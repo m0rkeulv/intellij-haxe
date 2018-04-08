@@ -11,14 +11,15 @@ before_script:
 - mkdir ~/haxelib
 - haxelib setup ~/haxelib
 - haxelib install hxjava
-- haxelib git debugger https://github.com/TiVo/debugger.git
+- haxelib install hxcpp-debugger
 - mkdir build
 - mkdir report
-script: make ANT_TARGET=$ANT_TARGET test
+install: ./gradlew check
+script: ./gradlew clean test -PtargetVersion=$IDEA_VERSION
 env:
-    - IDEA_VERSION=2016.3.7 ANT_TARGET=test
-    - IDEA_VERSION=2017.1.5 ANT_TARGET=test
-    - IDEA_VERSION=2017.2.6 ANT_TARGET=test
+    - IDEA_VERSION=2016.3.7
+    - IDEA_VERSION=2017.1.5
+    - IDEA_VERSION=2017.2.6
 
 notifications:
   email: false
