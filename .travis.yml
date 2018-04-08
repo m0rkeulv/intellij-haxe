@@ -10,7 +10,7 @@ before_script:
 - mkdir ~/haxelib
 - haxelib setup ~/haxelib
 - haxelib install hxjava
-- haxelib git hxcpp-debugger https://github.com/HaxeFoundation/hxcpp-debugger.git master
+- haxelib git hxcpp-debugger https://github.com/HaxeFoundation/hxcpp-debugger.git protocol_v1.1
 install:
 - true
 script: ./gradlew clean test -PtargetVersion=$IDEA_VERSION
