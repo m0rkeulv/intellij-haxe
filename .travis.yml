@@ -1,9 +1,11 @@
 sudo: required
-language: java
+language:
+- java
+- haxe
 jdk:
 - oraclejdk8
 haxe:
-  - "3.4.7"
+- "3.4.7"
 before_script:
 - sudo apt-get -qq update
 - sudo apt-get install ant-optional -y
