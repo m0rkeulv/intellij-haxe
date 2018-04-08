@@ -24,67 +24,20 @@ runIde.enabled = false
 patchPluginXml.enabled = false
 verifyPlugin.enabled = false
 
-
-def findHaxeVersion() {
-    def so = new ByteArrayOutputStream()
-    def eo = new ByteArrayOutputStream()
-    try {
-        exec {
-            commandLine 'haxe', '-version'
-            standardOutput = so
-            errorOutput = eo
-        }
-        //haxe returns version (3.4.7) in error output for some reason
-        ext.haxeVersion = eo.toString()
-    }
-    catch (Exception e) {
-        ext.haxeVersion = null
-
-    } finally {
-        so.close()
-        eo.close()
-    }
-    if (ext.haxeVersion != null)  {
-        println("Haxe found: $ext.haxeVersion")
-        println("Gradle will try to generate hxcpp debugger protocol if nessesary")
-        ext.hxcppGeneratedFolder = "src/generated/java"
-    }else {
-        println("Haxe not found ")
-        println("Gradle will use provided hxcpp debugger protocol source")
-        ext.hxcppGeneratedFolder = "src/fallback/java"
-    }
-}
 findHaxeVersion()
-
 
 ext.hxcppSrcFolder = "src/main/haxe"
 sourceSets.main.java.srcDir "$hxcppGeneratedFolder/src"
 
-task installHxJava(group: "hxcpp") {
-    doLast {
-        exec {
-            commandLine 'haxelib', 'install', 'hxjava'
-        }
-    }
-}
-task installHxcppDebugger(group: "hxcpp") {
-    doLast {
-        exec {
-            commandLine 'haxelib', 'git', 'hxcpp-debugger', 'https://github.com/HaxeFoundation/hxcpp-debugger.git', 'protocol_v1.1'
-        }
-    }
-
-}
-
 task generateDebuggerJavaSource(type: Exec, group: "hxcpp") {
-    dependsOn("installHxJava")
-    dependsOn("installHxcppDebugger")
 
     inputs.file "${hxcppSrcFolder}/JavaProtocol.hx"
     outputs.dir "${hxcppGeneratedFolder}/src"
 
     workingDir 'src/main/haxe/'
-    commandLine 'haxe', '-cp', '..', '-java', '../../generated/java/', '-main', 'JavaProtocol', '-lib', 'hxcpp-debugger'
+    commandLine 'haxe', '-cp', '..', '-java', '../../generated/java/', '-main', 'JavaProtocol',
+            '-lib', "hxcpp-debugger:$hxcppDebuggerVersion",
+            '-lib', "hxjava:$hxjavaVersion"
 }
 
 clean.dependsOn('cleanGenerated')
@@ -92,9 +45,46 @@ task cleanGenerated(type: Delete, group: 'generate') {
     delete "$hxcppGeneratedFolder"
 }
 
-cleanGenerated.onlyIf { haxeVersion != null }
-generateDebuggerJavaSource.onlyIf { haxeVersion != null }
-installHxcppDebugger.onlyIf { haxeVersion != null }
-installHxJava.onlyIf { haxeVersion != null }
+cleanGenerated.onlyIf { ext.generateHxcppDebugger }
+generateDebuggerJavaSource.onlyIf { ext.generateHxcppDebugger }
 
 compileJava.dependsOn('generateDebuggerJavaSource')
+
+
+
+def findHaxeVersion() {
+    if (!project.hasProperty('generateHxcpp') || project.property('generateHxcpp') != "true") {
+        ext.hxcppGeneratedFolder = "src/fallback/java"
+        ext.generateHxcppDebugger = false
+    } else {
+        def so = new ByteArrayOutputStream()
+        def eo = new ByteArrayOutputStream()
+        try {
+            exec {
+                commandLine 'haxe', '-version'
+                standardOutput = so
+                errorOutput = eo
+            }
+            //haxe(3.4.7) returns version in error output for some reason
+            ext.haxeVersion = eo.toString()
+        }
+        catch (Exception e) {
+            ext.haxeVersion = null
+        } finally {
+            so.close()
+            eo.close()
+        }
+
+        if (ext.haxeVersion != null) {
+            println("Haxe found: $ext.haxeVersion")
+            println("Gradle will try to generate hxcpp debugger protocol if nessesary")
+            ext.hxcppGeneratedFolder = "src/generated/java"
+            ext.generateHxcppDebugger = true
+        } else {
+            println("Haxe not found ")
+            println("Gradle will use provided hxcpp debugger protocol source")
+            ext.hxcppGeneratedFolder = "src/fallback/java"
+            ext.generateHxcppDebugger = false
+        }
+    }
+}
