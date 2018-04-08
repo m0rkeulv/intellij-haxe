@@ -24,27 +24,41 @@ runIde.enabled = false
 patchPluginXml.enabled = false
 verifyPlugin.enabled = false
 
-ext.hxcppGeneratedFolder = "src/generated/java"
-ext.hxcppSrcFolder = "src/main/haxe"
-
-sourceSets.main.java.srcDir  "$hxcppGeneratedFolder/src"
-
-
 
 def findHaxeVersion() {
-    try{
-    new ByteArrayOutputStream().withStream { os ->
-        ext.hxcppSrcFolder = exec {
-            commandLine  'haxe', '-version'
-            standardOutput = os
+    def so = new ByteArrayOutputStream()
+    def eo = new ByteArrayOutputStream()
+    try {
+        exec {
+            commandLine 'haxe', '-version'
+            standardOutput = so
+            errorOutput = eo
         }
-        ext.haxeVersion = os.toString()
+        //haxe returns version (3.4.7) in error output for some reason
+        ext.haxeVersion = eo.toString()
     }
-    }catch (Exception e)  {
+    catch (Exception e) {
         ext.haxeVersion = null
+
+    } finally {
+        so.close()
+        eo.close()
+    }
+    if (ext.haxeVersion != null)  {
+        println("Haxe found: $ext.haxeVersion")
+        println("Gradle will try to generate hxcpp debugger protocol if nessesary")
+        ext.hxcppGeneratedFolder = "src/generated/java"
+    }else {
+        println("Haxe not found ")
+        println("Gradle will use provided hxcpp debugger protocol source")
+        ext.hxcppGeneratedFolder = "src/fallback/java"
     }
 }
 findHaxeVersion()
+
+
+ext.hxcppSrcFolder = "src/main/haxe"
+sourceSets.main.java.srcDir "$hxcppGeneratedFolder/src"
 
 task installHxJava(group: "hxcpp") {
     doLast {
@@ -78,9 +92,9 @@ task cleanGenerated(type: Delete, group: 'generate') {
     delete "$hxcppGeneratedFolder"
 }
 
-cleanGenerated.onlyIf {haxeVersion != null}
-generateDebuggerJavaSource.onlyIf {haxeVersion != null}
-installHxcppDebugger.onlyIf {haxeVersion != null}
-installHxJava.onlyIf {haxeVersion != null}
+cleanGenerated.onlyIf { haxeVersion != null }
+generateDebuggerJavaSource.onlyIf { haxeVersion != null }
+installHxcppDebugger.onlyIf { haxeVersion != null }
+installHxJava.onlyIf { haxeVersion != null }
 
 compileJava.dependsOn('generateDebuggerJavaSource')
