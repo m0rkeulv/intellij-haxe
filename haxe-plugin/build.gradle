@@ -133,7 +133,7 @@ task cleanGenerated(type: Delete, group: 'generate') {
 task generateHaxeParser(dependsOn: ':setupTools', type: JavaExec, group: 'generate') {
     workingDir = "${toolDir}"
     main '-jar'
-    args "\"grammar-kit.jar\" \"${generatedSrcDir}\" \"${grammarHaxe}\""
+    args "grammar-kit.jar", "${generatedSrcDir}", "${grammarHaxe}"
 
     inputs.file "${grammarHaxe}"
     outputs.dir "${generatedSrcDir}/com/intellij/plugins/haxe/lang"
@@ -143,7 +143,7 @@ task generateHaxeParser(dependsOn: ':setupTools', type: JavaExec, group: 'genera
 task generateHxmlParser(dependsOn: ':setupTools', type: JavaExec, group: 'generate') {
     workingDir = "${toolDir}"
     main '-jar'
-    args "\"grammar-kit.jar\" \"${generatedSrcDir}\" \"${grammarHxml}\""
+    args "grammar-kit.jar", "${generatedSrcDir}", "${grammarHxml}"
 
     inputs.file "${grammarHxml}"
     outputs.dir "${generatedSrcDir}/com/intellij/plugins/haxe/hxml"
