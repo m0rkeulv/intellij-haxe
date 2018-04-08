@@ -36,16 +36,24 @@ task installHxJava(group: "hxcpp") {
         }
     }
 }
+task installHxcppDebugger(group: "hxcpp") {
+    doLast {
+        exec {
+            commandLine 'haxelib', 'git', 'hxcpp-debugger', "$hxcppDebuggerGit", "$hxcppDebuggerBranch"
+        }
+    }
+}
 
 task generateDebuggerJavaSource(type: Exec, group: "hxcpp") {
     dependsOn('installHxJava')
+    dependsOn('installHxcppDebugger')
 
     inputs.file "${hxcppSrcFolder}/JavaProtocol.hx"
     outputs.dir "${hxcppGeneratedFolder}/src"
 
     workingDir 'src/main/haxe/'
     commandLine 'haxe', '-cp', '..', '-java', '../../generated/java/', '-main', 'JavaProtocol',
-            '-lib', "hxcpp-debugger:$hxcppDebuggerVersion",
+            '-lib', "hxcpp-debugger:git:$hxcppDebuggerGit#$hxcppDebuggerBranch",
             '-lib', "hxjava:$hxjavaVersion"
 }
 
@@ -56,6 +64,7 @@ task cleanGenerated(type: Delete, group: 'generate') {
 
 cleanGenerated.onlyIf { ext.generateHxcppDebugger }
 installHxJava.onlyIf { ext.generateHxcppDebugger }
+installHxcppDebugger.onlyIf { ext.generateHxcppDebugger }
 generateDebuggerJavaSource.onlyIf { ext.generateHxcppDebugger }
 
 compileJava.dependsOn('generateDebuggerJavaSource')
