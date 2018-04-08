@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/m0rkeulv/intellij-haxe.svg?branch=gradle%2Fmaster)](https://travis-ci.org/m0rkeulv/intellij-haxe)
+[![GitHub license](https://img.shields.io/github/license/m0rkeulv/intellij-haxe.svg)](https://github.com/m0rkeulv/intellij-haxe/blob/gradle/master/LICENSE.txt)
 
 Haxe plugin for Intellij IDEA
 ======================================
