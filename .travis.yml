@@ -12,8 +12,6 @@ before_script:
 - haxelib setup ~/haxelib
 - haxelib install hxjava
 - haxelib install hxcpp-debugger
-- mkdir build
-- mkdir report
 script: ./gradlew clean test -PtargetVersion=$IDEA_VERSION
 env:
     - IDEA_VERSION=2016.3.7
