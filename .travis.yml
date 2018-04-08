@@ -9,8 +9,6 @@ before_script:
 - sudo apt-get install haxe -y
 - mkdir ~/haxelib
 - haxelib setup ~/haxelib
-- haxelib install hxjava
-- haxelib git hxcpp-debugger https://github.com/HaxeFoundation/hxcpp-debugger.git protocol_v1.1
 install:
 - true
 script: ./gradlew clean test -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
