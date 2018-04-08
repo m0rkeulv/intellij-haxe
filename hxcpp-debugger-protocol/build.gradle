@@ -29,7 +29,16 @@ findHaxeVersion()
 ext.hxcppSrcFolder = "src/main/haxe"
 sourceSets.main.java.srcDir "$hxcppGeneratedFolder/src"
 
+task installHxJava(group: "hxcpp") {
+    doLast {
+        exec {
+            commandLine 'haxelib', 'install', 'hxjava', "$hxjavaVersion"
+        }
+    }
+}
+
 task generateDebuggerJavaSource(type: Exec, group: "hxcpp") {
+    dependsOn('installHxJava')
 
     inputs.file "${hxcppSrcFolder}/JavaProtocol.hx"
     outputs.dir "${hxcppGeneratedFolder}/src"
@@ -46,6 +55,7 @@ task cleanGenerated(type: Delete, group: 'generate') {
 }
 
 cleanGenerated.onlyIf { ext.generateHxcppDebugger }
+installHxJava.onlyIf { ext.generateHxcppDebugger }
 generateDebuggerJavaSource.onlyIf { ext.generateHxcppDebugger }
 
 compileJava.dependsOn('generateDebuggerJavaSource')
