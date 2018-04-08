@@ -11,7 +11,7 @@ fi
 
 
 # Run the tests
-./gradlew clean test -PtargetVersion="$1" $2
+./gradlew clean test -PgenerateHxcpp=true -PtargetVersion="$1" $2
 
 # Was our build successful?
 stat=$?
