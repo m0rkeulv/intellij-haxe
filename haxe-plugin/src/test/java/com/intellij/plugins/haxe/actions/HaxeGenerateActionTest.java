@@ -30,7 +30,6 @@ import org.jetbrains.annotations.NotNull;
 public class HaxeGenerateActionTest extends LightPlatformCodeInsightTestCase {
   @SuppressWarnings("JUnitTestCaseWithNonTrivialConstructors")
   public HaxeGenerateActionTest() {
-    PlatformTestCase.initPlatformLangPrefix();
   }
 
   @NotNull

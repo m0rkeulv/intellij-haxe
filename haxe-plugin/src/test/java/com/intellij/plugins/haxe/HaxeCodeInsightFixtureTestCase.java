@@ -33,7 +33,6 @@ abstract public class HaxeCodeInsightFixtureTestCase extends JavaCodeInsightFixt
   protected HaxeCodeInsightFixtureTestCase() {
     super();
     HaxeDebugLogger.configurePrimaryLoggerToSwallowLogs();
-    PlatformTestCase.initPlatformLangPrefix();
   }
 
   @Override

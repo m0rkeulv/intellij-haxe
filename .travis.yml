@@ -18,6 +18,8 @@ env:
     - IDEA_VERSION=2016.3.7
     - IDEA_VERSION=2017.1.5
     - IDEA_VERSION=2017.2.6
+    - IDEA_VERSION=2017.3.4
+    - IDEA_VERSION=2018.1
 
 notifications:
   email: false
