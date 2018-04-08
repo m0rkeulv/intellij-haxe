@@ -33,6 +33,7 @@ task installHxJava(group: "hxcpp") {
     doLast {
         exec {
             commandLine 'haxelib', 'install', 'hxjava', "$hxjavaVersion"
+            standardOutput = new ByteArrayOutputStream() // avoid to much output (loads of empty lines)
         }
     }
 }
@@ -40,6 +41,7 @@ task installHxcppDebugger(group: "hxcpp") {
     doLast {
         exec {
             commandLine 'haxelib', 'git', 'hxcpp-debugger', "$hxcppDebuggerGit", "$hxcppDebuggerBranch"
+            standardOutput = new ByteArrayOutputStream() // avoid to much output (loads of empty lines)
         }
     }
 }
