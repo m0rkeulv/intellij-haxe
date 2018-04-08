@@ -20,6 +20,25 @@ runIde.enabled = false
 patchPluginXml.enabled = false
 verifyPlugin.enabled = false
 
+sourceSets.main.java.srcDir "src/generated/java/src"
 
-//sourceSets.main.haxe.srcDir "src/main/haxe"
-sourceSets.main.java.srcDir "src/generated/java"
+/**
+ * Source generation tested and working with Haxe Compiler 3.4.7
+ */
+
+task installHxJava(type: Exec, group: "hxcpp") {
+    commandLine 'haxelib', 'install', 'hxjava'
+}
+task installHxcppDebugger(type: Exec, group: "hxcpp") {
+    commandLine 'haxelib', 'install', 'hxcpp-debugger'
+}
+
+task generateDebuggerJavaSource(type: Exec, group: "hxcpp") {
+    dependsOn("installHxJava")
+    dependsOn("installHxcppDebugger")
+
+    workingDir 'src/main/haxe/'
+    commandLine 'haxe', '-cp', '..', '-java', '../../generated/java/', '-main', 'JavaProtocol', '-lib', 'hxcpp-debugger'
+}
+
+//compileJava.dependsOn('generateDebuggerJavaSource')
