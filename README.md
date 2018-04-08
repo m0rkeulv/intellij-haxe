@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/m0rkeulv/intellij-haxe.svg?branch=gradle%2Fmaster)](https://travis-ci.org/m0rkeulv/intellij-haxe)
+
 Haxe plugin for Intellij IDEA
 ======================================
 
