@@ -70,7 +70,7 @@ task installHxJava(group: "hxcpp") {
 task installHxcppDebugger(group: "hxcpp") {
     doLast {
         exec {
-            commandLine 'haxelib', 'install', 'hxcpp-debugger'
+            commandLine 'haxelib', 'git', 'hxcpp-debugger', 'https://github.com/HaxeFoundation/hxcpp-debugger.git', 'master'
         }
     }
 
