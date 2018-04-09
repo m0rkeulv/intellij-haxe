@@ -1,8 +1,9 @@
 
-|Operating system  |status       |
+|Operating system  |Build status |
 |------------------|-------------|
 |Linux/mac         | [![Build Status](https://travis-ci.org/m0rkeulv/intellij-haxe.svg?branch=gradle%2Fmaster)](https://travis-ci.org/m0rkeulv/intellij-haxe)|
 |Windows           | [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/m0rkeulv/intellij-haxe?branch=master&svg=true)](https://ci.appveyor.com/project/m0rkeulv/intellij-haxe)|
+
 [![GitHub license](https://img.shields.io/github/license/m0rkeulv/intellij-haxe.svg)](https://github.com/m0rkeulv/intellij-haxe/blob/gradle/master/LICENSE.txt)
 
 
