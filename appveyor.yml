@@ -1,0 +1,27 @@
+version: "{build}"
+
+clone_folder: C:\projects\intellij-haxe
+
+environment:
+    global:
+        HAXE_ROOT: C:\projects\haxe
+        HAXELIB_ROOT: C:\projects\haxelib
+    matrix:
+        - IDEA_VERSION: 2016.3.7
+        - IDEA_VERSION: 2017.1.5
+        - IDEA_VERSION: 2017.2.6
+        - IDEA_VERSION: 2017.3.4
+        - IDEA_VERSION: 2018.1
+
+install:
+    - cinst haxe --prerelease --ignore-dependencies -s 'https://ci.appveyor.com/nuget/haxe' -y
+    - RefreshEnv
+    - haxe -version
+    - mkdir "%HAXELIB_ROOT%"
+    - haxelib setup "%HAXELIB_ROOT%"
+
+build_script:
+    - gradlew.bat clean buildPlugin -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
+
+test_script:
+    - gradlew.bat clean test -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
