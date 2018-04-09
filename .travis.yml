@@ -2,16 +2,16 @@ sudo: required
 language: java
 install:
   - true
-env:
-  - IDEA_VERSION=2016.3.7
-  - IDEA_VERSION=2017.1.5
-  - IDEA_VERSION=2017.2.6
-  - IDEA_VERSION=2017.3.4
-  - IDEA_VERSION=2018.1
 
 matrix:
   include:
   - os: linux
+    env:
+      - IDEA_VERSION=2016.3.7
+      - IDEA_VERSION=2017.1.5
+      - IDEA_VERSION=2017.2.6
+      - IDEA_VERSION=2017.3.4
+      - IDEA_VERSION=2018.1
     jdk:
       - oraclejdk8
     before_script:
@@ -22,6 +22,12 @@ matrix:
       - mkdir ~/haxelib
       - haxelib setup ~/haxelib
   - os: osx
+    env:
+      - IDEA_VERSION=2016.3.7
+      - IDEA_VERSION=2017.1.5
+      - IDEA_VERSION=2017.2.6
+      - IDEA_VERSION=2017.3.4
+      - IDEA_VERSION=2018.1
     before_script:
       - brew update
       - brew install haxe
