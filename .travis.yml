@@ -11,27 +11,20 @@ env:
 os:
   - linux
   - osx
-jdk:
-  - oraclejdk8
 
 before_script:
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; sudo apt-get -qq update                        ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; sudo add-apt-repository ppa:haxe/releases -y   ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; sudo apt-get update                            ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; sudo apt-get install haxe -y                   ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; mkdir ~/haxelib                                ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; haxelib setup ~/haxelib                        ; fi
-
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; brew update               ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; brew install haxe         ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; mkdir ~/haxelib           ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; haxelib setup ~/haxelib   ; fi
-
-matrix:
-  exclude:
-  - os: osx
-    jdk:
-      - oraclejdk8
+# LINUX
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get -qq update                        ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo add-apt-repository ppa:haxe/releases -y   ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get update                            ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install haxe -y                   ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then mkdir ~/haxelib                                ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then haxelib setup ~/haxelib                        ; fi
+# OSX
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update               ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install haxe         ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then mkdir ~/haxelib           ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then haxelib setup ~/haxelib   ; fi
 
 script:
 - ./gradlew clean BuildPlugin -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
