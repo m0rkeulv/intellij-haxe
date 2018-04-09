@@ -12,19 +12,23 @@ os:
   - linux
   - osx
 
-before_script:
-# LINUX
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get -qq update                        ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo add-apt-repository ppa:haxe/releases -y   ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get update                            ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install haxe -y                   ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then mkdir ~/haxelib                                ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then haxelib setup ~/haxelib                        ; fi
-# OSX
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update               ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install haxe         ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then mkdir ~/haxelib           ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then haxelib setup ~/haxelib   ; fi
+before_script: |
+#Linux
+if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+	sudo apt-get -qq update
+	sudo add-apt-repository ppa:haxe/releases -y
+	sudo apt-get update
+	sudo apt-get install haxe -y
+	mkdir ~/haxelib
+	haxelib setup ~/haxelib
+fi
+#OSX
+if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+	brew update
+	brew install haxe
+	mkdir ~/haxelib
+	haxelib setup ~/haxelib
+fi
 
 script:
 - ./gradlew clean BuildPlugin -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
