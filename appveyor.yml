@@ -4,6 +4,7 @@ clone_folder: C:\projects\intellij-haxe
 
 environment:
     global:
+        HAXE_VERSION: 3.4.7
         HAXE_ROOT: C:\projects\haxe
         HAXELIB_ROOT: C:\projects\haxelib
     matrix:
@@ -14,7 +15,7 @@ environment:
         - IDEA_VERSION: 2018.1
 
 install:
-    - cinst haxe --prerelease --ignore-dependencies -s 'https://ci.appveyor.com/nuget/haxe' -y
+    - cinst haxe --version=%HAXE_VERSION% --ignore-dependencies -s 'https://ci.appveyor.com/nuget/haxe' -y
     - RefreshEnv
     - haxe -version
     - mkdir "%HAXELIB_ROOT%"
