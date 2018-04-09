@@ -1,8 +1,5 @@
 sudo: required
 language: java
-jdk:
-    - oraclejdk8
-
 install:
     - true
 env:
@@ -15,6 +12,8 @@ env:
 matrix:
   include:
     - os: linux
+      jdk:
+          - oraclejdk8
       before_script:
           - sudo apt-get -qq update
           - sudo add-apt-repository ppa:haxe/releases -y
@@ -24,10 +23,10 @@ matrix:
           - haxelib setup ~/haxelib
     - os: osx
       before_script:
-                - brew update
-                - brew install haxe
-                - mkdir ~/haxelib
-                - haxelib setup ~/haxelib
+          - brew update
+          - brew install haxe
+          - mkdir ~/haxelib
+          - haxelib setup ~/haxelib
 script:
     - ./gradlew clean BuildPlugin -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
     - ./gradlew clean test -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
