@@ -1,23 +1,37 @@
 sudo: required
 language: java
 jdk:
-- oraclejdk8
-before_script:
-- sudo apt-get -qq update
-- sudo add-apt-repository ppa:haxe/releases -y
-- sudo apt-get update
-- sudo apt-get install haxe -y
-- mkdir ~/haxelib
-- haxelib setup ~/haxelib
+    - oraclejdk8
+
 install:
-- true
-script: ./gradlew clean test -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
+    - true
 env:
-    - IDEA_VERSION=2016.3.7
-    - IDEA_VERSION=2017.1.5
-    - IDEA_VERSION=2017.2.6
-    - IDEA_VERSION=2017.3.4
-    - IDEA_VERSION=2018.1
+  - IDEA_VERSION=2016.3.7
+  - IDEA_VERSION=2017.1.5
+  - IDEA_VERSION=2017.2.6
+  - IDEA_VERSION=2017.3.4
+  - IDEA_VERSION=2018.1
+
+matrix:
+  include:
+    - os: linux
+      before_script:
+          - sudo apt-get -qq update
+          - sudo add-apt-repository ppa:haxe/releases -y
+          - sudo apt-get update
+          - sudo apt-get install haxe -y
+          - mkdir ~/haxelib
+          - haxelib setup ~/haxelib
+    - os: osx
+      before_script:
+                - brew update
+                - brew install haxe
+                - mkdir ~/haxelib
+                - haxelib setup ~/haxelib
+script:
+    - ./gradlew clean BuildPlugin -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
+    - ./gradlew clean test -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
+
 
 notifications:
-  email: false
+    email: false
