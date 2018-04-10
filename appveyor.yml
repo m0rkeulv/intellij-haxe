@@ -28,3 +28,6 @@ build_script:
 
 test_script:
     - gradlew.bat clean test -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
+artifacts:
+    path:
+        - intellij-haxe-*.jar
