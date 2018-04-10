@@ -26,8 +26,17 @@ install:
 build_script:
     - gradlew.bat clean buildPlugin -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
 
+artifacts:
+    path: intellij-haxe-*.jar
+
 test_script:
     - gradlew.bat clean test -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
-artifacts:
-    path:
-        - intellij-haxe-*.jar
+
+after_build:
+    # upload test results via rest-api
+    - ps: |
+          $wc = New-Object 'System.Net.WebClient'
+          Get-ChildItem . -Name -Recurse 'TEST-*.xml'  |
+          Foreach-Object {
+              $wc.UploadFile("https://ci.appveyor.com/api/testresults/junit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $_))
+          }
