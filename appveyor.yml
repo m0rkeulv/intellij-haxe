@@ -32,7 +32,7 @@ artifacts:
 test_script:
     - gradlew.bat clean test -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
 
-after_build:
+after_test:
     # upload test results via rest-api
     - ps: |
           $wc = New-Object 'System.Net.WebClient'
