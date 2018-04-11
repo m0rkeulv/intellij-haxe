@@ -1,10 +1,9 @@
 
-|Operating system  |Build status |
-|------------------|-------------|
+|Operating system  |Build status || 
+|------------------|-------------|---|
 |Linux/mac         | [![Build Status](https://travis-ci.org/m0rkeulv/intellij-haxe.svg?branch=gradle%2Fmaster)](https://travis-ci.org/m0rkeulv/intellij-haxe)|
-|Windows           | [![Build status](https://ci.appveyor.com/api/projects/status/fpm58wxluvels5bm/branch/gradle/master?svg=true)](https://ci.appveyor.com/project/m0rkeulv/intellij-haxe/branch/gradle/master)|
+|Windows           | [![Build status](https://img.shields.io/appveyor/ci/m0rkeulv/intellij-haxe/gradle/master.svg)](https://ci.appveyor.com/project/m0rkeulv/intellij-haxe/branch/gradle/master) | ![test results](https://img.shields.io/appveyor/tests/m0rkeulv/intellij-haxe/gradle/master.svg)|
 
-[![GitHub license](https://img.shields.io/github/license/m0rkeulv/intellij-haxe.svg)](https://github.com/m0rkeulv/intellij-haxe/blob/gradle/master/LICENSE.txt)
 
 |Download Latest Builds (SNAPSHOT)|
 |-------------|
