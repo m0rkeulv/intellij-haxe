@@ -13,7 +13,8 @@
 |[Download build for Intellij 2017.2](https://ci.appveyor.com/api/projects/m0rkeulv/intellij-haxe/artifacts/intellij-haxe-2017.2.6.jar?job=Environment:%20IDEA_VERSION=2017.2.6&branch=gradle%2Fmaster)|
 |[Download build for Intellij 2017.3](https://ci.appveyor.com/api/projects/m0rkeulv/intellij-haxe/artifacts/intellij-haxe-2017.3.4.jar?job=Environment:%20IDEA_VERSION=2017.3.4&branch=gradle%2Fmaster)|
 |[Download build for Intellij 2018.1](https://ci.appveyor.com/api/projects/m0rkeulv/intellij-haxe/artifacts/intellij-haxe-2018.1.jar?job=Environment:%20IDEA_VERSION=2018.1&branch=gradle%2Fmaster)|
-*If downloads are unavailable it might be because new files are being built.* 
+
+*&ast;If downloads are unavailable it might be because new files are being built.* 
 
 Haxe plugin for Intellij IDEA
 ======================================
