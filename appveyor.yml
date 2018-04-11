@@ -24,13 +24,14 @@ install:
     - haxelib setup "%HAXELIB_ROOT%"
 
 build_script:
-    - gradlew.bat clean buildPlugin -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
+    - gradlew.bat buildPlugin -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
 
 artifacts:
     path: intellij-haxe-*.jar
+    name: intellij-haxe.jar
 
 test_script:
-    - gradlew.bat clean test -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
+    - gradlew.bat test -PgenerateHxcpp=true -PtargetVersion=%IDEA_VERSION%
 
 after_test:
     # upload test results via rest-api
