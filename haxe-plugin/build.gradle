@@ -18,7 +18,7 @@
 
 if (!file("$generatedSrcDir").exists()) file("$generatedSrcDir").mkdirs()
 
-sourceSets.main.java.srcDirs = ['src/main/java', 'src/generated/java']
+sourceSets.main.java.srcDirs = ['gen', 'src/main/java']
 sourceSets.main.resources.srcDir 'src/main/resources'
 
 sourceSets.test.java.srcDir 'src/test/java'

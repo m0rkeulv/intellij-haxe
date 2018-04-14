@@ -54,7 +54,7 @@ task generateDebuggerJavaSource(type: Exec, group: "hxcpp") {
     outputs.dir "${hxcppGeneratedFolder}/src"
 
     workingDir 'src/main/haxe/'
-    commandLine 'haxe', '-cp', '..', '-java', '../../generated/java/', '-main', 'JavaProtocol',
+    commandLine 'haxe', '-cp', '..', '-java', '../../../gen/java/', '-main', 'JavaProtocol',
             '-lib', "hxcpp-debugger:git:$hxcppDebuggerGit#$hxcppDebuggerBranch",
             '-lib', "hxjava:$hxjavaVersion"
 }
@@ -99,7 +99,7 @@ def findHaxeVersion() {
         if (ext.haxeVersion != null) {
             println("Haxe found: $ext.haxeVersion")
             println("Gradle will try to generate hxcpp debugger protocol if nessesary")
-            ext.hxcppGeneratedFolder = "src/generated/java"
+            ext.hxcppGeneratedFolder = "gen/java"
             ext.generateHxcppDebugger = true
         } else {
             println("Haxe not found ")

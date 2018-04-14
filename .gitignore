@@ -16,10 +16,10 @@
 # OUTPUT #
 ##########
 out/
-/build/
+/*/gen/
+/*/build/
 /build_test/
 intellij-haxe*.jar
-generated/
 
 ################
 # DEPENDENCIES #

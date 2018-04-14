@@ -58,7 +58,7 @@ allprojects {
         haxeCommonDir = "${rootDir}/haxe-common"
         haxePluginDir = "${rootDir}/haxe-plugin"
 
-        generatedSrcDir = "${haxePluginDir}/src/generated/java"
+        generatedSrcDir = "${haxePluginDir}/gen"
         ideaBaseDir = "${rootDir}/idea-IU"
         ideaTargetDir = "${ideaBaseDir}/ideaIU-${ideaVersion}"
 
