@@ -168,10 +168,10 @@ task generateHxmlParser(type: GenerateParser,  group: 'generate') {
     targetRoot = "${generatedSrcDir}"
 
     // path to a parser file, relative to the targetRoot
-    pathToParser = "com/intellij/plugins/haxe/lang/parser/HaxeParser.java"
+    pathToParser = "com/intellij/plugins/haxe/hxml/HXMLParser.java"
 
     // path to a directory with generated psi files, relative to the targetRoot
-    pathToPsiRoot = "com/intellij/plugins/haxe/lang/lexer/psi"
+    pathToPsiRoot = "com/intellij/plugins/haxe/hxml/psi"
 
     // if set, plugin will remove a parser output file and psi output directory before generating new ones. Default: false
     purgeOldFiles = true

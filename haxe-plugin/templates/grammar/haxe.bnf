@@ -241,13 +241,6 @@ private metaKeyWord ::= MACRO_ID | '@:final' | '@:hack' | '@:native' | '@:macro'
 private ppConditionalStatement ::= CONDITIONAL_STATEMENT_ID
 private ppToken ::= '#if' | "#elseif" | "#else" | "#end" | "#error" | "#line" | ppConditionalStatement
 
-referenceExpression ::= identifier
-{mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxeReference"}
-//TODO  generator problem between here ?
-left qualifiedReferenceExpression ::= '.' identifier {elementType="referenceExpression" pin=2}
-// TODO generator problem and here ?
-private simpleQualifiedReferenceExpression ::= referenceExpression qualifiedReferenceExpression * { elementType="referenceExpression"}
-
 
 /*
  * Operators.  Priority is ascending; that is: the stuff lower down in the file
@@ -651,6 +644,11 @@ left callExpression ::= '(' expressionList? ')'
 left arrayAccessExpression ::= '[' expression ']'
 {mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxeReference"}
 
+referenceExpression ::= identifier
+{mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxeReference"}
+left qualifiedReferenceExpression ::= '.' identifier {elementType="referenceExpression" pin=2}
+private simpleQualifiedReferenceExpression ::= referenceExpression qualifiedReferenceExpression * { elementType="referenceExpression"}
+
 componentName ::= identifier
 {mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxeNamedElementImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxeNamedElement"}
 identifier ::= ID
@@ -706,5 +704,3 @@ private object_literal_list_recover ::= !('}')
 
 objectLiteralElement ::= (identifier | stringLiteralExpression) ':' expression {recoverWhile="object_literal_part_recover"}
 private object_literal_part_recover ::= !(',' | '}')
-
-
