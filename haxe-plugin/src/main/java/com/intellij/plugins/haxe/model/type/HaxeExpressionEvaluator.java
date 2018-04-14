@@ -199,7 +199,7 @@ public class HaxeExpressionEvaluator {
 
     if (element instanceof HaxeCastExpression) {
       handle(((HaxeCastExpression)element).getExpression(), context);
-      HaxeTypeOrAnonymous anonymous = getFirstItem(((HaxeCastExpression)element).getTypeOrAnonymousList());
+      HaxeTypeOrAnonymous anonymous = ((HaxeCastExpression)element).getTypeOrAnonymous();
       if (anonymous != null) {
         return HaxeTypeResolver.getTypeFromTypeOrAnonymous(anonymous);
       }
@@ -433,7 +433,8 @@ public class HaxeExpressionEvaluator {
         HaxeExpression fatArrow = null;
         while (null != forStatement || null != whileStatement) {
           if (null != forStatement) {
-            fatArrow = forStatement.getMapInitializer();
+            //TODO WARNING! new grammar-kit no longer provided a getMapInitializer, not sure if getExpression() works!
+            fatArrow = forStatement.getMapInitializerForStatement().getExpression();
             whileStatement = forStatement.getMapInitializerWhileStatement();
             forStatement = forStatement.getMapInitializerForStatement();
           } else {

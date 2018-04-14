@@ -779,7 +779,6 @@
     <extensionPoint name="haxeMethodsSearch" interface="com.intellij.util.QueryExecutor"/>
   </extensionPoints>
   <extensions defaultExtensionNs="com.intellij">
-    <compileServer.plugin classpath="haxe-jps-plugin.jar;haxe-common.jar"/>
     <errorHandler implementation="com.intellij.diagnostic.ITNReporter"/>
     <testFinder implementation="com.intellij.plugins.haxe.ide.HaxeTestFinder"/>
 

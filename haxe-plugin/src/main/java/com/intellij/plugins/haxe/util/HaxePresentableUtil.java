@@ -117,13 +117,13 @@ public class HaxePresentableUtil {
         return buildTypeText(element, haxeFunctionType, specialization);
       }
 
-      final List<HaxeTypeOrAnonymous> haxeTypeOrAnonymousList = typeTag.getTypeOrAnonymousList();
-      if (!haxeTypeOrAnonymousList.isEmpty()) {
-        final HaxeAnonymousType anonymousType = haxeTypeOrAnonymousList.get(0).getAnonymousType();
+      final HaxeTypeOrAnonymous haxeTypeOrAnonymous = typeTag.getTypeOrAnonymous();
+      if (haxeTypeOrAnonymous!= null) {
+        final HaxeAnonymousType anonymousType = haxeTypeOrAnonymous.getAnonymousType();
         if (anonymousType != null) {
           return anonymousType.getText();
         }
-        final HaxeType haxeType = haxeTypeOrAnonymousList.get(0).getType();
+        final HaxeType haxeType = haxeTypeOrAnonymous.getType();
         if (haxeType != null) {
           return buildTypeText(element, haxeType, specialization);
         }

@@ -16,7 +16,14 @@
  * limitations under the License.
  */
 
-
+buildscript {
+    repositories {
+        maven { url 'https://jitpack.io'}
+    }
+    dependencies{
+        classpath "com.github.JetBrains:gradle-grammar-kit-plugin:2018.1.1"
+    }
+}
 
 plugins {
     id 'de.undercouch.download' version '3.3.0'
@@ -47,37 +54,22 @@ allprojects {
     }
 
     ext {
-
         // modules
         haxeCommonDir = "${rootDir}/haxe-common"
         haxePluginDir = "${rootDir}/haxe-plugin"
 
         generatedSrcDir = "${haxePluginDir}/src/generated/java"
-
-        // Newer versions beyond 1.2.0 does not seem to work
-        grammarKitVersion = "1.2.0"
-
-        dependenciesDir = "${rootDir}/dependencies"
-        downloadsDir = "${dependenciesDir}/downloads"
-        toolDir = "${dependenciesDir}/tools"
-        ideaBaseDir = "${dependenciesDir}/idea-IU"
-
+        ideaBaseDir = "${rootDir}/idea-IU"
         ideaTargetDir = "${ideaBaseDir}/ideaIU-${ideaVersion}"
 
         //Note: path is system directory separator sensitive
-        grammarHaxe = file("${haxePluginDir}/templates/grammar/haxe.bnf").absolutePath
-        grammarHxml = file("${haxePluginDir}/templates/grammar/hxml.bnf").absolutePath
+        grammarHaxe = "${haxePluginDir}/templates/grammar/haxe.bnf"
+        grammarHxml = "${haxePluginDir}/templates/grammar/hxml.bnf"
 
-        flexDownloadFile = "idea-flex-${ideaVersion}.skeleton"
-        flexTargetFile = "idea-flex.skeleton"
-
-        grammarKitDownloadFile = "GrammarKit-${grammarKitVersion}.zip"
-        grammarKitTargetFile = "grammar-kit.jar"
-
-        psiDownloadFile = "light-psi-all-${grammarKitVersion}.jar"
-        psiTargetFile = "light-psi-all.jar"
     }
 
+    //making sure folder exists so plugin wont use default
+    file("$ideaBaseDir").mkdirs()
     apply plugin: 'org.jetbrains.intellij'
 
     intellij {
@@ -88,10 +80,3 @@ allprojects {
     }
 
 }
-
-
-//Download build tools
-apply from: 'dependencies/tools.gradle'
-
-build.dependsOn('setupTools')
-test.dependsOn('setupTools')

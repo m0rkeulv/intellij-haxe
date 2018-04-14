@@ -16,7 +16,7 @@
 # OUTPUT #
 ##########
 out/
-/build/
+build/
 /build_test/
 intellij-haxe*.jar
 generated/

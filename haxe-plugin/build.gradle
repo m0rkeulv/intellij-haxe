@@ -16,10 +16,6 @@
  * limitations under the License.
  */
 
-//runIde.enabled = false
-//patchPluginXml.enabled = false
-//verifyPlugin.enabled = false
-
 if (!file("$generatedSrcDir").exists()) file("$generatedSrcDir").mkdirs()
 
 sourceSets.main.java.srcDirs = ['src/main/java', 'src/generated/java']
@@ -30,9 +26,9 @@ sourceSets.test.resources.srcDir 'src/test/resources'
 
 
 dependencies {
-    compile project(':jps-plugin')
-    compile project(':haxe-common')
-    compile project(':hxcpp-debugger-protocol')
+    compileOnly project(':jps-plugin')
+    compileOnly project(':haxe-common')
+    compileOnly project(':hxcpp-debugger-protocol')
 
     compileOnly files("${ideaTargetDir}/plugins/flex/lib/flex-shared.jar")
     compileOnly files("${ideaTargetDir}/plugins/flex/lib/FlexSupport.jar")
@@ -130,45 +126,84 @@ task cleanGenerated(type: Delete, group: 'generate') {
     delete "$generatedSrcDir"
 }
 
-task generateHaxeParser(dependsOn: ':setupTools', type: JavaExec, group: 'generate') {
-    workingDir = "${toolDir}"
-    main '-jar'
-    args "grammar-kit.jar", "${generatedSrcDir}", "${grammarHaxe}"
+import org.jetbrains.grammarkit.tasks.*
+
+
+
+apply plugin: 'org.jetbrains.grammarkit'
+
+grammarKit {
+    // version of IntelliJ patched JFlex (see bintray link below), Default is 1.7.0
+    jflexRelease = '1.7.0'
+
+    // tag or short commit hash of Grammar-Kit to use (see link below). Default is 2017.1.2
+    grammarKitRelease = '2017.1.2'
+}
+
+task generateHaxeParser(type: GenerateParser,  group: 'generate') {
+    // source bnf file
+    source = "${grammarHaxe}"
+
+    // optional, task-specific root for the generated files. Default: none
+    targetRoot = "${generatedSrcDir}"
+
+    // path to a parser file, relative to the targetRoot
+    pathToParser = "com/intellij/plugins/haxe/lang/parser/HaxeParser.java"
+
+    // path to a directory with generated psi files, relative to the targetRoot
+    pathToPsiRoot = "com/intellij/plugins/haxe/lang/lexer/psi"
+
+    // if set, plugin will remove a parser output file and psi output directory before generating new ones. Default: false
+    purgeOldFiles = true
 
     inputs.file "${grammarHaxe}"
     outputs.dir "${generatedSrcDir}/com/intellij/plugins/haxe/lang"
 }
 
+task generateHxmlParser(type: GenerateParser,  group: 'generate') {
+    // source bnf file
+    source = "${grammarHxml}"
 
-task generateHxmlParser(dependsOn: ':setupTools', type: JavaExec, group: 'generate') {
-    workingDir = "${toolDir}"
-    main '-jar'
-    args "grammar-kit.jar", "${generatedSrcDir}", "${grammarHxml}"
+    // optional, task-specific root for the generated files. Default: none
+    targetRoot = "${generatedSrcDir}"
+
+    // path to a parser file, relative to the targetRoot
+    pathToParser = "com/intellij/plugins/haxe/lang/parser/HaxeParser.java"
+
+    // path to a directory with generated psi files, relative to the targetRoot
+    pathToPsiRoot = "com/intellij/plugins/haxe/lang/lexer/psi"
+
+    // if set, plugin will remove a parser output file and psi output directory before generating new ones. Default: false
+    purgeOldFiles = true
 
     inputs.file "${grammarHxml}"
     outputs.dir "${generatedSrcDir}/com/intellij/plugins/haxe/hxml"
 }
 
+
 import org.apache.tools.ant.filters.ReplaceTokens
 
-task generateIdeaSdkIdentifer(type: Copy, group: 'generate') {
-    file("${generatedSrcDir}/com/intellij/plugins/haxe/build/").mkdirs()
-    findValues(file("${ideaTargetDir}/build.txt"))
-    from("${haxePluginDir}/templates/java/com/intellij/plugins/haxe/build/IdeaSDKIdentifier.java.template") {
-        filter(ReplaceTokens, tokens:
-                [
-                        'idea.sdk.version'                   : "$ideaVersion".toString(),
-                        'idea.sdk.type'                      : "$ideaSdkType".toString(),
-                        'idea.sdk.codeline'                  : "$ideaSdkCodeline".toString(),
-                        'idea.sdk.build.number'              : "$ideaSdkBuildNumber".toString(),
-                        'idea.sdk.patch.number'              : "$ideaSdkPatchNumber".toString(),
-                        'replace.with.plugin.autogen.warning': 'Warning!! This file is auto-generated.  Do NOT edit it directly.',
-                ]
-        )
+task generateIdeaSdkIdentifer(group: 'generate') {
+    doLast {
+        copy {
+            file("${generatedSrcDir}/com/intellij/plugins/haxe/build/").mkdirs()
+            findValues(file("${ideaTargetDir}/build.txt"))
+            from("${haxePluginDir}/templates/java/com/intellij/plugins/haxe/build/IdeaSDKIdentifier.java.template") {
+                filter(ReplaceTokens, tokens:
+                        [
+                                'idea.sdk.version'                   : "$ideaVersion".toString(),
+                                'idea.sdk.type'                      : "$ideaSdkType".toString(),
+                                'idea.sdk.codeline'                  : "$ideaSdkCodeline".toString(),
+                                'idea.sdk.build.number'              : "$ideaSdkBuildNumber".toString(),
+                                'idea.sdk.patch.number'              : "$ideaSdkPatchNumber".toString(),
+                                'replace.with.plugin.autogen.warning': 'Warning!! This file is auto-generated.  Do NOT edit it directly.',
+                        ]
+                )
+            }
+            into "${generatedSrcDir}/com/intellij/plugins/haxe/build/"
+            rename('IdeaSDKIdentifier.java.template', 'IdeaSDKIdentifier.java')
+        }
     }
-    into "${generatedSrcDir}/com/intellij/plugins/haxe/build/"
-    rename('IdeaSDKIdentifier.java.template', 'IdeaSDKIdentifier.java')
-
 }
 
 void findValues(File buildFile) {
