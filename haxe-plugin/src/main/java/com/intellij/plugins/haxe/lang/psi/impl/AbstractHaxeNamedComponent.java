@@ -178,7 +178,7 @@ abstract public class AbstractHaxeNamedComponent extends HaxeMetaContainerElemen
   @Override
   public HaxeNamedComponent getTypeComponent() {
     final HaxeTypeTag typeTag = PsiTreeUtil.getChildOfType(getParent(), HaxeTypeTag.class);
-    final HaxeTypeOrAnonymous typeOrAnonymous = typeTag != null ? typeTag.getTypeOrAnonymous() : null;
+    final HaxeTypeOrAnonymous typeOrAnonymous = typeTag != null ? getFirstItem(typeTag.getTypeOrAnonymousList()) : null;
     final HaxeType type = typeOrAnonymous != null ? typeOrAnonymous.getType() : null;
     final PsiReference reference = type != null ? type.getReference() : null;
     if (reference != null) {

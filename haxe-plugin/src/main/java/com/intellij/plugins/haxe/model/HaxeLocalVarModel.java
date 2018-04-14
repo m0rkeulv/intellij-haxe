@@ -43,7 +43,7 @@ public class HaxeLocalVarModel extends HaxeMemberModel {
   @Override
   public ResultHolder getResultType() {
     final HaxeTypeTag typeTag = element.getTypeTag();
-    final HaxeTypeOrAnonymous type = typeTag != null ? typeTag.getTypeOrAnonymous() : null;
+    final HaxeTypeOrAnonymous type = typeTag != null ? getFirstItem(typeTag.getTypeOrAnonymousList()) : null;
     return type != null ? HaxeTypeResolver.getTypeFromTypeOrAnonymous(type) : null;
 
   }

@@ -150,7 +150,7 @@ public class HaxeTypeResolver {
   @NotNull
   static public ResultHolder getTypeFromTypeTag(@Nullable final HaxeTypeTag typeTag, @NotNull PsiElement context) {
     if (typeTag != null) {
-      final HaxeTypeOrAnonymous typeOrAnonymous = typeTag.getTypeOrAnonymous();
+      final HaxeTypeOrAnonymous typeOrAnonymous = getFirstItem(typeTag.getTypeOrAnonymousList());
       final HaxeFunctionType functionType = getFirstItem(typeTag.getFunctionTypeList());
 
       if (typeOrAnonymous != null) {

@@ -451,7 +451,7 @@ public class HaxeResolveUtil {
   public static HaxeClassResolveResult tryResolveClassByTypeTag(PsiElement element,
                                                                 HaxeGenericSpecialization specialization) {
     final HaxeTypeTag typeTag = PsiTreeUtil.getChildOfType(element, HaxeTypeTag.class);
-    final HaxeTypeOrAnonymous typeOrAnonymous = (typeTag != null) ? typeTag.getTypeOrAnonymous() : null;
+    final HaxeTypeOrAnonymous typeOrAnonymous = (typeTag != null) ? getFirstItem(typeTag.getTypeOrAnonymousList()) : null;
     final HaxeType type = (typeOrAnonymous != null) ? typeOrAnonymous.getType() :
                           ((element instanceof HaxeType) ? (HaxeType)element : null);
 
