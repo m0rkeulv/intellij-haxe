@@ -58,7 +58,7 @@ public class SemicolonFixer implements Fixer {
     if (haxeFunctionDeclarationWithAttributes != null) {
       HaxeTypeTag typeTag = haxeFunctionDeclarationWithAttributes.getTypeTag();
       if (typeTag != null) {
-        HaxeTypeOrAnonymous typeOrAnonymous = getFirstItem(typeTag.getTypeOrAnonymousList());
+        HaxeTypeOrAnonymous typeOrAnonymous = typeTag.getTypeOrAnonymous();
         if (typeOrAnonymous != null) {
           if (typeOrAnonymous.getText().equals("Void")) {
             return false;

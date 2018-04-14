@@ -24,6 +24,4 @@ generated/
 ################
 # DEPENDENCIES #
 ################
-/dependencies/downloads
-/dependencies/tools
-/dependencies/idea-IU
+/idea-IU

@@ -137,7 +137,7 @@ grammarKit {
     jflexRelease = '1.7.0-1'
 
     // tag or short commit hash of Grammar-Kit to use (see link below). Default is 2017.1.2
-    grammarKitRelease = '1.5.2'
+    grammarKitRelease = '2017.1.2'
 }
 
 task generateHaxeParser(type: GenerateParser,  group: 'generate') {
