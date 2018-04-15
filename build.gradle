@@ -52,10 +52,7 @@ allprojects {
         haxeCommonDir = "${rootDir}/haxe-common"
         haxePluginDir = "${rootDir}/haxe-plugin"
 
-        generatedSrcDir = "${haxePluginDir}/src/generated/java"
-
-        // Newer versions beyond 1.2.0 does not seem to work
-        grammarKitVersion = "1.2.0"
+        generatedSrcDir = "${haxePluginDir}/gen/"
 
         dependenciesDir = "${rootDir}/dependencies"
         downloadsDir = "${dependenciesDir}/downloads"

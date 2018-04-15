@@ -22,7 +22,7 @@
 
 if (!file("$generatedSrcDir").exists()) file("$generatedSrcDir").mkdirs()
 
-sourceSets.main.java.srcDirs = ['src/main/java', 'src/generated/java']
+sourceSets.main.java.srcDirs = ['src/main/java', 'gen']
 sourceSets.main.resources.srcDir 'src/main/resources'
 
 sourceSets.test.java.srcDir 'src/test/java'
@@ -133,20 +133,20 @@ task cleanGenerated(type: Delete, group: 'generate') {
 task generateHaxeParser(dependsOn: ':setupTools', type: JavaExec, group: 'generate') {
     workingDir = "${toolDir}"
     main '-jar'
-    args "grammar-kit.jar", "${generatedSrcDir}", "${grammarHaxe}"
+    args = ['grammar-kit.jar', "${generatedSrcDir}", "${grammarHaxe}"]
 
     inputs.file "${grammarHaxe}"
-    outputs.dir "${generatedSrcDir}/com/intellij/plugins/haxe/lang"
+    outputs.upToDateWhen { file("${generatedSrcDir}/com/intellij/plugins/haxe/lang").exists() }
 }
 
 
 task generateHxmlParser(dependsOn: ':setupTools', type: JavaExec, group: 'generate') {
     workingDir = "${toolDir}"
     main '-jar'
-    args "grammar-kit.jar", "${generatedSrcDir}", "${grammarHxml}"
+    args = ['grammar-kit.jar', "${generatedSrcDir}", "${grammarHxml}"]
 
     inputs.file "${grammarHxml}"
-    outputs.dir "${generatedSrcDir}/com/intellij/plugins/haxe/hxml"
+    outputs.upToDateWhen { file("${generatedSrcDir}/com/intellij/plugins/haxe/hxml").exists() }
 }
 
 import org.apache.tools.ant.filters.ReplaceTokens
@@ -210,11 +210,16 @@ void findValues(File buildFile) {
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 
-// from https://stackoverflow.com/questions/3963708/gradle-how-to-display-test-results-in-the-console-in-real-time
+
 tasks.withType(Test) {
+    // force all tests to run every time
+    dependsOn "cleanTest"
+
+    // output summary and any failed or skipped tests
+
+    // from https://stackoverflow.com/questions/3963708/gradle-how-to-display-test-results-in-the-console-in-real-time
     testLogging {
         events TestLogEvent.FAILED,
-                TestLogEvent.PASSED,
                 TestLogEvent.SKIPPED
 
         exceptionFormat TestExceptionFormat.FULL

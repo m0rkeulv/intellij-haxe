@@ -32,8 +32,8 @@ before_script: |
   fi
 
 script:
-- ./gradlew clean BuildPlugin -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
-- ./gradlew clean test -PgenerateHxcpp=true -PtargetVersion=$IDEA_VERSION
+- ./gradlew clean BuildPlugin -PgenerateHxcppDebugger=true -PtargetVersion=$IDEA_VERSION
+- ./gradlew clean test -PgenerateHxcppDebugger=true -PtargetVersion=$IDEA_VERSION
 
 
 notifications:

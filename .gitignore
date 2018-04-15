@@ -19,7 +19,7 @@ out/
 /build/
 /build_test/
 intellij-haxe*.jar
-generated/
+*/gen/
 
 ################
 # DEPENDENCIES #

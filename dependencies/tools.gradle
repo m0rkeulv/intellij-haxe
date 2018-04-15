@@ -39,7 +39,7 @@ task removeIdeaCache(group: 'dependencies') {
 }
 
 task grammarKitDownload(group: 'dependencies') {
-  outputs.file("$downloadsDir/$grammarKitDownloadFile")
+  outputs.upToDateWhen { file("$downloadsDir/$grammarKitDownloadFile").exists() }
   doLast {
     download {
       src "https://github.com/JetBrains/Grammar-Kit/releases/download/${grammarKitVersion}/GrammarKit.zip"
@@ -49,7 +49,8 @@ task grammarKitDownload(group: 'dependencies') {
   }
 }
 task grammarKitSetup(group: 'dependencies', dependsOn: 'grammarKitDownload') {
-//  outputs.file("$baseDir/$grammarKitTargetFile")
+  inputs.file("$downloadsDir/$grammarKitDownloadFile")
+  outputs.upToDateWhen { file("$toolDir/grammar-kit.jar").exists() }
   doLast {
     copy {
       from zipTree("$downloadsDir/$grammarKitDownloadFile").matching {
@@ -63,7 +64,7 @@ task grammarKitSetup(group: 'dependencies', dependsOn: 'grammarKitDownload') {
 }
 
 task psiDownload(group: 'dependencies') {
-  outputs.file("$downloadsDir/$psiDownloadFile")
+  outputs.upToDateWhen { file("$downloadsDir/$psiDownloadFile").exists() }
   doLast {
     download {
       src "https://github.com/JetBrains/Grammar-Kit/releases/download/${grammarKitVersion}/light-psi-all.jar"
@@ -72,9 +73,10 @@ task psiDownload(group: 'dependencies') {
     }
   }
 }
+
 task psiSetup(group: 'dependencies', dependsOn: 'psiDownload') {
-//  inputs.file("$downloadsDir/$psiDownloadFile")
-//  outputs.file("$toolDir/$psiTargetFile")
+  inputs.file("$downloadsDir/$psiDownloadFile")
+  outputs.upToDateWhen { file("$toolDir/$psiTargetFile").exists() }
   doLast {
     copy {
       from "$downloadsDir/$psiDownloadFile"
@@ -86,7 +88,7 @@ task psiSetup(group: 'dependencies', dependsOn: 'psiDownload') {
 
 
 task flexDownload(group: 'dependencies') {
-  outputs.file("$downloadsDir/$flexDownloadFile")
+  outputs.upToDateWhen { file("$downloadsDir/$flexDownloadFile").exists() }
   doLast {
     def url = getFlexUrl(file("${ideaTargetDir}/build.txt"))
     download {
@@ -99,8 +101,8 @@ task flexDownload(group: 'dependencies') {
 
 
 task flexSetup(group: 'dependencies', dependsOn: 'flexDownload') {
-//  inputs.file("$downloadsDir/$flexDownloadFile")
-//  outputs.file("$baseDir/$flexTargetFile")
+  inputs.file("$downloadsDir/$flexDownloadFile")
+  outputs.upToDateWhen { file("$toolDir/$flexTargetFile").exists() }
   doLast {
     copy {
       from "$downloadsDir/$flexDownloadFile"
@@ -109,7 +111,7 @@ task flexSetup(group: 'dependencies', dependsOn: 'flexDownload') {
     }
   }
 }
-//}
+
 
 String getFlexUrl(File buildFile) {
 //    println  "IDEA build number: " +buildFile.getText()

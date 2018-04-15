@@ -21,4 +21,3 @@ include 'haxe-plugin'
 include 'jps-plugin'
 include 'hxcpp-debugger-protocol'
 
-//rootProject.name = 'haxe-plugin'
