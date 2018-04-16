@@ -19,6 +19,7 @@
 runIde.enabled = false
 patchPluginXml.enabled = false
 verifyPlugin.enabled = false
+prepareSandbox.enabled = false
 
 sourceSets.main.java.srcDir "src/main/java"
 

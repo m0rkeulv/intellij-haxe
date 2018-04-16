@@ -16,9 +16,6 @@
  * limitations under the License.
  */
 
-//runIde.enabled = false
-//patchPluginXml.enabled = false
-//verifyPlugin.enabled = false
 
 if (!file("$generatedSrcDir").exists()) file("$generatedSrcDir").mkdirs()
 
@@ -27,6 +24,8 @@ sourceSets.main.resources.srcDir 'src/main/resources'
 
 sourceSets.test.java.srcDir 'src/test/java'
 sourceSets.test.resources.srcDir 'src/test/resources'
+
+idea.module{ generatedSourceDirs += file('gen') }
 
 
 dependencies {
@@ -127,6 +126,7 @@ test {
 
 clean.dependsOn('cleanGenerated')
 task cleanGenerated(type: Delete, group: 'generate') {
+    outputs.upToDateWhen { !file("$generatedSrcDir").exists() }
     delete "$generatedSrcDir"
 }
 

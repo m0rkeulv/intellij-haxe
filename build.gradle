@@ -75,6 +75,7 @@ allprojects {
         psiTargetFile = "light-psi-all.jar"
     }
 
+    apply plugin: 'idea'
     apply plugin: 'org.jetbrains.intellij'
 
     intellij {
