@@ -1046,5 +1046,18 @@
             text="Getter and Setter">
       <add-to-group anchor="after" relative-to-action="Generate.SetAccessor.Haxe" group-id="GenerateGroup"/>
     </action>
+
+    <action id="Haxe.reload" class="com.intellij.plugins.haxe.ide.popup.ReloadProjactAction"
+            text="Reload Project"
+
+            icon="AllIcons.Actions.Refresh">
+    </action>
+
+    <group id="Haxe.projectUtils" icon="HaxeIcons.Haxe_16" popup="true"  text="Haxe">
+      <reference id="Haxe.reload"/>
+      <!--<add-to-group group-id="EditorPopupMenu" anchor="before" relative-to-action="Haxe.projectUtils"/>-->
+      <add-to-group group-id="ProjectViewPopupMenu"/>
+    </group>
+
   </actions>
 </idea-plugin>

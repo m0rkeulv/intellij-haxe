@@ -130,6 +130,13 @@ public class HaxelibProjectUpdater {
     myQueue.add(tracker);
   }
 
+
+  public void forceUpdate(@NotNull Project project) {
+    ProjectTracker tracker = myProjects.get(project);
+    tracker.setDirty(true);
+    myQueue.add(tracker);
+  }
+
   /**
    * Close and possibly remove a project, if the reference count has been exhausted.
    *
