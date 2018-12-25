@@ -1,4 +1,5 @@
 sudo: required
+language: java
 
 env:
   - IDEA_VERSION=2016.3.8
