@@ -1,3 +1,4 @@
+sudo: required
 language: shell
 
 env:
@@ -10,6 +11,9 @@ os:
  - windows
  - osx
  - linux
+
+install:
+script:
 
 matrix:
   include:
@@ -33,7 +37,7 @@ matrix:
     script: 
     - ./gradlew clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD
   - os: osx
-    sudo: required
+    
     osx_image: xcode9.3
     install: |
       #OSX
