@@ -1,10 +1,11 @@
 language: generic
 
 env:
-  - IDEA_VERSION=2016.3.8
-  - IDEA_VERSION=2017.2.7
-  - IDEA_VERSION=2017.3.5
-  - IDEA_VERSION=2018.1.6
+  matrix:
+    - IDEA_VERSION=2016.3.8
+    - IDEA_VERSION=2017.2.7
+    - IDEA_VERSION=2017.3.5
+    - IDEA_VERSION=2018.1.6
 
 
 matrix:
