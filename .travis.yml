@@ -8,8 +8,6 @@ env:
   - IDEA_VERSION=2018.1.6
 
 
-
-
 matrix:
   include:
   - os: windows
@@ -17,19 +15,6 @@ matrix:
     - choco install jdk8
     script: 
     - gradlew.bat clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD
-  - os: linux
-    before_script: |
-      #Linux
-      if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-          sudo apt-get -qq update
-          sudo add-apt-repository ppa:haxe/releases -y
-          sudo apt-get update
-          sudo apt-get install haxe -y
-          mkdir ~/haxelib
-          haxelib setup ~/haxelib
-      fi
-    script: 
-    - ./gradlew clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD
   - os: osx
     osx_image: xcode9.3
     before_script: |
@@ -42,9 +27,6 @@ matrix:
       fi
     script: 
     - ./gradlew clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD     
-
-
-
 
 
 notifications:
