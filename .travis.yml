@@ -1,4 +1,4 @@
-language: generic
+language: shell
 
 env:
   - IDEA_VERSION=2016.3.8
