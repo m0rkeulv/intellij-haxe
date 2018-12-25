@@ -11,6 +11,31 @@ os:
  - osx
  - linux
 
+script:
+- ./gradlew clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD
+- gradlew.bat clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD 
+
+install:
+- choco install jdk8
+- |
+    #Linux
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+        sudo apt-get -qq update
+        sudo add-apt-repository ppa:haxe/releases -y
+        sudo apt-get update
+        sudo apt-get install haxe -y
+        mkdir ~/haxelib
+        haxelib setup ~/haxelib
+    fi
+- |
+    #OSX
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+        brew update
+        brew install haxe
+        mkdir ~/haxelib
+        haxelib setup ~/haxelib
+    fi
+
 matrix:
   include:
   - os: windows
