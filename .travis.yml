@@ -12,6 +12,11 @@ env:
 
 matrix:
   include:
+  - os: windows
+    before_install:
+    - choco install jdk8
+    script: 
+    - gradlew.bat clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD
   - os: linux
     before_script: |
       #Linux
@@ -25,9 +30,6 @@ matrix:
       fi
     script: 
     - ./gradlew clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD
-    after_success:
-    - pytest --cov --cov-config=setup.cfg
-    - coveralls
   - os: osx
     osx_image: xcode9.3
     before_script: |
@@ -40,11 +42,7 @@ matrix:
       fi
     script: 
     - ./gradlew clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD     
-  - os: windows
-    before_install:
-    - choco install jdk8
-    script: 
-    - gradlew.bat clean Build verifyPlugin -PgenerateHxcppDebugger=false -PtargetVersion=$IDEA_VERSION -PdevBuild=$DEV_BUILD
+
 
 
 
