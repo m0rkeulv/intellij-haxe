@@ -60,6 +60,7 @@ public class As3SearchReplaceAction extends AnAction implements Runnable {
     text = fixMultiExtends(text);
     //experimental
     //--------------------------------
+    text = fixSimpleFor(text);
     text = fixForEach(text);
     text = fixCasting(text);
     text = fixIsInstance(text);
@@ -174,6 +175,20 @@ public class As3SearchReplaceAction extends AnAction implements Runnable {
     return lines;
   }
 
+  private static String fixSimpleFor(String lines) {
+    String multiLine = "(?m)";
+    Matcher matcher = Pattern.compile(multiLine+"for\\s+\\(\\s*var\\s+(?<varName>\\w+)(:\\w+)?(\\s*=\\s*(\\d+);\\s*)(?<compareName>\\w+)\\s*\\<\\s*(.*);\\s((?<incName>\\w+)\\+\\+)\\)").matcher(lines);
+    if (matcher.find()) {
+      String varName = matcher.group("varName");
+      String compareName = matcher.group("compareName");
+      String incName = matcher.group("incName");
+      if (varName.equals(compareName) && compareName.equals(incName))
+        lines = lines.replaceAll(multiLine+"for\\s+\\(\\s*var\\s+(?<varName>\\w+)(:\\w+)?(\\s*=\\s*(\\d+);\\s*)(?<compareName>\\w+)\\s*\\<\\s*(.*);\\s((?<incName>\\w+)\\+\\+)\\)", "for ($1 in $4...$6)");
+    }
+
+    return lines;
+  }
+
   private static String fixForEach(String lines) {
     String multiLineIgnoreCase = "(?m)(?i)";
     lines = lines.replaceAll(multiLineIgnoreCase + "for\\s+each\\s*\\(\\s*var\\s+([\\w\\.\\(\\)\\[\\]\\\"]*)(\\:([\\w\\*]*))?\\s*in\\s+([\\w\\.\\(\\)\\[\\]\\\"]+)","for($1 in $4");
@@ -182,13 +197,13 @@ public class As3SearchReplaceAction extends AnAction implements Runnable {
   
   private static String fixCasting(String lines) {
     String multiLineIgnoreCase = "(?m)(?i)";
-    lines = lines.replaceAll(multiLineIgnoreCase + "([\\w\\.\\(\\)\\[\\]\\\"]+)\\s+as\\s+(\\w*)","cast($1, $2)");
+    lines = lines.replaceAll(multiLineIgnoreCase + "([\\w]+(\\.\\w*\\([\\w\\s]*\\))*|((\\w+\\[)[\\w\\.\\(\\)\\\"\\s\\+]+(\\])))\\s+as\\s+(\\w*)","cast($1, $6)");
     return lines;
   }
 
   private static String fixIsInstance(String lines) {
     String multiLineIgnoreCase = "(?m)(?i)";
-    lines = lines.replaceAll(multiLineIgnoreCase + "([\\w\\.\\(\\)\\[\\]\\\"]+)\\s+is\\s+(\\w*)","Std.is($1, $2)");
+    lines = lines.replaceAll(multiLineIgnoreCase + "(\\w[\\w\\.\\(\\)\\[\\]\\\"]+)\\s+is\\s+(\\w*)","Std.is($1, $2)");
     return lines;
   }
 
