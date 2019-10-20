@@ -134,6 +134,7 @@ public class HaxeResolver implements ResolveCache.AbstractResolver<HaxeReference
         if (target == null) target = HaxeResolveUtil.searchInSamePackage(fileModel, className);
 
         if (target != null) {
+          LogResolution(reference, "via import.");
           return asList(target);
         }
       }
@@ -148,7 +149,9 @@ public class HaxeResolver implements ResolveCache.AbstractResolver<HaxeReference
       }
     }
 
-    LogResolution(reference, "failed after exhausting all options.");
+    if (result == null) {
+      LogResolution(reference, "failed after exhausting all options.");
+    }
     return result == null ? ContainerUtil.emptyList() : result;
   }
 
@@ -172,6 +175,7 @@ public class HaxeResolver implements ResolveCache.AbstractResolver<HaxeReference
       final HaxeMethodModel method = accessorType == HaxeAccessorType.GET ? fieldModel.getGetterMethod() : fieldModel.getSetterMethod();
 
       if (method != null) {
+        LogResolution(reference, "via accessor.");
         return asList(method.getBasePsi());
       }
     }
@@ -430,7 +434,9 @@ public class HaxeResolver implements ResolveCache.AbstractResolver<HaxeReference
       if (leftClass.isAbstract()) {
         HaxeAbstractClassModel model = (HaxeAbstractClassModel)leftClass.getModel();
         if (model.isForwarded(reference.getReferenceName())) {
-          final HaxeClass underlyingClass = model.getUnderlyingClass(reference.getSpecialization().toGenericResolver(leftClass));
+          HaxeGenericSpecialization specialization = reference.getSpecialization();
+          HaxeGenericResolver resolver = specialization != null ? specialization.toGenericResolver(leftClass) : null;
+          final HaxeClass underlyingClass = model.getUnderlyingClass(resolver);
           if (underlyingClass != null) {
             member = underlyingClass.getModel().getMember(reference.getReferenceName());
             if (member != null) {

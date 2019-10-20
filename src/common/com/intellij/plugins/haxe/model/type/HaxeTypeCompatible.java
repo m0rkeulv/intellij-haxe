@@ -3,6 +3,7 @@
  * Copyright 2014-2015 AS3Boyan
  * Copyright 2014-2014 Elias Ku
  * Copyright 2018 Ilya Malanin
+ * Copyright 2019 Eric Bishton
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +19,7 @@
  */
 package com.intellij.plugins.haxe.model.type;
 
+import com.intellij.plugins.haxe.lang.psi.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -29,17 +31,40 @@ public class HaxeTypeCompatible {
     return true;
   }
 
-  static public boolean canAssignToFrom(SpecificTypeReference to, ResultHolder from) {
+  static public boolean canAssignToFrom(@Nullable SpecificTypeReference to, @Nullable ResultHolder from) {
+    if (null == to || null == from) return false;
     return canAssignToFrom(to, from.getType());
   }
 
-  static public boolean canAssignToFrom(ResultHolder to, ResultHolder from) {
+  static public boolean canAssignToFrom(@Nullable ResultHolder to, @Nullable ResultHolder from) {
+    if (null == to || null == from) return false;
     if (to.isUnknown()) {
       to.setType(from.getType().withoutConstantValue());
-    } else if (from.isUnknown()) {
+    }
+    else if (from.isUnknown()) {
       from.setType(to.getType().withoutConstantValue());
     }
     return canAssignToFrom(to.getType(), from.getType());
+  }
+
+  static private boolean isFunctionTypeOrReference(SpecificTypeReference ref) {
+    return ref instanceof SpecificFunctionReference || ref.isFunction();
+  }
+
+  static private SpecificFunctionReference asFunctionReference(SpecificTypeReference ref) {
+    if (ref instanceof SpecificFunctionReference)
+      return (SpecificFunctionReference)ref;
+
+    if (ref.isFunction()) {
+      HaxeClass classReference = ((SpecificHaxeClassReference)ref).getHaxeClass();
+      if (classReference instanceof HaxeSpecificFunction) {
+        HaxeSpecificFunction func = (HaxeSpecificFunction)classReference;
+        return SpecificFunctionReference.create(func);
+      }
+      // The Function class unifies with (can be assigned to by) any function.
+      return new SpecificFunctionReference.StdFunctionReference(classReference);
+    }
+    return null;  // XXX: Should throw exception instead??
   }
 
   static public boolean canAssignToFrom(
@@ -49,8 +74,10 @@ public class HaxeTypeCompatible {
     if (to == null || from == null) return false;
     if (to.isDynamic() || from.isDynamic()) return true;
 
-    if (to instanceof SpecificFunctionReference && from instanceof SpecificFunctionReference) {
-      return canAssignToFromFunction((SpecificFunctionReference)to, (SpecificFunctionReference)from);
+    if (isFunctionTypeOrReference(to) && isFunctionTypeOrReference(from)) {
+      SpecificFunctionReference toRef = asFunctionReference(to);
+      SpecificFunctionReference fromRef = asFunctionReference(from);
+      return canAssignToFromFunction(toRef, fromRef);
     }
 
     if (to instanceof SpecificHaxeClassReference && from instanceof SpecificHaxeClassReference) {
@@ -64,6 +91,13 @@ public class HaxeTypeCompatible {
     @NotNull SpecificFunctionReference to,
     @NotNull SpecificFunctionReference from
   ) {
+
+    // The Function class is always assignable to other functions.
+    if (to instanceof SpecificFunctionReference.StdFunctionReference
+        ||from instanceof SpecificFunctionReference.StdFunctionReference) {
+      return true;
+    }
+
     if (to.arguments.size() != from.arguments.size()) return false;
     for (int n = 0; n < to.arguments.size(); n++) {
       if (!to.arguments.get(n).canAssign(from.arguments.get(n))) return false;
@@ -73,7 +107,48 @@ public class HaxeTypeCompatible {
     return to.returnValue.isVoid() || to.returnValue.canAssign(from.returnValue);
   }
 
+  static private SpecificHaxeClassReference getUnderlyingClassIfAbstractNull(SpecificHaxeClassReference ref) {
+    if (ref.getHaxeClass() instanceof HaxeAbstractClassDeclaration && "Null".equals(ref.getClassName())) {
+      SpecificHaxeClassReference underlying = ref.getHaxeClassModel().getUnderlyingClassReference(ref.getGenericResolver());
+      if (null != underlying) {
+        ref = underlying;
+      }
+    }
+    return ref;
+  }
+
   static private boolean canAssignToFromType(
+    @NotNull SpecificHaxeClassReference to,
+    @NotNull SpecificHaxeClassReference from
+  ) {
+
+    // Null<T> is a special case.  It must act like a T in all ways.  Whereas,
+    // any other abstract must act like it hides its internal types.
+    to = getUnderlyingClassIfAbstractNull(to);
+    from = getUnderlyingClassIfAbstractNull(from);
+
+    if (canAssignToFromSpecificType(to, from)) return true;
+
+    Set<SpecificHaxeClassReference> compatibleTypes = to.getCompatibleTypes(SpecificHaxeClassReference.Compatibility.ASSIGNABLE_FROM);
+    for (SpecificHaxeClassReference compatibleType : compatibleTypes) {
+      if (canAssignToFromSpecificType(compatibleType, from)) return true;
+    }
+
+    compatibleTypes = from.getCompatibleTypes(SpecificHaxeClassReference.Compatibility.ASSIGNABLE_TO);
+    for (SpecificHaxeClassReference compatibleType : compatibleTypes) {
+      if (canAssignToFromSpecificType(to, compatibleType)) return true;
+    }
+
+    compatibleTypes = from.getInferTypes();
+    for (SpecificHaxeClassReference compatibleType : compatibleTypes) {
+      if (canAssignToFromSpecificType(to, compatibleType)) return true;
+    }
+
+    // Last ditch effort...
+    return to.toStringWithoutConstant().equals(from.toStringWithoutConstant());
+  }
+
+  static private boolean canAssignToFromSpecificType(
     @NotNull SpecificHaxeClassReference to,
     @NotNull SpecificHaxeClassReference from
   ) {
@@ -96,21 +171,10 @@ public class HaxeTypeCompatible {
         return true;
       }
       // issue #388: allow `public var m:Map<String, String> = new Map();`
-      else if(from.getSpecifics().length == 0) {
+      else if (from.getSpecifics().length == 0) {
         return true;
       }
     }
-
-    Set<SpecificHaxeClassReference> compatibleTypes = to.getCompatibleTypes();
-    for (SpecificHaxeClassReference compatibleType : compatibleTypes) {
-      if (compatibleType.toStringWithoutConstant().equals(from.toStringWithoutConstant())) return true;
-    }
-
-    compatibleTypes = from.getInferTypes();
-    for (SpecificHaxeClassReference compatibleType : compatibleTypes) {
-      if (compatibleType.toStringWithoutConstant().equals(to.toStringWithoutConstant())) return true;
-    }
-
-    return to.toStringWithoutConstant().equals(from.toStringWithoutConstant());
+    return false;
   }
 }

@@ -19,6 +19,9 @@
  */
 package com.intellij.plugins.haxe.model.type;
 
+import com.intellij.plugins.haxe.lang.psi.HaxeClass;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxeDummyASTNode;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxePsiCompositeElementImpl;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeProjectModel;
 import com.intellij.psi.PsiElement;
@@ -33,10 +36,15 @@ public abstract class SpecificTypeReference {
   public static final String STRING = "String";
   public static final String ARRAY = "Array";
   public static final String DYNAMIC = "Dynamic";
-  public static final String UNKNOWN = "Unknown";
+  public static final String UNKNOWN = "Unknown"; // TODO: Should NOT a legal type name.
   public static final String ITERATOR = "Iterator";
+  public static final String FUNCTION = "Function";
   public static final String INVALID = "@@Invalid";
   public static final String MAP = "Map";
+  public static final String ANY = "Any"; // Specifically, the "Any" class; See <Haxe>/std/Any.hx.
+
+  /** A context to use when there is none to be found.  Try very hard not to use this, please. */
+  public static final PsiElement UNKNOWN_CONTEXT = new HaxePsiCompositeElementImpl(new HaxeDummyASTNode(UNKNOWN));
 
   final protected PsiElement context;
 
@@ -76,8 +84,12 @@ public abstract class SpecificTypeReference {
     return primitive(DYNAMIC, context);
   }
 
+  public static SpecificHaxeClassReference getAny(@NotNull PsiElement context) {
+    return primitive(ANY, context);
+  }
+
   public static SpecificHaxeClassReference getUnknown(@NotNull PsiElement context) {
-    return primitive(UNKNOWN, context);
+    return SpecificHaxeClassReference.withoutGenerics(getUnknownClassReference(context));
   }
 
   public static SpecificHaxeClassReference getInvalid(@NotNull PsiElement context) {
@@ -88,6 +100,10 @@ public abstract class SpecificTypeReference {
     final PsiElement context = type.getElementContext();
     final HaxeClassReference classReference = getStdClassReference(ITERATOR, context);
     return SpecificHaxeClassReference.withGenerics(classReference, new ResultHolder[]{type.createHolder()});
+  }
+
+  public static SpecificHaxeClassReference getFunction(@NotNull PsiElement context) {
+    return primitive(FUNCTION, context);
   }
 
   public static SpecificHaxeClassReference primitive(String name, @NotNull PsiElement context) {
@@ -144,6 +160,14 @@ public abstract class SpecificTypeReference {
 
   final public boolean isMap() {
     return isNamedType(MAP);
+  }
+
+  final public boolean isAny() {
+    return isNamedType(ANY);
+  }
+
+  final public boolean isFunction() {
+    return isNamedType(FUNCTION);
   }
 
   private boolean isNamedType(String typeName) {
@@ -213,6 +237,7 @@ public abstract class SpecificTypeReference {
     return toString();
   }
 
+  /** Get the return type of the named method or field in the class referenced by this object. */
   @Nullable
   public ResultHolder access(String name, HaxeExpressionEvaluatorContext context, HaxeGenericResolver resolver) {
     return null;
@@ -247,5 +272,10 @@ public abstract class SpecificTypeReference {
   @Nullable
   private static HaxeClassModel getStdTypeModel(String name, PsiElement context) {
     return HaxeProjectModel.fromElement(context).getStdPackage().getClassModel(name);
+  }
+
+  @NotNull
+  private static HaxeClassReference getUnknownClassReference(@NotNull PsiElement context) {
+    return new HaxeClassReference(HaxeClass.UNKNOWN_CLASS.getModel(), context);
   }
 }

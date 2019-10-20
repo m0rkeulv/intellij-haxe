@@ -168,7 +168,9 @@ mDIGIT = [:digit:]
 ESCAPE_SEQUENCE=\\[^\r\n]
 
 IDENTIFIER="$"? {mLETTER} ({mDIGIT} | {mLETTER})*
-MACRO_IDENTIFIER="@" ":"? {IDENTIFIER}
+
+mMETA_PART = {mLETTER} ({mDIGIT} | {mLETTER})*
+MACRO_IDENTIFIER="@" ":"? {mMETA_PART} ("." {mMETA_PART})*
 
 C_STYLE_COMMENT=("/*"[^"*"]{COMMENT_TAIL})|"/*"
 DOC_COMMENT="/*""*"+("/"|([^"/""*"]{COMMENT_TAIL}))?
@@ -209,7 +211,7 @@ IDENTIFIER_NO_DOLLAR={IDENTIFIER_START_NO_DOLLAR}{IDENTIFIER_PART_NO_DOLLAR}*
     Compiler conditionals: e.g. "#if (js)...#else...#endif"
     "macro", "this", and "null" are all identifiers as far as CC is concerned.
  */
-CONDITIONAL_IDENTIFIER={IDENTIFIER_NO_DOLLAR}
+CONDITIONAL_IDENTIFIER={IDENTIFIER_NO_DOLLAR} ("." {IDENTIFIER_NO_DOLLAR})*
 
 // Treat #line and #error as end of line comments
 CONDITIONAL_LINE="#line"[^\r\n]*

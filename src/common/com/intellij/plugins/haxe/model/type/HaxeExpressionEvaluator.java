@@ -78,7 +78,7 @@ public class HaxeExpressionEvaluator {
     }
     catch (Throwable t) {
       // XXX: Watch this.  If it happens a lot, then maybe we shouldn't log it unless in debug mode.
-      LOG.warn("Error evaluating expression type for element " + element.toString(), t);
+      LOG.warn("Error evaluating expression type for element " + (null == element ? "<null>" : element.toString()), t);
       return SpecificHaxeClassReference.getUnknown(element).createHolder();
     }
   }
@@ -181,25 +181,13 @@ public class HaxeExpressionEvaluator {
       if (ancestor == null) return SpecificTypeReference.getDynamic(element).createHolder();
       HaxeClassModel model = ancestor.getModel();
       if (model.isAbstract()) {
-        HaxeTypeOrAnonymous typeOrAnon = model.getUnderlyingType();
-        if (typeOrAnon != null) {
-          HaxeType type = typeOrAnon.getType();
-          if (type != null) {
-            HaxeClass aClass = HaxeResolveUtil.tryResolveClassByQName(type);
-            if (aClass != null) {
-              ResultHolder[] specifics =  HaxeTypeResolver.resolveParametersToTypes(aClass, resolver);
-              return SpecificHaxeClassReference.withGenerics(new HaxeClassReference(aClass.getModel(), element), specifics, element).createHolder();
-            }
-          } else { // Anonymous type
-            HaxeAnonymousType anon = typeOrAnon.getAnonymousType();
-            if (anon != null) {
-              // Anonymous types don't have parameters of their own, but when they are part of a typedef, they use the parameters from it.
-              return SpecificHaxeClassReference.withGenerics(new HaxeClassReference(anon.getModel(), element), resolver.getSpecifics(), element).createHolder();
-            }
-          }
+        SpecificHaxeClassReference reference = model.getUnderlyingClassReference(resolver);
+        if (null != reference) {
+          return reference.createHolder();
         }
       }
-      return SpecificHaxeClassReference.withGenerics(new HaxeClassReference(model, element), resolver.getSpecifics()).createHolder();
+      ResultHolder[] specifics =  HaxeTypeResolver.resolveDeclarationParametersToTypes(model.haxeClass, resolver);
+      return SpecificHaxeClassReference.withGenerics(new HaxeClassReference(model, element), specifics).createHolder();
     }
 
     if (element instanceof HaxeIdentifier) {
@@ -340,13 +328,16 @@ public class HaxeExpressionEvaluator {
       boolean resolved = !typeHolder.getType().isUnknown();
       for (int n = 1; n < children.length; n++) {
         String accessName = children[n].getText();
-        if (typeHolder.getType().isString() && typeHolder.getType().isConstant() && accessName.equals("code")) {
+        if (typeHolder.getType().isString() && typeHolder.getType().isConstant() && "code".equals(accessName)) {
           String str = (String)typeHolder.getType().getConstant();
           typeHolder = SpecificTypeReference.getInt(element, (str != null && str.length() >= 1) ? str.charAt(0) : -1).createHolder();
           if (str == null || str.length() != 1) {
             context.addError(element, "String must be a single UTF8 char");
           }
         } else {
+
+          // TODO: Yo! Eric!!  This needs to get fixed.  The resolver is coming back as Dynamic, when it should be String
+
           HaxeGenericResolver localResolver = null != typeHolder.getClassType()
                                               ? typeHolder.getClassType().getGenericResolver()
                                               : new HaxeGenericResolver();
@@ -372,7 +363,7 @@ public class HaxeExpressionEvaluator {
         if (reference != null) {
           PsiElement subelement = reference.resolve();
           if (subelement instanceof AbstractHaxeNamedComponent) {
-            typeHolder = HaxeTypeResolver.getFieldOrMethodReturnType((AbstractHaxeNamedComponent)subelement);
+            typeHolder = HaxeTypeResolver.getFieldOrMethodReturnType((AbstractHaxeNamedComponent)subelement, resolver);
           }
         }
       }
@@ -539,15 +530,21 @@ public class HaxeExpressionEvaluator {
       return holder;
     }
 
-    if (element instanceof PsiJavaToken) {
-      IElementType type = ((PsiJavaToken)element).getTokenType();
+    if (element instanceof HaxePsiToken) {
+      IElementType type = ((HaxePsiToken)element).getTokenType();
 
       if (type == HaxeTokenTypes.LITINT || type == HaxeTokenTypes.LITHEX || type == HaxeTokenTypes.LITOCT) {
         return SpecificHaxeClassReference.primitive("Int", element, Long.decode(element.getText())).createHolder();
       } else if (type == HaxeTokenTypes.LITFLOAT) {
-        return SpecificHaxeClassReference.primitive("Float", element, Double.parseDouble(element.getText())).createHolder();
+        Float value = new Float(element.getText());
+        return SpecificHaxeClassReference.primitive("Float", element, Double.parseDouble(element.getText()))
+          .withConstantValue(value)
+          .createHolder();
       } else if (type == HaxeTokenTypes.KFALSE || type == HaxeTokenTypes.KTRUE) {
-        return SpecificHaxeClassReference.primitive("Bool", element, type == HaxeTokenTypes.KTRUE).createHolder();
+        Boolean value = type == HaxeTokenTypes.KTRUE;
+        return SpecificHaxeClassReference.primitive("Bool", element, type == HaxeTokenTypes.KTRUE)
+          .withConstantValue(value)
+          .createHolder();
       } else if (type == HaxeTokenTypes.KNULL) {
         return SpecificHaxeClassReference.primitive("Dynamic", element, HaxeNull.instance).createHolder();
       } else {

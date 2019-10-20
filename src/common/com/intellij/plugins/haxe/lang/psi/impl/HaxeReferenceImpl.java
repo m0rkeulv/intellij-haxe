@@ -43,6 +43,7 @@ import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.ArrayUtil;
 import com.intellij.util.IncorrectOperationException;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -283,10 +284,32 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
     return result;
   }
 
+  /** Replacement for instanceof that has better logging and is easier to step over :) */
+  @Contract("null->false")
+  private boolean isType(Class clazz) {
+    if (clazz.isInstance(this)) {
+      if (LOG.isTraceEnabled()) LOG.traceAs(HaxeDebugUtil.getCallerStackFrame(), "Resolving " + this.getDebugName() + " as class type " + clazz.getName());
+      return true;
+    }
+    if (LOG.isTraceEnabled()) LOG.traceAs(HaxeDebugUtil.getCallerStackFrame(), this.getDebugName() + " is not a " + clazz.getName());
+    return false;
+  }
+
+  /** Replacement for instanceof that has better logging and is easier to step over :) */
+  @Contract("null,_->false")
+  private boolean isType(Object o, Class clazz) {
+    if (clazz.isInstance(o)) {
+      if (LOG.isTraceEnabled()) LOG.traceAs(HaxeDebugUtil.getCallerStackFrame(), "Resolving " + o + " as class type " + clazz.getName());
+      return true;
+    }
+    if (LOG.isTraceEnabled()) LOG.traceAs(HaxeDebugUtil.getCallerStackFrame(), o + " is not a " + clazz.getName());
+    return false;
+  }
+
   @NotNull
   private HaxeClassResolveResult resolveHaxeClassInternal() {
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking for 'this'"));
-    if (this instanceof HaxeThisExpression) {
+
+    if (isType(HaxeThisExpression.class)) {
       HaxeClass clazz = PsiTreeUtil.getParentOfType(this, HaxeClass.class);
       // this has different semantics on abstracts
       if (clazz != null && clazz.getModel().isAbstract()) {
@@ -297,8 +320,8 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
       }
       return HaxeClassResolveResult.create(clazz);
     }
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking super class."));
-    if (this instanceof HaxeSuperExpression) {
+
+    if (isType(HaxeSuperExpression.class)) {
       final HaxeClass haxeClass = PsiTreeUtil.getParentOfType(this, HaxeClass.class);
       assert haxeClass != null;
       if (haxeClass.getHaxeExtendsList().isEmpty()) {
@@ -309,12 +332,12 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
       superClassResolveResult.specializeByParameters(haxeClass.getHaxeExtendsList().get(0).getTypeParam());
       return superClassResolveResult;
     }
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking string literal."));
-    if (this instanceof HaxeStringLiteralExpression) {
+
+    if (isType(HaxeStringLiteralExpression.class)) {
       return HaxeClassResolveResult.create(HaxeResolveUtil.findClassByQName("String", this));
     }
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking literal."));
-    if (this instanceof HaxeLiteralExpression) {
+
+    if (isType(HaxeLiteralExpression.class)) {
       final PsiElement firstChild = getFirstChild();
       if (firstChild instanceof LeafPsiElement) {
         final LeafPsiElement child = (LeafPsiElement)getFirstChild();
@@ -324,12 +347,12 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
       // Else, it's a block statement and not a named literal.
       return HaxeClassResolveResult.create(null);
     }
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking map literal."));
-    if (this instanceof HaxeMapLiteral) {
+
+    if (isType(HaxeMapLiteral.class)) {
       return HaxeClassResolveResult.create(HaxeResolveUtil.findClassByQName("Map", this));
     }
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking array literal."));
-    if (this instanceof HaxeArrayLiteral) {
+
+    if (isType(HaxeArrayLiteral.class)) {
       HaxeArrayLiteral haxeArrayLiteral = (HaxeArrayLiteral)this;
       HaxeExpressionList expressionList = haxeArrayLiteral.getExpressionList();
       boolean isString = false;
@@ -414,15 +437,15 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
 
       return resolveResult;
     } // end (this instanceof HaxeArrayLiteral)
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking 'new' expression."));
-    if (this instanceof HaxeNewExpression) {
+
+    if (isType(HaxeNewExpression.class)) {
       final HaxeClassResolveResult result = HaxeClassResolveResult.create(HaxeResolveUtil.tryResolveClassByQName(
         ((HaxeNewExpression)this).getType()));
       result.specialize(this);
       return result;
     }
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking call expression."));
-    if (this instanceof HaxeCallExpression) {
+
+    if (isType(HaxeCallExpression.class)) {
       final HaxeExpression expression = ((HaxeCallExpression)this).getExpression();
       final HaxeClassResolveResult leftResult = tryGetLeftResolveResult(expression);
       if (expression instanceof HaxeReference) {
@@ -432,8 +455,8 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
         return result;
       }
     }
-    if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Checking array access expression."));
-    if (this instanceof HaxeArrayAccessExpression) {
+
+    if (isType(HaxeArrayAccessExpression.class)) {
       // wrong generation. see HaxeCallExpression
       final HaxeReference reference = PsiTreeUtil.getChildOfType(this, HaxeReference.class);
       if (reference != null) {
@@ -458,18 +481,18 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
 
     if (LOG.isTraceEnabled()) LOG.trace(traceMsg("Calling resolve()"));
     PsiElement resolve = resolve();
-    if (resolve instanceof PsiPackage) {
+    if (isType(resolve, PsiPackage.class)) {
       // Packages don't ever resolve to classes. (And they don't have children!)
       return HaxeClassResolveResult.EMPTY;
     }
-    if (resolve instanceof HaxeAnonymousTypeField) {
+    if (isType(resolve, HaxeAnonymousTypeField.class)) {
       HaxeAnonymousTypeField field = (HaxeAnonymousTypeField)resolve;
       HaxeTypeTag typeTag = field.getTypeTag();
-      if (typeTag.getTypeOrAnonymous() != null) {
+      if (null != typeTag && typeTag.getTypeOrAnonymous() != null) {
         HaxeTypeOrAnonymous typeOrAnonymous = typeTag.getTypeOrAnonymous();
         if (typeOrAnonymous != null) {
           if (typeOrAnonymous.getAnonymousType() != null) {
-            return HaxeClassResolveResult.create(typeOrAnonymous.getAnonymousType(), getSpecialization().getInnerSpecialization(typeOrAnonymous));
+            return HaxeClassResolveResult.create(typeOrAnonymous.getAnonymousType(), getSpecialization());
           } else {
             HaxeType type = typeOrAnonymous.getType();
             if (type != null) {
@@ -479,7 +502,7 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
                 final HaxeGenericSpecialization specialization = getSpecialization();
                 if(specialization != null && componentName != null) {
                   String genericName = componentName.getText();
-                  final HaxeClassResolveResult result = getSpecialization().get(resolve, genericName);
+                  final HaxeClassResolveResult result = specialization.get(resolve, genericName);
                   if (result != null) {
                     return result;
                   }
@@ -495,7 +518,7 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
       return HaxeClassResolveResult.create(HaxeResolveUtil.findClassByQName("Dynamic", this));
     }
 
-    if (resolve instanceof HaxeGenericListPart) {
+    if (isType(resolve, HaxeGenericListPart.class)) {
       final HaxeComponentName componentName = ((HaxeGenericListPart)resolve).getComponentName();
       if (componentName != null) {
         HaxeGenericSpecialization innerSpecialization =
@@ -507,6 +530,18 @@ abstract public class HaxeReferenceImpl extends HaxeExpressionImpl implements Ha
         }
       }
     }
+
+    if (isType(resolve, HaxeEnumValueDeclaration.class)) {
+      final HaxeEnumDeclaration enumDeclaration = UsefulPsiTreeUtil.getParentOfType(resolve, HaxeEnumDeclaration.class);
+      return HaxeClassResolveResult.create(enumDeclaration, getSpecialization());
+    }
+
+    if (isType(resolve, HaxeClass.class) || isType(resolve, HaxeFunctionLiteral.class)) {
+      // Classes (particularly typedefs) that are already resolved should not be
+      // re-resolved to their component parts.
+      return HaxeClassResolveResult.create((HaxeClass)resolve, getSpecialization());
+    }
+
     if (resolve != null) {
       return HaxeResolveUtil.getHaxeClassResolveResult(resolve, getSpecialization());
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Eric Bishton
+ * Copyright 2018-2019 Eric Bishton
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
  */
 package com.intellij.plugins.haxe.model.type;
 
-import com.intellij.plugins.haxe.lang.psi.HaxeClass;
-import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
+import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
+import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
+import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -31,7 +32,23 @@ public class HaxeGenericResolverUtil {
     HaxeGenericResolver resolver = new HaxeGenericResolver();
     appendClassGenericResolver(element, resolver);
     appendMethodGenericResolver(element, resolver);
+    appendStatementGenericResolver(HaxeResolveUtil.getLeftReference(element), resolver);
+    return resolver;
+  }
 
+  @Nullable
+  public static HaxeGenericResolver generateResolverForSupers(HaxeClassModel classModel) {
+    if (null == classModel) return null;
+    return generateResolverForSupers(classModel.getPsi());
+  }
+
+  @Nullable
+  public static HaxeGenericResolver generateResolverForSupers(HaxeClass clazz) {
+    if (null == clazz) return null;
+    HaxeGenericResolver resolver = new HaxeGenericResolver();
+    for (PsiClass superClazz : clazz.getSupers()) {
+      appendClassGenericResolver(superClazz, resolver);
+    }
     return resolver;
   }
 
@@ -57,6 +74,20 @@ public class HaxeGenericResolverUtil {
       resolver.addAll(model.getGenericResolver(resolver));
     }
 
+    return resolver;
+  }
+
+  @Nullable static HaxeGenericResolver appendStatementGenericResolver(PsiElement element, @NotNull HaxeGenericResolver resolver) {
+    if (null == element) return resolver;
+
+    HaxeReference left = HaxeResolveUtil.getLeftReference(element);
+    if ( null != left) {
+      appendStatementGenericResolver(left, resolver);
+    }
+    if (element instanceof HaxeReference) {
+      HaxeClassResolveResult result = ((HaxeReference)element).resolveHaxeClass();
+      resolver.addAll(result.getGenericResolver());
+    }
     return resolver;
   }
 
