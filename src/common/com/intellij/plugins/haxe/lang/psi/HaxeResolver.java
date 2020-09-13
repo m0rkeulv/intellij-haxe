@@ -357,13 +357,29 @@ public class HaxeResolver implements ResolveCache.AbstractResolver<HaxeReference
   private List<? extends PsiElement> resolveChain(HaxeReference lefthandExpression, HaxeReference reference) {
     String identifier =
       reference instanceof HaxeReferenceExpression ? ((HaxeReferenceExpression)reference).getIdentifier().getText() : reference.getText();
-    HaxeClassResolveResult leftExpression = lefthandExpression.resolveHaxeClass();
+    final HaxeClassResolveResult leftExpression = lefthandExpression.resolveHaxeClass();
     if (leftExpression.getHaxeClass() != null) {
       HaxeMemberModel member = leftExpression.getHaxeClass().getModel().getMember(identifier, leftExpression.getGenericResolver());
       if (member != null) {
         return Collections.singletonList(member.getBasePsi());
       }
     }
+
+    // Check 'using' classes.
+    HaxeClass leftClass = leftExpression.getHaxeClass();
+    if (leftClass != null) {
+      HaxeFileModel fileModel = HaxeFileModel.fromElement(reference.getContainingFile());
+      List<HaxeUsingModel> usingModels = fileModel != null ? fileModel.getUsingModels() : Collections.emptyList();
+      HaxeMethodModel foundMethod = null;
+      for (int i = usingModels.size() - 1; i >= 0; --i) {
+        foundMethod = usingModels.get(i).findExtensionMethod(identifier, leftExpression.getSpecificClassReference(reference, leftExpression.getGenericResolver()));
+        if (null != foundMethod) {
+          if (LOG.isTraceEnabled()) LOG.trace("Found method in 'using' import: " + foundMethod.getName());
+          return Collections.singletonList(foundMethod.getBasePsi());
+        }
+      }
+    }
+
     if (LOG.isTraceEnabled()) LOG.trace(traceMsg(null));
     final HaxeComponentName componentName = tryResolveHelperClass(lefthandExpression, identifier);
     if (componentName != null) {
@@ -372,7 +388,7 @@ public class HaxeResolver implements ResolveCache.AbstractResolver<HaxeReference
     }
     if (LOG.isTraceEnabled()) LOG.trace(traceMsg("trying keywords (super, new) arrays, literals, etc."));
     // Try resolving keywords (super, new), arrays, literals, etc.
-    return resolveByClassAndSymbol(lefthandExpression.resolveHaxeClass(), reference);
+    return resolveByClassAndSymbol(leftExpression, reference);
   }
 
   private PsiElement resolveQualifiedReference(HaxeReference reference) {
@@ -583,8 +599,10 @@ public class HaxeResolver implements ResolveCache.AbstractResolver<HaxeReference
       // try find using
       HaxeFileModel fileModel = HaxeFileModel.fromElement(reference);
       if (fileModel != null) {
+        SpecificHaxeClassReference leftClassReference =
+          SpecificHaxeClassReference.withGenerics(classModel.getReference(), null == resolver ? null : resolver.getSpecificsFor(leftClass));
         for (HaxeUsingModel model : fileModel.getUsingModels()) {
-          HaxeMethodModel method = model.findExtensionMethod(reference.getReferenceName(), leftClass);
+          HaxeMethodModel method = model.findExtensionMethod(reference.getReferenceName(), leftClassReference);
           if (method != null) {
             isExtension.set(true);
             return asList(method.getNamePsi());
