@@ -63,7 +63,7 @@ public class As3SearchReplaceAction extends AnAction implements Runnable {
     text = fixSimpleFor(text);
     text = fixForEach(text);
     text = fixCasting(text);
-    text = fixIsInstance(text);
+    //text = fixIsInstance(text);
     text = fixConstructors(text);
 
     // My custom rules /
@@ -201,11 +201,11 @@ public class As3SearchReplaceAction extends AnAction implements Runnable {
     return lines;
   }
 
-  private static String fixIsInstance(String lines) {
-    String multiLineIgnoreCase = "(?m)(?i)";
-    lines = lines.replaceAll(multiLineIgnoreCase + "(\\w[\\w\\.\\(\\)\\[\\]\\\"]+)\\s+is\\s+(\\w*)","Std.is($1, $2)");
-    return lines;
-  }
+  //private static String fixIsInstance(String lines) {
+  //  String multiLineIgnoreCase = "(?m)(?i)";
+  //  lines = lines.replaceAll(multiLineIgnoreCase + "(\\w[\\w\\.\\(\\)\\[\\]\\\"]+)\\s+is\\s+(\\w*)","Std.is($1, $2)");
+  //  return lines;
+  //}
 
 
   private static String simpleReplacements(String line) {
