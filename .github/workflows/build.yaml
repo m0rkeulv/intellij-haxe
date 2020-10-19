@@ -29,7 +29,8 @@ jobs:
         with:
           haxe-version: 3.4.7
 
-      - run: haxe -version
+      - name: Test Haxe
+        run: haxe -version
 
       - name: Build with Gradle
         run: gradle clean build verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}"
