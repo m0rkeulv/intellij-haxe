@@ -44,7 +44,7 @@ jobs:
         with:
           path: dependencies
           key: ${{ runner.os }}-downloads-${{ hashFiles('**/**') }}
-          restore-keys: ${{ runner.os }}-gradle
+          restore-keys: ${{ runner.os }}-downloads
 
       - name: Build with Gradle
         run: gradle clean build verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}"
