@@ -42,9 +42,16 @@ jobs:
       - name: Cache plugin downloads
         uses: actions/cache@v2
         with:
-          path: dependencies
-          key: ${{ runner.os }}-downloads-${{ hashFiles('**/**') }}
-          restore-keys: ${{ runner.os }}-downloads
+          path: $GITHUB_WORKSPACE/dependencies/downloads
+          key: ${{ runner.os }}-extras-${{ hashFiles('**/**') }}
+          restore-keys: ${{ matrix.IDEA_VERSION }}-extras
+
+      - name: Cache intelliJ downloads
+        uses: actions/cache@v2
+        with:
+          path: $GITHUB_WORKSPACE/idea-IU
+          key: ${{ matrix.IDEA_VERSION }}-download-${{ hashFiles('ideaIU-${{ matrix.IDEA_VERSION }}/**') }}
+          restore-keys: ${{ matrix.IDEA_VERSION }}-download
 
       - name: Build with Gradle
         run: gradle clean build verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}"
