@@ -1,4 +1,4 @@
-name: Build, IntelliJ-Haxe
+name: Build, IntelliJ-Haxe-plugin
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 jobs:
   Build:
     strategy:
-      fail-fast: false
+      fail-fast: false # set this to true if oyu want to cancel all builds if one fails.
       matrix:
         IDEA_VERSION: [2020.2, 2020.1.4,2019.3.5,2018.2.8,2017.3.5,2016.3.8]
         OS: [macOS-latest, ubuntu-latest, windows-latest]
