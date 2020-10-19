@@ -27,6 +27,8 @@ jobs:
         uses: krdlab/setup-haxe@v1
         with:
           haxe-version: 3.4.7
+
+      - name: Test haxe
         run: haxe -version
 
       - name: Build with Gradle
