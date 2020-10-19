@@ -7,15 +7,14 @@ on:
       - 'develop'
       - 'feature/*'
 
+jobs:
+  Build:
     strategy:
       matrix:
         IDEA_VERSION: [2020.2, 2020.1.4,2019.3.5,2018.2.8,2017.3.5,2016.3.8]
         OS: [macOS-latest, ubuntu-latest, windows-latest]
 
-jobs:
-  Build_on_Mac:
     runs-on: ${{ matrix.OS }}
-
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 1.8
