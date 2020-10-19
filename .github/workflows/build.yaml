@@ -39,5 +39,12 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
           restore-keys: ${{ runner.os }}-gradle
 
+      - name: Cache plugin downloads
+        uses: actions/cache@v2
+        with:
+          path: dependencies
+          key: ${{ runner.os }}-downloads-${{ hashFiles('**/**') }}
+          restore-keys: ${{ runner.os }}-gradle
+
       - name: Build with Gradle
         run: gradle clean build verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}"
