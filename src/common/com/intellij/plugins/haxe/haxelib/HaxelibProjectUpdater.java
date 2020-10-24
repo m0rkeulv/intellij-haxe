@@ -129,6 +129,19 @@ public class HaxelibProjectUpdater {
     myQueue.add(tracker);
   }
 
+  public void reload(@NotNull Project project) {
+    closeProject(project);
+    openProject(project);
+  }
+
+
+  public void forceUpdate(@NotNull Project project) {
+    ProjectTracker tracker = myProjects.get(project);
+    tracker.mySdkManager.mySdkCache.clear();// TODO test to see if this clears haxelib cache
+    tracker.setDirty(true);
+    myQueue.add(tracker);
+  }
+
   /**
    * Close and possibly remove a project, if the reference count has been exhausted.
    *
