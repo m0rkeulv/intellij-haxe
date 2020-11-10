@@ -1204,5 +1204,38 @@
             text="Getter and Setter">
       <add-to-group anchor="after" relative-to-action="Generate.SetAccessor.Haxe" group-id="GenerateGroup"/>
     </action>
+
+    <action id="Haxe.update" class="com.intellij.plugins.haxe.ide.popup.UpdateProjectAction"
+            text="Update Project"
+            icon="AllIcons.Actions.Refresh">
+    </action>
+    <action id="Haxe.reload" class="com.intellij.plugins.haxe.ide.popup.ReloadProjectAction"
+            text="Reload Project"
+            icon="AllIcons.Actions.Refresh">
+    </action>
+
+    <group id="Haxe.projectUtils" icon="HaxeIcons.Haxe_16" popup="true"  text="Haxe">
+      <reference id="Haxe.reload"/>
+      <reference id="Haxe.update"/>
+      <add-to-group group-id="ProjectViewPopupMenu"/>
+    </group>
+
+
+    <action id="HxUtils.as3Replace" class="com.intellij.plugins.haxe.ide.popup.As3SearchReplaceAction"
+            text="AS3 -> Hx Search &amp; replace"
+            icon="AllIcons.Actions.Replace">
+    </action>
+
+    <action id="HxUtils.as3GetterSetter" class="com.intellij.plugins.haxe.ide.popup.HxInsertGetterSetterAction"
+            text="Generate getters/Setters"
+            icon="AllIcons.Actions.Replace">
+    </action>
+
+    <group id="HxUtils.utils" icon="HaxeIcons.Haxe_16" popup="true"  text="HxUtils">
+      <reference id="HxUtils.as3Replace"/>
+      <reference id="HxUtils.as3GetterSetter"/>
+      <add-to-group group-id="EditorPopupMenu"/>
+    </group>
+
   </actions>
 </idea-plugin>
