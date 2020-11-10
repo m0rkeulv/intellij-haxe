@@ -639,6 +639,9 @@ public class HaxeSemanticAnnotatorTest extends HaxeCodeInsightFixtureTestCase {
   public void testEnumHasEnumValueMembers() throws Throwable {
     doTestSkippingAnnotators(new HashSet<>());
   }
+  public void testTypeParameterConstraints() throws Throwable {
+    doTestSkippingAnnotators(new HashSet<>());
+  }
 
   public void testCallExpression() throws Throwable {
     doTestNoFixWithWarnings();
