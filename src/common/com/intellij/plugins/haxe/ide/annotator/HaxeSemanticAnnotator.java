@@ -45,7 +45,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.stream.Stream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -55,6 +54,7 @@ import static com.intellij.plugins.haxe.ide.annotator.HaxeStandardAnnotation.typ
 import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.*;
 import static com.intellij.plugins.haxe.model.type.HaxeTypeCompatible.canAssignToFrom;
 import static com.intellij.plugins.haxe.model.type.HaxeTypeCompatible.getUnderlyingClassIfAbstractNull;
+import static com.intellij.plugins.haxe.model.type.HaxeTypeResolver.getTypeFromFunctionArgument;
 import static java.util.stream.Collectors.toList;
 
 public class HaxeSemanticAnnotator implements Annotator, HighlightRangeExtension {
@@ -113,6 +113,71 @@ class CallExpressionChecker {
     final HaxeReference reference = (HaxeReference)expr.getExpression();
     final PsiElement target = reference.resolve();
 
+    //TODO unify logic for parameter checking for Function and Methods
+
+    if (target instanceof HaxePsiField) {
+
+      HaxeTypeTag tag = ((HaxePsiField)target).getTypeTag();
+
+      if(tag.getFunctionType() != null) {
+        List<HaxeFunctionArgument> argumentList = tag.getFunctionType().getFunctionArgumentList();
+
+        List<HaxeExpression> expressionArgList = new LinkedList<>();
+        HaxeExpressionList referenceParameterList = expr.getExpressionList();
+        if (referenceParameterList != null) {
+          expressionArgList.addAll(referenceParameterList.getExpressionList());
+        }
+
+        int argCount = argumentList.size();
+        if (expressionArgList.size() < argCount) {
+          TextRange range;
+          if(expressionArgList.size()  == 0 ) {
+            PsiElement first = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(expr.getExpression());
+            PsiElement second = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(first);
+            range = TextRange.create(first.getTextOffset(), second.getTextOffset()+1);
+
+          }else {
+            range = referenceParameterList.getTextRange();
+          }
+          String message = HaxeBundle.message("haxe.semantic.method.parameter.missing", argCount, expressionArgList.size());
+          holder.createErrorAnnotation(range, message);
+          return;
+        }
+
+        if (expressionArgList.size() > argCount) {
+          String message = HaxeBundle.message("haxe.semantic.method.parameter.too.many", argCount, expressionArgList.size());
+          holder.createErrorAnnotation(referenceParameterList.getTextRange(), message);
+          return;
+        }
+
+
+
+        for (int i = 0; i < expressionArgList.size(); i++) {
+          HaxeExpression expression = expressionArgList.get(i);
+          ResultHolder expressionType = findExpressionType(expression);
+
+          HaxeFunctionArgument functionArgument = argumentList.get(i);
+          ResultHolder parameterType = getTypeFromFunctionArgument(functionArgument);
+
+
+          // if expression is enumValue we need to resolve the underlying enumType type to test assignment
+          if(expressionType.getType() instanceof SpecificEnumValueReference) {
+            SpecificHaxeClassReference enumType = ((SpecificEnumValueReference)expressionType.getType()).getEnumClass();
+            expressionType = enumType.createHolder();
+          }
+
+          if (!canAssignToFrom(parameterType, expressionType)) {
+            String message = HaxeBundle.message("haxe.semantic.method.parameter.mismatch",
+                                                parameterType.toPresentationString(),
+                                                expressionType.toPresentationString());
+            holder.createErrorAnnotation(expression.getTextRange(), message);
+          }
+        }
+
+      }
+
+    }
+
     if (target instanceof HaxeMethod) {
       HaxeMethod method = (HaxeMethod)target;
       boolean isStaticExtension = expr.resolveIsStaticExtension();
@@ -130,8 +195,16 @@ class CallExpressionChecker {
       }
 
       if (expressionArgList.size() < minArgCount - (isStaticExtension ? 1 : 0) ) {
-        TextRange range = ((HaxeReferenceExpression)reference).getIdentifier().getTextRange();
-        String message = HaxeBundle.message("haxe.semantic.method.parameter.too.many", minArgCount, expressionArgList.size());
+        TextRange range;
+        if((expressionArgList.size()  - (isStaticExtension ? 1 : 0)) == 0 ) {
+          PsiElement first = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(expr.getExpression());
+          PsiElement second = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(first);
+          range = TextRange.create(first.getTextOffset(), second.getTextOffset()+1);
+
+        }else {
+          range = referenceParameterList.getTextRange();
+        }
+        String message = HaxeBundle.message("haxe.semantic.method.parameter.missing", minArgCount, expressionArgList.size());
         holder.createErrorAnnotation(range, message);
         return;
       }
@@ -149,7 +222,7 @@ class CallExpressionChecker {
 
       for (int i = 0; i < expressionArgList.size(); i++) {
         HaxeExpression expression = expressionArgList.get(i);
-        ResultHolder expressionType = findExpressionType(expression);
+
 
         //TODO add type check for haxe.extern.Rest arguments
 
@@ -162,6 +235,35 @@ class CallExpressionChecker {
 
         HaxeParameterModel parameterModel = parameters.get(parameterIndex);
         ResultHolder parameterType = parameterModel.getType(resolver);
+
+        ResultHolder expressionType = null;
+
+        if(expression instanceof  HaxeReferenceExpression) {
+            HaxeClassResolveResult resolveHaxeClass = ((HaxeReferenceExpression)expression).resolveHaxeClass();
+            if (resolveHaxeClass.getHaxeClass() instanceof HaxeSpecificFunction) {
+              SpecificHaxeClassReference parameterClassType = parameterType.getClassType();
+              if(parameterClassType != null) {
+                if (parameterClassType.isFunction()) {
+                  // parameter type `Function` accepts all functions
+                  continue;
+                } else {
+                  HaxeMethodDeclaration resolve = (HaxeMethodDeclaration)((HaxeReferenceExpression)expression).resolve();
+                  SpecificFunctionReference type = resolve.getModel().getFunctionType(null);
+                  expressionType = type.createHolder();
+
+                  // make sure that if  parameter type is typedef  try to convert to function so we can compare with argument
+                  if (parameterClassType.getHaxeClass().getModel().isTypedef()) {
+                    SpecificFunctionReference functionReference = parameterClassType.resolveTypeDefFunction();
+                    if (functionReference != null) {
+                      parameterType = functionReference.createHolder();
+                    }
+                  }
+                }
+              }
+          }
+        }
+
+        expressionType = expressionType != null ? expressionType :  findExpressionType(expression);
 
         // if expression is enumValue we need to resolve the underlying enumType type to test assignment
         if(expressionType.getType() instanceof SpecificEnumValueReference) {
@@ -181,14 +283,10 @@ class CallExpressionChecker {
 
 
   private static HaxeGenericResolver findGenericResolverFromVariable(HaxeCallExpression expr) {
-    PsiElement[] children = expr.getExpression().getChildren();
-    Optional<HaxeReference> first = Stream.of(children)
-      .filter(c -> c instanceof  HaxeReference)
-      .map(c -> (HaxeReference)c)
-      .findFirst();
+    HaxeReference[] type = UsefulPsiTreeUtil.getChildrenOfType(expr.getExpression(), HaxeReference.class, null);
 
-    if(first.isPresent()) {
-      HaxeReference expression = first.get();
+    if(type!= null && type.length> 0) {
+      HaxeReference expression = type[0];
       HaxeClassResolveResult resolveResult = expression.resolveHaxeClass();
       SpecificHaxeClassReference reference = resolveResult.getSpecificClassReference(expression.getElement(), null);
       SpecificHaxeClassReference finalReference = getUnderlyingClassIfAbstractNull(reference);
@@ -222,20 +320,21 @@ class CallExpressionChecker {
 
     if (model.getType().getType() instanceof  SpecificHaxeClassReference) {
       SpecificHaxeClassReference classType = (SpecificHaxeClassReference)model.getType().getType();
-      if(classType != null && classType.getHaxeClass() != null) {
-      String typeName = classType.getHaxeClass().getQualifiedName();
-      ResultHolder[] specifics = classType.getSpecifics();
-      if (specifics.length == 1) {
-        SpecificHaxeClassReference specificType = (SpecificHaxeClassReference)specifics[0].getType();
-        if (specificType != null && specificType.getHaxeClass() != null) {
-          if (typeName.equals("Array") && specificType.getHaxeClass().getQualifiedName().equals("haxe.macro.Expr")) {
-            return true;
-          }
-          if (typeName.equals("haxe.extern.Rest")) {
-            return true;
+      if(classType.getHaxeClass() != null) {
+        ResultHolder[] specifics = classType.getSpecifics();
+        if (specifics.length == 1) {
+          SpecificHaxeClassReference specificType = (SpecificHaxeClassReference)specifics[0].getType();
+          if (specificType.getHaxeClass() != null) {
+            // Array<haxe.macro.Expr>
+            if (classType.isArray() && specificType.isExpr() ) {
+              return true;
+            }
+            // haxe.extern.Rest<>
+            if (classType.isRest()) {
+              return true;
+            }
           }
         }
-      }
       }
     }
     return false;

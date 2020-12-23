@@ -645,15 +645,16 @@ public class HaxeSemanticAnnotatorTest extends HaxeCodeInsightFixtureTestCase {
     doTestSkippingAnnotators(new HashSet<>());
   }
 
-  public void testTypeParameterConstraints() throws Throwable {
-    doTestSkippingAnnotators(new HashSet<>());
-  }
-
   public void testCallExpression() throws Throwable {
     doTestNoFixWithWarnings();
+  }
+
+  public void testTypeParameterConstraints() throws Throwable {
+    doTestSkippingAnnotators(new HashSet<>());
   }
 
   public void testStringInterpolation() throws Throwable {
     doTestNoFixWithWarnings();
   }
+
 }
