@@ -197,7 +197,19 @@ public class As3SearchReplaceAction extends AnAction implements Runnable {
   
   private static String fixCasting(String lines) {
     String multiLineIgnoreCase = "(?m)(?i)";
-    lines = lines.replaceAll(multiLineIgnoreCase + "([\\w]+(\\.\\w*\\([\\w\\s]*\\))*|((\\w+\\[)[\\w\\.\\(\\)\\\"\\s\\+]+(\\])))\\s+as\\s+(\\w*)","cast($1, $6)");
+    //lines = lines.replaceAll(multiLineIgnoreCase + "([\\w]+(\\.\\w*\\([\\w\\s]*\\))*|((\\w+\\[)[\\w\\.\\(\\)\\\"\\s\\+]+(\\])))\\s+as\\s+(\\w*)","cast($1, $6)");
+    // abc.def()
+    /**
+     * TESTED:
+     * CwoAPI.mtx = dbc as IMtxSystem;
+     * CwoAPI.mtx = dbc() as IMtxSystem;
+     * CwoAPI.mtx = dbc[1] as IMtxSystem;
+     * CwoAPI.mtx = CwoAPI.portal.noemer.ebnda as IMtxSystem;
+     * CwoAPI.mtx = CwoAPI.portal.noemer.ebnda() as IMtxSystem;
+     * CwoAPI.mtx = CwoAPI.portal.noemer.ebnda("") as IMtxSystem;
+     * CwoAPI.mtx = CwoAPI.portal.noemer.ebnda[123] as IMtxSystem;
+     */
+    lines = lines.replaceAll(multiLineIgnoreCase + "([\\w]+(\\.\\w+)*(\\.*\\w*\\(.*\\))*|(([\\w]+(\\.\\w+)*\\[)[\\w\\.\\(\\)\\\"\\s\\+]+(\\]))|[\\w]+(\\.\\w+)*)\\s+as\\s+(\\w*)","cast($1, $9)");
     return lines;
   }
 
