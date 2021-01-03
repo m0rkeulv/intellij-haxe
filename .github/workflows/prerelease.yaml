@@ -10,7 +10,7 @@ on:
 
 jobs:
   prepare:
-    name: Create Pre-release
+    name: Create Pre-release draft
     runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
@@ -83,11 +83,9 @@ jobs:
       - name: Find assets
         id: find_assets
         run: |
-          ARTIFACT_NAME_NEW=${IDEA_VERSION}.jar
           ARTIFACT_PATHNAME=$(ls *.jar | head -n 1)
           ARTIFACT_NAME=$(basename $ARTIFACT_PATHNAME)
-          cp $ARTIFACT_PATHNAME/$ARTIFACT_PATHNAME  $ARTIFACT_PATHNAME/$ARTIFACT_NAME_NEW
-          echo ::set-output name=artifact_name::${ARTIFACT_NAME_NEW}
+          echo ::set-output name=artifact_name::${ARTIFACT_NAME}
           echo ::set-output name=artifact_pathname::${ARTIFACT_PATHNAME}
 
 
@@ -99,10 +97,11 @@ jobs:
         with:
           upload_url: ${{ needs.prepare.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
           asset_path: ${{ steps.find_assets.outputs.artifact_pathname }}
-          asset_name: ${{ steps.find_assets.outputs.artifact_name }}
+          asset_name: ${{ IDEA_VERSION }}.jar
           asset_content_type: application/java-archive
 
   finish:
+    name: publish Pre-release
     needs: [prepare, build]
     runs-on: ubuntu-latest
     steps:
