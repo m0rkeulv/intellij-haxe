@@ -30,8 +30,6 @@ jobs:
         with:
           path: ./CHANGELOG.md
 
-        ${{ steps.changelog.outputs.content }}
-
       - name: Get short SHA
         id: short_sha
         run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
