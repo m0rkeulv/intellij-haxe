@@ -10,7 +10,10 @@ on:
 
 jobs:
   prepare:
-    - name: Create Prerelease
+    name: Create Pre-release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Create Pre-release
       id: create_release
       uses: actions/create-release@v1
       env:
