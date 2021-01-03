@@ -70,13 +70,16 @@ jobs:
         run: gradle clean build verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}"
 
 
-      - name: Upload Rrerelease Asset
-        id: upload-pre-release-asset
+      - name: Find assets
+        id: Find-assets
         run: |
           ARTIFACT_PATHNAME=$(ls *.jar | head -n 1)
           ARTIFACT_NAME=$(basename $ARTIFACT_PATHNAME)
           echo ::set-env name=ARTIFACT_NAME::${ARTIFACT_NAME}
           echo ::set-env name=ARTIFACT_PATHNAME::${ARTIFACT_PATHNAME}
+
+      - name: Upload Rrerelease Asset
+        id: upload-pre-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
