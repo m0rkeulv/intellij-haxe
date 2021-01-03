@@ -89,8 +89,8 @@ jobs:
           echo ::set-output name=artifact_pathname::${ARTIFACT_PATHNAME}
 
 
-      - name: Upload Rrerelease Asset
-        id: upload-pre-release-asset
+      - name: Upload Asset
+        id: upload-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
