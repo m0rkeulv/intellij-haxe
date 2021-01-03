@@ -2,10 +2,11 @@ name: release, IntelliJ-Haxe-plugin
 
 
 on:
-  branches:
-    - 'master'
-    - 'develop'
-    - 'feature/*' # todo remove
+  push:
+    branches:
+      - 'master'
+      - 'develop'
+      - 'feature/*' # todo remove
 
 jobs:
   build:
