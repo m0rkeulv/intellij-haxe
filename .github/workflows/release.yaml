@@ -24,11 +24,16 @@ jobs:
       id: ${{ steps.create_release.outputs.id }}
     steps:
       - uses: actions/checkout@v2
-      - name: Get Changelog
-        id: changelog
-        # extracts text until empty line (parsing as binary so we can keep original line endings)
+      - name: shorten Changelog
+        id: shortlog
         run: |
-          echo ::set-output name=shortlog::$(sed -b -e '/^\r\?$/,$d' CHANGELOG.md)
+          sed -b -e '/^\r\?$/,$d' CHANGELOG.md >> shortlog.txt
+
+      - name: read Changelog
+        id: changelog
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./shortlog.txt
 
       - name: Get short SHA
         id: short_sha
@@ -42,7 +47,7 @@ jobs:
         with:
           tag_name: release/1.0.0.${{ steps.short_sha.outputs.sha8 }}
           release_name: Release 1.0.0.${{ steps.short_sha.outputs.sha8 }}
-          body: ${{ steps.changelog.outputs.shortlog }}
+          body: ${{ steps.changelog.outputs.content }}
           draft: true
           prerelease: false
 
