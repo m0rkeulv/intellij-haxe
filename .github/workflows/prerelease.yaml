@@ -21,7 +21,7 @@ jobs:
       id: timestep
       uses: nanzm/get-time-action@v1.1
       with:
-        format: 'YYYY-MM-DD-HH-mm-ss'
+        format: 'YYYYMMDDHHmm'
 
     - name: Get short SHA
       id: short_sha
