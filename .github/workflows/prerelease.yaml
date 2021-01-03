@@ -26,7 +26,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.sha }}
+        tag_name: beta-channel
         release_name: Beta build (${{ steps.short_sha.outputs.sha8 }})
         draft: true
         prerelease: true
@@ -97,7 +97,7 @@ jobs:
         with:
           upload_url: ${{ needs.prepare.outputs.upload_url }}
           asset_path: ${{ steps.find_assets.outputs.artifact_pathname }}
-          asset_name: ${{ matrix.IDEA_VERSION }}.jar
+          asset_name: intellij-haxe-${{ matrix.IDEA_VERSION }}-beta.jar
           asset_content_type: application/java-archive
 
   finish:
