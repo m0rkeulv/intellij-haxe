@@ -12,7 +12,8 @@ jobs:
   prepare:
     name: Create Pre-release
     runs-on: ubuntu-latest
-    output1: ${{ steps.step1.outputs.upload_url }}
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
     - name: Create Pre-release
       id: create_release
