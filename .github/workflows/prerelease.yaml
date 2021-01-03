@@ -34,7 +34,7 @@ jobs:
   build:
     name: Build and upload artifacts
     strategy:
-      fail-fast: false # cancel all builds if one fails.
+      fail-fast: true # cancel all builds if one fails.
       matrix:
         IDEA_VERSION: [2020.2, 2020.1.4,2019.3.5,2018.3.6]
     needs: prepare
@@ -86,7 +86,7 @@ jobs:
           ARTIFACT_NAME_NEW=${IDEA_VERSION}.jar
           ARTIFACT_PATHNAME=$(ls *.jar | head -n 1)
           ARTIFACT_NAME=$(basename $ARTIFACT_PATHNAME)
-          mv $ARTIFACT_PATHNAME  $ARTIFACT_NAME_NEW
+          cp $ARTIFACT_PATHNAME/$ARTIFACT_PATHNAME  $ARTIFACT_PATHNAME/$ARTIFACT_NAME_NEW
           echo ::set-output name=artifact_name::${ARTIFACT_NAME_NEW}
           echo ::set-output name=artifact_pathname::${ARTIFACT_PATHNAME}
 
@@ -102,4 +102,14 @@ jobs:
           asset_name: ${{ steps.find_assets.outputs.artifact_name }}
           asset_content_type: application/java-archive
 
+  finish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Publish release
+      uses: StuYarrow/publish-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        id: ${{ needs.prepare.outputs.id }}
 
