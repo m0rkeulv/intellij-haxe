@@ -270,7 +270,7 @@ task copyJar() {
         def props = findSdkValuesAndProperties(file("${ideaTargetDir}/build.txt"))
         def jarName = "intellij-haxe-" + props.getProperty("idea.version") + ".jar"
         copy {
-            from("${haxePluginDir}/build/libs/").include(jar.archiveName)
+            from("${haxePluginDir}/build/libs/").include(jar.archiveFileName)
             into("${rootDir}/")
             rename({jarName})
         }

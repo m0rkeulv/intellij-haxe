@@ -80,7 +80,8 @@ jobs:
         run: |
           ARTIFACT_PATHNAME=$(ls *.jar | head -n 1)
           ARTIFACT_NAME=$(basename $ARTIFACT_PATHNAME)
-          echo ::set-output name=artifact_name::${ARTIFACT_NAME}
+          mv $ARTIFACT_PATHNAME  ${IDEA_VERSION}.jar
+          echo ::set-output name=artifact_name::${${IDEA_VERSION}.jar}
           echo ::set-output name=artifact_pathname::${ARTIFACT_PATHNAME}
 
 
