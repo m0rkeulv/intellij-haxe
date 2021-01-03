@@ -72,7 +72,7 @@ jobs:
           restore-keys: ${{ matrix.IDEA_VERSION }}-idea
 
       - name: Build with Gradle
-        run: gradle clean build verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}"
+        run: gradle clean build  verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}" -x test
 
 
       - name: Find assets
@@ -87,7 +87,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.prepare.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          upload_url: ${{ needs.prepare.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
           asset_path: ${{ env.ARTIFACT_PATHNAME }}
           asset_name: ${{ env.ARTIFACT_NAME }}
           asset_content_type: application/java-archive
