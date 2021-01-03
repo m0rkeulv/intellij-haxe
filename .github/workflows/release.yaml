@@ -26,9 +26,10 @@ jobs:
       - uses: actions/checkout@v2
       - name: Get Changelog
         id: changelog
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./CHANGELOG.md
+        # extracts text until empty line
+        run: |
+          SHORT_LOG=$(sed -e '/^$/,$d' CHANGELOG.md)
+          echo ::set-output name=shortlog::${SHORT_LOG}
 
       - name: Get short SHA
         id: short_sha
@@ -42,7 +43,7 @@ jobs:
         with:
           tag_name: release/1.0.0.${{ steps.short_sha.outputs.sha8 }}
           release_name: Release 1.0.0.${{ steps.short_sha.outputs.sha8 }}
-          body: ${{ steps.changelog.outputs.content }}
+          body: ${{ steps.changelog.outputs.shortlog }}
           draft: true
           prerelease: false
 
@@ -115,15 +116,4 @@ jobs:
           asset_name: intellij-haxe-${{ matrix.IDEA_VERSION }}.jar
           asset_content_type: application/java-archive
 
-  finish:
-    name: publish Pre-release
-    needs: [prepare, build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish release
-        uses: StuYarrow/publish-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          id: ${{ needs.prepare.outputs.id }}
 
