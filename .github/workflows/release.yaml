@@ -26,9 +26,9 @@ jobs:
       - uses: actions/checkout@v2
       - name: Get Changelog
         id: changelog
-        # extracts text until empty line
+        # extracts text until empty line (parsing as binary so we can keep original line endings)
         run: |
-          SHORT_LOG=$(sed -e '/^$/,$d' CHANGELOG.md)
+          SHORT_LOG=$(sed -b -e '/^\r\?$/,$d' CHANGELOG.md)
           echo ::set-output name=shortlog::${SHORT_LOG}
 
       - name: Get short SHA
