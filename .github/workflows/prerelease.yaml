@@ -23,13 +23,17 @@ jobs:
       with:
         format: 'YYYY-MM-DD-HH-mm-ss'
 
+    - name: Get short SHA
+      id: short_sha
+      run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
+
     - name: Create Pre-release
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: pre-release/${{timestep.outputs.time }}
+        tag_name: pre-release/${{steps.timestep.outputs.time }}
         release_name: Beta build (${{ steps.short_sha.outputs.sha8 }})
         draft: true
         prerelease: true
