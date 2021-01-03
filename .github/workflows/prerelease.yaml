@@ -8,6 +8,7 @@ on:
       - 'develop'
       - 'feature/*'
 
+
 jobs:
   prepare:
     name: Create Pre-release draft
