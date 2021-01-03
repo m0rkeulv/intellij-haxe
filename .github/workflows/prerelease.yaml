@@ -15,6 +15,10 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
+    - name: Get short SHA
+        id: short_sha
+        run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
+
     - name: Create Pre-release
       id: create_release
       uses: actions/create-release@v1
@@ -22,12 +26,12 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.sha }}
-        release_name: Release ${{ github.sha }}
+        release_name: Beta build (${{ short_sha.outputs.sha8 }})
         draft: true
         prerelease: true
 
   build:
-    name: Build Pre-release
+    name: Build and upload artifacts
     strategy:
       fail-fast: false # cancel all builds if one fails.
       matrix:
