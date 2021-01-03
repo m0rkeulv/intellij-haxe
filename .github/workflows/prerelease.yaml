@@ -26,7 +26,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: beta-channel
+        tag_name: beta-channel/(${{ steps.short_sha.outputs.sha8 }})
         release_name: Beta build (${{ steps.short_sha.outputs.sha8 }})
         draft: true
         prerelease: true
