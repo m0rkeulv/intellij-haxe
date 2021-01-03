@@ -28,8 +28,7 @@ jobs:
         id: changelog
         # extracts text until empty line (parsing as binary so we can keep original line endings)
         run: |
-          SHORT_LOG=$(sed -b -e '/^\r\?$/,$d' CHANGELOG.md)
-          echo ::set-output name=shortlog::${SHORT_LOG}
+          echo ::set-output name=shortlog::$(sed -b -e '/^\r\?$/,$d' CHANGELOG.md)
 
       - name: Get short SHA
         id: short_sha
