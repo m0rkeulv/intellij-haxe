@@ -1,4 +1,4 @@
-name: Prerelease, IntelliJ-Haxe-plugin
+name: Pre-release, IntelliJ-Haxe-plugin
 
 
 on:
@@ -9,15 +9,26 @@ on:
       - 'feature/*' # todo remove
 
 jobs:
+  prepare:
+    - name: Create Prerelease
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.sha }}
+        release_name: Release ${{ github.sha }}
+        draft: true
+        prerelease: true
+
   build:
-    name: Build Prerelease
+    name: Build Pre-release
     strategy:
       fail-fast: true # cancel all builds if one fails.
       matrix:
         IDEA_VERSION: [2020.2, 2020.1.4,2019.3.5,2018.3.6]
 
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 1.8
@@ -58,44 +69,21 @@ jobs:
       - name: Build with Gradle
         run: gradle clean build verifyPlugin -PtargetVersion="${{ matrix.IDEA_VERSION }}"
 
-      - name: Create Prerelease
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-        with:
-          tag_name: ${{ github.sha }}
-          release_name: Release ${{ github.sha }}
-          draft: true
-          prerelease: true
-      - name: Upload 2020 Release Asset
-        id: upload-release-asset-2020
+
+      - name: Upload Rrerelease Asset
+        id: upload-pre-release-asset
+        run: |
+          ARTIFACT_PATHNAME=$(ls *.jar | head -n 1)
+          ARTIFACT_NAME=$(basename $ARTIFACT_PATHNAME)
+          echo ::set-env name=ARTIFACT_NAME::${ARTIFACT_NAME}
+          echo ::set-env name=ARTIFACT_PATHNAME::${ARTIFACT_PATHNAME}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          asset_path: ./intellij-haxe-2020.jar
-          asset_name: intellij-haxe-2020.jar
+          asset_path: ${{ env.ARTIFACT_PATHNAME }}
+          asset_name: ${{ env.ARTIFACT_NAME }}
           asset_content_type: application/java-archive
-      - name: Upload 2019 Release Asset
-        id: upload-release-asset-2019
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          asset_path: ./intellij-haxe-2019.jar
-          asset_name: intellij-haxe-2019.jar
-          asset_content_type: application/java-archive
-      - name: Upload 2018 Release Asset
-        id: upload-release-asset-2018
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          asset_path: ./intellij-haxe-2018.jar
-          asset_name: intellij-haxe-2018.jar
-          asset_content_type: application/java-archive
+
 
