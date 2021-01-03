@@ -70,7 +70,7 @@ jobs:
           draft: true
           prerelease: true
       - name: Upload 2020 Release Asset
-          id: upload-release-asset
+          id: upload-release-asset-2020
           uses: actions/upload-release-asset@v1
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,7 +80,7 @@ jobs:
             asset_name: intellij-haxe-2020.jar
             asset_content_type: application/java-archive
       - name: Upload 2019 Release Asset
-          id: upload-release-asset
+          id: upload-release-asset-2019
           uses: actions/upload-release-asset@v1
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,7 +90,7 @@ jobs:
             asset_name: intellij-haxe-2019.jar
             asset_content_type: application/java-archive
       - name: Upload 2018 Release Asset
-          id: upload-release-asset
+          id: upload-release-asset-2018
           uses: actions/upload-release-asset@v1
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
