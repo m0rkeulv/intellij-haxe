@@ -7,8 +7,9 @@ on:
       - 'master'
       - 'develop'
       - 'feature/*' # todo remove
+    tags-ignore:
+      - "[0-9]+.[0-9]+.[0-9]+*" # prevent pre-release when its a "real" release
 
-      # todo add ignore tags with version numbers
 
 jobs:
   prepare:
