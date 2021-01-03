@@ -17,9 +17,11 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       id: ${{ steps.create_release.outputs.id }}
     steps:
-    - name: Get short SHA
-      id: short_sha
-      run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
+    - name: Get Time
+      id: timestep
+      uses: nanzm/get-time-action@v1.1
+      with:
+        format: 'YYYY-MM-DD-HH-mm-ss'
 
     - name: Create Pre-release
       id: create_release
@@ -27,7 +29,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: pre-release/${{ steps.short_sha.outputs.sha8 }}
+        tag_name: pre-release/${{timestep.outputs.time }}
         release_name: Beta build (${{ steps.short_sha.outputs.sha8 }})
         draft: true
         prerelease: true
