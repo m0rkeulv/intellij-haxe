@@ -1,4 +1,9 @@
 # Changelog
+  <p>1.4.0 (Test release)</p>
+  <ul>
+    <li>Testing release logic.</li>
+  </ul>
+
   <p>1.3.1 (HaxeFoundation release)</p>
   <ul>
     <li>Allow both 'inline' and 'extern' to exist on functions and vars.</li>
