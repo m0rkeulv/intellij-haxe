@@ -28,9 +28,7 @@ import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.impl.AbstractHaxeNamedComponent;
-import com.intellij.plugins.haxe.model.HaxeBaseMemberModel;
-import com.intellij.plugins.haxe.model.HaxeClassModel;
-import com.intellij.plugins.haxe.model.HaxeMethodModel;
+import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.fixer.*;
 import com.intellij.plugins.haxe.util.*;
 import com.intellij.psi.PsiCodeBlock;
@@ -47,6 +45,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.model.type.SpecificFunctionReference.Argument;
+import static com.intellij.plugins.haxe.util.HaxeResolveUtil.getHaxeClassResolveResult;
 
 public class HaxeExpressionEvaluator {
   static final HaxeDebugLogger LOG = HaxeDebugLogger.getLogger();
@@ -215,7 +214,9 @@ public class HaxeExpressionEvaluator {
       if (anonymous != null) {
         return HaxeTypeResolver.getTypeFromTypeOrAnonymous(anonymous);
       } else {
-        return SpecificHaxeClassReference.getUnknown(element).createHolder();
+        // using ANY as it allows assign to any type but does not allow member access
+        // var test = (cast myvar).member would not make any sense.
+        return SpecificHaxeClassReference.getAny(element).createHolder();
       }
     }
 
@@ -344,18 +345,17 @@ public class HaxeExpressionEvaluator {
           }
         } else {
 
-          // TODO: Yo! Eric!!  This needs to get fixed.  The resolver is coming back as Dynamic, when it should be String
-
-          // Grab the types out of the original resolver (so we don't modify it), and overwrite them
-          // (by adding) with the class' resolver. That way, we get the combination of the two, and
-          // any parameters provided/set in the class will override any from the calling context.
-          HaxeGenericResolver localResolver = new HaxeGenericResolver();
-          localResolver.addAll(resolver);
-          if (null != typeHolder.getClassType()) {
-            localResolver.addAll(typeHolder.getClassType().getGenericResolver());
+          ResultHolder access = typeHolder.getType().access(accessName, context, resolver);
+          if(access == null ) {
+            HaxeClassResolveResult result =
+              getHaxeClassResolveResult(((HaxeReferenceExpression)element).resolve(), resolver.getSpecialization(element));
+            if(result.getHaxeClass() != null) {
+              access = result.getSpecificClassReference(element, resolver).createHolder();
+            }
           }
-          ResultHolder access = typeHolder.getType().access(accessName, context, localResolver);
-          if (access == null) {
+
+          if (access == null && !typeHolder.isDynamic() && !typeHolder.isUnknown()) {
+
             resolved = false;
             Annotation annotation = context.addError(children[n], "Can't resolve '" + accessName + "' in " + typeHolder.getType());
             if (children.length == 1) {
@@ -365,7 +365,17 @@ public class HaxeExpressionEvaluator {
               annotation.registerFix(new HaxeCreateFieldFixer(accessName, element));
             }
           }
-          typeHolder = access;
+
+          //if access is on a reference of dynamic<T> then return type
+          if (typeHolder.isDynamic()) {
+            ResultHolder[] specifics = access.getClassType().getSpecifics();
+            if (specifics.length > 0) {
+              resolved = true;
+              typeHolder = specifics[0];
+            }
+          }else {
+            typeHolder = access;
+          }
         }
       }
 
@@ -376,14 +386,96 @@ public class HaxeExpressionEvaluator {
         if (reference != null) {
           PsiElement subelement = reference.resolve();
           if (subelement instanceof HaxeClass) {
+            HaxeClass haxeClass = (HaxeClass)subelement;
+            HaxeClassModel model = haxeClass.getModel();
+            //List<HaxeGenericParamModel> params = model.getGenericParams();
+            //ResultHolder[] aFor = resolver.getSpecificsFor(haxeClass);
             typeHolder = SpecificHaxeClassReference.withGenerics(
-              new HaxeClassReference(((HaxeClass)subelement).getModel(), element), resolver.getSpecifics()).createHolder();
-          }
-          else if (subelement instanceof AbstractHaxeNamedComponent) {
+              new HaxeClassReference(model, element), resolver.getSpecificsFor(haxeClass)).createHolder();
+
+          }else if (subelement instanceof AbstractHaxeNamedComponent) {
             typeHolder = HaxeTypeResolver.getFieldOrMethodReturnType((AbstractHaxeNamedComponent)subelement, resolver);
+          //checking if method is a macro method
+           if (subelement instanceof HaxeMethodDeclaration) {
+             HaxeMethodDeclaration method = (HaxeMethodDeclaration)subelement;
+             if(element instanceof HaxeCallExpression) {
+               List<HaxeMethodModifier> list = method.getMethodModifierList();
+               //TODO better way to check modifers
+               //method.hasModifierProperty(HaxeMethodModifier.MACRO) /// does not work
+               boolean hasModifier = method.getModel().hasModifier(HaxeMethodModifier.MACRO);// does not work
+               if (list.stream().anyMatch(e -> e.getText().trim().equals(HaxeMethodModifier.MACRO))) {
+                 HaxeTypeTag tag = method.getTypeTag();
+                 if (tag.getTypeOrAnonymous().getType() != null) {
+                   HaxeType type = tag.getTypeOrAnonymous().getType();
+                   //TODO  fix this hackish marcro stuff
+                   // if unresolvable default to unknown
+                   if (tag.getTypeOrAnonymous().getType().getReferenceExpression().getIdentifier().getText().equals("ExprOf")) {
+                     HaxeType type1 = tag.getTypeOrAnonymous().getType()
+                       .getTypeParam()
+                       .getTypeList()
+                       .getTypeListPartList()
+                       .get(0)
+                       .getTypeOrAnonymous()
+                       .getType();
+
+                     return SpecificHaxeClassReference.propagateGenericsToType(type1, resolver).createHolder();
+                   } else {
+                     typeHolder = SpecificTypeReference.getDynamic(element).createHolder();
+                   }
+                 } else {
+                  HaxeClassResolveResult result = getHaxeClassResolveResult(subelement, resolver.getSpecialization(subelement));
+                  if (result.getHaxeClass() != null) typeHolder = result.getSpecificClassReference(subelement, resolver).createHolder();
+                }
+               }
+               //TODO m0rkeulv FLYTT OPP og erstatt  på ett fornuftig vis (if(element instanceof HaxeCallExpression) {)
+             }else if (!(element.getParent() instanceof  HaxeCallExpression)){
+               //TODO  figure out how to determine if refrence to method or  part of an expression
+               typeHolder =  SpecificFunctionReference.createFromMethodModel(method.getModel()).createHolder();
+             }
+           }
+            if (subelement instanceof HaxeForStatement) {
+              //typeHolder = handle(subelement, context, resolver);
+              HaxeForStatement  forStatement = (HaxeForStatement) subelement;
+              final HaxeKeyValueIterator keyValueIterator = forStatement.getKeyValueIterator();
+              final HaxeComponentName name = forStatement.getComponentName();
+              final HaxeIterable iterable = forStatement.getIterable();
+
+              if(keyValueIterator == null) {
+                final SpecificTypeReference iterableValue = handle(iterable, context, resolver).getType();
+                SpecificTypeReference type = iterableValue.getIterableElementType(iterableValue).getType();
+                typeHolder = type.createHolder();
+              }else {
+                HaxeIteratorkey iteratorKey = keyValueIterator.getIteratorkey();
+                HaxeIteratorValue iteratorValue = keyValueIterator.getIteratorValue();
+                if(iteratorKey.getComponentName().equals(((HaxeReferenceExpression)element).getIdentifier())) {
+                  HaxeClassResolveResult result = getHaxeClassResolveResult(iteratorKey, resolver.getSpecialization(null));
+                  typeHolder = result.getSpecificClassReference(iteratorKey, resolver).createHolder();
+                }
+                if(iteratorValue.getComponentName().equals(((HaxeReferenceExpression)element).getIdentifier())) {
+                  HaxeClassResolveResult result = getHaxeClassResolveResult(iteratorValue, resolver.getSpecialization(null));
+                  typeHolder = result.getSpecificClassReference(iteratorValue, resolver).createHolder();
+                }
+              }
+
+
+              //HaxeClassResolveResult result = getHaxeClassResolveResult(subelement, resolver.getSpecialization(subelement));
+              //if(result.getHaxeClass() != null)  typeHolder = result.getSpecificClassReference(subelement, resolver).createHolder();
+            }
+            //if (subelement instanceof HaxeParameter) {
+            //  HaxeClassResolveResult result = getHaxeClassResolveResult(subelement, resolver.getSpecialization(subelement));
+            //  if(result.getHaxeClass() != null)  typeHolder = result.getSpecificClassReference(subelement, resolver).createHolder();
+            //}
           }
         }
       }
+
+      // check if result is a enum or Class Identifier and wrap type // TODO remove?
+      if(!(context.root instanceof HaxeGenericListPart)) { // do not wrap if type is a generic part
+        if (typeHolder != null && typeHolder.getClassType() != null && element.getText().equals(typeHolder.getClassType().getClassName())) {
+          //typeHolder = wrapType(typeHolder, element, typeHolder.isEnumType()).createHolder();
+        }
+      }
+
 
       return (typeHolder != null) ? typeHolder : SpecificTypeReference.getDynamic(element).createHolder();
     }
@@ -391,23 +483,20 @@ public class HaxeExpressionEvaluator {
     if (element instanceof HaxeCallExpression) {
       HaxeCallExpression callelement = (HaxeCallExpression)element;
       HaxeExpression callLeft = ((HaxeCallExpression)element).getExpression();
-      SpecificTypeReference functionType = handle(callLeft, context, resolver).getType();
-
-      // @TODO: this should be innecessary when code is working right!
-      if (functionType.isUnknown()) {
-        if (callLeft instanceof HaxeReference) {
-          PsiReference reference = callLeft.getReference();
-          if (reference != null) {
-            PsiElement subelement = reference.resolve();
-            if (subelement instanceof HaxeMethod) {
-              functionType = ((HaxeMethod)subelement).getModel().getFunctionType(resolver);
-            }
-          }
-        }
+      HaxeGenericResolver localResolver = new HaxeGenericResolver();
+      localResolver.addAll(resolver);
+      if(callLeft instanceof  HaxeReferenceExpression) {
+        // adding specializations from resolved class as expressions might use type parameters from parent class
+        HaxeGenericResolver leftResolver = ((HaxeReferenceExpression)callLeft).resolveHaxeClass().getGenericResolver();
+        localResolver.addAll(leftResolver);
       }
 
+      SpecificTypeReference functionType = handle(callLeft, context, localResolver).getType();
+
+      //this should rarely happen but it can still happen for methods that dont have a definition(ex. trace(); )
       if (functionType.isUnknown()) {
         LOG.debug("Couldn't resolve " + callLeft.getText());
+        return functionType.createHolder();
       }
 
       List<HaxeExpression> parameterExpressions = null;
@@ -419,19 +508,30 @@ public class HaxeExpressionEvaluator {
 
       if (functionType instanceof SpecificFunctionReference) {
         SpecificFunctionReference ftype = (SpecificFunctionReference)functionType;
-        HaxeExpressionEvaluator.checkParameters(callelement, ftype, parameterExpressions, context, resolver);
-
+        HaxeExpressionEvaluator.checkParameters(callelement, ftype, parameterExpressions, context, localResolver);
         return ftype.getReturnType().duplicate();
       }
 
+
       if (functionType.isDynamic()) {
         for (HaxeExpression expression : parameterExpressions) {
-          handle(expression, context, resolver);
+          handle(expression, context, localResolver);
         }
 
         return functionType.withoutConstantValue().createHolder();
       }
 
+      // TODO mlo verify if it should be error or ok to return  type
+      if (functionType instanceof SpecificHaxeClassReference) {
+        //context.addError(callelement, functionType.toPresentationString() + " cannot be called");
+        return  functionType.createHolder();
+      }
+
+      if (functionType instanceof SpecificEnumValueReference) {
+        //context.addError(callelement, functionType.toPresentationString() + " cannot be called");
+        return  functionType.createHolder();
+      }
+      //
       // @TODO: resolve the function type return type
       return SpecificHaxeClassReference.getUnknown(element).createHolder();
     }
@@ -439,7 +539,10 @@ public class HaxeExpressionEvaluator {
     if (element instanceof HaxeLiteralExpression) {
       return handle(element.getFirstChild(), context, resolver);
     }
-
+    if (element instanceof HaxeObjectLiteral) {
+      HaxeObjectLiteral literal = (HaxeObjectLiteral)element;
+      return new SpecificObjectReference(literal).createHolder();
+    }
     if (element instanceof HaxeStringLiteralExpression) {
       // @TODO: check if it has string interpolation inside, in that case text is not constant
       return SpecificHaxeClassReference.primitive(
@@ -602,10 +705,17 @@ public class HaxeExpressionEvaluator {
       }
       return SpecificHaxeClassReference.getVoid(element);
       */
-      final HaxeMethodModel method = HaxeJavaUtil.cast(HaxeBaseMemberModel.fromPsi(element), HaxeMethodModel.class);
+
+      HaxeMethodModel method = HaxeJavaUtil.cast(HaxeBaseMemberModel.fromPsi(element), HaxeMethodModel.class);
       final HaxeMethodModel parentMethod = (method != null) ? method.getParentMethod(resolver) : null;
       if (parentMethod != null) {
-        return parentMethod.getFunctionType(resolver).createHolder();
+        if (element.getParent() instanceof HaxeCallExpression) {
+          return parentMethod.getFunctionType(resolver).createHolder();
+        } else if (element.getParent() instanceof HaxeReferenceExpression) {
+           return parentMethod.getDeclaringClass().getInstanceType();
+        }
+
+
       }
       context.addError(element, "Calling super without parent constructor");
       return SpecificHaxeClassReference.getUnknown(element).createHolder();
@@ -634,6 +744,7 @@ public class HaxeExpressionEvaluator {
       if (list.size() >= 2) {
         final SpecificTypeReference left = handle(list.get(0), context, resolver).getType();
         final SpecificTypeReference right = handle(list.get(1), context, resolver).getType();
+        ResultHolder holder = left.createHolder();
         if (left.isArray()) {
           Object constant = null;
           if (left.isConstant()) {
@@ -654,6 +765,19 @@ public class HaxeExpressionEvaluator {
             }
           }
           return left.getArrayElementType().getType().withConstantValue(constant).createHolder();
+        }else if (holder.isClassType()) {
+          SpecificHaxeClassReference classReference = (SpecificHaxeClassReference)left;
+          List<HaxeMethodModel> methods = classReference.getHaxeClassModel().getMethods(resolver);
+          for(HaxeMethodModel method : methods) {
+            if(method.isArrayAccessor()) {
+              HaxeParameterModel parameter = method.getParameters().get(0);
+              ResultHolder type = parameter.getType(resolver);
+              if(!right.canAssign(type)) {
+                context.addError(list.get(1), "Expected " + type.toPresentationString() + "  got " + right.toPresentationString());
+              }
+              return method.getReturnType(resolver);
+            }
+          }
         }
       }
       return SpecificHaxeClassReference.getUnknown(element).createHolder();

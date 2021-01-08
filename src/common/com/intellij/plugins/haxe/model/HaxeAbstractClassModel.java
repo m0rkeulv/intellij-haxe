@@ -96,8 +96,11 @@ public class HaxeAbstractClassModel extends HaxeClassModel {
   public boolean isForwarded(String name) {
     if (null == name) return false;
 
-    boolean allEmpty = true;
+
+    HaxeMeta metadata = HaxeMetadataUtils.getMetadata(getBasePsi(), HaxeMeta.COMPILE_TIME, HaxeMeta.FORWARD);
+    if (metadata == null) return false; // if no metadata found we wont forward any
     HaxeMetadataList forwardMetaList = HaxeMetadataUtils.getMetadataList(getBasePsi(), HaxeMeta.COMPILE_TIME, HaxeMeta.FORWARD);
+    boolean allEmpty = true; // if forward tag is empty we forward all,  if not then we need to find the member in the list.
     for (HaxeMeta forward : forwardMetaList) {
       HaxeMetadataContent content = forward.getContent();
       if (null != content) {
