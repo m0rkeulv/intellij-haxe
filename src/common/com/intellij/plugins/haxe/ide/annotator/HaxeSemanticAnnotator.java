@@ -1498,7 +1498,7 @@ class MethodChecker {
                                         : "haxe.semantic.overwritten.method.parameter.optional";
         }
 
-        errorMessage = HaxeBundle.message(errorMessage, parentParam.getPresentableText(),
+        errorMessage = HaxeBundle.message(errorMessage, parentParam.getPresentableText(scopeResolver),
                                           parentMethod.getDeclaringClass().getName() + "." + parentMethod.getName());
 
         final Annotation annotation = holder.createErrorAnnotation(currentParam.getBasePsi(), errorMessage);
