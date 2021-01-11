@@ -39,7 +39,6 @@ import static com.intellij.plugins.haxe.HaxeComponentType.*;
 import static com.intellij.plugins.haxe.model.type.HaxeTypeCompatible.canAssignToFrom;
 import static com.intellij.plugins.haxe.util.HaxeGenericUtil.*;
 import static com.intellij.plugins.haxe.util.HaxeMetadataUtil.getMethodsWithMetadata;
-import static java.util.stream.Collectors.toList;
 
 public class HaxeClassModel implements HaxeExposableModel {
   public final HaxeClass haxeClass;
@@ -216,10 +215,14 @@ public class HaxeClassModel implements HaxeExposableModel {
     if (!isAbstract()) return Collections.emptyList();
     List<HaxeMethodModel> methodsWithMetadata = getCastToMethods();
 
-    return  methodsWithMetadata.stream()
-      .filter(methodModel -> castMethodAcceptsSource(sourceType, methodModel))
-      .map(m -> setSpecificsConstraints(m, getReturnType(m)))
-      .collect(toList());
+    List<SpecificHaxeClassReference> list = new ArrayList<>();
+    for (HaxeMethodModel methodModel : methodsWithMetadata) {
+      if (castMethodAcceptsSource(sourceType, methodModel)) {
+        SpecificHaxeClassReference reference = setSpecificsConstraints(methodModel, getReturnType(methodModel));
+        list.add(reference);
+      }
+    }
+    return list;
   }
 
 
@@ -241,12 +244,18 @@ public class HaxeClassModel implements HaxeExposableModel {
     if (!isAbstract()) return Collections.emptyList();
     List<HaxeMethodModel> methodsWithMetadata = getCastFromMethods();
 
-    return methodsWithMetadata.stream()
-      // if return types can not be assign to target then skip this castMethod
-      .filter(m-> canAssignToFrom(targetType, setSpecificsConstraints(m, getReturnType(m)), false))
-      .map(this::getImplicitCastFromType)// TODO consider applying generics from targetType to be more strict about what methods are supported ?
-      .filter(Objects::nonNull)
-      .collect(toList());
+    // if return types can not be assign to target then skip this castMethod
+    List<SpecificHaxeClassReference> list = new ArrayList<>();
+    for (HaxeMethodModel m : methodsWithMetadata) {
+      // TODO consider applying generics from targetType to be more strict about what methods are supported ?
+      if (canAssignToFrom(targetType, setSpecificsConstraints(m, getReturnType(m)), false)) {
+        SpecificHaxeClassReference type = getImplicitCastFromType(m);
+        if (type != null) {
+          list.add(type);
+        }
+      }
+    }
+    return list;
   }
 
   @Nullable
@@ -480,10 +489,13 @@ public class HaxeClassModel implements HaxeExposableModel {
     HaxePsiCompositeElement body = PsiTreeUtil.getChildOfAnyType(haxeClass, isEnum() ? HaxeEnumBody.class : HaxeClassBody.class, HaxeInterfaceBody.class);
 
     if (body != null) {
-      return PsiTreeUtil.getChildrenOfAnyType(body, HaxeFieldDeclaration.class, HaxeAnonymousTypeField.class, HaxeEnumValueDeclaration.class)
-        .stream()
-        .map(HaxeFieldModel::new)
-        .collect(toList());
+      List<HaxeFieldModel> list = new ArrayList<>();
+      List<HaxePsiField> children = PsiTreeUtil.getChildrenOfAnyType(body, HaxeFieldDeclaration.class, HaxeAnonymousTypeField.class, HaxeEnumValueDeclaration.class);
+      for (HaxePsiField field : children) {
+        HaxeFieldModel model = new HaxeFieldModel(field);
+        list.add(model);
+      }
+      return list;
     } else {
       return Collections.emptyList();
     }
