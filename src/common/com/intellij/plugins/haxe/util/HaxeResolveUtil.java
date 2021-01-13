@@ -68,8 +68,8 @@ public class HaxeResolveUtil {
   public static HaxeReference getLeftReference(@Nullable PsiElement node) {
     if (node == null) return null;
 
-    if(node instanceof HaxeMethod) node = node.getChildren()[0]; // trims of array access part: [i]
-    if(node instanceof HaxeArrayAccessExpression) node = node.getChildren()[0];// trims of  parameter part: (argument1,argument2...)
+    if(node instanceof HaxeCallExpression) node = node.getChildren()[0];  // trims of parameter part: (argument1,argument2...) before finding dot
+    if(node instanceof HaxeArrayAccessExpression) node = node.getChildren()[0]; // trims of array access part: [i] before finding dot
 
     PsiElement leftExpression = UsefulPsiTreeUtil.getFirstChildSkipWhiteSpacesAndComments(node);
     PsiElement dot = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(leftExpression);
