@@ -87,7 +87,37 @@ from sources at a different location than the project opened in the IDE
 server-side support (Debugger.getFilesFullPath is not exposed over the
 protocol).
 
-## 5. Fixture builds and the compile-time port
+## 5. evaluate is read-only, setVariable writes ONLY the top frame
+
+### Symptom
+`n = 100` in the IDE's evaluate box shows "n = 100" as if it worked, but the
+program's behaviour and the Variables view are unchanged.
+
+### Cause (two independent server facts)
+- The server's `evaluate` never writes: its interpreter computes the
+  expression's value (assignment included) without touching the debuggee.
+  Writes must go through the `setVariable` method, whose value parameter is
+  a LITERAL (quotes stripped; not evaluated).
+- `setVariable` HARDCODES the top stack frame of the stopped thread
+  (`currentThreadInfo.stack.length - 3` in Server.hx). `switchFrame` does
+  not change that, and a variable that does not exist in the top frame is
+  silently ignored — the server still reports success.
+
+### Fix
+The adapter recognises top-level assignments in evaluate (`topLevelAssignment`
+— outside quotes/brackets, not a comparison), evaluates a non-literal right
+side first, routes the write through `setVariable`, and VERIFIES every write
+(evaluate + F2 setValue) by re-reading the target: an unchanged value becomes
+an error naming the top-frame-only limitation instead of a silent lie. The
+IDE-side evaluator refreshes the variable views after a successful assignment.
+
+### Where this bites again
+Only variables of the STOPPED function can be modified. Anything deeper
+(caller locals, and possibly object fields through paths the server's
+setStackVariableValue does not resolve) is refused with the explanatory
+error. Lifting this needs an upstream server change.
+
+## 6. Fixture builds and the compile-time port
 
 HXCPP_DEBUG_HOST/HXCPP_DEBUG_PORT are compile-time defines
 (`Context.definedValue`), not runtime configuration. The test fixture pins

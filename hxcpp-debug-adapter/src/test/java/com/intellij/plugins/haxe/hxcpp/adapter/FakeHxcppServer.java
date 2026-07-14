@@ -45,6 +45,7 @@ class FakeHxcppServer implements Closeable {
     handle("stepOut", params -> "null");
     handle("pause", params -> "null");
     handle("setExceptionOptions", params -> "null");
+    handle("switchFrame", params -> "null");
     Thread reader = new Thread(this::serveLoop, "fake-hxcpp-server");
     reader.setDaemon(true);
     reader.start();

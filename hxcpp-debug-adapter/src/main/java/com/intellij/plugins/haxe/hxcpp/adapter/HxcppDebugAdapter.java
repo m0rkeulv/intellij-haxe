@@ -385,7 +385,7 @@ public class HxcppDebugAdapter implements Closeable {
       decode(call(HxcppProtocol.GET_SCOPES, Map.of("frameId", frameId)), HxcppScopeInfo[].class);
     List<Scope> scopes = new ArrayList<>();
     for (HxcppScopeInfo scopeInfo : scopeInfos) {
-      variablePaths.registerScope(scopeInfo.id());
+      variablePaths.registerScope(scopeInfo.id(), frameId);
       Scope scope = new Scope();
       scope.setName(scopeInfo.name());
       scope.setVariablesReference(scopeInfo.id());
@@ -412,7 +412,7 @@ public class HxcppDebugAdapter implements Closeable {
     HxcppVarInfo[] varInfos = decode(call(HxcppProtocol.GET_VARIABLES, params), HxcppVarInfo[].class);
     List<Variable> variables = new ArrayList<>();
     for (HxcppVarInfo varInfo : varInfos) {
-      variablePaths.registerChild(reference, varInfo.name(), varInfo.variablesReference());
+      variablePaths.registerChild(reference, varInfo.name(), varInfo.reference());
       variables.add(toVariable(varInfo));
     }
     VariablesResponseBody body = new VariablesResponseBody();
@@ -466,13 +466,43 @@ public class HxcppDebugAdapter implements Closeable {
       return;
     }
     String expression = request.getArguments().getExpression();
+
+    // The server's evaluate is read-only: it happily computes `n = 100` as a
+    // value without ever writing n (silently misleading). Assignments must go
+    // through the setVariable method instead, whose value parameter is a
+    // LITERAL — a non-literal right side is evaluated first.
+    int assignAt = topLevelAssignment(expression);
+    if (assignAt >= 0) {
+      String target = expression.substring(0, assignAt).trim();
+      String value = expression.substring(assignAt + 1).trim();
+      if (target.isEmpty() || value.isEmpty()) {
+        sendErrorResponse(request, "Malformed assignment: " + expression);
+        return;
+      }
+      if (!isLiteral(value)) {
+        HxcppVarInfo computed =
+          decode(call(HxcppProtocol.EVALUATE, Map.of("expr", value, "frameId", frameId)), HxcppVarInfo.class);
+        value = computed.value();
+      }
+      HxcppVarInfo written = setVariableVerified(target, value, frameId);
+      variablePaths.registerExpression(written.reference(), target, frameId);
+      EvaluateResponseBody body = new EvaluateResponseBody();
+      body.setResult(written.value());
+      body.setType(written.type());
+      body.setVariablesReference(written.reference());
+      EvaluateResponse response = new EvaluateResponse();
+      response.setBody(body);
+      sendResponse(request, response);
+      return;
+    }
+
     HxcppVarInfo varInfo =
       decode(call(HxcppProtocol.EVALUATE, Map.of("expr", expression, "frameId", frameId)), HxcppVarInfo.class);
-    variablePaths.registerExpression(varInfo.variablesReference(), expression);
+    variablePaths.registerExpression(varInfo.reference(), expression, frameId);
     EvaluateResponseBody body = new EvaluateResponseBody();
     body.setResult(varInfo.value());
     body.setType(varInfo.type());
-    body.setVariablesReference(varInfo.variablesReference());
+    body.setVariablesReference(varInfo.reference());
     EvaluateResponse response = new EvaluateResponse();
     response.setBody(body);
     sendResponse(request, response);
@@ -487,14 +517,13 @@ public class HxcppDebugAdapter implements Closeable {
                                  + " - references are only valid while stopped");
       return;
     }
-    HxcppVarInfo varInfo = decode(
-      call(HxcppProtocol.SET_VARIABLE, Map.of("expr", expression, "value", request.getArguments().getValue())),
-      HxcppVarInfo.class);
-    variablePaths.registerExpression(varInfo.variablesReference(), expression);
+    Integer frameId = variablePaths.frameOf(reference);
+    HxcppVarInfo varInfo = setVariableVerified(expression, request.getArguments().getValue(), frameId);
+    variablePaths.registerExpression(varInfo.reference(), expression, frameId);
     SetVariableResponseBody body = new SetVariableResponseBody();
     body.setValue(varInfo.value());
     body.setType(varInfo.type());
-    body.setVariablesReference(varInfo.variablesReference());
+    body.setVariablesReference(varInfo.reference());
     SetVariableResponse response = new SetVariableResponse();
     response.setBody(body);
     sendResponse(request, response);
@@ -596,6 +625,116 @@ public class HxcppDebugAdapter implements Closeable {
   }
 
   /**
+   * Writes {@code target = value} and VERIFIES it stuck by re-reading the
+   * target. The server's setVariable always writes against the TOP frame of
+   * the stopped thread (Server.hx hardcodes the frame; switchFrame does not
+   * change it) and reports success even when the variable was not found
+   * there — so a write to any other frame's variable silently does nothing.
+   * The read-back turns that into an honest error.
+   */
+  private HxcppVarInfo setVariableVerified(String target, String value, Integer frameId)
+    throws IOException, InterruptedException {
+    HxcppVarInfo written =
+      decode(call(HxcppProtocol.SET_VARIABLE, Map.of("expr", target, "value", value)), HxcppVarInfo.class);
+    if (frameId == null) {
+      return written; // no frame context to verify against; trust the server
+    }
+    HxcppVarInfo readBack =
+      decode(call(HxcppProtocol.EVALUATE, Map.of("expr", target, "frameId", frameId)), HxcppVarInfo.class);
+    String expected = stripQuotes(value.trim());
+    String actual = readBack.value() != null ? readBack.value().trim() : "";
+    if (!valuesMatch(expected, actual)) {
+      throw new IOException("Could not set '" + target + "' (its value is still " + actual + "). "
+                            + "The hxcpp debug server can only modify variables of the TOP stack frame "
+                            + "of the stopped thread; variables of caller frames cannot be changed.");
+    }
+    return readBack;
+  }
+
+  private static String stripQuotes(String value) {
+    if (value.length() >= 2 && (value.charAt(0) == '"' || value.charAt(0) == '\'')
+        && value.charAt(value.length() - 1) == value.charAt(0)) {
+      return value.substring(1, value.length() - 1);
+    }
+    return value;
+  }
+
+  /** Loose equality: exact text, or both parse as the same number (e.g. "5" vs "5.0"). */
+  private static boolean valuesMatch(String expected, String actual) {
+    if (expected.equals(actual)) {
+      return true;
+    }
+    try {
+      return Double.parseDouble(expected) == Double.parseDouble(actual);
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  /**
+   * The index of a top-level assignment {@code =} in the expression, or -1.
+   * Top-level means outside quotes and brackets; {@code ==}, {@code !=},
+   * {@code <=} and {@code >=} are comparisons, not assignments. Public so
+   * the IDE-side evaluator can recognize assignments too (it refreshes the
+   * variable views after one succeeds).
+   */
+  public static int topLevelAssignment(String expression) {
+    int depth = 0;
+    boolean inString = false;
+    char quote = 0;
+    for (int i = 0; i < expression.length(); i++) {
+      char c = expression.charAt(i);
+      if (inString) {
+        if (c == quote && expression.charAt(i - 1) != '\\') {
+          inString = false;
+        }
+        continue;
+      }
+      switch (c) {
+        case '"', '\'' -> {
+          inString = true;
+          quote = c;
+        }
+        case '(', '[', '{' -> depth++;
+        case ')', ']', '}' -> depth--;
+        case '=' -> {
+          if (depth > 0) {
+            continue;
+          }
+          boolean comparison = (i + 1 < expression.length() && expression.charAt(i + 1) == '=')
+                               || (i > 0 && "=!<>".indexOf(expression.charAt(i - 1)) >= 0);
+          if (comparison) {
+            if (i + 1 < expression.length() && expression.charAt(i + 1) == '=') {
+              i++; // skip the second '=' of '=='
+            }
+            continue;
+          }
+          return i;
+        }
+        default -> { }
+      }
+    }
+    return -1;
+  }
+
+  /** True for values the server's setVariable takes as-is (numbers, bools, null, quoted strings). */
+  static boolean isLiteral(String value) {
+    if (value.equals("true") || value.equals("false") || value.equals("null")) {
+      return true;
+    }
+    if (value.length() >= 2 && (value.charAt(0) == '"' || value.charAt(0) == '\'')
+        && value.charAt(value.length() - 1) == value.charAt(0)) {
+      return true;
+    }
+    try {
+      Double.parseDouble(value);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  /**
    * A frame source usable by the IDE, or null. The server reports "?" (in
    * various path-mangled forms) for native/unknown frames — anything that is
    * not a valid file path yields a frame without source, not an error.
@@ -620,7 +759,7 @@ public class HxcppDebugAdapter implements Closeable {
     variable.setName(varInfo.name());
     variable.setValue(varInfo.value());
     variable.setType(varInfo.type());
-    variable.setVariablesReference(varInfo.variablesReference());
+    variable.setVariablesReference(varInfo.reference());
     variable.setNamedVariables(varInfo.namedVariables());
     variable.setIndexedVariables(varInfo.indexedVariables());
     return variable;

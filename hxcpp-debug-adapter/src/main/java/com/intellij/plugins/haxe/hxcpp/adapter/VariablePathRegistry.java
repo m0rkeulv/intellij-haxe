@@ -2,15 +2,19 @@ package com.intellij.plugins.haxe.hxcpp.adapter;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Maps live variablesReferences to the expression path of their container.
+ * Maps live variablesReferences to the expression path of their container
+ * and the stack frame they belong to.
  *
  * DAP's {@code setVariable} names a child of a variablesReference, but the
- * server's {@code setVariable} takes an expression string — so every time a
- * reference passes through the adapter we record how to spell its contents:
- * a scope's children are bare names, an object's children are
- * {@code container.name}, an array's are {@code container[index]}.
+ * server's {@code setVariable} takes an expression string and works against
+ * the server's CURRENT frame (selected via {@code switchFrame} — the method
+ * has no frame parameter). So every time a reference passes through the
+ * adapter we record how to spell its contents (a scope's children are bare
+ * names, an object's are {@code container.name}, an array's are
+ * {@code container[index]}) and which frame they live in.
  *
  * References are per-stop (the server clears its own on every stop), so the
  * adapter clears this registry whenever the debuggee resumes or stops — a
@@ -18,23 +22,31 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 class VariablePathRegistry {
   private final Map<Integer, String> containerExprByRef = new ConcurrentHashMap<>();
+  private final Map<Integer, Integer> frameByRef = new ConcurrentHashMap<>();
 
-  /** A scope reference: children are addressed by their bare name. */
-  void registerScope(int reference) {
+  /** A scope of {@code frameId}: children are addressed by their bare name. */
+  void registerScope(int reference, int frameId) {
     containerExprByRef.put(reference, "");
+    frameByRef.put(reference, frameId);
   }
 
-  /** A reference whose children are addressed relative to {@code expression}. */
-  void registerExpression(int reference, String expression) {
+  /** A reference in {@code frameId} whose children are addressed relative to {@code expression}. */
+  void registerExpression(int reference, String expression, @Nullable Integer frameId) {
     if (reference > 0) {
       containerExprByRef.put(reference, expression);
+      if (frameId != null) {
+        frameByRef.put(reference, frameId);
+      }
     }
   }
 
-  /** Registers an expandable child of a known container under its own path. */
+  /** Registers an expandable child of a known container under its own path (same frame). */
   void registerChild(int parentReference, String childName, int childReference) {
     if (childReference > 0) {
-      registerExpression(childReference, childExpression(parentReference, childName));
+      String expression = childExpression(parentReference, childName);
+      if (expression != null) {
+        registerExpression(childReference, expression, frameByRef.get(parentReference));
+      }
     }
   }
 
@@ -42,7 +54,7 @@ class VariablePathRegistry {
    * Spells the expression for {@code name} inside the container behind
    * {@code reference}; null when the reference is unknown (stale).
    */
-  String childExpression(int reference, String name) {
+  @Nullable String childExpression(int reference, String name) {
     String container = containerExprByRef.get(reference);
     if (container == null) {
       return null;
@@ -56,8 +68,14 @@ class VariablePathRegistry {
     return container + "." + name;
   }
 
+  /** The frame the reference belongs to; null when unknown. */
+  @Nullable Integer frameOf(int reference) {
+    return frameByRef.get(reference);
+  }
+
   void clear() {
     containerExprByRef.clear();
+    frameByRef.clear();
   }
 
   private static boolean isIndex(String name) {

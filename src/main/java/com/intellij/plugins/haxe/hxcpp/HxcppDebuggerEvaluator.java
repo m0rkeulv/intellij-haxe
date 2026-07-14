@@ -45,6 +45,11 @@ final class HxcppDebuggerEvaluator extends XDebuggerEvaluator {
         // a watch/hover result has no editable container (0); child expansion
         // still uses the result's own reference
         callback.evaluated(new HxcppValue(process, result, 0));
+        // an assignment changed debuggee state: the Variables view must
+        // re-read, or it keeps showing the old value
+        if (com.intellij.plugins.haxe.hxcpp.adapter.HxcppDebugAdapter.topLevelAssignment(expression) >= 0) {
+          process.getSession().rebuildViews();
+        }
       } else {
         String message = response != null && response.getMessage() != null
                          ? response.getMessage() : "Cannot evaluate";

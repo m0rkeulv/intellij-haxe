@@ -275,6 +275,8 @@ public class HxcppDebugAdapterTest {
       assertEquals("9", params.path("value").asString());
       return "{\"name\":\"x\",\"type\":\"Int\",\"value\":\"9\",\"variablesReference\":0}";
     });
+    server.handle("evaluate", params -> // write verification read-back
+      "{\"name\":\"obj.x\",\"type\":\"Int\",\"value\":\"9\",\"variablesReference\":0}");
 
     ScopesArguments scopesArguments = new ScopesArguments();
     scopesArguments.setFrameId(1);
@@ -318,6 +320,8 @@ public class HxcppDebugAdapterTest {
       assertEquals("items[3]", params.path("expr").asString());
       return "{\"name\":\"3\",\"type\":\"Int\",\"value\":\"42\",\"variablesReference\":0}";
     });
+    server.handle("evaluate", params -> // write verification read-back
+      "{\"name\":\"items[3]\",\"type\":\"Int\",\"value\":\"42\",\"variablesReference\":0}");
 
     ScopesArguments scopesArguments = new ScopesArguments();
     scopesArguments.setFrameId(1);
@@ -367,10 +371,14 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void evaluateTranslatesAndItsResultIsSettable() throws Exception {
-    server.handle("evaluate", params -> {
-      assertEquals("cfg", params.path("expr").asString());
-      assertEquals(1, params.path("frameId").asInt());
-      return "{\"name\":\"cfg\",\"type\":\"Config\",\"value\":\"Config\",\"variablesReference\":200}";
+    server.handle("evaluate", params -> switch (params.path("expr").asString()) {
+      case "cfg" -> {
+        assertEquals(1, params.path("frameId").asInt());
+        yield "{\"name\":\"cfg\",\"type\":\"Config\",\"value\":\"Config\",\"variablesReference\":200}";
+      }
+      // write verification read-back
+      case "cfg.count" -> "{\"name\":\"cfg.count\",\"type\":\"Int\",\"value\":\"9\",\"variablesReference\":0}";
+      default -> throw new RuntimeException("unexpected evaluate " + params.path("expr").asString());
     });
     server.handle("setVariable", params -> {
       assertEquals("cfg.count", params.path("expr").asString());
@@ -393,6 +401,130 @@ public class HxcppDebugAdapterTest {
     SetVariableRequest setRequest = new SetVariableRequest();
     setRequest.setArguments(setArguments);
     assertTrue(dapClient.sendRequest(setRequest, TIMEOUT).isSuccess());
+  }
+
+  @Test
+  public void evaluateAssignmentRoutesToSetVariableAndVerifies() throws Exception {
+    server.handle("setVariable", params -> {
+      assertEquals("n", params.path("expr").asString());
+      assertEquals("100", params.path("value").asString());
+      return "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"100\",\"variablesReference\":0}";
+    });
+    // the write is verified by re-reading the target
+    server.handle("evaluate", params -> {
+      assertEquals("n", params.path("expr").asString());
+      return "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"100\",\"variablesReference\":0}";
+    });
+
+    EvaluateArguments arguments = new EvaluateArguments();
+    arguments.setExpression("n = 100");
+    arguments.setFrameId(1);
+    EvaluateRequest request = new EvaluateRequest();
+    request.setArguments(arguments);
+    EvaluateResponse response = (EvaluateResponse)dapClient.sendRequest(request, TIMEOUT);
+    assertTrue(response.isSuccess());
+    assertEquals("100", response.getBody().getResult());
+
+    assertEquals(1, server.requests("setVariable").size());
+    assertEquals(1, server.requests("evaluate").size());
+  }
+
+  @Test
+  public void evaluateAssignmentWithExpressionValueEvaluatesTheRightSideFirst() throws Exception {
+    server.handle("evaluate", params -> switch (params.path("expr").asString()) {
+      case "m * 2" -> "{\"name\":\"m * 2\",\"type\":\"Int\",\"value\":\"84\",\"variablesReference\":0}";
+      case "n" -> "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"84\",\"variablesReference\":0}"; // read-back
+      default -> throw new RuntimeException("unexpected evaluate " + params.path("expr").asString());
+    });
+    server.handle("setVariable", params -> {
+      assertEquals("n", params.path("expr").asString());
+      assertEquals("84", params.path("value").asString());
+      return "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"84\",\"variablesReference\":0}";
+    });
+
+    EvaluateArguments arguments = new EvaluateArguments();
+    arguments.setExpression("n = m * 2");
+    arguments.setFrameId(1);
+    EvaluateRequest request = new EvaluateRequest();
+    request.setArguments(arguments);
+    EvaluateResponse response = (EvaluateResponse)dapClient.sendRequest(request, TIMEOUT);
+    assertTrue(response.isSuccess());
+    assertEquals("84", response.getBody().getResult());
+  }
+
+  @Test
+  public void silentlyIgnoredWriteBecomesAnHonestError() throws Exception {
+    // the real server reports success even when the variable was not found
+    // in the top frame; the read-back must expose the unchanged value
+    server.handle("setVariable", params ->
+      "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"100\",\"variablesReference\":0}");
+    server.handle("evaluate", params ->
+      "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"3\",\"variablesReference\":0}"); // unchanged!
+
+    EvaluateArguments arguments = new EvaluateArguments();
+    arguments.setExpression("n = 100");
+    arguments.setFrameId(1);
+    EvaluateRequest request = new EvaluateRequest();
+    request.setArguments(arguments);
+    Response response = dapClient.sendRequest(request, TIMEOUT);
+    assertFalse(response.isSuccess());
+    assertTrue(response.getMessage(), response.getMessage().contains("TOP stack frame"));
+  }
+
+  @Test
+  public void comparisonsAreNotAssignments() throws Exception {
+    server.handle("evaluate", params -> {
+      assertEquals("n == 100", params.path("expr").asString());
+      return "{\"name\":\"n == 100\",\"type\":\"Bool\",\"value\":\"false\",\"variablesReference\":0}";
+    });
+    EvaluateArguments arguments = new EvaluateArguments();
+    arguments.setExpression("n == 100");
+    arguments.setFrameId(1);
+    EvaluateRequest request = new EvaluateRequest();
+    request.setArguments(arguments);
+    assertTrue(dapClient.sendRequest(request, TIMEOUT).isSuccess());
+    assertEquals(0, server.requests("setVariable").size());
+  }
+
+  @Test
+  public void topLevelAssignmentDetection() {
+    assertEquals(2, HxcppDebugAdapter.topLevelAssignment("n = 100"));
+    assertEquals(9, HxcppDebugAdapter.topLevelAssignment("arr[i+1] = x"));
+    assertEquals(-1, HxcppDebugAdapter.topLevelAssignment("n == 100"));
+    assertEquals(-1, HxcppDebugAdapter.topLevelAssignment("n != 100"));
+    assertEquals(-1, HxcppDebugAdapter.topLevelAssignment("n <= 100"));
+    assertEquals(-1, HxcppDebugAdapter.topLevelAssignment("n >= 100"));
+    assertEquals(-1, HxcppDebugAdapter.topLevelAssignment("f(a = 1)"));
+    assertEquals(-1, HxcppDebugAdapter.topLevelAssignment("\"a = b\""));
+    assertEquals(2, HxcppDebugAdapter.topLevelAssignment("s = \"x == y\""));
+  }
+
+  @Test
+  public void setVariableVerifiesAgainstTheReferencesFrame() throws Exception {
+    server.handle("getScopes", params -> "[{\"id\":100,\"name\":\"Locals\"}]");
+    server.handle("setVariable", params ->
+      "{\"name\":\"x\",\"type\":\"Int\",\"value\":\"5\",\"variablesReference\":0}");
+    server.handle("evaluate", params -> {
+      // the read-back must target the frame the reference was handed out for
+      assertEquals("x", params.path("expr").asString());
+      assertEquals(7, params.path("frameId").asInt());
+      return "{\"name\":\"x\",\"type\":\"Int\",\"value\":\"5\",\"variablesReference\":0}";
+    });
+
+    ScopesArguments scopesArguments = new ScopesArguments();
+    scopesArguments.setFrameId(7);
+    ScopesRequest scopesRequest = new ScopesRequest();
+    scopesRequest.setArguments(scopesArguments);
+    dapClient.sendRequest(scopesRequest, TIMEOUT);
+
+    SetVariableArguments setArguments = new SetVariableArguments();
+    setArguments.setVariablesReference(100);
+    setArguments.setName("x");
+    setArguments.setValue("5");
+    SetVariableRequest setRequest = new SetVariableRequest();
+    setRequest.setArguments(setArguments);
+    assertTrue(dapClient.sendRequest(setRequest, TIMEOUT).isSuccess());
+    assertEquals(1, server.requests("evaluate").size());
   }
 
   @Test

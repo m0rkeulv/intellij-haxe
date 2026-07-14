@@ -261,6 +261,38 @@ public class HxcppLaunchIntegrationTest {
     EvaluateResponse evaluate = require(evaluateRequest);
     assertEquals("0", evaluate.getBody().getResult().trim());
 
+    // --- assignment through evaluate must WRITE (the n = 100 bug) -----------
+    // a TOP-frame local is writable; the changed value is verified by
+    // read-back here and by the program's own trace output at the end
+    // (doubled = 55 in iteration 1 makes the final total 115, not 60)
+    EvaluateArguments assignArguments = new EvaluateArguments();
+    assignArguments.setExpression("doubled = 55");
+    assignArguments.setFrameId(top.getId());
+    EvaluateRequest assignRequest = new EvaluateRequest();
+    assignRequest.setArguments(assignArguments);
+    require(assignRequest);
+
+    EvaluateArguments readBackArguments = new EvaluateArguments();
+    readBackArguments.setExpression("doubled");
+    readBackArguments.setFrameId(top.getId());
+    EvaluateRequest readBackRequest = new EvaluateRequest();
+    readBackRequest.setArguments(readBackArguments);
+    EvaluateResponse readBack = require(readBackRequest);
+    assertEquals("assignment did not stick", "55", readBack.getBody().getResult().trim());
+
+    // a CALLER-frame variable is not writable (the server hardcodes the top
+    // frame and would silently ignore it) — the adapter must say so
+    assertTrue("expected a caller frame", frames.size() >= 2);
+    EvaluateArguments callerAssignArguments = new EvaluateArguments();
+    callerAssignArguments.setExpression("n = 100");
+    callerAssignArguments.setFrameId(frames.get(1).getId());
+    EvaluateRequest callerAssignRequest = new EvaluateRequest();
+    callerAssignRequest.setArguments(callerAssignArguments);
+    com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response callerAssign =
+      dapClient.sendRequest(callerAssignRequest, TIMEOUT);
+    assertFalse("caller-frame write should be refused, not silently ignored", callerAssign.isSuccess());
+    assertTrue(callerAssign.getMessage(), callerAssign.getMessage().contains("TOP stack frame"));
+
     // --- step over stays in the program -------------------------------------
     NextArguments nextArguments = new NextArguments();
     nextArguments.setThreadId(threadId);
@@ -277,6 +309,21 @@ public class HxcppLaunchIntegrationTest {
     assertTrue(dapClient.sendRequest(continueRequest, TIMEOUT).isSuccess());
     awaitEvent(StoppedEvent.class);
 
+    // --- run-to-cursor mechanism: replace the file's set with the target ----
+    // (the breakpoint manager sends existing breakpoints + the temp line; here
+    // the existing set is empty so only the target remains — the pure case)
+    int doneLine = lineOfMarker("done");
+    setBreakpoints(doneLine);
+    assertTrue(dapClient.sendRequest(continueRequest, TIMEOUT).isSuccess());
+    StoppedEvent runToStop = (StoppedEvent)awaitEvent(StoppedEvent.class);
+    StackTraceArguments runToStackArguments = new StackTraceArguments();
+    runToStackArguments.setThreadId(runToStop.getBody().getThreadId());
+    StackTraceRequest runToStackRequest = new StackTraceRequest();
+    runToStackRequest.setArguments(runToStackArguments);
+    StackTraceResponse runToStack = require(runToStackRequest);
+    assertEquals("run-to target line not reached",
+                 doneLine, runToStack.getBody().getStackFrames().get(0).getLine());
+
     // --- clear breakpoints, run to completion --------------------------------
     setBreakpoints(/* none */);
     assertTrue(dapClient.sendRequest(continueRequest, TIMEOUT).isSuccess());
@@ -284,7 +331,9 @@ public class HxcppLaunchIntegrationTest {
     awaitEvent(TerminatedEvent.class);
     assertTrue("debuggee did not exit", debuggee.waitFor(TIMEOUT, TimeUnit.MILLISECONDS));
     assertEquals("debuggee output:\n" + output(), 0, debuggee.exitValue());
+    // 115, not 60: the doubled = 55 write in iteration 1 flowed into the sum —
+    // execution-level proof that evaluate assignments reach the debuggee
     assertTrue("expected trace output, got:\n" + output(),
-               output().contains("total=60 title=fixture"));
+               output().contains("total=115 title=fixture"));
   }
 }
