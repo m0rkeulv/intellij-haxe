@@ -59,7 +59,35 @@ path-mangled forms that make `Path.of` throw. Treat any unparseable source
 as "no source" (frame without navigation), never as an error that fails the
 whole stackTrace request.
 
-## 4. Fixture builds and the compile-time port
+## 4. Breakpoint file matching is EXACT-string (the silent no-stop bug)
+
+### Symptom
+Breakpoints show as set in the IDE but the program never stops on them.
+Everything else (launch, console, termination) works.
+
+### Cause
+Server.hx resolves a breakpoint's file by exact string lookup against the
+compiler-recorded full paths (`path2file[path2Key(params.file)]`, where
+path2Key only UPPERCASES on Windows — no separator normalization, no suffix
+matching). IntelliJ's VirtualFile paths use FORWARD slashes on Windows
+(`C:/Users/...`); the compiler records backslashes. The lookup misses, the
+breakpoint is registered against a null file, and there is no error — the
+server happily returns an id.
+
+### Fix
+The adapter converts client paths to native separators before every
+setBreakpoints (`toDebuggerPath`). The launch integration test deliberately
+sends IDE-shaped forward-slash paths so a real stop pins the conversion.
+
+### Where this bites again
+Any new request that carries a file path to the server needs the same
+conversion. And the match is still EXACT full-path: an executable compiled
+from sources at a different location than the project opened in the IDE
+(moved project, CI build) will not match — suffix matching would need
+server-side support (Debugger.getFilesFullPath is not exposed over the
+protocol).
+
+## 5. Fixture builds and the compile-time port
 
 HXCPP_DEBUG_HOST/HXCPP_DEBUG_PORT are compile-time defines
 (`Context.definedValue`), not runtime configuration. The test fixture pins

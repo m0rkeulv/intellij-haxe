@@ -171,7 +171,10 @@ public class HxcppLaunchIntegrationTest {
 
   private SetBreakpointsResponse setBreakpoints(int... lines) throws Exception {
     Source source = new Source();
-    source.setPath(fixtureSource.toString());
+    // deliberately IDE-shaped (forward slashes, as VirtualFile.getPath()
+    // reports on Windows): the adapter must convert before the server's
+    // exact-string path matching — a real breakpoint stop below proves it
+    source.setPath(fixtureSource.toString().replace('\\', '/'));
     SetBreakpointsArguments arguments = new SetBreakpointsArguments();
     arguments.setSource(source);
     arguments.setBreakpoints(java.util.Arrays.stream(lines).mapToObj(line -> {

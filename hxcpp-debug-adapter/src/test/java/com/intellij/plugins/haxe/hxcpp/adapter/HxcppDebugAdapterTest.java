@@ -169,6 +169,30 @@ public class HxcppDebugAdapterTest {
   }
 
   @Test
+  public void forwardSlashClientPathsBecomeNativeSeparators() throws Exception {
+    // the server matches breakpoint files by EXACT string against the
+    // compiler-recorded paths; IDE paths use forward slashes on Windows
+    String expected = "C:/project/src/Main.hx".replace('/', java.io.File.separatorChar);
+    server.handle("setBreakpoints", params -> {
+      assertEquals(expected, params.path("file").asString());
+      return "[{\"id\":1}]";
+    });
+
+    Source source = new Source();
+    source.setPath("C:/project/src/Main.hx");
+    SourceBreakpoint breakpoint = new SourceBreakpoint();
+    breakpoint.setLine(3);
+    SetBreakpointsArguments arguments = new SetBreakpointsArguments();
+    arguments.setSource(source);
+    arguments.setBreakpoints(List.of(breakpoint));
+    SetBreakpointsRequest request = new SetBreakpointsRequest();
+    request.setArguments(arguments);
+
+    assertTrue(dapClient.sendRequest(request, TIMEOUT).isSuccess());
+    assertEquals(1, server.requests("setBreakpoints").size());
+  }
+
+  @Test
   public void configurationDoneReleasesTheHeldDebuggee() throws Exception {
     assertTrue(dapClient.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess());
     List<tools.jackson.databind.JsonNode> continues = server.requests("continue");

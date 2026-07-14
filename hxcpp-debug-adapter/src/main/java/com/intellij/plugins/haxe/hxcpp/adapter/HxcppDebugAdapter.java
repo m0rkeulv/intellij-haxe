@@ -282,7 +282,11 @@ public class HxcppDebugAdapter implements Closeable {
   }
 
   private void handleSetBreakpoints(SetBreakpointsRequest request) throws IOException, InterruptedException {
-    String file = request.getArguments().getSource().getPath();
+    // The server resolves the file by EXACT string match against the
+    // compiler-recorded full paths (path2file, only case-normalized on
+    // Windows) — an IDE-style forward-slash Windows path silently matches
+    // nothing and the breakpoints land nowhere. Convert to native separators.
+    String file = toDebuggerPath(request.getArguments().getSource().getPath());
     List<Map<String, Object>> breakpoints = new ArrayList<>();
     List<SourceBreakpoint> requested = request.getArguments().getBreakpoints() != null
                                        ? request.getArguments().getBreakpoints() : List.of();
@@ -585,6 +589,11 @@ public class HxcppDebugAdapter implements Closeable {
   }
 
   // ------------------------------------------------------------------ helpers
+
+  /** Client (IDE) path → the debugger's native-separator form. */
+  private static String toDebuggerPath(String clientPath) {
+    return clientPath == null ? null : clientPath.replace('/', java.io.File.separatorChar);
+  }
 
   /**
    * A frame source usable by the IDE, or null. The server reports "?" (in
