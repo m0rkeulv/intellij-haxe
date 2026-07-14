@@ -129,16 +129,13 @@
     <lang.ast.factory language="HaxeMetadata" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeAstFactory" />
     <!-- METADATA END -->
 
-    <!-- Experimental HashLink support: a DEDICATED configuration type with its
-         own runners, keyed on HashLinkRunConfiguration - the generic Haxe
-         runners below never see HashLink runs and vice versa. -->
-    <configurationType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfigurationType"/>
+    <!-- HashLink and HXCPP(vshaxe) support (experimental): both live as
+         factories of the Haxe configuration GROUP (HaxeRunConfigurationType,
+         registered further below) so the Edit Configurations dialog nests
+         them under one Haxe node. Their runners key on the configuration
+         CLASS, so the legacy runners never see these runs and vice versa. -->
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkDebugRunner"/>
-    <!-- Experimental HXCPP (native) support: like HashLink, a DEDICATED
-         configuration type keyed on HxcppRunConfiguration - the legacy
-         Flash/hxcpp debugger below never sees these runs and vice versa. -->
-    <configurationType implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppRunConfigurationType"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.HaxeRunner"/>
