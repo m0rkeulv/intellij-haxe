@@ -132,21 +132,21 @@
     <!-- Experimental HashLink support: a DEDICATED configuration type with its
          own runners, keyed on HashLinkRunConfiguration - the generic Haxe
          runners below never see HashLink runs and vice versa. -->
-    <configurationType implementation="com.intellij.plugins.haxe.hashlink.HashLinkRunConfigurationType"/>
-    <programRunner implementation="com.intellij.plugins.haxe.hashlink.HashLinkRunner"/>
-    <programRunner implementation="com.intellij.plugins.haxe.hashlink.HashLinkDebugRunner"/>
+    <configurationType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfigurationType"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkDebugRunner"/>
     <!-- Experimental HXCPP (native) support: like HashLink, a DEDICATED
          configuration type keyed on HxcppRunConfiguration - the legacy
          Flash/hxcpp debugger below never sees these runs and vice versa. -->
-    <configurationType implementation="com.intellij.plugins.haxe.hxcpp.HxcppRunConfigurationType"/>
-    <programRunner implementation="com.intellij.plugins.haxe.hxcpp.HxcppRunner"/>
-    <programRunner implementation="com.intellij.plugins.haxe.hxcpp.HxcppDebugRunner"/>
+    <configurationType implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppRunConfigurationType"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.HaxeRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebugRunner"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.hashlink.HashLinkExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.hashlink.HashLinkUncaughtExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.hashlink.HashLinkTypedExceptionBreakpointType"/>
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkExceptionBreakpointType"/>
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkUncaughtExceptionBreakpointType"/>
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkTypedExceptionBreakpointType"/>
 
     <lang.parserDefinition language="Haxe" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeParserDefinition"/>
     <lang.formatter language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.formatter.HaxeFormattingModelBuilder"/>

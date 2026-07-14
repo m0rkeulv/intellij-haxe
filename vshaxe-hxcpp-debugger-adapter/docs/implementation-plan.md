@@ -4,7 +4,7 @@ Status: DRAFT — awaiting sign-off before any implementation.
 
 This plan is based on research of the vshaxe debugger (github.com/vshaxe/hxcpp-debugger,
 the `hxcpp.debug.jsonrpc` server library) and of our own HashLink debugger
-(`hashlink-debug-adapter` + `com.intellij.plugins.haxe.hashlink`).
+(`hashlink-debug-adapter` + `com.intellij.plugins.haxe.runner.debugger.hashlink`).
 
 ---
 
@@ -85,7 +85,7 @@ Gradle modules after this work:
 | `:vshaxe-hxcpp-debugger-adapter` (new; originally `:hxcpp-debug-adapter`, renamed to disambiguate from a possible future home-grown server) | `jsonrpc` package (framing, messages, client — zero IDE deps) + `adapter` package (the DAP↔jsonrpc translator). Depends on `:dap-protocol`. |
 | `:hashlink-debug-adapter` | unchanged except imports now point at `:dap-protocol`. Haxe adapter untouched. |
 | `:hxcpp-debugger-protocol-legacy` (renamed) | the old generated legacy protocol, wired exactly as before. Untouched otherwise. |
-| plugin (`src/main`) | new `com.intellij.plugins.haxe.hxcpp` package: run config, runner, `HxcppDebugProcess` + breakpoint/stack/value classes mirroring the `hashlink` package. **No code shared with hashlink or legacy debugger code (per project rules).** |
+| plugin (`src/main`) | new `com.intellij.plugins.haxe.runner.debugger.hxcpp` package: run config, runner, `HxcppDebugProcess` + breakpoint/stack/value classes mirroring the `hashlink` package. **No code shared with hashlink or legacy debugger code (per project rules).** |
 
 The DAP boundary between plugin and adapter: `HxcppDebugProcess` uses the same
 `DapClient` the HashLink side uses, connected to the in-process adapter through an
