@@ -129,6 +129,11 @@ public class HxcppDebugAdapter implements Closeable {
   public HxcppDebugAdapter(String host, int port, long debuggeeConnectTimeoutMillis) throws IOException {
     this.debuggeeConnectTimeoutMillis = debuggeeConnectTimeoutMillis;
     debuggeeListener = new ServerSocket();
+    // never share the port: a leftover instance of the debugged program (e.g.
+    // from a plain Run - its embedded server binds the port itself when no
+    // debugger answers) must surface as a clear bind failure here, not as a
+    // silent double-bind that poisons every later connection
+    debuggeeListener.setReuseAddress(false);
     debuggeeListener.bind(new InetSocketAddress(host, port));
   }
 
@@ -174,7 +179,9 @@ public class HxcppDebugAdapter implements Closeable {
     } catch (TimeoutException e) {
       throw new IOException("Debuggee did not connect to the debugger within " + timeoutMillis + " ms. "
                             + "Was it compiled with -debug and -lib hxcpp-debug-server, "
-                            + "with HXCPP_DEBUG_PORT matching " + getDebuggeePort() + "?");
+                            + "with HXCPP_DEBUG_PORT matching " + getDebuggeePort() + "? "
+                            + "A previous instance of the program still running (e.g. from a plain Run) "
+                            + "also blocks the debug port - stop any leftover instances and retry.");
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IOException("Interrupted while waiting for the debuggee to connect");

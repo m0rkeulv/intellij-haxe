@@ -103,6 +103,7 @@ public class HxcppDebugProcess extends XDebugProcess {
   private volatile ServerSocket dapListener;
   private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
+  private volatile boolean launched = false;
 
   public HxcppDebugProcess(@NotNull XDebugSession session, Module module,
                            HxcppDebugAdapter adapter, ProcessHandler debuggeeHandler) {
@@ -110,6 +111,21 @@ public class HxcppDebugProcess extends XDebugProcess {
     this.module = module;
     this.adapter = adapter;
     this.processHandler = debuggeeHandler;
+    // A debuggee dying BEFORE the session is up is always a startup failure
+    // (not compiled with the debug server, or its port is poisoned by a
+    // leftover instance) — fail immediately with the exit code instead of
+    // letting the launch request run into its timeout.
+    processHandler.addProcessListener(new com.intellij.execution.process.ProcessListener() {
+      @Override
+      public void processTerminated(@NotNull com.intellij.execution.process.ProcessEvent event) {
+        if (!shuttingDown && !launched) {
+          fail("The program exited (code " + event.getExitCode() + ") before the debugger could attach.\n"
+               + "Check that it was compiled with -debug and -lib hxcpp-debug-server, and that no previous\n"
+               + "instance of the program is still running (a leftover instance blocks the debug port and\n"
+               + "makes new ones crash on startup).");
+        }
+      }
+    });
   }
 
   Module getModule() {
@@ -159,6 +175,7 @@ public class HxcppDebugProcess extends XDebugProcess {
         fail("Cannot start the HXCPP debug session: " + launchResponse.getMessage());
         return;
       }
+      launched = true;
 
       breakpoints.flushAll();
       // releases the debuggee held by the server's startup break
@@ -238,6 +255,12 @@ public class HxcppDebugProcess extends XDebugProcess {
     ConsoleView console = getSession().getConsoleView();
     if (console != null) {
       console.print(text, stderr ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.NORMAL_OUTPUT);
+    } else {
+      // startup failures can precede the console; the process handler's
+      // listeners (the Console tab once built) still deliver the text
+      processHandler.notifyTextAvailable(text, stderr
+                                               ? com.intellij.execution.process.ProcessOutputTypes.STDERR
+                                               : com.intellij.execution.process.ProcessOutputTypes.STDOUT);
     }
   }
 
