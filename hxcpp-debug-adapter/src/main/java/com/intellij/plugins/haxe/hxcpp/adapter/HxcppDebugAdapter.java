@@ -357,12 +357,7 @@ public class HxcppDebugAdapter implements Closeable {
       stackFrame.setName(frame.name());
       stackFrame.setLine(frame.line());
       stackFrame.setColumn(frame.column());
-      if (frame.source() != null) {
-        Source source = new Source();
-        source.setPath(frame.source());
-        source.setName(Path.of(frame.source()).getFileName().toString());
-        stackFrame.setSource(source);
-      }
+      stackFrame.setSource(toSource(frame.source()));
       stackFrames.add(stackFrame);
     }
     StackTraceResponseBody body = new StackTraceResponseBody();
@@ -583,6 +578,26 @@ public class HxcppDebugAdapter implements Closeable {
   }
 
   // ------------------------------------------------------------------ helpers
+
+  /**
+   * A frame source usable by the IDE, or null. The server reports "?" (in
+   * various path-mangled forms) for native/unknown frames — anything that is
+   * not a valid file path yields a frame without source, not an error.
+   */
+  private static Source toSource(String sourcePath) {
+    if (sourcePath == null || sourcePath.isEmpty()) {
+      return null;
+    }
+    try {
+      Source source = new Source();
+      source.setPath(sourcePath);
+      Path fileName = Path.of(sourcePath).getFileName();
+      source.setName(fileName != null ? fileName.toString() : sourcePath);
+      return source;
+    } catch (java.nio.file.InvalidPathException e) {
+      return null;
+    }
+  }
 
   private static Variable toVariable(HxcppVarInfo varInfo) {
     Variable variable = new Variable();
