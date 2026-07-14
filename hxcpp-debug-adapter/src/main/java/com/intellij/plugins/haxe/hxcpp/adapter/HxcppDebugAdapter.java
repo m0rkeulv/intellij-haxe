@@ -322,12 +322,12 @@ public class HxcppDebugAdapter implements Closeable {
     sendResponse(request, response);
   }
 
-  private void handleSetExceptionBreakpoints(SetExceptionBreakpointsRequest request)
-    throws IOException, InterruptedException {
-    // Protocol.hx: setExceptionOptions takes a bare array of strings
-    List<String> filters = request.getArguments() != null && request.getArguments().getFilters() != null
-                           ? request.getArguments().getFilters() : List.of();
-    call(HxcppProtocol.SET_EXCEPTION_OPTIONS, filters);
+  private void handleSetExceptionBreakpoints(SetExceptionBreakpointsRequest request) throws IOException {
+    // Honest no-op: Protocol.hx declares setExceptionOptions but Server.hx
+    // has NO handler for it (unknown methods get a null-result success, so a
+    // call would only pretend to work). The server's fixed behaviour is:
+    // uncaught/critical exceptions always stop (surfaced as exceptionStop),
+    // caught ones never do — there is nothing to configure.
     sendResponse(request, new SetExceptionBreakpointsResponse());
   }
 

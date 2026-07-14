@@ -33,8 +33,17 @@ dependencies {
 // ---------------------------------------------------------------------------
 val hxcppFixturePort = 6973
 val hxcppDebugServerVersion = "1.2.4" // pinned for reproducible fixture builds
-val fixtureExeName = if (System.getProperty("os.name").startsWith("Windows")) "Main-debug.exe" else "Main-debug"
-val hxcppFixtureExe = layout.buildDirectory.file("hxcpp/fixture/$fixtureExeName")
+val exeSuffix = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
+
+// name -> (hxml, main class); each compiles to build/hxcpp/<name>/<Main>-debug(.exe)
+val hxcppFixtures = mapOf(
+    "fixture" to Pair("fixture.hxml", "Main"),
+    "spin" to Pair("spin.hxml", "Spin"),
+    "uncaught" to Pair("uncaught.hxml", "Uncaught"),
+)
+
+fun fixtureExe(name: String) =
+    layout.buildDirectory.file("hxcpp/$name/${hxcppFixtures.getValue(name).second}-debug$exeSuffix")
 
 // probed lazily at execution time so a haxe-less machine can still configure and build the rest of the plugin
 val haxeAvailable: Boolean by lazy {
@@ -55,27 +64,33 @@ tasks.register<Exec>("installHxcppDebugServerHaxelib") {
     commandLine = listOf("haxelib", "install", "hxcpp-debug-server", hxcppDebugServerVersion, "--quiet", "--always")
 }
 
-tasks.register<Exec>("buildHxcppFixture") {
-    group = "hxcpp"
-    description = "Compiles the debuggee test fixture to a native exe (build/hxcpp/fixture/$fixtureExeName)"
-    onlyIf {
-        if (!haxeAvailable) {
-            logger.warn("SKIPPING hxcpp fixture build (haxe compiler not found on PATH); integration tests will be skipped")
+hxcppFixtures.forEach { (name, spec) ->
+    tasks.register<Exec>("buildHxcpp${name.replaceFirstChar { it.uppercase() }}Fixture") {
+        group = "hxcpp"
+        description = "Compiles the '$name' debuggee fixture to a native exe (build/hxcpp/$name)"
+        onlyIf {
+            if (!haxeAvailable) {
+                logger.warn("SKIPPING hxcpp '$name' fixture build (haxe compiler not found on PATH); integration tests will be skipped")
+            }
+            haxeAvailable
         }
-        haxeAvailable
+        dependsOn("installHxcppDebugServerHaxelib")
+        workingDir = File(projectDir, "test-fixtures")
+        commandLine = listOf("haxe", spec.first)
+        inputs.dir("test-fixtures/src")
+        inputs.file("test-fixtures/${spec.first}")
+        outputs.file(fixtureExe(name))
     }
-    dependsOn("installHxcppDebugServerHaxelib")
-    workingDir = File(projectDir, "test-fixtures")
-    commandLine = listOf("haxe", "fixture.hxml")
-    inputs.dir("test-fixtures/src")
-    inputs.file("test-fixtures/fixture.hxml")
-    outputs.file(hxcppFixtureExe)
 }
 
 tasks.named<Test>("test") {
-    dependsOn("buildHxcppFixture")
-    // integration tests locate the built fixture and its sources through these
-    systemProperty("hxcpp.fixture.exe", hxcppFixtureExe.get().asFile.absolutePath)
+    hxcppFixtures.keys.forEach { name ->
+        dependsOn("buildHxcpp${name.replaceFirstChar { it.uppercase() }}Fixture")
+        // integration tests locate each built fixture through these
+        systemProperty("hxcpp.fixture.$name.exe", fixtureExe(name).get().asFile.absolutePath)
+    }
+    // kept for the existing tests' property name
+    systemProperty("hxcpp.fixture.exe", fixtureExe("fixture").get().asFile.absolutePath)
     systemProperty("hxcpp.fixture.port", hxcppFixturePort)
     systemProperty("hxcpp.fixture.src.dir", File(projectDir, "test-fixtures/src").absolutePath)
 }

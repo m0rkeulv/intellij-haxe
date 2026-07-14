@@ -142,7 +142,28 @@ improvement is a "step until the line changes" loop in the debug process
 (auto-repeat step while file:line is unchanged) — deliberate, opt-in,
 because it would hide intermediate state like the comprehension's `i`.
 
-## 7. Fixture builds and the compile-time port
+## 7. Unknown jsonrpc methods return a null-result SUCCESS
+
+Server.hx's dispatch handles only a subset of Protocol.hx: `switchFrame`,
+`setExceptionOptions`, `setBreakpoint` and `removeBreakpoint` have NO
+handler, and an unhandled method falls through to a response with a null
+result and no error. A call to them "succeeds" while doing nothing — this
+masked our misuse of switchFrame for a while. Never rely on a
+success response as proof a method exists; check the dispatch first.
+Consequence: `setExceptionBreakpoints` is an honest adapter-side no-op.
+
+## 8. Uncaught exceptions: stop first (as "pause"), classify later
+
+With the debugger attached, an uncaught throw STOPS the debuggee at the
+throw line — but the server reports that first stop as `pauseStop`, not
+`exceptionStop` (the critical-error classification happens later in the
+unwind). Continuing then yields an exception-reason stop carrying the
+thrown text and/or the process dying with its Critical Error output; the
+final continue races the process's death (an failed continue there is
+expected). Caught exceptions never stop, and there is nothing to configure.
+Pinned by HxcppUncaughtExceptionIntegrationTest.
+
+## 9. Fixture builds and the compile-time port
 
 HXCPP_DEBUG_HOST/HXCPP_DEBUG_PORT are compile-time defines
 (`Context.definedValue`), not runtime configuration. The test fixture pins
