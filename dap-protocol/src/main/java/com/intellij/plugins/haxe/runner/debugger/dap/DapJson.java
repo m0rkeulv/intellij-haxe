@@ -20,6 +20,23 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.OutputEvent
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.ProtocolMessage;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetExceptionBreakpointsResponse;
@@ -29,6 +46,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetVaria
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.VariablesResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.TerminatedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ThreadEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
@@ -62,9 +80,38 @@ public final class DapJson {
     return switch (type) {
       case Response.TYPE -> decodeResponse(root);
       case Event.TYPE -> decodeEvent(root);
-      case Request.TYPE -> MAPPER.treeToValue(root, Request.class);
+      case Request.TYPE -> decodeRequest(root);
       default -> throw new IllegalArgumentException("Unknown DAP message type '" + type + "' in: " + json);
     };
+  }
+
+  /**
+   * Requests decode to their typed subclass (so a DAP server implementation
+   * gets typed arguments); unknown commands fall back to the bare envelope.
+   */
+  private static Request decodeRequest(JsonNode root) {
+    String command = root.path("command").asString("");
+    Class<? extends Request> target = switch (command) {
+      case "initialize" -> InitializeRequest.class;
+      case "launch" -> LaunchRequest.class;
+      case "setBreakpoints" -> SetBreakpointsRequest.class;
+      case "setExceptionBreakpoints" -> SetExceptionBreakpointsRequest.class;
+      case "configurationDone" -> ConfigurationDoneRequest.class;
+      case "threads" -> ThreadsRequest.class;
+      case "stackTrace" -> StackTraceRequest.class;
+      case "scopes" -> ScopesRequest.class;
+      case "variables" -> VariablesRequest.class;
+      case "continue" -> ContinueRequest.class;
+      case "next" -> NextRequest.class;
+      case "stepIn" -> StepInRequest.class;
+      case "stepOut" -> StepOutRequest.class;
+      case "pause" -> PauseRequest.class;
+      case "evaluate" -> EvaluateRequest.class;
+      case "setVariable" -> SetVariableRequest.class;
+      case "disconnect" -> DisconnectRequest.class;
+      default -> Request.class;
+    };
+    return MAPPER.treeToValue(root, target);
   }
 
   private static Response decodeResponse(JsonNode root) {
@@ -105,6 +152,7 @@ public final class DapJson {
       case OutputEvent.EVENT -> OutputEvent.class;
       case BreakpointEvent.EVENT -> BreakpointEvent.class;
       case ContinuedEvent.EVENT -> ContinuedEvent.class;
+      case ThreadEvent.EVENT -> ThreadEvent.class;
       default -> Event.class;
     };
     return MAPPER.treeToValue(root, target);

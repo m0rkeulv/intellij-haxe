@@ -32,7 +32,10 @@ the `hxcpp.debug.jsonrpc` server library) and of our own HashLink debugger
 ### The wire protocol (`hxcpp.debug.jsonrpc`)
 - Framing: 4-byte little-endian length prefix + UTF-8 JSON body.
 - Requests `{id, method, params}` → responses `{id, result}` or `{id, error:{code,message}}`.
-  Notifications from the server have no id.
+  Notifications from the server have no id. NOTE (verified in Server.hx): the server answers
+  by sending the REQUEST OBJECT back with result/error filled in, so responses also carry the
+  request's `method` and `params` — presence of `id` alone identifies a response. Every
+  request gets a response, including Void-result methods.
 - Methods: `pause`, `continue{threadId}`, `stepIn`, `next`, `stepOut`,
   `stackTrace{threadId}`, `setBreakpoints`, `setBreakpoint`, `removeBreakpoint`,
   `switchFrame{id}`, `getScopes{frameId}`, `getVariables{variablesReference,?start,?count}`,

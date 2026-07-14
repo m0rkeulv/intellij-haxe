@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.hxcpp.jsonrpc;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -11,15 +12,23 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * Decoding discriminates on the envelope: a message carrying an {@code id}
  * is the response to one of our requests; one carrying only a {@code method}
- * is a notification. The server never sends its own requests, so an id
- * combined with a method is rejected as corruption rather than guessed at.
+ * is a notification. The server never sends its own requests. Note that the
+ * server answers by sending the REQUEST OBJECT back with {@code result} or
+ * {@code error} filled in (Server.hx sendResponse), so responses also carry
+ * the request's {@code method} and {@code params} — id alone decides.
  */
 public final class JsonRpcJson {
   private static final ObjectMapper MAPPER = JsonMapper.builder()
+    .changeDefaultPropertyInclusion(inclusion -> inclusion.withValueInclusion(JsonInclude.Include.NON_NULL))
     .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
     .build();
 
   private JsonRpcJson() {
+  }
+
+  /** The shared (immutable) mapper, for decoding typed result/params trees. */
+  public static ObjectMapper mapper() {
+    return MAPPER;
   }
 
   public static String encode(JsonRpcRequest request) {
@@ -34,9 +43,7 @@ public final class JsonRpcJson {
 
   public static JsonRpcServerMessage decode(String json) {
     JsonNode root = MAPPER.readTree(json);
-    boolean hasId = root.hasNonNull("id");
-    boolean hasMethod = root.hasNonNull("method");
-    if (hasId && !hasMethod) {
+    if (root.hasNonNull("id")) {
       JsonRpcError error = null;
       JsonNode errorNode = root.get("error");
       if (errorNode != null && !errorNode.isNull()) {
@@ -45,7 +52,7 @@ public final class JsonRpcJson {
       }
       return new JsonRpcResponse(root.get("id").asInt(), root.get("result"), error);
     }
-    if (hasMethod && !hasId) {
+    if (root.hasNonNull("method")) {
       return new JsonRpcNotification(root.get("method").asString(), root.get("params"));
     }
     throw new IllegalArgumentException("Not a jsonrpc response or notification: " + json);

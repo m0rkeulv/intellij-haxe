@@ -59,9 +59,16 @@ public class JsonRpcJsonTest {
     assertEquals(2, notification.params().path("threadId").asInt());
   }
 
-  @Test(expected = IllegalArgumentException.class)
-  public void decodeRejectsIdPlusMethod() {
-    JsonRpcJson.decode("{\"id\":1,\"method\":\"threads\",\"params\":{}}");
+  @Test
+  public void decodeResponseEchoingRequestFields() {
+    // Server.hx answers by sending the request object back with result/error
+    // filled in, so a response also carries method and params — id decides.
+    JsonRpcServerMessage message = JsonRpcJson.decode(
+      "{\"id\":9,\"method\":\"continue\",\"params\":{\"threadId\":0},\"result\":null}");
+    assertTrue(message instanceof JsonRpcResponse);
+    JsonRpcResponse response = (JsonRpcResponse)message;
+    assertEquals(9, response.id());
+    assertFalse(response.isError());
   }
 
   @Test(expected = IllegalArgumentException.class)

@@ -25,6 +25,7 @@ public class JsonRpcClient implements Closeable {
   private final ConcurrentMap<Integer, BlockingQueue<JsonRpcResponse>> pendingResponses = new ConcurrentHashMap<>();
   private final BlockingQueue<JsonRpcNotification> notifications = new LinkedBlockingQueue<>();
   private volatile boolean closed = false;
+  private volatile boolean readerFinished = false;
 
   public JsonRpcClient(JsonRpcConnection connection) {
     this.connection = connection;
@@ -72,6 +73,15 @@ public class JsonRpcClient implements Closeable {
     return notifications.poll(timeoutMillis, TimeUnit.MILLISECONDS);
   }
 
+  /**
+   * True once the reader saw EOF or died — the connection carries no further
+   * messages (the debuggee exited or the socket broke). Lets an event pump
+   * distinguish "no notification yet" from "there will never be another".
+   */
+  public boolean isConnectionFinished() {
+    return readerFinished;
+  }
+
   private void readLoop() {
     try {
       while (true) {
@@ -97,6 +107,8 @@ public class JsonRpcClient implements Closeable {
         System.err.println("JsonRpcClient reader died: " + e);
         e.printStackTrace();
       }
+    } finally {
+      readerFinished = true;
     }
   }
 
