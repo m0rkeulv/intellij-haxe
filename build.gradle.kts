@@ -120,6 +120,7 @@ dependencies {
         // are on the plugin's runtime classpath - lib/modules jars are not loaded
         pluginComposedModule(implementation(project(":dap-protocol")))
         pluginComposedModule(implementation(project(":hashlink-debug-adapter")))
+        pluginComposedModule(implementation(project(":hxcpp-debug-adapter")))
 
     }
 

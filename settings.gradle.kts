@@ -9,4 +9,5 @@ include(":jps-plugin")
 include(":common")
 include(":dap-protocol")
 include(":hashlink-debug-adapter")
+include(":hxcpp-debug-adapter")
 
