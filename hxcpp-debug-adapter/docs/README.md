@@ -117,7 +117,32 @@ Only variables of the STOPPED function can be modified. Anything deeper
 setStackVariableValue does not resolve) is refused with the explanatory
 error. Lifting this needs an upstream server change.
 
-## 6. Fixture builds and the compile-time port
+## 6. Multi-expression lines hit their breakpoint once per expression
+
+### Symptom
+A breakpoint on a line containing embedded iteration — e.g. an array
+comprehension `var items = [for (i in 0...n) i * 10];` — stops once per
+iteration, not once per line. Stepping over such a line re-lands on it
+repeatedly, and plain run-to-cursor keeps getting intercepted by it
+(breakpoints win over the run-to target by design, same as IntelliJ's Java
+debugger).
+
+### Cause
+hxcpp traps at EXPRESSION granularity: every executed sub-expression of the
+line re-enters the breakpoint. This is server/runtime behaviour (the VSCode
+debugger has it too), not something the adapter can reliably filter — a
+loop-body line legitimately re-hits every iteration, and there is no way to
+tell "same statement, next comprehension iteration" from "next loop pass"
+at the protocol level.
+
+### Workarounds / status
+Force Run to Cursor works: the platform temporarily unregisters breakpoints
+through our handler, so the server has none armed. A possible future
+improvement is a "step until the line changes" loop in the debug process
+(auto-repeat step while file:line is unchanged) — deliberate, opt-in,
+because it would hide intermediate state like the comprehension's `i`.
+
+## 7. Fixture builds and the compile-time port
 
 HXCPP_DEBUG_HOST/HXCPP_DEBUG_PORT are compile-time defines
 (`Context.definedValue`), not runtime configuration. The test fixture pins
