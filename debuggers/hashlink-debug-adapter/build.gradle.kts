@@ -16,7 +16,7 @@ dependencies {
     }
 
     // generic DAP client/transport/messages live in :dap-protocol (shared with the HXCPP debugger)
-    implementation(project(":dap-protocol"))
+    implementation(project(":debuggers:dap-protocol"))
 
     implementation("tools.jackson.core:jackson-databind:3.1.0")
 

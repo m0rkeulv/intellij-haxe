@@ -112,15 +112,15 @@ dependencies {
 
         pluginModule(implementation(project(":jps-plugin")))
         pluginModule(implementation(project(":common")))
-        pluginModule(implementation(project(":hashlink-debug-adapter")))
+        pluginModule(implementation(project(":debuggers:hashlink-debug-adapter")))
 
-        pluginComposedModule(implementation(project(":hxcpp-debugger-protocol-legacy")))
+        pluginComposedModule(implementation(project(":debuggers:hxcpp-debugger-protocol-legacy")))
         pluginComposedModule(implementation(project(":common")))
         // composed (merged into the main jar) so the DAP client/protocol classes
         // are on the plugin's runtime classpath - lib/modules jars are not loaded
-        pluginComposedModule(implementation(project(":dap-protocol")))
-        pluginComposedModule(implementation(project(":hashlink-debug-adapter")))
-        pluginComposedModule(implementation(project(":vshaxe-hxcpp-debugger-adapter")))
+        pluginComposedModule(implementation(project(":debuggers:dap-protocol")))
+        pluginComposedModule(implementation(project(":debuggers:hashlink-debug-adapter")))
+        pluginComposedModule(implementation(project(":debuggers:vshaxe-hxcpp-debugger-adapter")))
 
     }
 
@@ -270,8 +270,8 @@ tasks {
     // ship the DAP debug adapter bytecode inside the plugin directory (not a jar):
     // the hl executable needs a real file path to run it
     withType<PrepareSandboxTask> {
-        dependsOn(":hashlink-debug-adapter:buildDebugAdapter")
-        from(project(":hashlink-debug-adapter").layout.buildDirectory.file("hl/hl-debug-adapter.hl")) {
+        dependsOn(":debuggers:hashlink-debug-adapter:buildDebugAdapter")
+        from(project(":debuggers:hashlink-debug-adapter").layout.buildDirectory.file("hl/hl-debug-adapter.hl")) {
             into(pluginName.map { "$it/adapter" })
         }
     }

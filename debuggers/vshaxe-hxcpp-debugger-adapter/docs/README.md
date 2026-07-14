@@ -174,3 +174,17 @@ HXCPP_DEBUG_HOST/HXCPP_DEBUG_PORT are compile-time defines
 (`Context.definedValue`), not runtime configuration. The test fixture pins
 port 6973 (non-default) so tests never collide with a real session on 6972;
 integration tests serialize on that port.
+
+## 10. Moving/renaming this module breaks fixture builds two ways
+
+- hxcpp object files embed absolute paths: after any directory change the
+  incremental link fails with `LNK2011: precompiled object not linked in` —
+  delete `build/hxcpp` once and rebuild.
+- Windows MAX_PATH (260): haxe writes generated files with paths built from
+  its cwd WITHOUT normalizing, so a `test-fixtures/../` segment counts
+  toward the limit. The fixture tasks therefore run haxe from the MODULE
+  ROOT with `test-fixtures/`-relative hxml paths; the longest generated
+  name (GenericStackIterator_hxcpp_debug_jsonrpc_eval_Token.cpp) sits close
+  enough to the limit that a deeper module path plus the unnormalized
+  segment failed with a misleading `Sys_error(... No such file or
+  directory)` while the file plainly existed.

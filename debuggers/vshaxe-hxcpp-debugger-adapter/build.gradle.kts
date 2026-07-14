@@ -19,7 +19,7 @@ dependencies {
         intellijIdea(providers.gradleProperty("platformVersion"))
     }
 
-    implementation(project(":dap-protocol"))
+    implementation(project(":debuggers:dap-protocol"))
     implementation("tools.jackson.core:jackson-databind:3.1.0")
 
     compileOnly("org.projectlombok:lombok:1.18.44")
@@ -78,8 +78,11 @@ hxcppFixtures.forEach { (name, spec) ->
             haxeAvailable
         }
         dependsOn("installHxcppDebugServerHaxelib")
-        workingDir = File(projectDir, "test-fixtures")
-        commandLine = listOf("haxe", spec.first)
+        // run from the MODULE root, not test-fixtures: haxe builds generated-file
+        // paths from the cwd without normalizing, and a "test-fixtures/../" segment
+        // pushes the longest generated names past Windows' 260-char MAX_PATH
+        workingDir = projectDir
+        commandLine = listOf("haxe", "test-fixtures/${spec.first}")
         inputs.dir("test-fixtures/src")
         inputs.file("test-fixtures/${spec.first}")
         outputs.file(fixtureExe(name))
