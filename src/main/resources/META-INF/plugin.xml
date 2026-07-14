@@ -135,6 +135,12 @@
     <configurationType implementation="com.intellij.plugins.haxe.hashlink.HashLinkRunConfigurationType"/>
     <programRunner implementation="com.intellij.plugins.haxe.hashlink.HashLinkRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.hashlink.HashLinkDebugRunner"/>
+    <!-- Experimental HXCPP (native) support: like HashLink, a DEDICATED
+         configuration type keyed on HxcppRunConfiguration - the legacy
+         Flash/hxcpp debugger below never sees these runs and vice versa. -->
+    <configurationType implementation="com.intellij.plugins.haxe.hxcpp.HxcppRunConfigurationType"/>
+    <programRunner implementation="com.intellij.plugins.haxe.hxcpp.HxcppRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.hxcpp.HxcppDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.HaxeRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebugRunner"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType"/>
