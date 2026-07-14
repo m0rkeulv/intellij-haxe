@@ -17,6 +17,7 @@ import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugProcessStarter;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerManager;
+import com.intellij.xdebugger.XSessionStartedResult;
 import java.io.IOException;
 import java.nio.file.Path;
 import org.jetbrains.annotations.NotNull;
@@ -83,17 +84,21 @@ public class HxcppDebugRunner extends GenericProgramRunner<RunnerSettings> {
     ProcessTerminatedListener.attach(debuggeeHandler, environment.getProject());
 
     try {
-      XDebugSession debugSession = XDebuggerManager.getInstance(environment.getProject()).startSession(
-        environment,
-        new XDebugProcessStarter() {
+      // the session builder is the split-debugger-safe way to hand the
+      // descriptor back to the execution manager (XDebugSession's own
+      // getRunContentDescriptor is deprecated and logs an error)
+      XSessionStartedResult started = XDebuggerManager.getInstance(environment.getProject())
+        .newSessionBuilder(new XDebugProcessStarter() {
           @NotNull
           @Override
           public XDebugProcess start(@NotNull XDebugSession session) {
             // lightweight: the DAP conversation starts asynchronously in sessionInitialized()
             return new HxcppDebugProcess(session, adapter, debuggeeHandler);
           }
-        });
-      return debugSession.getRunContentDescriptor();
+        })
+        .environment(environment)
+        .startSession();
+      return started.getRunContentDescriptor();
     } catch (ExecutionException | RuntimeException e) {
       debuggeeHandler.destroyProcess();
       closeQuietly(adapter);
