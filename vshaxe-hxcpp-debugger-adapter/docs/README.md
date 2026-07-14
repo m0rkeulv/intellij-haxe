@@ -4,6 +4,11 @@ Non-obvious problems hit while building the HXCPP debugger and the reasoning
 behind the fixes, in the spirit of the HashLink module's gotchas doc. Read
 before touching the launch/port/lifecycle code.
 
+The module is named `vshaxe-hxcpp-debugger-adapter` because it specifically
+targets the VSHAXE hxcpp debug server (vshaxe/hxcpp-debugger's
+hxcpp-debug-server haxelib) — see docs/future-native-dap-server.md for the
+possible second, home-grown server this naming keeps unambiguous.
+
 ---
 
 ## 1. A leftover debuggee instance poisons the debug port (the first IDE test failure)

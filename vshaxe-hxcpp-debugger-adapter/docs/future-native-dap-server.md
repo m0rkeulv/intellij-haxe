@@ -80,7 +80,6 @@ them a bonus, not a dependency.
 
 ## Naming
 
-To avoid ambiguity once a second server exists, the current module is to be
-renamed (e.g. `vshaxe-hxcpp-debugger-adapter`) and its user-facing
-descriptions updated to say it targets the VSHAXE debug server — scheduled
-after the current feature set completes.
+DONE: the module is `vshaxe-hxcpp-debugger-adapter` and its user-facing
+descriptions say it targets the VSHAXE debug server, so a future home-grown
+server can take an unambiguous name of its own.

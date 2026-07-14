@@ -66,7 +66,7 @@ Mirrors the vshaxe design (proven: DAP front, jsonrpc back), but the adapter is
 +------------------------------------|---------------------------------------------------+
                                      | DAP  (in-process, via dap-protocol module)
 +------------------------------------v---------------------------------------------------+
-| :hxcpp-debug-adapter   HxcppDebugAdapter — implements the DAP server surface           |
+| :vshaxe-hxcpp-debugger-adapter  HxcppDebugAdapter — implements the DAP server surface  |
 |                        translator: DAP request <-> jsonrpc call, event <-> notification|
 |                        jsonrpc client: framing + messages (own testable package)       |
 +------------------------------------|---------------------------------------------------+
@@ -82,7 +82,7 @@ Gradle modules after this work:
 | Module | Content |
 |---|---|
 | `:dap-protocol` (new) | generic DAP Java code moved out of `:hashlink-debug-adapter`: `DapClient`, `DapConnection`, `DapJson`, protocol POJOs. No IntelliJ dependencies beyond what it has today. |
-| `:hxcpp-debug-adapter` (new) | `jsonrpc` package (framing, messages, client — zero IDE deps) + `adapter` package (the DAP↔jsonrpc translator). Depends on `:dap-protocol`. |
+| `:vshaxe-hxcpp-debugger-adapter` (new; originally `:hxcpp-debug-adapter`, renamed to disambiguate from a possible future home-grown server) | `jsonrpc` package (framing, messages, client — zero IDE deps) + `adapter` package (the DAP↔jsonrpc translator). Depends on `:dap-protocol`. |
 | `:hashlink-debug-adapter` | unchanged except imports now point at `:dap-protocol`. Haxe adapter untouched. |
 | `:hxcpp-debugger-protocol-legacy` (renamed) | the old generated legacy protocol, wired exactly as before. Untouched otherwise. |
 | plugin (`src/main`) | new `com.intellij.plugins.haxe.hxcpp` package: run config, runner, `HxcppDebugProcess` + breakpoint/stack/value classes mirroring the `hashlink` package. **No code shared with hashlink or legacy debugger code (per project rules).** |
@@ -135,7 +135,7 @@ fixture paths via system properties).
   threads, stack, scopes/variables, evaluate, setVariable, disconnect.
   hxcpp compilation is slow (minutes, not HL's seconds) — keep the fixture count
   low and reuse one exe across many tests.
-- **Gradle:** `:hxcpp-debug-adapter` gets fixture-build tasks modeled on
+- **Gradle:** `:vshaxe-hxcpp-debugger-adapter` gets fixture-build tasks modeled on
   `hashlink-debug-adapter/build.gradle.kts` (`onlyIf { haxeAvailable }`,
   `inputs`/`outputs`, warn-and-skip).
 
