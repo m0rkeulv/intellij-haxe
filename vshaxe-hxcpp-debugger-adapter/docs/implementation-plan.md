@@ -1,6 +1,8 @@
 # HXCPP debugger — implementation plan
 
-Status: DRAFT — awaiting sign-off before any implementation.
+Status: IMPLEMENTED — milestones M0–M6 are complete and manually verified;
+kept as the design record. Discovered server behaviours live in README.md
+(gotchas); the possible next act is future-native-dap-server.md.
 
 This plan is based on research of the vshaxe debugger (github.com/vshaxe/hxcpp-debugger,
 the `hxcpp.debug.jsonrpc` server library) and of our own HashLink debugger
