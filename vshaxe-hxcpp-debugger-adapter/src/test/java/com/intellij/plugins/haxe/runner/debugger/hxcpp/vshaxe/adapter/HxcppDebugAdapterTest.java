@@ -18,6 +18,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ThreadEvent
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequest;
@@ -45,6 +46,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTra
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.VariablesResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
+import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -172,7 +174,7 @@ public class HxcppDebugAdapterTest {
   public void forwardSlashClientPathsBecomeNativeSeparators() throws Exception {
     // the server matches breakpoint files by EXACT string against the
     // compiler-recorded paths; IDE paths use forward slashes on Windows
-    String expected = "C:/project/src/Main.hx".replace('/', java.io.File.separatorChar);
+    String expected = "C:/project/src/Main.hx".replace('/', File.separatorChar);
     server.handle("setBreakpoints", params -> {
       assertEquals(expected, params.path("file").asString());
       return "[{\"id\":1}]";
@@ -596,8 +598,7 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void disconnectResponds() throws Exception {
-    Response response = dapClient.sendRequest(
-      new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest(), TIMEOUT);
+    Response response = dapClient.sendRequest(new DisconnectRequest(), TIMEOUT);
     assertTrue(response.isSuccess());
   }
 

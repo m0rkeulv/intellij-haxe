@@ -5,7 +5,6 @@ import com.intellij.execution.configurations.ConfigurationType;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.util.containers.ContainerUtil;
 import javax.swing.Icon;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -21,10 +20,6 @@ import org.jetbrains.annotations.NotNull;
  */
 public class HxcppRunConfigurationType implements ConfigurationType {
   private final HxcppFactory factory = new HxcppFactory(this);
-
-  public static HxcppRunConfigurationType getInstance() {
-    return ContainerUtil.findInstance(CONFIGURATION_TYPE_EP.getExtensionList(), HxcppRunConfigurationType.class);
-  }
 
   @Override
   public @NotNull String getDisplayName() {

@@ -22,6 +22,9 @@ dependencies {
     implementation(project(":dap-protocol"))
     implementation("tools.jackson.core:jackson-databind:3.1.0")
 
+    compileOnly("org.projectlombok:lombok:1.18.44")
+    annotationProcessor("org.projectlombok:lombok:1.18.44")
+
     testImplementation(libs.junit)
 }
 

@@ -33,6 +33,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.Disconnec
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
@@ -40,7 +41,9 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakp
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
@@ -73,15 +76,18 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.Variable
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.VariablesResponseBody;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -185,7 +191,7 @@ public class HxcppDebugAdapter implements Closeable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IOException("Interrupted while waiting for the debuggee to connect");
-    } catch (ExecutionException | java.util.concurrent.CancellationException e) {
+    } catch (ExecutionException | CancellationException e) {
       throw new IOException("Debuggee connection failed: " + e.getCause(), e.getCause());
     }
   }
@@ -222,43 +228,38 @@ public class HxcppDebugAdapter implements Closeable {
   }
 
   private void dispatch(Request request) throws IOException, InterruptedException {
-    if (request instanceof InitializeRequest r) {
-      handleInitialize(r);
-    } else if (request instanceof LaunchRequest r) {
-      handleLaunch(r);
-    } else if (request instanceof SetBreakpointsRequest r) {
-      handleSetBreakpoints(r);
-    } else if (request instanceof SetExceptionBreakpointsRequest r) {
-      handleSetExceptionBreakpoints(r);
-    } else if (request instanceof ConfigurationDoneRequest r) {
-      handleConfigurationDone(r);
-    } else if (request instanceof ThreadsRequest r) {
-      handleThreads(r);
-    } else if (request instanceof StackTraceRequest r) {
-      handleStackTrace(r);
-    } else if (request instanceof ScopesRequest r) {
-      handleScopes(r);
-    } else if (request instanceof VariablesRequest r) {
-      handleVariables(r);
-    } else if (request instanceof ContinueRequest r) {
-      handleContinue(r);
-    } else if (request instanceof NextRequest r) {
-      handleStep(r, HxcppProtocol.NEXT, r.getArguments() != null ? r.getArguments().getThreadId() : null);
-    } else if (request instanceof StepInRequest r) {
-      handleStep(r, HxcppProtocol.STEP_IN, r.getArguments() != null ? r.getArguments().getThreadId() : null);
-    } else if (request instanceof StepOutRequest r) {
-      handleStep(r, HxcppProtocol.STEP_OUT, r.getArguments() != null ? r.getArguments().getThreadId() : null);
-    } else if (request instanceof PauseRequest r) {
-      handlePause(r);
-    } else if (request instanceof EvaluateRequest r) {
-      handleEvaluate(r);
-    } else if (request instanceof SetVariableRequest r) {
-      handleSetVariable(r);
-    } else if (request instanceof DisconnectRequest r) {
-      handleDisconnect(r);
-    } else {
-      sendErrorResponse(request, "Unsupported request '" + request.getCommand() + "'");
+    switch (request) {
+      case InitializeRequest r -> handleInitialize(r);
+      case LaunchRequest r -> handleLaunch(r);
+      case SetBreakpointsRequest r -> handleSetBreakpoints(r);
+      case SetExceptionBreakpointsRequest r -> handleSetExceptionBreakpoints(r);
+      case ConfigurationDoneRequest r -> handleConfigurationDone(r);
+      case ThreadsRequest r -> handleThreads(r);
+      case StackTraceRequest r -> handleStackTrace(r);
+      case ScopesRequest r -> handleScopes(r);
+      case VariablesRequest r -> handleVariables(r);
+      case ContinueRequest r -> handleContinue(r);
+      case NextRequest r -> handleStep(r, HxcppProtocol.NEXT, threadIdOf(r.getArguments()));
+      case StepInRequest r -> handleStep(r, HxcppProtocol.STEP_IN, threadIdOf(r.getArguments()));
+      case StepOutRequest r -> handleStep(r, HxcppProtocol.STEP_OUT, threadIdOf(r.getArguments()));
+      case PauseRequest r -> handlePause(r);
+      case EvaluateRequest r -> handleEvaluate(r);
+      case SetVariableRequest r -> handleSetVariable(r);
+      case DisconnectRequest r -> handleDisconnect(r);
+      default -> sendErrorResponse(request, "Unsupported request '" + request.getCommand() + "'");
     }
+  }
+
+  private static Integer threadIdOf(NextArguments arguments) {
+    return arguments != null ? arguments.getThreadId() : null;
+  }
+
+  private static Integer threadIdOf(StepInArguments arguments) {
+    return arguments != null ? arguments.getThreadId() : null;
+  }
+
+  private static Integer threadIdOf(StepOutArguments arguments) {
+    return arguments != null ? arguments.getThreadId() : null;
   }
 
   private void handleInitialize(InitializeRequest request) throws IOException {
@@ -621,7 +622,7 @@ public class HxcppDebugAdapter implements Closeable {
 
   /** Client (IDE) path → the debugger's native-separator form. */
   private static String toDebuggerPath(String clientPath) {
-    return clientPath == null ? null : clientPath.replace('/', java.io.File.separatorChar);
+    return clientPath == null ? null : clientPath.replace('/', File.separatorChar);
   }
 
   /**
@@ -749,7 +750,7 @@ public class HxcppDebugAdapter implements Closeable {
       Path fileName = Path.of(sourcePath).getFileName();
       source.setName(fileName != null ? fileName.toString() : sourcePath);
       return source;
-    } catch (java.nio.file.InvalidPathException e) {
+    } catch (InvalidPathException e) {
       return null;
     }
   }

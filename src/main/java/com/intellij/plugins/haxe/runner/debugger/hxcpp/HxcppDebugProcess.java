@@ -1,12 +1,14 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp;
 
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
+import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
+import com.intellij.execution.process.ProcessListener;
+import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter.HxcppDebugAdapter;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
@@ -92,7 +94,6 @@ public class HxcppDebugProcess extends XDebugProcess {
   private static final long DISCONNECT_TIMEOUT_MILLIS = 3_000;
   private static final long EVENT_POLL_MILLIS = 250;
 
-  private final Module module;
   private final HxcppDebugAdapter adapter;
   private final ProcessHandler processHandler;
   private final HxcppBreakpointManager breakpoints = new HxcppBreakpointManager(this);
@@ -105,19 +106,18 @@ public class HxcppDebugProcess extends XDebugProcess {
   private volatile boolean shuttingDown = false;
   private volatile boolean launched = false;
 
-  public HxcppDebugProcess(@NotNull XDebugSession session, Module module,
+  public HxcppDebugProcess(@NotNull XDebugSession session,
                            HxcppDebugAdapter adapter, ProcessHandler debuggeeHandler) {
     super(session);
-    this.module = module;
     this.adapter = adapter;
     this.processHandler = debuggeeHandler;
     // A debuggee dying BEFORE the session is up is always a startup failure
     // (not compiled with the debug server, or its port is poisoned by a
     // leftover instance) — fail immediately with the exit code instead of
     // letting the launch request run into its timeout.
-    processHandler.addProcessListener(new com.intellij.execution.process.ProcessListener() {
+    processHandler.addProcessListener(new ProcessListener() {
       @Override
-      public void processTerminated(@NotNull com.intellij.execution.process.ProcessEvent event) {
+      public void processTerminated(@NotNull ProcessEvent event) {
         if (!shuttingDown && !launched) {
           fail("The program exited (code " + event.getExitCode() + ") before the debugger could attach.\n"
                + "Check that it was compiled with -debug and -lib hxcpp-debug-server, and that no previous\n"
@@ -126,10 +126,6 @@ public class HxcppDebugProcess extends XDebugProcess {
         }
       }
     });
-  }
-
-  Module getModule() {
-    return module;
   }
 
   // --- lifecycle ---
@@ -258,9 +254,7 @@ public class HxcppDebugProcess extends XDebugProcess {
     } else {
       // startup failures can precede the console; the process handler's
       // listeners (the Console tab once built) still deliver the text
-      processHandler.notifyTextAvailable(text, stderr
-                                               ? com.intellij.execution.process.ProcessOutputTypes.STDERR
-                                               : com.intellij.execution.process.ProcessOutputTypes.STDOUT);
+      processHandler.notifyTextAvailable(text, stderr ? ProcessOutputTypes.STDERR : ProcessOutputTypes.STDOUT);
     }
   }
 

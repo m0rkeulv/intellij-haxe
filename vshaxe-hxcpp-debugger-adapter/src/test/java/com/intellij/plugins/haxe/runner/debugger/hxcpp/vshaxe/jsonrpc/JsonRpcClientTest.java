@@ -12,6 +12,7 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
@@ -205,7 +206,7 @@ public class JsonRpcClientTest {
     server.start();
 
     JsonNode result = client.call("evaluate",
-                                  java.util.Map.of("expr", "æøå 🐛", "frameId", 0), TIMEOUT);
+                                  Map.of("expr", "æøå 🐛", "frameId", 0), TIMEOUT);
     assertEquals("rød grød", new String(result.asString().getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8));
     server.join(TIMEOUT);
   }

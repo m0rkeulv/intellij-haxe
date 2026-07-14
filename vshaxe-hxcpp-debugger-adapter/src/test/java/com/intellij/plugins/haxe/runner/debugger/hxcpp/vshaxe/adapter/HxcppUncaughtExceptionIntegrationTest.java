@@ -13,6 +13,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExcept
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
+import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -69,7 +70,7 @@ public class HxcppUncaughtExceptionIntegrationTest extends HxcppIntegrationTestB
       }
     }
 
-    debuggee.waitFor(TIMEOUT, java.util.concurrent.TimeUnit.MILLISECONDS);
+    debuggee.waitFor(TIMEOUT, TimeUnit.MILLISECONDS);
     assertTrue("the thrown text should surface somewhere (exception stop or Critical Error output); "
                + "sawExceptionStop=" + sawExceptionStop + ", output:\n" + output(),
                sawExceptionStop || output().contains("kaboom"));

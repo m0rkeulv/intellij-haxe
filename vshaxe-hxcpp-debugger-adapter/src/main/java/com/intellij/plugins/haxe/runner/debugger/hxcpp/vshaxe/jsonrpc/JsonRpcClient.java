@@ -89,14 +89,15 @@ public class JsonRpcClient implements Closeable {
         if (message == null) {
           return;
         }
-        if (message instanceof JsonRpcResponse response) {
-          BlockingQueue<JsonRpcResponse> pending = pendingResponses.get(response.id());
-          if (pending != null) {
-            pending.offer(response);
+        // exhaustive: JsonRpcServerMessage is sealed
+        switch (message) {
+          case JsonRpcResponse response -> {
+            BlockingQueue<JsonRpcResponse> pending = pendingResponses.get(response.id());
+            if (pending != null) {
+              pending.offer(response);
+            }
           }
-        }
-        else if (message instanceof JsonRpcNotification notification) {
-          notifications.offer(notification);
+          case JsonRpcNotification notification -> notifications.offer(notification);
         }
       }
     } catch (IOException | RuntimeException e) {

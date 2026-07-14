@@ -24,6 +24,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
+import lombok.Getter;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -47,52 +48,32 @@ public class HxcppRunConfiguration extends ModuleBasedConfiguration<RunConfigura
   private static final String DEBUG_HOST = "debugHost";
   private static final String DEBUG_PORT = "debugPort";
 
-  private String executablePath = "";
-  private String workingDirectory = "";
-  private String programArguments = "";
-  private String debugHost = DEFAULT_DEBUG_HOST;
-  private String debugPort = Integer.toString(DEFAULT_DEBUG_PORT);
+  @Getter private String executablePath = "";
+  @Getter private String workingDirectory = "";
+  @Getter private String programArguments = "";
+  @Getter private String debugHost = DEFAULT_DEBUG_HOST;
+  @Getter private String debugPort = Integer.toString(DEFAULT_DEBUG_PORT);
 
   public HxcppRunConfiguration(String name, Project project, ConfigurationFactory factory) {
     super(name, new RunConfigurationModule(project), factory);
   }
 
-  // --- settings ---
-
-  public String getExecutablePath() {
-    return executablePath;
-  }
+  // --- settings (setters normalize their input, so they stay hand-written) ---
 
   public void setExecutablePath(@Nullable String path) {
     executablePath = path == null ? "" : path;
-  }
-
-  public String getWorkingDirectory() {
-    return workingDirectory;
   }
 
   public void setWorkingDirectory(@Nullable String directory) {
     workingDirectory = directory == null ? "" : directory;
   }
 
-  public String getProgramArguments() {
-    return programArguments;
-  }
-
   public void setProgramArguments(@Nullable String arguments) {
     programArguments = arguments == null ? "" : arguments;
   }
 
-  public String getDebugHost() {
-    return debugHost;
-  }
-
   public void setDebugHost(@Nullable String host) {
     debugHost = host == null || host.isBlank() ? DEFAULT_DEBUG_HOST : host.trim();
-  }
-
-  public String getDebugPort() {
-    return debugPort;
   }
 
   public void setDebugPort(@Nullable String port) {

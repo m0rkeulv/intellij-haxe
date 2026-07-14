@@ -11,7 +11,6 @@ import com.intellij.execution.process.ProcessTerminatedListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.GenericProgramRunner;
 import com.intellij.execution.ui.RunContentDescriptor;
-import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter.HxcppDebugAdapter;
 import com.intellij.xdebugger.XDebugProcess;
@@ -54,9 +53,9 @@ public class HxcppDebugRunner extends GenericProgramRunner<RunnerSettings> {
   protected RunContentDescriptor doExecute(@NotNull RunProfileState state, @NotNull ExecutionEnvironment environment)
     throws ExecutionException {
     HxcppRunConfiguration configuration = (HxcppRunConfiguration)environment.getRunProfile();
-    Module module = configuration.requireModule();
 
     // fail fast, before any UI is built
+    configuration.requireModule();
     Path executable = configuration.resolveExecutable();
     Path workingDirectory = configuration.resolveWorkingDirectory();
     String debugHost = configuration.getDebugHost();
@@ -91,7 +90,7 @@ public class HxcppDebugRunner extends GenericProgramRunner<RunnerSettings> {
           @Override
           public XDebugProcess start(@NotNull XDebugSession session) {
             // lightweight: the DAP conversation starts asynchronously in sessionInitialized()
-            return new HxcppDebugProcess(session, module, adapter, debuggeeHandler);
+            return new HxcppDebugProcess(session, adapter, debuggeeHandler);
           }
         });
       return debugSession.getRunContentDescriptor();

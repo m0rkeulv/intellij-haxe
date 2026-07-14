@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.hxcpp;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter.HxcppDebugAdapter;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
@@ -47,7 +48,7 @@ final class HxcppDebuggerEvaluator extends XDebuggerEvaluator {
         callback.evaluated(new HxcppValue(process, result, 0));
         // an assignment changed debuggee state: the Variables view must
         // re-read, or it keeps showing the old value
-        if (com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter.HxcppDebugAdapter.topLevelAssignment(expression) >= 0) {
+        if (HxcppDebugAdapter.topLevelAssignment(expression) >= 0) {
           process.getSession().rebuildViews();
         }
       } else {
