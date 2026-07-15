@@ -34,6 +34,7 @@ val fixtureHl = layout.buildDirectory.file("hl/test-fixture.hl")
 val threadsFixtureHl = layout.buildDirectory.file("hl/threads-fixture.hl")
 val spinFixtureHl = layout.buildDirectory.file("hl/spin-fixture.hl")
 val uncaughtFixtureHl = layout.buildDirectory.file("hl/uncaught-fixture.hl")
+val nativeFixtureHl = layout.buildDirectory.file("hl/native-fixture.hl")
 val stacktraceFixtureHl = layout.buildDirectory.file("hl/stacktrace-fixture.hl")
 val typedThrowFixtureHl = layout.buildDirectory.file("hl/typedthrow-fixture.hl")
 // haxelib used to read the .hl bytecode debug tables; pinned for reproducible builds
@@ -104,6 +105,18 @@ tasks.register<Exec>("buildUncaughtFixture") {
     inputs.dir("test-fixtures/src")
     inputs.file("test-fixtures/uncaught.hxml")
     outputs.file(uncaughtFixtureHl)
+}
+
+tasks.register<Exec>("buildNativeFixture") {
+    group = "hashlink"
+    description = "Compiles the VM-raised (null access) exception fixture (build/hl/native-fixture.hl)"
+    onlyIf { buildHashlinkAdapter && haxeAvailable }
+    dependsOn("installFormatHaxelib")
+    workingDir = File(projectDir, "test-fixtures")
+    commandLine = listOf("haxe", "native.hxml")
+    inputs.dir("test-fixtures/src")
+    inputs.file("test-fixtures/native.hxml")
+    outputs.file(nativeFixtureHl)
 }
 
 tasks.register<Exec>("buildStackTraceFixture") {
@@ -186,7 +199,7 @@ tasks.named<Test>("test") {
         }
         debuggerTests
     }
-    dependsOn("buildDebugAdapter", "buildTestFixture", "buildThreadsFixture", "buildSpinFixture", "buildUncaughtFixture", "buildStackTraceFixture", "buildTypedThrowFixture")
+    dependsOn("buildDebugAdapter", "buildTestFixture", "buildThreadsFixture", "buildSpinFixture", "buildUncaughtFixture", "buildNativeFixture", "buildStackTraceFixture", "buildTypedThrowFixture")
     // integration tests locate the built adapter, the debuggee fixtures and
     // (optionally) the HashLink executable through these
     systemProperty("dap.adapter.hl", adapterHl.get().asFile.absolutePath)
@@ -194,6 +207,7 @@ tasks.named<Test>("test") {
     systemProperty("dap.fixture.threads.hl", threadsFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.spin.hl", spinFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.uncaught.hl", uncaughtFixtureHl.get().asFile.absolutePath)
+    systemProperty("dap.fixture.native.hl", nativeFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.stacktrace.hl", stacktraceFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.typedthrow.hl", typedThrowFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.src.dir", File(projectDir, "test-fixtures/src").absolutePath)

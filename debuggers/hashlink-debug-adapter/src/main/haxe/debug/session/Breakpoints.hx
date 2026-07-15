@@ -29,6 +29,10 @@ class Breakpoints {
 	// INT3s planted at every throw site while an exception breakpoint is enabled;
 	// `reg` is the HL register holding the thrown value at that site
 	final byException:Map<String, {bp:PatchedBreakpoint, reg:Int}> = new Map();
+	// a single INT3 on hl_throw's entry while the "native exceptions" breakpoint
+	// is on — catches VM-raised errors (null access, bounds, ...) that never
+	// execute an OThrow. Null when disarmed.
+	var nativeThrow:Null<{address:Pointer, originalByte:Int}> = null;
 
 	public function new(api:DebugApi, pid:Int) {
 		this.api = api;
@@ -178,6 +182,51 @@ class Breakpoints {
 		return byException.get(addressKey(address));
 	}
 
+	// --- native-exception trap (one INT3 on hl_throw's entry) ---
+
+	/** Plants an INT3 at hl_throw's entry (no-op if already armed there). */
+	public function armNativeThrow(address:Pointer):Void {
+		if (nativeThrow != null) {
+			return;
+		}
+		var original = readByte(address);
+		writeByte(address, INT3);
+		nativeThrow = {address: address, originalByte: original};
+	}
+
+	/** Restores hl_throw's entry byte and forgets the trap. */
+	public function disarmNativeThrow():Void {
+		if (nativeThrow != null) {
+			writeByte(nativeThrow.address, nativeThrow.originalByte);
+			nativeThrow = null;
+		}
+	}
+
+	public function isNativeThrowArmed():Bool {
+		return nativeThrow != null;
+	}
+
+	/** True when `address` is hl_throw's armed entry. */
+	public function isNativeThrow(address:Pointer):Bool {
+		return nativeThrow != null && Int64.eq(nativeThrow.address, address);
+	}
+
+	/**
+	 * A synthetic PatchedBreakpoint view of the native-throw trap, so a stop on it
+	 * flows through the same currentStoppedBreakpoint machinery (suspend / rearm /
+	 * step-over on continue) as any breakpoint. Not in byAddress, so atAddress
+	 * lookups (reconcileStoppedBreakpoint) correctly ignore it. Null when disarmed.
+	 */
+	public function nativeThrowBreakpoint():Null<PatchedBreakpoint> {
+		if (nativeThrow == null) {
+			return null;
+		}
+		return {
+			id: -1, address: nativeThrow.address, originalByte: nativeThrow.originalByte,
+			fidx: -1, op: -1, file: "", line: 0, condition: null
+		};
+	}
+
 	/**
 	 * Restores every patched byte (breakpoints and temps). Used before
 	 * detaching in attach mode: the debuggee keeps running without a debugger,
@@ -187,6 +236,7 @@ class Breakpoints {
 	public function removeAll():Void {
 		clearTemps();
 		disarmExceptions();
+		disarmNativeThrow();
 		for (bp in byAddress) {
 			restore(bp);
 		}

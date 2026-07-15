@@ -1,0 +1,4 @@
+-cp src
+-main NativeError
+-debug
+-hl ../build/hl/native-fixture.hl

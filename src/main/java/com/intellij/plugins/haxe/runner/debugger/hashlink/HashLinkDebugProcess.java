@@ -624,6 +624,19 @@ public class HashLinkDebugProcess extends XDebugProcess {
         public void unregisterBreakpoint(@NotNull XBreakpoint<HashLinkExceptionBreakpointProperties> breakpoint, boolean temporary) {
           updateExceptionFilters();
         }
+      },
+      // "Native HashLink exception": VM-raised errors (null access, out-of-bounds,
+      // ...) that never execute a bytecode throw — trapped via hl_throw
+      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HashLinkNativeExceptionBreakpointType.class) {
+        @Override
+        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
+          updateExceptionFilters();
+        }
+
+        @Override
+        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
+          updateExceptionFilters();
+        }
       }
     };
   }
@@ -652,6 +665,9 @@ public class HashLinkDebugProcess extends XDebugProcess {
       }
       if (anyEnabled(manager, util.findBreakpointType(HashLinkUncaughtExceptionBreakpointType.class))) {
         filters.add("uncaught");
+      }
+      if (anyEnabled(manager, util.findBreakpointType(HashLinkNativeExceptionBreakpointType.class))) {
+        filters.add("native");
       }
       XBreakpointType<?, ?> typedType = util.findBreakpointType(HashLinkTypedExceptionBreakpointType.class);
       if (typedType != null) {

@@ -14,6 +14,7 @@ import debug.eval.call.CallEmitter.CallArg;
 import debug.layout.Align;
 import debug.module.CodeGraph;
 import debug.module.ExceptionSites;
+import debug.module.NativeThrowResolver;
 import debug.module.TryRegions;
 import debug.module.JitInfo;
 import debug.module.JitInfoReader;
@@ -95,6 +96,12 @@ class DebugSession {
 	var exceptionBreakUncaught:Bool = false;
 	// FQNs (or simple names) of exception classes to stop on — the per-type filter.
 	var exceptionBreakTypes:Array<String> = [];
+	// "native" filter: break on VM-raised errors (null access, bounds, cast, ...)
+	// by trapping hl_throw. Resolved lazily from an OThrow site once, then cached.
+	var exceptionBreakNative:Bool = false;
+	var nativeThrowResolver:NativeThrowResolver;
+	var nativeThrowAddress:Null<Pointer> = null;
+	var memReader:MemoryReader;
 	var handshakeSocket:Socket;
 	var stackWalker:StackWalker;
 	var threadRegistry:ThreadRegistry;
@@ -286,7 +293,8 @@ class DebugSession {
 			exceptionSites = new ExceptionSites(module, jit);
 			tryRegions = new TryRegions(module);
 			stackWalker = new StackWalker(api, debuggeePid, jit);
-			var memReader = new MemoryReader(api, debuggeePid, jit.is64);
+			memReader = new MemoryReader(api, debuggeePid, jit.is64);
+			nativeThrowResolver = new NativeThrowResolver(module, jit, memReader, exceptionSites);
 			threadRegistry = new ThreadRegistry(memReader,
 				new Align(jit.is64, jit.boolSize4), jit.hlVersionMajor, jit.hlVersionMinor);
 			inspector = new VariableInspector(module, jit, memReader);
@@ -706,33 +714,59 @@ class DebugSession {
 	function handleSetExceptionBreakpoints(requestSeq:Int, filters:Array<String>, filterTypes:Array<String>):Void {
 		exceptionBreakAll = filters != null && filters.indexOf("all") >= 0;
 		exceptionBreakUncaught = filters != null && filters.indexOf("uncaught") >= 0;
+		exceptionBreakNative = filters != null && filters.indexOf("native") >= 0;
 		exceptionBreakTypes = filterTypes != null ? filterTypes : [];
 		applyExceptionBreakpoints();
 		emit(EvExceptionBreakpointsSet(requestSeq));
 	}
 
-	// Reconciles the armed throw-site INT3s with the desired state — armed while
-	// either mode ("all" / "uncaught") is on (both plant an INT3 at every throw;
-	// the mode only changes whether a hit surfaces). A no-op before launch
+	// Reconciles the armed exception INT3s with the desired state. Two independent
+	// traps: OThrow sites (armed while "all"/"uncaught"/types is on — the mode only
+	// changes whether a hit surfaces) and hl_throw's entry (the "native" filter,
+	// catching VM-raised errors with no bytecode throw). A no-op before launch
 	// (breakpoints/sites not built yet — re-run once they are). Arming/disarming
 	// writes debuggee memory, so a running debuggee is briefly frozen first.
 	function applyExceptionBreakpoints():Void {
-		var wanted = exceptionBreakAll || exceptionBreakUncaught || exceptionBreakTypes.length > 0;
-		if (breakpoints == null || exceptionSites == null || wanted == breakpoints.isExceptionsArmed()) {
+		if (breakpoints == null || exceptionSites == null) {
+			return;
+		}
+		var wantSites = exceptionBreakAll || exceptionBreakUncaught || exceptionBreakTypes.length > 0;
+		var wantNative = exceptionBreakNative && resolveNativeThrow() != null;
+		var sitesChange = wantSites != breakpoints.isExceptionsArmed();
+		var nativeChange = wantNative != breakpoints.isNativeThrowArmed();
+		if (!sitesChange && !nativeChange) {
 			return;
 		}
 		var wasRunning = switch (state) { case Running: true; default: false; };
 		if (wasRunning) {
 			pauseForMemoryWrite();
 		}
-		if (wanted) {
-			breakpoints.armExceptions(exceptionSites.all());
-		} else {
-			breakpoints.disarmExceptions();
+		if (sitesChange) {
+			if (wantSites) breakpoints.armExceptions(exceptionSites.all());
+			else breakpoints.disarmExceptions();
+		}
+		if (nativeChange) {
+			if (wantNative) breakpoints.armNativeThrow(nativeThrowAddress);
+			else breakpoints.disarmNativeThrow();
 		}
 		if (wasRunning) {
 			resumeAfterMemoryWrite();
 		}
+	}
+
+	// Resolves hl_throw's address once (mined from an OThrow site) and caches it;
+	// null when the program has no throw site to mine or the pattern is absent
+	// (the native-exception breakpoint then simply cannot arm).
+	function resolveNativeThrow():Null<Pointer> {
+		if (nativeThrowAddress == null && nativeThrowResolver != null) {
+			nativeThrowAddress = nativeThrowResolver.resolve();
+			if (nativeThrowAddress == null) {
+				emit(EvOutput("console",
+					"HashLink native exception breakpoint unavailable: could not locate hl_throw "
+					+ "(the program has no throw site to mine, or the JIT pattern was not recognised).\n"));
+			}
+		}
+		return nativeThrowAddress;
 	}
 
 	// True when no live frame's current op sits inside a `try` block — only HL's
@@ -769,6 +803,34 @@ class DebugSession {
 				+ (source != null ? " (" + source.file + ":" + source.line + ")" : "");
 		}
 		return what + where + ". Execution cannot continue past this instruction.";
+	}
+
+	// At hl_throw's entry, true when the immediate caller is C runtime code (the
+	// return address on the stack is NOT in JIT code) — i.e. the throw was raised
+	// by the VM (null access, bounds, cast, div0), not by a bytecode OThrow whose
+	// caller is jitted. Bytecode throws are left to the OThrow-based breakpoints.
+	function raisedByRuntime(threadId:Int):Bool {
+		var esp = api.readRegister(debuggeePid, threadId, Esp);
+		var returnAddress = memReader.readPointer(esp);
+		return !jit.isCodePtr(returnAddress);
+	}
+
+	// The stopped(reason:"exception") text for a VM-raised error trapped at
+	// hl_throw. The kind (null access vs bounds ...) is not knowable — HL's debug
+	// API exposes no argument register to read the thrown value — so we name the
+	// recovered throwing frame and point the user at the locals, which is where
+	// the offending value (a null field, an out-of-range index) is visible.
+	function describeNativeThrow(threadId:Int):String {
+		var frames = inspector.framesFor(threadId);
+		if (frames.length == 0) {
+			return "HashLink runtime exception (such as a null access or out-of-bounds); inspect the locals.";
+		}
+		var location = frames[0].location;
+		var source = module.lookup(location.fidx, location.op);
+		var where = module.functionName(location.fidx)
+			+ (source != null ? " (" + source.file + ":" + source.line + ")" : "");
+		return "HashLink runtime exception in " + where
+			+ " (such as a null access or out-of-bounds — inspect the locals to see the offending value).";
 	}
 
 	// Describes the value being thrown (the exception in register `reg` of the top
@@ -1173,8 +1235,9 @@ class DebugSession {
 		var userBp = breakpoints != null ? breakpoints.atAddress(hitAddress) : null;
 		var temp = breakpoints != null && breakpoints.isTemp(hitAddress);
 		var excEntry = breakpoints != null ? breakpoints.exceptionAt(hitAddress) : null;
+		var nativeThrow = breakpoints != null && breakpoints.isNativeThrow(hitAddress);
 
-		if (userBp == null && !temp && excEntry == null) {
+		if (userBp == null && !temp && excEntry == null && !nativeThrow) {
 			// attach/loader breakpoint or spurious: just keep going
 			api.resume(debuggeePid, threadId);
 			return;
@@ -1235,6 +1298,30 @@ class DebugSession {
 			breakpoints.suspend(excEntry.bp);
 			enterStopped(threadId, excEntry.bp);
 			emit(EvStoppedException(threadId, describeThrow(threadId, excEntry.reg)));
+			return;
+		}
+
+		// hl_throw's entry: EVERY exception passes through here. We only surface
+		// VM-RAISED errors (null access, bounds, cast, ...) — i.e. throws whose
+		// immediate caller is C runtime code, not a jitted OThrow. A bytecode
+		// throw's caller IS jit code, so it is left to the OThrow-based breakpoints
+		// (avoiding a double stop) and resumed past silently here.
+		if (nativeThrow) {
+			var syntheticBp = breakpoints.nativeThrowBreakpoint();
+			if (!raisedByRuntime(threadId)) {
+				inspector.invalidate();
+				var interrupted = resumePastUserBreakpoint(threadId, syntheticBp);
+				if (state == Exited) {
+					return;
+				}
+				if (interrupted != null) {
+					handleWaitOutcome(interrupted);
+				}
+				return;
+			}
+			breakpoints.suspend(syntheticBp);
+			enterStopped(threadId, syntheticBp);
+			emit(EvStoppedException(threadId, describeNativeThrow(threadId)));
 			return;
 		}
 

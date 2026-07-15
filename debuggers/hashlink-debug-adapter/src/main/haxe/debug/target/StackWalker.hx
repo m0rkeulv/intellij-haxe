@@ -39,7 +39,13 @@ class StackWalker {
 		var ebp = api.readRegister(pid, threadId, Ebp);
 		var top = jit.resolveAddress(eip);
 		if (top != null) {
+			// normal stop: RIP is inside a jitted function
 			frames.push({fidx: top.fidx, op: top.op, address: eip, ebp: ebp});
+		} else {
+			// stopped inside a C runtime function (e.g. an INT3 on hl_throw's
+			// entry): RBP still belongs to the caller, so seed the walk from the
+			// return-address chain and continue with the first JIT frame as base.
+			ebp = seedFromCEntry(threadId, ebp, frames);
 		}
 
 		while (frames.length < MAX_FRAMES) {
@@ -67,6 +73,41 @@ class StackWalker {
 		}
 
 		return frames;
+	}
+
+	/**
+	 * Seeds the walk when the thread is stopped at a C function's ENTRY (before
+	 * its prologue ran, so RBP is still the caller's). Finds the first return
+	 * address that lands in JIT code — the throwing Haxe frame — pushes it, and
+	 * returns the RBP the outer walk should continue from (that frame's base).
+	 *
+	 * At a C entry the immediate caller's resume address is at [Esp] and its
+	 * frame base is the current RBP; each further C frame is unwound through its
+	 * RBP chain. Returns 0 (walk stops) when no JIT frame is found.
+	 */
+	function seedFromCEntry(threadId:Int, ebp:Pointer, frames:Array<StackFrameLocation>):Pointer {
+		var esp = api.readRegister(pid, threadId, Esp);
+		var returnAddress = readPointer(esp); // the immediate caller's resume address
+		var frameBase = ebp; // ... whose frame base is the current RBP
+		var guard = 0;
+		while (guard++ < MAX_FRAMES) {
+			var resolved = jit.resolveAddress(returnAddress);
+			if (resolved != null) {
+				frames.push({fidx: resolved.fidx, op: resolved.op, address: returnAddress, ebp: frameBase});
+				return frameBase; // the outer walk continues from this frame's base
+			}
+			// a C caller: unwind it through its RBP (== frameBase)
+			if (Int64.eq(frameBase, Int64.ofInt(0))) {
+				return Int64.ofInt(0);
+			}
+			returnAddress = readPointer(Int64.add(frameBase, Int64.ofInt(pointerSize)));
+			var nextBase = readPointer(frameBase);
+			if (Int64.compare(nextBase, frameBase) <= 0) {
+				return Int64.ofInt(0); // not strictly ascending: bail rather than loop
+			}
+			frameBase = nextBase;
+		}
+		return Int64.ofInt(0);
 	}
 
 	function readPointer(addr:Pointer):Pointer {
