@@ -41,58 +41,14 @@ enum DebugEvent {
 	ThreadStopped(threadNumber:Int, status:Int, frame:Null<DebugStackFrame>);
 }
 
+// The std debugger data types on cpp; API-identical stubs (one type per file,
+// package intellij.hxcpp.debug.stubs) everywhere else.
 #if cpp
 typedef DebugParameter = cpp.vm.Debugger.Parameter;
 typedef DebugStackFrame = cpp.vm.Debugger.StackFrame;
 typedef DebugThread = cpp.vm.Debugger.ThreadInfo;
 #else
-
-/** Non-cpp stand-in for `cpp.vm.Debugger.Parameter` — same API surface. */
-class DebugParameter {
-	public var name(default, null):String;
-	public var value(default, null):Dynamic;
-
-	public function new(name:String, value:Dynamic) {
-		this.name = name;
-		this.value = value;
-	}
-}
-
-/** Non-cpp stand-in for `cpp.vm.Debugger.StackFrame` — same API surface. */
-class DebugStackFrame {
-	public var fileName(default, null):String;
-	public var lineNumber(default, null):Int;
-	public var className(default, null):String;
-	public var functionName(default, null):String;
-	public var parameters(default, null):Array<DebugParameter> = [];
-
-	public function new(fileName:String, lineNumber:Int, className:String, functionName:String) {
-		this.fileName = fileName;
-		this.lineNumber = lineNumber;
-		this.className = className;
-		this.functionName = functionName;
-	}
-}
-
-/** Non-cpp stand-in for `cpp.vm.Debugger.ThreadInfo` — same API surface. */
-class DebugThread {
-	public static inline var STATUS_RUNNING = 1;
-	public static inline var STATUS_STOPPED_BREAK_IMMEDIATE = 2;
-	public static inline var STATUS_STOPPED_BREAKPOINT = 3;
-	public static inline var STATUS_STOPPED_UNCAUGHT_EXCEPTION = 4;
-	public static inline var STATUS_STOPPED_CRITICAL_ERROR = 5;
-
-	public var number(default, null):Int;
-	public var status(default, null):Int;
-	public var breakpoint(default, null):Int;
-	public var criticalErrorDescription(default, null):String;
-	public var stack(default, null):Array<DebugStackFrame> = [];
-
-	public function new(number:Int, status:Int, breakpoint:Int = -1, criticalErrorDescription:String = null) {
-		this.number = number;
-		this.status = status;
-		this.breakpoint = breakpoint;
-		this.criticalErrorDescription = criticalErrorDescription;
-	}
-}
+typedef DebugParameter = intellij.hxcpp.debug.stubs.Parameter;
+typedef DebugStackFrame = intellij.hxcpp.debug.stubs.StackFrame;
+typedef DebugThread = intellij.hxcpp.debug.stubs.ThreadInfo;
 #end
