@@ -40,13 +40,16 @@ public class HaxeAccessAnnotator implements Annotator {
 
     if (element instanceof HaxeReferenceExpression referenceExpression) {
       // we want to ignore references used in package, type or metas
+      if (isExpressionEvaluation(element)) return;
       if (checkIfShouldBeIgnored(referenceExpression)) return;
       checkAccessForReference(referenceExpression, holder);
     }
     else if (element instanceof HaxeNewExpression newExpression) {
+      if (isExpressionEvaluation(element)) return;
       checkAccessForConstructor(newExpression, holder);
     }
    else if (element instanceof HaxeCompiletimeMetaArg compileTimeMeta) {
+      if (isExpressionEvaluation(element)) return;
       HaxeMeta haxeMeta = PsiTreeUtil.getParentOfType(compileTimeMeta, HaxeMeta.class);
       if (haxeMeta != null) {
         if (haxeMeta.isType(ALLOW) || haxeMeta.isType(ACCESS)) {
@@ -122,6 +125,12 @@ public class HaxeAccessAnnotator implements Annotator {
     HaxeMeta haxeMeta = PsiTreeUtil.getParentOfType(expressionParent, HaxeMeta.class);
     if(haxeMeta instanceof  HaxeCompiletimeMetaArg) return true;
     return false;
+  }
+
+  private static boolean isExpressionEvaluation(PsiElement psiElement) {
+    // ignoring access rules for expression evaluation during debugging
+    HaxeExpressionCodeFragment condFragment = PsiTreeUtil.getParentOfType(psiElement, HaxeExpressionCodeFragment.class);
+    return condFragment != null;
   }
 
   private void checkAccessForReference(@NotNull HaxeReferenceExpression referenceExpression, @NotNull AnnotationHolder holder) {
