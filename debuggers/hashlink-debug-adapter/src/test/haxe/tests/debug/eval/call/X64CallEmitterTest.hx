@@ -1,11 +1,11 @@
 package tests.debug.eval.call;
 
-import debug.eval.call.CallEmitter;
+import debug.eval.call.X64CallEmitter;
 
 import haxe.Int64;
 import haxe.io.Bytes;
 
-class CallEmitterTest {
+class X64CallEmitterTest {
 	public static function run(assert:Assert):Void {
 		emitsWin64IntCall(assert);
 		placesFloatArgumentInXmm(assert);
@@ -23,7 +23,7 @@ class CallEmitterTest {
 
 	static function emitsWin64IntCall(assert:Assert):Void {
 		// call f(5) at 0x1122334455667788, integer return, Windows x64
-		var bytes = new CallEmitter(true).build(
+		var bytes = new X64CallEmitter(true).build(
 			Int64.make(0x11223344, 0x55667788),
 			[{isFloat: false, bits: Int64.ofInt(5)}],
 			0);
@@ -43,7 +43,7 @@ class CallEmitterTest {
 
 	static function placesFloatArgumentInXmm(assert:Assert):Void {
 		// f(3, 1.5): arg 0 int -> RCX, arg 1 float -> XMM1 (positional on win64)
-		var bytes = new CallEmitter(true).build(
+		var bytes = new X64CallEmitter(true).build(
 			Int64.ofInt(0x400000),
 			[{isFloat: false, bits: Int64.ofInt(3)}, {isFloat: true, bits: haxe.io.FPHelper.doubleToI64(1.5)}],
 			0);
@@ -59,7 +59,7 @@ class CallEmitterTest {
 		var tooMany = [for (i in 0...5) {isFloat: false, bits: Int64.ofInt(i)}];
 		var threw = false;
 		try {
-			new CallEmitter(true).build(Int64.ofInt(1), tooMany, 0);
+			new X64CallEmitter(true).build(Int64.ofInt(1), tooMany, 0);
 		} catch (e:debug.DebugError) {
 			threw = true;
 		}
@@ -67,8 +67,8 @@ class CallEmitterTest {
 	}
 
 	static function capturesFloatReturn(assert:Assert):Void {
-		var intRet = new CallEmitter(true).build(Int64.ofInt(0x1000), [], 0);
-		var floatRet = new CallEmitter(true).build(Int64.ofInt(0x1000), [], 64);
+		var intRet = new X64CallEmitter(true).build(Int64.ofInt(0x1000), [], 0);
+		var floatRet = new X64CallEmitter(true).build(Int64.ofInt(0x1000), [], 64);
 		// the float-return path adds the XMM0->RAX capture (movsd [rsp],xmm0 = f20f110424)
 		assert.isTrue(hex(floatRet).indexOf("f20f110424") >= 0, "float return captures XMM0");
 		assert.isTrue(floatRet.length > intRet.length, "float return emits extra capture code");

@@ -634,9 +634,9 @@ call. Locals (non-arguments) are unaffected: HL 1.15 re-reads their slots
 **Calling functions in evaluate (`f(args)`) — the eval-call machinery (M13)**:
 `evaluate` recognises a call `callee(arg, ...)` where `callee` resolves to a
 function value and runs it INSIDE the stopped debuggee. Only the debuggee's own
-code can allocate or execute HL logic, so we borrow its thread: `CallEmitter`
-builds an x86-64 trampoline (port of hld `evalCall`) and `DebugSession.callInDebuggee`
-injects it. The dance:
+code can allocate or execute HL logic, so we borrow its thread: `X64CallEmitter`
+(or `X86CallEmitter` on 32-bit) builds a trampoline (port of hld `evalCall`) and
+`DebugSession.callInDebuggee` injects it. The dance:
 - The debug native only lets us write Esp/Eip/Rax, so the trampoline loads the
   argument registers ITSELF: save the scratch/arg registers, `mov` each arg into
   its calling-convention register (win64: RCX/RDX/R8/R9 + XMM0-3 positionally;
@@ -649,6 +649,16 @@ injects it. The dance:
   trailing INT3, then restore the code and registers. If Eip did not land
   exactly past the INT3 the call threw or hit a breakpoint → reported as an
   error with everything restored.
+- **Lift EVERY breakpoint for the duration of the call** (`Breakpoints.suspendAll`
+  / `rearmAll`). Otherwise the called function trips OUR INT3s: a user breakpoint
+  in its body, or — the common one — the `hl_throw` trap whenever it throws and
+  catches internally (which countless stdlib paths do), which is armed by default
+  since "HashLink VM Exceptions" is on. Tripping one aborts the call
+  mid-execution and leaves a half-run frame → later steps crash with low-level
+  runtime errors. The one we are stopped on stays suspended (the continue
+  machinery re-arms it after stepping past). NOTE this does NOT rescue a call
+  that throws an UNCAUGHT exception — `hl_throw` then longjmps to the program's
+  own handler, past our injected frame; that case still fails (and always has).
 - **Stack discipline is everything** (learned the hard way): every push/sub must
   be matched by an equal pop/add WITHIN the trampoline, or the scratch-register
   restore reads the wrong slots and hands the debuggee corrupted registers — the
@@ -1045,7 +1055,7 @@ The 32-bit lessons (each was a live bug):
   argument registers. The mining lives behind arch-selected entry points
   (`MachineCode.mineMovImmThenCall`, `mineArgThenCall`), so resolvers pass
   `jit.is64` and never branch themselves.
-- **Eval-calls work on BOTH architectures**: `CallEmitter` emits the x86-64
+- **Eval-calls work on BOTH architectures**: `X64CallEmitter` emits the x86-64
   register-arg trampoline, `X86CallEmitter` the 32-bit cdecl one (stack args,
   EAX return, ST0 float spilled to a scratch slot the caller reads);
   `callInDebuggee` selects by `jit.is64`. The one remaining x64-only test is

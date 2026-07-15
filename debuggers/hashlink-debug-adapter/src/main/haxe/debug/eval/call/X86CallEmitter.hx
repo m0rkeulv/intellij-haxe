@@ -1,6 +1,6 @@
 package debug.eval.call;
 
-import debug.eval.call.CallEmitter.CallArg;
+import debug.eval.call.CallArg;
 
 import haxe.Int64;
 import haxe.io.Bytes;

@@ -9,9 +9,9 @@ import dap.protocol.Breakpoint;
 
 import debug.DebugError;
 import debug.Pointer;
-import debug.eval.call.CallEmitter;
-import debug.eval.call.CallEmitter.CallArg;
+import debug.eval.call.CallArg;
 import debug.eval.call.CallTrampoline;
+import debug.eval.call.X64CallEmitter;
 import debug.eval.call.X86CallEmitter;
 import debug.layout.Align;
 import debug.module.CodeGraph;
@@ -543,7 +543,7 @@ class DebugSession {
 		// the trampoline is CPU-architecture-specific: x86-64 loads argument
 		// registers and returns through RAX/XMM0; x86 pushes cdecl stack args and
 		// returns through EAX/ST0. Selected once from the handshake bitness.
-		var emitter:CallTrampoline = jit.is64 ? new CallEmitter(jit.winCall) : new X86CallEmitter();
+		var emitter:CallTrampoline = jit.is64 ? new X64CallEmitter(jit.winCall) : new X86CallEmitter();
 		var asm = emitter.build(funcAddr, args, floatBits);
 		var asmSize = asm.length;
 

@@ -1,5 +1,6 @@
 package debug.eval.call;
 import debug.DebugError;
+import debug.eval.call.CallArg;
 
 import haxe.Int64;
 import haxe.io.Bytes;
@@ -22,7 +23,7 @@ import haxe.io.BytesBuffer;
  * 64-bit only, like hld (the 32-bit cdecl trampoline is {@link X86CallEmitter}).
  * Pure and unit-tested against exact byte sequences.
  */
-class CallEmitter implements CallTrampoline {
+class X64CallEmitter implements CallTrampoline {
 	// x86-64 register encodings (hardware numbers).
 	static inline var RAX = 0;
 	static inline var RCX = 1;
@@ -230,18 +231,6 @@ class CallEmitter implements CallTrampoline {
 			out.addByte((high >>> (i * 8)) & 0xFF);
 		}
 	}
-}
-
-/**
- * A call argument, lowered to the raw 64-bit value that goes in its register
- * (x86-64) or is pushed on the stack (x86). `wide` marks an 8-byte value (an
- * HF64 double) so the x86 trampoline pushes two dwords rather than one; the
- * x86-64 trampoline ignores it (every argument occupies one register slot).
- */
-typedef CallArg = {
-	var isFloat:Bool;
-	var bits:Int64;
-	var ?wide:Bool;
 }
 
 /** Where an argument goes: the target register, and whether it's an XMM (float) register. */

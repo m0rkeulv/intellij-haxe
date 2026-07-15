@@ -1,13 +1,13 @@
 package debug.eval.call;
 
-import debug.eval.call.CallEmitter.CallArg;
+import debug.eval.call.CallArg;
 
 import haxe.Int64;
 import haxe.io.Bytes;
 
 /**
  * A machine-code trampoline that calls a function in the debuggee and traps
- * (INT3) on return. Selected by CPU architecture — {@link CallEmitter} emits
+ * (INT3) on return. Selected by CPU architecture — {@link X64CallEmitter} emits
  * x86-64, {@link X86CallEmitter} emits 32-bit cdecl — so the rest of the
  * adapter drives eval-calls without knowing the bitness.
  *
