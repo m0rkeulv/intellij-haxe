@@ -601,15 +601,28 @@ public class HashLinkDebugProcess extends XDebugProcess {
           updateExceptionFilters();
         }
       },
-      // The "Uncaught" category's two rows: any-uncaught, and VM-raised errors
-      new XBreakpointHandler<XBreakpoint<HashLinkUncaughtExceptionProperties>>(HashLinkUncaughtExceptionBreakpointType.class) {
+      // "Uncaught HashLink exception": stop only where no live try/catch handles it
+      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HashLinkUncaughtExceptionBreakpointType.class) {
         @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<HashLinkUncaughtExceptionProperties> breakpoint) {
+        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
           updateExceptionFilters();
         }
 
         @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<HashLinkUncaughtExceptionProperties> breakpoint, boolean temporary) {
+        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
+          updateExceptionFilters();
+        }
+      },
+      // "HashLink VM exception": VM-raised errors (null access, out-of-bounds,
+      // ...) that never execute a bytecode throw — trapped via hl_throw
+      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HashLinkVmExceptionBreakpointType.class) {
+        @Override
+        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
+          updateExceptionFilters();
+        }
+
+        @Override
+        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
           updateExceptionFilters();
         }
       },
@@ -635,12 +648,11 @@ public class HashLinkDebugProcess extends XDebugProcess {
   }
 
   // Builds the setExceptionBreakpoints request by reading the CURRENT state of the
-  // exception breakpoints straight from the breakpoint manager: the "all" filter,
-  // the "uncaught"/"vm" filters (the uncaught category's two rows, distinguished
-  // by their properties), plus the class names of every enabled per-class
-  // breakpoint. Reading the manager (rather than tracking volatile flags) is the
-  // single source of truth, so a session started with breakpoints already
-  // enabled (e.g. after an IDE restart) arms them the same as a live toggle.
+  // exception breakpoints straight from the breakpoint manager: the
+  // "all"/"uncaught"/"vm" filters plus the class names of every enabled
+  // per-class breakpoint. Reading the manager (rather than tracking volatile
+  // flags) is the single source of truth, so a session started with breakpoints
+  // already enabled (e.g. after an IDE restart) arms them the same as a live toggle.
   private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
     List<String> filters = new ArrayList<>();
     List<String> filterTypes = new ArrayList<>();
@@ -651,18 +663,11 @@ public class HashLinkDebugProcess extends XDebugProcess {
       if (anyEnabled(manager, util.findBreakpointType(HashLinkExceptionBreakpointType.class))) {
         filters.add("all");
       }
-      HashLinkUncaughtExceptionBreakpointType uncaughtType =
-        util.findBreakpointType(HashLinkUncaughtExceptionBreakpointType.class);
-      if (uncaughtType != null) {
-        for (XBreakpoint<HashLinkUncaughtExceptionProperties> breakpoint : manager.getBreakpoints(uncaughtType)) {
-          if (!breakpoint.isEnabled()) {
-            continue;
-          }
-          String filter = HashLinkUncaughtExceptionBreakpointType.isVmErrors(breakpoint) ? "vm" : "uncaught";
-          if (!filters.contains(filter)) {
-            filters.add(filter);
-          }
-        }
+      if (anyEnabled(manager, util.findBreakpointType(HashLinkUncaughtExceptionBreakpointType.class))) {
+        filters.add("uncaught");
+      }
+      if (anyEnabled(manager, util.findBreakpointType(HashLinkVmExceptionBreakpointType.class))) {
+        filters.add("vm");
       }
       XBreakpointType<?, ?> typedType = util.findBreakpointType(HashLinkTypedExceptionBreakpointType.class);
       if (typedType != null) {

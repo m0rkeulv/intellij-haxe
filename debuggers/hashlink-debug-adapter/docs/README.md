@@ -948,10 +948,11 @@ throw — so it never hits an OThrow trap and escapes to the root handler.
 ### Fix: trap hl_throw's entry, report at hl_throw's own break (the "vm" filter)
 (Named "vm" — the party that raises them. NOT "native", which reads as the
 HXCPP/C native *target*; not "runtime", since every exception happens at
-runtime. In the IDE it is the "HashLink VM exceptions" row of the "HashLink
-Uncaught Exceptions" breakpoint category — a property-flagged sibling
-installed at project start, because the platform allows only one default
-breakpoint per `XBreakpointType`.)
+runtime. In the IDE it is its own "HashLink VM Exceptions" breakpoint
+category, ENABLED by default — an unstopped VM error just kills the program.
+Its own category because only a type's single default breakpoint is
+undeletable; a programmatically-added row under another category could be
+removed from the dialog.)
 
 Every exception, bytecode or VM-raised, passes through the single C function
 `hl_throw(vdynamic*)`. `NativeThrowResolver` mines its address by

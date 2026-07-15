@@ -144,8 +144,7 @@
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkExceptionBreakpointType"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkUncaughtExceptionBreakpointType"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkTypedExceptionBreakpointType"/>
-    <!-- installs the "HashLink VM exceptions" row of the uncaught category (one default breakpoint per type is a platform limit) -->
-    <postStartupActivity implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkVmBreakpointStartActivity"/>
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkVmExceptionBreakpointType"/>
 
     <lang.parserDefinition language="Haxe" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeParserDefinition"/>
     <lang.formatter language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.formatter.HaxeFormattingModelBuilder"/>
