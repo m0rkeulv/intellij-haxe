@@ -72,4 +72,23 @@ class FakeDebuggerApi implements DebuggerApi {
 	public function deleteBreakpoint(number:Int):Void {
 		deletedBreakpoints.push(number);
 	}
+
+	// stack variables: an ordered name list + values for a single test frame
+	public var localNames:Array<String> = [];
+	public var localValues:Map<String, Dynamic> = new Map();
+	public var setVarCalls:Array<{thread:Int, frame:Int, name:String, value:Dynamic}> = [];
+
+	public function stackVariables(threadNumber:Int, frame:Int):Array<String> {
+		return localNames;
+	}
+
+	public function stackVariableValue(threadNumber:Int, frame:Int, name:String):Dynamic {
+		return localValues.get(name);
+	}
+
+	public function setStackVariableValue(threadNumber:Int, frame:Int, name:String, value:Dynamic):Dynamic {
+		setVarCalls.push({thread: threadNumber, frame: frame, name: name, value: value});
+		localValues.set(name, value);
+		return value;
+	}
 }

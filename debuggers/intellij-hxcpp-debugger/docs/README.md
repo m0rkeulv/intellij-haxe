@@ -100,6 +100,24 @@ step is in flight: a BREAK_IMMEDIATE stop during a step is reason "step" (and
 re-steps if the source line has not changed, §5); otherwise it is "pause". A
 breakpoint or exception hit mid-step wins over the step.
 
+## 11. Variables are reflection, and writes reach ANY frame
+
+Because the server runs in-process, a local's value is a real Haxe object:
+`Values` describes and expands it with `Type.typeof`/`Reflect` (arrays,
+objects — data fields only, methods filtered — anon structures, enums), no
+memory decoding. This all runs under the interpreter, so it is unit-tested
+over plain values.
+
+`setStackVariableValue(thread, frame, name, value)` takes a real frame number,
+so the server writes to ANY frame — the fix over vshaxe's top-frame-only,
+silently-ignored writes. `VariablesView` owns the DAP variablesReference
+registry (a reference names a frame's locals or an expandable value) and
+`reset()`s it on every stop, since a reference must never outlive its stop.
+
+Scope for now: one flat "Locals" scope per frame (hxcpp exposes params +
+locals + `this` together); setVariable parses bool/int/float/string literals
+(constructing objects is out of scope).
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log

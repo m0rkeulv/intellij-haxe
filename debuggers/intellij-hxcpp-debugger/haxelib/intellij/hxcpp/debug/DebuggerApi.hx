@@ -62,6 +62,18 @@ interface DebuggerApi {
 
 	/** Removes a previously installed breakpoint by its runtime number. */
 	function deleteBreakpoint(number:Int):Void;
+
+	/** The names of the local variables (and `this`) visible in a frame. */
+	function stackVariables(threadNumber:Int, frame:Int):Array<String>;
+
+	/** The live value of one local in a frame (a real Dynamic, any frame). */
+	function stackVariableValue(threadNumber:Int, frame:Int, name:String):Dynamic;
+
+	/**
+		Writes `value` to a local in a frame — ANY frame (the marquee fix over
+		vshaxe's top-frame-only writes). Returns the value actually stored.
+	**/
+	function setStackVariableValue(threadNumber:Int, frame:Int, name:String, value:Dynamic):Dynamic;
 }
 
 /** A runtime notification, re-delivered on the server thread. */

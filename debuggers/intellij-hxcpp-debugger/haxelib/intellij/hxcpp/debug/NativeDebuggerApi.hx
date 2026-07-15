@@ -87,5 +87,17 @@ public function continueThreads(threadNumber:Int, count:Int):Void {
 	public function deleteBreakpoint(number:Int):Void {
 		Debugger.deleteBreakpoint(number);
 	}
+
+	public function stackVariables(threadNumber:Int, frame:Int):Array<String> {
+		return Debugger.getStackVariables(threadNumber, frame, false);
+	}
+
+	public function stackVariableValue(threadNumber:Int, frame:Int, name:String):Dynamic {
+		return Debugger.getStackVariableValue(threadNumber, frame, name, false);
+	}
+
+	public function setStackVariableValue(threadNumber:Int, frame:Int, name:String, value:Dynamic):Dynamic {
+		return Debugger.setStackVariableValue(threadNumber, frame, name, value, false);
+	}
 }
 #end

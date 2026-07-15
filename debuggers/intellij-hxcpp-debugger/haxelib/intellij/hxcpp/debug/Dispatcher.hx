@@ -5,6 +5,7 @@ import dap.protocol.requests.SetBreakpointsArguments;
 import haxe.Json;
 import intellij.hxcpp.debug.DebuggerApi;
 import intellij.hxcpp.debug.breakpoints.Breakpoints;
+import intellij.hxcpp.debug.values.VariablesView;
 
 /**
 	Translates decoded DAP request payloads into responses/events, written as
@@ -20,6 +21,7 @@ class Dispatcher {
 	final debugger:DebuggerApi;
 	final send:String->Void;
 	final breakpoints:Breakpoints;
+	final variablesView:VariablesView;
 	var nextSeq:Int = 1;
 	var nextBreakpointId:Int = 1;
 
@@ -58,6 +60,7 @@ class Dispatcher {
 		this.debugger = debugger;
 		this.send = send;
 		this.breakpoints = new Breakpoints(debugger);
+		this.variablesView = new VariablesView(debugger);
 	}
 
 	/**
@@ -111,6 +114,14 @@ class Dispatcher {
 				handleStep(seq, command, request.arguments, StepType.OUT);
 			case "stackTrace":
 				handleStackTrace(seq, command, request.arguments);
+			case "scopes":
+				handleScopes(seq, command, request.arguments);
+			case "variables":
+				var reference = (request.arguments != null && request.arguments.variablesReference != null)
+					? request.arguments.variablesReference : 0;
+				sendResponse(seq, command, true, {variables: variablesView.variables(reference)});
+			case "setVariable":
+				handleSetVariable(seq, command, request.arguments);
 			case "configurationDone":
 				configurationDone = true;
 				sendResponse(seq, command, true, null);
@@ -171,6 +182,31 @@ class Dispatcher {
 		sendResponse(seq, command, true, {stackFrames: frames, totalFrames: frames.length});
 	}
 
+	// A frame's Locals scope. The DAP frameId is the hxcpp stack index (assigned
+	// in stackTrace); the thread is the current stop. hxcpp exposes one flat set
+	// of locals per frame (params + declared vars + `this`), so we surface a
+	// single "Locals" scope rather than splitting arguments out.
+	function handleScopes(seq:Int, command:String, args:Dynamic):Void {
+		var frameId = (args != null && args.frameId != null) ? args.frameId : 0;
+		var reference = variablesView.frameScope(lastStoppedThread, frameId);
+		sendResponse(seq, command, true, {
+			scopes: [{name: "Locals", variablesReference: reference, expensive: false}]
+		});
+	}
+
+	function handleSetVariable(seq:Int, command:String, args:Dynamic):Void {
+		if (args == null || args.variablesReference == null || args.name == null || args.value == null) {
+			sendResponse(seq, command, false, null, "Missing variablesReference, name or value");
+			return;
+		}
+		var result = variablesView.setVariable(args.variablesReference, args.name, args.value);
+		if (result == null) {
+			sendResponse(seq, command, false, null, "Cannot set '" + args.name + "': unknown or stale reference");
+			return;
+		}
+		sendResponse(seq, command, true, result);
+	}
+
 	// hxcpp replaces the whole breakpoint set for a source; assign each request
 	// a stable DAP id and hand the batch to the Breakpoints manager.
 	function handleSetBreakpoints(seq:Int, command:String, args:SetBreakpointsArguments):Void {
@@ -211,6 +247,8 @@ class Dispatcher {
 	function handleThreadStopped(threadNumber:Int, status:Int, breakpoint:Int, stack:Array<DebugStackFrame>):Void {
 		lastStoppedThread = threadNumber;
 		stoppedStack = stack;
+		// every reference from the previous stop is stale now (the debuggee moved)
+		variablesView.reset();
 
 		// A step landing that did not change the source line: re-issue the step
 		// (multi-expression line, or a loop-body line that never "changes"), up

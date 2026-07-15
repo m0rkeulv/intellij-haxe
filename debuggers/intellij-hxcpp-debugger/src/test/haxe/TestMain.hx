@@ -10,7 +10,9 @@ class TestMain {
 			{name: "FramingTest", run: tests.FramingTest.run},
 			{name: "DispatcherTest", run: tests.DispatcherTest.run},
 			{name: "FileMatcherTest", run: tests.FileMatcherTest.run},
-			{name: "BreakpointsTest", run: tests.BreakpointsTest.run}
+			{name: "BreakpointsTest", run: tests.BreakpointsTest.run},
+			{name: "ValuesTest", run: tests.ValuesTest.run},
+			{name: "VariablesViewTest", run: tests.VariablesViewTest.run}
 		];
 		for (test in tests) {
 			test.run(assert);
