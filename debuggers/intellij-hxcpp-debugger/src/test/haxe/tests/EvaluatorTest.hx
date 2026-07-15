@@ -11,6 +11,8 @@ class EvaluatorTest {
 		methodCallsMutateTheRealObject(assert);
 		staticCallsReachRealCompiledCode(assert);
 		constructionAndCallsCompose(assert);
+		dottedPackagePathsResolve(assert);
+		unknownIdentifiersStillError(assert);
 		conditionHoldsIsFailSafe(assert);
 	}
 
@@ -87,6 +89,35 @@ class EvaluatorTest {
 		var t = make();
 		assert.equals(9, t.eval.evaluate(0, 0, "new EvalTarget(4).addTo(5)"), "constructs a real instance and calls it");
 		assert.equals(4, t.eval.evaluate(0, 0, "Std.int(4.7)"), "std-library statics resolve too");
+	}
+
+	static function dottedPackagePathsResolve(assert:Assert):Void {
+		var t = make();
+		evalfixtures.PackTarget.total = 0;
+		evalfixtures.deep.DeepTarget.total = 0;
+		assert.equals(4, t.eval.evaluate(0, 0, "evalfixtures.PackTarget.bump(4)"), "packaged static call");
+		assert.equals(4, evalfixtures.PackTarget.total, "packaged static state mutated for real");
+		assert.equals(6, t.eval.evaluate(0, 0, "new evalfixtures.PackTarget(1).addTo(5)"), "packaged construction");
+		assert.equals(3, t.eval.evaluate(0, 0, "evalfixtures.deep.DeepTarget.bump(3)"), "two package levels");
+		// two chains sharing the root identifier in ONE expression must merge
+		assert.equals(9, t.eval.evaluate(0, 0,
+			"evalfixtures.PackTarget.bump(1) + evalfixtures.deep.DeepTarget.bump(1)"), "shared-root chains merge");
+		// a frame local shadows a package root of the same name
+		t.api.localNames = ["evalfixtures"];
+		t.api.localValues.set("evalfixtures", 41);
+		assert.equals(42, t.eval.evaluate(0, 0, "evalfixtures + 1"), "a local shadows the package root");
+	}
+
+	static function unknownIdentifiersStillError(assert:Assert):Void {
+		var t = make();
+		var threw = false;
+		try {
+			t.eval.evaluate(0, 0, "nosuch.thing.here");
+		} catch (e:Dynamic) {
+			threw = true;
+		}
+		assert.isTrue(threw, "an unresolvable dotted path still errors (no silent null)");
+		assert.isTrue(t.eval.conditionHolds(0, 0, "typoVar == 2"), "unknown identifier in a condition still fails safe");
 	}
 
 	static function conditionHoldsIsFailSafe(assert:Assert):Void {

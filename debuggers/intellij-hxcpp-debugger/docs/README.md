@@ -139,16 +139,37 @@ in `Reflect` on the REAL values bridged from the frame (`Interp.call` is
 literally `Reflect.callMethod(o, f, args)`). So `box.addTo(7)` in a watch runs
 the compiled method and mutates the real object, and the change persists after
 resume — exactly like evaluate in the Java debugger. Our `ResolvingInterp`
-additionally resolves bare type names via `Type.resolveClass`/`resolveEnum`,
-so static calls (`Counter.bump(5)`, `Std.int(x)`) and `new` work too.
-Verified live: an evaluated `Counter.bump()` accumulated static state across
-separate evaluate requests against the native fixture.
+additionally resolves type names, so static calls and `new` work too: bare
+identifiers (`Counter.bump(5)`, `Std.int(x)`) resolve at execution time, and
+dotted package paths (`my.pack.Target.fn(x)`) — which hscript parses as field
+access on the free identifier `my` — are pre-bound by scanning the parsed AST
+and materializing each resolvable dotted prefix as nested anonymous objects.
+Binding only paths that actually resolve keeps unknown-identifier errors (and
+the conditional-breakpoint fail-safe) intact. Verified live: evaluated
+`Counter.bump()` and `fix.PackCounter.bump()` calls accumulated static state
+across separate evaluate requests against the native fixture.
 
-Two boundaries to remember: reassigning a frame LOCAL only persists through
-the explicit `name = expr` write-back path (hscript's own scope is scratch),
-and dotted package paths (`pack.Cls.fn()`) don't resolve — hscript parses
-`pack` as an identifier. Side effect of liveness: a careless watch expression
-can change program behavior; that is inherent to in-process evaluation.
+One boundary to remember: reassigning a frame LOCAL only persists through the
+explicit `name = expr` write-back path (hscript's own scope is scratch);
+object-field and static mutations need no help. Side effect of liveness: a
+careless watch expression can change program behavior; that is inherent to
+in-process evaluation.
+
+## 14. hxcpp catches by enum TYPE loosely — hscript errors became null
+
+On hxcpp, a `catch` clause typed to one enum catches ANY thrown enum. hscript's
+`Interp.exprReturn` wraps evaluation in `catch(e:Stop)` (its internal
+control-flow enum for return/break/continue) — on cpp that also caught
+hscript's `Error` enum, matched no `Stop` case, and fell through to `return
+null`. Net effect: every runtime evaluate error (unknown identifier, null
+access) silently produced `null` on the native target while throwing correctly
+under the interpreter — an interpreter-green/native-broken class of bug our
+unit tests cannot catch, which is exactly why every milestone is also verified
+live. `ResolvingInterp.execute` bypasses `exprReturn` (calls `expr` directly)
+and re-handles the `Stop` cases by name, since `Stop` is module-private.
+Residual: `exprReturn` is also used inside hscript-defined function bodies, so
+an error inside a function DEFINED IN THE WATCH EXPRESSION still nulls on cpp;
+not worth reimplementing `EFunction` over.
 
 ## Diagnostics
 

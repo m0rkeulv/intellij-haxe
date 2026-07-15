@@ -1,7 +1,9 @@
 package intellij.hxcpp.debug.eval;
 
+import hscript.Expr;
 import hscript.Interp;
 import hscript.Parser;
+import hscript.Tools;
 import intellij.hxcpp.debug.DebuggerApi;
 
 /**
@@ -37,25 +39,24 @@ class Evaluator {
 			interp.variables.set(name, debugger.stackVariableValue(thread, frame, name));
 		}
 
-		if (assignment != null) {
-			var value = run(interp, assignment.rhs);
-			// persist to the debuggee frame, not just hscript's scratch scope
-			return debugger.setStackVariableValue(thread, frame, assignment.name, value);
-		}
-		return run(interp, trimmed);
-	}
-
-	function run(interp:Interp, source:String):Dynamic {
+		var source = assignment != null ? assignment.rhs : trimmed;
 		var program = try {
 			parser.parseString(source);
 		} catch (e:Dynamic) {
 			throw "Cannot parse expression: " + Std.string(e);
 		}
-		return try {
+		interp.bindTypePaths(program);
+		var value = try {
 			interp.execute(program);
 		} catch (e:Dynamic) {
 			throw Std.string(e);
 		}
+
+		if (assignment != null) {
+			// persist to the debuggee frame, not just hscript's scratch scope
+			return debugger.setStackVariableValue(thread, frame, assignment.name, value);
+		}
+		return value;
 	}
 
 	/**
@@ -138,20 +139,65 @@ class Evaluator {
 
 /**
 	hscript `Interp` whose identifier lookup falls back to the debuggee's own
-	types: a name that is not a frame local resolves via `Type.resolveClass`
-	/ `Type.resolveEnum`, so expressions can call static methods and construct
-	objects (`Counter.bump(5)`, `new Point(1, 2)`).
+	types, so expressions can call static methods and construct objects
+	(`Counter.bump(5)`, `my.pack.Target.fn(x)`, `new Point(1, 2)`).
 
 	Method calls run through `Reflect.callMethod` on the REAL object — hscript
 	is not a sandbox — so an evaluated call executes compiled debuggee code and
 	its side effects persist in the program.
 
-	Limitation: only single-identifier names resolve (types in the root
-	package, like `Math`, `Std` and the fixture's `Counter`); dotted package
-	paths do not, because hscript sees `pack.Cls` as field access on the
-	identifier `pack`.
+	Two mechanisms cover the two shapes a type name takes in an expression:
+
+	- a bare identifier (`Math`, `Std`, root-package `Counter`) resolves at
+	  execution time via the `resolve` override;
+	- a dotted path (`my.pack.Target.fn`) parses as field access on the free
+	  identifier `my`, so `bindTypePaths` pre-scans the parsed program and
+	  binds each resolvable dotted prefix into `variables` as nested anonymous
+	  objects (`my` → `{pack: {Target: cls}}`). Binding BEFORE execution (and
+	  only paths that actually resolve) keeps unknown-identifier errors — and
+	  with them the conditional-breakpoint fail-safe — intact.
+
+	`new my.pack.Target(...)` needs neither: hscript keeps the full dotted
+	path in `ENew` and `Interp.cnew` resolves it directly.
 **/
 private class ResolvingInterp extends Interp {
+	// package objects created by bindTypePaths, so chains sharing a root
+	// (`a.b.X` and `a.c.Y`) merge instead of clobbering each other
+	final packageRoots = new Map<String, Dynamic>();
+
+	/**
+		Bypasses `Interp.exprReturn`. On hxcpp, catching by enum type catches
+		ANY enum, so exprReturn's `catch(e:Stop)` also swallows hscript's own
+		`Error` enum: the switch matches no `Stop` case and falls through to
+		`return null` — every runtime error (unknown identifier, null access)
+		silently evaluated to null on the native target while correctly
+		throwing under the interpreter. Calling `expr` directly lets errors
+		propagate; the `Stop` control-flow enums a top-level `return`/`break`
+		would throw are re-handled here by name (`Stop` itself is
+		module-private to hscript, so it cannot be caught by type).
+	**/
+	override public function execute(program:Expr):Dynamic {
+		depth = 0;
+		locals = new Map();
+		declared = new Array();
+		try {
+			return expr(program);
+		} catch (e:Dynamic) {
+			switch (Std.string(e)) {
+				case "SReturn":
+					var v = returnValue;
+					returnValue = null;
+					return v;
+				case "SBreak":
+					throw "Invalid break";
+				case "SContinue":
+					throw "Invalid continue";
+				default:
+					throw e;
+			}
+		}
+	}
+
 	override function resolve(id:String):Dynamic {
 		if (variables.exists(id)) {
 			return variables.get(id);
@@ -165,5 +211,77 @@ private class ResolvingInterp extends Interp {
 			return en;
 		}
 		return super.resolve(id); // throws EUnknownVariable
+	}
+
+	/**
+		Walks the parsed program and pre-binds every dotted type path (see the
+		class doc). Call after the frame locals are in `variables` — locals
+		shadow packages — and before `execute`.
+	**/
+	public function bindTypePaths(program:Expr):Void {
+		switch (Tools.expr(program)) {
+			case EField(_, _):
+				tryBindChain(program);
+			default:
+		}
+		Tools.iter(program, bindTypePaths);
+	}
+
+	// `program` is the outermost EField of an `a.b.c.d` chain; binds the
+	// longest dotted prefix that names a class or enum, if any
+	function tryBindChain(program:Expr):Void {
+		var segments = new Array<String>();
+		var current = program;
+		while (true) {
+			switch (Tools.expr(current)) {
+				case EField(inner, field):
+					segments.unshift(field);
+					current = inner;
+				case EIdent(id):
+					segments.unshift(id);
+					break;
+				default:
+					return; // rooted in an expression, not a free identifier
+			}
+		}
+		// a frame local (or anything else already bound) owns the root name;
+		// our own package objects are the one thing safe to extend
+		if (variables.exists(segments[0]) && !packageRoots.exists(segments[0])) {
+			return;
+		}
+		// longest prefix first: `a.b.Cls` must win over a package `a.b`
+		var length = segments.length;
+		while (length >= 2) {
+			var path = segments.slice(0, length).join(".");
+			var type:Dynamic = Type.resolveClass(path);
+			if (type == null) {
+				type = Type.resolveEnum(path);
+			}
+			if (type != null) {
+				bindPath(segments, length, type);
+				return;
+			}
+			length--;
+		}
+	}
+
+	// materializes `a.b.Cls` as variables["a"] = {b: {Cls: type}}
+	function bindPath(segments:Array<String>, length:Int, type:Dynamic):Void {
+		var root = packageRoots.get(segments[0]);
+		if (root == null) {
+			root = {};
+			packageRoots.set(segments[0], root);
+			variables.set(segments[0], root);
+		}
+		var node:Dynamic = root;
+		for (i in 1...length - 1) {
+			var next:Dynamic = Reflect.field(node, segments[i]);
+			if (next == null) {
+				next = {};
+				Reflect.setField(node, segments[i], next);
+			}
+			node = next;
+		}
+		Reflect.setField(node, segments[length - 1], type);
 	}
 }
