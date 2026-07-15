@@ -16,6 +16,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEven
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -25,6 +27,13 @@ import org.junit.Test;
  * afterwards (execution continues to a clean exit).
  */
 public class EvalCallIntegrationTest extends DapIntegrationTestBase {
+
+  @Before
+  public void requireX64() throws Exception {
+    // the trampoline is x86-64 machine code; on a 32-bit VM the adapter
+    // refuses eval-calls with a clear error instead of injecting garbage
+    Assume.assumeFalse("eval-calls are x86-64 only - skipping on x86 hl", isX86Hl());
+  }
 
   @Test
   public void callsFunctionsAndReturnsValues() throws Exception {

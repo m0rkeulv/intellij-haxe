@@ -100,8 +100,8 @@ class ValueReader {
 				// (captured-and-mutated closure locals are the common case)
 				read(ptr, inner);
 			case HNull(inner):
-				// a box: the wrapped value sits right after the type header
-				read(ptr.offset(align.ptr), inner);
+				// a box (vdynamic-shaped): the payload union is @ +8 on BOTH bitnesses
+				read(ptr.offset(align.dynPayload), inner);
 			case HDyn:
 				readDynamic(ptr);
 			case HFun(_), HMethod(_):
@@ -244,7 +244,7 @@ class ValueReader {
 			default:
 				Tools.isDynamic(resolved)
 					? decodePointed(ptr, resolved)
-					: read(ptr.offset(align.ptr), resolved);
+					: read(ptr.offset(align.dynPayload), resolved);
 		}
 	}
 
@@ -300,7 +300,7 @@ class ValueReader {
 	public function previewThrownDynamic(ptr:Pointer):Null<String> {
 		var resolved = runtimeTypes == null ? null : runtimeTypes.typeAt(mem.readPointer(ptr));
 		if (resolved != null && resolved.match(HBytes)) {
-			var text = nativeUtf16At(mem.readPointer(ptr.offset(align.ptr)));
+			var text = nativeUtf16At(mem.readPointer(ptr.offset(align.dynPayload)));
 			if (text != null) {
 				return text;
 			}

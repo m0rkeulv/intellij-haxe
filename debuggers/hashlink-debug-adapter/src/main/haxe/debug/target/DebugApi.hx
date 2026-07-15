@@ -47,4 +47,11 @@ interface DebugApi {
 
 	/** Write a CPU register. */
 	function writeRegister(pid:Int, threadId:Int, register:Register, value:Pointer):Bool;
+
+	/**
+	 * Tell the api the DEBUGGEE's bitness (from the handshake). Selects the
+	 * thread-context layout register reads/writes use — with the wrong one a
+	 * 32-bit debuggee's registers read as garbage and writes corrupt the thread.
+	 */
+	function setTargetIs64(is64:Bool):Void;
 }

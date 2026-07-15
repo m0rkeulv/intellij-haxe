@@ -78,7 +78,7 @@ class ValueWriter {
 			throw new DebugError('Cannot assign to "' + target.name
 				+ '" because it is currently null (allocating a new boxed value is not supported)');
 		}
-		return {name: target.name, address: box.offset(align.ptr), type: inner};
+		return {name: target.name, address: box.offset(align.dynPayload), type: inner};
 	}
 
 	/**
@@ -232,7 +232,7 @@ class ValueWriter {
 				+ '" in place (currently ' + (boxed == null ? "unknown" : ValueReader.typeName(boxed))
 				+ "; allocating a new boxed value is not supported)");
 		}
-		writePayload(box.offset(align.ptr));
+		writePayload(box.offset(align.dynPayload));
 	}
 
 	function readNumericAsInt(source:WriteTarget):Int64 {

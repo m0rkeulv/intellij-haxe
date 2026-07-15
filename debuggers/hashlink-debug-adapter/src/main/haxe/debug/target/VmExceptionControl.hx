@@ -82,7 +82,8 @@ class VmExceptionControl {
 		if (count <= 0 || count > MAX_THREADS) {
 			return null;
 		}
-		var array = mem.readPointer(registryPtr.offset(ptr));
+		// int count + bool + padding put the array pointer @ +8 on BOTH bitnesses
+		var array = mem.readPointer(registryPtr.offset(8));
 		if (array.isNull()) {
 			return null;
 		}

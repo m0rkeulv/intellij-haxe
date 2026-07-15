@@ -32,7 +32,6 @@ class RuntimeTypes {
 	static inline var KNULL = 19;
 	static inline var KSTRUCT = 21;
 	static inline var KGUID = 23;
-	static inline var OBJ_NAME_OFFSET = 16; // hl_type_obj: 3 x i32 + pad
 	static inline var MAX_NAME_CHARS = 256;
 
 	static final PRIMITIVES:Array<HLType> = [HVoid, HUi8, HUi16, HI32, HI64, HF32, HF64, HBool, HBytes, HDyn];
@@ -98,9 +97,12 @@ class RuntimeTypes {
 		return mem.readPointer(Int64.add(typePtr, Int64.ofInt(mem.pointerSize)));
 	}
 
-	// name pointer for HOBJ/HSTRUCT lives inside hl_type_obj
+	// name pointer for HOBJ/HSTRUCT lives inside hl_type_obj: 3 x i32 then the
+	// uchar* name — padded to the POINTER's alignment, so @ +16 on 64-bit but
+	// @ +12 on 32-bit
 	function offsetName(objData:Pointer):Pointer {
-		return mem.readPointer(Int64.add(objData, Int64.ofInt(OBJ_NAME_OFFSET)));
+		var nameOffset = mem.pointerSize == 8 ? 16 : 12;
+		return mem.readPointer(Int64.add(objData, Int64.ofInt(nameOffset)));
 	}
 
 	// null-terminated UCS-2, capped; a failed/zeroed read yields "" which simply

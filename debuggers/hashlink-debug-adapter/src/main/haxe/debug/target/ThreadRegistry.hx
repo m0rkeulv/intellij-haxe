@@ -13,7 +13,8 @@ import haxe.Int64;
  *  - NOT compiled with thread support: there is no registry to walk; the
  *    process has a single thread — reported as one entry from the stopped id.
  *  - compiled with thread support: the registry is `count` (i32 @ +0) followed
- *    by an array of `hl_thread_info*` @ +ptr; each info has its OS tid @ +0,
+ *    by an array of `hl_thread_info*` @ +8 (int + bool + padding, so +8 on
+ *    BOTH bitnesses); each info has its OS tid @ +0,
  *    a flags word @ `ptr*6 + 8` (bit 16 = invisible, skipped), and — only on
  *    HL runtime >= 1.13 — a 128-byte UTF-8 name @ `ptr*6 + 16`.
  *
@@ -64,7 +65,9 @@ class ThreadRegistry {
 		if (count <= 0 || count > MAX_THREADS) {
 			return [];
 		}
-		var array = mem.readPointer(registryPtr.offset(ptr));
+		// hl_threads_info: int count; bool stopping_world; hl_thread_info **threads
+		// — int + bool + padding puts the array pointer @ +8 on BOTH bitnesses
+		var array = mem.readPointer(registryPtr.offset(8));
 		if (array.isNull()) {
 			return [];
 		}

@@ -998,11 +998,59 @@ Pinned by `VmExceptionIntegrationTest` (stops at the null-access line with
 filter does NOT catch it) and `StackWalkerTest` (C-entry seeding via both a C
 and a direct-JIT caller).
 
+## 10. VM version & bitness compatibility
+
+The adapter reads raw debuggee memory everywhere, so struct-layout drift
+across HL versions/bitnesses is a standing risk. The policy: NEVER crash,
+freeze, or corrupt the debuggee — degrade to missing names/values or refuse a
+feature with a clear message. No per-version code branches; sane fallbacks.
+
+Run the whole suite against any HL build with
+`gradlew :debuggers:hashlink-debug-adapter:test -PhashlinkBin=<path\to\hl.exe>`
+(tests spawn BOTH the adapter and the debuggee on that executable). Verified
+matrix (adapter + fixtures compiled with the current Haxe):
+
+| HL build | Result |
+|---|---|
+| 1.15.0 win64 (pinned) | all pass |
+| 1.16 nightly win64 | all pass (its stack capture adds C frames that stay opaque `hl_symbol @ 0x..` — allowed) |
+| 1.16 nightly win32 | pass; x86-64-only features skip (eval-calls, register-arg caveat) |
+| 1.13.0 win64 | all pass |
+| 1.9.0 | VM refuses to LOAD current-Haxe bytecode (`Failed to load function std@exception_stack_raw`) — clean fatal, nothing to degrade to |
+
+The 32-bit lessons (each was a live bug):
+
+- **The adapter itself must load on HL32**: native 64-bit ints are rejected by
+  the 32-bit VM at module load. `build.hxml` compiles with `-D hl-legacy32`
+  (the legacy Int64 representation, accepted by both VMs) — one artifact
+  serves both bitnesses. Without it: "using 64 bit ints that are not
+  supported by the HL32".
+- **Register reads/writes take the DEBUGGEE's bitness** (`debug.c`'s `is64`
+  selects CONTEXT vs WOW64_CONTEXT). Passing the wrong one reads garbage EIP
+  (empty stacks) and register WRITES corrupt the thread context — the debuggee
+  crashes on the first continue past an INT3. `api.setTargetIs64(jit.is64)`
+  right after the handshake; never hardcode.
+- **Not every offset is pointer-relative.** Structs whose C source pads
+  explicitly are at FIXED offsets on both bitnesses: a vdynamic's payload
+  union @ +8 (`Align.dynPayload` — hl.h `int __pad` on 32-bit), the
+  hl_threads_info thread array @ +8 (int + bool + padding), varray data @
+  ptr*2+8. Others genuinely shrink: hl_type_obj's name @ +16 on 64-bit but
+  @ +12 on 32-bit (3 ints + pointer alignment). When adding a new raw read,
+  check hl.h for `#ifndef HL_64` padding before reaching for `align.ptr`.
+- **JIT code patterns differ**: x86 emits `mov eax, imm32; call eax`
+  (`MachineCode.movEaxImmThenCall`) where x64 emits `mov rax, imm64; call
+  rax`. Address-mining resolvers must branch on `jit.is64`.
+- **Eval-calls are x86-64 only**: CallEmitter emits x64 machine code;
+  `callInDebuggee` refuses upfront on a 32-bit debuggee (clear DebugError)
+  instead of injecting garbage. Their tests skip via
+  `DapIntegrationTestBase.isX86Hl()` (PE-header check).
+
 ## Quick reference
 
 | Concern | Rule |
 |---|---|
 | VM-raised exceptions | OThrow traps miss null access/bounds/cast (raised in C, no bytecode throw); the "vm" filter traps hl_throw's entry (mined from an OThrow site). Two phases: at the entry (only when [Esp] is NOT jit code) walk+park the frames and set HL_EXC_CATCH_ALL on the thread; report at hl_throw's own hl_debug_break, where exc_value holds the thrown vdynamic — decode its UTF-16 bytes for the real message ("Null access .length") |
+| VM version/bitness drift | Never crash/freeze/corrupt — degrade to missing data or a clear refusal; no per-version branches. Adapter builds with -D hl-legacy32 (loads on HL32); register access takes the DEBUGGEE's bitness (setTargetIs64); padded structs sit at FIXED offsets on both bitnesses (vdynamic payload +8, threads array +8) while hl_type_obj.name shrinks (+16 → +12) — check hl.h before using align.ptr; JIT patterns differ (mov eax,imm32 on x86); eval-calls refuse on 32-bit. Test any build via -PhashlinkBin |
 | Blocking native call on a background thread | Wrap in `hl.Gc.blocking(true/false)`; read into a preallocated buffer; allocate nothing inside the section |
 | Socket vs process/file reads | Socket reads are GC-safe; process/file reads are not |
 | Reading a variable-length VM message off a socket | Drain-then-parse (with a read timeout) or length-prefix; never over-request |

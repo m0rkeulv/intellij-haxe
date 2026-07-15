@@ -16,6 +16,14 @@ class Align {
 	public final ptr:Int;
 	public final boolSize:Int;
 
+	/**
+	 * Offset of a vdynamic's value union (a box's payload). NOT ptr-relative:
+	 * hl.h pads the 32-bit struct ("int __pad; // force align on 16 bytes for
+	 * double") so the union sits at +8 on BOTH bitnesses — reading it at +ptr
+	 * on a 32-bit debuggee reads the padding.
+	 */
+	public final dynPayload:Int = 8;
+
 	public function new(is64:Bool, boolSize4:Bool) {
 		this.is64 = is64;
 		this.ptr = is64 ? 8 : 4;

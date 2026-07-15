@@ -18,7 +18,18 @@ import haxe.io.Bytes;
  * pointer-typed value, so the same bridge applies.
  */
 class HlNativeDebugApi implements DebugApi {
+	// The DEBUGGEE's bitness, not ours: debug.c's is64 selects the thread-context
+	// layout (CONTEXT vs WOW64_CONTEXT on win64; a 32-bit libhl only has the
+	// 32-bit CONTEXT). Passing the wrong one reads garbage registers and — worse —
+	// register WRITES corrupt the thread context and crash the debuggee. True
+	// until the handshake tells us (registers are first touched after it).
+	var targetIs64:Bool = true;
+
 	public function new() {}
+
+	public function setTargetIs64(is64:Bool):Void {
+		targetIs64 = is64;
+	}
 
 	public function start(pid:Int):Bool {
 		return debug_start(pid);
@@ -55,12 +66,12 @@ class HlNativeDebugApi implements DebugApi {
 	}
 
 	public function readRegister(pid:Int, threadId:Int, register:Register):Pointer {
-		var value = debug_read_register(pid, threadId, register, true);
+		var value = debug_read_register(pid, threadId, register, targetIs64);
 		return value.address();
 	}
 
 	public function writeRegister(pid:Int, threadId:Int, register:Register, value:Pointer):Bool {
-		return debug_write_register(pid, threadId, register, hl.Bytes.fromAddress(value), true);
+		return debug_write_register(pid, threadId, register, hl.Bytes.fromAddress(value), targetIs64);
 	}
 
 	// The @:hlNative bodies below are placeholders; the linker replaces them

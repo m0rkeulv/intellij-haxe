@@ -57,7 +57,8 @@ class NativeThrowResolver {
 	}
 
 	// Reads an OThrow site's machine code and pulls hl_throw's address out of the
-	// `mov rax, imm64 ; call rax` the JIT emitted for it.
+	// `mov rax, imm64 ; call rax` the JIT emitted for it (`mov eax, imm32 ;
+	// call eax` on a 32-bit VM).
 	function mineCallSite(site:ThrowSite):Null<Pointer> {
 		var start = jit.addressOf(site.fidx, site.op);
 		var end = jit.addressOf(site.fidx, site.op + 1);
@@ -67,8 +68,10 @@ class NativeThrowResolver {
 		}
 		var code = memory.read(start, len);
 		var i = 0;
-		while (i + 12 <= len) {
-			var addr = MachineCode.movRaxImmThenCall(code, i, len);
+		while (i < len) {
+			var addr = jit.is64
+				? MachineCode.movRaxImmThenCall(code, i, len)
+				: MachineCode.movEaxImmThenCall(code, i, len);
 			if (addr != null) {
 				return addr;
 			}

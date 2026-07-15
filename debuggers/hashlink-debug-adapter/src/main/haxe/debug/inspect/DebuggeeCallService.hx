@@ -322,7 +322,7 @@ class DebuggeeCallService {
 		if (Int64.eq(box, Int64.ofInt(0))) {
 			throw new DebugError("Unable to box a value: alloc_dynamic returned null");
 		}
-		writePayload(box.offset(align.ptr)); // HDYN_VALUE = one pointer past the hl_type*
+		writePayload(box.offset(align.dynPayload)); // vdynamic payload union (@ +8 on BOTH bitnesses)
 		return {isFloat: false, bits: box};
 	}
 

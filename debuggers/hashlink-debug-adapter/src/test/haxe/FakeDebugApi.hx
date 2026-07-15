@@ -100,6 +100,10 @@ class FakeDebugApi implements DebugApi {
 		return true;
 	}
 
+	public function setTargetIs64(is64:Bool):Void {
+		// the fake's registers are plain map entries; bitness is irrelevant
+	}
+
 	static inline function memKey(address:Pointer):String {
 		return Int64.toStr(address);
 	}

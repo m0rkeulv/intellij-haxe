@@ -113,6 +113,23 @@ public abstract class DapIntegrationTestBase {
     return true;
   }
 
+  /**
+   * True when the resolved hl executable is a 32-bit (x86) build, read from its
+   * PE header. Some debugger features are x86-64 only — eval-calls inject
+   * x86-64 machine code — and the adapter refuses them with a clear error on a
+   * 32-bit VM; their tests skip there instead of failing.
+   */
+  protected boolean isX86Hl() throws IOException {
+    try (var exe = new java.io.RandomAccessFile(hlExecutable, "r")) {
+      exe.seek(0x3C);
+      int peOffset = Integer.reverseBytes(exe.readInt()); // e_lfanew, little-endian
+      exe.seek(peOffset + 4);
+      int lo = exe.read();
+      int hi = exe.read();
+      return (lo | (hi << 8)) == 0x014c; // IMAGE_FILE_MACHINE_I386
+    }
+  }
+
   @Before
   public void startAdapter() throws IOException {
     String adapter = System.getProperty("dap.adapter.hl", "");

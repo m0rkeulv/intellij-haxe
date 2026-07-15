@@ -291,6 +291,10 @@ class DebugSession {
 			// Parsing straight off the socket deadlocks against the two HL processes'
 			// send/recv buffering, and byte-at-a-time socket reads are far too slow.
 			jit = JitInfoReader.read(new BytesInput(readHandshake()));
+			// register reads/writes must use the DEBUGGEE's context layout: with the
+			// wrong bitness a 32-bit debuggee's registers read as garbage and EIP
+			// writes corrupt the thread (crash on the first continue past an INT3)
+			api.setTargetIs64(jit.is64);
 
 			if (!api.start(debuggeePid)) {
 				throw new DebugError("Failed to attach to the debuggee process");
@@ -533,6 +537,13 @@ class DebugSession {
 	 * runs longer than CALL_TIMEOUT_MS fails with the state restored.
 	 */
 	function callInDebuggee(threadId:Int, funcAddr:Pointer, args:Array<CallArg>, floatReturn:Bool):Pointer {
+		// CallEmitter emits x86-64 machine code; injecting it into a 32-bit
+		// debuggee would execute garbage. Refuse upfront with a clear message —
+		// everything else (breakpoints, stepping, variables) still works.
+		if (!jit.is64) {
+			throw new DebugError("Calling debuggee functions from the debugger is x86-64 only"
+				+ " (this program runs on a 32-bit HashLink VM)");
+		}
 		var asm = new CallEmitter(jit.winCall).build(funcAddr, args, floatReturn);
 		var asmSize = asm.length;
 

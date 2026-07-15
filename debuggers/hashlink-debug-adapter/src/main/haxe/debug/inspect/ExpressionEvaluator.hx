@@ -353,7 +353,7 @@ class ExpressionEvaluator {
 			return VNull;
 		}
 		return switch (t) {
-			case HNull(inner): evalValueAt(ptr.offset(align.ptr), inner); // box payload
+			case HNull(inner): evalValueAt(ptr.offset(align.dynPayload), inner); // box payload (@ +8 on BOTH bitnesses)
 			case HDyn: dynamicValue(ptr);
 			case HObj(p) if (p != null && p.name == "String"): VString(valueReader.stringContentAt(ptr), ptr);
 			case HObj(_): VObject(ptr, resolver.refineObjectType(ptr, t));
@@ -362,20 +362,21 @@ class ExpressionEvaluator {
 	}
 
 	// A Dynamic value: primitives live in a vdynamic box (hl_type* @0, payload
-	// one pointer past); pointer kinds ARE the value (their own header says so).
+	// union @ +8 on BOTH bitnesses); pointer kinds ARE the value (their own
+	// header says so).
 	function dynamicValue(ptr:Pointer):EvalValue {
 		var runtime = runtimeTypes.typeAt(memory.readPointer(ptr));
 		if (runtime == null) {
 			return VObject(ptr, HDyn);
 		}
 		return switch (runtime) {
-			case HUi8: VInt(Int64.ofInt(memory.readU8(ptr.offset(align.ptr))));
-			case HUi16: VInt(Int64.ofInt(memory.readU16(ptr.offset(align.ptr))));
-			case HI32: VInt(Int64.ofInt(memory.readI32(ptr.offset(align.ptr))));
-			case HI64: VInt(memory.readI64(ptr.offset(align.ptr)));
-			case HF32: VFloat(memory.readF32(ptr.offset(align.ptr)));
-			case HF64: VFloat(memory.readF64(ptr.offset(align.ptr)));
-			case HBool: VBool(memory.readU8(ptr.offset(align.ptr)) != 0);
+			case HUi8: VInt(Int64.ofInt(memory.readU8(ptr.offset(align.dynPayload))));
+			case HUi16: VInt(Int64.ofInt(memory.readU16(ptr.offset(align.dynPayload))));
+			case HI32: VInt(Int64.ofInt(memory.readI32(ptr.offset(align.dynPayload))));
+			case HI64: VInt(memory.readI64(ptr.offset(align.dynPayload)));
+			case HF32: VFloat(memory.readF32(ptr.offset(align.dynPayload)));
+			case HF64: VFloat(memory.readF64(ptr.offset(align.dynPayload)));
+			case HBool: VBool(memory.readU8(ptr.offset(align.dynPayload)) != 0);
 			case HObj(p) if (p != null && p.name == "String"): VString(valueReader.stringContentAt(ptr), ptr);
 			default: VObject(ptr, runtime);
 		}

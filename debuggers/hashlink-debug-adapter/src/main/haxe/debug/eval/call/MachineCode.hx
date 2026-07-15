@@ -35,6 +35,20 @@ class MachineCode {
 		return read64(code, at + 2);
 	}
 
+	/**
+	 * The 32-bit form of the same JIT shape: `mov eax, imm32` (`B8`, no REX)
+	 * followed by `call eax` (`FF D0`). Returns the imm32 zero-extended.
+	 */
+	public static function movEaxImmThenCall(code:Bytes, at:Int, len:Int):Null<Pointer> {
+		if (at + 7 > len || code.get(at) != 0xB8) {
+			return null;
+		}
+		if (!hasCallRax(code, at + 5, len)) {
+			return null;
+		}
+		return Int64.make(0, code.getInt32(at + 1));
+	}
+
 	// `FF D0` within a short window from `from` (skips an optional `sub rsp,imm8`).
 	public static function hasCallRax(code:Bytes, from:Int, len:Int):Bool {
 		var limit = from + 8 < len - 1 ? from + 8 : len - 1;
