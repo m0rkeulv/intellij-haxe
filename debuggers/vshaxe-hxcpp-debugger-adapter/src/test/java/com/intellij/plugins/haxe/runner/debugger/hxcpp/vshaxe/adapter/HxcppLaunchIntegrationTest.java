@@ -13,23 +13,18 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.TerminatedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponse;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.VariablesResponse;
 import java.util.List;
@@ -60,22 +55,6 @@ public class HxcppLaunchIntegrationTest extends HxcppIntegrationTestBase {
     return require(request);
   }
 
-  private StackTraceResponse stackTrace(int threadId) throws Exception {
-    StackTraceArguments arguments = new StackTraceArguments();
-    arguments.setThreadId(threadId);
-    StackTraceRequest request = new StackTraceRequest();
-    request.setArguments(arguments);
-    return require(request);
-  }
-
-  private void sendContinue(int threadId) throws Exception {
-    ContinueArguments arguments = new ContinueArguments();
-    arguments.setThreadId(threadId);
-    ContinueRequest request = new ContinueRequest();
-    request.setArguments(arguments);
-    require(request);
-  }
-
   @Test
   public void fullDebugLifecycleAgainstTheRealServer() throws Exception {
     initializeAndLaunch();
@@ -90,18 +69,16 @@ public class HxcppLaunchIntegrationTest extends HxcppIntegrationTestBase {
     require(new ConfigurationDoneRequest());
 
     // --- first hit ----------------------------------------------------------
-    StoppedEvent stopped = (StoppedEvent)awaitEvent(StoppedEvent.class);
-    int threadId = stopped.getBody().getThreadId();
+    Stop stop = awaitStopAtLine(accumulateLine);
+    int threadId = stop.threadId();
 
     ThreadsResponse threads = require(new ThreadsRequest());
     assertFalse(threads.getBody().getThreads().isEmpty());
 
-    List<StackFrame> frames = stackTrace(threadId).getBody().getStackFrames();
-    assertFalse("no stack frames", frames.isEmpty());
-    StackFrame top = frames.get(0);
+    List<StackFrame> frames = stop.frames();
+    StackFrame top = stop.top();
     assertTrue("top frame is '" + top.getName() + "', expected accumulate",
                top.getName().contains("accumulate"));
-    assertEquals(accumulateLine, top.getLine());
     assertNotNull(top.getSource());
     assertTrue(top.getSource().getPath().endsWith("Main.hx"));
 
@@ -158,16 +135,13 @@ public class HxcppLaunchIntegrationTest extends HxcppIntegrationTestBase {
 
     // --- second breakpoint hit on continue -----------------------------------
     sendContinue(threadId);
-    awaitEvent(StoppedEvent.class);
+    awaitStopAtLine(accumulateLine);
 
     // --- run-to-cursor mechanism: replace the file's set with the target ----
     int doneLine = lineOfMarker("done");
     setBreakpointLines(doneLine);
     sendContinue(threadId);
-    StoppedEvent runToStop = (StoppedEvent)awaitEvent(StoppedEvent.class);
-    StackTraceResponse runToStack = stackTrace(runToStop.getBody().getThreadId());
-    assertEquals("run-to target line not reached",
-                 doneLine, runToStack.getBody().getStackFrames().get(0).getLine());
+    awaitStopAtLine(doneLine);
 
     // --- clear breakpoints, run to completion --------------------------------
     setBreakpointLines(/* none */);
@@ -194,9 +168,9 @@ public class HxcppLaunchIntegrationTest extends HxcppIntegrationTestBase {
 
     require(new ConfigurationDoneRequest());
 
-    StoppedEvent stopped = (StoppedEvent)awaitEvent(StoppedEvent.class);
-    int threadId = stopped.getBody().getThreadId();
-    int frameId = stackTrace(threadId).getBody().getStackFrames().get(0).getId();
+    Stop stop = awaitStopAtLine(lineOfMarker("accumulate"));
+    int threadId = stop.threadId();
+    int frameId = stop.top().getId();
     assertEquals("stopped on the wrong iteration", "20",
                  evaluate("v", frameId).getBody().getResult().trim());
     // acc after two un-stopped iterations: 0 + 0*2 + 10*2 = 20

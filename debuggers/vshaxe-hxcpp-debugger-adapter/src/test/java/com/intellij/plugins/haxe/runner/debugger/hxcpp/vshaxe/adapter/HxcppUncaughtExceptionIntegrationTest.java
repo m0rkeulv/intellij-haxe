@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
@@ -10,9 +9,6 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.Configura
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,18 +36,11 @@ public class HxcppUncaughtExceptionIntegrationTest extends HxcppIntegrationTestB
     require(new ConfigurationDoneRequest());
 
     // the debugger stops AT the uncaught throw, whatever the reason label
-    StoppedEvent stopped = (StoppedEvent)awaitEvent(StoppedEvent.class);
-    StackTraceArguments stackArguments = new StackTraceArguments();
-    stackArguments.setThreadId(stopped.getBody().getThreadId());
-    StackTraceRequest stackRequest = new StackTraceRequest();
-    stackRequest.setArguments(stackArguments);
-    StackTraceResponse stack = require(stackRequest);
-    assertEquals("not stopped at the throw line",
-                 lineOfMarker("throw"), stack.getBody().getStackFrames().get(0).getLine());
+    Stop stop = awaitStopAtLine(lineOfMarker("throw"));
 
     // releasing it lets the throw unwind: an exception-reason stop may follow
     // (continue past it), then the process dies printing the Critical Error
-    sendContinue(stopped.getBody().getThreadId());
+    sendContinue(stop.threadId());
     boolean sawExceptionStop = false;
     long deadline = System.currentTimeMillis() + TIMEOUT;
     while (System.currentTimeMillis() < deadline) {
@@ -74,14 +63,6 @@ public class HxcppUncaughtExceptionIntegrationTest extends HxcppIntegrationTestB
     assertTrue("the thrown text should surface somewhere (exception stop or Critical Error output); "
                + "sawExceptionStop=" + sawExceptionStop + ", output:\n" + output(),
                sawExceptionStop || output().contains("kaboom"));
-  }
-
-  private void sendContinue(int threadId) throws Exception {
-    ContinueArguments arguments = new ContinueArguments();
-    arguments.setThreadId(threadId);
-    ContinueRequest request = new ContinueRequest();
-    request.setArguments(arguments);
-    require(request);
   }
 
   private void continueQuietly(int threadId) {

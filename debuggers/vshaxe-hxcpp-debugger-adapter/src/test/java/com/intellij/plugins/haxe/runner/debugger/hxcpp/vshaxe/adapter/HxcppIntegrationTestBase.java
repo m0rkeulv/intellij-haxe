@@ -10,12 +10,19 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Source;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.SourceBreakpoint;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -126,6 +133,58 @@ abstract class HxcppIntegrationTestBase {
     synchronized (debuggeeOutput) {
       return debuggeeOutput.toString();
     }
+  }
+
+  /** A stop with its (already fetched) stack; frames are never empty. */
+  protected record Stop(StoppedEvent event, List<StackFrame> frames) {
+    int threadId() {
+      return event.getBody().getThreadId();
+    }
+
+    StackFrame top() {
+      return frames.get(0);
+    }
+  }
+
+  /**
+   * Awaits a stop whose TOP frame is at {@code line} of the fixture source.
+   * Stops elsewhere — observed on slow CI runners as the debuggee's startup
+   * hold surfacing late, with a stack of only debugger-internal frames — are
+   * released with a continue and waiting resumes, so a test never mistakes
+   * such a stray stop for its breakpoint hit.
+   */
+  protected Stop awaitStopAtLine(int line) throws Exception {
+    StringBuilder seen = new StringBuilder();
+    for (int attempt = 0; attempt < 5; attempt++) {
+      StoppedEvent stopped = (StoppedEvent)awaitEvent(StoppedEvent.class);
+      List<StackFrame> frames = stackTrace(stopped.getBody().getThreadId()).getBody().getStackFrames();
+      if (!frames.isEmpty() && frames.get(0).getLine() == line) {
+        return new Stop(stopped, frames);
+      }
+      seen.append("\n  reason=").append(stopped.getBody().getReason())
+        .append(" threadId=").append(stopped.getBody().getThreadId())
+        .append(" top=").append(frames.isEmpty() ? "<no frames>"
+                                                 : frames.get(0).getName() + ":" + frames.get(0).getLine());
+      sendContinue(stopped.getBody().getThreadId());
+    }
+    throw new AssertionError("No stop at line " + line + "; stray stops seen:" + seen
+                             + "\ndebuggee output so far:\n" + output());
+  }
+
+  protected StackTraceResponse stackTrace(int threadId) throws Exception {
+    StackTraceArguments arguments = new StackTraceArguments();
+    arguments.setThreadId(threadId);
+    StackTraceRequest request = new StackTraceRequest();
+    request.setArguments(arguments);
+    return require(request);
+  }
+
+  protected void sendContinue(int threadId) throws Exception {
+    ContinueArguments arguments = new ContinueArguments();
+    arguments.setThreadId(threadId);
+    ContinueRequest request = new ContinueRequest();
+    request.setArguments(arguments);
+    require(request);
   }
 
   /** Sends the request and fails with the server's error message rather than a cast error. */
