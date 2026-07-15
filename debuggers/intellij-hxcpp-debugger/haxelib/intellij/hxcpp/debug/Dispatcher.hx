@@ -90,13 +90,13 @@ class Dispatcher {
 		}
 	}
 
-	// ThreadStatus -> DAP stopped reason. BREAK_IMMEDIATE covers both pause and
+	// STATUS_* -> DAP stopped reason. BREAK_IMMEDIATE covers both pause and
 	// step landings in the runtime; M3 (run control) tells them apart by
 	// tracking which one it asked for.
 	static function stopReason(status:Int):String {
 		return switch (status) {
-			case ThreadStatus.STOPPED_BREAKPOINT: "breakpoint";
-			case ThreadStatus.STOPPED_UNCAUGHT_EXCEPTION, ThreadStatus.STOPPED_CRITICAL_ERROR: "exception";
+			case DebugThread.STATUS_STOPPED_BREAKPOINT: "breakpoint";
+			case DebugThread.STATUS_STOPPED_UNCAUGHT_EXCEPTION, DebugThread.STATUS_STOPPED_CRITICAL_ERROR: "exception";
 			default: "pause";
 		}
 	}

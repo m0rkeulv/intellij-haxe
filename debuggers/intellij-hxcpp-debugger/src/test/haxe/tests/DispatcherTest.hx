@@ -39,8 +39,8 @@ class DispatcherTest {
 	static function threadsComeFromTheDebuggerApi(assert:Assert):Void {
 		var t = make();
 		t.api.cannedThreads = [
-			{number: 1, status: ThreadStatus.STOPPED_BREAKPOINT, breakpoint: 3, criticalErrorDescription: null, stack: []},
-			{number: 5, status: ThreadStatus.RUNNING, breakpoint: -1, criticalErrorDescription: null, stack: []}
+			new DebugThread(1, DebugThread.STATUS_STOPPED_BREAKPOINT, 3),
+			new DebugThread(5, DebugThread.STATUS_RUNNING)
 		];
 		t.dispatcher.handleRequest(request("threads", 7));
 		var body = t.sent[0].body;
@@ -71,9 +71,9 @@ class DispatcherTest {
 
 	static function runtimeEventsMapToDapEvents(assert:Assert):Void {
 		var t = make();
-		t.dispatcher.handleDebugEvent(ThreadStopped(2, ThreadStatus.STOPPED_BREAKPOINT, null));
-		t.dispatcher.handleDebugEvent(ThreadStopped(2, ThreadStatus.STOPPED_UNCAUGHT_EXCEPTION, null));
-		t.dispatcher.handleDebugEvent(ThreadStopped(2, ThreadStatus.STOPPED_BREAK_IMMEDIATE, null));
+		t.dispatcher.handleDebugEvent(ThreadStopped(2, DebugThread.STATUS_STOPPED_BREAKPOINT, null));
+		t.dispatcher.handleDebugEvent(ThreadStopped(2, DebugThread.STATUS_STOPPED_UNCAUGHT_EXCEPTION, null));
+		t.dispatcher.handleDebugEvent(ThreadStopped(2, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, null));
 		t.dispatcher.handleDebugEvent(ThreadCreated(4));
 		t.dispatcher.handleDebugEvent(ThreadTerminated(4));
 		assert.equals("breakpoint", t.sent[0].body.reason, "breakpoint stop reason");
