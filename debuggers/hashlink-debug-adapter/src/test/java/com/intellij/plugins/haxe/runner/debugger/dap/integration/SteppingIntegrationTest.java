@@ -81,4 +81,34 @@ public class SteppingIntegrationTest extends DapIntegrationTestBase {
 
     request(new DisconnectRequest());
   }
+
+  @Test
+  public void stepOverACaughtThrowLandsInTheCatchBlock() throws Exception {
+    // Regression (user-reported): stepping over `throw` inside a try left the
+    // function entirely instead of landing in the catch. The CFG treated OThrow
+    // as terminal; the VM actually longjmps to the enclosing OTrap's handler,
+    // so the step planted no temp at the catch and ran through it to the caller.
+    // Uncaught.hx: line 11 `throw "caught-one"` inside try, catch body prints
+    // on line 13.
+    org.junit.Assume.assumeTrue("uncaught fixture not built - skipping", uncaughtFixtureHl != null);
+    initialize();
+    assertTrue("launch", launch(uncaughtFixtureHl.toString()).isSuccess());
+    assertTrue("breakpoint on the caught throw",
+               setBreakpoints(fixtureSrcDir.resolve("Uncaught.hx").toString(), 11).isSuccess());
+    assertTrue("configurationDone",
+               request(new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest()).isSuccess());
+    StoppedEvent atThrow = awaitStopped();
+    int threadId = atThrow.getBody().getThreadId();
+
+    assertTrue("next accepted", request(nextRequest(threadId)).isSuccess());
+    StoppedEvent landed = awaitStopped();
+
+    assertEquals("step", landed.getBody().getReason());
+    var frame = stackTrace(landed.getBody().getThreadId()).getBody().getStackFrames().get(0);
+    assertTrue("still in Uncaught.main (was " + frame.getName() + ")", frame.getName().endsWith("main"));
+    assertTrue("landed in the catch block, lines 12-14 (was line " + frame.getLine() + ")",
+               frame.getLine() >= 12 && frame.getLine() <= 14);
+
+    request(new DisconnectRequest());
+  }
 }

@@ -11,6 +11,8 @@ class CodeGraphTest {
 		stepTargetsFindsCallsAndLineChange(assert);
 		stepTargetsStopsAtLineChangeAndBranches(assert);
 		stepTargetsDetectsReturn(assert);
+		guardedThrowFlowsToTheCatchHandler(assert);
+		unguardedThrowIsTerminal(assert);
 	}
 
 	// A small synthetic function:
@@ -85,5 +87,47 @@ class CodeGraphTest {
 		var t = g.stepTargets(4, 12, lineOf);
 		assert.equals(0, t.lineChangeOps.length, "no other line reachable from the last line");
 		assert.isTrue(t.returns, "ORet on the same line marks a return");
+	}
+
+	// try { throw } catch { ... } — the shape of the reported bug:
+	//  0 OTrap(end=3) line 20   handler at 0+1+3 = 4
+	//  1 OString      line 21   (the throw line: build the value)
+	//  2 OThrow       line 21   guarded -> flows to the handler, NOT out
+	//  3 OEndTrap     line 22   (normal exit, jumped over on throw)
+	//  4 OMov         line 23   catch handler (trace line)
+	//  5 ORet         line 24
+	static function tryCatchOps():Array<Opcode> {
+		return [
+			OTrap(0, 3),
+			OString(0, 0),
+			OThrow(0),
+			OEndTrap(true),
+			OMov(0, 0),
+			ORet(0)
+		];
+	}
+
+	static var tryCatchLines = [20, 21, 21, 22, 23, 24];
+
+	static function guardedThrowFlowsToTheCatchHandler(assert:Assert):Void {
+		var g = new CodeGraph(tryCatchOps());
+		assert.equals("4", g.successors(2).join(","), "guarded OThrow's successor is the catch handler");
+		assert.isFalse(g.isTerminal(2), "a guarded throw does not leave the function");
+
+		// stepping from the throw line must land on the catch handler's line,
+		// and must NOT claim the function returns (the reported bug: no temp at
+		// the catch, so the step ran through catch and out to the caller)
+		var t = g.stepTargets(1, 21, op -> op >= 0 && op < tryCatchLines.length ? tryCatchLines[op] : 0);
+		assert.equals("4", t.lineChangeOps.join(","), "step from the throw line lands at the catch handler");
+		assert.isFalse(t.returns, "a caught throw is not a function exit");
+	}
+
+	static function unguardedThrowIsTerminal(assert:Assert):Void {
+		var ops:Array<Opcode> = [OString(0, 0), OThrow(0)];
+		var g = new CodeGraph(ops);
+		assert.equals("", g.successors(1).join(","), "unguarded OThrow has no successors");
+		assert.isTrue(g.isTerminal(1), "unguarded throw leaves the function");
+		var t = g.stepTargets(0, 30, _ -> 30);
+		assert.isTrue(t.returns, "stepping over an unguarded throw may leave the function");
 	}
 }

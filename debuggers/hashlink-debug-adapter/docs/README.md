@@ -199,8 +199,13 @@ then just resuming is both faster and simpler.
 On a step, from the current `(function, opcode, line)`:
 - `CodeGraph` walks the function's opcodes following successors. A jump's target is
   `opIndex + 1 + offset` (conditional jumps add both the fall-through and the
-  target; `OSwitch` adds every case; `ORet`/`OThrow` are terminal). The walk is
-  guarded by a visited set so loops (back-edges) terminate.
+  target; `OSwitch` adds every case; `ORet` is terminal). An `OThrow` inside a
+  `try` is NOT terminal: the VM longjmps to the enclosing `OTrap`'s catch
+  handler, so its successors are the enclosing handlers — treating it as
+  terminal planted no temp at the catch, and stepping over a caught `throw` ran
+  through the catch block and out of the function (user-reported). Unguarded
+  throws stay terminal. The walk is guarded by a visited set so loops
+  (back-edges) terminate.
 - **next (step over):** plant a temp INT3 at the first opcode of every reachable
   line other than the current one, and — if a return is reachable — at the caller's
   return address. Calls are *not* entered; the call runs and returns to the next

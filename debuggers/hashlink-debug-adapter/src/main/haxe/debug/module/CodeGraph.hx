@@ -7,15 +7,22 @@ import format.hl.Data.Opcode;
  * a source-level step should plant temporary breakpoints.
  *
  * Successor arithmetic (verified against hashlink and vshaxe/hashlink-debugger):
- * a jump's target opcode is `opIndex + 1 + offset`. Returns/throws are terminal.
- * Successor sets are deliberately over-approximated (an unreachable target only
- * costs a temporary breakpoint that is cleaned up), never under-approximated.
+ * a jump's target opcode is `opIndex + 1 + offset`. Returns are terminal; a
+ * throw inside a `try` transfers to the enclosing OTrap's catch handler (the VM
+ * longjmps there — it does NOT leave the function), so its successors are the
+ * enclosing handlers and it is terminal only when unguarded. Successor sets are
+ * deliberately over-approximated (an unreachable target only costs a temporary
+ * breakpoint that is cleaned up), never under-approximated.
  *
  * Pure and dependency-light: operates on an opcode array plus a `lineOf` callback,
  * so it is exercised with synthetic opcodes under the interpreter.
  */
 class CodeGraph {
 	final ops:Array<Opcode>;
+	// OTrap protection ranges (same derivation as TryRegions): OTrap at `start`
+	// with offset `d` guards ops start < op <= start+d; its catch handler is at
+	// start+d+1. Lazily built on the first throw-successor query.
+	var trapRegions:Null<Array<{start:Int, end:Int}>> = null;
 
 	public function new(ops:Array<Opcode>) {
 		this.ops = ops;
@@ -32,8 +39,12 @@ class CodeGraph {
 		}
 		var next = op + 1;
 		var result:Array<Int> = switch (ops[op]) {
-			case ORet(_), OThrow(_), ORethrow(_):
+			case ORet(_):
 				[];
+			case OThrow(_), ORethrow(_):
+				// caught by an enclosing try: control resumes at its catch
+				// handler(s); with none, the throw leaves the function (terminal)
+				catchHandlers(op);
 			case OJAlways(d):
 				[next + d];
 			case OJTrue(_, d), OJFalse(_, d), OJNull(_, d), OJNotNull(_, d):
@@ -71,15 +82,33 @@ class CodeGraph {
 		}
 	}
 
-	/** True if opcode `op` ends the function (return/throw). */
+	/** True if opcode `op` ends the function (a return, or an UNguarded throw). */
 	public function isTerminal(op:Int):Bool {
 		if (op < 0 || op >= ops.length) {
 			return false;
 		}
 		return switch (ops[op]) {
-			case ORet(_), OThrow(_), ORethrow(_): true;
+			case ORet(_): true;
+			case OThrow(_), ORethrow(_): catchHandlers(op).length == 0;
 			default: false;
 		}
+	}
+
+	// Catch-handler ops of every try region enclosing `op`. The runtime truth is
+	// the VM's trap STACK (innermost active handler); taking every statically
+	// enclosing region over-approximates, which stepping tolerates.
+	function catchHandlers(op:Int):Array<Int> {
+		if (trapRegions == null) {
+			trapRegions = [];
+			for (i in 0...ops.length) {
+				switch (ops[i]) {
+					case OTrap(_, end):
+						trapRegions.push({start: i, end: i + end});
+					default:
+				}
+			}
+		}
+		return [for (r in trapRegions) if (op > r.start && op <= r.end) r.end + 1];
 	}
 
 	/**
