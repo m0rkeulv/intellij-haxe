@@ -1,6 +1,7 @@
 package debug.values;
 
 import debug.Pointer;
+import debug.layout.Align;
 import debug.target.MemoryReader;
 
 import format.hl.Data.HLType;
@@ -10,15 +11,17 @@ import haxe.Int64;
  * Resolves a runtime `hl_type*` (found in value headers: object/vdynamic/venum
  * headers, a varray's element type) back to a module HLType.
  *
- * hl_type layout (64-bit): kind i32 @ +0, kind-specific data pointer @ +8.
+ * hl_type layout: kind i32 @ +0, kind-specific data pointer @ +ptr.
  * - primitive kinds map directly (format HLType constructor order matches the
  *   C hl_type_kind indices exactly);
- * - HOBJ/HSTRUCT: data -> hl_type_obj { i32 nfields/nproto/nbindings, pad,
- *   uchar* name @ +16 } -> resolve the UCS-2 name against the module's types;
+ * - HOBJ/HSTRUCT: data -> hl_type_obj { i32 nfields/nproto/nbindings, then the
+ *   uchar* name at Align.objTypeName } -> resolve the UCS-2 name against the
+ *   module's types;
  * - HENUM: data -> hl_type_enum { uchar* name @ +0 } -> resolve by name;
  * - HNULL/HREF: data is the wrapped hl_type*.
- * Anything unknown or unresolvable returns null; callers fall back to the
- * static (bytecode) type.
+ * All offsets come from the {@link debug.layout.Align} arch descriptor. Anything
+ * unknown or unresolvable returns null; callers fall back to the static
+ * (bytecode) type.
  */
 class RuntimeTypes {
 	static inline var KFUN = 10;
@@ -37,11 +40,13 @@ class RuntimeTypes {
 	static final PRIMITIVES:Array<HLType> = [HVoid, HUi8, HUi16, HI32, HI64, HF32, HF64, HBool, HBytes, HDyn];
 
 	final mem:MemoryReader;
+	final align:Align;
 	final resolveName:String->Null<HLType>;
 	final cache:Map<String, HLType> = new Map(); // keyed by the hl_type* address
 
-	public function new(mem:MemoryReader, resolveName:String->Null<HLType>) {
+	public function new(mem:MemoryReader, align:Align, resolveName:String->Null<HLType>) {
 		this.mem = mem;
+		this.align = align;
 		this.resolveName = resolveName;
 	}
 
@@ -94,15 +99,12 @@ class RuntimeTypes {
 	}
 
 	function dataPtr(typePtr:Pointer):Pointer {
-		return mem.readPointer(Int64.add(typePtr, Int64.ofInt(mem.pointerSize)));
+		return mem.readPointer(Int64.add(typePtr, Int64.ofInt(align.ptr)));
 	}
 
-	// name pointer for HOBJ/HSTRUCT lives inside hl_type_obj: 3 x i32 then the
-	// uchar* name — padded to the POINTER's alignment, so @ +16 on 64-bit but
-	// @ +12 on 32-bit
+	// name pointer for HOBJ/HSTRUCT lives inside hl_type_obj (Align.objTypeName)
 	function offsetName(objData:Pointer):Pointer {
-		var nameOffset = mem.pointerSize == 8 ? 16 : 12;
-		return mem.readPointer(Int64.add(objData, Int64.ofInt(nameOffset)));
+		return mem.readPointer(Int64.add(objData, Int64.ofInt(align.objTypeName)));
 	}
 
 	// null-terminated UCS-2, capped; a failed/zeroed read yields "" which simply

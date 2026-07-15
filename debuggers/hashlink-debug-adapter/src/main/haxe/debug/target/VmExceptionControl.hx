@@ -11,9 +11,9 @@ import debug.layout.Align;
  * thrown value is finally readable (it is unreadable at hl_throw's ENTRY — the
  * argument registers are not exposed by HL's debug API).
  *
- * Field offsets follow the hld layout already empirically pinned by
- * {@see ThreadRegistry}: thread id @ +0, exc_value @ ptr*5 + 8, flags (i32,
- * little-endian — both bits live in its first byte) @ ptr*6 + 8.
+ * All struct offsets come from the {@link debug.layout.Align} arch descriptor
+ * (thread id @ +0, exc_value/flags in the ptr-relative tail); the flags word is
+ * an i32 whose two bits both live in its first little-endian byte.
  */
 class VmExceptionControl {
 	static inline var HL_EXC_CATCH_ALL = 2;
@@ -23,14 +23,14 @@ class VmExceptionControl {
 	final api:DebugApi;
 	final pid:Int;
 	final mem:MemoryReader;
-	final ptr:Int;
+	final align:Align;
 	final registryPtr:Pointer;
 
 	public function new(api:DebugApi, pid:Int, mem:MemoryReader, align:Align, registryPtr:Pointer) {
 		this.api = api;
 		this.pid = pid;
 		this.mem = mem;
-		this.ptr = align.ptr;
+		this.align = align;
 		this.registryPtr = registryPtr;
 	}
 
@@ -67,7 +67,7 @@ class VmExceptionControl {
 		if (info == null) {
 			return null;
 		}
-		var value = mem.readPointer(info.offset(ptr * 5 + 8));
+		var value = mem.readPointer(info.offset(align.threadExcValue));
 		return value.isNull() ? null : value;
 	}
 
@@ -82,13 +82,12 @@ class VmExceptionControl {
 		if (count <= 0 || count > MAX_THREADS) {
 			return null;
 		}
-		// int count + bool + padding put the array pointer @ +8 on BOTH bitnesses
-		var array = mem.readPointer(registryPtr.offset(8));
+		var array = mem.readPointer(registryPtr.offset(align.threadsArray));
 		if (array.isNull()) {
 			return null;
 		}
 		for (i in 0...count) {
-			var info = mem.readPointer(array.offset(ptr * i));
+			var info = mem.readPointer(array.offset(align.ptr * i));
 			if (!info.isNull() && mem.readI32(info) == threadId) {
 				return info;
 			}
@@ -101,13 +100,13 @@ class VmExceptionControl {
 	// read-modify-write cannot race the debuggee.
 	function readFlagsByte(info:Pointer):Int {
 		var buf = haxe.io.Bytes.alloc(1);
-		api.readMemory(pid, info.offset(ptr * 6 + 8), buf, 1);
+		api.readMemory(pid, info.offset(align.threadFlags), buf, 1);
 		return buf.get(0);
 	}
 
 	function writeFlagsByte(info:Pointer, value:Int):Void {
 		var buf = haxe.io.Bytes.alloc(1);
 		buf.set(0, value & 0xFF);
-		api.writeMemory(pid, info.offset(ptr * 6 + 8), buf, 1);
+		api.writeMemory(pid, info.offset(align.threadFlags), buf, 1);
 	}
 }

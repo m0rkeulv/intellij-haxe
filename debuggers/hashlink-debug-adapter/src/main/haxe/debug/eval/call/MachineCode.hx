@@ -21,6 +21,15 @@ class MachineCode {
 	public static inline var MOV_RDI = 0xBF48; // 48 BF : mov rdi, imm64 (SysV arg0)
 
 	/**
+	 * Arch-selected mining of a native call site: `mov rax, imm64; call rax` on
+	 * x86-64, `mov eax, imm32; call eax` on x86. The single entry callers use so
+	 * they never branch on bitness themselves.
+	 */
+	public static function mineMovImmThenCall(code:Bytes, at:Int, len:Int, is64:Bool):Null<Pointer> {
+		return is64 ? movRaxImmThenCall(code, at, len) : movEaxImmThenCall(code, at, len);
+	}
+
+	/**
 	 * If `code[at]` begins `mov rax, imm64` and a `call rax` follows within a
 	 * few bytes (skipping an optional shadow-space `sub rsp`), returns the
 	 * imm64 (the called address); otherwise null.

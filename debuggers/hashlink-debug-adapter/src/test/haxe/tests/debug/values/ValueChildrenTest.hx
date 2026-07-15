@@ -57,7 +57,7 @@ class ValueChildrenTest {
 		reader.referenceAllocator = (_, _) -> 42; // any nonzero: mark expandable
 		var vc = new ValueChildren(mem, align, reader, new ObjectLayout(align));
 		if (resolve != null) {
-			vc.runtimeTypes = new RuntimeTypes(mem, resolve);
+			vc.runtimeTypes = new RuntimeTypes(mem, align, resolve);
 		}
 		return vc;
 	}

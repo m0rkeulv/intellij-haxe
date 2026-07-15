@@ -307,10 +307,11 @@ class DebugSession {
 			stackWalker = new StackWalker(api, debuggeePid, jit);
 			memReader = new MemoryReader(api, debuggeePid, jit.is64);
 			nativeThrowResolver = new NativeThrowResolver(module, jit, memReader, exceptionSites);
-			threadRegistry = new ThreadRegistry(memReader,
-				new Align(jit.is64, jit.boolSize4), jit.hlVersionMajor, jit.hlVersionMinor);
-			vmExceptions = new VmExceptionControl(api, debuggeePid, memReader,
-				new Align(jit.is64, jit.boolSize4), jit.threadsPtr);
+			// one arch descriptor resolved from the handshake, shared by every
+			// raw-memory reader here (the inspector builds its own from the same jit)
+			var align = new Align(jit.is64, jit.boolSize4);
+			threadRegistry = new ThreadRegistry(memReader, align, jit.hlVersionMajor, jit.hlVersionMinor);
+			vmExceptions = new VmExceptionControl(api, debuggeePid, memReader, align, jit.threadsPtr);
 			inspector = new VariableInspector(module, jit, memReader);
 			// Frames parked at hl_throw's ENTRY serve the stop reported at hl_throw's
 			// own break: by then execution is deep inside hl_throw, where the frame

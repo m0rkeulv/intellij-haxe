@@ -69,9 +69,7 @@ class NativeThrowResolver {
 		var code = memory.read(start, len);
 		var i = 0;
 		while (i < len) {
-			var addr = jit.is64
-				? MachineCode.movRaxImmThenCall(code, i, len)
-				: MachineCode.movEaxImmThenCall(code, i, len);
+			var addr = MachineCode.mineMovImmThenCall(code, i, len, jit.is64);
 			if (addr != null) {
 				return addr;
 			}

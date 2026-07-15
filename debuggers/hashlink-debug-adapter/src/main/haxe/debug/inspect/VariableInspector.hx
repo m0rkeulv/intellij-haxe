@@ -114,7 +114,7 @@ class VariableInspector {
 		objectLayout = new ObjectLayout(align);
 		globalTable = new GlobalTable(align, module.globals());
 
-		runtimeTypes = new RuntimeTypes(memory, name -> module.typeByName(name));
+		runtimeTypes = new RuntimeTypes(memory, align, name -> module.typeByName(name));
 		var enumLayout = new EnumLayout(align);
 		valueReader = new ValueReader(memory, align);
 		valueReader.referenceAllocator = (pointer, type) -> stops.allocReference(RefObject(pointer, type));

@@ -13,14 +13,14 @@ import haxe.Int64;
  *  - NOT compiled with thread support: there is no registry to walk; the
  *    process has a single thread — reported as one entry from the stopped id.
  *  - compiled with thread support: the registry is `count` (i32 @ +0) followed
- *    by an array of `hl_thread_info*` @ +8 (int + bool + padding, so +8 on
- *    BOTH bitnesses); each info has its OS tid @ +0,
- *    a flags word @ `ptr*6 + 8` (bit 16 = invisible, skipped), and — only on
- *    HL runtime >= 1.13 — a 128-byte UTF-8 name @ `ptr*6 + 16`.
+ *    by the `hl_thread_info*` array (`Align.threadsArray`); each info has its
+ *    OS tid @ +0, a flags word (`Align.threadFlags`; bit 16 = invisible,
+ *    skipped), and — only on HL runtime >= 1.13 — a 128-byte UTF-8 name eight
+ *    bytes past flags (two i32s).
  *
- * The registry offsets are the hld layout and MUST be empirically pinned
- * against real HL 1.15 (wrong offsets read plausible garbage). The name offset
- * branches on the runtime version.
+ * All arch-sensitive offsets come from the {@link debug.layout.Align} descriptor
+ * (wrong offsets read plausible garbage). The name offset also branches on the
+ * runtime version.
  *
  * "main" is the LOWEST thread id (not wherever we happened to stop): a stop can
  * land in any thread, so tying the name to the stopped thread would be wrong.
@@ -31,12 +31,12 @@ class ThreadRegistry {
 	static inline var NAME_BYTES = 128;
 
 	final mem:MemoryReader;
-	final ptr:Int;
+	final align:Align;
 	final hlVersion:Float; // major + minor/100, for the >= 1.13 name-offset branch
 
 	public function new(mem:MemoryReader, align:Align, hlVersionMajor:Int, hlVersionMinor:Int) {
 		this.mem = mem;
-		this.ptr = align.ptr;
+		this.align = align;
 		this.hlVersion = hlVersionMajor + hlVersionMinor / 100;
 	}
 
@@ -65,21 +65,20 @@ class ThreadRegistry {
 		if (count <= 0 || count > MAX_THREADS) {
 			return [];
 		}
-		// hl_threads_info: int count; bool stopping_world; hl_thread_info **threads
-		// — int + bool + padding puts the array pointer @ +8 on BOTH bitnesses
-		var array = mem.readPointer(registryPtr.offset(8));
+		var array = mem.readPointer(registryPtr.offset(align.threadsArray));
 		if (array.isNull()) {
 			return [];
 		}
-		var flagsPos = ptr * 6 + 8;
-		var namePos = hlVersion >= 1.13 ? flagsPos + 8 : -1;
+		// thread_name[128] follows flags past exc_stack_count — two i32s, so +8
+		// regardless of bitness; present only on HL runtime >= 1.13
+		var namePos = hlVersion >= 1.13 ? align.threadFlags + 8 : -1;
 		var result:Array<{id:Int, name:Null<String>}> = [];
 		for (i in 0...count) {
-			var info = mem.readPointer(array.offset(ptr * i));
+			var info = mem.readPointer(array.offset(align.ptr * i));
 			if (info.isNull()) {
 				continue;
 			}
-			if (mem.readI32(info.offset(flagsPos)) & FLAG_INVISIBLE != 0) {
+			if (mem.readI32(info.offset(align.threadFlags)) & FLAG_INVISIBLE != 0) {
 				continue; // GC / internal thread, hidden from the user
 			}
 			var id = mem.readI32(info);

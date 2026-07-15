@@ -16,7 +16,7 @@ import haxe.Int64;
  *   raw_data @ +2*ptr  storage for non-pointer field values
  *   values   @ +3*ptr  storage for pointer field values
  *   nfields  @ +4*ptr
- * Lookup entry i @ lookup + i*(ptr+8):
+ * Lookup entry i @ lookup + i*Align.fieldLookupStride:
  *   hl_type* @ +0, hashed_name i32 @ +ptr, packed i32 @ +ptr+4
  *   (packed & 0x1FFFF = slot offset; packed >>> 17 = display order index).
  * Field names travel as hl_hash values; they are resolved through the module
@@ -58,7 +58,7 @@ class DynObjReader {
 		var unordered:Array<DynObjField> = [];
 		var hasIndex = false;
 		for (i in 0...count) {
-			var entry = lookup.offset(i * (align.ptr + 8));
+			var entry = lookup.offset(i * align.fieldLookupStride);
 			var fieldType = runtimeTypes.typeAt(mem.readPointer(entry));
 			if (fieldType == null) {
 				fieldType = HDyn;
@@ -105,7 +105,7 @@ class DynObjReader {
 		var max = count;
 		while (min < max) {
 			var mid = (min + max) >> 1;
-			var entry = lookup.offset(mid * (align.ptr + 8));
+			var entry = lookup.offset(mid * align.fieldLookupStride);
 			var h = mem.readI32(entry.offset(align.ptr));
 			if (h < hash) {
 				min = mid + 1;

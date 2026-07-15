@@ -1,6 +1,7 @@
 package tests.debug.values;
 
 import debug.Pointer;
+import debug.layout.Align;
 import debug.target.MemoryReader;
 import debug.values.RuntimeTypes;
 
@@ -44,7 +45,7 @@ class RuntimeTypesTest {
 	}
 
 	static function types(api:FakeDebugApi, resolve:String->Null<HLType>):RuntimeTypes {
-		return new RuntimeTypes(new MemoryReader(api, 1, true), resolve);
+		return new RuntimeTypes(new MemoryReader(api, 1, true), new Align(true, false), resolve);
 	}
 
 	static function primitiveKindsMapDirectly(assert:Assert):Void {
