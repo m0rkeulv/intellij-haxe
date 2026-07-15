@@ -649,7 +649,7 @@ call. Locals (non-arguments) are unaffected: HL 1.15 re-reads their slots
 function value and runs it INSIDE the stopped debuggee. Only the debuggee's own
 code can allocate or execute HL logic, so we borrow its thread: `X64CallEmitter`
 (or `X86CallEmitter` on 32-bit) builds a trampoline (port of hld `evalCall`) and
-`DebugSession.callInDebuggee` injects it. The dance:
+`EvalCallInjector.call` injects it. The dance:
 - The debug native only lets us write Esp/Eip/Rax, so the trampoline loads the
   argument registers ITSELF: save the scratch/arg registers, `mov` each arg into
   its calling-convention register (win64: RCX/RDX/R8/R9 + XMM0-3 positionally;
@@ -1071,7 +1071,7 @@ The 32-bit lessons (each was a live bug):
 - **Eval-calls work on BOTH architectures**: `X64CallEmitter` emits the x86-64
   register-arg trampoline, `X86CallEmitter` the 32-bit cdecl one (stack args,
   EAX return, ST0 float spilled to a scratch slot the caller reads);
-  `callInDebuggee` selects by `jit.is64`. The one remaining x64-only test is
+  `EvalCallInjector` selects by `jit.is64`. The one remaining x64-only test is
   the *register-passed-argument caveat* — genuinely an x64 ABI behavior (x86
   passes args on the stack), skipped via `DapIntegrationTestBase.isX86Hl()`.
 
