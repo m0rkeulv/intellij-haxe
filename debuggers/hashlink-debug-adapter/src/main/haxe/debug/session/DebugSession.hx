@@ -11,6 +11,8 @@ import debug.DebugError;
 import debug.Pointer;
 import debug.eval.call.CallEmitter;
 import debug.eval.call.CallEmitter.CallArg;
+import debug.eval.call.CallTrampoline;
+import debug.eval.call.X86CallEmitter;
 import debug.layout.Align;
 import debug.module.CodeGraph;
 import debug.module.ExceptionSites;
@@ -333,8 +335,8 @@ class DebugSession {
 			inspector.xmm0Writer = value ->
 				api.writeRegister(debuggeePid, stoppedThreadId, Xmm0, FPHelper.doubleToI64(value));
 			inspector.warnSink = text -> emit(EvOutput("console", text));
-			inspector.functionCaller = (funcAddr, args, floatReturn) ->
-				callInDebuggee(stoppedThreadId, funcAddr, args, floatReturn);
+			inspector.functionCaller = (funcAddr, args, floatBits) ->
+				callInDebuggee(stoppedThreadId, funcAddr, args, floatBits);
 			applyExceptionBreakpoints(); // honour a pre-launch setExceptionBreakpoints
 			state = Configured;
 			emit(EvLaunched(requestSeq));
@@ -537,15 +539,12 @@ class DebugSession {
 	 * valid while stopped; a call that throws, recurses into a breakpoint, or
 	 * runs longer than CALL_TIMEOUT_MS fails with the state restored.
 	 */
-	function callInDebuggee(threadId:Int, funcAddr:Pointer, args:Array<CallArg>, floatReturn:Bool):Pointer {
-		// CallEmitter emits x86-64 machine code; injecting it into a 32-bit
-		// debuggee would execute garbage. Refuse upfront with a clear message —
-		// everything else (breakpoints, stepping, variables) still works.
-		if (!jit.is64) {
-			throw new DebugError("Calling debuggee functions from the debugger is x86-64 only"
-				+ " (this program runs on a 32-bit HashLink VM)");
-		}
-		var asm = new CallEmitter(jit.winCall).build(funcAddr, args, floatReturn);
+	function callInDebuggee(threadId:Int, funcAddr:Pointer, args:Array<CallArg>, floatBits:Int):Pointer {
+		// the trampoline is CPU-architecture-specific: x86-64 loads argument
+		// registers and returns through RAX/XMM0; x86 pushes cdecl stack args and
+		// returns through EAX/ST0. Selected once from the handshake bitness.
+		var emitter:CallTrampoline = jit.is64 ? new CallEmitter(jit.winCall) : new X86CallEmitter();
+		var asm = emitter.build(funcAddr, args, floatBits);
 		var asmSize = asm.length;
 
 		var prevEax = api.readRegister(debuggeePid, threadId, Eax);
@@ -570,7 +569,13 @@ class DebugSession {
 		api.writeMemory(debuggeePid, prevEip, original, asmSize);
 		api.flush(debuggeePid, prevEip, asmSize);
 
-		var result = api.readRegister(debuggeePid, threadId, Eax);
+		// x86 returns a float on the x87 stack (ST0), which HL's debug register
+		// API does not expose; X86CallEmitter spilled it into the scratch slot at
+		// scratchStackTop, so read it from there. Everything else returns in
+		// RAX/EAX (a float return on x86-64 was copied into RAX by the trampoline).
+		var result = (!jit.is64 && floatBits != 0)
+			? readFloatSpill(scratchStackTop(prevEsp), floatBits)
+			: api.readRegister(debuggeePid, threadId, Eax);
 		var landedEip = api.readRegister(debuggeePid, threadId, Eip);
 
 		api.writeRegister(debuggeePid, threadId, Eax, prevEax);
@@ -623,6 +628,16 @@ class DebugSession {
 			}
 		}
 		return false;
+	}
+
+	// Reads an x87 float result the x86 trampoline spilled into the scratch slot:
+	// a qword for an F64 return, a dword (in the low 32 bits) for F32 — matching
+	// how the caller decodes the raw bits.
+	function readFloatSpill(slot:Pointer, floatBits:Int):Pointer {
+		var size = floatBits == 64 ? 8 : 4;
+		var buf = Bytes.alloc(size);
+		api.readMemory(debuggeePid, slot, buf, size);
+		return size == 8 ? Int64.make(buf.getInt32(4), buf.getInt32(0)) : Int64.make(0, buf.getInt32(0));
 	}
 
 	// The scratch stack top for an injected call: the 256-byte-aligned address at

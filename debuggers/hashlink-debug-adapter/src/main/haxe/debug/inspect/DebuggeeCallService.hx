@@ -33,7 +33,8 @@ import haxe.Int64;
  * DANGEROUS by nature — it executes arbitrary debuggee code on the session
  * thread — but that is the accepted trade for steering execution. The
  * constructor/native/box resolvers it uses disassemble raw JIT output (see
- * ConstructorResolver / NativeResolver / BoxResolver) and are x86-64 only.
+ * ConstructorResolver / NativeResolver / BoxResolver), which select the JIT
+ * pattern by CPU architecture (x86-64 and x86).
  */
 class DebuggeeCallService {
 	final resolver:SymbolResolver;
@@ -43,8 +44,11 @@ class DebuggeeCallService {
 	final align:Align;
 
 	// Installed by DebugSession: injects a trampoline that calls `addr(args)` in
-	// the debuggee and returns its result. Null until eval-call is enabled.
-	public var functionCaller:Null<(Pointer, Array<CallArg>, Bool)->Pointer> = null;
+	// the debuggee and returns its result. `floatBits` is the return's float
+	// width — 0 for an int/pointer return (delivered in RAX/EAX), 32 or 64 for a
+	// float return (the width matters on x86, where the decoder reads the low
+	// bits for F32 but all 64 for F64). Null until eval-call is enabled.
+	public var functionCaller:Null<(Pointer, Array<CallArg>, Int)->Pointer> = null;
 	// Installed alongside writes: lets makeString/boxPrimitive write into the
 	// buffers/boxes they allocate in the debuggee.
 	public var memWriter:Null<MemoryWriter> = null;
@@ -109,8 +113,7 @@ class DebuggeeCallService {
 		for (i in 0...args.length) {
 			callArgs.push(lowerValue(args[i], fn.args[i]));
 		}
-		var floatReturn = fn.ret.match(HF64) || fn.ret.match(HF32);
-		return {raw: functionCaller(funcAddr, callArgs, floatReturn), type: fn.ret};
+		return {raw: functionCaller(funcAddr, callArgs, returnFloatBits(fn.ret)), type: fn.ret};
 	}
 
 	/**
@@ -167,8 +170,7 @@ class DebuggeeCallService {
 		for (i in 0...args.length) {
 			callArgs.push(lowerValue(args[i], paramTypes[i]));
 		}
-		var floatReturn = fn.ret.match(HF64) || fn.ret.match(HF32);
-		return {raw: functionCaller(jit.functionEntry(arrayIndex), callArgs, floatReturn), type: fn.ret};
+		return {raw: functionCaller(jit.functionEntry(arrayIndex), callArgs, returnFloatBits(fn.ret)), type: fn.ret};
 	}
 
 	// The (raw) findex of instance method `name` on an HObj/HStruct type, walking
@@ -217,7 +219,7 @@ class DebuggeeCallService {
 		if (site == null) {
 			throw new DebugError('Cannot construct "' + className
 				+ '": no reachable constructor. Object construction is experimental — it only'
-				+ ' works for classes the program itself instantiates (and on x86-64).');
+				+ ' works for classes the program itself instantiates.');
 		}
 		// the constructor's declared type: arg0 is `this`, the rest are the params
 		var ctorFun = switch (module.functionType(site.ctorFindex)) {
@@ -230,7 +232,7 @@ class DebuggeeCallService {
 				+ " argument(s), got " + args.length);
 		}
 		// allocate: hl_alloc_obj(classType) -> fresh zeroed instance
-		var instance = functionCaller(site.allocFunction, [{isFloat: false, bits: site.typePointer}], false);
+		var instance = functionCaller(site.allocFunction, [{isFloat: false, bits: site.typePointer}], 0);
 		if (Int64.eq(instance, Int64.ofInt(0))) {
 			throw new DebugError("Allocation returned null while constructing " + className);
 		}
@@ -239,13 +241,13 @@ class DebuggeeCallService {
 		for (i in 0...args.length) {
 			ctorArgs.push(lowerValue(args[i], paramTypes[i]));
 		}
-		functionCaller(jit.functionEntry(site.ctorFindex), ctorArgs, false);
+		functionCaller(jit.functionEntry(site.ctorFindex), ctorArgs, 0);
 		return instance;
 	}
 
 	// Calls a bytecode function resolved by qualified name (a runtime helper).
 	// Returns the raw result.
-	function callByName(name:String, args:Array<CallArg>, floatReturn:Bool):Pointer {
+	function callByName(name:String, args:Array<CallArg>, floatBits:Int):Pointer {
 		if (functionCaller == null) {
 			throw new DebugError("Calling functions is not available in this session");
 		}
@@ -255,7 +257,7 @@ class DebuggeeCallService {
 				+ " (it may have been removed as unused code)");
 		}
 		// call the true entry (prologue), not addressOf(fidx,0) which is past it
-		return functionCaller(jit.functionEntry(fidx), args, floatReturn);
+		return functionCaller(jit.functionEntry(fidx), args, floatBits);
 	}
 
 	/**
@@ -283,19 +285,19 @@ class DebuggeeCallService {
 		var allocBytes = natives.resolve("alloc_bytes");
 		if (allocBytes == null) {
 			throw new DebugError("Unable to create a string: the debuggee's byte allocator (alloc_bytes)"
-				+ " could not be located. String creation is x86-64 only and needs the program to allocate"
-				+ " bytes somewhere (nearly all do).");
+				+ " could not be located. String creation needs the program to allocate bytes"
+				+ " somewhere (nearly all do).");
 		}
 		var utf8 = Bytes.ofString(text, Encoding.UTF8);
 		// +1 for a guaranteed null terminator (alloc_bytes does not zero the tail)
-		var bufferPtr = functionCaller(allocBytes, [{isFloat: false, bits: Int64.ofInt(utf8.length + 1)}], false);
+		var bufferPtr = functionCaller(allocBytes, [{isFloat: false, bits: Int64.ofInt(utf8.length + 1)}], 0);
 		if (Int64.eq(bufferPtr, Int64.ofInt(0))) {
 			throw new DebugError("Unable to create a string: alloc_bytes returned null");
 		}
 		var buffer = Bytes.alloc(utf8.length + 1); // terminator byte defaults to 0
 		buffer.blit(0, utf8, 0, utf8.length);
 		memWriter.write(bufferPtr, buffer);
-		var str = callByName("String.fromUTF8", [{isFloat: false, bits: bufferPtr}], false);
+		var str = callByName("String.fromUTF8", [{isFloat: false, bits: bufferPtr}], 0);
 		if (Int64.eq(str, Int64.ofInt(0))) {
 			throw new DebugError("Unable to create a string: String.fromUTF8 returned null");
 		}
@@ -316,9 +318,9 @@ class DebuggeeCallService {
 		var recipe = boxer.resolve(kind);
 		if (recipe == null) {
 			throw new DebugError("Unable to box this primitive into a Dynamic: the debuggee never boxes a value"
-				+ " of this type, so the boxing helper could not be located (boxing is x86-64 only and DCE-limited).");
+				+ " of this type, so the boxing helper could not be located (boxing is DCE-limited).");
 		}
-		var box = functionCaller(recipe.allocDynamic, [{isFloat: false, bits: recipe.typePointer}], false);
+		var box = functionCaller(recipe.allocDynamic, [{isFloat: false, bits: recipe.typePointer}], 0);
 		if (Int64.eq(box, Int64.ofInt(0))) {
 			throw new DebugError("Unable to box a value: alloc_dynamic returned null");
 		}
@@ -347,13 +349,13 @@ class DebuggeeCallService {
 		return switch (v) {
 			case VInt(i):
 				isFloatSlot(paramType)
-					? {isFloat: true, bits: FPHelper.doubleToI64(Int64.toInt(i))}
+					? {isFloat: true, bits: FPHelper.doubleToI64(Int64.toInt(i)), wide: paramType.match(HF64)}
 					: {isFloat: false, bits: i};
 			case VFloat(f):
 				if (!isFloatSlot(paramType)) {
 					throw new DebugError("A float argument does not fit an integer parameter");
 				}
-				{isFloat: true, bits: FPHelper.doubleToI64(f)};
+				{isFloat: true, bits: FPHelper.doubleToI64(f), wide: paramType.match(HF64)};
 			case VBool(b):
 				{isFloat: false, bits: Int64.ofInt(b ? 1 : 0)};
 			case VNull:
@@ -376,6 +378,17 @@ class DebuggeeCallService {
 
 	static function isFloatSlot(t:HLType):Bool {
 		return t.match(HF32) || t.match(HF64);
+	}
+
+	// The float width of a return type for functionCaller: 0 = int/pointer
+	// (returned in RAX/EAX), 32 = HF32, 64 = HF64 (returned in XMM0 on x86-64,
+	// ST0 on x86 — the trampoline captures it accordingly).
+	static function returnFloatBits(t:HLType):Int {
+		return switch (t) {
+			case HF32: 32;
+			case HF64: 64;
+			default: 0;
+		}
 	}
 }
 

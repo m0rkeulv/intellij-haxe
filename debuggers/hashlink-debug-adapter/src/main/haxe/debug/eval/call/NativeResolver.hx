@@ -20,9 +20,10 @@ import haxe.Int64;
  * absolute address is the imm64. So we find any `OCall` whose target findex is
  * the native's, read that opcode's machine code, and pull the address out.
  *
- * x86-64 only; if the native is never called in the program (no site to mine)
- * or the pattern is absent, resolution fails and the caller degrades
- * gracefully. See MachineCode for the shared byte pattern.
+ * The mining is arch-selected (x86 uses `mov eax, imm32; call eax`); if the
+ * native is never called in the program (no site to mine) or the pattern is
+ * absent, resolution fails and the caller degrades gracefully. See MachineCode
+ * for the shared byte pattern.
  */
 class NativeResolver {
 	final module:ModuleDebugInfo;
@@ -85,8 +86,8 @@ class NativeResolver {
 		}
 		var code = memory.read(start, len);
 		var i = 0;
-		while (i + 12 <= len) {
-			var addr = MachineCode.movRaxImmThenCall(code, i, len);
+		while (i < len) {
+			var addr = MachineCode.mineMovImmThenCall(code, i, len, jit.is64);
 			if (addr != null) {
 				return addr;
 			}

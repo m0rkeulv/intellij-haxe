@@ -719,12 +719,13 @@ One `ONew Class` site yields the allocator, the class type pointer, and — from
 the `OCall` right after whose first arg is the allocated register — the
 constructor findex (mapped findex→array-index via `callTargetFunction`). We
 then `hl_alloc_obj(type)` → run `ctor(instance, args…)` on the eval-call
-machinery. **Caveats, by design**: x86-64 only; **DCE-limited** to classes the
-program actually instantiates (no `ONew` site otherwise — and the constructor
-may be stripped anyway); if the pattern isn't found, construction reports
-itself *experimental / unavailable* rather than guessing. This is the most
-fragile machinery in the adapter (it reads raw JIT output) and is marked as
-such in the code.
+machinery. **Caveats, by design**: **DCE-limited** to classes the program
+actually instantiates (no `ONew` site otherwise — and the constructor may be
+stripped anyway); if the pattern isn't found, construction reports itself
+*experimental / unavailable* rather than guessing. The mining picks the x86-64
+(`mov rcx/rdi,type`) or x86 (`push type`) form by architecture. This is the
+most fragile machinery in the adapter (it reads raw JIT output) and is marked
+as such in the code.
 
 **Instance method calls (`recv.method(args)`) — M16**: the value-manipulation
 keystone. When an evaluate call's last path segment is a proto method on the
@@ -1035,15 +1036,21 @@ The 32-bit lessons (each was a live bug):
   union @ +8 (`Align.dynPayload` — hl.h `int __pad` on 32-bit), the
   hl_threads_info thread array @ +8 (int + bool + padding), varray data @
   ptr*2+8. Others genuinely shrink: hl_type_obj's name @ +16 on 64-bit but
-  @ +12 on 32-bit (3 ints + pointer alignment). When adding a new raw read,
-  check hl.h for `#ifndef HL_64` padding before reaching for `align.ptr`.
-- **JIT code patterns differ**: x86 emits `mov eax, imm32; call eax`
-  (`MachineCode.movEaxImmThenCall`) where x64 emits `mov rax, imm64; call
-  rax`. Address-mining resolvers must branch on `jit.is64`.
-- **Eval-calls are x86-64 only**: CallEmitter emits x64 machine code;
-  `callInDebuggee` refuses upfront on a 32-bit debuggee (clear DebugError)
-  instead of injecting garbage. Their tests skip via
-  `DapIntegrationTestBase.isX86Hl()` (PE-header check).
+  @ +12 on 32-bit (3 ints + pointer alignment). All of these are named fields
+  on the `Align` arch descriptor, resolved once from the handshake — read them
+  back rather than hardcoding; when adding a new raw read, check hl.h for a
+  `#ifndef HL_64` / `int __pad` before assuming `ptr`-relative.
+- **JIT code patterns differ**: x86 emits `mov eax, imm32; call eax` and pushes
+  stack args (`push imm32`) where x64 emits `mov rax, imm64; call rax` and loads
+  argument registers. The mining lives behind arch-selected entry points
+  (`MachineCode.mineMovImmThenCall`, `mineArgThenCall`), so resolvers pass
+  `jit.is64` and never branch themselves.
+- **Eval-calls work on BOTH architectures**: `CallEmitter` emits the x86-64
+  register-arg trampoline, `X86CallEmitter` the 32-bit cdecl one (stack args,
+  EAX return, ST0 float spilled to a scratch slot the caller reads);
+  `callInDebuggee` selects by `jit.is64`. The one remaining x64-only test is
+  the *register-passed-argument caveat* — genuinely an x64 ABI behavior (x86
+  passes args on the stack), skipped via `DapIntegrationTestBase.isX86Hl()`.
 
 ## Quick reference
 
@@ -1087,5 +1094,5 @@ The 32-bit lessons (each was a live bug):
 | Thread enumeration | Read HL's registry at `threadsPtr` (offsets are hld's, empirically pinned; name field only ≥1.13); `hl_debug_wait` swallows thread create/exit, so re-read every stop. "main" = lowest id, not the stopped thread |
 | Per-thread inspection | All threads frozen at a stop → walk any thread's stack via `read_register(tid)`; frame ids are globally unique (shared monotonic counter with references). Suspend-single-thread and output attribution are impossible with HL's API |
 | Value writes | Allocation-free only (no debuggee allocator access): literals into primitives, null into pointers, pointer-copy/box-payload updates. New strings/objects need the eval-call machinery. GC-safe because HL has no write barriers and we only write while stopped |
-| Constructing objects | `new X(args)` is a HACK: disassemble an `ONew X` site for `48 B8 <hl_alloc_obj> … FF D0` + the type-ptr `mov` before it + the ctor findex from the following `OCall`. x86-64 only, DCE-limited to instantiated classes, reports "experimental/unavailable" if the pattern isn't found. Never assume the call is immediately after the `mov rax` — win64 slips `sub rsp,0x20` in between |
+| Constructing objects | `new X(args)` is a HACK: disassemble an `ONew X` site for the alloc call (`mov (r/e)ax,<hl_alloc_obj> … FF D0`) + the type-ptr set-arg before it (`mov rcx/rdi` on x64, `push` on x86) + the ctor findex from the following `OCall`. Arch-selected via `MachineCode.mineArgThenCall`, DCE-limited to instantiated classes, reports "experimental/unavailable" if the pattern isn't found. Never assume the call is immediately after the `mov` — win64 slips `sub rsp,0x20` in between |
 | findex ≠ array index | An `OCall`/binding carries a raw findex; `functionType`/`functionEntry`/`opcodes` want the ARRAY position. Map with `callTargetFunction`/`functionIndexByFindex`, never use a raw findex directly |

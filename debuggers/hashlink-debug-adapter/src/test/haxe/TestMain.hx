@@ -38,6 +38,7 @@ class TestMain {
 			{name: "ExprParserTest", run: tests.debug.eval.ExprParserTest.run},
 			{name: "OperatorsTest", run: tests.debug.eval.OperatorsTest.run},
 			{name: "CallEmitterTest", run: tests.debug.eval.call.CallEmitterTest.run},
+			{name: "X86CallEmitterTest", run: tests.debug.eval.call.X86CallEmitterTest.run},
 		];
 
 		var assert = new Assert();

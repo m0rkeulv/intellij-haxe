@@ -16,24 +16,16 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEven
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
 
 /**
  * Runs functions inside the stopped debuggee via evaluate against real
  * HashLink: injects a call trampoline, runs it, and reads the return. The
  * decisive checks assert KNOWN return values, and that the debuggee is intact
- * afterwards (execution continues to a clean exit).
+ * afterwards (execution continues to a clean exit). Runs on both the x86-64
+ * (register-arg) and x86 (cdecl stack-arg) trampolines.
  */
 public class EvalCallIntegrationTest extends DapIntegrationTestBase {
-
-  @Before
-  public void requireX64() throws Exception {
-    // the trampoline is x86-64 machine code; on a 32-bit VM the adapter
-    // refuses eval-calls with a clear error instead of injecting garbage
-    Assume.assumeFalse("eval-calls are x86-64 only - skipping on x86 hl", isX86Hl());
-  }
 
   @Test
   public void callsFunctionsAndReturnsValues() throws Exception {

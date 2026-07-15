@@ -19,30 +19,24 @@ import haxe.Int64;
  * is a JIT-internal helper (no findex, not a native), the latter are global C
  * symbols. But the JIT emits both, as constants, for every `OToDyn` opcode
  * (`x = (someInt : Dynamic)`), lowered (hashlink `jit.c`) for a non-pointer
- * source to `call_native_consts(hl_alloc_dynamic, {src->t}, 1)`:
+ * source to `call_native_consts(hl_alloc_dynamic, {src->t}, 1)` — the same
+ * set-argument-then-call shape as ONew (arg0 = the primitive's hl_type*, then
+ * `mov (r/e)ax, <hl_alloc_dynamic> ; call`), register-based on x86-64 and a
+ * `push` on x86. See ConstructorResolver for the byte layout.
  *
- *     48 B9 <hlt_i32*  : 8>     mov  rcx, <primitive hl_type*>   (win64 arg0)
- *     48 BF <hlt_i32*  : 8>     mov  rdi, <primitive hl_type*>   (SysV arg0)
- *     48 B8 <alloc_dyn : 8>     mov  rax, <hl_alloc_dynamic>
- *     FF D0                     call rax
+ * We scan `OToDyn` sites whose SOURCE register is a primitive and read the
+ * arg/fn pair (MachineCode.mineArgThenCall picks the arch form): the primitive's
+ * type pointer (matched to the source register's kind, so it is self-verifying)
+ * and the shared allocator address. This yields a box recipe per primitive KIND
+ * the program actually boxes somewhere — the same DCE-limited scope accepted for
+ * constructors: a program that never boxes a Bool cannot have one boxed by the
+ * debugger.
  *
- * We scan `OToDyn` sites whose SOURCE register is a primitive and read the two
- * imm64s: the primitive's type pointer (matched to the source register's kind,
- * so it is self-verifying) and the shared allocator address. This yields a box
- * recipe per primitive KIND the program actually boxes somewhere — the same
- * DCE-limited scope accepted for constructors: a program that never boxes a
- * Bool cannot have one boxed by the debugger.
- *
- * FRAGILE and x86-64 only (see ConstructorResolver). No pattern → the feature
- * reports itself unavailable rather than guessing.
+ * FRAGILE (see ConstructorResolver). No pattern → the feature reports itself
+ * unavailable rather than guessing.
  * =====================================================================
  */
 class BoxResolver {
-	// A `mov reg, imm64` is 10 bytes: a 2-byte REX.W+opcode then the 8-byte
-	// immediate. The box site's arg-mov (`mov rcx/rdi, type*`) has this shape, so
-	// the type pointer sits at +2 and the following `mov rax, alloc ; call rax`
-	// begins at +MOV_IMM64_LEN.
-	static inline var MOV_IMM64_LEN = 10;
 	// Sanity cap on one OToDyn opcode's machine code: real sites are a handful of
 	// instructions, so anything larger is not the pattern we mine — skip it.
 	static inline var MAX_SITE_BYTES = 256;
@@ -126,15 +120,11 @@ class BoxResolver {
 			return null;
 		}
 		var code = memory.read(start, len);
-		var argMov = jit.winCall ? MachineCode.MOV_RCX : MachineCode.MOV_RDI;
 		var i = 0;
-		// need room for the arg-mov (MOV_IMM64_LEN) plus the 2-byte start of the mov rax
-		while (i + MOV_IMM64_LEN + 2 <= len) {
-			if (code.getUInt16(i) == argMov) {
-				var allocFn = MachineCode.movRaxImmThenCall(code, i + MOV_IMM64_LEN, len);
-				if (allocFn != null) {
-					return {typePtr: MachineCode.read64(code, i + 2), allocFn: allocFn};
-				}
+		while (i < len) {
+			var mined = MachineCode.mineArgThenCall(code, i, len, jit.is64, jit.winCall);
+			if (mined != null) {
+				return {typePtr: mined.arg, allocFn: mined.fn};
 			}
 			i++;
 		}

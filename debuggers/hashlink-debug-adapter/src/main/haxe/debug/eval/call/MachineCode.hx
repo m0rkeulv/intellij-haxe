@@ -11,7 +11,10 @@ import haxe.io.Bytes;
  * `call_native`) emits every native call as `mov rax, imm64` (REX.W `48 B8`,
  * then the 8-byte address) followed by `call rax` (`FF D0`). On win64 a
  * `sub rsp, 0x20` (shadow space) can sit between the two, so the `call` is not
- * at a fixed offset. These helpers recognise that shape. x86-64 only.
+ * at a fixed offset. These helpers recognise that shape. The x86 JIT emits the
+ * 32-bit forms (`mov eax, imm32; call eax`; `push imm32` for a stack argument);
+ * the arch-selected entry points (`mineMovImmThenCall`, `mineArgThenCall`)
+ * dispatch on `is64` so callers never branch.
  */
 class MachineCode {
 	// little-endian first two bytes of each instruction
@@ -19,6 +22,32 @@ class MachineCode {
 	public static inline var CALL_RAX = 0xD0FF; // FF D0 : call rax
 	public static inline var MOV_RCX = 0xB948; // 48 B9 : mov rcx, imm64 (win64 arg0)
 	public static inline var MOV_RDI = 0xBF48; // 48 BF : mov rdi, imm64 (SysV arg0)
+	public static inline var PUSH_IMM32 = 0x68; // 68 : push imm32 (x86 stack arg0)
+
+	/**
+	 * Arch-selected mining of a "set argument 0, then call a native" site — how
+	 * the JIT lowers call_native_consts (ONew's alloc, OToDyn's box): a constant
+	 * arg pointer set up, then `mov (r/e)ax, fn ; call`. Returns the arg constant
+	 * and the called function's address, or null if `code[at]` is not that shape.
+	 *
+	 * x86-64 passes the arg in a register: `mov rcx/rdi, arg (10 bytes); mov rax,
+	 * fn; call rax`. x86 pushes it: `push arg (5 bytes); mov eax, fn; call eax`.
+	 */
+	public static function mineArgThenCall(code:Bytes, at:Int, len:Int, is64:Bool, winCall:Bool):Null<{arg:Pointer, fn:Pointer}> {
+		if (is64) {
+			var argMov = winCall ? MOV_RCX : MOV_RDI; // mov rcx/rdi, imm64 (10 bytes)
+			if (at + 12 > len || code.getUInt16(at) != argMov) {
+				return null;
+			}
+			var fn = movRaxImmThenCall(code, at + 10, len);
+			return fn == null ? null : {arg: read64(code, at + 2), fn: fn};
+		}
+		if (at + 5 > len || code.get(at) != PUSH_IMM32) { // push imm32 (5 bytes)
+			return null;
+		}
+		var fn = movEaxImmThenCall(code, at + 5, len);
+		return fn == null ? null : {arg: Int64.make(0, code.getInt32(at + 1)), fn: fn};
+	}
 
 	/**
 	 * Arch-selected mining of a native call site: `mov rax, imm64; call rax` on

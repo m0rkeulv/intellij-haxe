@@ -652,7 +652,6 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
 
   @Test
   public void callsInstanceMethodsAndMutatesAMap() throws Exception {
-    org.junit.Assume.assumeFalse("eval-calls are x86-64 only - skipping on x86 hl", isX86Hl());
     runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_LINE);
     int frameId = topFrameId(lastStoppedThreadId());
 
@@ -677,7 +676,6 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
   public void mapBracketSyntaxSugarsToGetAndSet() throws Exception {
     // map[k] / map[k]=v are compile-time sugar for get/set; the evaluator
     // offers the same syntax by rewriting to the method calls.
-    org.junit.Assume.assumeFalse("eval-calls are x86-64 only - skipping on x86 hl", isX86Hl());
     runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_LINE);
     int frameId = topFrameId(lastStoppedThreadId());
 
@@ -705,7 +703,6 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
     // stringMap is Map<String,Int>: values are stored BOXED (Dynamic). Passing
     // the int literal 9 requires boxing it into a vdynamic.
     // Proven end to end: set then read the value back.
-    org.junit.Assume.assumeFalse("eval-calls are x86-64 only - skipping on x86 hl", isX86Hl());
     runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_LINE);
     int frameId = topFrameId(lastStoppedThreadId());
 

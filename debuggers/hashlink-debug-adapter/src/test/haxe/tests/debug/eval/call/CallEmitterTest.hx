@@ -26,7 +26,7 @@ class CallEmitterTest {
 		var bytes = new CallEmitter(true).build(
 			Int64.make(0x11223344, 0x55667788),
 			[{isFloat: false, bits: Int64.ofInt(5)}],
-			false);
+			0);
 		var h = hex(bytes);
 
 		// exact size (see the byte accounting in the emitter): 151 bytes
@@ -46,7 +46,7 @@ class CallEmitterTest {
 		var bytes = new CallEmitter(true).build(
 			Int64.ofInt(0x400000),
 			[{isFloat: false, bits: Int64.ofInt(3)}, {isFloat: true, bits: haxe.io.FPHelper.doubleToI64(1.5)}],
-			false);
+			0);
 		var h = hex(bytes);
 		// XMM1 loaded via RAX + an 8-byte stack slot: push rax (50) ; movsd
 		// xmm1,[rsp] (f20f100c24) ; add rsp,8 (4883c408) — the balanced pop
@@ -59,7 +59,7 @@ class CallEmitterTest {
 		var tooMany = [for (i in 0...5) {isFloat: false, bits: Int64.ofInt(i)}];
 		var threw = false;
 		try {
-			new CallEmitter(true).build(Int64.ofInt(1), tooMany, false);
+			new CallEmitter(true).build(Int64.ofInt(1), tooMany, 0);
 		} catch (e:debug.DebugError) {
 			threw = true;
 		}
@@ -67,8 +67,8 @@ class CallEmitterTest {
 	}
 
 	static function capturesFloatReturn(assert:Assert):Void {
-		var intRet = new CallEmitter(true).build(Int64.ofInt(0x1000), [], false);
-		var floatRet = new CallEmitter(true).build(Int64.ofInt(0x1000), [], true);
+		var intRet = new CallEmitter(true).build(Int64.ofInt(0x1000), [], 0);
+		var floatRet = new CallEmitter(true).build(Int64.ofInt(0x1000), [], 64);
 		// the float-return path adds the XMM0->RAX capture (movsd [rsp],xmm0 = f20f110424)
 		assert.isTrue(hex(floatRet).indexOf("f20f110424") >= 0, "float return captures XMM0");
 		assert.isTrue(floatRet.length > intRet.length, "float return emits extra capture code");

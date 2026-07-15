@@ -21,27 +21,30 @@ import haxe.Int64;
  *
  * Every `new` in Haxe compiles to `ONew dst` (allocate) followed by a call to
  * the constructor. For an HOBJ/HSTRUCT, `ONew` is lowered (hashlink `jit.c`,
- * `ONew` -> `call_native_consts(hl_alloc_obj, {dst->t}, 1)`) to a fixed x86-64
- * sequence:
+ * `ONew` -> `call_native_consts(hl_alloc_obj, {dst->t}, 1)`) to a fixed
+ * set-argument-then-call sequence — the class type pointer into arg0, then
+ * `mov (r/e)ax, <hl_alloc_obj> ; call`:
  *
- *     48 B9 <typePtr : 8>       mov  rcx, <class hl_type*>     (win64 arg0)
- *     48 BF <typePtr : 8>       mov  rdi, <class hl_type*>     (SysV arg0)
- *     48 B8 <allocFn : 8>       mov  rax, <hl_alloc_obj>
- *     FF D0                     call rax
+ *   x86-64:  48 B9/BF <typePtr:8>   mov rcx/rdi, <class hl_type*>  (win64/SysV arg0)
+ *            48 B8 <allocFn:8>      mov rax, <hl_alloc_obj>
+ *            FF D0                  call rax
+ *   x86:     68 <typePtr:4>         push <class hl_type*>          (cdecl arg0)
+ *            B8 <allocFn:4>         mov eax, <hl_alloc_obj>
+ *            FF D0                  call eax
  *
- * We scan an `ONew` site for that sequence and read the two imm64 operands: the
- * class's runtime type pointer and the allocator's address. The constructor's
- * findex comes from the `OCall*` that follows, whose first argument is the
- * freshly allocated register. A single `ONew SomeClass` site therefore yields
- * everything to construct that class — and it only exists when the program
- * actually constructs the class, which is exactly the DCE-limited scope we
- * accept (a class the program never `new`s cannot be constructed, and its
- * constructor may have been stripped anyway).
+ * We scan an `ONew` site for that sequence (MachineCode.mineArgThenCall picks
+ * the arch form) and read the type pointer and allocator address. The
+ * constructor's findex comes from the `OCall*` that follows, whose first
+ * argument is the freshly allocated register. A single `ONew SomeClass` site
+ * therefore yields everything to construct that class — and it only exists when
+ * the program actually constructs the class, which is exactly the DCE-limited
+ * scope we accept (a class the program never `new`s cannot be constructed, and
+ * its constructor may have been stripped anyway).
  *
- * This is FRAGILE: it depends on the exact x86-64 instruction selection of the
- * HashLink 1.15 JIT and is x86-64 only. If the pattern is ever not found the
- * feature reports itself unavailable (see VariableInspector) rather than
- * guessing — construction is explicitly experimental.
+ * This is FRAGILE: it depends on the exact instruction selection of the
+ * HashLink JIT. If the pattern is ever not found the feature reports itself
+ * unavailable (see VariableInspector) rather than guessing — construction is
+ * explicitly experimental.
  * =====================================================================
  */
 class ConstructorResolver {
@@ -128,22 +131,18 @@ class ConstructorResolver {
 			return null; // implausible span
 		}
 		var code = memory.read(start, len);
-		var argMov = jit.winCall ? MachineCode.MOV_RCX : MachineCode.MOV_RDI;
-		// look for: <argMov=type ptr> <typePtr:8> mov rax,<allocFn> ; call rax
+		// look for the alloc call: arg0 = type ptr, then mov (r/e)ax,allocFn ; call
 		var i = 0;
-		while (i + 12 <= len) {
-			if (code.getUInt16(i) == argMov) {
-				var allocFn = MachineCode.movRaxImmThenCall(code, i + 10, len);
-				if (allocFn != null) {
-					var typePtr = MachineCode.read64(code, i + 2);
-					if (allocResolved && !Int64.eq(allocFn, allocFnValue)) {
-						// two ONew sites disagree on the allocator: don't trust it
-						return null;
-					}
-					allocFnValue = allocFn;
-					allocResolved = true;
-					return {typePtr: typePtr, allocFn: allocFn};
+		while (i < len) {
+			var mined = MachineCode.mineArgThenCall(code, i, len, jit.is64, jit.winCall);
+			if (mined != null) {
+				if (allocResolved && !Int64.eq(mined.fn, allocFnValue)) {
+					// two ONew sites disagree on the allocator: don't trust it
+					return null;
 				}
+				allocFnValue = mined.fn;
+				allocResolved = true;
+				return {typePtr: mined.arg, allocFn: mined.fn};
 			}
 			i++;
 		}

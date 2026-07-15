@@ -8,9 +8,10 @@ import haxe.io.BytesBuffer;
 /**
  * Emits a self-contained x86-64 machine-code trampoline that calls a function
  * in the debuggee and traps (INT3) on return — a port of the assembly in
- * vshaxe/hashlink-debugger `hld/Eval.evalCall`. The trampoline is written OVER
- * the code at the stopped thread's instruction pointer (which is guaranteed
- * executable); the caller saves and restores the original bytes.
+ * vshaxe/hashlink-debugger `hld/Eval.evalCall` (the 32-bit cdecl counterpart is
+ * {@link X86CallEmitter}). The trampoline is written OVER the code at the
+ * stopped thread's instruction pointer (which is guaranteed executable); the
+ * caller saves and restores the original bytes.
  *
  * We cannot write the argument registers from outside (the debug native only
  * exposes Esp/Eip/Rax), so the trampoline loads them itself: it saves the
@@ -18,9 +19,10 @@ import haxe.io.BytesBuffer;
  * register, `mov rax, <addr>` / `call rax`, captures the return (RAX, or XMM0
  * copied to RAX for a float return), restores the saved registers, and `int3`.
  *
- * 64-bit only, like hld. Pure and unit-tested against exact byte sequences.
+ * 64-bit only, like hld (the 32-bit cdecl trampoline is {@link X86CallEmitter}).
+ * Pure and unit-tested against exact byte sequences.
  */
-class CallEmitter {
+class CallEmitter implements CallTrampoline {
 	// x86-64 register encodings (hardware numbers).
 	static inline var RAX = 0;
 	static inline var RCX = 1;
@@ -50,10 +52,11 @@ class CallEmitter {
 	/**
 	 * The trampoline bytes for calling `funcAddr` with `args` (already lowered
 	 * to raw 64-bit register values), capturing a float return through XMM0
-	 * when `floatReturn` is set. Throws when an argument cannot be placed in a
-	 * register (no stack-argument support yet).
+	 * when `floatBits` is nonzero (both widths sit in XMM0's low bits, so 32 and
+	 * 64 are handled identically here). Throws when an argument cannot be placed
+	 * in a register (no stack-argument support yet).
 	 */
-	public function build(funcAddr:Int64, args:Array<CallArg>, floatReturn:Bool):Bytes {
+	public function build(funcAddr:Int64, args:Array<CallArg>, floatBits:Int):Bytes {
 		var out = new BytesBuffer();
 		// save the scratch registers (both the integer reg and its XMM peer)
 		for (i in 0...scratch.length) {
@@ -77,7 +80,7 @@ class CallEmitter {
 		setCpu(out, RAX, funcAddr);
 		out.addByte(0xFF);
 		out.addByte(0xD0);
-		if (floatReturn) {
+		if (floatBits != 0) {
 			captureXmm0ToRax(out);
 		}
 		// restore the scratch registers in reverse
@@ -229,10 +232,16 @@ class CallEmitter {
 	}
 }
 
-/** A call argument, lowered to the raw 64-bit value that goes in its register. */
+/**
+ * A call argument, lowered to the raw 64-bit value that goes in its register
+ * (x86-64) or is pushed on the stack (x86). `wide` marks an 8-byte value (an
+ * HF64 double) so the x86 trampoline pushes two dwords rather than one; the
+ * x86-64 trampoline ignores it (every argument occupies one register slot).
+ */
 typedef CallArg = {
 	var isFloat:Bool;
 	var bits:Int64;
+	var ?wide:Bool;
 }
 
 /** Where an argument goes: the target register, and whether it's an XMM (float) register. */

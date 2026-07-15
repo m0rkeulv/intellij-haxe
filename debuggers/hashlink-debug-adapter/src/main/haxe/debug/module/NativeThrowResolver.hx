@@ -18,12 +18,12 @@ import haxe.Int64;
  * The debug handshake exposes addresses for bytecode functions only, so — like
  * NativeResolver mining a native from an OCall — we disassemble an `OThrow`
  * jitted site: hashlink `jit.c` compiles OThrow to a `call_native(hl_throw)`,
- * i.e. the fixed `mov rax, <hl_throw> (48 B8 ..) ; call rax (FF D0)` sequence,
- * so the imm64 IS hl_throw's absolute address.
+ * i.e. the fixed `mov (r/e)ax, <hl_throw> ; call` sequence (MachineCode picks
+ * the x86-64 or x86 form), so the immediate IS hl_throw's absolute address.
  *
- * x86-64 only; when no OThrow site exists (a program that never throws) or the
- * pattern is absent, resolution fails and the caller degrades gracefully (the
- * native-exception breakpoint simply cannot arm).
+ * When no OThrow site exists (a program that never throws) or the pattern is
+ * absent, resolution fails and the caller degrades gracefully (the VM-exception
+ * breakpoint simply cannot arm).
  */
 class NativeThrowResolver {
 	final module:ModuleDebugInfo;
