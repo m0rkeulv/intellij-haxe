@@ -228,6 +228,48 @@ class Breakpoints {
 	}
 
 	/**
+	 * Temporarily lifts EVERY planted INT3 (user breakpoints, exception sites,
+	 * the hl_throw trap) without forgetting them, so an injected eval-call runs
+	 * like unpatched code — a called function that internally throws/catches or
+	 * crosses a user breakpoint must not trip OUR traps and derail the call.
+	 * Paired with rearmAll(). Step temps are left alone (an eval-call runs from a
+	 * stopped state, not mid-step). Idempotent per byte.
+	 */
+	public function suspendAll():Void {
+		for (bp in byAddress) {
+			writeByte(bp.address, bp.originalByte);
+		}
+		for (entry in byException) {
+			writeByte(entry.bp.address, entry.bp.originalByte);
+		}
+		if (nativeThrow != null) {
+			writeByte(nativeThrow.address, nativeThrow.originalByte);
+		}
+	}
+
+	/**
+	 * Re-plants every INT3 lifted by suspendAll, EXCEPT at `keepSuspended` (the
+	 * breakpoint the debugger is currently stopped on, whose byte the stop/continue
+	 * machinery keeps restored until it single-steps past it — re-arming it here
+	 * would make that step trap on itself).
+	 */
+	public function rearmAll(?keepSuspended:Pointer):Void {
+		for (bp in byAddress) {
+			if (keepSuspended == null || !Int64.eq(bp.address, keepSuspended)) {
+				writeByte(bp.address, INT3);
+			}
+		}
+		for (entry in byException) {
+			if (keepSuspended == null || !Int64.eq(entry.bp.address, keepSuspended)) {
+				writeByte(entry.bp.address, INT3);
+			}
+		}
+		if (nativeThrow != null && (keepSuspended == null || !Int64.eq(nativeThrow.address, keepSuspended))) {
+			writeByte(nativeThrow.address, INT3);
+		}
+	}
+
+	/**
 	 * Restores every patched byte (breakpoints and temps). Used before
 	 * detaching in attach mode: the debuggee keeps running without a debugger,
 	 * so any leftover INT3 would crash it. Restoring a byte that was already

@@ -551,6 +551,15 @@ class DebugSession {
 		var prevEip = api.readRegister(debuggeePid, threadId, Eip);
 		var prevEsp = api.readRegister(debuggeePid, threadId, Esp);
 
+		// Lift every planted INT3 for the duration of the call: the called function
+		// may internally throw/catch (tripping the hl_throw trap when VM-exception
+		// breakpoints are on) or run through a user breakpoint — either would abort
+		// the call and leave a half-executed frame that corrupts later execution.
+		// Read `original` AFTER, so the trampoline's saved bytes are clean too.
+		if (breakpoints != null) {
+			breakpoints.suspendAll();
+		}
+
 		var original = Bytes.alloc(asmSize);
 		if (!api.readMemory(debuggeePid, prevEip, original, asmSize)) {
 			throw new DebugError("Cannot read code to inject a call");
@@ -581,6 +590,13 @@ class DebugSession {
 		api.writeRegister(debuggeePid, threadId, Eax, prevEax);
 		api.writeRegister(debuggeePid, threadId, Eip, prevEip);
 		api.writeRegister(debuggeePid, threadId, Esp, prevEsp);
+
+		// Re-plant the breakpoints we lifted, except the one we are stopped on
+		// (the stop/continue machinery keeps its byte restored until it steps past).
+		if (breakpoints != null) {
+			var keepSuspended = currentStoppedBreakpoint != null ? currentStoppedBreakpoint.address : null;
+			breakpoints.rearmAll(keepSuspended);
+		}
 
 		if (!completed || !Int64.eq(landedEip, trapEnd)) {
 			throw new DebugError("The called function did not return normally (it threw an exception or hit a breakpoint)");

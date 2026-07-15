@@ -5,6 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
@@ -212,6 +213,58 @@ public class EvalCallIntegrationTest extends DapIntegrationTestBase {
                || rejected.getMessage().toLowerCase().contains("construct"));
 
     request(new DisconnectRequest());
+  }
+
+  @Test
+  public void callSucceedsAndStaysCleanWithABreakpointInsideTheCallee() throws Exception {
+    // The reported corruption: an injected call whose body trips one of OUR
+    // planted INT3s (a user breakpoint here; the hl_throw trap when VM-exception
+    // breakpoints are on, for a callee that throws/catches internally) aborts
+    // mid-call and leaves a half-executed frame that breaks later execution.
+    // The eval-call must lift every breakpoint for the duration of the call.
+    initialize();
+    assertTrue("launch", launch().isSuccess());
+    // breakpoints at the stop line AND inside addImpl (line 13, `return a + b;`)
+    String callSrc = fixtureSrcDir.resolve(FIXTURE_CALL).toString();
+    assertTrue("setBreakpoints", setBreakpoints(callSrc, FIXTURE_CALL_LINE, 13).isSuccess());
+    assertTrue("configurationDone", request(new ConfigurationDoneRequest()).isSuccess());
+    StoppedEvent stopped = awaitStopped();
+    int threadId = stopped.getBody().getThreadId();
+    int frameId = topFrameId(threadId);
+
+    // add(1, 2) runs addImpl, which has a breakpoint on its body — the call must
+    // still return 3 (not abort on that INT3) and not corrupt anything
+    assertEquals("add(1, 2) completes past the interior breakpoint", "3",
+                 evaluate(frameId, "add(1, 2)").getBody().getResult());
+
+    // the program keeps running; the interior breakpoint is back in force, so
+    // when the fixture's own print line calls add(base, 1) it stops there again
+    assertTrue("continue", request(continueRequest(threadId)).isSuccess());
+    StoppedEvent rehit = awaitStopped();
+    assertEquals("interior breakpoint re-armed after the eval-call", "breakpoint",
+                 rehit.getBody().getReason());
+
+    request(new DisconnectRequest());
+  }
+
+  @Test
+  public void pushToIntArrayReturnsAndLeavesTheProcessRunnable() throws Exception {
+    // reproduces the reported corruption: a method call that allocates/grows an
+    // Array<Int> (hl.types.ArrayBytes_Int.push) must return AND leave the VM
+    // able to keep executing — a botched call teardown crashes later steps.
+    StoppedEvent stopped = runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_LINE);
+    int threadId = stopped.getBody().getThreadId();
+    int frameId = topFrameId(threadId);
+
+    // ints = [2, 5, 10]; push(99) grows it and returns the new length 4
+    assertEquals("ints.push(99) returns the new length", "4", evaluate(frameId, "ints.push(99)").getBody().getResult());
+    // a second call must also be clean
+    assertEquals("ints.push(7) returns 5", "5", evaluate(frameId, "ints.push(7)").getBody().getResult());
+
+    // the program keeps running after the calls — no heap corruption. ints[2]
+    // is still 10, so the fixture's own output line is unchanged.
+    String output = continueToExit(threadId);
+    assertTrue("program ran to completion intact after the pushes (" + output + ")", output.contains("rich:10"));
   }
 
   private EvaluateResponse evaluate(int frameId, String expression) throws Exception {
