@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.VariableKind;
 import javax.swing.Icon;
+import com.intellij.xdebugger.XExpression;
 import com.intellij.xdebugger.frame.XCompositeNode;
 import com.intellij.xdebugger.frame.XNamedValue;
 import com.intellij.xdebugger.frame.XValueChildrenList;
@@ -81,10 +82,11 @@ final class HashLinkValue extends XNamedValue {
       }
 
       @Override
-      public void setValue(@NotNull String expression, @NotNull XModificationCallback callback) {
+      public void setValue(@NotNull XExpression expression, @NotNull XModificationCallback callback) {
+        String text = expression.getExpression();
         process.onRequestThread(() -> {
           try {
-            String newValue = process.requestSetVariable(containerReference, variable.getName(), expression);
+            String newValue = process.requestSetVariable(containerReference, variable.getName(), text);
             // the node re-presents THIS instance after the edit: update the
             // cached variable or the view keeps showing the old value
             variable.setValue(newValue);
