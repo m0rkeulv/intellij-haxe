@@ -82,8 +82,13 @@ jobs:
         with:
           haxe-version: 4.3.4
 
-      - name: Install hxcpp haxelib
-        run: haxelib install hxcpp --quiet --always
+      # format and hxcpp-debug-server versions mirror the pins in the debugger
+      # modules' build.gradle.kts (whose install tasks then no-op)
+      - name: Install haxelib dependencies
+        run: |
+          haxelib install hxcpp --quiet --always
+          haxelib install format 3.7.0 --quiet --always
+          haxelib install hxcpp-debug-server 1.2.4 --quiet --always
 
       - name: Install HashLink (for the HashLink integration tests)
         env:
