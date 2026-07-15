@@ -135,6 +135,9 @@ class DebugSession {
 	// variable inspection (created at launch, once jit/module are available);
 	// owns the per-stop frame cache + variablesReference registry
 	var inspector:VariableInspector;
+	// exception-stop text assembly and throw classification (created at launch)
+	var descriptions:StopDescriptions;
+	var throwClassifier:ThrowClassifier;
 
 	public function new(api:DebugApi, emit:DebugEvent->Void) {
 		this.api = api;
@@ -339,6 +342,8 @@ class DebugSession {
 		threadRegistry = new ThreadRegistry(memReader, align, jit.hlVersionMajor, jit.hlVersionMinor);
 		vmExceptions = new VmExceptionControl(api, debuggeePid, memReader, align, jit.threadsPtr);
 		inspector = new VariableInspector(module, jit, memReader);
+		descriptions = new StopDescriptions(module, inspector);
+		throwClassifier = new ThrowClassifier(api, debuggeePid, jit, memReader, stackWalker, tryRegions, inspector);
 		// Frames parked at hl_throw's ENTRY serve the stop reported at hl_throw's
 		// own break: by then execution is deep inside hl_throw, where the frame
 		// chain is no longer walkable. Consumed on first use; framesFor caches it
@@ -427,29 +432,14 @@ class DebugSession {
 	function handleSetBreakpoints(requestSeq:Int, sourceKey:String, sourcePath:String, requested:Array<RequestedBreakpoint>, isReverify:Bool):Void {
 		if (module == null) {
 			// not launched yet; cannot resolve. Should not happen (dispatcher buffers), but stay safe.
-			var pending = [for (r in requested) unresolved(r, sourcePath)];
+			var pending = [for (r in requested) BreakpointPlanner.unresolved(r, sourcePath)];
 			emitBreakpointResults(requestSeq, pending, isReverify);
 			return;
 		}
 
-		var locations:Array<BreakpointLocation> = [];
-		var results:Array<BreakpointResult> = [];
-		for (request in requested) {
-			var resolved = module.resolveLine(sourcePath, request.line);
-			if (resolved.length == 0) {
-				results.push(unresolved(request, sourcePath));
-			} else {
-				for (location in resolved) {
-					locations.push({
-						id: request.id,
-						address: jit.addressOf(location.fidx, location.op),
-						fidx: location.fidx, op: location.op, file: sourcePath, line: location.line,
-						condition: request.condition
-					});
-				}
-				results.push({id: request.id, verified: true, line: resolved[0].line, sourcePath: sourcePath});
-			}
-		}
+		var planned = BreakpointPlanner.plan(module, jit, sourcePath, requested);
+		var locations = planned.locations;
+		var results = planned.results;
 
 		// while the debuggee runs we must stop it before writing its memory
 		var wasRunning = switch (state) { case Running: true; default: false; };
@@ -493,10 +483,6 @@ class DebugSession {
 		} else {
 			emit(EvBreakpoints(requestSeq, results));
 		}
-	}
-
-	function unresolved(request:RequestedBreakpoint, sourcePath:String):BreakpointResult {
-		return {id: request.id, verified: false, line: request.line, message: "no executable code at this line", sourcePath: sourcePath};
 	}
 
 	// Force the running debuggee to stop, so its memory can be patched, then keep
@@ -874,103 +860,6 @@ class DebugSession {
 			}
 		}
 		return nativeThrowAddress;
-	}
-
-	// True when no live frame's current op sits inside a `try` block — only HL's
-	// root handler would catch the throw. Typed catches are approximated as always
-	// matching (any active try counts as catching), so this can under-report an
-	// uncaught throw whose only enclosing catch has a non-matching type.
-	function isUncaught(threadId:Int):Bool {
-		for (frame in stackWalker.walk(threadId)) {
-			if (tryRegions.isProtected(frame.fidx, frame.op)) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	// Describes a LOW-LEVEL runtime fault (Error/StackOverflow wait outcome):
-	// unlike a Haxe throw there is no exception value to read, and HL's debug
-	// API exposes no OS exception record, so the precise cause (null access,
-	// bad arithmetic, wild pointer, ...) is not knowable here. Give the user
-	// what we do know — the kind, the faulting function and source line — and
-	// warn that the fault is not steppable: resuming re-executes the faulting
-	// instruction (hl_debug_resume has no pass-to-program mode), so
-	// step/continue can never get past it.
-	function describeRuntimeError(threadId:Int, stackOverflow:Bool):String {
-		var what = stackOverflow
-			? "Stack overflow"
-			: "Low-level runtime error (such as a null access or invalid arithmetic; the VM reports no further detail)";
-		var where = "";
-		var frames = inspector.framesFor(threadId);
-		if (frames.length > 0) {
-			var location = frames[0].location;
-			var source = module.lookup(location.fidx, location.op);
-			where = " in " + module.functionName(location.fidx)
-				+ (source != null ? " (" + source.file + ":" + source.line + ")" : "");
-		}
-		return what + where + ". Execution cannot continue past this instruction.";
-	}
-
-	// At hl_throw's entry, true when the immediate caller is C runtime code (the
-	// return address on the stack is NOT in JIT code) — i.e. the throw was raised
-	// by the VM (null access, bounds, cast, div0), not by a bytecode OThrow whose
-	// caller is jitted. Bytecode throws are left to the OThrow-based breakpoints.
-	function raisedByRuntime(threadId:Int):Bool {
-		var esp = api.readRegister(debuggeePid, threadId, Esp);
-		var returnAddress = memReader.readPointer(esp);
-		return !jit.isCodePtr(returnAddress);
-	}
-
-	// The stopped(reason:"exception") text for a VM-raised error. `thrown` is
-	// the vdynamic parked in the thread's exc_value — available when the stop is
-	// hl_throw's own break; for hl_error_msg-raised errors it decodes to the
-	// exact runtime message ("Null access .length", "Out of bounds 5/3", ...).
-	// Null (registry unreadable, or decode failure) degrades to a generic text.
-	function describeVmThrow(threadId:Int, thrown:Null<Pointer>):String {
-		var message = thrown != null ? inspector.previewDynamicPointer(thrown) : null;
-		var frames = inspector.framesFor(threadId);
-		var where = null;
-		if (frames.length > 0) {
-			var location = frames[0].location;
-			var source = module.lookup(location.fidx, location.op);
-			where = module.functionName(location.fidx)
-				+ (source != null ? " (" + source.file + ":" + source.line + ")" : "");
-		}
-		if (message != null) {
-			return "HashLink VM exception: " + message + (where != null ? " — in " + where : "");
-		}
-		return "HashLink VM exception" + (where != null ? " in " + where : "")
-			+ " (such as a null access or out-of-bounds — inspect the locals to see the offending value).";
-	}
-
-	// Describes the value being thrown (the exception in register `reg` of the top
-	// frame) for the stopped(reason:"exception") text; a generic message if it
-	// can't be read.
-	function describeThrow(threadId:Int, reg:Int):String {
-		var frames = inspector.framesFor(threadId);
-		if (frames.length == 0) {
-			return "Exception thrown";
-		}
-		var value = inspector.readRegisterValue(frames[0].frameId, reg);
-		if (value == null || value.value == null) {
-			return "Exception thrown";
-		}
-		return value.type != null ? value.type + ": " + value.value : value.value;
-	}
-
-	// True when the thrown value (register `reg` of the throwing frame) is an
-	// instance of one of the configured type filters — by FQN or simple name,
-	// including subclasses (the tsuper chain). Empty filter set ⇒ false.
-	function throwMatchesTypes(threadId:Int, reg:Int):Bool {
-		if (exceptionBreakTypes.length == 0) {
-			return false;
-		}
-		var frames = inspector.framesFor(threadId);
-		if (frames.length == 0) {
-			return false;
-		}
-		return inspector.registerValueMatchesType(frames[0].frameId, reg, exceptionBreakTypes);
 	}
 
 	// The single-step-over-the-patched-instruction sequence. On return the
@@ -1372,7 +1261,7 @@ class DebugSession {
 				api.resume(debuggeePid, outcome.threadId);
 			case Error, StackOverflow:
 				enterStopped(outcome.threadId, null);
-				emit(EvStoppedException(outcome.threadId, describeRuntimeError(outcome.threadId, outcome.result == StackOverflow)));
+				emit(EvStoppedException(outcome.threadId, descriptions.runtimeError(outcome.threadId, outcome.result == StackOverflow)));
 			case Handled:
 				// hl_debug_wait already continued this event internally (thread
 				// create/exit/set-name, dll load, ...). Continuing again is at
@@ -1423,7 +1312,7 @@ class DebugSession {
 			pendingVmThrow.remove(threadId);
 			vmExceptions.disarmCatchAll(threadId);
 			enterStopped(threadId, null);
-			emit(EvStoppedException(threadId, describeVmThrow(threadId, vmExceptions.thrownValue(threadId))));
+			emit(EvStoppedException(threadId, descriptions.vmThrow(threadId, vmExceptions.thrownValue(threadId))));
 			return;
 		}
 		api.resume(debuggeePid, threadId);
@@ -1453,8 +1342,8 @@ class DebugSession {
 	// (same trap-dance as a false conditional breakpoint), so the catch runs.
 	function handleExceptionSiteHit(threadId:Int, excEntry:{bp:PatchedBreakpoint, reg:Int}):Void {
 		var stop = exceptionBreakAll
-			|| (exceptionBreakUncaught && isUncaught(threadId))
-			|| throwMatchesTypes(threadId, excEntry.reg);
+			|| (exceptionBreakUncaught && throwClassifier.isUncaught(threadId))
+			|| throwClassifier.throwMatchesTypes(threadId, excEntry.reg, exceptionBreakTypes);
 		if (!stop) {
 			resumePastSuppressedTrap(threadId, excEntry.bp);
 			return;
@@ -1464,7 +1353,7 @@ class DebugSession {
 		// Reported BEFORE the throw executes, so the frame is the throwing function.
 		breakpoints.suspend(excEntry.bp);
 		enterStopped(threadId, excEntry.bp);
-		emit(EvStoppedException(threadId, describeThrow(threadId, excEntry.reg)));
+		emit(EvStoppedException(threadId, descriptions.thrown(threadId, excEntry.reg)));
 	}
 
 	// hl_throw's entry: EVERY exception passes through here. We only surface
@@ -1482,11 +1371,11 @@ class DebugSession {
 	// stop here, with a generic description.
 	function handleNativeThrowHit(threadId:Int):Void {
 		var syntheticBp = breakpoints.nativeThrowBreakpoint();
-		var vmRaised = raisedByRuntime(threadId);
+		var vmRaised = throwClassifier.raisedByRuntime(threadId);
 		if (vmRaised && !(vmExceptions != null && vmExceptions.armCatchAll(threadId))) {
 			breakpoints.suspend(syntheticBp);
 			enterStopped(threadId, syntheticBp);
-			emit(EvStoppedException(threadId, describeVmThrow(threadId, null)));
+			emit(EvStoppedException(threadId, descriptions.vmThrow(threadId, null)));
 			return;
 		}
 		if (vmRaised) {
