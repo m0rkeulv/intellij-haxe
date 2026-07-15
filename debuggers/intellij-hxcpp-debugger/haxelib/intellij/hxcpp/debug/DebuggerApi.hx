@@ -3,9 +3,12 @@ package intellij.hxcpp.debug;
 /**
 	Everything the server needs from `cpp.vm.Debugger`, behind an interface so
 	the unit tests run under the interpreter against a scriptable fake (the
-	native implementation is cpp-only). Data crosses as plain typedefs — the
-	std ThreadInfo/StackFrame classes have (default,null) fields a fake could
-	not construct.
+	native implementation is cpp-only). Data crosses as plain typedefs because
+	the std types CANNOT: the compiler rejects the cpp package on any other
+	target ("You cannot access the cpp package while targeting eval"), so
+	`ThreadInfo`/`StackFrame` may not appear in any signature shared with
+	interpreter-run code — only the native implementation sees them and
+	converts.
 **/
 interface DebuggerApi {
 	/** Marks the calling (server) thread as never-breaking. */
