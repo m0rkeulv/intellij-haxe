@@ -32,7 +32,7 @@ class Evaluator {
 		var trimmed = StringTools.trim(expression);
 		var assignment = topLevelAssignment(trimmed);
 
-		var interp = new Interp();
+		var interp = new ResolvingInterp();
 		for (name in debugger.stackVariables(thread, frame)) {
 			interp.variables.set(name, debugger.stackVariableValue(thread, frame, name));
 		}
@@ -133,5 +133,37 @@ class Evaluator {
 			}
 		}
 		return true;
+	}
+}
+
+/**
+	hscript `Interp` whose identifier lookup falls back to the debuggee's own
+	types: a name that is not a frame local resolves via `Type.resolveClass`
+	/ `Type.resolveEnum`, so expressions can call static methods and construct
+	objects (`Counter.bump(5)`, `new Point(1, 2)`).
+
+	Method calls run through `Reflect.callMethod` on the REAL object — hscript
+	is not a sandbox — so an evaluated call executes compiled debuggee code and
+	its side effects persist in the program.
+
+	Limitation: only single-identifier names resolve (types in the root
+	package, like `Math`, `Std` and the fixture's `Counter`); dotted package
+	paths do not, because hscript sees `pack.Cls` as field access on the
+	identifier `pack`.
+**/
+private class ResolvingInterp extends Interp {
+	override function resolve(id:String):Dynamic {
+		if (variables.exists(id)) {
+			return variables.get(id);
+		}
+		var cls = Type.resolveClass(id);
+		if (cls != null) {
+			return cls;
+		}
+		var en = Type.resolveEnum(id);
+		if (en != null) {
+			return en;
+		}
+		return super.resolve(id); // throws EUnknownVariable
 	}
 }

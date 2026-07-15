@@ -8,6 +8,9 @@ class EvaluatorTest {
 		readsFrameLocals(assert);
 		fieldAndIndexAccess(assert);
 		assignmentWritesBackToTheFrame(assert);
+		methodCallsMutateTheRealObject(assert);
+		staticCallsReachRealCompiledCode(assert);
+		constructionAndCallsCompose(assert);
 		conditionHoldsIsFailSafe(assert);
 	}
 
@@ -54,6 +57,36 @@ class EvaluatorTest {
 		// `==` is NOT an assignment
 		t.eval.evaluate(0, 0, "count == 99");
 		assert.equals(1, t.api.setVarCalls.length, "comparison did not write");
+	}
+
+	// The user-visible guarantee behind evaluate: hscript is reflection over
+	// LIVE references, not a sandbox. A method called on a frame local runs
+	// the real compiled method and mutates the real object.
+	static function methodCallsMutateTheRealObject(assert:Assert):Void {
+		var t = make();
+		var box = new EvalTarget(10);
+		t.api.localNames = ["box"];
+		t.api.localValues.set("box", box);
+		assert.equals(17, t.eval.evaluate(0, 0, "box.addTo(7)"), "method call returns the method's result");
+		assert.equals(17, box.value, "the REAL object was mutated (same reference)");
+		assert.equals(17, t.eval.evaluate(0, 0, "box.value"), "a later evaluate sees the mutation");
+		assert.equals(0, t.api.setVarCalls.length, "mutation went through the object, not variable write-back");
+	}
+
+	static function staticCallsReachRealCompiledCode(assert:Assert):Void {
+		var t = make();
+		EvalTarget.total = 0;
+		assert.equals(5, t.eval.evaluate(0, 0, "EvalTarget.bump(5)"), "static method call returns");
+		assert.equals(5, EvalTarget.total, "real static state was mutated");
+		t.eval.evaluate(0, 0, "EvalTarget.bump(2)");
+		assert.equals(7, EvalTarget.total, "state persists and accumulates across evaluates");
+		assert.equals(7, t.eval.evaluate(0, 0, "EvalTarget.total"), "static field reads back through evaluate");
+	}
+
+	static function constructionAndCallsCompose(assert:Assert):Void {
+		var t = make();
+		assert.equals(9, t.eval.evaluate(0, 0, "new EvalTarget(4).addTo(5)"), "constructs a real instance and calls it");
+		assert.equals(4, t.eval.evaluate(0, 0, "Std.int(4.7)"), "std-library statics resolve too");
 	}
 
 	static function conditionHoldsIsFailSafe(assert:Assert):Void {

@@ -17,3 +17,17 @@ class Main {
 		return current + amount; // FIXTURE_ADD_LINE = 17
 	}
 }
+
+// Evaluate-time mutation target (never called by the fixture itself): probes
+// call Counter.bump() from an `evaluate` request to prove evaluated method
+// calls execute real compiled code and their side effects persist in the
+// debuggee. @:keep so no future dce flag strips the uncalled method.
+@:keep
+class Counter {
+	public static var total = 0;
+
+	public static function bump(amount:Int):Int {
+		total += amount;
+		return total;
+	}
+}

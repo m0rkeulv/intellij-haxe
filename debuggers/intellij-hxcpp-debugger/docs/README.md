@@ -132,6 +132,24 @@ it as `null`, `null == 2` is `false`, and the conditional breakpoint suppresses
 EVERY hit instead of erroring. The DAP `evaluate` request looked fine only
 because clients pass an explicit `frameId` from `stackTrace`.
 
+## 13. evaluate is LIVE — hscript is reflection, not a sandbox
+
+hscript does not interpret a copy of the program: every operation bottoms out
+in `Reflect` on the REAL values bridged from the frame (`Interp.call` is
+literally `Reflect.callMethod(o, f, args)`). So `box.addTo(7)` in a watch runs
+the compiled method and mutates the real object, and the change persists after
+resume — exactly like evaluate in the Java debugger. Our `ResolvingInterp`
+additionally resolves bare type names via `Type.resolveClass`/`resolveEnum`,
+so static calls (`Counter.bump(5)`, `Std.int(x)`) and `new` work too.
+Verified live: an evaluated `Counter.bump()` accumulated static state across
+separate evaluate requests against the native fixture.
+
+Two boundaries to remember: reassigning a frame LOCAL only persists through
+the explicit `name = expr` write-back path (hscript's own scope is scratch),
+and dotted package paths (`pack.Cls.fn()`) don't resolve — hscript parses
+`pack` as an identifier. Side effect of liveness: a careless watch expression
+can change program behavior; that is inherent to in-process evaluation.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log
