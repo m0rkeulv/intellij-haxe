@@ -748,6 +748,29 @@ class DebugSession {
 		return true;
 	}
 
+	// Describes a LOW-LEVEL runtime fault (Error/StackOverflow wait outcome):
+	// unlike a Haxe throw there is no exception value to read, and HL's debug
+	// API exposes no OS exception record, so the precise cause (null access,
+	// bad arithmetic, wild pointer, ...) is not knowable here. Give the user
+	// what we do know — the kind, the faulting function and source line — and
+	// warn that the fault is not steppable: resuming re-executes the faulting
+	// instruction (hl_debug_resume has no pass-to-program mode), so
+	// step/continue can never get past it.
+	function describeRuntimeError(threadId:Int, stackOverflow:Bool):String {
+		var what = stackOverflow
+			? "Stack overflow"
+			: "Low-level runtime error (such as a null access or invalid arithmetic; the VM reports no further detail)";
+		var where = "";
+		var frames = inspector.framesFor(threadId);
+		if (frames.length > 0) {
+			var location = frames[0].location;
+			var source = module.lookup(location.fidx, location.op);
+			where = " in " + module.functionName(location.fidx)
+				+ (source != null ? " (" + source.file + ":" + source.line + ")" : "");
+		}
+		return what + where + ". Execution cannot continue past this instruction.";
+	}
+
 	// Describes the value being thrown (the exception in register `reg` of the top
 	// frame) for the stopped(reason:"exception") text; a generic message if it
 	// can't be read.
@@ -1134,7 +1157,7 @@ class DebugSession {
 				api.resume(debuggeePid, outcome.threadId);
 			case Error, StackOverflow:
 				enterStopped(outcome.threadId, null);
-				emit(EvStoppedException(outcome.threadId, outcome.result == StackOverflow ? "Stack overflow" : "Unhandled exception"));
+				emit(EvStoppedException(outcome.threadId, describeRuntimeError(outcome.threadId, outcome.result == StackOverflow)));
 			case Handled:
 				// hl_debug_wait already continued this event internally (thread
 				// create/exit/set-name, dll load, ...). Continuing again is at

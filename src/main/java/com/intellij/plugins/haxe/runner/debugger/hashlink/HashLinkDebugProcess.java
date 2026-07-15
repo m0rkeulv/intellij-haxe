@@ -289,6 +289,9 @@ public class HashLinkDebugProcess extends XDebugProcess {
     if ("exception".equals(stopped.getBody().getReason())) {
       String description = stopped.getBody().getDescription();
       exceptionText = description != null ? description : "Exception thrown";
+      // the gutter icon's tooltip is easy to miss - put the text where the
+      // user is already looking
+      print(exceptionText + "\n", true);
     }
     reportStopped(currentThreadId, exceptionText);
     // run-to-cursor is one-shot: any stop (including a breakpoint reached before the
