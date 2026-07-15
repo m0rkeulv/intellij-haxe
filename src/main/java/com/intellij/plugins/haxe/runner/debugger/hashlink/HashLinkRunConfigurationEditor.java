@@ -18,6 +18,9 @@ import org.jetbrains.annotations.NotNull;
 /**
  * Settings UI for a HashLink run configuration: module, compiled .hl file
  * (optional — auto-detected from the build when empty) and working directory.
+ * The file chooser also accepts .dat, so a Lime/OpenFL distribution's
+ * {@code hlboot.dat} (the game's bytecode next to the renamed hl.exe) can be
+ * debugged in place.
  */
 public class HashLinkRunConfigurationEditor extends SettingsEditor<HashLinkRunConfiguration> {
   private final Project project;
@@ -28,7 +31,11 @@ public class HashLinkRunConfigurationEditor extends SettingsEditor<HashLinkRunCo
 
   public HashLinkRunConfigurationEditor(Project project) {
     this.project = project;
-    browseInto(hlFileField, FileChooserDescriptorFactory.createSingleFileDescriptor("hl"));
+    browseInto(hlFileField, FileChooserDescriptorFactory.createSingleFileDescriptor()
+      .withFileFilter(file -> {
+        String extension = file.getExtension();
+        return "hl".equalsIgnoreCase(extension) || "dat".equalsIgnoreCase(extension);
+      }));
     browseInto(workingDirectoryField, FileChooserDescriptorFactory.createSingleFolderDescriptor());
     panel = FormBuilder.createFormBuilder()
       .addLabeledComponent(HaxeBundle.message("hashlink.runner.editor.module"), moduleCombo)

@@ -63,11 +63,13 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
   @Override
   public void apply() throws ConfigurationException {
     final HaxeSdkData haxeSdkData = getHaxeSdkData();
-    if (haxeSdkData == null) {
-      return;
-    }
-
-    final HaxeSdkData newData = new HaxeSdkData(haxeSdkData.getHomePath(), haxeSdkData.getVersion());
+    // An SDK entry can lack HaxeSdkData (created by an old plugin version, or a
+    // deferred setup write that never ran). Returning here would silently drop
+    // everything typed in this panel, with no way to ever configure the SDK
+    // short of deleting and recreating it — so create the data instead.
+    final HaxeSdkData newData = haxeSdkData != null
+                                ? new HaxeSdkData(haxeSdkData.getHomePath(), haxeSdkData.getVersion())
+                                : new HaxeSdkData(mySdk.getHomePath(), mySdk.getVersionString());
     newData.setNekoBinPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getNekoBinPath()));
     newData.setHlBinPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getHlBinPath()));
     newData.setHaxelibPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getHaxelibPath()));
