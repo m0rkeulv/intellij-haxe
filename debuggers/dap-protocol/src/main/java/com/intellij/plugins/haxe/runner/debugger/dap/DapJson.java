@@ -7,6 +7,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.Continue
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.NextResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.PauseResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInTargetsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepOutResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.DisconnectResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ErrorResponse;
@@ -34,6 +35,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExcept
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
@@ -104,6 +106,7 @@ public final class DapJson {
       case "continue" -> ContinueRequest.class;
       case "next" -> NextRequest.class;
       case "stepIn" -> StepInRequest.class;
+      case "stepInTargets" -> StepInTargetsRequest.class;
       case "stepOut" -> StepOutRequest.class;
       case "pause" -> PauseRequest.class;
       case "evaluate" -> EvaluateRequest.class;
@@ -129,6 +132,7 @@ public final class DapJson {
       case "continue" -> ContinueResponse.class;
       case "next" -> NextResponse.class;
       case "stepIn" -> StepInResponse.class;
+      case "stepInTargets" -> StepInTargetsResponse.class;
       case "stepOut" -> StepOutResponse.class;
       case "pause" -> PauseResponse.class;
       case "stackTrace" -> StackTraceResponse.class;

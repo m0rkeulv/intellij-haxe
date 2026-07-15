@@ -12,7 +12,11 @@ enum SessionCommand {
 	CmdSetBreakpoints(requestSeq:Int, sourceKey:String, sourcePath:String, breakpoints:Array<RequestedBreakpoint>, isReverify:Bool);
 	CmdConfigurationDone(requestSeq:Int);
 	CmdContinue(requestSeq:Int, threadId:Int);
-	CmdStep(requestSeq:Int, threadId:Int, mode:StepMode);
+	// `targetId` (stepIn only): the call-opcode id from a preceding stepInTargets
+	// — enter THAT call instead of the first one reached; null = plain step.
+	CmdStep(requestSeq:Int, threadId:Int, mode:StepMode, targetId:Null<Int>);
+	// Lists the calls on `frameId`'s stopped line as step-into choices.
+	CmdStepInTargets(requestSeq:Int, frameId:Int);
 	CmdPause(requestSeq:Int, threadId:Int);
 	// Enables/disables breaking on thrown exceptions; `filters` is the DAP filter
 	// id list (non-empty = enable "all exceptions", empty = disable).

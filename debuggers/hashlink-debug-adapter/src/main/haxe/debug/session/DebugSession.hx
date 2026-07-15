@@ -221,7 +221,8 @@ class DebugSession {
 			case CmdSetBreakpoints(seq, _, _, _, _): seq;
 			case CmdConfigurationDone(seq): seq;
 			case CmdContinue(seq, _): seq;
-			case CmdStep(seq, _, _): seq;
+			case CmdStep(seq, _, _, _): seq;
+			case CmdStepInTargets(seq, _): seq;
 			case CmdPause(seq, _): seq;
 			case CmdSetExceptionBreakpoints(seq, _, _): seq;
 			case CmdThreads(seq): seq;
@@ -245,8 +246,10 @@ class DebugSession {
 				handleConfigurationDone(seq);
 			case CmdContinue(seq, threadId):
 				handleContinue(seq, threadId);
-			case CmdStep(seq, threadId, mode):
-				handleStep(seq, threadId, mode);
+			case CmdStep(seq, threadId, mode, targetId):
+				handleStep(seq, threadId, mode, targetId);
+			case CmdStepInTargets(seq, frameId):
+				handleStepInTargets(seq, frameId);
 			case CmdPause(seq, threadId):
 				handlePause(seq, threadId);
 			case CmdSetExceptionBreakpoints(seq, filters, filterTypes):
@@ -997,10 +1000,10 @@ class DebugSession {
 
 	// --- stepping ---
 
-	function handleStep(requestSeq:Int, threadId:Int, mode:StepMode):Void {
+	function handleStep(requestSeq:Int, threadId:Int, mode:StepMode, targetId:Null<Int>):Void {
 		switch (state) {
 			case Stopped(_):
-				var interrupted = planStep(threadId, mode);
+				var interrupted = planStep(threadId, mode, targetId);
 				state = Running;
 				emit(EvStepStarted(requestSeq)); // ack now; the stopped(reason:"step") event follows
 				if (interrupted != null) {
@@ -1021,12 +1024,51 @@ class DebugSession {
 		}
 	}
 
+	function handleStepInTargets(requestSeq:Int, frameId:Int):Void {
+		switch (state) {
+			case Stopped(_):
+				emit(EvStepInTargets(requestSeq, computeStepInTargets(frameId)));
+			default:
+				reject(requestSeq, "Cannot list step-in targets: debuggee is not stopped");
+		}
+	}
+
+	// The calls on `frameId`'s stopped line, as smart-step-into choices. Only the
+	// newest frame can step, so any other frame gets an empty list (not an error:
+	// the client asks per its UI state). Unresolvable callees (closures, virtual
+	// dispatch through a vtable) are omitted — the plain stepIn still enters them.
+	function computeStepInTargets(frameId:Int):Array<StepInTargetInfo> {
+		var frame = inspector.frameAt(frameId);
+		if (frame == null || frame.index != 0) {
+			return [];
+		}
+		var fidx = frame.location.fidx;
+		var startOp = frame.location.op;
+		var startLine = module.lineOf(fidx, startOp);
+		var graph = new CodeGraph(module.opcodes(fidx));
+		var targets = graph.stepTargets(startOp, startLine, (op) -> module.lineOf(fidx, op));
+		var callOps = targets.callOps.copy();
+		callOps.sort((a, b) -> a - b); // the CFG walk is DFS; present in execution order
+		var result:Array<StepInTargetInfo> = [];
+		for (op in callOps) {
+			var callee = module.callTargetFunction(fidx, op);
+			if (callee >= 0) {
+				result.push({id: op, label: module.functionName(callee)});
+			}
+		}
+		return result;
+	}
+
 	// Plant the temporary breakpoints that mark where this step should land, then
 	// resume (stepping over the instruction we are parked on). `activeStep`
 	// afterwards says whether any landing was planted (null = the caller
 	// downgrades the step to a plain continue). Returns a pending debug event
 	// when another thread interrupted the resume dance.
-	function planStep(threadId:Int, mode:StepMode):Null<WaitOutcome> {
+	// `targetId` (stepIn only): enter ONLY the call at that opcode (a smart step
+	// into choice from stepInTargets); the line-change/return landings stay
+	// planted as a fallback, so a selected call that never executes (short
+	// circuit, conditional) degrades to a step-over stop instead of running away.
+	function planStep(threadId:Int, mode:StepMode, targetId:Null<Int>):Null<WaitOutcome> {
 		breakpoints.clearTemps();
 		activeStep = null;
 		var startEsp = api.readRegister(debuggeePid, threadId, Esp);
@@ -1057,6 +1099,9 @@ class DebugSession {
 			}
 			if (mode == StepIn) {
 				for (op in targets.callOps) {
+					if (targetId != null && op != targetId) {
+						continue; // targeted step: only the chosen call's entry
+					}
 					var callee = module.callTargetFunction(fidx, op);
 					if (callee >= 0) {
 						breakpoints.addTemp(jit.addressOf(callee, 0)); // callee entry = first opcode

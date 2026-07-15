@@ -20,6 +20,7 @@ enum DebugEvent {
 	EvPaused(requestSeq:Int); // ack for a pause request; the stopped(reason:"pause") event follows
 	EvExceptionBreakpointsSet(requestSeq:Int); // ack for a setExceptionBreakpoints request
 	EvThreads(requestSeq:Int, threads:Array<ThreadInfo>);
+	EvStepInTargets(requestSeq:Int, targets:Array<StepInTargetInfo>);
 	EvStackTrace(requestSeq:Int, frames:Array<FrameInfo>);
 	EvScopes(requestSeq:Int, scopes:Array<ScopeInfo>);
 	EvVariables(requestSeq:Int, variables:Array<VariableInfo>);

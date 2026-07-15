@@ -47,8 +47,12 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInTargetsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments;
@@ -76,6 +80,7 @@ import com.intellij.xdebugger.breakpoints.XBreakpointType;
 import com.intellij.xdebugger.breakpoints.XLineBreakpoint;
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider;
 import com.intellij.xdebugger.frame.XSuspendContext;
+import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import com.intellij.xdebugger.ui.XDebugTabLayouter;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -122,6 +127,9 @@ public class HashLinkDebugProcess extends XDebugProcess {
   private volatile Process adapterProcess;
   private volatile DapClient client;
   private volatile int currentThreadId = 1;
+  // the DAP frame id of the newest frame at the current stop (-1 before the first);
+  // smart step into asks the adapter for that frame's step-in targets
+  private volatile int topFrameId = -1;
   private volatile boolean shuttingDown = false;
   private volatile HashLinkRegistersPanel registersPanel;
   // which exception breakpoints are enabled (union sent to the adapter)
@@ -303,6 +311,7 @@ public class HashLinkDebugProcess extends XDebugProcess {
   private void reportStopped(int threadId, String exceptionText) {
     List<DapThread> threads = requestThreads();
     List<StackFrame> activeFrames = requestStackTrace(threadId);
+    topFrameId = activeFrames.isEmpty() ? -1 : activeFrames.get(0).getId();
     getSession().positionReached(
       new HashLinkSuspendContext(this, threads, threadId, activeFrames, exceptionText));
   }
@@ -441,6 +450,16 @@ public class HashLinkDebugProcess extends XDebugProcess {
     onRequestThread(() -> sendRequest(request));
   }
 
+  /** Smart step into: enter the specific call chosen from the step-in targets. */
+  void stepIntoTarget(int targetId) {
+    StepInRequest request = new StepInRequest();
+    StepInArguments arguments = new StepInArguments();
+    arguments.setThreadId(currentThreadId);
+    arguments.setTargetId(targetId);
+    request.setArguments(arguments);
+    onRequestThread(() -> sendRequest(request));
+  }
+
   @Override
   public void startStepOut(@Nullable XSuspendContext context) {
     StepOutRequest request = new StepOutRequest();
@@ -526,6 +545,24 @@ public class HashLinkDebugProcess extends XDebugProcess {
            ? response.getBody().getScopes() : List.of();
   }
 
+  /**
+   * The calls on the stopped line the user can choose to step into (empty when
+   * running, no frames, or the adapter can't resolve any callee).
+   */
+  List<StepInTarget> requestStepInTargets() {
+    int frameId = topFrameId;
+    if (frameId < 0) {
+      return List.of();
+    }
+    StepInTargetsRequest request = new StepInTargetsRequest();
+    StepInTargetsArguments arguments = new StepInTargetsArguments();
+    arguments.setFrameId(frameId);
+    request.setArguments(arguments);
+    return sendRequest(request) instanceof StepInTargetsResponse response && response.isSuccess()
+           && response.getBody() != null && response.getBody().getTargets() != null
+           ? response.getBody().getTargets() : List.of();
+  }
+
   List<Variable> requestVariables(int variablesReference) {
     VariablesRequest request = new VariablesRequest();
     VariablesArguments arguments = new VariablesArguments();
@@ -573,6 +610,11 @@ public class HashLinkDebugProcess extends XDebugProcess {
   @Override
   public @NotNull XDebuggerEditorsProvider getEditorsProvider() {
     return new HaxeDebuggerEditorsProvider();
+  }
+
+  @Override
+  public XSmartStepIntoHandler<?> getSmartStepIntoHandler() {
+    return new HashLinkSmartStepIntoHandler(this);
   }
 
   @Override

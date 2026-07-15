@@ -216,6 +216,14 @@ On a step, from the current `(function, opcode, line)`:
   stepIn falls back to step-over behaviour for those — a documented limitation.
 - **stepOut:** a temp only at the caller's return address (frame 1 from the stack
   walker).
+- **smart step into (stepInTargets + stepIn targetId):** `stepInTargets` lists the
+  resolvable calls on the stopped line (call-opcode id + callee name, execution
+  order); a stepIn carrying one of those ids plants the callee-entry temp ONLY for
+  that call. The line-change/return temps stay planted as a fallback, so a chosen
+  call that never executes (short-circuit, conditional) degrades to a step-over
+  stop instead of running away. Ids are opcode indexes — stateless; the stepIn
+  re-resolves the callee from the same opcode. Unresolvable callees
+  (`OCallMethod`/`OCallThis`/`OCallClosure`) are omitted from the list.
 
 Then the debuggee is resumed via the existing step-over-the-current-instruction
 dance. The pieces are all reused: opcode→line (`ModuleDebugInfo`), opcode→address

@@ -191,6 +191,13 @@ class VariableInspector {
 	}
 
 	/**
+		The cached frame a DAP frameId names, or null when unknown/stale.
+	**/
+	public inline function frameAt(frameId:Int):Null<CachedFrame> {
+		return stops.frameAt(frameId);
+	}
+
+	/**
 		The scopes of a cached frame: Locals, plus Statics when the owning class has static data.
 	**/
 	public inline function scopesFor(frameId:Int):Array<ScopeInfo> {

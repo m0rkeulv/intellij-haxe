@@ -12,4 +12,5 @@ public class Capabilities {
   private Boolean supportsEvaluateForHovers;
   private Boolean supportsSetVariable;
   private Boolean supportsConditionalBreakpoints;
+  private Boolean supportsStepInTargetsRequest;
 }

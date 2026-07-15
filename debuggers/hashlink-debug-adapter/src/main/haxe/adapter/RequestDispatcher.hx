@@ -29,6 +29,8 @@ import dap.protocol.requests.EvaluateArguments;
 import dap.protocol.requests.VariablesArguments;
 import dap.protocol.SourceBreakpoint;
 import dap.protocol.requests.StackTraceArguments;
+import dap.protocol.requests.StepInTargetsArguments;
+import dap.protocol.responses.StepInTargetsResponseBody;
 import dap.protocol.responses.ThreadsResponseBody;
 import haxe.Json;
 
@@ -114,6 +116,8 @@ class RequestDispatcher {
 				handleStep(request, Next);
 			case "stepIn":
 				handleStep(request, StepIn);
+			case "stepInTargets":
+				handleStepInTargets(request);
 			case "stepOut":
 				handleStep(request, StepOut);
 			case "pause":
@@ -144,6 +148,7 @@ class RequestDispatcher {
 			supportsConfigurationDoneRequest: true, supportsVariableType: true,
 			supportsEvaluateForHovers: true, supportsSetVariable: true,
 			supportsConditionalBreakpoints: true,
+			supportsStepInTargetsRequest: true,
 			exceptionBreakpointFilters: [
 				{filter: "all", label: "All Exceptions"},
 				{filter: "uncaught", label: "Uncaught Exceptions"}
@@ -234,10 +239,32 @@ class RequestDispatcher {
 			sendError(request.seq, request.command, ERROR_INVALID_REQUEST, "Cannot step: nothing is running");
 			return;
 		}
-		// next/stepIn/stepOut all carry {threadId}
+		// next/stepIn/stepOut all carry {threadId}; stepIn may carry a targetId
+		// (a call-opcode id from stepInTargets — enter that specific call)
 		var threadId = request.arguments != null && Reflect.hasField(request.arguments, "threadId") ? request.arguments.threadId : currentThreadId;
+		var targetId:Null<Int> = null;
+		if (mode == StepIn && request.arguments != null) {
+			var raw:Dynamic = Reflect.field(request.arguments, "targetId");
+			if (Std.isOfType(raw, Int)) {
+				targetId = raw;
+			}
+		}
 		defer(request);
-		sessionCommands(CmdStep(request.seq, threadId, mode));
+		sessionCommands(CmdStep(request.seq, threadId, mode, targetId));
+	}
+
+	function handleStepInTargets(request:Request):Void {
+		if (!launched) {
+			sendError(request.seq, request.command, ERROR_INVALID_REQUEST, "Cannot list step-in targets: nothing is running");
+			return;
+		}
+		var args:StepInTargetsArguments = request.arguments;
+		if (args == null || !Reflect.hasField(args, "frameId")) {
+			sendError(request.seq, request.command, ERROR_INVALID_REQUEST, "Missing frameId");
+			return;
+		}
+		defer(request);
+		sessionCommands(CmdStepInTargets(request.seq, args.frameId));
 	}
 
 	function handlePause(request:Request):Void {
@@ -355,6 +382,9 @@ class RequestDispatcher {
 				completeSuccess(seq, null);
 			case EvThreads(seq, threads):
 				completeSuccess(seq, threadsBody(threads));
+			case EvStepInTargets(seq, targets):
+				var body:StepInTargetsResponseBody = {targets: [for (t in targets) {id: t.id, label: t.label}]};
+				completeSuccess(seq, body);
 			case EvStackTrace(seq, frames):
 				completeSuccess(seq, stackTraceBody(frames));
 			case EvScopes(seq, scopes):
