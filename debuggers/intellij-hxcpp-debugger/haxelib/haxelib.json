@@ -8,6 +8,7 @@
 	"releasenote": "Scaffolding (M0)",
 	"contributors": ["intellij-haxe"],
 	"dependencies": {
-		"intellij-dap-protocol": ""
+		"intellij-dap-protocol": "",
+		"hscript": ""
 	}
 }

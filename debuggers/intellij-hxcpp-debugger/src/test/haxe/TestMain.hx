@@ -12,7 +12,8 @@ class TestMain {
 			{name: "FileMatcherTest", run: tests.FileMatcherTest.run},
 			{name: "BreakpointsTest", run: tests.BreakpointsTest.run},
 			{name: "ValuesTest", run: tests.ValuesTest.run},
-			{name: "VariablesViewTest", run: tests.VariablesViewTest.run}
+			{name: "VariablesViewTest", run: tests.VariablesViewTest.run},
+			{name: "EvaluatorTest", run: tests.EvaluatorTest.run}
 		];
 		for (test in tests) {
 			test.run(assert);

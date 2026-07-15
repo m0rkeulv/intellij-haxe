@@ -5,6 +5,7 @@ import dap.protocol.requests.SetBreakpointsArguments;
 import haxe.Json;
 import intellij.hxcpp.debug.DebuggerApi;
 import intellij.hxcpp.debug.breakpoints.Breakpoints;
+import intellij.hxcpp.debug.eval.Evaluator;
 import intellij.hxcpp.debug.values.VariablesView;
 
 /**
@@ -22,6 +23,7 @@ class Dispatcher {
 	final send:String->Void;
 	final breakpoints:Breakpoints;
 	final variablesView:VariablesView;
+	final evaluator:Evaluator;
 	var nextSeq:Int = 1;
 	var nextBreakpointId:Int = 1;
 
@@ -61,6 +63,7 @@ class Dispatcher {
 		this.send = send;
 		this.breakpoints = new Breakpoints(debugger);
 		this.variablesView = new VariablesView(debugger);
+		this.evaluator = new Evaluator(debugger);
 	}
 
 	/**
@@ -83,7 +86,10 @@ class Dispatcher {
 		switch (command) {
 			case "initialize":
 				sendResponse(seq, command, true, {
-					supportsConfigurationDoneRequest: true
+					supportsConfigurationDoneRequest: true,
+					supportsConditionalBreakpoints: true,
+					supportsEvaluateForHovers: true,
+					supportsSetVariable: true
 				});
 				// the spec requires the initialized event strictly after the response
 				sendEvent("initialized", null);
@@ -122,6 +128,8 @@ class Dispatcher {
 				sendResponse(seq, command, true, {variables: variablesView.variables(reference)});
 			case "setVariable":
 				handleSetVariable(seq, command, request.arguments);
+			case "evaluate":
+				handleEvaluate(seq, command, request.arguments);
 			case "configurationDone":
 				configurationDone = true;
 				sendResponse(seq, command, true, null);
@@ -192,6 +200,25 @@ class Dispatcher {
 		sendResponse(seq, command, true, {
 			scopes: [{name: "Locals", variablesReference: reference, expensive: false}]
 		});
+	}
+
+	// evaluate a watch/hover/repl expression against a frame; a bare assignment
+	// writes back to the debuggee. The frameId is a hxcpp stack index (from
+	// stackTrace); default to the top frame (0) for a global/no-frame evaluate.
+	function handleEvaluate(seq:Int, command:String, args:Dynamic):Void {
+		if (args == null || args.expression == null) {
+			sendResponse(seq, command, false, null, "Missing expression");
+			return;
+		}
+		// default to the innermost frame (highest hxcpp index) for a frameless evaluate
+		var frame = (args.frameId != null) ? args.frameId : (stoppedStack != null ? stoppedStack.length - 1 : 0);
+		try {
+			var value = evaluator.evaluate(lastStoppedThread, frame, args.expression);
+			var presented = variablesView.present(value);
+			sendResponse(seq, command, true, {result: presented.value, type: presented.type, variablesReference: presented.variablesReference});
+		} catch (e:Dynamic) {
+			sendResponse(seq, command, false, null, Std.string(e));
+		}
 	}
 
 	function handleSetVariable(seq:Int, command:String, args:Dynamic):Void {
@@ -269,6 +296,18 @@ class Dispatcher {
 
 		// Any other stop ends a pending step.
 		stepActive = false;
+
+		// A conditional breakpoint stops only when its condition is true; a false
+		// condition resumes silently. Evaluated against the INNERMOST frame,
+		// which is the highest hxcpp frame index (stack is innermost-last).
+		if (status == DebugThread.STATUS_STOPPED_BREAKPOINT && breakpoint >= 0) {
+			var condition = breakpoints.conditionForRuntimeNumber(breakpoint);
+			if (condition != null && condition != "" && !evaluator.conditionHolds(threadNumber, stack.length - 1, condition)) {
+				debugger.continueThreads(threadNumber, 1);
+				return;
+			}
+		}
+
 		var body:Dynamic = {
 			reason: stopReason(status),
 			threadId: threadNumber,

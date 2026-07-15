@@ -9,6 +9,7 @@ private typedef Installed = {
 	var id:Int;
 	var runtimeNumber:Int;
 	var line:Int;
+	var condition:Null<String>; // evaluated at each hit when non-null (M5)
 }
 
 /**
@@ -49,7 +50,7 @@ class Breakpoints {
 				results.push({id: ids[i], verified: false, line: line, message: "no matching source file in the debuggee"});
 			} else {
 				var runtimeNumber = debugger.addFileLineBreakpoint(fileKey, line);
-				installed.push({id: ids[i], runtimeNumber: runtimeNumber, line: line});
+				installed.push({id: ids[i], runtimeNumber: runtimeNumber, line: line, condition: requested[i].condition});
 				results.push({id: ids[i], verified: true, line: line});
 			}
 		}
@@ -57,6 +58,18 @@ class Breakpoints {
 			bySource.set(sourceKey(sourcePath), installed);
 		}
 		return results;
+	}
+
+	/** The condition of the breakpoint installed at runtime `number`, or null. */
+	public function conditionForRuntimeNumber(number:Int):Null<String> {
+		for (source in bySource) {
+			for (bp in source) {
+				if (bp.runtimeNumber == number) {
+					return bp.condition;
+				}
+			}
+		}
+		return null;
 	}
 
 	/** The DAP id of the breakpoint installed at runtime `number`, or -1. */

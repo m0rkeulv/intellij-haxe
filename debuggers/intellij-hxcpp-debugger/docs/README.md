@@ -118,6 +118,20 @@ Scope for now: one flat "Locals" scope per frame (hxcpp exposes params +
 locals + `this` together); setVariable parses bool/int/float/string literals
 (constructing objects is out of scope).
 
+## 12. Frame index 0 is the OUTERMOST frame, not the top
+
+hxcpp's stack (in `ThreadInfo.stack` and for `getStackVariables`) is ordered
+innermost-LAST, so the frame the debuggee actually stopped in is at
+`stack.length - 1`, and index 0 is `__hxcpp_main`. The DAP frame ids we hand
+out are these raw hxcpp indices (the trim in gotcha 9 only drops the tail, so
+the surviving indices still line up). Anything that evaluates against "the
+current frame" — a conditional breakpoint's condition, a frameless
+`evaluate` — must therefore default to `stack.length - 1`, NOT 0. Getting this
+wrong is silent: `amount` resolves to nothing in `__hxcpp_main`, hscript reads
+it as `null`, `null == 2` is `false`, and the conditional breakpoint suppresses
+EVERY hit instead of erroring. The DAP `evaluate` request looked fine only
+because clients pass an explicit `frameId` from `stackTrace`.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log

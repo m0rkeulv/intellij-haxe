@@ -23,10 +23,20 @@ tasks.register<Exec>("registerDapProtocolHaxelib") {
                          rootProject.file("debuggers/dap-protocol").absolutePath)
 }
 
+// hscript powers watch/hover/condition evaluation (M5); it is a released
+// haxelib, so pull it in when absent rather than assuming a primed machine
+tasks.register<Exec>("installHscript") {
+    group = "hxcpp"
+    description = "Installs the hscript haxelib if it is not already present"
+    onlyIf { haxeOnPath() }
+    commandLine = listOf("haxelib", "install", "hscript", "--always", "--quiet")
+    isIgnoreExitValue = true
+}
+
 tasks.register<Exec>("testHaxeServer") {
     group = "verification"
     description = "Runs the intellij-hxcpp-debug-server unit tests under the Haxe interpreter"
-    dependsOn("registerDapProtocolHaxelib")
+    dependsOn("registerDapProtocolHaxelib", "installHscript")
     workingDir = projectDir
     commandLine = listOf("haxe", "test.hxml")
     onlyIf {

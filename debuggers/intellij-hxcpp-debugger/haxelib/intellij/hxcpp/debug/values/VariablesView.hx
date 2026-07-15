@@ -79,6 +79,19 @@ class VariablesView {
 		};
 	}
 
+	/**
+		Renders a standalone value (an evaluate result) with a child reference
+		when expandable — reusing the same registry so it can be drilled into.
+	**/
+	public function present(value:Dynamic):{value:String, type:String, variablesReference:Int} {
+		var described = Values.describe(value);
+		return {
+			value: described.value,
+			type: described.type,
+			variablesReference: described.expandable ? register(ObjectValue(value)) : 0
+		};
+	}
+
 	function variable(name:String, value:Dynamic):Variable {
 		var described = Values.describe(value);
 		return {

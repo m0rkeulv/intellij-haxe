@@ -21,6 +21,58 @@ class DispatcherTest {
 		aStepThatKeepsTheSameLineReSteps(assert);
 		stackTraceReportsFramesNewestFirst(assert);
 		aBreakpointHitMidStepWinsOverTheStep(assert);
+		evaluateReturnsAResult(assert);
+		aFalseConditionResumesWithoutStopping(assert);
+		aTrueConditionStops(assert);
+	}
+
+	static function evaluateReturnsAResult(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, -1, "Main.hx", 10));
+		t.api.localNames = ["count"];
+		t.api.localValues.set("count", 6);
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({
+			seq: 1, type: "request", command: "evaluate",
+			arguments: {expression: "count * 7", frameId: 0}
+		}));
+		assert.isTrue(t.sent[0].success, "evaluate succeeds");
+		assert.equals("42", t.sent[0].body.result, "expression evaluated against the frame");
+	}
+
+	static function conditionalBreakpoint(t, condition:String):Int {
+		t.api.cannedFilesFullPath = ["C:/src/Main.hx"];
+		t.api.cannedFiles = ["Main.hx"];
+		t.dispatcher.handleRequest(Json.stringify({
+			seq: 1, type: "request", command: "setBreakpoints",
+			arguments: {source: {path: "C:/src/Main.hx"}, breakpoints: [{line: 20, condition: condition}]}
+		}));
+		return t.api.installedBreakpoints[0].number;
+	}
+
+	static function aFalseConditionResumesWithoutStopping(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		var rt = conditionalBreakpoint(t, "count > 5");
+		t.api.localNames = ["count"];
+		t.api.localValues.set("count", 3); // condition false
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, rt, "Main.hx", 20));
+		assert.equals(0, t.sent.length, "no stopped event when the condition is false");
+		assert.equals(1, t.api.continueCalls.length, "resumed silently");
+	}
+
+	static function aTrueConditionStops(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		var rt = conditionalBreakpoint(t, "count > 5");
+		t.api.localNames = ["count"];
+		t.api.localValues.set("count", 10); // condition true
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, rt, "Main.hx", 20));
+		assert.equals(1, t.sent.length, "stopped when the condition is true");
+		assert.equals("breakpoint", t.sent[0].body.reason, "reported as a breakpoint");
 	}
 
 	// A ThreadStopped event with an optional single-frame stack.
