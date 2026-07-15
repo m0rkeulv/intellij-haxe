@@ -16,12 +16,18 @@ class NativeDebuggerApi implements DebuggerApi {
 		Debugger.enableCurrentThreadDebugging(false);
 	}
 
+	public function enableCurrentThread():Void {
+		Debugger.enableCurrentThreadDebugging(true);
+	}
+
 	public function setEventHandler(handler:DebugEvent->Void):Void {
 		Debugger.setEventNotificationHandler(
 			(threadNumber:Int, event:Int, stackFrame:Int, className:String, functionName:String, fileName:String, lineNumber:Int) -> {
-				// runs on the STOPPING thread: translate and hand off, nothing else.
-				// The stop STATUS is not part of the callback; the Server resolves
-				// it via threadStatus() on its own thread when dequeuing.
+				// Runs on the STOPPING thread. The stop STATUS is read here, where
+				// the thread is guaranteed stopped (safe=false), not later from the
+				// server thread — a cross-thread read races the thread's state and
+				// returns RUNNING. Then hand off and return; hxcpp blocks the
+				// thread in DoBreak until continueThreads.
 				if (event == Debugger.THREAD_CREATED) {
 					handler(ThreadCreated(threadNumber));
 				} else if (event == Debugger.THREAD_TERMINATED) {
@@ -29,7 +35,10 @@ class NativeDebuggerApi implements DebuggerApi {
 				} else if (event == Debugger.THREAD_STARTED) {
 					handler(ThreadStarted(threadNumber));
 				} else if (event == Debugger.THREAD_STOPPED) {
-					handler(ThreadStopped(threadNumber, DebugThread.STATUS_RUNNING,
+					var info = Debugger.getThreadInfo(threadNumber, false);
+					var stop = {status: info != null ? info.status : DebugThread.STATUS_RUNNING,
+						breakpoint: info != null ? info.breakpoint : -1};
+					handler(ThreadStopped(threadNumber, stop,
 						new DebugStackFrame(fileName, lineNumber, className, functionName)));
 				}
 			});
@@ -39,13 +48,28 @@ class NativeDebuggerApi implements DebuggerApi {
 		return Debugger.getThreadInfos();
 	}
 
-	public function threadStatus(threadNumber:Int):Int {
-		var info = Debugger.getThreadInfo(threadNumber, true);
-		return info != null ? info.status : DebugThread.STATUS_RUNNING;
+public function continueThreads(threadNumber:Int, count:Int):Void {
+		Debugger.continueThreads(threadNumber, count);
 	}
 
-	public function continueThreads(threadNumber:Int, count:Int):Void {
-		Debugger.continueThreads(threadNumber, count);
+	public function breakNow(wait:Bool):Void {
+		Debugger.breakNow(wait);
+	}
+
+	public function files():Array<String> {
+		return Debugger.getFiles();
+	}
+
+	public function filesFullPath():Array<String> {
+		return Debugger.getFilesFullPath();
+	}
+
+	public function addFileLineBreakpoint(file:String, line:Int):Int {
+		return Debugger.addFileLineBreakpoint(file, line);
+	}
+
+	public function deleteBreakpoint(number:Int):Void {
+		Debugger.deleteBreakpoint(number);
 	}
 }
 #end

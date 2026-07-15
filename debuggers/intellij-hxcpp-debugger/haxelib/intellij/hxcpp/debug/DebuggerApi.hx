@@ -15,8 +15,15 @@ package intellij.hxcpp.debug;
 	cross-checks shared code against the real types.
 **/
 interface DebuggerApi {
-	/** Marks the calling (server) thread as never-breaking. */
+	/** Marks the calling thread as never-breaking (the server thread). */
 	function excludeCurrentThread():Void;
+
+	/**
+		Enables breaking on the calling thread — hxcpp does NOT debug a thread
+		until this is called, so the main thread must opt in or no breakpoint
+		ever fires. Called on the main thread during server startup.
+	**/
+	function enableCurrentThread():Void;
 
 	/**
 		Installs the runtime stop/lifecycle notification handler. CAUTION: the
@@ -28,15 +35,36 @@ interface DebuggerApi {
 	/** All live threads with their current status and stacks. */
 	function threads():Array<DebugThread>;
 
-	/**
-		The STATUS_* of one thread (RUNNING when unknown). The stop handler runs
-		on the stopping thread and must stay minimal, so the Server resolves the
-		status here, on its own thread, when dequeuing the event.
-	**/
-	function threadStatus(threadNumber:Int):Int;
-
-	/** Resumes `threadNumber` (-1 = all) `count` times. */
+/** Resumes `threadNumber` (-1 = all) `count` times. */
 	function continueThreads(threadNumber:Int, count:Int):Void;
+
+	/** Stops all debuggable threads now; `wait` blocks until they are stopped. */
+	function breakNow(wait:Bool):Void;
+
+	/**
+		The runtime's source file names as they appear in stack positions (e.g.
+		"Main.hx") — the form `addFileLineBreakpoint` matches against.
+	**/
+	function files():Array<String>;
+
+	/**
+		The absolute path of each `files()` entry, index-aligned — used to
+		suffix-match an IDE-supplied path onto a runtime file key (handles moved
+		projects and CI-built executables where the prefixes differ).
+	**/
+	function filesFullPath():Array<String>;
+
+	/** Installs a breakpoint on `file`:`line`, returning its runtime number. */
+	function addFileLineBreakpoint(file:String, line:Int):Int;
+
+	/** Removes a previously installed breakpoint by its runtime number. */
+	function deleteBreakpoint(number:Int):Void;
+}
+
+/** Why a thread is stopped: its STATUS_* and, for a breakpoint, its number. */
+typedef StopInfo = {
+	var status:Int;
+	var breakpoint:Int; // runtime breakpoint number, or -1
 }
 
 /** A runtime notification, re-delivered on the server thread. */
@@ -44,8 +72,8 @@ enum DebugEvent {
 	ThreadCreated(threadNumber:Int);
 	ThreadTerminated(threadNumber:Int);
 	ThreadStarted(threadNumber:Int);
-	// `status` is a DebugThread.STATUS_* value explaining WHY
-	ThreadStopped(threadNumber:Int, status:Int, frame:Null<DebugStackFrame>);
+	// `stop` explains WHY (status + hit breakpoint number)
+	ThreadStopped(threadNumber:Int, stop:StopInfo, frame:Null<DebugStackFrame>);
 }
 
 // The std debugger data types on cpp; API-identical stubs (one type per file,

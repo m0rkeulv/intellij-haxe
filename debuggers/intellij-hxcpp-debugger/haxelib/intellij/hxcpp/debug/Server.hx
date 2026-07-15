@@ -28,11 +28,25 @@ class Server {
 	static inline var POLL_TIMEOUT_S = 0.05;
 	static inline var READ_CHUNK = 4096;
 
+	// A gated diagnostic log: writes to the file named by HXCPP_DEBUG_LOG, off
+	// otherwise. The debug protocol is opaque and multi-threaded, so a low-tech
+	// append log is the practical way to trace a live session.
+	public static function log(msg:String):Void {
+		var path = Sys.getEnv("HXCPP_DEBUG_LOG");
+		if (path != null) {
+			try {
+				var out = sys.io.File.append(path, false);
+				out.writeString(msg + "\n");
+				out.close();
+			} catch (e:Dynamic) {}
+		}
+	}
+
 	static function __init__():Void {
 		try {
 			start();
 		} catch (e:Dynamic) {
-			// swallow everything: a debug-server failure must never crash the app
+			log("start threw: " + Std.string(e));
 		}
 	}
 
@@ -44,8 +58,20 @@ class Server {
 		if (socket == null) {
 			return; // nobody listening: run undebugged
 		}
+		// Runs on the MAIN thread. The event handler must be installed ON THE
+		// SERVER THREAD, because setEventNotificationHandler registers its caller
+		// as hxcpp's debug thread (the one thread excluded from breaking). Set it
+		// on main and main would never hit a breakpoint. So: spawn the server
+		// thread, wait for it to register the handler and exclude itself (`ready`),
+		// THEN enable this (main) thread's debugging — only now can it break, with
+		// the handler already in place to report the stop.
+		var api:DebuggerApi = new NativeDebuggerApi();
+		var events = new Deque<DebugEvent>();
+		var ready = new Deque<Bool>();
 		var released = new Deque<Bool>();
-		Thread.create(() -> run(socket, released));
+		Thread.create(() -> run(api, events, socket, released, ready));
+		ready.pop(true);
+		api.enableCurrentThread();
 		// hold user code until the IDE finished configuring (or the wire died)
 		released.pop(true);
 	}
@@ -71,12 +97,15 @@ class Server {
 
 	// The server thread: the ONLY thread doing protocol I/O and the only
 	// caller into the Dispatcher. Runtime events arrive queued from the
-	// stopping threads and are enriched (stop status) here.
-	static function run(socket:Socket, released:Deque<Bool>):Void {
-		var api:DebuggerApi = new NativeDebuggerApi();
-		api.excludeCurrentThread();
-		var events = new Deque<DebugEvent>();
+	// stopping threads (via the handler installed on the main thread) and are
+	// enriched (stop status) here.
+	static function run(api:DebuggerApi, events:Deque<DebugEvent>, socket:Socket, released:Deque<Bool>, ready:Deque<Bool>):Void {
+		// Registering the handler here makes THIS (the server) thread hxcpp's
+		// debug thread — the one thread excluded from breaking. Then signal main
+		// that the handler is in place so it may enable its own debugging.
 		api.setEventHandler(event -> events.add(event));
+		api.excludeCurrentThread();
+		ready.add(true);
 
 		var framing = new DapFraming();
 		var dispatcher = new Dispatcher(api, payload -> {
@@ -93,7 +122,6 @@ class Server {
 		}
 
 		try {
-			socket.setTimeout(POLL_TIMEOUT_S);
 			var buffer = Bytes.alloc(READ_CHUNK);
 			while (!dispatcher.shutdownRequested) {
 				while (true) {
@@ -101,12 +129,19 @@ class Server {
 					if (event == null) {
 						break;
 					}
-					dispatcher.handleDebugEvent(enrich(api, event));
+					dispatcher.handleDebugEvent(event);
 				}
-				var read = readChunk(socket, buffer);
-				if (read > 0) {
-					for (payload in framing.feed(buffer.sub(0, read))) {
-						dispatcher.handleRequest(payload);
+				// Poll readability with select rather than a read timeout: a
+				// timed-out blocking read can surface as Eof on cpp, which is
+				// indistinguishable from a real close. select keeps the loop
+				// spinning to drain events while no request is pending.
+				var selected = Socket.select([socket], null, null, POLL_TIMEOUT_S);
+				if (selected.read.length > 0) {
+					var read = socket.input.readBytes(buffer, 0, READ_CHUNK); // Eof here = real close
+					if (read > 0) {
+						for (payload in framing.feed(buffer.sub(0, read))) {
+							dispatcher.handleRequest(payload);
+						}
 					}
 				}
 				if (dispatcher.configurationDone) {
@@ -122,24 +157,5 @@ class Server {
 		} catch (e:Dynamic) {}
 	}
 
-	// One bounded read; 0 on poll timeout, throws Eof when the IDE hung up.
-	static function readChunk(socket:Socket, buffer:Bytes):Int {
-		return try {
-			socket.input.readBytes(buffer, 0, READ_CHUNK);
-		} catch (e:haxe.io.Error) {
-			if (e == Blocked) 0 else throw e;
-		}
-	}
-
-	// The stop status is unreadable inside the notification callback (it runs
-	// on the stopping thread); fill it in here on the server thread.
-	static function enrich(api:DebuggerApi, event:DebugEvent):DebugEvent {
-		return switch (event) {
-			case ThreadStopped(threadNumber, _, frame):
-				ThreadStopped(threadNumber, api.threadStatus(threadNumber), frame);
-			default:
-				event;
-		}
-	}
 }
 #end
