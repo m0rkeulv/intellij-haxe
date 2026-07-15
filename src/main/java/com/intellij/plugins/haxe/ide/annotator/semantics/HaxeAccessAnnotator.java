@@ -31,6 +31,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.intellij.plugins.haxe.lang.psi.HaxeCodeFragmentUtil.isInCodeFragment;
 import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.*;
 
 public class HaxeAccessAnnotator implements Annotator {
@@ -40,16 +41,16 @@ public class HaxeAccessAnnotator implements Annotator {
 
     if (element instanceof HaxeReferenceExpression referenceExpression) {
       // we want to ignore references used in package, type or metas
-      if (isExpressionEvaluation(element)) return;
+      if (isInCodeFragment(element)) return;
       if (checkIfShouldBeIgnored(referenceExpression)) return;
       checkAccessForReference(referenceExpression, holder);
     }
     else if (element instanceof HaxeNewExpression newExpression) {
-      if (isExpressionEvaluation(element)) return;
+      if (isInCodeFragment(element)) return;
       checkAccessForConstructor(newExpression, holder);
     }
    else if (element instanceof HaxeCompiletimeMetaArg compileTimeMeta) {
-      if (isExpressionEvaluation(element)) return;
+      if (isInCodeFragment(element)) return;
       HaxeMeta haxeMeta = PsiTreeUtil.getParentOfType(compileTimeMeta, HaxeMeta.class);
       if (haxeMeta != null) {
         if (haxeMeta.isType(ALLOW) || haxeMeta.isType(ACCESS)) {
@@ -127,11 +128,6 @@ public class HaxeAccessAnnotator implements Annotator {
     return false;
   }
 
-  private static boolean isExpressionEvaluation(PsiElement psiElement) {
-    // ignoring access rules for expression evaluation during debugging
-    HaxeExpressionCodeFragment condFragment = PsiTreeUtil.getParentOfType(psiElement, HaxeExpressionCodeFragment.class);
-    return condFragment != null;
-  }
 
   private void checkAccessForReference(@NotNull HaxeReferenceExpression referenceExpression, @NotNull AnnotationHolder holder) {
 

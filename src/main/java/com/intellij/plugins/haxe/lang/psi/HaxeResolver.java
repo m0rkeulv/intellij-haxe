@@ -32,7 +32,6 @@ import com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentStringCode
 import com.intellij.plugins.haxe.lang.psi.impl.*;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
-import com.intellij.plugins.haxe.metadata.psi.impl.HaxeMetadataTypeName;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCacheService;
@@ -3140,7 +3139,7 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
       if (fakePsi != null) {
         return Collections.singletonList(fakePsi);
       } else {
-        fakePsi = HaxeSynteticPsiUtil.createFakeForBind(haxeIdentifier, namedComponent);
+        fakePsi = HaxeSyntheticPsiUtil.createFakeForBind(haxeIdentifier, namedComponent);
         reference.putUserData(FAKE_PSI_KEY, fakePsi);
         return Collections.singletonList(fakePsi);
       }
@@ -3148,11 +3147,11 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
   }
 
   private static @NonNull List<PsiElement> createSynteticForSyntax(String name, String qname, HaxeReference reference) {
-    return List.of(HaxeSynteticPsiUtil.createSynteticForTargetSpecificSyntax(name, qname, reference));
+    return List.of(HaxeSyntheticPsiUtil.createSyntheticForTargetSpecificSyntax(name, qname, reference));
   }
 
   private static @NonNull List<PsiElement> getOrCreateSynteticForTrace(HaxeReference reference) {
-    return List.of(HaxeSynteticPsiUtil.createSynteticForTrace(reference.getProject()));
+    return List.of(HaxeSyntheticPsiUtil.createSyntheticForTrace(reference.getProject()));
   }
 
 }

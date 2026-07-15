@@ -55,6 +55,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 
 import static com.intellij.openapi.util.text.StringUtil.defaultIfEmpty;
+import static com.intellij.plugins.haxe.lang.psi.HaxeCodeFragmentUtil.isInCodeFragment;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.searchReferencesForType;
 import static com.intellij.plugins.haxe.model.type.SpecificTypeReference.ARRAY;
 import static com.intellij.plugins.haxe.model.type.SpecificTypeReference.CLASS;
@@ -1275,7 +1276,8 @@ abstract public class HaxeReferenceImpl extends HaxeStubBasedPsiElementBase<Haxe
   @NotNull
   @Override
   public Object[] getVariants() {
-    return HaxeReferenceSuggestionUtil.getVariants(this);
+    boolean forceShowPrivateMembers = isInCodeFragment(this);
+    return HaxeReferenceSuggestionUtil.getVariants(this, forceShowPrivateMembers);
   }
 
 
