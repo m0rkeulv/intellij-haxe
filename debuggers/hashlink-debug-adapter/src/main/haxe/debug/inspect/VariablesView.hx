@@ -178,6 +178,15 @@ class VariablesView {
 	}
 
 	/**
+	 * Display text for the vdynamic at `ptr` (a pointer already in hand — e.g.
+	 * hl_throw's parked exc_value), resolved through its runtime type header.
+	 * Null when it cannot be decoded.
+	 */
+	public function previewDynamicPointer(ptr:Pointer):Null<String> {
+		return try valueReader.previewThrownDynamic(ptr) catch (e:Dynamic) null;
+	}
+
+	/**
 	 * True when the value in register `reg` of `frameId` is an object whose
 	 * runtime class (or a superclass) matches one of `wanted` (FQN or simple
 	 * name) — the type filter for exception breakpoints. False for a non-object

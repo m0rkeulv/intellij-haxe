@@ -98,7 +98,7 @@ public abstract class DapIntegrationTestBase {
   protected Path threadsFixtureHl;
   protected Path spinFixtureHl;
   protected Path uncaughtFixtureHl;
-  protected Path runtimeFixtureHl;
+  protected Path vmFixtureHl;
   protected Path stacktraceFixtureHl;
   protected Path typedThrowFixtureHl;
   protected Path fixtureSrcDir;
@@ -136,9 +136,9 @@ public abstract class DapIntegrationTestBase {
       if (!uncaughtProperty.isEmpty() && Files.isRegularFile(Path.of(uncaughtProperty))) {
         uncaughtFixtureHl = Path.of(uncaughtProperty);
       }
-      String runtimeProperty = System.getProperty("dap.fixture.runtime.hl", "");
-      if (!runtimeProperty.isEmpty() && Files.isRegularFile(Path.of(runtimeProperty))) {
-        runtimeFixtureHl = Path.of(runtimeProperty);
+      String vmProperty = System.getProperty("dap.fixture.vm.hl", "");
+      if (!vmProperty.isEmpty() && Files.isRegularFile(Path.of(vmProperty))) {
+        vmFixtureHl = Path.of(vmProperty);
       }
       String stacktraceProperty = System.getProperty("dap.fixture.stacktrace.hl", "");
       if (!stacktraceProperty.isEmpty() && Files.isRegularFile(Path.of(stacktraceProperty))) {

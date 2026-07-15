@@ -34,7 +34,7 @@ val fixtureHl = layout.buildDirectory.file("hl/test-fixture.hl")
 val threadsFixtureHl = layout.buildDirectory.file("hl/threads-fixture.hl")
 val spinFixtureHl = layout.buildDirectory.file("hl/spin-fixture.hl")
 val uncaughtFixtureHl = layout.buildDirectory.file("hl/uncaught-fixture.hl")
-val runtimeFixtureHl = layout.buildDirectory.file("hl/runtime-fixture.hl")
+val vmFixtureHl = layout.buildDirectory.file("hl/vm-fixture.hl")
 val stacktraceFixtureHl = layout.buildDirectory.file("hl/stacktrace-fixture.hl")
 val typedThrowFixtureHl = layout.buildDirectory.file("hl/typedthrow-fixture.hl")
 // haxelib used to read the .hl bytecode debug tables; pinned for reproducible builds
@@ -107,16 +107,16 @@ tasks.register<Exec>("buildUncaughtFixture") {
     outputs.file(uncaughtFixtureHl)
 }
 
-tasks.register<Exec>("buildRuntimeFixture") {
+tasks.register<Exec>("buildVmFixture") {
     group = "hashlink"
-    description = "Compiles the VM-raised (null access) exception fixture (build/hl/runtime-fixture.hl)"
+    description = "Compiles the VM-raised (null access) exception fixture (build/hl/vm-fixture.hl)"
     onlyIf { buildHashlinkAdapter && haxeAvailable }
     dependsOn("installFormatHaxelib")
     workingDir = File(projectDir, "test-fixtures")
-    commandLine = listOf("haxe", "runtime.hxml")
+    commandLine = listOf("haxe", "vm.hxml")
     inputs.dir("test-fixtures/src")
-    inputs.file("test-fixtures/runtime.hxml")
-    outputs.file(runtimeFixtureHl)
+    inputs.file("test-fixtures/vm.hxml")
+    outputs.file(vmFixtureHl)
 }
 
 tasks.register<Exec>("buildStackTraceFixture") {
@@ -199,7 +199,7 @@ tasks.named<Test>("test") {
         }
         debuggerTests
     }
-    dependsOn("buildDebugAdapter", "buildTestFixture", "buildThreadsFixture", "buildSpinFixture", "buildUncaughtFixture", "buildRuntimeFixture", "buildStackTraceFixture", "buildTypedThrowFixture")
+    dependsOn("buildDebugAdapter", "buildTestFixture", "buildThreadsFixture", "buildSpinFixture", "buildUncaughtFixture", "buildVmFixture", "buildStackTraceFixture", "buildTypedThrowFixture")
     // integration tests locate the built adapter, the debuggee fixtures and
     // (optionally) the HashLink executable through these
     systemProperty("dap.adapter.hl", adapterHl.get().asFile.absolutePath)
@@ -207,7 +207,7 @@ tasks.named<Test>("test") {
     systemProperty("dap.fixture.threads.hl", threadsFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.spin.hl", spinFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.uncaught.hl", uncaughtFixtureHl.get().asFile.absolutePath)
-    systemProperty("dap.fixture.runtime.hl", runtimeFixtureHl.get().asFile.absolutePath)
+    systemProperty("dap.fixture.vm.hl", vmFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.stacktrace.hl", stacktraceFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.typedthrow.hl", typedThrowFixtureHl.get().asFile.absolutePath)
     systemProperty("dap.fixture.src.dir", File(projectDir, "test-fixtures/src").absolutePath)

@@ -195,6 +195,11 @@ class VariableInspector {
 		return view.registerValueMatchesType(frameId, reg, wanted);
 	}
 
+	/** Display text for the vdynamic at `ptr` (e.g. hl_throw's exc_value); null when undecodable. */
+	public inline function previewDynamicPointer(ptr:Pointer):Null<String> {
+		return view.previewDynamicPointer(ptr);
+	}
+
 	/**
 	 * Evaluates a VARIABLE PATH (`name`, `obj.field`, `arr[3]`, ...) in a
 	 * cached frame. Root resolution order: the frame's locals, then fields of

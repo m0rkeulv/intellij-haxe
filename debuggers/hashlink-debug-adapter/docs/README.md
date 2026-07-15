@@ -932,59 +932,76 @@ The old spawn path remains for headless debuggees and most integration tests.
 
 ---
 
-## 9. Runtime (VM-raised) exceptions: trapping hl_throw
+## 9. VM-raised exceptions: trapping hl_throw, reading exc_value
 
 ### Symptom
-A runtime error — null access, array-out-of-bounds, invalid cast, division by
-zero — terminates the program without stopping, even with the "any exception"
-or "uncaught" breakpoints enabled.
+A VM-raised error — null access, array-out-of-bounds, invalid cast, division
+by zero — terminates the program without stopping, even with the "any
+exception" or "uncaught" breakpoints enabled.
 
 ### Cause
 Those breakpoints plant an INT3 at every bytecode `OThrow`/`ORethrow` site
-(`ExceptionSites`). But a runtime error is raised by HL's C runtime
-(`hl_null_access` → `hl_throw`), which executes NO bytecode throw — so it
-never hits an OThrow trap and escapes to the root handler.
+(`ExceptionSites`). But a VM-raised error comes from HL's C runtime
+(`hl_null_access` → `hl_error_msg` → `hl_throw`), which executes NO bytecode
+throw — so it never hits an OThrow trap and escapes to the root handler.
 
-### Fix: trap hl_throw itself (the "runtime" filter)
-(Named "runtime", not "native", everywhere user- or protocol-facing: "native"
-reads as the HXCPP/C native *target*. In the IDE it is the "HashLink runtime
-exceptions" row of the "HashLink Uncaught Exceptions" breakpoint category —
-a property-flagged sibling installed at project start, because the platform
-allows only one default breakpoint per `XBreakpointType`.)
-Every exception, bytecode or runtime, passes through the single C function
+### Fix: trap hl_throw's entry, report at hl_throw's own break (the "vm" filter)
+(Named "vm" — the party that raises them. NOT "native", which reads as the
+HXCPP/C native *target*; not "runtime", since every exception happens at
+runtime. In the IDE it is the "HashLink VM exceptions" row of the "HashLink
+Uncaught Exceptions" breakpoint category — a property-flagged sibling
+installed at project start, because the platform allows only one default
+breakpoint per `XBreakpointType`.)
+
+Every exception, bytecode or VM-raised, passes through the single C function
 `hl_throw(vdynamic*)`. `NativeThrowResolver` mines its address by
 disassembling an OThrow JIT site — hashlink `jit.c` compiles OThrow to
 `call_native(hl_throw)`, i.e. the same `mov rax,<hl_throw>; call rax` pattern
 NativeResolver already reads — and `Breakpoints.armNativeThrow` plants one
-INT3 there.
+INT3 there. The stop is then delivered in TWO phases, because the thrown
+value cannot be read at the entry:
 
-Three subtleties make it work:
-- **Distinguishing runtime from bytecode throws.** At the hl_throw hit we stop
-  ONLY when the immediate caller ([Esp]) is NOT jitted code — i.e. a C runtime
-  function raised it. A bytecode throw's caller IS jit code, so it is left to
-  the OThrow breakpoints (no double stop). This makes "runtime" mean exactly
-  "VM-raised error".
-- **Recovering the Haxe frame from a C entry.** At hl_throw's entry RBP still
-  belongs to the caller, so the normal RBP walk would be wrong.
-  `StackWalker.seedFromCEntry` finds the first return address that lands in JIT
-  code (unwinding any C frames via their RBP chain) and continues the walk from
-  that frame's base. Every downstream consumer (stack trace, locals) then works
-  unchanged.
-- **No thrown value.** HL's debug native exposes only ESP/EBP/EIP/FLAGS/Dr/RAX/
-  XMM0 — NOT the argument registers — so the thrown `vdynamic*` (in RCX/RDI) is
-  unreadable at hl_throw entry. The stop description is therefore generic; the
-  offending value (a null field, an out-of-range index) is found in the
-  recovered frame's LOCALS, which is what the user needs.
+1. **Entry INT3** (detection + discrimination). We proceed only when the
+   immediate caller ([Esp]) is NOT jitted code — i.e. a C runtime function
+   raised the throw. A bytecode throw's caller IS jit code, so it is left to
+   the OThrow breakpoints (no double stop). The throwing Haxe frames are
+   walked HERE (`StackWalker.seedFromCEntry`: at the entry RBP still belongs
+   to the caller, so the walk seeds from the first return address landing in
+   JIT code) and parked in `vmThrowFrames` — the chain is no longer walkable
+   at phase 2. We do NOT stop: the thrown `vdynamic*` sits in an argument
+   register (RCX/RDI) and HL's debug native exposes only
+   ESP/EBP/EIP/FLAGS/Dr/RAX/XMM0. Instead `VmExceptionControl` sets
+   HL_EXC_CATCH_ALL (hl.h, value 2) in the throwing thread's
+   `hl_thread_info.flags` (offsets pinned with ThreadRegistry's hld layout:
+   tid @+0, exc_value @ptr*5+8, flags @ptr*6+8) and resumes past the trap.
+2. **hl_throw's own hl_debug_break** (reporting). hl_throw stores the value
+   in `exc_value`, then — seeing CATCH_ALL — sets HL_EXC_IS_THROW(4) and
+   executes an int3 (`hl_debug_break`, real because IsDebuggerPresent() is
+   true under our attach). The formerly-"spurious" branch recognises it
+   (pendingVmThrow + IS_THROW), clears CATCH_ALL, reads `exc_value` and
+   decodes the ACTUAL message — hl_error_msg ships it as a bytes-typed
+   vdynamic holding NUL-terminated UTF-16 ("Null access .length",
+   "Out of bounds 5/3") — and stops with the parked frames. EIP is already
+   past the VM's int3 (nothing of ours is patched there), so continue
+   resumes plainly.
 
-Pinned by `RuntimeExceptionIntegrationTest` (stops at the null-access line with
-`maybe == null` visible; the "all" filter does NOT catch it) and
-`StackWalkerTest` (C-entry seeding via both a C and a direct-JIT caller).
+Degradations: thread registry unreadable → stop at the entry with a generic
+text; exc_value undecodable → same generic text at phase 2. If CATCH_ALL is
+left set in a detached process, hl_debug_break is a no-op without a debugger.
+Note hl_throw ALSO fires this break for genuinely uncaught throws with no
+flag set (break_on_trap) — any IS_THROW break that is not pending is resumed
+past like before.
+
+Pinned by `VmExceptionIntegrationTest` (stops at the null-access line with
+"Null access" in the description and `maybe == null` in the locals; the "all"
+filter does NOT catch it) and `StackWalkerTest` (C-entry seeding via both a C
+and a direct-JIT caller).
 
 ## Quick reference
 
 | Concern | Rule |
 |---|---|
-| Runtime (VM-raised) exceptions | OThrow traps miss null access/bounds/cast (raised in C, no bytecode throw); the "runtime" filter traps hl_throw (mined from an OThrow site). Stop only when [Esp] is NOT jit code (runtime-raised); recover the Haxe frame via StackWalker.seedFromCEntry; no thrown value readable (arg registers not exposed) — read the locals |
+| VM-raised exceptions | OThrow traps miss null access/bounds/cast (raised in C, no bytecode throw); the "vm" filter traps hl_throw's entry (mined from an OThrow site). Two phases: at the entry (only when [Esp] is NOT jit code) walk+park the frames and set HL_EXC_CATCH_ALL on the thread; report at hl_throw's own hl_debug_break, where exc_value holds the thrown vdynamic — decode its UTF-16 bytes for the real message ("Null access .length") |
 | Blocking native call on a background thread | Wrap in `hl.Gc.blocking(true/false)`; read into a preallocated buffer; allocate nothing inside the section |
 | Socket vs process/file reads | Socket reads are GC-safe; process/file reads are not |
 | Reading a variable-length VM message off a socket | Drain-then-parse (with a read timeout) or length-prefix; never over-request |

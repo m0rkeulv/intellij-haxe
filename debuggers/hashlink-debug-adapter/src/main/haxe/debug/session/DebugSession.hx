@@ -23,9 +23,11 @@ import debug.target.DebugApi;
 import debug.target.DebuggeeProcess;
 import debug.target.MemoryReader;
 import debug.target.MemoryWriter;
+import debug.target.StackFrameLocation;
 import debug.target.StackWalker;
 import debug.target.ThreadInfo;
 import debug.target.ThreadRegistry;
+import debug.target.VmExceptionControl;
 import debug.target.WaitOutcome;
 import debug.inspect.CpuRegisters;
 import debug.inspect.VariableInspector;
@@ -96,11 +98,17 @@ class DebugSession {
 	var exceptionBreakUncaught:Bool = false;
 	// FQNs (or simple names) of exception classes to stop on — the per-type filter.
 	var exceptionBreakTypes:Array<String> = [];
-	// "runtime" filter: break on VM-raised errors (null access, bounds, cast, ...)
+	// "vm" filter: break on VM-raised errors (null access, bounds, cast, ...)
 	// by trapping hl_throw. Resolved lazily from an OThrow site once, then cached.
-	var exceptionBreakRuntime:Bool = false;
+	var exceptionBreakVm:Bool = false;
 	var nativeThrowResolver:NativeThrowResolver;
 	var nativeThrowAddress:Null<Pointer> = null;
+	// Threads parked between hl_throw's ENTRY trap (where the thrown value is
+	// unreadable) and hl_throw's own hl_debug_break (where exc_value holds it),
+	// with the throwing frames walked at the entry (unwalkable at the break).
+	var vmExceptions:Null<VmExceptionControl> = null;
+	var pendingVmThrow:Map<Int, Bool> = new Map();
+	var vmThrowFrames:Map<Int, Array<StackFrameLocation>> = new Map();
 	var memReader:MemoryReader;
 	var handshakeSocket:Socket;
 	var stackWalker:StackWalker;
@@ -297,8 +305,21 @@ class DebugSession {
 			nativeThrowResolver = new NativeThrowResolver(module, jit, memReader, exceptionSites);
 			threadRegistry = new ThreadRegistry(memReader,
 				new Align(jit.is64, jit.boolSize4), jit.hlVersionMajor, jit.hlVersionMinor);
+			vmExceptions = new VmExceptionControl(api, debuggeePid, memReader,
+				new Align(jit.is64, jit.boolSize4), jit.threadsPtr);
 			inspector = new VariableInspector(module, jit, memReader);
-			inspector.frameWalker = tid -> stackWalker.walk(tid);
+			// Frames parked at hl_throw's ENTRY serve the stop reported at hl_throw's
+			// own break: by then execution is deep inside hl_throw, where the frame
+			// chain is no longer walkable. Consumed on first use; framesFor caches it
+			// for the rest of the stop.
+			inspector.frameWalker = tid -> {
+				var parked = vmThrowFrames.get(tid);
+				if (parked != null) {
+					vmThrowFrames.remove(tid);
+					return parked;
+				}
+				return stackWalker.walk(tid);
+			};
 			var cpuRegisters = new CpuRegisters(api, debuggeePid);
 			// CPU registers are only readable while stopped; the callback is invoked
 			// for a stopped thread's top frame, but guard defensively.
@@ -714,7 +735,7 @@ class DebugSession {
 	function handleSetExceptionBreakpoints(requestSeq:Int, filters:Array<String>, filterTypes:Array<String>):Void {
 		exceptionBreakAll = filters != null && filters.indexOf("all") >= 0;
 		exceptionBreakUncaught = filters != null && filters.indexOf("uncaught") >= 0;
-		exceptionBreakRuntime = filters != null && filters.indexOf("runtime") >= 0;
+		exceptionBreakVm = filters != null && filters.indexOf("vm") >= 0;
 		exceptionBreakTypes = filterTypes != null ? filterTypes : [];
 		applyExceptionBreakpoints();
 		emit(EvExceptionBreakpointsSet(requestSeq));
@@ -722,7 +743,7 @@ class DebugSession {
 
 	// Reconciles the armed exception INT3s with the desired state. Two independent
 	// traps: OThrow sites (armed while "all"/"uncaught"/types is on — the mode only
-	// changes whether a hit surfaces) and hl_throw's entry (the "runtime" filter,
+	// changes whether a hit surfaces) and hl_throw's entry (the "vm" filter,
 	// catching VM-raised errors with no bytecode throw). A no-op before launch
 	// (breakpoints/sites not built yet — re-run once they are). Arming/disarming
 	// writes debuggee memory, so a running debuggee is briefly frozen first.
@@ -731,10 +752,10 @@ class DebugSession {
 			return;
 		}
 		var wantSites = exceptionBreakAll || exceptionBreakUncaught || exceptionBreakTypes.length > 0;
-		var wantRuntime = exceptionBreakRuntime && resolveNativeThrow() != null;
+		var wantVm = exceptionBreakVm && resolveNativeThrow() != null;
 		var sitesChange = wantSites != breakpoints.isExceptionsArmed();
-		var runtimeChange = wantRuntime != breakpoints.isNativeThrowArmed();
-		if (!sitesChange && !runtimeChange) {
+		var vmChange = wantVm != breakpoints.isNativeThrowArmed();
+		if (!sitesChange && !vmChange) {
 			return;
 		}
 		var wasRunning = switch (state) { case Running: true; default: false; };
@@ -745,9 +766,19 @@ class DebugSession {
 			if (wantSites) breakpoints.armExceptions(exceptionSites.all());
 			else breakpoints.disarmExceptions();
 		}
-		if (runtimeChange) {
-			if (wantRuntime) breakpoints.armNativeThrow(nativeThrowAddress);
-			else breakpoints.disarmNativeThrow();
+		if (vmChange) {
+			if (wantVm) {
+				breakpoints.armNativeThrow(nativeThrowAddress);
+			} else {
+				breakpoints.disarmNativeThrow();
+				// forget throws parked between the entry trap and hl_throw's own
+				// break — the filter is off, so they must not surface as stops
+				for (threadId in pendingVmThrow.keys()) {
+					vmExceptions.disarmCatchAll(threadId);
+				}
+				pendingVmThrow.clear();
+				vmThrowFrames.clear();
+			}
 		}
 		if (wasRunning) {
 			resumeAfterMemoryWrite();
@@ -756,13 +787,13 @@ class DebugSession {
 
 	// Resolves hl_throw's address once (mined from an OThrow site) and caches it;
 	// null when the program has no throw site to mine or the pattern is absent
-	// (the runtime-exceptions breakpoint then simply cannot arm).
+	// (the VM-exceptions breakpoint then simply cannot arm).
 	function resolveNativeThrow():Null<Pointer> {
 		if (nativeThrowAddress == null && nativeThrowResolver != null) {
 			nativeThrowAddress = nativeThrowResolver.resolve();
 			if (nativeThrowAddress == null) {
 				emit(EvOutput("console",
-					"HashLink runtime exceptions breakpoint unavailable: could not locate hl_throw "
+					"HashLink VM exceptions breakpoint unavailable: could not locate hl_throw "
 					+ "(the program has no throw site to mine, or the JIT pattern was not recognised).\n"));
 			}
 		}
@@ -815,21 +846,25 @@ class DebugSession {
 		return !jit.isCodePtr(returnAddress);
 	}
 
-	// The stopped(reason:"exception") text for a VM-raised error trapped at
-	// hl_throw. The kind (null access vs bounds ...) is not knowable — HL's debug
-	// API exposes no argument register to read the thrown value — so we name the
-	// recovered throwing frame and point the user at the locals, which is where
-	// the offending value (a null field, an out-of-range index) is visible.
-	function describeRuntimeThrow(threadId:Int):String {
+	// The stopped(reason:"exception") text for a VM-raised error. `thrown` is
+	// the vdynamic parked in the thread's exc_value — available when the stop is
+	// hl_throw's own break; for hl_error_msg-raised errors it decodes to the
+	// exact runtime message ("Null access .length", "Out of bounds 5/3", ...).
+	// Null (registry unreadable, or decode failure) degrades to a generic text.
+	function describeVmThrow(threadId:Int, thrown:Null<Pointer>):String {
+		var message = thrown != null ? inspector.previewDynamicPointer(thrown) : null;
 		var frames = inspector.framesFor(threadId);
-		if (frames.length == 0) {
-			return "HashLink runtime exception (such as a null access or out-of-bounds); inspect the locals.";
+		var where = null;
+		if (frames.length > 0) {
+			var location = frames[0].location;
+			var source = module.lookup(location.fidx, location.op);
+			where = module.functionName(location.fidx)
+				+ (source != null ? " (" + source.file + ":" + source.line + ")" : "");
 		}
-		var location = frames[0].location;
-		var source = module.lookup(location.fidx, location.op);
-		var where = module.functionName(location.fidx)
-			+ (source != null ? " (" + source.file + ":" + source.line + ")" : "");
-		return "HashLink runtime exception in " + where
+		if (message != null) {
+			return "HashLink VM exception: " + message + (where != null ? " — in " + where : "");
+		}
+		return "HashLink VM exception" + (where != null ? " in " + where : "")
 			+ " (such as a null access or out-of-bounds — inspect the locals to see the offending value).";
 	}
 
@@ -1238,6 +1273,17 @@ class DebugSession {
 		var nativeThrow = breakpoints != null && breakpoints.isNativeThrow(hitAddress);
 
 		if (userBp == null && !temp && excEntry == null && !nativeThrow) {
+			// hl_throw's own hl_debug_break, requested at the entry trap: exc_value
+			// now holds the thrown vdynamic, readable at last. EIP is already past
+			// the VM's own int3 (nothing of ours is patched there), so a later
+			// continue resumes plainly with no trap dance.
+			if (pendingVmThrow.exists(threadId) && vmExceptions != null && vmExceptions.isThrowBreak(threadId)) {
+				pendingVmThrow.remove(threadId);
+				vmExceptions.disarmCatchAll(threadId);
+				enterStopped(threadId, null);
+				emit(EvStoppedException(threadId, describeVmThrow(threadId, vmExceptions.thrownValue(threadId))));
+				return;
+			}
 			// attach/loader breakpoint or spurious: just keep going
 			api.resume(debuggeePid, threadId);
 			return;
@@ -1306,22 +1352,36 @@ class DebugSession {
 		// immediate caller is C runtime code, not a jitted OThrow. A bytecode
 		// throw's caller IS jit code, so it is left to the OThrow-based breakpoints
 		// (avoiding a double stop) and resumed past silently here.
+		//
+		// The thrown value is UNREADABLE at this entry (it sits in an argument
+		// register HL's debug API does not expose), so a VM-raised throw does not
+		// stop here either: we set HL_EXC_CATCH_ALL on the throwing thread and let
+		// hl_throw run on — it stores exc_value and then executes its own
+		// hl_debug_break, where the pendingVmThrow branch above reports the stop
+		// WITH the actual error message. Only when the thread registry is
+		// unreadable do we stop here, with a generic description.
 		if (nativeThrow) {
 			var syntheticBp = breakpoints.nativeThrowBreakpoint();
-			if (!raisedByRuntime(threadId)) {
-				inspector.invalidate();
-				var interrupted = resumePastUserBreakpoint(threadId, syntheticBp);
-				if (state == Exited) {
-					return;
-				}
-				if (interrupted != null) {
-					handleWaitOutcome(interrupted);
-				}
+			var vmRaised = raisedByRuntime(threadId);
+			if (vmRaised && !(vmExceptions != null && vmExceptions.armCatchAll(threadId))) {
+				breakpoints.suspend(syntheticBp);
+				enterStopped(threadId, syntheticBp);
+				emit(EvStoppedException(threadId, describeVmThrow(threadId, null)));
 				return;
 			}
-			breakpoints.suspend(syntheticBp);
-			enterStopped(threadId, syntheticBp);
-			emit(EvStoppedException(threadId, describeRuntimeThrow(threadId)));
+			if (vmRaised) {
+				pendingVmThrow.set(threadId, true);
+				// walked HERE: at hl_throw's own break the chain is gone
+				vmThrowFrames.set(threadId, stackWalker.walk(threadId));
+			}
+			inspector.invalidate();
+			var interrupted = resumePastUserBreakpoint(threadId, syntheticBp);
+			if (state == Exited) {
+				return;
+			}
+			if (interrupted != null) {
+				handleWaitOutcome(interrupted);
+			}
 			return;
 		}
 

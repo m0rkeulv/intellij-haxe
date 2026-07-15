@@ -1,0 +1,4 @@
+-cp src
+-main VmError
+-debug
+-hl ../build/hl/vm-fixture.hl

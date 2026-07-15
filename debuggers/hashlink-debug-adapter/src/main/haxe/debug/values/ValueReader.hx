@@ -291,6 +291,54 @@ class ValueReader {
 		return {value: typeName(t) + " @ " + hex(ptr), type: typeName(t), reference: 0};
 	}
 
+	/**
+	 * Display text for a vdynamic already in hand — hl_throw's parked exc_value.
+	 * A bytes-typed dynamic (how hl_error_msg ships runtime error text: "Null
+	 * access .length", "Out of bounds 5/3", ...) decodes to its NUL-terminated
+	 * UTF-16 content; anything else formats through the regular decoder.
+	 */
+	public function previewThrownDynamic(ptr:Pointer):Null<String> {
+		var resolved = runtimeTypes == null ? null : runtimeTypes.typeAt(mem.readPointer(ptr));
+		if (resolved != null && resolved.match(HBytes)) {
+			var text = nativeUtf16At(mem.readPointer(ptr.offset(align.ptr)));
+			if (text != null) {
+				return text;
+			}
+		}
+		var decoded = decodeReturnedPointer(ptr, HDyn);
+		return decoded == null ? null : decoded.value;
+	}
+
+	// Text of a NUL-terminated UTF-16 native string. Read in small chunks so a
+	// missing terminator or an unmapped tail page degrades to what was already
+	// read, not to a failure; capped since a runtime message is short.
+	function nativeUtf16At(bytesPtr:Pointer):Null<String> {
+		if (bytesPtr.isNull()) {
+			return null;
+		}
+		var buf = new StringBuf();
+		var offset = 0;
+		final chunkBytes = 64;
+		final maxBytes = 1024;
+		while (offset < maxBytes) {
+			var chunk = try mem.read(bytesPtr.offset(offset), chunkBytes) catch (e:Dynamic) null;
+			if (chunk == null) {
+				break;
+			}
+			var i = 0;
+			while (i + 1 < chunkBytes) {
+				var code = chunk.getUInt16(i);
+				if (code == 0) {
+					return buf.length > 0 ? buf.toString() : null;
+				}
+				buf.addChar(code); // UTF-16 code unit (BMP)
+				i += 2;
+			}
+			offset += chunkBytes;
+		}
+		return buf.length > 0 ? buf.toString() : null;
+	}
+
 	function readString(strPtr:Pointer):String {
 		return "\"" + stringContentAt(strPtr) + "\"";
 	}

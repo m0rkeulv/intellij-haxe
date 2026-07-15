@@ -13,27 +13,27 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Installs the "HashLink runtime exceptions" breakpoint as a second row of the
+ * Installs the "HashLink VM exceptions" breakpoint as a second row of the
  * "HashLink Uncaught Exceptions" category. The platform supports only ONE
  * default breakpoint per type ({@code XBreakpointType.createDefaultBreakpoint}),
- * so this sibling — distinguished by {@link HashLinkUncaughtExceptionProperties#runtimeErrors}
+ * so this sibling — distinguished by {@link HashLinkUncaughtExceptionProperties#vmErrors}
  * — is added programmatically on project start when missing. It persists with
  * the project's other breakpoints afterwards; if the user deletes the row, it
  * reappears (disabled) on the next open, mirroring default-breakpoint behavior.
  */
-public class HashLinkRuntimeBreakpointStartActivity implements ProjectActivity {
+public class HashLinkVmBreakpointStartActivity implements ProjectActivity {
 
   @Override
   public @Nullable Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
     ApplicationManager.getApplication().invokeLater(() -> {
       if (!project.isDisposed()) {
-        ApplicationManager.getApplication().runWriteAction(() -> installRuntimeBreakpointIfMissing(project));
+        ApplicationManager.getApplication().runWriteAction(() -> installVmBreakpointIfMissing(project));
       }
     });
     return null;
   }
 
-  private static void installRuntimeBreakpointIfMissing(Project project) {
+  private static void installVmBreakpointIfMissing(Project project) {
     HashLinkUncaughtExceptionBreakpointType type =
       XDebuggerUtil.getInstance().findBreakpointType(HashLinkUncaughtExceptionBreakpointType.class);
     if (type == null) {
@@ -41,12 +41,12 @@ public class HashLinkRuntimeBreakpointStartActivity implements ProjectActivity {
     }
     XBreakpointManager manager = XDebuggerManager.getInstance(project).getBreakpointManager();
     for (XBreakpoint<HashLinkUncaughtExceptionProperties> breakpoint : manager.getBreakpoints(type)) {
-      if (HashLinkUncaughtExceptionBreakpointType.isRuntimeErrors(breakpoint)) {
+      if (HashLinkUncaughtExceptionBreakpointType.isVmErrors(breakpoint)) {
         return;
       }
     }
     HashLinkUncaughtExceptionProperties properties = new HashLinkUncaughtExceptionProperties();
-    properties.runtimeErrors = true;
+    properties.vmErrors = true;
     manager.addBreakpoint(type, properties).setEnabled(false); // off by default; the user opts in
   }
 }

@@ -601,7 +601,7 @@ public class HashLinkDebugProcess extends XDebugProcess {
           updateExceptionFilters();
         }
       },
-      // The "Uncaught" category's two rows: any-uncaught, and runtime (VM-raised) errors
+      // The "Uncaught" category's two rows: any-uncaught, and VM-raised errors
       new XBreakpointHandler<XBreakpoint<HashLinkUncaughtExceptionProperties>>(HashLinkUncaughtExceptionBreakpointType.class) {
         @Override
         public void registerBreakpoint(@NotNull XBreakpoint<HashLinkUncaughtExceptionProperties> breakpoint) {
@@ -636,11 +636,11 @@ public class HashLinkDebugProcess extends XDebugProcess {
 
   // Builds the setExceptionBreakpoints request by reading the CURRENT state of the
   // exception breakpoints straight from the breakpoint manager: the "all" filter,
-  // the "uncaught"/"runtime" filters (the uncaught category's two rows,
-  // distinguished by their properties), plus the class names of every enabled
-  // per-class breakpoint. Reading the manager (rather than tracking volatile
-  // flags) is the single source of truth, so a session started with breakpoints
-  // already enabled (e.g. after an IDE restart) arms them the same as a live toggle.
+  // the "uncaught"/"vm" filters (the uncaught category's two rows, distinguished
+  // by their properties), plus the class names of every enabled per-class
+  // breakpoint. Reading the manager (rather than tracking volatile flags) is the
+  // single source of truth, so a session started with breakpoints already
+  // enabled (e.g. after an IDE restart) arms them the same as a live toggle.
   private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
     List<String> filters = new ArrayList<>();
     List<String> filterTypes = new ArrayList<>();
@@ -658,7 +658,7 @@ public class HashLinkDebugProcess extends XDebugProcess {
           if (!breakpoint.isEnabled()) {
             continue;
           }
-          String filter = HashLinkUncaughtExceptionBreakpointType.isRuntimeErrors(breakpoint) ? "runtime" : "uncaught";
+          String filter = HashLinkUncaughtExceptionBreakpointType.isVmErrors(breakpoint) ? "vm" : "uncaught";
           if (!filters.contains(filter)) {
             filters.add(filter);
           }
