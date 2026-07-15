@@ -28,6 +28,13 @@ interface DebuggerApi {
 	/** All live threads with their current status and stacks. */
 	function threads():Array<DebugThread>;
 
+	/**
+		The STATUS_* of one thread (RUNNING when unknown). The stop handler runs
+		on the stopping thread and must stay minimal, so the Server resolves the
+		status here, on its own thread, when dequeuing the event.
+	**/
+	function threadStatus(threadNumber:Int):Int;
+
 	/** Resumes `threadNumber` (-1 = all) `count` times. */
 	function continueThreads(threadNumber:Int, count:Int):Void;
 }

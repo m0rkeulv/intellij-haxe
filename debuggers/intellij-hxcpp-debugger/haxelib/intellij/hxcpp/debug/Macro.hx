@@ -17,8 +17,10 @@ class Macro {
 	public static function injectServer():Void {
 		#if macro
 		if (Context.defined("cpp") && Context.defined("debug") && !Context.defined("display")) {
-			Context.getType("intellij.hxcpp.debug.Server");
+			// define FIRST: Server's whole class is #if HXCPP_DEBUGGER guarded,
+			// so pulling the type in before the define finds an empty module
 			Compiler.define("HXCPP_DEBUGGER");
+			Context.getType("intellij.hxcpp.debug.Server");
 		}
 		#end
 	}

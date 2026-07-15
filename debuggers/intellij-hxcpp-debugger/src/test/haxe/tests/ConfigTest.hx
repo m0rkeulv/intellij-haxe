@@ -30,6 +30,10 @@ class ConfigTest {
 		var config = Config.resolve(env(new Map()));
 		assert.equals(Config.DEFAULT_HOST, config.host, "default host");
 		assert.equals(Config.DEFAULT_PORT, config.port, "default port");
+		assert.isTrue(!config.configured, "nothing set = not configured (one quick connect attempt only)");
+		assert.isTrue(Config.resolve(env(["HXCPP_DEBUG_PORT" => "6001"])).configured, "env port marks configured");
+		assert.isTrue(Config.resolve(env(new Map()), null, "garbage").configured,
+			"even an invalid define marks configured (someone asked for debugging)");
 	}
 
 	static function invalidOrEmptyValuesFallThroughTheChain(assert:Assert):Void {

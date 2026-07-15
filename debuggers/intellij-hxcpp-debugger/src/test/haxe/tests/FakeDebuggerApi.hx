@@ -26,6 +26,15 @@ class FakeDebuggerApi implements DebuggerApi {
 		return cannedThreads;
 	}
 
+	public function threadStatus(threadNumber:Int):Int {
+		for (t in cannedThreads) {
+			if (t.number == threadNumber) {
+				return t.status;
+			}
+		}
+		return DebugThread.STATUS_RUNNING;
+	}
+
 	public function continueThreads(threadNumber:Int, count:Int):Void {
 		continueCalls.push({threadNumber: threadNumber, count: count});
 	}

@@ -3,6 +3,10 @@ package intellij.hxcpp.debug;
 typedef ServerConfig = {
 	var host:String;
 	var port:Int;
+	// true when ANY env var or define contributed a value (even an invalid
+	// one): someone asked for debugging, so the server may retry the connect
+	// patiently; unconfigured builds get one quick attempt and run on
+	var configured:Bool;
 }
 
 /**
@@ -18,17 +22,21 @@ class Config {
 	public static inline var DEFAULT_PORT = 6972;
 
 	public static function resolve(env:String->Null<String>, ?defineHost:String, ?definePort:String):ServerConfig {
-		var host = nonEmpty(env("HXCPP_DEBUG_HOST"));
+		var envHost = env("HXCPP_DEBUG_HOST");
+		var envPort = env("HXCPP_DEBUG_PORT");
+		var host = nonEmpty(envHost);
 		if (host == null) {
 			host = nonEmpty(defineHost);
 		}
-		var port = parsePort(env("HXCPP_DEBUG_PORT"));
+		var port = parsePort(envPort);
 		if (port == null) {
 			port = parsePort(definePort);
 		}
 		return {
 			host: host != null ? host : DEFAULT_HOST,
-			port: port != null ? port : DEFAULT_PORT
+			port: port != null ? port : DEFAULT_PORT,
+			configured: nonEmpty(envHost) != null || nonEmpty(envPort) != null
+				|| nonEmpty(defineHost) != null || nonEmpty(definePort) != null
 		};
 	}
 

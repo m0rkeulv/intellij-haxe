@@ -1,0 +1,7 @@
+# Compile from the MODULE root (haxe test-fixtures/fixture.hxml): hxcpp builds
+# generated-file paths from the cwd without normalizing.
+-cp test-fixtures/src
+-main Main
+-lib intellij-hxcpp-debug-server
+-debug
+-cpp build/hxcpp/fixture
