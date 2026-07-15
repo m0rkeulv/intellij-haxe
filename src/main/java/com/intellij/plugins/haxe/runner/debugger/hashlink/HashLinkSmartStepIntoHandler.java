@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.frame.XSuspendContext;
@@ -51,6 +52,14 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
 
   private List<Variant> fetchVariants() {
     return process.requestStepInTargets().stream().map(Variant::new).toList();
+  }
+
+  // The base implementation throws AbstractMethodError, and the frontend/backend
+  // debugger split calls this eagerly while creating the session DTO — an
+  // unimplemented title breaks session initialization, not just the popup.
+  @Override
+  public String getPopupTitle() {
+    return HaxeBundle.message("hashlink.debugger.smart.step.into.title");
   }
 
   @Override
