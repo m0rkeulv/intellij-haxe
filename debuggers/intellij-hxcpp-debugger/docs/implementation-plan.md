@@ -120,9 +120,10 @@ integration tests green before commit.
 
 ## Parked / backlog
 
-- Smart step into (stepInTargets): hxcpp stops are line-granular with no
-  opcode CFG; needs a different mechanism (class/function breakpoints on the
-  callees named on the line?) — revisit after M3.
+- Smart step into: FEASIBLE, mechanism researched and recorded in
+  `smart-step-into-research.md` (IDE-side PSI target discovery + a temporary
+  class/function breakpoint under a STEP_OVER — the runtime evaluates both
+  together, verified in hxcpp 4.3.2). Schedule after M3 + M7.
 - Attach mode (connect to an already-running debuggee): deferred, launch-only
   v1 (same decision as the vshaxe adapter).
 - Upstream PRs to vshaxe (env-var port, frame-number writes, suffix matching)
