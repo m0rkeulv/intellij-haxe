@@ -36,6 +36,12 @@ dependencies {
 // ---------------------------------------------------------------------------
 val hxcppFixturePort = 6973
 val hxcppDebugServerVersion = "1.2.4" // pinned for reproducible fixture builds
+
+// Fixture builds need haxe + the hxcpp toolchain + a C++ compiler and take
+// minutes - CI's regular build/release jobs disable them with
+// -PbuildHxcppFixtures=false (the integration tests then skip themselves);
+// the dedicated debugger job on a windows runner keeps them on.
+val buildHxcppFixtures = providers.gradleProperty("buildHxcppFixtures").getOrElse("true").toBoolean()
 val exeSuffix = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
 
 // name -> (hxml, main class); each compiles to build/hxcpp/<name>/<Main>-debug(.exe)
@@ -63,7 +69,7 @@ val haxeAvailable: Boolean by lazy {
 tasks.register<Exec>("installHxcppDebugServerHaxelib") {
     group = "hxcpp"
     description = "Installs the pinned 'hxcpp-debug-server' haxelib compiled into the test fixture"
-    onlyIf { haxeAvailable }
+    onlyIf { buildHxcppFixtures && haxeAvailable }
     commandLine = listOf("haxelib", "install", "hxcpp-debug-server", hxcppDebugServerVersion, "--quiet", "--always")
 }
 
@@ -72,10 +78,12 @@ hxcppFixtures.forEach { (name, spec) ->
         group = "hxcpp"
         description = "Compiles the '$name' debuggee fixture to a native exe (build/hxcpp/$name)"
         onlyIf {
-            if (!haxeAvailable) {
+            if (!buildHxcppFixtures) {
+                logger.lifecycle("SKIPPING hxcpp '$name' fixture build (buildHxcppFixtures=false); integration tests will be skipped")
+            } else if (!haxeAvailable) {
                 logger.warn("SKIPPING hxcpp '$name' fixture build (haxe compiler not found on PATH); integration tests will be skipped")
             }
-            haxeAvailable
+            buildHxcppFixtures && haxeAvailable
         }
         dependsOn("installHxcppDebugServerHaxelib")
         // run from the MODULE root, not test-fixtures: haxe builds generated-file
