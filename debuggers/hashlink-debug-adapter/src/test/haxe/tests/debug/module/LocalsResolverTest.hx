@@ -6,10 +6,10 @@ import debug.module.ModuleDebugInfo;
 
 
 /**
- * Exercises LocalsResolver against the compiled fixture (env DAP_FIXTURE_HL).
- * At the loop line, main's locals are total(reg2)/count(reg3)/i(reg6); add's args
- * are current(reg0)/amount(reg1). Constants mirror test-fixtures/src/Main.hx.
- */
+	Exercises LocalsResolver against the compiled fixture (env DAP_FIXTURE_HL).
+	At the loop line, main's locals are total(reg2)/count(reg3)/i(reg6); add's args
+	are current(reg0)/amount(reg1). Constants mirror test-fixtures/src/Main.hx.
+**/
 class LocalsResolverTest {
 	static inline var FIXTURE_LOOP_LINE = 18;
 	static inline var FIXTURE_ADD_LINE = 28;

@@ -15,13 +15,13 @@ import format.hl.Data.ObjPrototype;
 import haxe.Int64;
 
 /**
- * Turns a stopped frame (or a variablesReference) into the DAP variable lists
- * the client renders: the frame's scopes (Locals / Statics / Registers), the
- * decoded locals, the HL bytecode registers, and a class's static fields.
- *
- * Read-only over the frozen debuggee — every value it produces is decoded via
- * ValueReader/ValueChildren and is valid only for the current stop.
- */
+	Turns a stopped frame (or a variablesReference) into the DAP variable lists
+	the client renders: the frame's scopes (Locals / Statics / Registers), the
+	decoded locals, the HL bytecode registers, and a class's static fields.
+
+	Read-only over the frozen debuggee — every value it produces is decoded via
+	ValueReader/ValueChildren and is valid only for the current stop.
+**/
 class VariablesView {
 	final stops:StopState;
 	final memory:MemoryReader;
@@ -53,7 +53,9 @@ class VariablesView {
 		this.valueChildren = valueChildren;
 	}
 
-	/** The scopes of a cached frame: Locals, plus Statics when the owning class has static data. */
+	/**
+		The scopes of a cached frame: Locals, plus Statics when the owning class has static data.
+	**/
 	public function scopesFor(frameId:Int):Array<ScopeInfo> {
 		var frame = stops.frameAt(frameId);
 		if (frame == null) {
@@ -69,7 +71,9 @@ class VariablesView {
 		return scopes;
 	}
 
-	/** The children of a variablesReference ([] for an unknown/stale reference). */
+	/**
+		The children of a variablesReference ([] for an unknown/stale reference).
+	**/
 	public function variablesFor(reference:Int):Array<VariableInfo> {
 		var target = stops.referenceTarget(reference);
 		if (target == null) {
@@ -114,11 +118,11 @@ class VariablesView {
 	}
 
 	/**
-	 * The frame's HL bytecode registers r0..rN (every typed `ebp+offset` slot,
-	 * including args and unnamed temporaries), each annotated with the local
-	 * name currently bound to it. The stopped thread's CPU registers lead the
-	 * list on the top frame (they are thread state, not frame state).
-	 */
+		The frame's HL bytecode registers r0..rN (every typed `ebp+offset` slot,
+		including args and unnamed temporaries), each annotated with the local
+		name currently bound to it. The stopped thread's CPU registers lead the
+		list on the top frame (they are thread state, not frame state).
+	**/
 	function readRegisters(frameId:Int):Array<VariableInfo> {
 		var handle = stops.frameAt(frameId);
 		if (handle == null) {
@@ -157,10 +161,10 @@ class VariablesView {
 	}
 
 	/**
-	 * The decoded value held in HL register `reg` of `frameId` — used to describe
-	 * the value being thrown at a throw site, where it is a live bound value.
-	 * Null when the frame is gone or the register is out of range.
-	 */
+		The decoded value held in HL register `reg` of `frameId` — used to describe
+		the value being thrown at a throw site, where it is a live bound value.
+		Null when the frame is gone or the register is out of range.
+	**/
 	public function readRegisterValue(frameId:Int, reg:Int):Null<VariableInfo> {
 		var handle = stops.frameAt(frameId);
 		if (handle == null) {
@@ -178,20 +182,20 @@ class VariablesView {
 	}
 
 	/**
-	 * Display text for the vdynamic at `ptr` (a pointer already in hand — e.g.
-	 * hl_throw's parked exc_value), resolved through its runtime type header.
-	 * Null when it cannot be decoded.
-	 */
+		Display text for the vdynamic at `ptr` (a pointer already in hand — e.g.
+		hl_throw's parked exc_value), resolved through its runtime type header.
+		Null when it cannot be decoded.
+	**/
 	public function previewDynamicPointer(ptr:Pointer):Null<String> {
 		return try valueReader.previewThrownDynamic(ptr) catch (e:Dynamic) null;
 	}
 
 	/**
-	 * True when the value in register `reg` of `frameId` is an object whose
-	 * runtime class (or a superclass) matches one of `wanted` (FQN or simple
-	 * name) — the type filter for exception breakpoints. False for a non-object
-	 * slot or when `wanted` is empty.
-	 */
+		True when the value in register `reg` of `frameId` is an object whose
+		runtime class (or a superclass) matches one of `wanted` (FQN or simple
+		name) — the type filter for exception breakpoints. False for a non-object
+		slot or when `wanted` is empty.
+	**/
 	public function registerValueMatchesType(frameId:Int, reg:Int, wanted:Array<String>):Bool {
 		if (wanted == null || wanted.length == 0) {
 			return false;

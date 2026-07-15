@@ -8,21 +8,21 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * Resolves a runtime `hl_type*` (found in value headers: object/vdynamic/venum
- * headers, a varray's element type) back to a module HLType.
- *
- * hl_type layout: kind i32 @ +0, kind-specific data pointer @ +ptr.
- * - primitive kinds map directly (format HLType constructor order matches the
- *   C hl_type_kind indices exactly);
- * - HOBJ/HSTRUCT: data -> hl_type_obj { i32 nfields/nproto/nbindings, then the
- *   uchar* name at Align.objTypeName } -> resolve the UCS-2 name against the
- *   module's types;
- * - HENUM: data -> hl_type_enum { uchar* name @ +0 } -> resolve by name;
- * - HNULL/HREF: data is the wrapped hl_type*.
- * All offsets come from the {@link debug.layout.Align} arch descriptor. Anything
- * unknown or unresolvable returns null; callers fall back to the static
- * (bytecode) type.
- */
+	Resolves a runtime `hl_type*` (found in value headers: object/vdynamic/venum
+	headers, a varray's element type) back to a module HLType.
+
+	hl_type layout: kind i32 @ +0, kind-specific data pointer @ +ptr.
+	- primitive kinds map directly (format HLType constructor order matches the
+	  C hl_type_kind indices exactly);
+	- HOBJ/HSTRUCT: data -> hl_type_obj { i32 nfields/nproto/nbindings, then the
+	  uchar* name at Align.objTypeName } -> resolve the UCS-2 name against the
+	  module's types;
+	- HENUM: data -> hl_type_enum { uchar* name @ +0 } -> resolve by name;
+	- HNULL/HREF: data is the wrapped hl_type*.
+	All offsets come from the `debug.layout.Align` arch descriptor. Anything
+	unknown or unresolvable returns null; callers fall back to the static
+	(bytecode) type.
+**/
 class RuntimeTypes {
 	static inline var KFUN = 10;
 	static inline var KOBJ = 11;
@@ -50,7 +50,9 @@ class RuntimeTypes {
 		this.resolveName = resolveName;
 	}
 
-	/** The module HLType for the runtime type at `typePtr`, or null when unknown. */
+	/**
+		The module HLType for the runtime type at `typePtr`, or null when unknown.
+	**/
 	public function typeAt(typePtr:Pointer):Null<HLType> {
 		if (typePtr.isNull()) {
 			return null;

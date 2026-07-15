@@ -1,14 +1,14 @@
 /**
- * Debuggee fixture entry point (Point/Config/Shade/Rich live in own files).
- *
- * WARNING: line numbers in this file are load-bearing test constants.
- * The integration tests set breakpoints on the lines marked below and
- * assert stack frames/values against them — do not reformat or reorder without
- * updating DapIntegrationTestBase and the Haxe fixture-backed tests.
- *
- * The loop bound comes from a runtime value on purpose: a constant range like
- * `0...3` is unrolled by the compiler, which would defeat a loop breakpoint.
- */
+	Debuggee fixture entry point (Point/Config/Shade/Rich live in own files).
+
+	WARNING: line numbers in this file are load-bearing test constants.
+	The integration tests set breakpoints on the lines marked below and
+	assert stack frames/values against them — do not reformat or reorder without
+	updating DapIntegrationTestBase and the Haxe fixture-backed tests.
+
+	The loop bound comes from a runtime value on purpose: a constant range like
+	`0...3` is unrolled by the compiler, which would defeat a loop breakpoint.
+**/
 class Main {
 	static function main():Void {
 		Sys.println("fixture-start");

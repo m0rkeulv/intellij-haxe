@@ -6,9 +6,9 @@ import format.hl.Data.HLType;
 import format.hl.Data.ObjPrototype;
 
 /**
- * What a DAP `variablesReference` resolves to. References are handed out per stop
- * and invalidated on resume.
- */
+	What a DAP `variablesReference` resolves to. References are handed out per stop
+	and invalidated on resume.
+**/
 enum RefTarget {
 	RefLocals(frameId:Int);
 	RefObject(pointer:Pointer, type:HLType);

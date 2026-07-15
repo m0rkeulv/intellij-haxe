@@ -4,17 +4,17 @@ import debug.Pointer;
 import debug.layout.Align;
 
 /**
- * Drives HashLink's built-in break-on-throw support. hl_throw (src/std/error.c)
- * stores the thrown vdynamic in hl_thread_info.exc_value and THEN — when
- * HL_EXC_CATCH_ALL is set in that thread's flags — executes hl_debug_break()
- * with HL_EXC_IS_THROW set: an int3 the debugger receives at a point where the
- * thrown value is finally readable (it is unreadable at hl_throw's ENTRY — the
- * argument registers are not exposed by HL's debug API).
- *
- * All struct offsets come from the {@link debug.layout.Align} arch descriptor
- * (thread id @ +0, exc_value/flags in the ptr-relative tail); the flags word is
- * an i32 whose two bits both live in its first little-endian byte.
- */
+	Drives HashLink's built-in break-on-throw support. hl_throw (src/std/error.c)
+	stores the thrown vdynamic in hl_thread_info.exc_value and THEN — when
+	HL_EXC_CATCH_ALL is set in that thread's flags — executes hl_debug_break()
+	with HL_EXC_IS_THROW set: an int3 the debugger receives at a point where the
+	thrown value is finally readable (it is unreadable at hl_throw's ENTRY — the
+	argument registers are not exposed by HL's debug API).
+
+	All struct offsets come from the `debug.layout.Align` arch descriptor
+	(thread id @ +0, exc_value/flags in the ptr-relative tail); the flags word is
+	an i32 whose two bits both live in its first little-endian byte.
+**/
 class VmExceptionControl {
 	static inline var HL_EXC_CATCH_ALL = 2;
 	static inline var HL_EXC_IS_THROW = 4;
@@ -35,10 +35,10 @@ class VmExceptionControl {
 	}
 
 	/**
-	 * Requests hl_throw's own debug break for the next throw on `threadId`
-	 * (sets HL_EXC_CATCH_ALL). False when the thread's info cannot be found —
-	 * the caller must then fall back to reporting without the thrown value.
-	 */
+		Requests hl_throw's own debug break for the next throw on `threadId`
+		(sets HL_EXC_CATCH_ALL). False when the thread's info cannot be found —
+		the caller must then fall back to reporting without the thrown value.
+	**/
 	public function armCatchAll(threadId:Int):Bool {
 		var info = infoFor(threadId);
 		if (info == null) {
@@ -55,13 +55,17 @@ class VmExceptionControl {
 		}
 	}
 
-	/** True while `threadId` is parked at hl_throw's own break (HL_EXC_IS_THROW). */
+	/**
+		True while `threadId` is parked at hl_throw's own break (HL_EXC_IS_THROW).
+	**/
 	public function isThrowBreak(threadId:Int):Bool {
 		var info = infoFor(threadId);
 		return info != null && readFlagsByte(info) & HL_EXC_IS_THROW != 0;
 	}
 
-	/** The thrown vdynamic* parked in exc_value, or null when unavailable. */
+	/**
+		The thrown vdynamic* parked in exc_value, or null when unavailable.
+	**/
 	public function thrownValue(threadId:Int):Null<Pointer> {
 		var info = infoFor(threadId);
 		if (info == null) {

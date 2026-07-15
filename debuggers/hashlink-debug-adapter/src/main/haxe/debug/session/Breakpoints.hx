@@ -8,15 +8,15 @@ import haxe.Int64;
 import haxe.io.Bytes;
 
 /**
- * Installs and tracks software (INT3) breakpoints in the debuggee.
- *
- * All memory access goes through DebugApi, so this class is exercised in tests
- * with a fake API over in-memory bytes. It performs no threading and no event
- * handling; DebugSession drives it from the single debug thread.
- *
- * DAP setBreakpoints replaces the entire breakpoint set for a source file, so
- * breakpoints are grouped by source key and replaced wholesale.
- */
+	Installs and tracks software (INT3) breakpoints in the debuggee.
+
+	All memory access goes through DebugApi, so this class is exercised in tests
+	with a fake API over in-memory bytes. It performs no threading and no event
+	handling; DebugSession drives it from the single debug thread.
+
+	DAP setBreakpoints replaces the entire breakpoint set for a source file, so
+	breakpoints are grouped by source key and replaced wholesale.
+**/
 class Breakpoints {
 	static inline var INT3 = 0xCC;
 
@@ -40,10 +40,10 @@ class Breakpoints {
 	}
 
 	/**
-	 * Replaces all breakpoints for `sourceKey` with the given locations. The
-	 * caller assigns each location's breakpoint id (so ids stay stable across
-	 * re-verification). Returns the installed breakpoints in input order.
-	 */
+		Replaces all breakpoints for `sourceKey` with the given locations. The
+		caller assigns each location's breakpoint id (so ids stay stable across
+		re-verification). Returns the installed breakpoints in input order.
+	**/
 	public function setForSource(sourceKey:String, locations:Array<BreakpointLocation>):Array<PatchedBreakpoint> {
 		clearSource(sourceKey);
 		var installed:Array<PatchedBreakpoint> = [];
@@ -54,7 +54,9 @@ class Breakpoints {
 		return installed;
 	}
 
-	/** Removes and restores every breakpoint installed for `sourceKey`. */
+	/**
+		Removes and restores every breakpoint installed for `sourceKey`.
+	**/
 	public function clearSource(sourceKey:String):Void {
 		var existing = bySource.get(sourceKey);
 		if (existing == null) {
@@ -67,7 +69,9 @@ class Breakpoints {
 		bySource.remove(sourceKey);
 	}
 
-	/** The breakpoint installed at `address`, or null. */
+	/**
+		The breakpoint installed at `address`, or null.
+	**/
 	public function atAddress(address:Pointer):Null<PatchedBreakpoint> {
 		return byAddress.get(addressKey(address));
 	}
@@ -76,26 +80,32 @@ class Breakpoints {
 		return byAddress.exists(addressKey(address));
 	}
 
-	/** All installed breakpoints across every source. */
+	/**
+		All installed breakpoints across every source.
+	**/
 	public function all():Array<PatchedBreakpoint> {
 		return [for (bp in byAddress) bp];
 	}
 
-	/** Temporarily restores the original byte (before stepping over the breakpoint). */
+	/**
+		Temporarily restores the original byte (before stepping over the breakpoint).
+	**/
 	public function suspend(bp:PatchedBreakpoint):Void {
 		writeByte(bp.address, bp.originalByte);
 	}
 
-	/** Re-installs the INT3 after a step-over. */
+	/**
+		Re-installs the INT3 after a step-over.
+	**/
 	public function rearm(bp:PatchedBreakpoint):Void {
 		writeByte(bp.address, INT3);
 	}
 
 	/**
-	 * Plants a temporary INT3 (for a step) at `address`. If a breakpoint is
-	 * already installed there, nothing is written and the temp is marked `shared`
-	 * so clearTemps leaves the breakpoint intact.
-	 */
+		Plants a temporary INT3 (for a step) at `address`. If a breakpoint is
+		already installed there, nothing is written and the temp is marked `shared`
+		so clearTemps leaves the breakpoint intact.
+	**/
 	public function addTemp(address:Pointer):Void {
 		var key = addressKey(address);
 		if (temps.exists(key)) {
@@ -112,7 +122,9 @@ class Breakpoints {
 		temps.set(key, {address: address, originalByte: original, shared: shared});
 	}
 
-	/** Removes all temporary breakpoints, restoring bytes not shared with a breakpoint. */
+	/**
+		Removes all temporary breakpoints, restoring bytes not shared with a breakpoint.
+	**/
 	public function clearTemps():Void {
 		for (temp in temps) {
 			if (!temp.shared) {
@@ -126,7 +138,9 @@ class Breakpoints {
 		return temps.exists(addressKey(address));
 	}
 
-	/** Restores a single temp's original byte (to single-step past it at a wrong frame). */
+	/**
+		Restores a single temp's original byte (to single-step past it at a wrong frame).
+	**/
 	public function suspendTemp(address:Pointer):Void {
 		var temp = temps.get(addressKey(address));
 		if (temp != null && !temp.shared) {
@@ -134,7 +148,9 @@ class Breakpoints {
 		}
 	}
 
-	/** Re-installs a single temp's INT3 after stepping past it. */
+	/**
+		Re-installs a single temp's INT3 after stepping past it.
+	**/
 	public function rearmTemp(address:Pointer):Void {
 		var temp = temps.get(addressKey(address));
 		if (temp != null && !temp.shared) {
@@ -148,7 +164,9 @@ class Breakpoints {
 
 	// --- exception breakpoints (one INT3 per throw site while enabled) ---
 
-	/** Plants an INT3 at every throw site (skipping addresses already patched). */
+	/**
+		Plants an INT3 at every throw site (skipping addresses already patched).
+	**/
 	public function armExceptions(sites:Array<ThrowSite>):Void {
 		for (site in sites) {
 			var key = addressKey(site.address);
@@ -165,7 +183,9 @@ class Breakpoints {
 		}
 	}
 
-	/** Restores every throw-site byte and forgets them. */
+	/**
+		Restores every throw-site byte and forgets them.
+	**/
 	public function disarmExceptions():Void {
 		for (entry in byException) {
 			restore(entry.bp);
@@ -177,14 +197,18 @@ class Breakpoints {
 		return byException.keys().hasNext();
 	}
 
-	/** The throw-site breakpoint at `address` (with its thrown-value register), or null. */
+	/**
+		The throw-site breakpoint at `address` (with its thrown-value register), or null.
+	**/
 	public function exceptionAt(address:Pointer):Null<{bp:PatchedBreakpoint, reg:Int}> {
 		return byException.get(addressKey(address));
 	}
 
 	// --- native-exception trap (one INT3 on hl_throw's entry) ---
 
-	/** Plants an INT3 at hl_throw's entry (no-op if already armed there). */
+	/**
+		Plants an INT3 at hl_throw's entry (no-op if already armed there).
+	**/
 	public function armNativeThrow(address:Pointer):Void {
 		if (nativeThrow != null) {
 			return;
@@ -194,7 +218,9 @@ class Breakpoints {
 		nativeThrow = {address: address, originalByte: original};
 	}
 
-	/** Restores hl_throw's entry byte and forgets the trap. */
+	/**
+		Restores hl_throw's entry byte and forgets the trap.
+	**/
 	public function disarmNativeThrow():Void {
 		if (nativeThrow != null) {
 			writeByte(nativeThrow.address, nativeThrow.originalByte);
@@ -206,17 +232,19 @@ class Breakpoints {
 		return nativeThrow != null;
 	}
 
-	/** True when `address` is hl_throw's armed entry. */
+	/**
+		True when `address` is hl_throw's armed entry.
+	**/
 	public function isNativeThrow(address:Pointer):Bool {
 		return nativeThrow != null && Int64.eq(nativeThrow.address, address);
 	}
 
 	/**
-	 * A synthetic PatchedBreakpoint view of the native-throw trap, so a stop on it
-	 * flows through the same currentStoppedBreakpoint machinery (suspend / rearm /
-	 * step-over on continue) as any breakpoint. Not in byAddress, so atAddress
-	 * lookups (reconcileStoppedBreakpoint) correctly ignore it. Null when disarmed.
-	 */
+		A synthetic PatchedBreakpoint view of the native-throw trap, so a stop on it
+		flows through the same currentStoppedBreakpoint machinery (suspend / rearm /
+		step-over on continue) as any breakpoint. Not in byAddress, so atAddress
+		lookups (reconcileStoppedBreakpoint) correctly ignore it. Null when disarmed.
+	**/
 	public function nativeThrowBreakpoint():Null<PatchedBreakpoint> {
 		if (nativeThrow == null) {
 			return null;
@@ -228,13 +256,13 @@ class Breakpoints {
 	}
 
 	/**
-	 * Temporarily lifts EVERY planted INT3 (user breakpoints, exception sites,
-	 * the hl_throw trap) without forgetting them, so an injected eval-call runs
-	 * like unpatched code — a called function that internally throws/catches or
-	 * crosses a user breakpoint must not trip OUR traps and derail the call.
-	 * Paired with rearmAll(). Step temps are left alone (an eval-call runs from a
-	 * stopped state, not mid-step). Idempotent per byte.
-	 */
+		Temporarily lifts EVERY planted INT3 (user breakpoints, exception sites,
+		the hl_throw trap) without forgetting them, so an injected eval-call runs
+		like unpatched code — a called function that internally throws/catches or
+		crosses a user breakpoint must not trip OUR traps and derail the call.
+		Paired with rearmAll(). Step temps are left alone (an eval-call runs from a
+		stopped state, not mid-step). Idempotent per byte.
+	**/
 	public function suspendAll():Void {
 		for (bp in byAddress) {
 			writeByte(bp.address, bp.originalByte);
@@ -248,11 +276,11 @@ class Breakpoints {
 	}
 
 	/**
-	 * Re-plants every INT3 lifted by suspendAll, EXCEPT at `keepSuspended` (the
-	 * breakpoint the debugger is currently stopped on, whose byte the stop/continue
-	 * machinery keeps restored until it single-steps past it — re-arming it here
-	 * would make that step trap on itself).
-	 */
+		Re-plants every INT3 lifted by suspendAll, EXCEPT at `keepSuspended` (the
+		breakpoint the debugger is currently stopped on, whose byte the stop/continue
+		machinery keeps restored until it single-steps past it — re-arming it here
+		would make that step trap on itself).
+	**/
 	public function rearmAll(?keepSuspended:Pointer):Void {
 		for (bp in byAddress) {
 			if (keepSuspended == null || !Int64.eq(bp.address, keepSuspended)) {
@@ -270,11 +298,11 @@ class Breakpoints {
 	}
 
 	/**
-	 * Restores every patched byte (breakpoints and temps). Used before
-	 * detaching in attach mode: the debuggee keeps running without a debugger,
-	 * so any leftover INT3 would crash it. Restoring a byte that was already
-	 * suspended writes the same original value again — harmless.
-	 */
+		Restores every patched byte (breakpoints and temps). Used before
+		detaching in attach mode: the debuggee keeps running without a debugger,
+		so any leftover INT3 would crash it. Restoring a byte that was already
+		suspended writes the same original value again — harmless.
+	**/
 	public function removeAll():Void {
 		clearTemps();
 		disarmExceptions();

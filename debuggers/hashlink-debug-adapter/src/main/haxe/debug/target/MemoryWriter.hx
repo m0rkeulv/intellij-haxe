@@ -7,11 +7,11 @@ import haxe.Int64;
 import haxe.io.Bytes;
 
 /**
- * Typed little-endian writes of debuggee memory over DebugApi — the value
- * modification counterpart of MemoryReader. Only used while the debuggee is
- * stopped; a failed write throws (unlike reads, a silent partial write would
- * corrupt the debuggee).
- */
+	Typed little-endian writes of debuggee memory over DebugApi — the value
+	modification counterpart of MemoryReader. Only used while the debuggee is
+	stopped; a failed write throws (unlike reads, a silent partial write would
+	corrupt the debuggee).
+**/
 class MemoryWriter {
 	final api:DebugApi;
 	final pid:Int;

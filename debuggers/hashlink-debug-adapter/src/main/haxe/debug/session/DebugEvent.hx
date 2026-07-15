@@ -6,9 +6,9 @@ import debug.inspect.ScopeInfo;
 import debug.values.VariableInfo;
 
 /**
- * An event emitted by the DebugSession thread, consumed by the worker/dispatcher
- * and turned into DAP responses or events.
- */
+	An event emitted by the DebugSession thread, consumed by the worker/dispatcher
+	and turned into DAP responses or events.
+**/
 enum DebugEvent {
 	// deferred-response completions (carry the originating request seq)
 	EvLaunched(requestSeq:Int);

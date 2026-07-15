@@ -3,9 +3,9 @@ package debug.session;
 import debug.Pointer;
 
 /**
- * A breakpoint physically installed in the debuggee: the INT3-patched machine
- * address, the original byte we must restore, and the source location it maps to.
- */
+	A breakpoint physically installed in the debuggee: the INT3-patched machine
+	address, the original byte we must restore, and the source location it maps to.
+**/
 typedef PatchedBreakpoint = {
 	var id:Int;
 	var address:Pointer;

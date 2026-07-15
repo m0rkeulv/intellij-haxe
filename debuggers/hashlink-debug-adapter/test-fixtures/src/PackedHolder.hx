@@ -1,4 +1,6 @@
-/** An object with a @:packed field: the Vec2 struct is inlined into the instance (HPacked). */
+/**
+	An object with a @:packed field: the Vec2 struct is inlined into the instance (HPacked).
+**/
 class PackedHolder {
 	public var id:Int;
 	@:packed public var pos(default, null):Vec2;

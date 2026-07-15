@@ -49,15 +49,15 @@ private enum State {
 }
 
 /**
- * Owns the whole debug session on a single dedicated thread — the only thread
- * that touches DebugApi (required on Windows, where WaitForDebugEvent must run
- * on the attaching thread). Commands come in on a Deque; results and stop/exit
- * events go out through the `emit` callback.
- *
- * All memory/breakpoint logic is factored into testable helpers (JitInfoReader,
- * ModuleDebugInfo, Breakpoints, StackWalker); this class sequences them and the
- * OS event loop.
- */
+	Owns the whole debug session on a single dedicated thread — the only thread
+	that touches DebugApi (required on Windows, where WaitForDebugEvent must run
+	on the attaching thread). Commands come in on a Deque; results and stop/exit
+	events go out through the `emit` callback.
+
+	All memory/breakpoint logic is factored into testable helpers (JitInfoReader,
+	ModuleDebugInfo, Breakpoints, StackWalker); this class sequences them and the
+	OS event loop.
+**/
 class DebugSession {
 
 	// After attaching, Windows delivers a burst of startup debug events (initial
@@ -141,12 +141,16 @@ class DebugSession {
 		this.emit = emit;
 	}
 
-	/** Starts the session thread. */
+	/**
+		Starts the session thread.
+	**/
 	public function start():Void {
 		Thread.create(loop);
 	}
 
-	/** Queues a command for the session thread. */
+	/**
+		Queues a command for the session thread.
+	**/
 	public function send(command:SessionCommand):Void {
 		commands.add(command);
 	}
@@ -529,16 +533,16 @@ class DebugSession {
 	static inline var CALL_TIMEOUT_MS = 5000;
 
 	/**
-	 * Calls `funcAddr` in the debuggee with `args` (already lowered to raw
-	 * register values) and returns the raw result (RAX, or XMM0-as-RAX for a
-	 * float return). Injects a trampoline over the code at the stopped thread's
-	 * instruction pointer, runs it to a trailing INT3, then restores the
-	 * original code and the Eip/Esp/Rax registers.
-	 *
-	 * DANGEROUS: this runs arbitrary debuggee code on the session thread. Only
-	 * valid while stopped; a call that throws, recurses into a breakpoint, or
-	 * runs longer than CALL_TIMEOUT_MS fails with the state restored.
-	 */
+		Calls `funcAddr` in the debuggee with `args` (already lowered to raw
+		register values) and returns the raw result (RAX, or XMM0-as-RAX for a
+		float return). Injects a trampoline over the code at the stopped thread's
+		instruction pointer, runs it to a trailing INT3, then restores the
+		original code and the Eip/Esp/Rax registers.
+
+		DANGEROUS: this runs arbitrary debuggee code on the session thread. Only
+		valid while stopped; a call that throws, recurses into a breakpoint, or
+		runs longer than CALL_TIMEOUT_MS fails with the state restored.
+	**/
 	function callInDebuggee(threadId:Int, funcAddr:Pointer, args:Array<CallArg>, floatBits:Int):Pointer {
 		// the trampoline is CPU-architecture-specific: x86-64 loads argument
 		// registers and returns through RAX/XMM0; x86 pushes cdecl stack args and

@@ -6,19 +6,23 @@ import debug.target.MemoryReader;
 import haxe.Int64;
 
 /**
- * Reads native HashLink maps (what haxe.ds.StringMap/IntMap/ObjectMap wrap in
- * their first field). Port of hld makeMap for the HL RUNTIME >= 1.13 layout —
- * older runtimes get no entry listing (callers fall back to a raw display).
- *
- * Native layout (64-bit):
- *   cells   @ +0       hash buckets: first entry index per bucket
- *   nexts   @ +ptr     per-entry chain links
- *   entries @ +2*ptr   key storage (Int keys)
- *   values  @ +3*ptr   value storage (+ keys for String/Object maps)
- *   freelist (ptr+8 bytes), then ncells/nentries/maxEntries i32s
- * Small maps (maxEntries < 128) use BYTE cells/nexts with 255 as the chain
- * terminator; larger maps use i32 arrays with negative terminators.
- */
+	Reads native HashLink maps (what haxe.ds.StringMap/IntMap/ObjectMap wrap in
+	their first field). Port of hld makeMap for the HL RUNTIME >= 1.13 layout —
+	older runtimes get no entry listing (callers fall back to a raw display).
+
+	Native layout (64-bit):
+
+	| field     | offset   | purpose                                       |
+	|-----------|----------|-----------------------------------------------|
+	| `cells`   | `+0`     | hash buckets: first entry index per bucket    |
+	| `nexts`   | `+ptr`   | per-entry chain links                         |
+	| `entries` | `+2*ptr` | key storage (Int keys)                        |
+	| `values`  | `+3*ptr` | value storage (+ keys for String/Object maps) |
+
+	then a freelist (ptr+8 bytes) and the ncells/nentries/maxEntries i32s.
+	Small maps (maxEntries < 128) use BYTE cells/nexts with 255 as the chain
+	terminator; larger maps use i32 arrays with negative terminators.
+**/
 class MapReader {
 	static inline var MAX_ENTRIES = 512; // same cap as array listing
 	static inline var MAX_KEY_CHARS = 256;
@@ -34,7 +38,9 @@ class MapReader {
 		this.supported = supported;
 	}
 
-	/** Live entry count, or -1 when the layout is unsupported/implausible. */
+	/**
+		Live entry count, or -1 when the layout is unsupported/implausible.
+	**/
 	public function entryCount(native:Pointer):Int {
 		if (!supported || native.isNull()) {
 			return -1;
@@ -45,9 +51,9 @@ class MapReader {
 	}
 
 	/**
-	 * The live entries. `dynPreview` renders Object keys (read as HDyn) for
-	 * display. Capped at 512 entries.
-	 */
+		The live entries. `dynPreview` renders Object keys (read as HDyn) for
+		display. Capped at 512 entries.
+	**/
 	public function entries(native:Pointer, kind:MapKeyKind, dynPreview:Pointer->String):Array<MapEntrySlot> {
 		var total = entryCount(native);
 		if (total <= 0) {

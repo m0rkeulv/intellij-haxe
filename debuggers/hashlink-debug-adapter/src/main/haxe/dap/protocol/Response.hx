@@ -1,9 +1,9 @@
 package dap.protocol;
 
 /**
- * A response to a request (type = "response").
- * `request_seq` echoes the `seq` of the request being answered.
- */
+	A response to a request (type = "response").
+	`request_seq` echoes the `seq` of the request being answered.
+**/
 typedef Response = {
 	> ProtocolMessage,
 	var request_seq:Int;

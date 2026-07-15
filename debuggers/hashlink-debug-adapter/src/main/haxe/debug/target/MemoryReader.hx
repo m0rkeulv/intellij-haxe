@@ -6,10 +6,10 @@ import haxe.Int64;
 import haxe.io.Bytes;
 
 /**
- * Typed little-endian reads of debuggee memory over DebugApi. All value decoding
- * goes through this, so it is exercised in tests with a fake API over in-memory
- * bytes.
- */
+	Typed little-endian reads of debuggee memory over DebugApi. All value decoding
+	goes through this, so it is exercised in tests with a fake API over in-memory
+	bytes.
+**/
 class MemoryReader {
 	final api:DebugApi;
 	final pid:Int;

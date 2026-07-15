@@ -12,20 +12,20 @@ import sys.net.Socket;
 import sys.thread.Thread;
 
 /**
- * Spawns and owns the HashLink debuggee process, launched under the VM's
- * debug server (`hl --debug <port> --debug-wait <program>`), and pumps its
- * stdout/stderr so the pipes never fill and block the debuggee.
- *
- * Output is delivered through the `onOutput(category, text)` callback from two
- * dedicated pump threads; nothing here touches the debug natives.
- *
- * WINDOWS GOTCHA: this spawn goes through HL's process.c, which sets
- * STARTF_USESHOWWINDOW + SW_HIDE — Windows then overrides the child's FIRST
- * ShowWindow call with SW_HIDE, so a GUI debuggee's window is created but
- * never shown. GUI clients must spawn the debuggee themselves and use attach
- * mode (launch args `attachPid`/`debugPort`); this path remains for headless
- * debuggees and the integration tests.
- */
+	Spawns and owns the HashLink debuggee process, launched under the VM's
+	debug server (`hl --debug <port> --debug-wait <program>`), and pumps its
+	stdout/stderr so the pipes never fill and block the debuggee.
+
+	Output is delivered through the `onOutput(category, text)` callback from two
+	dedicated pump threads; nothing here touches the debug natives.
+
+	WINDOWS GOTCHA: this spawn goes through HL's process.c, which sets
+	STARTF_USESHOWWINDOW + SW_HIDE — Windows then overrides the child's FIRST
+	ShowWindow call with SW_HIDE, so a GUI debuggee's window is created but
+	never shown. GUI clients must spawn the debuggee themselves and use attach
+	mode (launch args `attachPid`/`debugPort`); this path remains for headless
+	debuggees and the integration tests.
+**/
 class DebuggeeProcess {
 	public var pid(default, null):Int;
 
@@ -66,7 +66,9 @@ class DebuggeeProcess {
 		pid = process.getPid();
 	}
 
-	/** Starts the stdout/stderr pump threads. */
+	/**
+		Starts the stdout/stderr pump threads.
+	**/
 	public function startOutputPumps():Void {
 		pump(process.stdout, "stdout");
 		pump(process.stderr, "stderr");
@@ -118,12 +120,16 @@ class DebuggeeProcess {
 		#end
 	}
 
-	/** Non-blocking exit-code probe; null while the process is still running. */
+	/**
+		Non-blocking exit-code probe; null while the process is still running.
+	**/
 	public function tryExitCode():Null<Int> {
 		return process.exitCode(false);
 	}
 
-	/** Blocks until the process exits and returns its code. */
+	/**
+		Blocks until the process exits and returns its code.
+	**/
 	public function waitExitCode():Int {
 		return process.exitCode(true);
 	}
@@ -141,10 +147,10 @@ class DebuggeeProcess {
 	}
 
 	/**
-	 * Reserves an ephemeral TCP port on the loopback interface and returns it.
-	 * There is an unavoidable race between closing here and the VM binding it;
-	 * DebugSession retries the connect to cover it.
-	 */
+		Reserves an ephemeral TCP port on the loopback interface and returns it.
+		There is an unavoidable race between closing here and the VM binding it;
+		DebugSession retries the connect to cover it.
+	**/
 	public static function findFreePort():Int {
 		var socket = new Socket();
 		socket.bind(new Host("127.0.0.1"), 0);

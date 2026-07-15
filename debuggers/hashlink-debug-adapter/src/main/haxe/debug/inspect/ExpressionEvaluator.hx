@@ -17,18 +17,18 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * The evaluate-expression interpreter. A parsed expression's leaves
- * resolve through the SAME machinery as paths/writes (typed reads at
- * SymbolResolver addresses, calls via DebuggeeCallService, `new` via construct,
- * map brackets via get/set); operators fold ADAPTER-SIDE on EvalValue — no
- * debuggee code runs for arithmetic. Produces either a raw EvalValue (for
- * operands / conditions / call arguments) or a rendered VariableInfo (for
- * display in the watches view).
- *
- * A pure variable path keeps the direct reference walk (`evaluatePath`) so a
- * watch renders exactly like the Variables view — map entries, enum params,
- * expandable references and all.
- */
+	The evaluate-expression interpreter. A parsed expression's leaves
+	resolve through the SAME machinery as paths/writes (typed reads at
+	SymbolResolver addresses, calls via DebuggeeCallService, `new` via construct,
+	map brackets via get/set); operators fold ADAPTER-SIDE on EvalValue — no
+	debuggee code runs for arithmetic. Produces either a raw EvalValue (for
+	operands / conditions / call arguments) or a rendered VariableInfo (for
+	display in the watches view).
+
+	A pure variable path keeps the direct reference walk (`evaluatePath`) so a
+	watch renders exactly like the Variables view — map entries, enum params,
+	expandable references and all.
+**/
 class ExpressionEvaluator {
 	final resolver:SymbolResolver;
 	final calls:DebuggeeCallService;
@@ -55,11 +55,11 @@ class ExpressionEvaluator {
 	}
 
 	/**
-	 * Evaluates a NON-assignment expression to a displayed value (the caller
-	 * handles a top-level assignment before delegating here). A pure path uses
-	 * the Variables-view reference walk; a call/new returns the decoded result;
-	 * anything else is interpreted and rendered.
-	 */
+		Evaluates a NON-assignment expression to a displayed value (the caller
+		handles a top-level assignment before delegating here). A pure path uses
+		the Variables-view reference walk; a call/new returns the decoded result;
+		anything else is interpreted and rendered.
+	**/
 	public function evaluateExpr(frameId:Int, e:Expr, exprText:String):VariableInfo {
 		switch (e) {
 			case ECall(callee, args):
@@ -88,10 +88,10 @@ class ExpressionEvaluator {
 	}
 
 	/**
-	 * Evaluates a breakpoint condition to a Bool in the given frame. The
-	 * expression must yield a Bool — a number/string/object condition is a user
-	 * error, surfaced with a clear message so the caller can fail safe (stop).
-	 */
+		Evaluates a breakpoint condition to a Bool in the given frame. The
+		expression must yield a Bool — a number/string/object condition is a user
+		error, surfaced with a clear message so the caller can fail safe (stop).
+	**/
 	public function evaluateBool(frameId:Int, expression:String):Bool {
 		var e = ExprParser.parse(StringTools.trim(expression));
 		if (e.match(EAssign(_, _))) {
@@ -184,7 +184,9 @@ class ExpressionEvaluator {
 
 	// --- the expression interpreter ---
 
-	/** Evaluates an expression node to a typed adapter-side value. */
+	/**
+		Evaluates an expression node to a typed adapter-side value.
+	**/
 	public function evalExpr(frameId:Int, e:Expr):EvalValue {
 		return switch (e) {
 			case EInt(v): VInt(v);
@@ -272,7 +274,9 @@ class ExpressionEvaluator {
 	// (subtype matching moved to ClassChain — shared with exception
 	// breakpoint type filters)
 
-	/** A chain of EIdent/EField/EIndex(constant int) is exactly a ValuePath. */
+	/**
+		A chain of EIdent/EField/EIndex(constant int) is exactly a ValuePath.
+	**/
 	public static function chainToPath(e:Expr):Null<ValuePath> {
 		var accessors:Array<PathAccessor> = [];
 		var cur = e;
@@ -297,7 +301,9 @@ class ExpressionEvaluator {
 		}
 	}
 
-	/** Evaluates an index expression to a non-negative Int (for array elements). */
+	/**
+		Evaluates an index expression to a non-negative Int (for array elements).
+	**/
 	public function intKey(frameId:Int, key:Expr):Int {
 		return switch (evalExpr(frameId, key)) {
 			case VInt(v):
@@ -395,7 +401,9 @@ class ExpressionEvaluator {
 		}
 	}
 
-	/** Renders an evaluated value as a displayed VariableInfo. */
+	/**
+		Renders an evaluated value as a displayed VariableInfo.
+	**/
 	public function renderValue(name:String, v:EvalValue):VariableInfo {
 		return switch (v) {
 			case VInt(i): {name: name, value: Int64.toStr(i), type: "Int", reference: 0};
@@ -418,7 +426,9 @@ class ExpressionEvaluator {
 		return t == null ? HDyn : t;
 	}
 
-	/** Decodes a raw call/pointer result (RAX, or XMM0-as-RAX for a float) for display. */
+	/**
+		Decodes a raw call/pointer result (RAX, or XMM0-as-RAX for a float) for display.
+	**/
 	public function decodeReturn(name:String, raw:Pointer, retType:HLType):VariableInfo {
 		return switch (retType) {
 			case HVoid: {name: name, value: "void", type: "Void", reference: 0};

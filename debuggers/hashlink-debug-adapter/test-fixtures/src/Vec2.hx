@@ -1,4 +1,6 @@
-/** A flat value class (HStruct on HashLink): no hl_type* header, fields at base 0. */
+/**
+	A flat value class (HStruct on HashLink): no hl_type* header, fields at base 0.
+**/
 @:struct class Vec2 {
 	public var x:Float;
 	public var y:Float;

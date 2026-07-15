@@ -11,19 +11,19 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * Writes a value into a resolved target slot `{address, type}` from a parsed
- * ValueLiteral. The envelope is deliberately allocation-free — creating new
- * heap values (strings, objects) needs the debuggee's allocator (the eval-call
- * machinery, a later milestone). Supported:
- *  - a literal into a matching primitive slot (Int/Float/Bool/Int64/sub-int);
- *  - `null` into any pointer slot;
- *  - a variable path whose EXISTING value is copied — a raw pointer copy for
- *    reference types, a numeric coercion for primitives;
- *  - an in-place primitive update of a Dynamic that already boxes that kind.
- *
- * Only runs while the debuggee is stopped. Any unsupported combination throws
- * a DebugError with a message aimed at the user.
- */
+	Writes a value into a resolved target slot `{address, type}` from a parsed
+	ValueLiteral. The envelope is deliberately allocation-free — creating new
+	heap values (strings, objects) needs the debuggee's allocator (the eval-call
+	machinery, a later milestone). Supported:
+	 - a literal into a matching primitive slot (Int/Float/Bool/Int64/sub-int);
+	 - `null` into any pointer slot;
+	 - a variable path whose EXISTING value is copied — a raw pointer copy for
+	   reference types, a numeric coercion for primitives;
+	 - an in-place primitive update of a Dynamic that already boxes that kind.
+
+	Only runs while the debuggee is stopped. Any unsupported combination throws
+	a DebugError with a message aimed at the user.
+**/
 class ValueWriter {
 	final mem:MemoryReader;
 	final out:MemoryWriter;
@@ -37,7 +37,9 @@ class ValueWriter {
 		this.runtimeTypes = runtimeTypes;
 	}
 
-	/** A resolved write source: the value read from a variable path. */
+	/**
+		A resolved write source: the value read from a variable path.
+	**/
 	public function write(target:WriteTarget, literal:ValueLiteral):Void {
 		// setting a nullable slot to null is a plain pointer write; any other
 		// value updates the box it points at (allocating a fresh box is not
@@ -82,11 +84,11 @@ class ValueWriter {
 	}
 
 	/**
-	 * Writes an in-hand computed value (a call's raw result — RAX, or the double
-	 * bits for a float return) into the target, type-checked against the result
-	 * type. Pointer results are written directly (the callee returned a live
-	 * heap object, so no allocation/rooting concern); primitives are coerced.
-	 */
+		Writes an in-hand computed value (a call's raw result — RAX, or the double
+		bits for a float return) into the target, type-checked against the result
+		type. Pointer results are written directly (the callee returned a live
+		heap object, so no allocation/rooting concern); primitives are coerced.
+	**/
 	public function assignRaw(target:WriteTarget, raw:Int64, sourceType:HLType):Void {
 		if (target.type.match(HNull(_))) {
 			if (isPointer(sourceType) && Int64.compare(raw, Int64.ofInt(0)) == 0) {
@@ -136,7 +138,9 @@ class ValueWriter {
 		}
 	}
 
-	/** Copies an already-resolved source slot into the target (variable = variable). */
+	/**
+		Copies an already-resolved source slot into the target (variable = variable).
+	**/
 	public function copy(target:WriteTarget, source:WriteTarget):Void {
 		if (target.type.match(HNull(_))) {
 			// null source into a nullable slot clears it; otherwise update the box

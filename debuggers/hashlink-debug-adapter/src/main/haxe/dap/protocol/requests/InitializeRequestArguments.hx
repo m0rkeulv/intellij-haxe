@@ -1,8 +1,8 @@
 package dap.protocol.requests;
 
 /**
- * Arguments for the "initialize" request.
- */
+	Arguments for the "initialize" request.
+**/
 typedef InitializeRequestArguments = {
 	var adapterID:String;
 	var ?clientID:String;

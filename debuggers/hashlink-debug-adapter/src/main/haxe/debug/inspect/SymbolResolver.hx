@@ -17,21 +17,21 @@ import format.hl.Data.ObjPrototype;
 import haxe.Int64;
 
 /**
- * Resolves a variable PATH (`x`, `obj.field`, `arr[3]`, `MyClass.member`) to a
- * writable location `{name, address, type}` in the stopped debuggee — the
- * SINGLE navigation of the frame layout + object graph shared by reads (the
- * expression interpreter) and writes (setVariable / assignment).
- *
- * Root resolution order: the frame's locals → fields of `this` (implicit
- * member access) → the owning class's statics → a class named by a leading
- * dotted prefix (`MyClass.member`, `pkg.Cls.member`). Object-typed slots are
- * refined to their runtime class so a `Base`-typed slot holding a `Sub`
- * resolves `Sub`'s fields.
- *
- * Owns no per-stop caches of its own — it reads through StopState (frames) and
- * ValueChildren (child addresses); everything it returns is an address+type
- * valid only for the current stop.
- */
+	Resolves a variable PATH (`x`, `obj.field`, `arr[3]`, `MyClass.member`) to a
+	writable location `{name, address, type}` in the stopped debuggee — the
+	SINGLE navigation of the frame layout + object graph shared by reads (the
+	expression interpreter) and writes (setVariable / assignment).
+
+	Root resolution order: the frame's locals → fields of `this` (implicit
+	member access) → the owning class's statics → a class named by a leading
+	dotted prefix (`MyClass.member`, `pkg.Cls.member`). Object-typed slots are
+	refined to their runtime class so a `Base`-typed slot holding a `Sub`
+	resolves `Sub`'s fields.
+
+	Owns no per-stop caches of its own — it reads through StopState (frames) and
+	ValueChildren (child addresses); everything it returns is an address+type
+	valid only for the current stop.
+**/
 class SymbolResolver {
 	final stops:StopState;
 	final memory:MemoryReader;
@@ -61,7 +61,9 @@ class SymbolResolver {
 		this.runtimeTypes = runtimeTypes;
 	}
 
-	/** Resolves the child named `name` of a variablesReference (DAP setVariable). */
+	/**
+		Resolves the child named `name` of a variablesReference (DAP setVariable).
+	**/
 	public function targetInReference(reference:Int, name:String):WriteTarget {
 		var container = stops.referenceTarget(reference);
 		if (container == null) {
@@ -86,7 +88,9 @@ class SymbolResolver {
 		}
 	}
 
-	/** Resolves a full path to a writable target (throws if unresolvable). */
+	/**
+		Resolves a full path to a writable target (throws if unresolvable).
+	**/
 	public function targetOfPath(frameId:Int, path:ValuePath):WriteTarget {
 		writeFrame = frameId;
 		var start = 0;
@@ -180,12 +184,12 @@ class SymbolResolver {
 	}
 
 	/**
-	 * Matches a leading dotted prefix of `path` against a class name — the root
-	 * alone (`MyClass`) or the root extended by field accessors (`pkg.MyClass`,
-	 * `pkg.sub.MyClass`). The FIRST (shortest) match wins; `consumed` is how
-	 * many accessors the class name swallowed. Callers must try frame-local
-	 * resolution first so a local can never be shadowed by a class.
-	 */
+		Matches a leading dotted prefix of `path` against a class name — the root
+		alone (`MyClass`) or the root extended by field accessors (`pkg.MyClass`,
+		`pkg.sub.MyClass`). The FIRST (shortest) match wins; `consumed` is how
+		many accessors the class name swallowed. Callers must try frame-local
+		resolution first so a local can never be shadowed by a class.
+	**/
 	public function staticsPrefix(path:ValuePath):Null<StaticsPrefix> {
 		var name = path.root;
 		var i = 0;
@@ -235,7 +239,9 @@ class SymbolResolver {
 		return null;
 	}
 
-	/** Resolves a child of an already-resolved target (throws if it has none). */
+	/**
+		Resolves a child of an already-resolved target (throws if it has none).
+	**/
 	public function childTarget(parent:WriteTarget, childName:String):WriteTarget {
 		var child = tryChildTarget(parent, childName);
 		if (child == null) {
@@ -275,7 +281,9 @@ class SymbolResolver {
 		return {name: displayName, address: child.address, type: child.type};
 	}
 
-	/** Refines an object pointer's static type to its runtime class (via its header). */
+	/**
+		Refines an object pointer's static type to its runtime class (via its header).
+	**/
 	public function refineObjectType(base:Pointer, staticType:HLType):HLType {
 		var runtime = runtimeTypes.typeAt(memory.readPointer(base));
 		return switch (runtime) {
@@ -285,8 +293,12 @@ class SymbolResolver {
 	}
 }
 
-/** A class's live statics: the global slot holding it, the singleton pointer, and its proto. */
+/**
+	A class's live statics: the global slot holding it, the singleton pointer, and its proto.
+**/
 typedef StaticsContainer = {slot:Pointer, singleton:Pointer, proto:ObjPrototype}
 
-/** A StaticsContainer matched by a dotted path prefix: the class name that matched and how many path accessors it consumed. */
+/**
+	A StaticsContainer matched by a dotted path prefix: the class name that matched and how many path accessors it consumed.
+**/
 typedef StaticsPrefix = {>StaticsContainer, className:String, consumed:Int}

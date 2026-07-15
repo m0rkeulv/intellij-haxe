@@ -8,20 +8,25 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * Reads runtime dynamic objects (vdynobj) — what a {@code Dynamic}-typed
- * structure, a Reflect-built object or parsed JSON becomes at runtime.
- *
- * vdynobj layout (64-bit; port of hld readFieldAddress/dfields):
- *   lookup   @ +ptr    sorted-by-hash table, one entry per field
- *   raw_data @ +2*ptr  storage for non-pointer field values
- *   values   @ +3*ptr  storage for pointer field values
- *   nfields  @ +4*ptr
- * Lookup entry i @ lookup + i*Align.fieldLookupStride:
- *   hl_type* @ +0, hashed_name i32 @ +ptr, packed i32 @ +ptr+4
- *   (packed & 0x1FFFF = slot offset; packed >>> 17 = display order index).
- * Field names travel as hl_hash values; they are resolved through the module
- * string table (every field name literal exists there).
- */
+	Reads runtime dynamic objects (vdynobj) — what a `Dynamic`-typed
+	structure, a Reflect-built object or parsed JSON becomes at runtime.
+
+	vdynobj layout (64-bit; port of hld readFieldAddress/dfields):
+
+	| field      | offset   | purpose                                    |
+	|------------|----------|--------------------------------------------|
+	| `lookup`   | `+ptr`   | sorted-by-hash table, one entry per field  |
+	| `raw_data` | `+2*ptr` | storage for non-pointer field values       |
+	| `values`   | `+3*ptr` | storage for pointer field values           |
+	| `nfields`  | `+4*ptr` |                                            |
+
+	Lookup entry `i` @ `lookup + i*Align.fieldLookupStride`: `hl_type*` @ +0,
+	`hashed_name` i32 @ +ptr, `packed` i32 @ +ptr+4 (`packed & 0x1FFFF` = slot
+	offset; `packed >>> 17` = display order index).
+
+	Field names travel as hl_hash values; they are resolved through the module
+	string table (every field name literal exists there).
+**/
 class DynObjReader {
 	static inline var OFFSET_MASK = (1 << 17) - 1;
 	static inline var MAX_FIELDS = 4096; // sanity bound against garbage reads
@@ -38,13 +43,17 @@ class DynObjReader {
 		this.resolveHash = resolveHash;
 	}
 
-	/** Number of fields of the dynobj at `ptr` (0 when implausible). */
+	/**
+		Number of fields of the dynobj at `ptr` (0 when implausible).
+	**/
 	public function fieldCount(ptr:Pointer):Int {
 		var n = mem.readI32(ptr.offset(align.ptr * 4));
 		return (n >= 0 && n <= MAX_FIELDS) ? n : 0;
 	}
 
-	/** All fields, in declaration order when the lookup carries order indexes. */
+	/**
+		All fields, in declaration order when the lookup carries order indexes.
+	**/
 	public function fields(ptr:Pointer):Array<DynObjField> {
 		var count = fieldCount(ptr);
 		if (count == 0) {
@@ -90,7 +99,9 @@ class DynObjReader {
 		return [for (f in ordered) if (f != null) f];
 	}
 
-	/** The slot of a named field (hash + binary search over the lookup), or null. */
+	/**
+		The slot of a named field (hash + binary search over the lookup), or null.
+	**/
 	public function fieldByName(ptr:Pointer, name:String):Null<DynObjField> {
 		var count = fieldCount(ptr);
 		if (count == 0) {

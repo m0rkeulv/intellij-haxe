@@ -1,9 +1,9 @@
 package dap.protocol.events;
 
 /**
- * Body of the "stopped" event.
- * `reason` is e.g. "breakpoint" or "exception".
- */
+	Body of the "stopped" event.
+	`reason` is e.g. "breakpoint" or "exception".
+**/
 typedef StoppedEventBody = {
 	var reason:String;
 	var ?threadId:Int;

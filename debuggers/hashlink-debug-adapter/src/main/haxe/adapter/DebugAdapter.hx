@@ -14,17 +14,17 @@ import sys.thread.Deque;
 import sys.thread.Thread;
 
 /**
- * Runs one DAP session over a connected socket.
- *
- * Threads, so the adapter never blocks on any single activity:
- *  - reader thread: reads client frames into the worker queue
- *  - writer thread: writes outbound frames to the socket
- *  - session thread (created on launch): owns the debuggee and the debug natives
- *  - worker (this thread): the only one that touches the dispatcher
- *
- * Client frames and session events share one inbound queue, so the dispatcher
- * remains single-threaded and total message ordering is preserved.
- */
+	Runs one DAP session over a connected socket.
+
+	Threads, so the adapter never blocks on any single activity:
+	 - reader thread: reads client frames into the worker queue
+	 - writer thread: writes outbound frames to the socket
+	 - session thread (created on launch): owns the debuggee and the debug natives
+	 - worker (this thread): the only one that touches the dispatcher
+
+	Client frames and session events share one inbound queue, so the dispatcher
+	remains single-threaded and total message ordering is preserved.
+**/
 class DebugAdapter {
 	final socket:Socket;
 	final inbound = new Deque<WorkerMessage>();
@@ -42,7 +42,9 @@ class DebugAdapter {
 
 	var clientEofSeen = false;
 
-	/** Serves the session; returns when the client disconnected and all output is flushed. */
+	/**
+		Serves the session; returns when the client disconnected and all output is flushed.
+	**/
 	public function run():Void {
 		Thread.create(readerLoop);
 		Thread.create(writerLoop);

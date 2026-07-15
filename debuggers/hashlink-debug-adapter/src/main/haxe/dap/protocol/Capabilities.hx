@@ -1,8 +1,8 @@
 package dap.protocol;
 
 /**
- * The capabilities the adapter reports in the "initialize" response body.
- */
+	The capabilities the adapter reports in the "initialize" response body.
+**/
 typedef Capabilities = {
 	var ?supportsConfigurationDoneRequest:Bool;
 	var ?supportsVariableType:Bool;
@@ -14,7 +14,9 @@ typedef Capabilities = {
 	var ?exceptionBreakpointFilters:Array<ExceptionBreakpointsFilter>;
 }
 
-/** One toggle in the client's exception-breakpoint list (only the required fields). */
+/**
+	One toggle in the client's exception-breakpoint list (only the required fields).
+**/
 typedef ExceptionBreakpointsFilter = {
 	var filter:String;
 	var label:String;

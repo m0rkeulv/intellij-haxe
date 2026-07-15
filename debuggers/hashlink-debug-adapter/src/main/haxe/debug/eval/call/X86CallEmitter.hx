@@ -7,30 +7,32 @@ import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
 
 /**
- * Emits a 32-bit (x86) call trampoline, the cdecl counterpart of the x86-64
- * {@link CallEmitter}. HashLink's JIT calls natives cdecl on 32-bit: arguments
- * pushed right-to-left, caller cleans the stack, int/pointer returned in EAX,
- * float/double returned on the x87 stack (ST0).
- *
- * The caller sets ESP to a scratch top S below the interrupted frame before
- * running this. Layout the trampoline builds:
- *
- *   push ecx ; push edx          save the caller-saved scratch registers
- *   push <args, right-to-left>   each dword; an 8-byte double is two pushes
- *   mov eax, funcAddr ; call eax
- *   add esp, argBytes            cdecl caller cleanup -> ESP back to S-8
- *   [float] fstp {qword|dword} [esp+8]   store ST0 into the return slot at [S]
- *   pop edx ; pop ecx            restore the scratch registers
- *   int3
- *
- * The result: an int/pointer is in EAX (the caller reads it directly); a float
- * is written to [S] — a free 8-byte slot just below the interrupted frame — and
- * the caller reads it from there (ST0 is not exposed by HL's debug register
- * API, so it cannot be read after the trap; it must be spilled here). `wide`
- * float args (HF64) push two dwords; F32 return spills a dword, F64 a qword.
- *
- * Pure and unit-tested against exact byte sequences.
- */
+	Emits a 32-bit (x86) call trampoline, the cdecl counterpart of the x86-64
+	`X64CallEmitter`. HashLink's JIT calls natives cdecl on 32-bit: arguments
+	pushed right-to-left, caller cleans the stack, int/pointer returned in EAX,
+	float/double returned on the x87 stack (ST0).
+
+	The caller sets ESP to a scratch top S below the interrupted frame before
+	running this. Layout the trampoline builds:
+
+	```
+	push ecx ; push edx          save the caller-saved scratch registers
+	push <args, right-to-left>   each dword; an 8-byte double is two pushes
+	mov eax, funcAddr ; call eax
+	add esp, argBytes            cdecl caller cleanup -> ESP back to S-8
+	[float] fstp {qword|dword} [esp+8]   store ST0 into the return slot at [S]
+	pop edx ; pop ecx            restore the scratch registers
+	int3
+	```
+
+	The result: an int/pointer is in EAX (the caller reads it directly); a float
+	is written to [S] — a free 8-byte slot just below the interrupted frame — and
+	the caller reads it from there (ST0 is not exposed by HL's debug register
+	API, so it cannot be read after the trap; it must be spilled here). `wide`
+	float args (HF64) push two dwords; F32 return spills a dword, F64 a qword.
+
+	Pure and unit-tested against exact byte sequences.
+**/
 class X86CallEmitter implements CallTrampoline {
 	static inline var MAX_ARGS = 16; // cdecl is stack-based; a sane cap vs the scratch stack
 

@@ -1,8 +1,8 @@
 package dap.protocol.requests;
 
 /**
- * Arguments for the "next" (step over) request.
- */
+	Arguments for the "next" (step over) request.
+**/
 typedef NextArguments = {
 	var threadId:Int;
 	var ?singleThread:Bool;

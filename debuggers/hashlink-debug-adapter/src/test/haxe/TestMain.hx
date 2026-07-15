@@ -1,11 +1,11 @@
 /**
- * Entry point of the Haxe-side adapter tests, run with `haxe test.hxml` (interpreter mode).
- * Exits non-zero when any assertion failed so the Gradle Exec task fails the build.
- *
- * To register a new suite, add ONE line to `suites` below (fully qualified,
- * no import needed). The context name shown on failures is derived from the
- * class name.
- */
+	Entry point of the Haxe-side adapter tests, run with `haxe test.hxml` (interpreter mode).
+	Exits non-zero when any assertion failed so the Gradle Exec task fails the build.
+
+	To register a new suite, add ONE line to `suites` below (fully qualified,
+	no import needed). The context name shown on failures is derived from the
+	class name.
+**/
 class TestMain {
 	static function main():Void {
 		var suites:Array<{name:String, run:Assert->Void}> = [

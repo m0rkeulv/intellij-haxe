@@ -21,21 +21,21 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * Runs code INSIDE the stopped debuggee: calls functions/methods,
- * constructs objects, materializes strings, and boxes primitives — everything
- * that needs the debuggee's own machinery rather than adapter-side reads.
- *
- * The actual injection is done by `functionCaller` (a trampoline the session
- * installs); this class resolves what to call (via SymbolResolver), lowers the
- * arguments to the calling convention, and returns the RAW result. Turning that
- * raw result into a displayed value is the caller's job (decodeReturn).
- *
- * DANGEROUS by nature — it executes arbitrary debuggee code on the session
- * thread — but that is the accepted trade for steering execution. The
- * constructor/native/box resolvers it uses disassemble raw JIT output (see
- * ConstructorResolver / NativeResolver / BoxResolver), which select the JIT
- * pattern by CPU architecture (x86-64 and x86).
- */
+	Runs code INSIDE the stopped debuggee: calls functions/methods,
+	constructs objects, materializes strings, and boxes primitives — everything
+	that needs the debuggee's own machinery rather than adapter-side reads.
+
+	The actual injection is done by `functionCaller` (a trampoline the session
+	installs); this class resolves what to call (via SymbolResolver), lowers the
+	arguments to the calling convention, and returns the RAW result. Turning that
+	raw result into a displayed value is the caller's job (decodeReturn).
+
+	DANGEROUS by nature — it executes arbitrary debuggee code on the session
+	thread — but that is the accepted trade for steering execution. The
+	constructor/native/box resolvers it uses disassemble raw JIT output (see
+	ConstructorResolver / NativeResolver / BoxResolver), which select the JIT
+	pattern by CPU architecture (x86-64 and x86).
+**/
 class DebuggeeCallService {
 	final resolver:SymbolResolver;
 	final memory:MemoryReader;
@@ -67,13 +67,13 @@ class DebuggeeCallService {
 	}
 
 	/**
-	 * Runs `callee(args)` in the debuggee and returns the raw result (RAX, or
-	 * XMM0-as-RAX for a float return) plus the return type. `callee` resolves to
-	 * a function value (an unbound or bound closure); args are ALREADY
-	 * evaluated and lowered to the callee's declared parameter types. Tries an
-	 * instance-method call first (`recv.method(args)`), falling back to the
-	 * closure-field call.
-	 */
+		Runs `callee(args)` in the debuggee and returns the raw result (RAX, or
+		XMM0-as-RAX for a float return) plus the return type. `callee` resolves to
+		a function value (an unbound or bound closure); args are ALREADY
+		evaluated and lowered to the callee's declared parameter types. Tries an
+		instance-method call first (`recv.method(args)`), falling back to the
+		closure-field call.
+	**/
 	public function callRaw(frameId:Int, path:ValuePath, args:Array<EvalValue>):CallResult {
 		if (functionCaller == null) {
 			throw new DebugError("Calling functions is not available in this session");
@@ -117,12 +117,12 @@ class DebuggeeCallService {
 	}
 
 	/**
-	 * If `path` is `receiver.method` and `method` is an instance method on the
-	 * receiver's runtime class, calls it with the receiver threaded as `this`
-	 * Returns null when it isn't a method call (the caller then treats
-	 * the path as a closure-valued field). Enables `map.set(k,v)`, `arr.push(x)`,
-	 * getters, and any other mutation/query the program's own methods provide.
-	 */
+		If `path` is `receiver.method` and `method` is an instance method on the
+		receiver's runtime class, calls it with the receiver threaded as `this`
+		Returns null when it isn't a method call (the caller then treats
+		the path as a closure-valued field). Enables `map.set(k,v)`, `arr.push(x)`,
+		getters, and any other mutation/query the program's own methods provide.
+	**/
 	function tryMethodCall(frameId:Int, path:ValuePath, args:Array<EvalValue>):Null<CallResult> {
 		if (path.accessors.length == 0) {
 			return null; // a bare name: not `recv.method`
@@ -200,14 +200,14 @@ class DebuggeeCallService {
 	}
 
 	/**
-	 * Constructs `new className(args)` in the debuggee and returns the new
-	 * instance pointer. Allocates via the recovered `hl_alloc_obj` + class type
-	 * pointer (see ConstructorResolver — a disassembly hack), then runs the
-	 * constructor `(this, args...)`. Construction is EXPERIMENTAL: if the
-	 * allocator/ONew pattern can't be mined (non-x86-64, an unrecognised JIT, or
-	 * the class is never constructed in the program so its `new` was stripped by
-	 * DCE) it fails with a clear message rather than guessing.
-	 */
+		Constructs `new className(args)` in the debuggee and returns the new
+		instance pointer. Allocates via the recovered `hl_alloc_obj` + class type
+		pointer (see ConstructorResolver — a disassembly hack), then runs the
+		constructor `(this, args...)`. Construction is EXPERIMENTAL: if the
+		allocator/ONew pattern can't be mined (non-x86-64, an unrecognised JIT, or
+		the class is never constructed in the program so its `new` was stripped by
+		DCE) it fails with a clear message rather than guessing.
+	**/
 	public function construct(frameId:Int, className:String, args:Array<EvalValue>):Pointer {
 		if (functionCaller == null) {
 			throw new DebugError("Constructing objects is not available in this session");
@@ -261,16 +261,16 @@ class DebuggeeCallService {
 	}
 
 	/**
-	 * Materializes a String literal as a live heap String in the debuggee and
-	 * returns its pointer. Allocates a byte buffer on the HEAP via the
-	 * program's own `alloc_bytes` native, writes the UTF-8 bytes into it, then
-	 * calls `String.fromUTF8` — both through the eval-call machinery. Heap
-	 * (not stack) because on Windows there is no red zone: a buffer below Esp
-	 * plus the callee's own stack use faults on the guard page. GC-safe: no
-	 * allocation happens between reading the buffer pointer and the fromUTF8
-	 * call that consumes it, and the buffer is fromUTF8's argument (kept live by
-	 * the conservative stack scan) during its internal allocation.
-	 */
+		Materializes a String literal as a live heap String in the debuggee and
+		returns its pointer. Allocates a byte buffer on the HEAP via the
+		program's own `alloc_bytes` native, writes the UTF-8 bytes into it, then
+		calls `String.fromUTF8` — both through the eval-call machinery. Heap
+		(not stack) because on Windows there is no red zone: a buffer below Esp
+		plus the callee's own stack use faults on the guard page. GC-safe: no
+		allocation happens between reading the buffer pointer and the fromUTF8
+		call that consumes it, and the buffer is fromUTF8's argument (kept live by
+		the conservative stack scan) during its internal allocation.
+	**/
 	public function makeString(text:String):Pointer {
 		if (memWriter == null || functionCaller == null) {
 			throw new DebugError("Unable to create a string: value modification is not available in this session");
@@ -392,5 +392,7 @@ class DebuggeeCallService {
 	}
 }
 
-/** The result of running debuggee code: the raw return value (RAX, or XMM0-as-RAX for a float) and its HL type. */
+/**
+	The result of running debuggee code: the raw return value (RAX, or XMM0-as-RAX for a float) and its HL type.
+**/
 typedef CallResult = {raw:Pointer, type:HLType}

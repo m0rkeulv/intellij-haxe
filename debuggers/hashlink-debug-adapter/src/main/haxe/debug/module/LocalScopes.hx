@@ -1,25 +1,25 @@
 package debug.module;
 
 /**
- * Resolves which register a local variable NAME occupies at a given opcode,
- * honouring source scopes (a port of hld `CodeGraph.getLocal`/`lookupLocal`).
- *
- * The `.hl` debug tables carry no scope information — only append-only
- * `assigns` entries ("at opcode N this name was written to `dst(N)`"), and
- * registers are freely reused for temporaries once a source scope ends. So the
- * binding of a name at an opcode must be reconstructed from control flow:
- *
- *  - within the current basic block, the last assignment of that name BEFORE
- *    the opcode wins (a `for`-loop `x` shadows an outer `x` inside the loop);
- *  - otherwise the lookup recurses into predecessor blocks, skipping loop
- *    back-edges (predecessors that start later), which is what makes the name
- *    fall back to the OUTER binding after a shadowing loop ends;
- *  - if the incoming branches disagree on the register (a name assigned in
- *    only one arm of an `if`), the name is out of scope and dropped.
- *
- * Pure; built from a CodeGraph plus the function's local assigns, unit-tested
- * with synthetic opcodes.
- */
+	Resolves which register a local variable NAME occupies at a given opcode,
+	honouring source scopes (a port of hld `CodeGraph.getLocal`/`lookupLocal`).
+
+	The `.hl` debug tables carry no scope information — only append-only
+	`assigns` entries ("at opcode N this name was written to `dst(N)`"), and
+	registers are freely reused for temporaries once a source scope ends. So the
+	binding of a name at an opcode must be reconstructed from control flow:
+
+	 - within the current basic block, the last assignment of that name BEFORE
+	   the opcode wins (a `for`-loop `x` shadows an outer `x` inside the loop);
+	 - otherwise the lookup recurses into predecessor blocks, skipping loop
+	   back-edges (predecessors that start later), which is what makes the name
+	   fall back to the OUTER binding after a shadowing loop ends;
+	 - if the incoming branches disagree on the register (a name assigned in
+	   only one arm of an `if`), the name is out of scope and dropped.
+
+	Pure; built from a CodeGraph plus the function's local assigns, unit-tested
+	with synthetic opcodes.
+**/
 class LocalScopes {
 	final assigns:Array<LocalAssign>; // position-ordered, positions >= 0 only
 	final dstOf:Int->Int;
@@ -77,7 +77,9 @@ class LocalScopes {
 		}
 	}
 
-	/** The register holding `name` at opcode `pos`, or -1 when out of scope. */
+	/**
+		The register holding `name` at opcode `pos`, or -1 when out of scope.
+	**/
 	public function registerOf(name:String, pos:Int):Int {
 		if (blocks.length == 0) {
 			return -1;
@@ -87,9 +89,9 @@ class LocalScopes {
 	}
 
 	/**
-	 * The locals in scope at opcode `pos`, one entry per NAME (a shadowing
-	 * binding replaces the outer one), each resolved to its current register.
-	 */
+		The locals in scope at opcode `pos`, one entry per NAME (a shadowing
+		binding replaces the outer one), each resolved to its current register.
+	**/
 	public function visibleLocals(pos:Int):Array<LocalVar> {
 		var seen = new Map<String, Bool>();
 		var result:Array<LocalVar> = [];

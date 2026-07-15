@@ -1,10 +1,10 @@
 package debug.session;
 
 /**
- * A command handed to the DebugSession thread. `requestSeq` echoes the DAP
- * request that triggered it so the completion event can be turned back into
- * the right response (deferred responses).
- */
+	A command handed to the DebugSession thread. `requestSeq` echoes the DAP
+	request that triggered it so the completion event can be turned back into
+	the right response (deferred responses).
+**/
 enum SessionCommand {
 	CmdLaunch(requestSeq:Int, config:LaunchConfig);
 	// isReverify = a breakpoint set that was already answered (pre-launch); the

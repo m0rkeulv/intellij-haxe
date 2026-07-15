@@ -8,23 +8,23 @@ import debug.target.MemoryReader;
 import haxe.Int64;
 
 /**
- * Resolves the runtime address of HashLink's `hl_throw(vdynamic*)` — the single
- * C function through which EVERY exception passes, whether a bytecode `OThrow`
- * or a runtime error raised inside the VM (null access, array-out-of-bounds,
- * invalid cast, division by zero). Trapping `hl_throw` therefore catches the
- * runtime errors that have no bytecode throw site and would otherwise escape
- * the OThrow-based exception breakpoints (see ExceptionSites).
- *
- * The debug handshake exposes addresses for bytecode functions only, so — like
- * NativeResolver mining a native from an OCall — we disassemble an `OThrow`
- * jitted site: hashlink `jit.c` compiles OThrow to a `call_native(hl_throw)`,
- * i.e. the fixed `mov (r/e)ax, <hl_throw> ; call` sequence (MachineCode picks
- * the x86-64 or x86 form), so the immediate IS hl_throw's absolute address.
- *
- * When no OThrow site exists (a program that never throws) or the pattern is
- * absent, resolution fails and the caller degrades gracefully (the VM-exception
- * breakpoint simply cannot arm).
- */
+	Resolves the runtime address of HashLink's `hl_throw(vdynamic*)` — the single
+	C function through which EVERY exception passes, whether a bytecode `OThrow`
+	or a runtime error raised inside the VM (null access, array-out-of-bounds,
+	invalid cast, division by zero). Trapping `hl_throw` therefore catches the
+	runtime errors that have no bytecode throw site and would otherwise escape
+	the OThrow-based exception breakpoints (see ExceptionSites).
+
+	The debug handshake exposes addresses for bytecode functions only, so — like
+	NativeResolver mining a native from an OCall — we disassemble an `OThrow`
+	jitted site: hashlink `jit.c` compiles OThrow to a `call_native(hl_throw)`,
+	i.e. the fixed `mov (r/e)ax, <hl_throw> ; call` sequence (MachineCode picks
+	the x86-64 or x86 form), so the immediate IS hl_throw's absolute address.
+
+	When no OThrow site exists (a program that never throws) or the pattern is
+	absent, resolution fails and the caller degrades gracefully (the VM-exception
+	breakpoint simply cannot arm).
+**/
 class NativeThrowResolver {
 	final module:ModuleDebugInfo;
 	final jit:JitInfo;
@@ -40,7 +40,9 @@ class NativeThrowResolver {
 		this.sites = sites;
 	}
 
-	/** hl_throw's runtime address, or null when it can't be mined (cached). */
+	/**
+		hl_throw's runtime address, or null when it can't be mined (cached).
+	**/
 	public function resolve():Null<Pointer> {
 		if (resolved) {
 			return cached;

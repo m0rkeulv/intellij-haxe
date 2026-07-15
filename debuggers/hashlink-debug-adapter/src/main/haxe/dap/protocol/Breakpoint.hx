@@ -1,8 +1,8 @@
 package dap.protocol;
 
 /**
- * The adapter's view of a breakpoint, returned in the "setBreakpoints" response.
- */
+	The adapter's view of a breakpoint, returned in the "setBreakpoints" response.
+**/
 typedef Breakpoint = {
 	var verified:Bool;
 	var ?id:Int;

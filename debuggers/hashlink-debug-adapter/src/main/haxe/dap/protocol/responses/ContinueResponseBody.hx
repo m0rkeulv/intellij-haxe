@@ -1,8 +1,8 @@
 package dap.protocol.responses;
 
 /**
- * Body of the "continue" response.
- */
+	Body of the "continue" response.
+**/
 typedef ContinueResponseBody = {
 	var ?allThreadsContinued:Bool;
 }

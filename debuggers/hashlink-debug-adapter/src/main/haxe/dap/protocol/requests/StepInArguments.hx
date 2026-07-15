@@ -1,8 +1,8 @@
 package dap.protocol.requests;
 
 /**
- * Arguments for the "stepIn" request.
- */
+	Arguments for the "stepIn" request.
+**/
 typedef StepInArguments = {
 	var threadId:Int;
 	var ?singleThread:Bool;

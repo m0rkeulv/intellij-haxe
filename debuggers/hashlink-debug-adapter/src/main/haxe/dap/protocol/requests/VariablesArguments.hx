@@ -1,8 +1,8 @@
 package dap.protocol.requests;
 
 /**
- * Arguments for the "variables" request.
- */
+	Arguments for the "variables" request.
+**/
 typedef VariablesArguments = {
 	var variablesReference:Int;
 	var ?filter:String; // "indexed" | "named"

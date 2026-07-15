@@ -3,18 +3,18 @@ package debug.module;
 import debug.module.LocalScopes.LocalAssign;
 
 /**
- * Lists the named locals and arguments visible at a given opcode, resolving each
- * to the bytecode register it occupies, from the function's `assigns` debug table.
- *
- * Encoding (verified against compiled fixtures):
- *  - Arguments have `position < 0`. The named-argument assigns, in table order, map
- *    to the argument registers starting at `argCount - namedArgs` (so an instance
- *    method's unnamed `this` occupies register 0 and the named args follow).
- *  - Locals have `position >= 0`; the register is the destination of the opcode at
- *    that position. Which register a NAME means at the current opcode is scope
- *    dependent (shadowing, loops, register reuse) and resolved through the
- *    control-flow graph by `LocalScopes` — one entry per visible name.
- */
+	Lists the named locals and arguments visible at a given opcode, resolving each
+	to the bytecode register it occupies, from the function's `assigns` debug table.
+
+	Encoding (verified against compiled fixtures):
+	 - Arguments have `position < 0`. The named-argument assigns, in table order, map
+	   to the argument registers starting at `argCount - namedArgs` (so an instance
+	   method's unnamed `this` occupies register 0 and the named args follow).
+	 - Locals have `position >= 0`; the register is the destination of the opcode at
+	   that position. Which register a NAME means at the current opcode is scope
+	   dependent (shadowing, loops, register reuse) and resolved through the
+	   control-flow graph by `LocalScopes` — one entry per visible name.
+**/
 class LocalsResolver {
 	final module:ModuleDebugInfo;
 	final scopeCache:Map<Int, LocalScopes> = new Map();

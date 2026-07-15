@@ -1,11 +1,11 @@
 package debug;
 
 /**
- * Breadcrumbs to stderr for diagnosing hangs and lost messages; enabled by the
- * DAP_ADAPTER_TRACE environment variable. The integration tests set it and dump
- * the pipe on teardown, so a wedged run self-diagnoses: the last breadcrumb
- * printed tells you where things stopped.
- */
+	Breadcrumbs to stderr for diagnosing hangs and lost messages; enabled by the
+	DAP_ADAPTER_TRACE environment variable. The integration tests set it and dump
+	the pipe on teardown, so a wedged run self-diagnoses: the last breadcrumb
+	printed tells you where things stopped.
+**/
 class Trace {
 	public static final ENABLED = Sys.getEnv("DAP_ADAPTER_TRACE") != null;
 

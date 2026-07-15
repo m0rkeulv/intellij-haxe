@@ -6,25 +6,25 @@ import debug.layout.Align;
 import haxe.Int64;
 
 /**
- * Reads the live thread list from HashLink's runtime thread registry (the
- * `threadsPtr` sent in the handshake), a port of hld `Debugger.readThreads`.
- *
- * Two format cases (the program's `threads` compile flag):
- *  - NOT compiled with thread support: there is no registry to walk; the
- *    process has a single thread — reported as one entry from the stopped id.
- *  - compiled with thread support: the registry is `count` (i32 @ +0) followed
- *    by the `hl_thread_info*` array (`Align.threadsArray`); each info has its
- *    OS tid @ +0, a flags word (`Align.threadFlags`; bit 16 = invisible,
- *    skipped), and — only on HL runtime >= 1.13 — a 128-byte UTF-8 name eight
- *    bytes past flags (two i32s).
- *
- * All arch-sensitive offsets come from the {@link debug.layout.Align} descriptor
- * (wrong offsets read plausible garbage). The name offset also branches on the
- * runtime version.
- *
- * "main" is the LOWEST thread id (not wherever we happened to stop): a stop can
- * land in any thread, so tying the name to the stopped thread would be wrong.
- */
+	Reads the live thread list from HashLink's runtime thread registry (the
+	`threadsPtr` sent in the handshake), a port of hld `Debugger.readThreads`.
+
+	Two format cases (the program's `threads` compile flag):
+	 - NOT compiled with thread support: there is no registry to walk; the
+	   process has a single thread — reported as one entry from the stopped id.
+	 - compiled with thread support: the registry is `count` (i32 @ +0) followed
+	   by the `hl_thread_info*` array (`Align.threadsArray`); each info has its
+	   OS tid @ +0, a flags word (`Align.threadFlags`; bit 16 = invisible,
+	   skipped), and — only on HL runtime >= 1.13 — a 128-byte UTF-8 name eight
+	   bytes past flags (two i32s).
+
+	All arch-sensitive offsets come from the `debug.layout.Align` descriptor
+	(wrong offsets read plausible garbage). The name offset also branches on the
+	runtime version.
+
+	"main" is the LOWEST thread id (not wherever we happened to stop): a stop can
+	land in any thread, so tying the name to the stopped thread would be wrong.
+**/
 class ThreadRegistry {
 	static inline var FLAG_INVISIBLE = 16;
 	static inline var MAX_THREADS = 4096; // sanity cap; a bad count reads as garbage
@@ -41,10 +41,10 @@ class ThreadRegistry {
 	}
 
 	/**
-	 * The live threads. `threadsEnabled` is the handshake `threads` flag;
-	 * `stoppedThreadId` is the fallback when there is no registry (single-thread
-	 * program) or the registry is unreadable.
-	 */
+		The live threads. `threadsEnabled` is the handshake `threads` flag;
+		`stoppedThreadId` is the fallback when there is no registry (single-thread
+		program) or the registry is unreadable.
+	**/
 	public function read(registryPtr:Pointer, threadsEnabled:Bool, stoppedThreadId:Int):Array<ThreadInfo> {
 		var raw:Array<{id:Int, name:Null<String>}> = threadsEnabled && !registryPtr.isNull()
 			? readRegistry(registryPtr)

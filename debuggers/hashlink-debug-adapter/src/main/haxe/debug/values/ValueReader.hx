@@ -13,11 +13,11 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * Decodes a value at a memory address given its HLType, producing a display
- * string + type label (+ a reference for expandable values). Milestone 4 step 1
- * handles primitives, strings and null; other pointer types render as a raw
- * `<Type> @ 0x..` until object/array expansion (step 2) sets `referenceAllocator`.
- */
+	Decodes a value at a memory address given its HLType, producing a display
+	string + type label (+ a reference for expandable values). Milestone 4 step 1
+	handles primitives, strings and null; other pointer types render as a raw
+	`<Type> @ 0x..` until object/array expansion (step 2) sets `referenceAllocator`.
+**/
 class ValueReader {
 	final mem:MemoryReader;
 	final align:Align;
@@ -72,9 +72,9 @@ class ValueReader {
 	}
 
 	/**
-	 * Decodes a value whose pointer is already in hand (e.g. a function's
-	 * pointer-typed return value in RAX) — no address dereference.
-	 */
+		Decodes a value whose pointer is already in hand (e.g. a function's
+		pointer-typed return value in RAX) — no address dereference.
+	**/
 	public function decodeReturnedPointer(ptr:Pointer, t:HLType):DecodedValue {
 		return decodePointed(ptr, t);
 	}
@@ -155,7 +155,9 @@ class ValueReader {
 		return {value: "Map(" + count + ")", type: "Map", reference: reference};
 	}
 
-	/** The key layout of a native map abstract, or null when not a map native. */
+	/**
+		The key layout of a native map abstract, or null when not a map native.
+	**/
 	public static function nativeMapKind(name:String):Null<MapKeyKind> {
 		return switch (name) {
 			case "hl_bytes_map": StringKey;
@@ -189,7 +191,9 @@ class ValueReader {
 		return {value: "Map(" + count + ")", type: "Map", reference: reference};
 	}
 
-	/** The map key layout for a wrapper class name, or null when not a map. */
+	/**
+		The map key layout for a wrapper class name, or null when not a map.
+	**/
 	public static function mapKeyKind(name:String):Null<MapKeyKind> {
 		return switch (name) {
 			case "haxe.ds.StringMap": StringKey;
@@ -292,11 +296,11 @@ class ValueReader {
 	}
 
 	/**
-	 * Display text for a vdynamic already in hand — hl_throw's parked exc_value.
-	 * A bytes-typed dynamic (how hl_error_msg ships runtime error text: "Null
-	 * access .length", "Out of bounds 5/3", ...) decodes to its NUL-terminated
-	 * UTF-16 content; anything else formats through the regular decoder.
-	 */
+		Display text for a vdynamic already in hand — hl_throw's parked exc_value.
+		A bytes-typed dynamic (how hl_error_msg ships runtime error text: "Null
+		access .length", "Out of bounds 5/3", ...) decodes to its NUL-terminated
+		UTF-16 content; anything else formats through the regular decoder.
+	**/
 	public function previewThrownDynamic(ptr:Pointer):Null<String> {
 		var resolved = runtimeTypes == null ? null : runtimeTypes.typeAt(mem.readPointer(ptr));
 		if (resolved != null && resolved.match(HBytes)) {
@@ -343,7 +347,9 @@ class ValueReader {
 		return "\"" + stringContentAt(strPtr) + "\"";
 	}
 
-	/** The UTF-16 content of a debuggee String, UNQUOTED ("" for empty). */
+	/**
+		The UTF-16 content of a debuggee String, UNQUOTED ("" for empty).
+	**/
 	public function stringContentAt(strPtr:Pointer):String {
 		var bytesPtr = mem.readPointer(strPtr.offset(align.ptr));
 		var length = mem.readI32(strPtr.offset(align.ptr * 2));
@@ -374,7 +380,9 @@ class ValueReader {
 	static inline var ARRAY_BYTES_PREFIX = "hl.types.ArrayBytes_";
 	public static inline var ARRAY_DYN = "hl.types.ArrayDyn";
 
-	/** True for the std Array wrappers (hl.types.ArrayBytes_* / ArrayObj / ArrayDyn). */
+	/**
+		True for the std Array wrappers (hl.types.ArrayBytes_* / ArrayObj / ArrayDyn).
+	**/
 	public static function isArrayWrapper(name:String):Bool {
 		return name != null
 			&& (name == "hl.types.ArrayObj" || name == ARRAY_DYN || StringTools.startsWith(name, ARRAY_BYTES_PREFIX));
@@ -387,7 +395,9 @@ class ValueReader {
 		return inner.isNull() ? -1 : mem.readI32(inner.offset(align.ptr));
 	}
 
-	/** Element type encoded in an hl.types.ArrayBytes_* class name, or null. */
+	/**
+		Element type encoded in an hl.types.ArrayBytes_* class name, or null.
+	**/
 	public static function arrayBytesElementType(name:String):Null<HLType> {
 		if (name == null || !StringTools.startsWith(name, ARRAY_BYTES_PREFIX)) {
 			return null;

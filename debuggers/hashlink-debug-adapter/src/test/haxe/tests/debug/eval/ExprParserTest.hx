@@ -4,11 +4,11 @@ import debug.eval.ExprAst.Expr;
 import debug.eval.ExprParser;
 
 /**
- * Parser structure tests: each expression is parsed and dumped to a canonical
- * fully-parenthesized string, which pins precedence and associativity (Haxe
- * rules: bitwise in one tier binding tighter than comparisons, shifts between
- * additive and bitwise, `/` just a normal multiplicative operator).
- */
+	Parser structure tests: each expression is parsed and dumped to a canonical
+	fully-parenthesized string, which pins precedence and associativity (Haxe
+	rules: bitwise in one tier binding tighter than comparisons, shifts between
+	additive and bitwise, `/` just a normal multiplicative operator).
+**/
 class ExprParserTest {
 	public static function run(assert:Assert):Void {
 		function dump(e:Expr):String {

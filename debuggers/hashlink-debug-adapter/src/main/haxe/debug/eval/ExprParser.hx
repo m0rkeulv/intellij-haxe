@@ -4,29 +4,33 @@ import debug.DebugError;
 import debug.eval.ExprAst.Expr;
 
 /**
- * Tokenizer + precedence-climbing parser for evaluate expressions.
- *
- * Operator precedence follows HAXE (which differs from C: bitwise ops share
- * one tier and bind tighter than comparisons; shifts sit between additive and
- * bitwise):
- *
- *   1. unary  ! - ~            (prefix)
- *   2. % * /
- *   3. + -
- *   4. << >> >>>
- *   5. & | ^                   (one tier, left-associative)
- *   6. == != < <= > >=  and  `is`
- *   7. &&
- *   8. ||
- *   9. ?:                      (ternary, right-associative)
- *  10. =                       (right-associative)
- *
- * Postfix: `.field`, `[expr]`, `(args)`. Primary: literals, identifiers,
- * parentheses, `new pkg.Cls(args)`. `e is Type` sits at the comparison level;
- * its right side is a (dotted) type name, not an expression.
- */
+	Tokenizer + precedence-climbing parser for evaluate expressions.
+
+	Operator precedence follows HAXE (which differs from C: bitwise ops share
+	one tier and bind tighter than comparisons; shifts sit between additive and
+	bitwise):
+
+	| tier | operators                          | notes                       |
+	|------|------------------------------------|-----------------------------|
+	| 1    | unary `!` `-` `~`                  | prefix                      |
+	| 2    | `%` `*` `/`                        |                             |
+	| 3    | `+` `-`                            |                             |
+	| 4    | `<<` `>>` `>>>`                    |                             |
+	| 5    | `&` `\|` `^`                       | one tier, left-associative  |
+	| 6    | `==` `!=` `<` `<=` `>` `>=` `is`   |                             |
+	| 7    | `&&`                               |                             |
+	| 8    | `\|\|`                             |                             |
+	| 9    | `?:`                               | ternary, right-associative  |
+	| 10   | `=`                                | right-associative           |
+
+	Postfix: `.field`, `[expr]`, `(args)`. Primary: literals, identifiers,
+	parentheses, `new pkg.Cls(args)`. `e is Type` sits at the comparison level;
+	its right side is a (dotted) type name, not an expression.
+**/
 class ExprParser {
-	/** Parses a full expression; throws DebugError with a clear message. */
+	/**
+		Parses a full expression; throws DebugError with a clear message.
+	**/
 	public static function parse(text:String):Expr {
 		var parser = new ExprParser(text);
 		var e = parser.parseAssign();

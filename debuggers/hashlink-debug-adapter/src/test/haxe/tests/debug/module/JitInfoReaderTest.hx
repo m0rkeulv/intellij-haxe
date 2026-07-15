@@ -16,7 +16,9 @@ class JitInfoReaderTest {
 		rejectsUnsupportedVersion(assert);
 	}
 
-	/** Builds a synthetic HLD1 handshake. Functions: Array of {start, offsets:[...]} (large inferred from values). */
+	/**
+		Builds a synthetic HLD1 handshake. Functions: Array of {start, offsets:[...]} (large inferred from values).
+	**/
 	static function build(is64:Bool, flagsExtra:Int, hlVersionRaw:Int, pid:Int, jitCodeBase:Int, codeSize:Int,
 			functions:Array<{start:Int, offsets:Array<Int>, ?large:Bool}>):BytesInput {
 		var out = new BytesOutput();

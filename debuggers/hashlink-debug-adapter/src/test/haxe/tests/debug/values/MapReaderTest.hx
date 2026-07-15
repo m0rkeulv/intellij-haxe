@@ -8,11 +8,11 @@ import debug.values.MapReader;
 import haxe.Int64;
 
 /**
- * Fabricated-memory test for the native map walk, focused on the Int64Map key
- * layout (8-byte keys) — which cannot be exercised end-to-end because
- * hl.types.Int64Map is not constructible from ordinary Haxe. The String/Int/
- * Object flavours are covered by VariablesIntegrationTest against a real map.
- */
+	Fabricated-memory test for the native map walk, focused on the Int64Map key
+	layout (8-byte keys) — which cannot be exercised end-to-end because
+	hl.types.Int64Map is not constructible from ordinary Haxe. The String/Int/
+	Object flavours are covered by VariablesIntegrationTest against a real map.
+**/
 class MapReaderTest {
 	public static function run(assert:Assert):Void {
 		walksInt64SmallMap(assert);

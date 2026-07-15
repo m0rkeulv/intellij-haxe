@@ -1,15 +1,17 @@
 package debug.values;
 
 /**
- * Parses the variable-path subset the evaluator supports:
- *
- *   path     = ident accessor*
- *   accessor = "." ident | "[" digits "]"
- *   ident    = [A-Za-z_$][A-Za-z0-9_]*
- *
- * Anything else (operators, calls, string literals, ...) is NOT an evaluable
- * path and parses to null — the caller reports a friendly "paths only" error.
- */
+	Parses the variable-path subset the evaluator supports:
+
+	```
+	path     = ident accessor*
+	accessor = "." ident | "[" digits "]"
+	ident    = [A-Za-z_$][A-Za-z0-9_]*
+	```
+
+	Anything else (operators, calls, string literals, ...) is NOT an evaluable
+	path and parses to null — the caller reports a friendly "paths only" error.
+**/
 class ValuePath {
 	public final root:String;
 	public final accessors:Array<PathAccessor>;
@@ -19,7 +21,9 @@ class ValuePath {
 		this.accessors = accessors;
 	}
 
-	/** The path rendered for display/error messages (`obj.field[3]`). */
+	/**
+		The path rendered for display/error messages (`obj.field[3]`).
+	**/
 	public function display():String {
 		var s = root;
 		for (a in accessors) {
@@ -31,7 +35,9 @@ class ValuePath {
 		return s;
 	}
 
-	/** A copy of this path with one more field accessor appended. */
+	/**
+		A copy of this path with one more field accessor appended.
+	**/
 	public function plus(field:String):ValuePath {
 		return new ValuePath(root, accessors.concat([Field(field)]));
 	}

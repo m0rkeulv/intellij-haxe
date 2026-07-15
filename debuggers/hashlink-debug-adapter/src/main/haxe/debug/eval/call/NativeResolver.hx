@@ -9,22 +9,22 @@ import format.hl.Data.Opcode;
 import haxe.Int64;
 
 /**
- * Resolves the runtime address of a HashLink C native (e.g. `alloc_bytes`) by
- * DISASSEMBLING a jitted call site — the same hack as ConstructorResolver, and
- * the same reason: the debug handshake exposes addresses for bytecode functions
- * only, and natives have no findex we can turn into an address.
- *
- * A bytecode `OCall` to a native compiles (hashlink `jit.c`,
- * `op_call_fun` -> `call_native(m->functions_ptrs[findex])`) to the fixed
- * sequence `mov rax, <native> (48 B8 ..); call rax (FF D0)` — the native's
- * absolute address is the imm64. So we find any `OCall` whose target findex is
- * the native's, read that opcode's machine code, and pull the address out.
- *
- * The mining is arch-selected (x86 uses `mov eax, imm32; call eax`); if the
- * native is never called in the program (no site to mine) or the pattern is
- * absent, resolution fails and the caller degrades gracefully. See MachineCode
- * for the shared byte pattern.
- */
+	Resolves the runtime address of a HashLink C native (e.g. `alloc_bytes`) by
+	DISASSEMBLING a jitted call site — the same hack as ConstructorResolver, and
+	the same reason: the debug handshake exposes addresses for bytecode functions
+	only, and natives have no findex we can turn into an address.
+
+	A bytecode `OCall` to a native compiles (hashlink `jit.c`,
+	`op_call_fun` -> `call_native(m->functions_ptrs[findex])`) to the fixed
+	sequence `mov rax, <native> (48 B8 ..); call rax (FF D0)` — the native's
+	absolute address is the imm64. So we find any `OCall` whose target findex is
+	the native's, read that opcode's machine code, and pull the address out.
+
+	The mining is arch-selected (x86 uses `mov eax, imm32; call eax`); if the
+	native is never called in the program (no site to mine) or the pattern is
+	absent, resolution fails and the caller degrades gracefully. See MachineCode
+	for the shared byte pattern.
+**/
 class NativeResolver {
 	final module:ModuleDebugInfo;
 	final jit:JitInfo;
@@ -37,7 +37,9 @@ class NativeResolver {
 		this.memory = memory;
 	}
 
-	/** The runtime address of native `name`, or null when it can't be mined. */
+	/**
+		The runtime address of native `name`, or null when it can't be mined.
+	**/
 	public function resolve(name:String):Null<Pointer> {
 		if (cache.exists(name)) {
 			return cache.get(name);

@@ -3,8 +3,8 @@ package dap.transport;
 import haxe.io.Output;
 
 /**
- * Writes JSON payloads as DAP frames to a haxe.io.Output.
- */
+	Writes JSON payloads as DAP frames to a haxe.io.Output.
+**/
 class MessageWriter {
 	final output:Output;
 

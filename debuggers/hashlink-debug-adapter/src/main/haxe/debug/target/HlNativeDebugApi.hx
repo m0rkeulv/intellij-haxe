@@ -7,16 +7,16 @@ import haxe.Int64;
 import haxe.io.Bytes;
 
 /**
- * DebugApi backed by the HashLink VM's `debug_*` natives (library "std",
- * implemented per-OS in hashlink `src/std/debug.c`). Compiled only on the HL
- * target, since @:hlNative bindings do not exist under the interpreter or on
- * other targets.
- *
- * Addresses cross the interface as Int64 (Pointer); here they are bridged to
- * the native `hl.Bytes` pointer type via hl.Bytes.fromAddress / Bytes.address.
- * The register read/write natives take/return the register value as a
- * pointer-typed value, so the same bridge applies.
- */
+	DebugApi backed by the HashLink VM's `debug_*` natives (library "std",
+	implemented per-OS in hashlink `src/std/debug.c`). Compiled only on the HL
+	target, since @:hlNative bindings do not exist under the interpreter or on
+	other targets.
+
+	Addresses cross the interface as Int64 (Pointer); here they are bridged to
+	the native `hl.Bytes` pointer type via hl.Bytes.fromAddress / Bytes.address.
+	The register read/write natives take/return the register value as a
+	pointer-typed value, so the same bridge applies.
+**/
 class HlNativeDebugApi implements DebugApi {
 	// The DEBUGGEE's bitness, not ours: debug.c's is64 selects the thread-context
 	// layout (CONTEXT vs WOW64_CONTEXT on win64; a 32-bit libhl only has the

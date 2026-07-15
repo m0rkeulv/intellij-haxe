@@ -1,15 +1,15 @@
 /**
- * Multi-threaded fixture: its OWN program (main class) because it blocks
- * forever — it can't join the shared Main flow that other tests run to exit.
- *
- * A worker thread waits until main is parked in block() (holding a live local),
- * then prints on a known line where the test sets a breakpoint. At that stop
- * ALL threads are frozen: the worker is at its println, main is spinning in
- * block(). Both stacks + locals are then inspectable.
- *
- * WARNING: FIXTURE_THREADS_WORKER_LINE in DapIntegrationTestBase is the marked
- * line below — keep them in sync.
- */
+	Multi-threaded fixture: its OWN program (main class) because it blocks
+	forever — it can't join the shared Main flow that other tests run to exit.
+
+	A worker thread waits until main is parked in block() (holding a live local),
+	then prints on a known line where the test sets a breakpoint. At that stop
+	ALL threads are frozen: the worker is at its println, main is spinning in
+	block(). Both stacks + locals are then inspectable.
+
+	WARNING: FIXTURE_THREADS_WORKER_LINE in DapIntegrationTestBase is the marked
+	line below — keep them in sync.
+**/
 class Threads {
 	static var mainReady = false;
 	static var release = false;

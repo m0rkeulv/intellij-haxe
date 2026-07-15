@@ -1,8 +1,8 @@
 package dap.protocol.responses;
 
 /**
- * A structured error message (DAP "Message" type), used in error response bodies.
- */
+	A structured error message (DAP "Message" type), used in error response bodies.
+**/
 typedef Message = {
 	var id:Int;
 	var format:String;

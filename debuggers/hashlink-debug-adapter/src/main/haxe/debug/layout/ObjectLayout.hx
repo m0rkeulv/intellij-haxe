@@ -4,19 +4,19 @@ import format.hl.Data.HLType;
 import format.hl.Data.ObjPrototype;
 
 /**
- * Computes the byte offset of each field within a HashLink object instance,
- * replicating the runtime layout (a port of hld `getObjectProto`, matching the
- * VM's `hl_runtime_obj`): an object begins with a `hl_type*` header (one
- * pointer) — a struct does NOT — superclass fields come first (reclaiming the
- * parent's trailing padding), and each field is aligned to its own size.
- *
- * A `@:packed` field (HPacked wrapping an HStruct) is inlined: it is aligned
- * on the sub-struct's largest field and occupies the sub-struct's full padded
- * size. The total size is padded to a multiple of the largest field, which is
- * what makes nested packed layouts compose.
- *
- * Pure; unit-tested with synthetic prototypes.
- */
+	Computes the byte offset of each field within a HashLink object instance,
+	replicating the runtime layout (a port of hld `getObjectProto`, matching the
+	VM's `hl_runtime_obj`): an object begins with a `hl_type*` header (one
+	pointer) — a struct does NOT — superclass fields come first (reclaiming the
+	parent's trailing padding), and each field is aligned to its own size.
+
+	A `@:packed` field (HPacked wrapping an HStruct) is inlined: it is aligned
+	on the sub-struct's largest field and occupies the sub-struct's full padded
+	size. The total size is padded to a multiple of the largest field, which is
+	what makes nested packed layouts compose.
+
+	Pure; unit-tested with synthetic prototypes.
+**/
 class ObjectLayout {
 	final align:Align;
 	final cache:Map<String, ProtoLayout> = new Map();
@@ -26,10 +26,10 @@ class ObjectLayout {
 	}
 
 	/**
-	 * All fields of `proto` (superclass fields first) with their instance
-	 * offsets. `isStruct` skips the hl_type* header (HStruct values and the
-	 * inline layout of packed fields).
-	 */
+		All fields of `proto` (superclass fields first) with their instance
+		offsets. `isStruct` skips the hl_type* header (HStruct values and the
+		inline layout of packed fields).
+	**/
 	public function fields(proto:ObjPrototype, isStruct:Bool = false):Array<FieldLayout> {
 		return layout(proto, isStruct).fields;
 	}

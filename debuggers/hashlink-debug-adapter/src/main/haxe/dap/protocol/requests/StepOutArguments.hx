@@ -1,8 +1,8 @@
 package dap.protocol.requests;
 
 /**
- * Arguments for the "stepOut" request.
- */
+	Arguments for the "stepOut" request.
+**/
 typedef StepOutArguments = {
 	var threadId:Int;
 	var ?singleThread:Bool;

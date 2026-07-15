@@ -10,32 +10,32 @@ import format.hl.Data.Opcode;
 import haxe.Int64;
 
 /**
- * Recovers what is needed to BOX a primitive into a `vdynamic` in the debuggee:
- * the runtime `hl_alloc_dynamic` address and a primitive's runtime `hl_type*`.
- *
- * ================================ HACK ================================
- * Neither `hl_alloc_dynamic` nor the primitive type singletons (`&hlt_i32`,
- * `&hlt_f64`, `&hlt_bool`) are reachable from the debug handshake — the former
- * is a JIT-internal helper (no findex, not a native), the latter are global C
- * symbols. But the JIT emits both, as constants, for every `OToDyn` opcode
- * (`x = (someInt : Dynamic)`), lowered (hashlink `jit.c`) for a non-pointer
- * source to `call_native_consts(hl_alloc_dynamic, {src->t}, 1)` — the same
- * set-argument-then-call shape as ONew (arg0 = the primitive's hl_type*, then
- * `mov (r/e)ax, <hl_alloc_dynamic> ; call`), register-based on x86-64 and a
- * `push` on x86. See ConstructorResolver for the byte layout.
- *
- * We scan `OToDyn` sites whose SOURCE register is a primitive and read the
- * arg/fn pair (MachineCode.mineArgThenCall picks the arch form): the primitive's
- * type pointer (matched to the source register's kind, so it is self-verifying)
- * and the shared allocator address. This yields a box recipe per primitive KIND
- * the program actually boxes somewhere — the same DCE-limited scope accepted for
- * constructors: a program that never boxes a Bool cannot have one boxed by the
- * debugger.
- *
- * FRAGILE (see ConstructorResolver). No pattern → the feature reports itself
- * unavailable rather than guessing.
- * =====================================================================
- */
+	Recovers what is needed to BOX a primitive into a `vdynamic` in the debuggee:
+	the runtime `hl_alloc_dynamic` address and a primitive's runtime `hl_type*`.
+
+	================================ HACK ================================
+	Neither `hl_alloc_dynamic` nor the primitive type singletons (`&hlt_i32`,
+	`&hlt_f64`, `&hlt_bool`) are reachable from the debug handshake — the former
+	is a JIT-internal helper (no findex, not a native), the latter are global C
+	symbols. But the JIT emits both, as constants, for every `OToDyn` opcode
+	(`x = (someInt : Dynamic)`), lowered (hashlink `jit.c`) for a non-pointer
+	source to `call_native_consts(hl_alloc_dynamic, {src->t}, 1)` — the same
+	set-argument-then-call shape as ONew (arg0 = the primitive's hl_type*, then
+	`mov (r/e)ax, <hl_alloc_dynamic> ; call`), register-based on x86-64 and a
+	`push` on x86. See ConstructorResolver for the byte layout.
+
+	We scan `OToDyn` sites whose SOURCE register is a primitive and read the
+	arg/fn pair (MachineCode.mineArgThenCall picks the arch form): the primitive's
+	type pointer (matched to the source register's kind, so it is self-verifying)
+	and the shared allocator address. This yields a box recipe per primitive KIND
+	the program actually boxes somewhere — the same DCE-limited scope accepted for
+	constructors: a program that never boxes a Bool cannot have one boxed by the
+	debugger.
+
+	FRAGILE (see ConstructorResolver). No pattern → the feature reports itself
+	unavailable rather than guessing.
+	=====================================================================
+**/
 class BoxResolver {
 	// Sanity cap on one OToDyn opcode's machine code: real sites are a handful of
 	// instructions, so anything larger is not the pattern we mine — skip it.
@@ -56,10 +56,10 @@ class BoxResolver {
 	}
 
 	/**
-	 * The box recipe for a primitive `kind` (a format HLType enum index, e.g.
-	 * `Type.enumIndex(HI32)`), or null when the program never boxes that
-	 * primitive (no OToDyn site to mine) or the machine-code pattern is absent.
-	 */
+		The box recipe for a primitive `kind` (a format HLType enum index, e.g.
+		`Type.enumIndex(HI32)`), or null when the program never boxes that
+		primitive (no OToDyn site to mine) or the machine-code pattern is absent.
+	**/
 	public function resolve(kind:Int):Null<{allocDynamic:Pointer, typePointer:Pointer}> {
 		if (!scanned) {
 			scan();

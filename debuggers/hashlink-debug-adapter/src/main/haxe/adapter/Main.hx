@@ -4,14 +4,14 @@ import sys.net.Host;
 import sys.net.Socket;
 
 /**
- * Entry point of the HashLink DAP debug adapter.
- *
- * Usage: hl hl-debug-adapter.hl [--port <n>]
- *
- * Binds a TCP server on 127.0.0.1 (port 0 = OS-assigned, the default),
- * announces the chosen port on stdout as "DAP-ADAPTER-LISTENING:<port>",
- * then serves exactly one DAP client session and exits.
- */
+	Entry point of the HashLink DAP debug adapter.
+
+	Usage: hl hl-debug-adapter.hl [--port <n>]
+
+	Binds a TCP server on 127.0.0.1 (port 0 = OS-assigned, the default),
+	announces the chosen port on stdout as "DAP-ADAPTER-LISTENING:<port>",
+	then serves exactly one DAP client session and exits.
+**/
 class Main {
 	static inline var LISTENING_PREFIX = "DAP-ADAPTER-LISTENING:";
 

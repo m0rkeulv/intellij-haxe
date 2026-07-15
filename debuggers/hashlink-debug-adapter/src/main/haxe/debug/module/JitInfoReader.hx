@@ -8,32 +8,33 @@ import haxe.io.BytesInput;
 import haxe.io.Input;
 
 /**
- * Parses the "HLD1" handshake the debuggee VM sends over the --debug socket.
- *
- * Layout empirically verified against HashLink 1.15 (little-endian, 64-bit),
- * cross-checked with hashlink `src/debugger.c` and vshaxe/hashlink-debugger
- * `hld/JitInfo.hx`:
- *
- *   "HLD" + version char             3 + 1 bytes
- *   flags                            int32   bit0 is64, bit1 boolSize4, bit2 threads, bit3 winCall
- *   hlVersion                        int32   (major<<16)|(minor<<8)|patch
- *   pid                              int32   (present when hlVersion >= 1.07)
- *   threads / globals / jitCode      pointer each (8 bytes when is64)
- *   codeSize                         int32
- *   types                            pointer
- *   structSizes[1..8]                8 x int32
- *   nfunctions                       int32
- *   per function:                    nops(int32) start(int32) large(byte)
- *                                    offsets[nops+1] x (large ? int32 : uint16)
- *
- * The input is read in exact-size chunks (input.read(n)): the debuggee sends the
- * whole handshake and then blocks, so a single over-read would hang forever.
- * Byte-at-a-time reads over a socket are also far too slow, so each field group
- * is pulled in one read.
- *
- * Only protocol version 1 is supported (what HashLink 1.15 emits); a different
- * version char raises DebugError rather than risk a silent misparse.
- */
+	Parses the "HLD1" handshake the debuggee VM sends over the --debug socket.
+
+	Layout empirically verified against HashLink 1.15 (little-endian, 64-bit),
+	cross-checked with hashlink `src/debugger.c` and vshaxe/hashlink-debugger
+	`hld/JitInfo.hx`:
+
+	| field                       | size         | notes                                                  |
+	|-----------------------------|--------------|--------------------------------------------------------|
+	| `"HLD"` + version char      | 3 + 1 bytes  |                                                        |
+	| flags                       | int32        | bit0 is64, bit1 boolSize4, bit2 threads, bit3 winCall  |
+	| hlVersion                   | int32        | `(major<<16) \| (minor<<8) \| patch`                   |
+	| pid                         | int32        | present when hlVersion >= 1.07                         |
+	| threads / globals / jitCode | pointer each | 8 bytes when is64                                      |
+	| codeSize                    | int32        |                                                        |
+	| types                       | pointer      |                                                        |
+	| structSizes[1..8]           | 8 x int32    |                                                        |
+	| nfunctions                  | int32        |                                                        |
+	| per function                |              | nops(int32) start(int32) large(byte), then offsets[nops+1] x (large ? int32 : uint16) |
+
+	The input is read in exact-size chunks (input.read(n)): the debuggee sends the
+	whole handshake and then blocks, so a single over-read would hang forever.
+	Byte-at-a-time reads over a socket are also far too slow, so each field group
+	is pulled in one read.
+
+	Only protocol version 1 is supported (what HashLink 1.15 emits); a different
+	version char raises DebugError rather than risk a silent misparse.
+**/
 class JitInfoReader {
 	static inline var SUPPORTED_VERSION = 1;
 

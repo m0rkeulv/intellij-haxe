@@ -5,12 +5,12 @@ import debug.Pointer;
 import haxe.Int64;
 
 /**
- * The runtime JIT/memory map the debuggee VM sends over the --debug socket
- * (the "HLD1" handshake). Bridges source opcodes ↔ absolute machine addresses.
- *
- * Wire layout empirically verified against HashLink 1.15 (protocol version 1):
- * see JitInfoReader.
- */
+	The runtime JIT/memory map the debuggee VM sends over the --debug socket
+	(the "HLD1" handshake). Bridges source opcodes ↔ absolute machine addresses.
+
+	Wire layout empirically verified against HashLink 1.15 (protocol version 1):
+	see JitInfoReader.
+**/
 class JitInfo {
 	public var is64(default, null):Bool;
 	public var boolSize4(default, null):Bool;
@@ -65,22 +65,26 @@ class JitInfo {
 	}
 
 	/**
-	 * The function's true machine entry point — the start of its JIT prologue
-	 * (frame setup, callee-saved register saves). This is the address to CALL,
-	 * unlike `addressOf(fidx, 0)`, which points at opcode 0 AFTER the prologue
-	 * (correct for a breakpoint, fatal for a call — it skips frame setup).
-	 */
+		The function's true machine entry point — the start of its JIT prologue
+		(frame setup, callee-saved register saves). This is the address to CALL,
+		unlike `addressOf(fidx, 0)`, which points at opcode 0 AFTER the prologue
+		(correct for a breakpoint, fatal for a call — it skips frame setup).
+	**/
 	public function functionEntry(fidx:Int):Pointer {
 		return Int64.add(jitCodeBase, Int64.ofInt(functions[fidx].start));
 	}
 
-	/** Absolute machine address of opcode `op` in function `fidx`. */
+	/**
+		Absolute machine address of opcode `op` in function `fidx`.
+	**/
 	public function addressOf(fidx:Int, op:Int):Pointer {
 		var fn = functions[fidx];
 		return Int64.add(jitCodeBase, Int64.ofInt(fn.start + fn.offsets[op]));
 	}
 
-	/** True when `ptr` lies within the JIT code region. */
+	/**
+		True when `ptr` lies within the JIT code region.
+	**/
 	public function isCodePtr(ptr:Pointer):Bool {
 		var rel = Int64.sub(ptr, jitCodeBase);
 		if (Int64.isNeg(rel)) {
@@ -90,9 +94,9 @@ class JitInfo {
 	}
 
 	/**
-	 * Maps a machine address back to (function index, opcode index).
-	 * Returns null when the address is not inside any known function's code.
-	 */
+		Maps a machine address back to (function index, opcode index).
+		Returns null when the address is not inside any known function's code.
+	**/
 	public function resolveAddress(ptr:Pointer):Null<CodePosition> {
 		if (!isCodePtr(ptr)) {
 			return null;
@@ -133,5 +137,7 @@ class JitInfo {
 	}
 }
 
-/** A code position: a function index and an opcode index within it. */
+/**
+	A code position: a function index and an opcode index within it.
+**/
 typedef CodePosition = {fidx:Int, op:Int}

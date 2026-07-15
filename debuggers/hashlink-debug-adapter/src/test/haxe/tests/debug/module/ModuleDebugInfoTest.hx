@@ -5,12 +5,12 @@ import debug.module.ModuleDebugInfo;
 
 
 /**
- * Exercises ModuleDebugInfo against the compiled test fixture. The fixture path
- * is provided via DAP_FIXTURE_HL (set by the Gradle testHaxeAdapter task);
- * when unset the suite prints SKIP so a bare `haxe test.hxml` still passes.
- *
- * Line constants mirror test-fixtures/src/Main.hx.
- */
+	Exercises ModuleDebugInfo against the compiled test fixture. The fixture path
+	is provided via DAP_FIXTURE_HL (set by the Gradle testHaxeAdapter task);
+	when unset the suite prints SKIP so a bare `haxe test.hxml` still passes.
+
+	Line constants mirror test-fixtures/src/Main.hx.
+**/
 class ModuleDebugInfoTest {
 	static inline var FIXTURE_LOOP_LINE = 18;
 	static inline var FIXTURE_ADD_LINE = 28;

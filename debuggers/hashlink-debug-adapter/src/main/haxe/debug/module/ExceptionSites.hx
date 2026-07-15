@@ -4,20 +4,20 @@ import debug.Pointer;
 import format.hl.Data.Opcode;
 
 /**
- * A throw site: the machine address of an `OThrow`/`ORethrow` opcode and the HL
- * register holding the value being thrown there.
- */
+	A throw site: the machine address of an `OThrow`/`ORethrow` opcode and the HL
+	register holding the value being thrown there.
+**/
 typedef ThrowSite = {address:Pointer, fidx:Int, op:Int, reg:Int};
 
 /**
- * Enumerates every `OThrow`/`ORethrow` opcode in the program to its JIT machine
- * address, so an "exception breakpoint" can plant an INT3 at each one. This is a
- * CODE-only pass: it walks the already-decoded function opcode lists
- * (`data.functions[*].ops`) and never touches the data/constants/bytes sections
- * where embedded assets live. The result is computed once and cached — the loop
- * is over in-memory opcodes (no re-parsing), and nothing is planted until an
- * exception breakpoint is actually enabled.
- */
+	Enumerates every `OThrow`/`ORethrow` opcode in the program to its JIT machine
+	address, so an "exception breakpoint" can plant an INT3 at each one. This is a
+	CODE-only pass: it walks the already-decoded function opcode lists
+	(`data.functions[*].ops`) and never touches the data/constants/bytes sections
+	where embedded assets live. The result is computed once and cached — the loop
+	is over in-memory opcodes (no re-parsing), and nothing is planted until an
+	exception breakpoint is actually enabled.
+**/
 class ExceptionSites {
 	final module:ModuleDebugInfo;
 	final jit:JitInfo;
@@ -28,7 +28,9 @@ class ExceptionSites {
 		this.jit = jit;
 	}
 
-	/** All throw sites in the program (cached after the first call). */
+	/**
+		All throw sites in the program (cached after the first call).
+	**/
 	public function all():Array<ThrowSite> {
 		if (cached != null) {
 			return cached;

@@ -1,13 +1,13 @@
 /**
- * One local per "rich" value kind, decoded by VariablesIntegrationTest:
- * arrays (bytes/object/dynamic flavours), Dynamic, enum, anonymous structure,
- * a closure, a captured-and-mutated local (compiler-boxed into a 1-element
- * array) and an explicit hl.Ref. All built from runtime values and used with
- * runtime indices on the print line, so the analyzer cannot fold them away.
- *
- * WARNING: line numbers are load-bearing test constants
- * (FIXTURE_RICH_LINE in DapIntegrationTestBase) — update them together.
- */
+	One local per "rich" value kind, decoded by VariablesIntegrationTest:
+	arrays (bytes/object/dynamic flavours), Dynamic, enum, anonymous structure,
+	a closure, a captured-and-mutated local (compiler-boxed into a 1-element
+	array) and an explicit hl.Ref. All built from runtime values and used with
+	runtime indices on the print line, so the analyzer cannot fold them away.
+
+	WARNING: line numbers are load-bearing test constants
+	(FIXTURE_RICH_LINE in DapIntegrationTestBase) — update them together.
+**/
 class Rich {
 	public static function demo():Void {
 		var n:Int = Std.parseInt("2"); // typed Int so [n, ...] is ArrayBytes_Int, not boxed ArrayObj

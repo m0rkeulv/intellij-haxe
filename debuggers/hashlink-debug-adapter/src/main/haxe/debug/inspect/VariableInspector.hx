@@ -20,23 +20,25 @@ import debug.target.MemoryWriter;
 import debug.target.StackFrameLocation;
 
 /**
- * The "what can I see and change while stopped" FACADE. It constructs and wires
- * the value-inspection collaborators and exposes the small surface DebugSession
- * drives — stop lifecycle, scopes/variables, evaluate/condition, setVariable —
- * delegating each to the owning class:
- *
- *  - StopState           per-stop frame caches + variablesReference registry
- *  - SymbolResolver      variable path → writable {address, type}
- *  - VariablesView       frames/references → DAP scopes & variable lists
- *  - DebuggeeCallService running code in the debuggee (calls / new / string / box)
- *  - ExpressionEvaluator the evaluate-expression interpreter
- *  - VariableMutator     the write path (setVariable / assignment)
- *
- * Wired once at launch from the module/jit metadata; DebugSession sets the
- * per-session callbacks (frameWalker, cpuRegistersFor, functionCaller, ...),
- * feeds a new stop via startStop, and invalidates on every resume — a reference
- * must never outlive its stop, since the GC can move objects.
- */
+	The "what can I see and change while stopped" FACADE. It constructs and wires
+	the value-inspection collaborators and exposes the small surface DebugSession
+	drives — stop lifecycle, scopes/variables, evaluate/condition, setVariable —
+	delegating each to the owning class:
+
+	| collaborator          | role                                                    |
+	|-----------------------|---------------------------------------------------------|
+	| `StopState`           | per-stop frame caches + variablesReference registry     |
+	| `SymbolResolver`      | variable path → writable {address, type}                |
+	| `VariablesView`       | frames/references → DAP scopes & variable lists         |
+	| `DebuggeeCallService` | running code in the debuggee (calls / new / string / box) |
+	| `ExpressionEvaluator` | the evaluate-expression interpreter                     |
+	| `VariableMutator`     | the write path (setVariable / assignment)               |
+
+	Wired once at launch from the module/jit metadata; DebugSession sets the
+	per-session callbacks (frameWalker, cpuRegistersFor, functionCaller, ...),
+	feeds a new stop via startStop, and invalidates on every resume — a reference
+	must never outlive its stop, since the GC can move objects.
+**/
 class VariableInspector {
 	final module:ModuleDebugInfo;
 	final jit:JitInfo;
@@ -61,7 +63,9 @@ class VariableInspector {
 	// The value-modification path (setVariable / assignment).
 	final mutator:VariableMutator;
 
-	/** Enables value modification (setVariable / assignment) via `out`. */
+	/**
+		Enables value modification (setVariable / assignment) via `out`.
+	**/
 	public function enableWrites(out:MemoryWriter):Void {
 		mutator.writer = new ValueWriter(memory, out, align, runtimeTypes);
 		calls.memWriter = out;
@@ -156,58 +160,72 @@ class VariableInspector {
 			frameLayout, stops);
 	}
 
-	/** Begins a new stop landed in `threadId` (see StopState.startStop). */
+	/**
+		Begins a new stop landed in `threadId` (see StopState.startStop).
+	**/
 	public inline function startStop(threadId:Int):Void {
 		stops.startStop(threadId);
 	}
 
-	/** Clears every per-stop cache (on resume). */
+	/**
+		Clears every per-stop cache (on resume).
+	**/
 	public inline function invalidate():Void {
 		stops.invalidate();
 	}
 
-	/** True once a stop has produced at least one frame (any thread walked). */
+	/**
+		True once a stop has produced at least one frame (any thread walked).
+	**/
 	public inline function hasFrames():Bool {
 		return stops.hasFrames();
 	}
 
 	/**
-	 * The frames of `threadId` (walked+cached on first request; all threads are
-	 * frozen at a stop). Each carries the globally-unique frame id the client
-	 * uses for scopes/variables/evaluate.
-	 */
+		The frames of `threadId` (walked+cached on first request; all threads are
+		frozen at a stop). Each carries the globally-unique frame id the client
+		uses for scopes/variables/evaluate.
+	**/
 	public inline function framesFor(threadId:Int):Array<CachedFrame> {
 		return stops.framesFor(threadId);
 	}
 
-	/** The scopes of a cached frame: Locals, plus Statics when the owning class has static data. */
+	/**
+		The scopes of a cached frame: Locals, plus Statics when the owning class has static data.
+	**/
 	public inline function scopesFor(frameId:Int):Array<ScopeInfo> {
 		return view.scopesFor(frameId);
 	}
 
-	/** The decoded value in HL register `reg` of a frame (for describing a thrown exception). */
+	/**
+		The decoded value in HL register `reg` of a frame (for describing a thrown exception).
+	**/
 	public inline function readRegisterValue(frameId:Int, reg:Int):Null<VariableInfo> {
 		return view.readRegisterValue(frameId, reg);
 	}
 
-	/** True when register `reg` holds an object matching one of the type filters. */
+	/**
+		True when register `reg` holds an object matching one of the type filters.
+	**/
 	public inline function registerValueMatchesType(frameId:Int, reg:Int, wanted:Array<String>):Bool {
 		return view.registerValueMatchesType(frameId, reg, wanted);
 	}
 
-	/** Display text for the vdynamic at `ptr` (e.g. hl_throw's exc_value); null when undecodable. */
+	/**
+		Display text for the vdynamic at `ptr` (e.g. hl_throw's exc_value); null when undecodable.
+	**/
 	public inline function previewDynamicPointer(ptr:Pointer):Null<String> {
 		return view.previewDynamicPointer(ptr);
 	}
 
 	/**
-	 * Evaluates a VARIABLE PATH (`name`, `obj.field`, `arr[3]`, ...) in a
-	 * cached frame. Root resolution order: the frame's locals, then fields of
-	 * `this`, then the owning class's statics, then a class named by a leading
-	 * path prefix (`MyClass.member`, `pkg.MyClass.member` — resolves to that
-	 * class's statics container). Throws DebugError with a user-facing
-	 * message when the path cannot be resolved.
-	 */
+		Evaluates a VARIABLE PATH (`name`, `obj.field`, `arr[3]`, ...) in a
+		cached frame. Root resolution order: the frame's locals, then fields of
+		`this`, then the owning class's statics, then a class named by a leading
+		path prefix (`MyClass.member`, `pkg.MyClass.member` — resolves to that
+		class's statics container). Throws DebugError with a user-facing
+		message when the path cannot be resolved.
+	**/
 	public function evaluate(frameId:Int, expression:String):VariableInfo {
 		// a single-line expression may carry a trailing ';' (e.g. copied from
 		// source); it is not part of the expression grammar, so drop it
@@ -223,12 +241,16 @@ class VariableInspector {
 		}
 	}
 
-	/** Evaluates a breakpoint condition to a Bool in the given frame. */
+	/**
+		Evaluates a breakpoint condition to a Bool in the given frame.
+	**/
 	public inline function evaluateBool(frameId:Int, expression:String):Bool {
 		return evaluator.evaluateBool(frameId, expression);
 	}
 
-	/** Sets a variablesReference child to an evaluate expression (DAP `setVariable`). */
+	/**
+		Sets a variablesReference child to an evaluate expression (DAP `setVariable`).
+	**/
 	public inline function setVariable(reference:Int, name:String, valueExpr:String):VariableInfo {
 		return mutator.setVariable(reference, name, valueExpr);
 	}
@@ -243,7 +265,9 @@ class VariableInspector {
 		return caller;
 	}
 
-	/** The children of a variablesReference ([] for an unknown/stale reference). */
+	/**
+		The children of a variablesReference ([] for an unknown/stale reference).
+	**/
 	public inline function variablesFor(reference:Int):Array<VariableInfo> {
 		return view.variablesFor(reference);
 	}

@@ -12,11 +12,11 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * Lists the children of an expandable value (a `variablesReference` target):
- * object fields, array elements, and later enum params / virtual fields.
- * Element listing is capped: a huge array gets a trailing "…" marker instead of
- * flooding the client (no variable paging is advertised).
- */
+	Lists the children of an expandable value (a `variablesReference` target):
+	object fields, array elements, and later enum params / virtual fields.
+	Element listing is capped: a huge array gets a trailing "…" marker instead of
+	flooding the client (no variable paging is advertised).
+**/
 class ValueChildren {
 	static inline var MAX_ELEMENTS = 512;
 
@@ -70,12 +70,12 @@ class ValueChildren {
 	}
 
 	/**
-	 * The address + static type of a single named child (a field name, or a
-	 * numeric index as a string), for value modification. Reuses the SAME
-	 * layout arithmetic as `of`, so a write lands exactly where the matching
-	 * read came from. Returns null when the child isn't individually
-	 * addressable (maps, enum params, closures) or doesn't exist.
-	 */
+		The address + static type of a single named child (a field name, or a
+		numeric index as a string), for value modification. Reuses the SAME
+		layout arithmetic as `of`, so a write lands exactly where the matching
+		read came from. Returns null when the child isn't individually
+		addressable (maps, enum params, closures) or doesn't exist.
+	**/
 	public function targetOf(pointer:Pointer, t:HLType, childName:String):Null<AddressedValue> {
 		return switch (t) {
 			case HObj(proto) if (proto != null && ValueReader.arrayBytesElementType(proto.name) != null):

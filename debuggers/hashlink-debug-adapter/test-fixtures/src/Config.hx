@@ -1,9 +1,9 @@
 /**
- * Statics fixture: version/title are read through the "Statics" scope.
- *
- * WARNING: line numbers are load-bearing test constants
- * (FIXTURE_STATICS_LINE in DapIntegrationTestBase) — update them together.
- */
+	Statics fixture: version/title are read through the "Statics" scope.
+
+	WARNING: line numbers are load-bearing test constants
+	(FIXTURE_STATICS_LINE in DapIntegrationTestBase) — update them together.
+**/
 class Config {
 	public static var version:Int = 7;
 	public static var title:String = "cfg";

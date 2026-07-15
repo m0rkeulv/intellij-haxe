@@ -9,12 +9,12 @@ import format.hl.Data.ObjPrototype;
 import haxe.Int64;
 
 /**
- * Lists the entries of a haxe.ds.BalancedTree (and its subclass
- * EnumValueMap) — a PURE-HAXE red/black tree, so unlike the native maps there
- * is no C layout to port: the wrapper's `root` field and each `TreeNode`'s
- * `left`/`right`/`key`/`value` fields are ordinary typed object fields read
- * through ObjectLayout. Produces an in-order (sorted) key → value listing.
- */
+	Lists the entries of a haxe.ds.BalancedTree (and its subclass
+	EnumValueMap) — a PURE-HAXE red/black tree, so unlike the native maps there
+	is no C layout to port: the wrapper's `root` field and each `TreeNode`'s
+	`left`/`right`/`key`/`value` fields are ordinary typed object fields read
+	through ObjectLayout. Produces an in-order (sorted) key → value listing.
+**/
 class TreeMapReader {
 	static inline var MAX_ENTRIES = 512;
 	static inline var MAX_DEPTH = 128; // guards against a cyclic/garbage tree
@@ -31,12 +31,16 @@ class TreeMapReader {
 		this.runtimeTypes = runtimeTypes;
 	}
 
-	/** True for BalancedTree and any subclass (EnumValueMap). */
+	/**
+		True for BalancedTree and any subclass (EnumValueMap).
+	**/
 	public static function isTreeMap(name:String):Bool {
 		return name == "haxe.ds.EnumValueMap" || name == "haxe.ds.BalancedTree";
 	}
 
-	/** Live entry count (capped), or -1 when the tree can't be walked. */
+	/**
+		Live entry count (capped), or -1 when the tree can't be walked.
+	**/
 	public function entryCount(mapPtr:Pointer, mapProto:ObjPrototype):Int {
 		var root = rootNode(mapPtr, mapProto);
 		if (root == null) {
@@ -48,10 +52,10 @@ class TreeMapReader {
 	}
 
 	/**
-	 * In-order entries. `keyValuePreview` renders a key or value at an address
-	 * (both are HDyn-typed generic slots). valueAddress is read as HDyn by the
-	 * caller. Capped at 512.
-	 */
+		In-order entries. `keyValuePreview` renders a key or value at an address
+		(both are HDyn-typed generic slots). valueAddress is read as HDyn by the
+		caller. Capped at 512.
+	**/
 	public function entries(mapPtr:Pointer, mapProto:ObjPrototype, keyPreview:Pointer->String):Array<MapEntrySlot> {
 		var root = rootNode(mapPtr, mapProto);
 		var result:Array<MapEntrySlot> = [];

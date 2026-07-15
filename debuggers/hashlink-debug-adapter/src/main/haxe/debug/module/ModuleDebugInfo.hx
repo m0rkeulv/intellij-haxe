@@ -11,13 +11,13 @@ import format.hl.Data.HLType;
 import format.hl.Data.Opcode;
 
 /**
- * Reads a .hl file's embedded debug tables (via the `format` haxelib) and maps
- * between source (file, line) and bytecode (function index, opcode).
- *
- * The function index used here is the position in the code's function array,
- * which matches the per-function order of the handshake (see JitInfo), so a
- * (fidx, op) resolved here can be handed straight to JitInfo.addressOf.
- */
+	Reads a .hl file's embedded debug tables (via the `format` haxelib) and maps
+	between source (file, line) and bytecode (function index, opcode).
+
+	The function index used here is the position in the code's function array,
+	which matches the per-function order of the handshake (see JitInfo), so a
+	(fidx, op) resolved here can be handed straight to JitInfo.addressOf.
+**/
 class ModuleDebugInfo {
 	final data:Data;
 	final isWindows:Bool;
@@ -64,16 +64,18 @@ class ModuleDebugInfo {
 		typesByName = buildTypeNameIndex();
 	}
 
-	/** Module type by its runtime name (class, struct or enum), or null. */
+	/**
+		Module type by its runtime name (class, struct or enum), or null.
+	**/
 	public function typeByName(name:String):Null<HLType> {
 		return typesByName.get(name);
 	}
 
 	/**
-	 * True when `name` names a module type by its full name (`pkg.Cls`) OR by its
-	 * simple name (`Cls`) — used to tell a real type from a typo in an `is` check
-	 * without an import context.
-	 */
+		True when `name` names a module type by its full name (`pkg.Cls`) OR by its
+		simple name (`Cls`) — used to tell a real type from a typo in an `is` check
+		without an import context.
+	**/
 	public function typeNameExists(name:String):Bool {
 		if (typesByName.exists(name)) {
 			return true;
@@ -96,7 +98,9 @@ class ModuleDebugInfo {
 	// the reverse mapping (same approach as hld Module.reverseHash)
 	var reversedHashes:Null<Map<Int, String>> = null;
 
-	/** The module string with the given hl_hash, or null. */
+	/**
+		The module string with the given hl_hash, or null.
+	**/
 	public function reverseHash(hash:Int):Null<String> {
 		if (reversedHashes == null) {
 			reversedHashes = new Map();
@@ -107,16 +111,18 @@ class ModuleDebugInfo {
 		return reversedHashes.get(hash);
 	}
 
-	/** The types of the module's globals, in index order (for the globals table layout). */
+	/**
+		The types of the module's globals, in index order (for the globals table layout).
+	**/
 	public function globals():Array<HLType> {
 		return data.globals;
 	}
 
 	/**
-	 * The statics container prototype ("$Class") that owns the function at `fidx`,
-	 * i.e. the class whose static fields should be shown while stopped in it, or
-	 * null when the function has no such container (rare) or `fidx` is invalid.
-	 */
+		The statics container prototype ("$Class") that owns the function at `fidx`,
+		i.e. the class whose static fields should be shown while stopped in it, or
+		null when the function has no such container (rare) or `fidx` is invalid.
+	**/
 	public function staticsProtoForFunction(fidx:Int):Null<ObjPrototype> {
 		if (fidx < 0 || fidx >= data.functions.length) {
 			return null;
@@ -125,10 +131,10 @@ class ModuleDebugInfo {
 	}
 
 	/**
-	 * The global index whose slot holds the statics singleton for a "$Class"
-	 * container prototype, or -1 if none. (The singleton's own type is the
-	 * container, so it appears directly as a global of that type.)
-	 */
+		The global index whose slot holds the statics singleton for a "$Class"
+		container prototype, or -1 if none. (The singleton's own type is the
+		container, so it appears directly as a global of that type.)
+	**/
 	public function staticsGlobalIndex(proto:ObjPrototype):Int {
 		var index = globalIndexByTypeName.get(proto.name);
 		return index != null ? index : -1;
@@ -138,27 +144,37 @@ class ModuleDebugInfo {
 		return data.functions.length;
 	}
 
-	/** Opcode count of a function, for aligning against the handshake tables. */
+	/**
+		Opcode count of a function, for aligning against the handshake tables.
+	**/
 	public function opCount(fidx:Int):Int {
 		return data.functions[fidx].ops.length;
 	}
 
-	/** The decoded opcodes of a function (for control-flow / stepping analysis). */
+	/**
+		The decoded opcodes of a function (for control-flow / stepping analysis).
+	**/
 	public function opcodes(fidx:Int):Array<Opcode> {
 		return data.functions[fidx].ops;
 	}
 
-	/** The function's type (an HFun), for reading its argument count/types. */
+	/**
+		The function's type (an HFun), for reading its argument count/types.
+	**/
 	public function functionType(fidx:Int):HLType {
 		return data.functions[fidx].t;
 	}
 
-	/** The function's register types (arguments first, then locals). */
+	/**
+		The function's register types (arguments first, then locals).
+	**/
 	public function registers(fidx:Int):Array<HLType> {
 		return data.functions[fidx].regs;
 	}
 
-	/** The debug "assigns" table mapping variable names (string index) to opcode positions. */
+	/**
+		The debug "assigns" table mapping variable names (string index) to opcode positions.
+	**/
 	public function assignsOf(fidx:Int):Array<{varName:Int, position:Int}> {
 		return data.functions[fidx].assigns;
 	}
@@ -167,7 +183,9 @@ class ModuleDebugInfo {
 		return (index >= 0 && index < data.strings.length) ? data.strings[index] : "?";
 	}
 
-	/** Number of arguments (including an implicit `this` for instance methods). */
+	/**
+		Number of arguments (including an implicit `this` for instance methods).
+	**/
 	public function argCount(fidx:Int):Int {
 		return switch (data.functions[fidx].t) {
 			case HFun(f): f.args.length;
@@ -175,7 +193,9 @@ class ModuleDebugInfo {
 		}
 	}
 
-	/** The destination register written by the opcode at `op`, or -1 if it writes none. */
+	/**
+		The destination register written by the opcode at `op`, or -1 if it writes none.
+	**/
 	public function dstRegister(fidx:Int, op:Int):Int {
 		var ops = data.functions[fidx].ops;
 		if (op < 0 || op >= ops.length) {
@@ -215,7 +235,9 @@ class ModuleDebugInfo {
 		}
 	}
 
-	/** Source line of a single opcode, or 0 when unknown. */
+	/**
+		Source line of a single opcode, or 0 when unknown.
+	**/
 	public function lineOf(fidx:Int, op:Int):Int {
 		if (fidx < 0 || fidx >= data.functions.length) {
 			return 0;
@@ -226,11 +248,11 @@ class ModuleDebugInfo {
 	}
 
 	/**
-	 * For a static call opcode (OCall0..4 / OCallN), the callee's function index
-	 * (the same index space JitInfo uses). Returns -1 for non-calls and for
-	 * dynamic/virtual/closure calls whose target isn't statically known, in which
-	 * case step-in falls back to step-over behaviour.
-	 */
+		For a static call opcode (OCall0..4 / OCallN), the callee's function index
+		(the same index space JitInfo uses). Returns -1 for non-calls and for
+		dynamic/virtual/closure calls whose target isn't statically known, in which
+		case step-in falls back to step-over behaviour.
+	**/
 	public function callTargetFunction(fidx:Int, op:Int):Int {
 		if (fidx < 0 || fidx >= data.functions.length) {
 			return -1;
@@ -254,10 +276,10 @@ class ModuleDebugInfo {
 	}
 
 	/**
-	 * Resolves a source breakpoint to bytecode locations, one per function that
-	 * has code on that line. When the exact line has no code, moves to the next
-	 * line with code in the same file (DAP allows this). Empty result = no code.
-	 */
+		Resolves a source breakpoint to bytecode locations, one per function that
+		has code on that line. When the exact line has no code, moves to the next
+		line with code in the same file (DAP allows this). Empty result = no code.
+	**/
 	public function resolveLine(file:String, line:Int):Array<{fidx:Int, op:Int, line:Int}> {
 		var fileMatches = matchingFileIndexes(file);
 		if (!fileMatches.keys().hasNext()) {
@@ -302,7 +324,9 @@ class ModuleDebugInfo {
 		return result;
 	}
 
-	/** Reverse mapping: bytecode location -> source (file, line). */
+	/**
+		Reverse mapping: bytecode location -> source (file, line).
+	**/
 	public function lookup(fidx:Int, op:Int):Null<SourceLine> {
 		if (fidx < 0 || fidx >= data.functions.length) {
 			return null;
@@ -322,16 +346,18 @@ class ModuleDebugInfo {
 		return {file: file, line: line};
 	}
 
-	/** The "Class.method" display name of a function by its (global) findex, or null. */
+	/**
+		The "Class.method" display name of a function by its (global) findex, or null.
+	**/
 	public function functionNameByFindex(findex:Int):Null<String> {
 		return namesByFindex.get(findex);
 	}
 
 	/**
-	 * The data.functions index (what JitInfo uses) of a function by qualified
-	 * name ("String.fromUTF8"), or -1 when unknown or the name maps to a native
-	 * (natives have no jitted body and cannot be called this way).
-	 */
+		The data.functions index (what JitInfo uses) of a function by qualified
+		name ("String.fromUTF8"), or -1 when unknown or the name maps to a native
+		(natives have no jitted body and cannot be called this way).
+	**/
 	public function functionIndexByName(name:String):Int {
 		var findex = findexByName.get(name);
 		if (findex == null) {
@@ -342,21 +368,21 @@ class ModuleDebugInfo {
 	}
 
 	/**
-	 * Maps a raw (global) findex — e.g. from a proto method entry — to the
-	 * position in `data.functions` that functionType/functionEntry expect, or
-	 * -1 for a native (no jitted body) or an unknown findex.
-	 */
+		Maps a raw (global) findex — e.g. from a proto method entry — to the
+		position in `data.functions` that functionType/functionEntry expect, or
+		-1 for a native (no jitted body) or an unknown findex.
+	**/
 	public function functionArrayIndex(findex:Int):Int {
 		var fidx = functionIndexByFindex.get(findex);
 		return fidx == null ? -1 : fidx;
 	}
 
 	/**
-	 * The findex of an imported C native by its name (e.g. "alloc_bytes"), or -1
-	 * when the program doesn't import it. Natives have no jitted body — this
-	 * findex is used to find a jitted CALL site to the native (see NativeResolver),
-	 * not as a callable index.
-	 */
+		The findex of an imported C native by its name (e.g. "alloc_bytes"), or -1
+		when the program doesn't import it. Natives have no jitted body — this
+		findex is used to find a jitted CALL site to the native (see NativeResolver),
+		not as a callable index.
+	**/
 	public function nativeFindexByName(name:String):Int {
 		for (n in data.natives) {
 			if (n.name == name) {
@@ -366,7 +392,9 @@ class ModuleDebugInfo {
 		return -1;
 	}
 
-	/** Best-effort display name ("Class.method") for a stack frame, else "fn@<findex>". */
+	/**
+		Best-effort display name ("Class.method") for a stack frame, else "fn@<findex>".
+	**/
 	public function functionName(fidx:Int):String {
 		if (fidx < 0 || fidx >= data.functions.length) {
 			return "?";
@@ -545,5 +573,7 @@ class ModuleDebugInfo {
 	}
 }
 
-/** A source position: the file path and 1-based line number. */
+/**
+	A source position: the file path and 1-based line number.
+**/
 typedef SourceLine = {file:String, line:Int}

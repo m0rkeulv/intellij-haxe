@@ -1,10 +1,10 @@
 /**
- * Object-expansion target for the variables tests: a Point(10, 20, "origin")
- * built in Main.inspectDemo is expanded field by field.
- *
- * WARNING: line numbers are load-bearing test constants
- * (FIXTURE_POINT_METHOD_LINE in DapIntegrationTestBase) — update together.
- */
+	Object-expansion target for the variables tests: a Point(10, 20, "origin")
+	built in Main.inspectDemo is expanded field by field.
+
+	WARNING: line numbers are load-bearing test constants
+	(FIXTURE_POINT_METHOD_LINE in DapIntegrationTestBase) — update together.
+**/
 class Point {
 	public var x:Int;
 	public var y:Int;

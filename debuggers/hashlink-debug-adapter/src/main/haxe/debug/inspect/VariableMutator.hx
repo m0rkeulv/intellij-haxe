@@ -16,18 +16,18 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
- * The value-modification path: DAP `setVariable` and `path = expr` in
- * evaluate. Resolves the target slot (via SymbolResolver), evaluates the RHS
- * (via ExpressionEvaluator), and writes it (via ValueWriter) while the debuggee
- * is stopped — to steer execution.
- *
- * Non-null `writer` gates every write (value modification is opt-in per
- * session). String/object RHS values are materialized/passed through by the
- * call service; primitives go straight to the writer. After a write to a
- * register-passed argument, the arrival-register fixup (`fixupAfterWrite`)
- * patches XMM0 for the first float arg (the only arrival register the debug
- * API exposes) and warns for the rest.
- */
+	The value-modification path: DAP `setVariable` and `path = expr` in
+	evaluate. Resolves the target slot (via SymbolResolver), evaluates the RHS
+	(via ExpressionEvaluator), and writes it (via ValueWriter) while the debuggee
+	is stopped — to steer execution.
+
+	Non-null `writer` gates every write (value modification is opt-in per
+	session). String/object RHS values are materialized/passed through by the
+	call service; primitives go straight to the writer. After a write to a
+	register-passed argument, the arrival-register fixup (`fixupAfterWrite`)
+	patches XMM0 for the first float arg (the only arrival register the debug
+	API exposes) and warns for the rest.
+**/
 class VariableMutator {
 	final resolver:SymbolResolver;
 	final evaluator:ExpressionEvaluator;
@@ -61,10 +61,10 @@ class VariableMutator {
 	}
 
 	/**
-	 * Sets a named child of a variablesReference (DAP `setVariable`) to any
-	 * evaluate expression (literal, another variable, arithmetic, a call), and
-	 * returns the child's new decoded value. Throws DebugError on any failure.
-	 */
+		Sets a named child of a variablesReference (DAP `setVariable`) to any
+		evaluate expression (literal, another variable, arithmetic, a call), and
+		returns the child's new decoded value. Throws DebugError on any failure.
+	**/
 	public function setVariable(reference:Int, name:String, valueExpr:String):VariableInfo {
 		var target = resolver.targetInReference(reference, name);
 		var v = evaluator.evalExpr(resolver.writeFrame, ExprParser.parse(StringTools.trim(valueExpr)));
@@ -75,9 +75,9 @@ class VariableMutator {
 	}
 
 	/**
-	 * `target = expr` from evaluate: the target is a variable path, an array
-	 * element (any Int key expression), or a map bracket (sugar for set).
-	 */
+		`target = expr` from evaluate: the target is a variable path, an array
+		element (any Int key expression), or a map bracket (sugar for set).
+	**/
 	public function assignExpr(frameId:Int, lhs:Expr, rhs:Expr):VariableInfo {
 		switch (lhs) {
 			case EIndex(recv, key):

@@ -33,15 +33,15 @@ import dap.protocol.responses.ThreadsResponseBody;
 import haxe.Json;
 
 /**
- * Translates incoming DAP requests into session commands and outgoing DAP
- * responses/events, and turns DebugEvents from the session back into responses
- * and events.
- *
- * Performs no I/O and owns the adapter-side `seq` counter. Requests handled on
- * the session thread get deferred responses: the command carries the request
- * seq, and the matching DebugEvent produces the response later (preserving
- * total ordering because only the single worker thread calls in here).
- */
+	Translates incoming DAP requests into session commands and outgoing DAP
+	responses/events, and turns DebugEvents from the session back into responses
+	and events.
+
+	Performs no I/O and owns the adapter-side `seq` counter. Requests handled on
+	the session thread get deferred responses: the command carries the request
+	seq, and the matching DebugEvent produces the response later (preserving
+	total ordering because only the single worker thread calls in here).
+**/
 class RequestDispatcher {
 	static inline var ERROR_UNRECOGNIZED_COMMAND = 1000;
 	static inline var ERROR_INVALID_REQUEST = 1001;
@@ -61,7 +61,9 @@ class RequestDispatcher {
 	// breakpoints requested before launch, replayed for re-verification afterwards
 	final preLaunchBreakpoints:Array<{sourceKey:String, sourcePath:String, requested:Array<RequestedBreakpoint>}> = [];
 
-	/** Set once the session has ended (or disconnect handled without a session). */
+	/**
+		Set once the session has ended (or disconnect handled without a session).
+	**/
 	public var shutdownRequested(default, null):Bool = false;
 
 	public function new(sink:ProtocolMessage->Void, sessionCommands:SessionCommand->Void) {
@@ -69,7 +71,9 @@ class RequestDispatcher {
 		this.sessionCommands = sessionCommands;
 	}
 
-	/** Parses one frame payload and dispatches it. Never throws on bad input. */
+	/**
+		Parses one frame payload and dispatches it. Never throws on bad input.
+	**/
 	public function handleRawPayload(payload:String):Void {
 		var parsed:Dynamic;
 		try {
@@ -81,7 +85,9 @@ class RequestDispatcher {
 		handleRequest(parsed);
 	}
 
-	/** Dispatches an already-parsed message. */
+	/**
+		Dispatches an already-parsed message.
+	**/
 	public function handleRequest(message:Dynamic):Void {
 		var seq = readInt(message, "seq");
 		var type = readString(message, "type");

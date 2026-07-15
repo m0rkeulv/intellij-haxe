@@ -8,14 +8,14 @@ import debug.values.VariableInfo;
 import haxe.Int64;
 
 /**
- * Reads the architecture-neutral CPU register subset (SP/BP/IP/FLAGS) of a
- * SUSPENDED thread and formats it as DAP variable rows for the Registers scope.
- *
- * Only these four indexes are portable across the platforms we target — see
- * Register; the rest silently alias RAX on Windows. Register reads only make
- * sense while the thread is stopped, so callers must guard on that (a read of a
- * running thread would fault or return garbage, which the try/catch swallows).
- */
+	Reads the architecture-neutral CPU register subset (SP/BP/IP/FLAGS) of a
+	SUSPENDED thread and formats it as DAP variable rows for the Registers scope.
+
+	Only these four indexes are portable across the platforms we target — see
+	Register; the rest silently alias RAX on Windows. Register reads only make
+	sense while the thread is stopped, so callers must guard on that (a read of a
+	running thread would fault or return garbage, which the try/catch swallows).
+**/
 class CpuRegisters {
 	final api:DebugApi;
 	final pid:Int;
@@ -25,7 +25,9 @@ class CpuRegisters {
 		this.pid = pid;
 	}
 
-	/** SP/BP/IP/FLAGS of `threadId` as CPU rows ([] if the read fails). */
+	/**
+		SP/BP/IP/FLAGS of `threadId` as CPU rows ([] if the read fails).
+	**/
 	public function rows(threadId:Int):Array<VariableInfo> {
 		var rows:Array<VariableInfo> = [];
 		try {

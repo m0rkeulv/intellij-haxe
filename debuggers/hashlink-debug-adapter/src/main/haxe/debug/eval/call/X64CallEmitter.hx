@@ -7,22 +7,22 @@ import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
 
 /**
- * Emits a self-contained x86-64 machine-code trampoline that calls a function
- * in the debuggee and traps (INT3) on return — a port of the assembly in
- * vshaxe/hashlink-debugger `hld/Eval.evalCall` (the 32-bit cdecl counterpart is
- * {@link X86CallEmitter}). The trampoline is written OVER the code at the
- * stopped thread's instruction pointer (which is guaranteed executable); the
- * caller saves and restores the original bytes.
- *
- * We cannot write the argument registers from outside (the debug native only
- * exposes Esp/Eip/Rax), so the trampoline loads them itself: it saves the
- * scratch/argument registers, moves each argument into its calling-convention
- * register, `mov rax, <addr>` / `call rax`, captures the return (RAX, or XMM0
- * copied to RAX for a float return), restores the saved registers, and `int3`.
- *
- * 64-bit only, like hld (the 32-bit cdecl trampoline is {@link X86CallEmitter}).
- * Pure and unit-tested against exact byte sequences.
- */
+	Emits a self-contained x86-64 machine-code trampoline that calls a function
+	in the debuggee and traps (INT3) on return — a port of the assembly in
+	vshaxe/hashlink-debugger `hld/Eval.evalCall` (the 32-bit cdecl counterpart is
+	`X86CallEmitter`). The trampoline is written OVER the code at the
+	stopped thread's instruction pointer (which is guaranteed executable); the
+	caller saves and restores the original bytes.
+
+	We cannot write the argument registers from outside (the debug native only
+	exposes Esp/Eip/Rax), so the trampoline loads them itself: it saves the
+	scratch/argument registers, moves each argument into its calling-convention
+	register, `mov rax, <addr>` / `call rax`, captures the return (RAX, or XMM0
+	copied to RAX for a float return), restores the saved registers, and `int3`.
+
+	64-bit only, like hld (the 32-bit cdecl trampoline is `X86CallEmitter`).
+	Pure and unit-tested against exact byte sequences.
+**/
 class X64CallEmitter implements CallTrampoline {
 	// x86-64 register encodings (hardware numbers).
 	static inline var RAX = 0;
@@ -45,18 +45,20 @@ class X64CallEmitter implements CallTrampoline {
 		scratch = winCall ? [RCX, RDX, R8, R9, R10, R11] : [RDI, RSI, RDX, RCX, R8, R9, R10, R11];
 	}
 
-	/** The number of arguments the register-only calling path supports. */
+	/**
+		The number of arguments the register-only calling path supports.
+	**/
 	public function maxArgs():Int {
 		return winCall ? 4 : 6; // win64: 4 positional; SysV: 6 int / (8 float, capped here)
 	}
 
 	/**
-	 * The trampoline bytes for calling `funcAddr` with `args` (already lowered
-	 * to raw 64-bit register values), capturing a float return through XMM0
-	 * when `floatBits` is nonzero (both widths sit in XMM0's low bits, so 32 and
-	 * 64 are handled identically here). Throws when an argument cannot be placed
-	 * in a register (no stack-argument support yet).
-	 */
+		The trampoline bytes for calling `funcAddr` with `args` (already lowered
+		to raw 64-bit register values), capturing a float return through XMM0
+		when `floatBits` is nonzero (both widths sit in XMM0's low bits, so 32 and
+		64 are handled identically here). Throws when an argument cannot be placed
+		in a register (no stack-argument support yet).
+	**/
 	public function build(funcAddr:Int64, args:Array<CallArg>, floatBits:Int):Bytes {
 		var out = new BytesBuffer();
 		// save the scratch registers (both the integer reg and its XMM peer)
@@ -233,5 +235,7 @@ class X64CallEmitter implements CallTrampoline {
 	}
 }
 
-/** Where an argument goes: the target register, and whether it's an XMM (float) register. */
+/**
+	Where an argument goes: the target register, and whether it's an XMM (float) register.
+**/
 typedef ArgRegister = {reg:Int, xmm:Bool}

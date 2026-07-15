@@ -7,10 +7,10 @@ import haxe.Int64;
 import haxe.io.Bytes;
 
 /**
- * In-memory DebugApi for unit tests: models the debuggee's memory as a byte
- * map and its registers as a per-thread map, with a scripted queue of wait
- * outcomes. No OS, no threads — usable under the Haxe interpreter.
- */
+	In-memory DebugApi for unit tests: models the debuggee's memory as a byte
+	map and its registers as a per-thread map, with a scripted queue of wait
+	outcomes. No OS, no threads — usable under the Haxe interpreter.
+**/
 class FakeDebugApi implements DebugApi {
 	public var started(default, null):Bool = false;
 	public var stopped(default, null):Bool = false;

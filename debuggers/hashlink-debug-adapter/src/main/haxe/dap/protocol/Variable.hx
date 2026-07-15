@@ -1,9 +1,9 @@
 package dap.protocol;
 
 /**
- * One variable in a "variables" response. `variablesReference` > 0 marks an
- * expandable value (object/array); 0 means a leaf.
- */
+	One variable in a "variables" response. `variablesReference` > 0 marks an
+	expandable value (object/array); 0 means a leaf.
+**/
 typedef Variable = {
 	var name:String;
 	var value:String;

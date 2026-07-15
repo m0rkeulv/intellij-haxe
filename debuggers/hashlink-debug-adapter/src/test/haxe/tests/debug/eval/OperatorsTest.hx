@@ -4,7 +4,9 @@ import debug.eval.EvalValue;
 import debug.eval.Operators;
 import haxe.Int64;
 
-/** Pure operator-fold tests: Haxe semantics over EvalValue. */
+/**
+	Pure operator-fold tests: Haxe semantics over EvalValue.
+**/
 class OperatorsTest {
 	public static function run(assert:Assert):Void {
 		inline function i(v:Int):EvalValue

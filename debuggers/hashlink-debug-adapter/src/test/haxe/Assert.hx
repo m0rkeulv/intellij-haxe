@@ -1,7 +1,7 @@
 /**
- * Minimal assertion collector for the adapter test suite.
- * Kept dependency-free on purpose: no haxelib install is needed to run the tests.
- */
+	Minimal assertion collector for the adapter test suite.
+	Kept dependency-free on purpose: no haxelib install is needed to run the tests.
+**/
 class Assert {
 	public var failures(default, null):Int = 0;
 	public var checks(default, null):Int = 0;

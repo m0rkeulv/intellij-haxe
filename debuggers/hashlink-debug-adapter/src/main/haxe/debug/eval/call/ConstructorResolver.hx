@@ -10,43 +10,45 @@ import format.hl.Data.Opcode;
 import haxe.Int64;
 
 /**
- * Resolves everything needed to construct `new SomeClass(args)` in the debuggee.
- *
- * ================================ HACK ================================
- * There is NO clean, supported way to reach HashLink's object allocator
- * (`hl_alloc_obj`) or a class's runtime `hl_type*` from the debug handshake:
- * the handshake only exposes addresses for *bytecode* functions, and
- * `hl_alloc_obj` is a C runtime native with no findex. So we recover them by
- * DISASSEMBLING the machine code the JIT emits for an `ONew` opcode.
- *
- * Every `new` in Haxe compiles to `ONew dst` (allocate) followed by a call to
- * the constructor. For an HOBJ/HSTRUCT, `ONew` is lowered (hashlink `jit.c`,
- * `ONew` -> `call_native_consts(hl_alloc_obj, {dst->t}, 1)`) to a fixed
- * set-argument-then-call sequence — the class type pointer into arg0, then
- * `mov (r/e)ax, <hl_alloc_obj> ; call`:
- *
- *   x86-64:  48 B9/BF <typePtr:8>   mov rcx/rdi, <class hl_type*>  (win64/SysV arg0)
- *            48 B8 <allocFn:8>      mov rax, <hl_alloc_obj>
- *            FF D0                  call rax
- *   x86:     68 <typePtr:4>         push <class hl_type*>          (cdecl arg0)
- *            B8 <allocFn:4>         mov eax, <hl_alloc_obj>
- *            FF D0                  call eax
- *
- * We scan an `ONew` site for that sequence (MachineCode.mineArgThenCall picks
- * the arch form) and read the type pointer and allocator address. The
- * constructor's findex comes from the `OCall*` that follows, whose first
- * argument is the freshly allocated register. A single `ONew SomeClass` site
- * therefore yields everything to construct that class — and it only exists when
- * the program actually constructs the class, which is exactly the DCE-limited
- * scope we accept (a class the program never `new`s cannot be constructed, and
- * its constructor may have been stripped anyway).
- *
- * This is FRAGILE: it depends on the exact instruction selection of the
- * HashLink JIT. If the pattern is ever not found the feature reports itself
- * unavailable (see VariableInspector) rather than guessing — construction is
- * explicitly experimental.
- * =====================================================================
- */
+	Resolves everything needed to construct `new SomeClass(args)` in the debuggee.
+
+	================================ HACK ================================
+	There is NO clean, supported way to reach HashLink's object allocator
+	(`hl_alloc_obj`) or a class's runtime `hl_type*` from the debug handshake:
+	the handshake only exposes addresses for *bytecode* functions, and
+	`hl_alloc_obj` is a C runtime native with no findex. So we recover them by
+	DISASSEMBLING the machine code the JIT emits for an `ONew` opcode.
+
+	Every `new` in Haxe compiles to `ONew dst` (allocate) followed by a call to
+	the constructor. For an HOBJ/HSTRUCT, `ONew` is lowered (hashlink `jit.c`,
+	`ONew` -> `call_native_consts(hl_alloc_obj, {dst->t}, 1)`) to a fixed
+	set-argument-then-call sequence — the class type pointer into arg0, then
+	`mov (r/e)ax, <hl_alloc_obj> ; call`:
+
+	```
+	x86-64:  48 B9/BF <typePtr:8>   mov rcx/rdi, <class hl_type*>  (win64/SysV arg0)
+	         48 B8 <allocFn:8>      mov rax, <hl_alloc_obj>
+	         FF D0                  call rax
+	x86:     68 <typePtr:4>         push <class hl_type*>          (cdecl arg0)
+	         B8 <allocFn:4>         mov eax, <hl_alloc_obj>
+	         FF D0                  call eax
+	```
+
+	We scan an `ONew` site for that sequence (MachineCode.mineArgThenCall picks
+	the arch form) and read the type pointer and allocator address. The
+	constructor's findex comes from the `OCall*` that follows, whose first
+	argument is the freshly allocated register. A single `ONew SomeClass` site
+	therefore yields everything to construct that class — and it only exists when
+	the program actually constructs the class, which is exactly the DCE-limited
+	scope we accept (a class the program never `new`s cannot be constructed, and
+	its constructor may have been stripped anyway).
+
+	This is FRAGILE: it depends on the exact instruction selection of the
+	HashLink JIT. If the pattern is ever not found the feature reports itself
+	unavailable (see VariableInspector) rather than guessing — construction is
+	explicitly experimental.
+	=====================================================================
+**/
 class ConstructorResolver {
 	final module:ModuleDebugInfo;
 	final jit:JitInfo;
@@ -64,10 +66,10 @@ class ConstructorResolver {
 	}
 
 	/**
-	 * The construction recipe for `className`, or null when the program never
-	 * constructs it (so we have no ONew site to mine) or the machine-code
-	 * pattern is absent (non-x86-64 / a JIT we don't recognise).
-	 */
+		The construction recipe for `className`, or null when the program never
+		constructs it (so we have no ONew site to mine) or the machine-code
+		pattern is absent (non-x86-64 / a JIT we don't recognise).
+	**/
 	public function resolve(className:String):Null<ConstructorSite> {
 		if (cache.exists(className)) {
 			return cache.get(className);

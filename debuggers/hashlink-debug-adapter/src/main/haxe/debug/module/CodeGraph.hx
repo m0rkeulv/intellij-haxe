@@ -3,20 +3,20 @@ package debug.module;
 import format.hl.Data.Opcode;
 
 /**
- * Control-flow graph over one HashLink function's opcodes, used to compute where
- * a source-level step should plant temporary breakpoints.
- *
- * Successor arithmetic (verified against hashlink and vshaxe/hashlink-debugger):
- * a jump's target opcode is `opIndex + 1 + offset`. Returns are terminal; a
- * throw inside a `try` transfers to the enclosing OTrap's catch handler (the VM
- * longjmps there — it does NOT leave the function), so its successors are the
- * enclosing handlers and it is terminal only when unguarded. Successor sets are
- * deliberately over-approximated (an unreachable target only costs a temporary
- * breakpoint that is cleaned up), never under-approximated.
- *
- * Pure and dependency-light: operates on an opcode array plus a `lineOf` callback,
- * so it is exercised with synthetic opcodes under the interpreter.
- */
+	Control-flow graph over one HashLink function's opcodes, used to compute where
+	a source-level step should plant temporary breakpoints.
+
+	Successor arithmetic (verified against hashlink and vshaxe/hashlink-debugger):
+	a jump's target opcode is `opIndex + 1 + offset`. Returns are terminal; a
+	throw inside a `try` transfers to the enclosing OTrap's catch handler (the VM
+	longjmps there — it does NOT leave the function), so its successors are the
+	enclosing handlers and it is terminal only when unguarded. Successor sets are
+	deliberately over-approximated (an unreachable target only costs a temporary
+	breakpoint that is cleaned up), never under-approximated.
+
+	Pure and dependency-light: operates on an opcode array plus a `lineOf` callback,
+	so it is exercised with synthetic opcodes under the interpreter.
+**/
 class CodeGraph {
 	final ops:Array<Opcode>;
 	// OTrap protection ranges (same derivation as TryRegions): OTrap at `start`
@@ -32,7 +32,9 @@ class CodeGraph {
 		return ops.length;
 	}
 
-	/** Opcode indices that may execute immediately after opcode `op`. */
+	/**
+		Opcode indices that may execute immediately after opcode `op`.
+	**/
 	public function successors(op:Int):Array<Int> {
 		if (op < 0 || op >= ops.length) {
 			return [];
@@ -67,7 +69,9 @@ class CodeGraph {
 		return [for (t in result) if (t >= 0 && t < ops.length) t];
 	}
 
-	/** True if opcode `op` invokes another function (a step-in candidate). */
+	/**
+		True if opcode `op` invokes another function (a step-in candidate).
+	**/
 	public function isCall(op:Int):Bool {
 		if (op < 0 || op >= ops.length) {
 			return false;
@@ -82,7 +86,9 @@ class CodeGraph {
 		}
 	}
 
-	/** True if opcode `op` ends the function (a return, or an UNguarded throw). */
+	/**
+		True if opcode `op` ends the function (a return, or an UNguarded throw).
+	**/
 	public function isTerminal(op:Int):Bool {
 		if (op < 0 || op >= ops.length) {
 			return false;
@@ -112,11 +118,11 @@ class CodeGraph {
 	}
 
 	/**
-	 * Walks the CFG from `startOp` collecting step targets. `lineOf(op)` gives the
-	 * source line of an opcode (0/negative = unknown). The walk stops expanding at
-	 * any opcode whose known line differs from `startLine` (that opcode is a
-	 * line-change target) and at terminals; it is guarded against loops.
-	 */
+		Walks the CFG from `startOp` collecting step targets. `lineOf(op)` gives the
+		source line of an opcode (0/negative = unknown). The walk stops expanding at
+		any opcode whose known line differs from `startLine` (that opcode is a
+		line-change target) and at terminals; it is guarded against loops.
+	**/
 	public function stepTargets(startOp:Int, startLine:Int, lineOf:Int->Int):StepTargets {
 		var lineChangeOps:Array<Int> = [];
 		var callOps:Array<Int> = [];

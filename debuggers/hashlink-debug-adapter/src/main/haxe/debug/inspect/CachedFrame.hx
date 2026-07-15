@@ -2,7 +2,9 @@ package debug.inspect;
 
 import debug.target.StackFrameLocation;
 
-/** A walked stack frame plus the globally-unique id the client refers to it by. */
+/**
+	A walked stack frame plus the globally-unique id the client refers to it by.
+**/
 typedef CachedFrame = {
 	var frameId:Int;
 	var threadId:Int;

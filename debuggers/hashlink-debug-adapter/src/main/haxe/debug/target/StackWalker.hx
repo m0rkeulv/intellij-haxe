@@ -8,15 +8,15 @@ import haxe.Int64;
 import haxe.io.Bytes;
 
 /**
- * Reconstructs the call stack of a stopped thread by following the frame-pointer
- * (RBP) chain: the current RIP is the innermost frame, then each saved
- * [RBP] -> caller RBP and [RBP + ptrSize] -> return address gives the next
- * frame, until a return address falls outside JIT code or the depth cap is hit.
- *
- * Only reads memory/registers through DebugApi and resolves addresses through
- * JitInfo, so it is unit-testable with a fake API and a synthetic JitInfo.
- * Returns bytecode coordinates; source mapping is applied by the caller.
- */
+	Reconstructs the call stack of a stopped thread by following the frame-pointer
+	(RBP) chain: the current RIP is the innermost frame, then each saved
+	[RBP] -> caller RBP and [RBP + ptrSize] -> return address gives the next
+	frame, until a return address falls outside JIT code or the depth cap is hit.
+
+	Only reads memory/registers through DebugApi and resolves addresses through
+	JitInfo, so it is unit-testable with a fake API and a synthetic JitInfo.
+	Returns bytecode coordinates; source mapping is applied by the caller.
+**/
 class StackWalker {
 	static inline var MAX_FRAMES = 64;
 
@@ -76,15 +76,15 @@ class StackWalker {
 	}
 
 	/**
-	 * Seeds the walk when the thread is stopped at a C function's ENTRY (before
-	 * its prologue ran, so RBP is still the caller's). Finds the first return
-	 * address that lands in JIT code — the throwing Haxe frame — pushes it, and
-	 * returns the RBP the outer walk should continue from (that frame's base).
-	 *
-	 * At a C entry the immediate caller's resume address is at [Esp] and its
-	 * frame base is the current RBP; each further C frame is unwound through its
-	 * RBP chain. Returns 0 (walk stops) when no JIT frame is found.
-	 */
+		Seeds the walk when the thread is stopped at a C function's ENTRY (before
+		its prologue ran, so RBP is still the caller's). Finds the first return
+		address that lands in JIT code — the throwing Haxe frame — pushes it, and
+		returns the RBP the outer walk should continue from (that frame's base).
+
+		At a C entry the immediate caller's resume address is at [Esp] and its
+		frame base is the current RBP; each further C frame is unwound through its
+		RBP chain. Returns 0 (walk stops) when no JIT frame is found.
+	**/
 	function seedFromCEntry(threadId:Int, ebp:Pointer, frames:Array<StackFrameLocation>):Pointer {
 		var esp = api.readRegister(pid, threadId, Esp);
 		var returnAddress = readPointer(esp); // the immediate caller's resume address

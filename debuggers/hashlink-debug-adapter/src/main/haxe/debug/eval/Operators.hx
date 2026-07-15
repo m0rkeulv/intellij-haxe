@@ -6,19 +6,19 @@ import debug.values.ValueReader;
 import haxe.Int64;
 
 /**
- * Pure adapter-side operator folding over EvalValue — Haxe semantics:
- *
- * - `/` is ALWAYS Float (like Haxe, unlike C).
- * - `+` concatenates when either side is a String (numbers/bools/null are
- *   stringified; raw objects refuse — we won't silently call toString).
- * - `%` and the other arithmetic ops stay Int when both sides are Int.
- * - bitwise ops and shifts use 32-bit Int semantics (HL's Int is 32-bit).
- * - `==`/`!=` compare strings by CONTENT, objects by pointer; mismatched
- *   kinds are simply not equal (never an error).
- * - `< <= > >=` work on numbers and on strings (lexicographic).
- *
- * `&&`/`||` are NOT here: they short-circuit in the interpreter.
- */
+	Pure adapter-side operator folding over EvalValue — Haxe semantics:
+
+	- `/` is ALWAYS Float (like Haxe, unlike C).
+	- `+` concatenates when either side is a String (numbers/bools/null are
+	  stringified; raw objects refuse — we won't silently call toString).
+	- `%` and the other arithmetic ops stay Int when both sides are Int.
+	- bitwise ops and shifts use 32-bit Int semantics (HL's Int is 32-bit).
+	- `==`/`!=` compare strings by CONTENT, objects by pointer; mismatched
+	  kinds are simply not equal (never an error).
+	- `< <= > >=` work on numbers and on strings (lexicographic).
+
+	`&&`/`||` are NOT here: they short-circuit in the interpreter.
+**/
 class Operators {
 	public static function binop(op:String, a:EvalValue, b:EvalValue):EvalValue {
 		return switch (op) {
@@ -57,7 +57,9 @@ class Operators {
 		}
 	}
 
-	/** Bool coercion for logical operators and conditions. */
+	/**
+		Bool coercion for logical operators and conditions.
+	**/
 	public static function asBool(v:EvalValue, op:String):Bool {
 		return switch (v) {
 			case VBool(b): b;
@@ -65,7 +67,9 @@ class Operators {
 		}
 	}
 
-	/** Haxe-ish Std.string for concat results and messages. */
+	/**
+		Haxe-ish Std.string for concat results and messages.
+	**/
 	public static function stringify(v:EvalValue):String {
 		return switch (v) {
 			case VInt(i): Int64.toStr(i);
