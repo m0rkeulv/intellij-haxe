@@ -8,6 +8,8 @@ import debug.Trace;
 import dap.protocol.Breakpoint;
 
 import debug.DebugError;
+import debug.breakpoints.Breakpoints;
+import debug.breakpoints.PatchedBreakpoint;
 import debug.Pointer;
 import debug.layout.Align;
 import debug.module.ExceptionSites;

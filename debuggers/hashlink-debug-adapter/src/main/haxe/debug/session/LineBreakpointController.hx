@@ -1,6 +1,10 @@
 package debug.session;
 
 import debug.DebugError;
+import debug.breakpoints.BreakpointPlanner;
+import debug.breakpoints.BreakpointResult;
+import debug.breakpoints.PatchedBreakpoint;
+import debug.breakpoints.RequestedBreakpoint;
 
 /**
 	Source line breakpoints: resolving and installing setBreakpoints requests,

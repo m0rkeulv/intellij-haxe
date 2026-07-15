@@ -1,7 +1,7 @@
-package tests.debug.session;
+package tests.debug.breakpoints;
 
 import debug.Pointer;
-import debug.session.Breakpoints;
+import debug.breakpoints.Breakpoints;
 
 import haxe.Int64;
 

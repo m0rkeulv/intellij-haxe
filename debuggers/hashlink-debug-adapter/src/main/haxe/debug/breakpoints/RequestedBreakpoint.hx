@@ -1,4 +1,4 @@
-package debug.session;
+package debug.breakpoints;
 
 /**
 	A breakpoint the client asked for: the source line, the id the adapter

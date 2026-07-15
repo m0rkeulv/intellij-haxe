@@ -1,6 +1,6 @@
 package tests.adapter;
 
-import debug.session.BreakpointResult;
+import debug.breakpoints.BreakpointResult;
 import debug.session.FrameInfo;
 import debug.session.SessionCommand;
 

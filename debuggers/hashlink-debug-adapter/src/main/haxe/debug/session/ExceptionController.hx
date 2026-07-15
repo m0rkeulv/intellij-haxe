@@ -1,6 +1,7 @@
 package debug.session;
 
 import debug.Pointer;
+import debug.breakpoints.PatchedBreakpoint;
 import debug.target.StackFrameLocation;
 
 /**

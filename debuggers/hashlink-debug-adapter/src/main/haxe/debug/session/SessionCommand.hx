@@ -1,5 +1,7 @@
 package debug.session;
 
+import debug.breakpoints.RequestedBreakpoint;
+
 /**
 	A command handed to the DebugSession thread. `requestSeq` echoes the DAP
 	request that triggered it so the completion event can be turned back into

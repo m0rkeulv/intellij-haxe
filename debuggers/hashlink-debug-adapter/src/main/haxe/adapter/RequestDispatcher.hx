@@ -1,11 +1,11 @@
 package adapter;
 import debug.target.ThreadInfo;
 
-import debug.session.BreakpointResult;
+import debug.breakpoints.BreakpointResult;
 import debug.session.DebugEvent;
 import debug.session.FrameInfo;
 import debug.session.LaunchConfig;
-import debug.session.RequestedBreakpoint;
+import debug.breakpoints.RequestedBreakpoint;
 import debug.inspect.ScopeInfo;
 import debug.session.SessionCommand;
 import debug.session.StepMode;

@@ -1,6 +1,7 @@
 package debug.session;
 
 import debug.DebugError;
+import debug.breakpoints.Breakpoints;
 import debug.Pointer;
 import debug.eval.call.CallArg;
 import debug.eval.call.CallTrampoline;

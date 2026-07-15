@@ -1,4 +1,4 @@
-package debug.session;
+package debug.breakpoints;
 
 /**
 	The adapter's verdict on a requested breakpoint, echoed back to the client.

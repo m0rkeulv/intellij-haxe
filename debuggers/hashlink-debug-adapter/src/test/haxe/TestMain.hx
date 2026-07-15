@@ -20,7 +20,7 @@ class TestMain {
 			{name: "LocalScopesTest", run: tests.debug.module.LocalScopesTest.run},
 			{name: "LocalsResolverTest", run: tests.debug.module.LocalsResolverTest.run},
 			// target control
-			{name: "BreakpointsTest", run: tests.debug.session.BreakpointsTest.run},
+			{name: "BreakpointsTest", run: tests.debug.breakpoints.BreakpointsTest.run},
 			{name: "StackWalkerTest", run: tests.debug.target.StackWalkerTest.run},
 			{name: "ThreadRegistryTest", run: tests.debug.target.ThreadRegistryTest.run},
 			// memory layout

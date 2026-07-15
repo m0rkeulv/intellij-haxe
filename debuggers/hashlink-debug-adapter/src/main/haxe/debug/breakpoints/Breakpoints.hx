@@ -1,4 +1,4 @@
-package debug.session;
+package debug.breakpoints;
 
 import debug.Pointer;
 import debug.module.ExceptionSites.ThrowSite;

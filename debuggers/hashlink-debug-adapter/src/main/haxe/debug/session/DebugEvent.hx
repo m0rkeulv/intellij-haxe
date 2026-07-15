@@ -1,5 +1,6 @@
 package debug.session;
 import debug.DebugErrorCode;
+import debug.breakpoints.BreakpointResult;
 import debug.target.ThreadInfo;
 import debug.inspect.ScopeInfo;
 
