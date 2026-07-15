@@ -5,6 +5,8 @@ import com.intellij.execution.configurations.ConfigurationType;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
+import icons.HaxeIcons;
+import javax.swing.Icon;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 
@@ -24,6 +26,11 @@ public class HxcppConfigurationFactory extends ConfigurationFactory {
   @NotNull
   public String getName() {
     return HaxeBundle.message("hxcpp.runner.configuration.name");
+  }
+
+  @Override
+  public Icon getIcon() {
+    return HaxeIcons.VSHAXE;
   }
 
   @Override
