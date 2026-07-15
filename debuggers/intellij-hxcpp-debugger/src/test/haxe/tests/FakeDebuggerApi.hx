@@ -32,7 +32,7 @@ class FakeDebuggerApi implements DebuggerApi {
 		return cannedThreads;
 	}
 
-public function continueThreads(threadNumber:Int, count:Int):Void {
+	public function continueThreads(threadNumber:Int, count:Int):Void {
 		continueCalls.push({threadNumber: threadNumber, count: count});
 	}
 
@@ -40,6 +40,12 @@ public function continueThreads(threadNumber:Int, count:Int):Void {
 
 	public function breakNow(wait:Bool):Void {
 		breakNowCalls++;
+	}
+
+	public var stepCalls:Array<{threadNumber:Int, stepType:Int}> = [];
+
+	public function stepThread(threadNumber:Int, stepType:Int):Void {
+		stepCalls.push({threadNumber: threadNumber, stepType: stepType});
 	}
 
 	// breakpoint engine: canned file tables, recorded installs, monotonic numbers

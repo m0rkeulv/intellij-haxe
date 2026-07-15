@@ -35,11 +35,23 @@ class NativeDebuggerApi implements DebuggerApi {
 				} else if (event == Debugger.THREAD_STARTED) {
 					handler(ThreadStarted(threadNumber));
 				} else if (event == Debugger.THREAD_STOPPED) {
+					// Capture the thread here (safe read on the stopped thread):
+					// status, hit breakpoint, and the stack. The captured stack has
+					// THIS handler's own frames on top (getThreadInfo, the closure);
+					// trim everything above the reported stop — the innermost user
+					// frame — leaving a clean user stack (innermost last).
 					var info = Debugger.getThreadInfo(threadNumber, false);
-					var stop = {status: info != null ? info.status : DebugThread.STATUS_RUNNING,
-						breakpoint: info != null ? info.breakpoint : -1};
-					handler(ThreadStopped(threadNumber, stop,
-						new DebugStackFrame(fileName, lineNumber, className, functionName)));
+					if (info != null) {
+						var stack = info.stack;
+						var end = stack.length;
+						for (i in 0...stack.length) {
+							var f = stack[i];
+							if (f.fileName == fileName && f.lineNumber == lineNumber && f.functionName == functionName) {
+								end = i + 1; // last match = the innermost user frame
+							}
+						}
+						handler(ThreadStopped(threadNumber, info.status, info.breakpoint, stack.slice(0, end)));
+					}
 				}
 			});
 	}
@@ -54,6 +66,10 @@ public function continueThreads(threadNumber:Int, count:Int):Void {
 
 	public function breakNow(wait:Bool):Void {
 		Debugger.breakNow(wait);
+	}
+
+	public function stepThread(threadNumber:Int, stepType:Int):Void {
+		Debugger.stepThread(threadNumber, stepType, 1);
 	}
 
 	public function files():Array<String> {

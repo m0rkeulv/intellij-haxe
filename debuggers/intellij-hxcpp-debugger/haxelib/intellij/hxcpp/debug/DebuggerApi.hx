@@ -35,11 +35,14 @@ interface DebuggerApi {
 	/** All live threads with their current status and stacks. */
 	function threads():Array<DebugThread>;
 
-/** Resumes `threadNumber` (-1 = all) `count` times. */
+	/** Resumes `threadNumber` (-1 = all) `count` times. */
 	function continueThreads(threadNumber:Int, count:Int):Void;
 
 	/** Stops all debuggable threads now; `wait` blocks until they are stopped. */
 	function breakNow(wait:Bool):Void;
+
+	/** Steps `threadNumber` once (a StepType.* value); resumes on completion. */
+	function stepThread(threadNumber:Int, stepType:Int):Void;
 
 	/**
 		The runtime's source file names as they appear in stack positions (e.g.
@@ -61,19 +64,23 @@ interface DebuggerApi {
 	function deleteBreakpoint(number:Int):Void;
 }
 
-/** Why a thread is stopped: its STATUS_* and, for a breakpoint, its number. */
-typedef StopInfo = {
-	var status:Int;
-	var breakpoint:Int; // runtime breakpoint number, or -1
-}
-
 /** A runtime notification, re-delivered on the server thread. */
 enum DebugEvent {
 	ThreadCreated(threadNumber:Int);
 	ThreadTerminated(threadNumber:Int);
 	ThreadStarted(threadNumber:Int);
-	// `stop` explains WHY (status + hit breakpoint number)
-	ThreadStopped(threadNumber:Int, stop:StopInfo, frame:Null<DebugStackFrame>);
+	// Captured ON THE STOPPING THREAD (status, hit breakpoint number, and the
+	// stack — already trimmed of the debugger's own frames), so the server
+	// thread reports the stop and serves stackTrace without a cross-thread
+	// getThreadInfo race. The stack is innermost-LAST.
+	ThreadStopped(threadNumber:Int, status:Int, breakpoint:Int, stack:Array<DebugStackFrame>);
+}
+
+/** The STEP_* constants mirror cpp.vm.Debugger. */
+class StepType {
+	public static inline var INTO = 1;
+	public static inline var OVER = 2;
+	public static inline var OUT = 3;
 }
 
 // The std debugger data types on cpp; API-identical stubs (one type per file,

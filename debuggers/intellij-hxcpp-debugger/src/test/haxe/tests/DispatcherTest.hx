@@ -16,6 +16,102 @@ class DispatcherTest {
 		aBreakpointStopCarriesTheHitId(assert);
 		continueResumesAllThreads(assert);
 		eventsBeforeInitializeAreBufferedThenFlushed(assert);
+		pauseBreaksTheWorld(assert);
+		stepIssuesTheRightStepTypeAndReportsStep(assert);
+		aStepThatKeepsTheSameLineReSteps(assert);
+		stackTraceReportsFramesNewestFirst(assert);
+		aBreakpointHitMidStepWinsOverTheStep(assert);
+	}
+
+	// A ThreadStopped event with an optional single-frame stack.
+	static function stop(number:Int, status:Int, breakpoint:Int = -1, ?file:String, ?line:Int):DebugEvent {
+		var stack:Array<DebugStackFrame> = [];
+		if (file != null) {
+			stack.push(new DebugStackFrame(file, line != null ? line : 0, "Main", "fn"));
+		}
+		return ThreadStopped(number, status, breakpoint, stack);
+	}
+
+	static function pauseBreaksTheWorld(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.dispatcher.handleRequest(request("pause", 3));
+		assert.isTrue(t.sent[0].success, "pause acked");
+		assert.equals(1, t.api.breakNowCalls, "breakNow called");
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 5));
+		assert.equals("pause", t.sent[1].body.reason, "an immediate break with no step in flight is a pause");
+	}
+
+	static function stepIssuesTheRightStepTypeAndReportsStep(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		// prime a current stop so the step has a "from" line
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, -1, "Main.hx", 10));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(stepRequest("next", 3, 1));
+		assert.equals(1, t.api.stepCalls.length, "stepThread issued");
+		assert.equals(2, t.api.stepCalls[0].stepType, "next -> STEP_OVER");
+		// landing on a different line -> stop with reason step
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 11));
+		assert.equals("step", t.sent[1].body.reason, "step landing reported as step");
+	}
+
+	static function aStepThatKeepsTheSameLineReSteps(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, -1, "Main.hx", 10));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(stepRequest("next", 3, 1));
+		// still on line 10 (multi-expression line) -> re-step, no stopped event
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 10));
+		assert.equals(2, t.api.stepCalls.length, "re-stepped on the same line");
+		assert.equals(1, t.sent.length, "no stopped event while still on the same line (just the step response)");
+		// now the line changes -> report
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 12));
+		assert.equals("step", t.sent[1].body.reason, "reported once the line changed");
+	}
+
+	static function aBreakpointHitMidStepWinsOverTheStep(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.api.cannedFilesFullPath = ["C:/src/Main.hx"];
+		t.api.cannedFiles = ["Main.hx"];
+		t.dispatcher.handleRequest(Json.stringify({
+			seq: 1, type: "request", command: "setBreakpoints",
+			arguments: {source: {path: "C:/src/Main.hx"}, breakpoints: [{line: 20}]}
+		}));
+		var runtimeNumber = t.api.installedBreakpoints[0].number;
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, -1, "Main.hx", 10));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(stepRequest("next", 3, 1));
+		// the step ran into a breakpoint: report breakpoint, not step
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, runtimeNumber, "Main.hx", 20));
+		assert.equals("breakpoint", t.sent[1].body.reason, "a breakpoint mid-step wins");
+	}
+
+	static function stackTraceReportsFramesNewestFirst(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.api.cannedFiles = ["Main.hx"];
+		t.api.cannedFilesFullPath = ["C:/src/Main.hx"];
+		// hxcpp orders innermost LAST: main() then add()
+		var stack = [
+			new DebugStackFrame("Main.hx", 11, "Main", "main"),
+			new DebugStackFrame("Main.hx", 17, "Main", "add")
+		];
+		t.dispatcher.handleDebugEvent(ThreadStopped(1, DebugThread.STATUS_STOPPED_BREAKPOINT, -1, stack));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(stepRequest("stackTrace", 5, 1));
+		var frames = t.sent[0].body.stackFrames;
+		assert.equals(2, frames.length, "two frames");
+		assert.equals("Main.add", frames[0].name, "newest (innermost) frame first");
+		assert.equals(17, frames[0].line, "innermost line");
+		assert.equals("C:/src/Main.hx", frames[0].source.path, "short file mapped to full path");
+		assert.equals("Main.main", frames[1].name, "caller second");
+	}
+
+	static function stepRequest(command:String, seq:Int, threadId:Int):String {
+		return Json.stringify({seq: seq, type: "request", command: command, arguments: {threadId: threadId}});
 	}
 
 	static function eventsBeforeInitializeAreBufferedThenFlushed(assert:Assert):Void {
@@ -102,9 +198,9 @@ class DispatcherTest {
 	static function runtimeEventsMapToDapEvents(assert:Assert):Void {
 		var t = make();
 		initialize(t);
-		t.dispatcher.handleDebugEvent(ThreadStopped(2, {status: DebugThread.STATUS_STOPPED_BREAKPOINT, breakpoint: -1}, null));
-		t.dispatcher.handleDebugEvent(ThreadStopped(2, {status: DebugThread.STATUS_STOPPED_UNCAUGHT_EXCEPTION, breakpoint: -1}, null));
-		t.dispatcher.handleDebugEvent(ThreadStopped(2, {status: DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, breakpoint: -1}, null));
+		t.dispatcher.handleDebugEvent(stop(2, DebugThread.STATUS_STOPPED_BREAKPOINT));
+		t.dispatcher.handleDebugEvent(stop(2, DebugThread.STATUS_STOPPED_UNCAUGHT_EXCEPTION));
+		t.dispatcher.handleDebugEvent(stop(2, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE));
 		t.dispatcher.handleDebugEvent(ThreadCreated(4));
 		t.dispatcher.handleDebugEvent(ThreadTerminated(4));
 		assert.equals("breakpoint", t.sent[0].body.reason, "breakpoint stop reason");
@@ -141,7 +237,7 @@ class DispatcherTest {
 		}));
 		var runtimeNumber = t.api.installedBreakpoints[0].number;
 		var dapId = t.sent[0].body.breakpoints[0].id;
-		t.dispatcher.handleDebugEvent(ThreadStopped(1, {status: DebugThread.STATUS_STOPPED_BREAKPOINT, breakpoint: runtimeNumber}, null));
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, runtimeNumber));
 		var stopped = t.sent[1];
 		assert.equals("breakpoint", stopped.body.reason, "breakpoint stop");
 		assert.equals(dapId, stopped.body.hitBreakpointIds[0], "the hit id maps back to the DAP breakpoint");

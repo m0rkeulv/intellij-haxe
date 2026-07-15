@@ -65,6 +65,41 @@ its debugging is enabled — before the client has even sent `initialize`. The
 Dispatcher buffers all outbound debug events until it has answered initialize
 and sent the `initialized` event, then flushes them in arrival order.
 
+## 7. stepThread continues the thread itself; find it by number
+
+`Debugger.stepThread(threadNumber, stepType, 1)` both arms the step AND
+continues the stopped thread — do NOT call continueThreads after. It matches
+the thread by its debugger NUMBER (getThreadInfos().number), which for the main
+thread is 0. STEP_INTO stops at the next line; STEP_OVER/OUT compare stack
+depth against the level captured when the thread broke.
+
+## 8. Stepping needs a breakpoint to stay armed (zero-breakpoint limitation)
+
+hxcpp only runs its per-line step/breakpoint check while at least one
+breakpoint exists (`gShouldCallHandleBreakpoints`). Consequence: a step issued
+when the user has NO breakpoints set never stops — the thread runs to
+completion. Stepping is reliable whenever any breakpoint is set (the common
+case, and what our tests cover). A sentinel-breakpoint workaround was tried but
+did not reliably keep the check armed; robust zero-breakpoint stepping is an
+open item (candidate: an execution-trace toggle, if hxcpp exposes one).
+
+## 9. Trim the debugger's own frames from a captured stack
+
+`getThreadInfo(n, false)` is read INSIDE the stop handler (§2), so the captured
+stack has this handler's frames on top (getThreadInfo, the notification
+closure). Trim everything above the reported stop location — the innermost
+frame matching the handler's (file, line, function) — leaving a clean user
+stack. Stack order is innermost-LAST; DAP wants newest-first, so it is reversed
+when building the stackTrace response.
+
+## 10. Step vs pause: both are BREAK_IMMEDIATE
+
+The runtime reports a step landing and a user pause with the same status
+(STOPPED_BREAK_IMMEDIATE). The Dispatcher disambiguates by tracking whether a
+step is in flight: a BREAK_IMMEDIATE stop during a step is reason "step" (and
+re-steps if the source line has not changed, §5); otherwise it is "pause". A
+breakpoint or exception hit mid-step wins over the step.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log
