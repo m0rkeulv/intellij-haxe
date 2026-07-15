@@ -57,7 +57,8 @@ public class HashLinkDebugRunner extends GenericProgramRunner<RunnerSettings> {
     Module module = configuration.requireModule();
 
     // fail fast, before any UI is built
-    Path hlExecutable = HashLinkRunConfigurations.resolveHlExecutable(module);
+
+    Path hlExecutable = configuration.resolveHlExecutable(module);
     Path hlProgram = configuration.resolveProgram(module);
     Path workingDirectory = configuration.resolveWorkingDirectory(module);
 
