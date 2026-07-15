@@ -12,5 +12,6 @@ include(":common")
 include(":debuggers:dap-protocol")
 include(":debuggers:hashlink-debug-adapter")
 include(":debuggers:vshaxe-hxcpp-debugger-adapter")
+include(":debuggers:intellij-hxcpp-debugger")
 include(":debuggers:hxcpp-debugger-protocol-legacy")
 

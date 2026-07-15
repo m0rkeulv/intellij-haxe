@@ -1,0 +1,5 @@
+# Unit tests under the Haxe interpreter (no cpp toolchain needed).
+-cp haxelib
+-cp src/test/haxe
+-main TestMain
+--interp
