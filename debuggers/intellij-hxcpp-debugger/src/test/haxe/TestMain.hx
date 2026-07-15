@@ -6,7 +6,9 @@ class TestMain {
 	static function main():Void {
 		var assert = new Assert();
 		var tests:Array<{name:String, run:Assert->Void}> = [
-			{name: "ConfigTest", run: tests.ConfigTest.run}
+			{name: "ConfigTest", run: tests.ConfigTest.run},
+			{name: "FramingTest", run: tests.FramingTest.run},
+			{name: "DispatcherTest", run: tests.DispatcherTest.run}
 		];
 		for (test in tests) {
 			test.run(assert);
