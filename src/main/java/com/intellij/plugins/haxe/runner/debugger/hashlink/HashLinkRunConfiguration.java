@@ -36,9 +36,15 @@ import org.jetbrains.annotations.Nullable;
 public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfigurationModule, Element> {
   private static final String HL_FILE = "hlFile";
   private static final String WORKING_DIRECTORY = "workingDirectory";
+  private static final String USE_CUSTOM_HL_BINARY = "useCustomHlBinary";
+  private static final String CUSTOM_HL_BINARY = "customHlBinary";
 
   private String hlFilePath = "";
   private String workingDirectory = "";
+  // when enabled, this HashLink executable runs the program instead of the
+  // SDK/environment-resolved one (e.g. a Lime/OpenFL game's renamed hl.exe)
+  private boolean useCustomHlBinary = false;
+  private String customHlBinaryPath = "";
 
   public HashLinkRunConfiguration(String name, Project project, ConfigurationFactory factory) {
     super(name, new RunConfigurationModule(project), factory);
@@ -60,6 +66,22 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
 
   public void setWorkingDirectory(@Nullable String directory) {
     workingDirectory = directory == null ? "" : directory;
+  }
+
+  public boolean isUseCustomHlBinary() {
+    return useCustomHlBinary;
+  }
+
+  public void setUseCustomHlBinary(boolean use) {
+    useCustomHlBinary = use;
+  }
+
+  public String getCustomHlBinaryPath() {
+    return customHlBinaryPath;
+  }
+
+  public void setCustomHlBinaryPath(@Nullable String path) {
+    customHlBinaryPath = path == null ? "" : path;
   }
 
   // --- ModuleBasedConfiguration ---
@@ -103,7 +125,15 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
     if (!Files.isRegularFile(program)) {
       throw new RuntimeConfigurationWarning(HaxeBundle.message("haxe.run.hl.output.missing", program.toString()));
     }
-    if (HlExecutableResolver.resolve(module).isEmpty()) {
+    if (useCustomHlBinary) {
+      Path custom = HashLinkRunConfigurations.resolveAgainstModule(module, customHlBinaryPath);
+      if (customHlBinaryPath.isBlank() || custom == null) {
+        throw new RuntimeConfigurationError(HaxeBundle.message("hashlink.runner.custom.hl.not.set"));
+      }
+      if (!Files.isRegularFile(custom)) {
+        throw new RuntimeConfigurationWarning(HaxeBundle.message("haxe.run.custom.hl.missing", custom.toString()));
+      }
+    } else if (HlExecutableResolver.resolve(module).isEmpty()) {
       throw new RuntimeConfigurationWarning(HaxeBundle.message("haxe.run.bad.hl.bin.path"));
     }
   }
@@ -112,9 +142,26 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
     Module module = requireModule();
     return new HashLinkRunningState(env, module,
-                                    HashLinkRunConfigurations.resolveHlExecutable(module),
+                                    resolveHlExecutable(module),
                                     resolveProgram(module),
                                     resolveWorkingDirectory(module));
+  }
+
+  /**
+   * The HashLink executable to run the program with: the custom override when
+   * enabled (it must exist — a broken override fails loudly instead of falling
+   * back to an unexpected binary), else the SDK/environment-resolved one.
+   */
+  Path resolveHlExecutable(Module module) throws ExecutionException {
+    if (!useCustomHlBinary) {
+      return HashLinkRunConfigurations.resolveHlExecutable(module);
+    }
+    Path custom = HashLinkRunConfigurations.resolveAgainstModule(module, customHlBinaryPath);
+    if (custom == null || !Files.isRegularFile(custom)) {
+      throw new ExecutionException(
+        HaxeBundle.message("haxe.run.custom.hl.missing", custom != null ? custom.toString() : "<not set>"));
+    }
+    return custom;
   }
 
   // --- program resolution ---
@@ -161,6 +208,8 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
     readModule(element);
     hlFilePath = orEmpty(JDOMExternalizerUtil.readField(element, HL_FILE));
     workingDirectory = orEmpty(JDOMExternalizerUtil.readField(element, WORKING_DIRECTORY));
+    useCustomHlBinary = Boolean.parseBoolean(JDOMExternalizerUtil.readField(element, USE_CUSTOM_HL_BINARY));
+    customHlBinaryPath = orEmpty(JDOMExternalizerUtil.readField(element, CUSTOM_HL_BINARY));
   }
 
   @Override
@@ -169,6 +218,8 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
     writeModule(element);
     JDOMExternalizerUtil.writeField(element, HL_FILE, hlFilePath);
     JDOMExternalizerUtil.writeField(element, WORKING_DIRECTORY, workingDirectory);
+    JDOMExternalizerUtil.writeField(element, USE_CUSTOM_HL_BINARY, String.valueOf(useCustomHlBinary));
+    JDOMExternalizerUtil.writeField(element, CUSTOM_HL_BINARY, customHlBinaryPath);
   }
 
   private static String orEmpty(@Nullable String value) {
