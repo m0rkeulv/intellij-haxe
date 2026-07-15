@@ -7,5 +7,7 @@
 	"version": "0.1.0",
 	"releasenote": "Scaffolding (M0)",
 	"contributors": ["intellij-haxe"],
-	"dependencies": {}
+	"dependencies": {
+		"intellij-dap-protocol": ""
+	}
 }

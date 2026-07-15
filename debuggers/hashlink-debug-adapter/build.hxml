@@ -6,5 +6,6 @@
 -D hl-legacy32
 -cp src/main/haxe
 -lib format
+-lib intellij-dap-protocol
 -main adapter.Main
 -hl build/hl/hl-debug-adapter.hl

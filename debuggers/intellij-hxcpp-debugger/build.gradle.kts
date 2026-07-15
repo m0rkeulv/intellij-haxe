@@ -13,9 +13,20 @@ fun haxeOnPath(): Boolean = try {
     false
 }
 
+// the DAP message typedefs come from the shared :debuggers:dap-protocol
+// module (haxelib "intellij-dap-protocol"); registration is idempotent
+tasks.register<Exec>("registerDapProtocolHaxelib") {
+    group = "hxcpp"
+    description = "Points haxelib at the in-repo intellij-dap-protocol sources (haxelib dev)"
+    onlyIf { haxeOnPath() }
+    commandLine = listOf("haxelib", "dev", "intellij-dap-protocol",
+                         rootProject.file("debuggers/dap-protocol").absolutePath)
+}
+
 tasks.register<Exec>("testHaxeServer") {
     group = "verification"
     description = "Runs the intellij-hxcpp-debug-server unit tests under the Haxe interpreter"
+    dependsOn("registerDapProtocolHaxelib")
     workingDir = projectDir
     commandLine = listOf("haxe", "test.hxml")
     onlyIf {

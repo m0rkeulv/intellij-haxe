@@ -1,5 +1,6 @@
 # Unit tests under the Haxe interpreter (no cpp toolchain needed).
 -cp haxelib
+-lib intellij-dap-protocol
 -cp src/test/haxe
 -main TestMain
 --interp

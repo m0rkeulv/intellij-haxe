@@ -143,10 +143,21 @@ tasks.register<Exec>("buildTypedThrowFixture") {
     outputs.file(typedThrowFixtureHl)
 }
 
+// The DAP message typedefs live in the shared :debuggers:dap-protocol module
+// (haxelib "intellij-dap-protocol", consumed via `haxelib dev`); this makes
+// the registration idempotent for every build that compiles against them.
+tasks.register<Exec>("registerDapProtocolHaxelib") {
+    group = "hashlink"
+    description = "Points haxelib at the in-repo intellij-dap-protocol sources (haxelib dev)"
+    onlyIf { haxeAvailable }
+    commandLine = listOf("haxelib", "dev", "intellij-dap-protocol",
+                         rootProject.file("debuggers/dap-protocol").absolutePath)
+}
+
 tasks.register<Exec>("buildDebugAdapter") {
     group = "hashlink"
     description = "Compiles the DAP debug adapter to HashLink bytecode (build/hl/hl-debug-adapter.hl)"
-    dependsOn("installFormatHaxelib")
+    dependsOn("installFormatHaxelib", "registerDapProtocolHaxelib")
     onlyIf {
         if (!buildHashlinkAdapter) {
             logger.warn("SKIPPING HashLink debug adapter build (buildHashlinkAdapter=false); the plugin distribution will not contain hl-debug-adapter.hl")
@@ -161,6 +172,7 @@ tasks.register<Exec>("buildDebugAdapter") {
     workingDir = projectDir
     commandLine = listOf("haxe", "build.hxml")
     inputs.dir("src/main/haxe")
+    inputs.dir(rootProject.file("debuggers/dap-protocol/src/main/haxe"))
     inputs.file("build.hxml")
     outputs.file(adapterHl)
 }
@@ -173,7 +185,7 @@ val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("true").
 tasks.register<Exec>("testHaxeAdapter") {
     group = "hashlink"
     description = "Runs the Haxe-side adapter tests with the Haxe interpreter (no HashLink runtime required)"
-    dependsOn("installFormatHaxelib", "buildTestFixture")
+    dependsOn("installFormatHaxelib", "registerDapProtocolHaxelib", "buildTestFixture")
     onlyIf {
         (debuggerTests && buildHashlinkAdapter && haxeAvailable).also {
             if (!it) logger.warn("SKIPPING Haxe adapter tests (-PdebuggerTests=false, haxe compiler not found on PATH, or buildHashlinkAdapter=false)")
