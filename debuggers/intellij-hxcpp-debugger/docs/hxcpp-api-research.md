@@ -39,9 +39,19 @@ answer.
   our suffix-matching (vshaxe gotcha #4 fix) is a pure-Haxe map over these,
   and the two arrays are parallel (index-aligned), so IDE path → runtime file
   key is one lookup.
-- Limitation found: no per-file line table exists — a breakpoint on a
-  non-executable line silently never fires. DAP "verified" can only mean
-  "file matched"; document it.
+- No RUNTIME line table exists: the generated `HXLINE(n)` markers expand to
+  `_hx_stackframe.lineNumber = n;` (StackContext.h) — executed assignments,
+  never registered anywhere queryable — so the runtime alone cannot verify a
+  line and a breakpoint on a non-executable line silently never fires.
+- **But we can build the table at COMPILE time** (user-spotted): the HXLINE
+  values come from typed-AST positions, and our boot macro runs inside that
+  same compilation. A `Context.onGenerate` walk collects executable lines per
+  file and bakes a `file -> sorted lines` resource into the binary; the
+  server then verifies breakpoints line-level AND snaps a non-executable line
+  to the next executable one (the HL adapter's resolveLine behaviour, which
+  DAP allows). Strictly better than vshaxe and the raw runtime. M2 fixture
+  tests must pin the walk's "line with code" notion against what gencpp
+  actually emits.
 
 ## M3 — run control (shrinks a lot)
 
