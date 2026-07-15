@@ -31,11 +31,10 @@ public class HashLinkRunConfigurationEditor extends SettingsEditor<HashLinkRunCo
 
   public HashLinkRunConfigurationEditor(Project project) {
     this.project = project;
+    // an extension filter (not withFileFilter) so the NATIVE file dialog gets a
+    // real "*.hl;*.dat" dropdown entry — a Condition-based filter is invisible to it
     browseInto(hlFileField, FileChooserDescriptorFactory.createSingleFileDescriptor()
-      .withFileFilter(file -> {
-        String extension = file.getExtension();
-        return "hl".equalsIgnoreCase(extension) || "dat".equalsIgnoreCase(extension);
-      }));
+      .withExtensionFilter(HaxeBundle.message("hashlink.runner.editor.file.filter"), "hl", "dat"));
     browseInto(workingDirectoryField, FileChooserDescriptorFactory.createSingleFolderDescriptor());
     panel = FormBuilder.createFormBuilder()
       .addLabeledComponent(HaxeBundle.message("hashlink.runner.editor.module"), moduleCombo)
