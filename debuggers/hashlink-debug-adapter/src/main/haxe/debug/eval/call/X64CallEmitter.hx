@@ -20,7 +20,6 @@ import haxe.io.BytesBuffer;
 	register, `mov rax, <addr>` / `call rax`, captures the return (RAX, or XMM0
 	copied to RAX for a float return), restores the saved registers, and `int3`.
 
-	64-bit only, like hld (the 32-bit cdecl trampoline is `X86CallEmitter`).
 	Pure and unit-tested against exact byte sequences.
 **/
 class X64CallEmitter implements CallTrampoline {

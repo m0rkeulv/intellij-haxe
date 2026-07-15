@@ -37,10 +37,6 @@ import haxe.Int64;
 	=====================================================================
 **/
 class BoxResolver {
-	// Sanity cap on one OToDyn opcode's machine code: real sites are a handful of
-	// instructions, so anything larger is not the pattern we mine — skip it.
-	static inline var MAX_SITE_BYTES = 256;
-
 	final module:ModuleDebugInfo;
 	final jit:JitInfo;
 	final memory:MemoryReader;
@@ -116,7 +112,7 @@ class BoxResolver {
 		var start = jit.addressOf(fidx, op);
 		var end = jit.addressOf(fidx, op + 1);
 		var len = Int64.toInt(Int64.sub(end, start));
-		if (len <= 0 || len > MAX_SITE_BYTES) {
+		if (len <= 0 || len > MachineCode.MAX_SITE_BYTES) {
 			return null;
 		}
 		var code = memory.read(start, len);

@@ -17,12 +17,19 @@ import haxe.io.Bytes;
 	dispatch on `is64` so callers never branch.
 **/
 class MachineCode {
+	/**
+		Sanity cap on one opcode's jitted machine-code span when scanning for these
+		patterns (ConstructorResolver/BoxResolver/NativeResolver): real sites are a
+		handful of instructions, so anything larger is not the pattern being mined.
+	**/
+	public static inline var MAX_SITE_BYTES = 256;
+
 	// little-endian first two bytes of each instruction
-	public static inline var MOV_RAX = 0xB848; // 48 B8 : mov rax, imm64
-	public static inline var CALL_RAX = 0xD0FF; // FF D0 : call rax
-	public static inline var MOV_RCX = 0xB948; // 48 B9 : mov rcx, imm64 (win64 arg0)
-	public static inline var MOV_RDI = 0xBF48; // 48 BF : mov rdi, imm64 (SysV arg0)
-	public static inline var PUSH_IMM32 = 0x68; // 68 : push imm32 (x86 stack arg0)
+	static inline var MOV_RAX = 0xB848; // 48 B8 : mov rax, imm64
+	static inline var CALL_RAX = 0xD0FF; // FF D0 : call rax
+	static inline var MOV_RCX = 0xB948; // 48 B9 : mov rcx, imm64 (win64 arg0)
+	static inline var MOV_RDI = 0xBF48; // 48 BF : mov rdi, imm64 (SysV arg0)
+	static inline var PUSH_IMM32 = 0x68; // 68 : push imm32 (x86 stack arg0)
 
 	/**
 		Arch-selected mining of a "set argument 0, then call a native" site — how
@@ -63,7 +70,7 @@ class MachineCode {
 		few bytes (skipping an optional shadow-space `sub rsp`), returns the
 		imm64 (the called address); otherwise null.
 	**/
-	public static function movRaxImmThenCall(code:Bytes, at:Int, len:Int):Null<Pointer> {
+	static function movRaxImmThenCall(code:Bytes, at:Int, len:Int):Null<Pointer> {
 		if (at + 12 > len || code.getUInt16(at) != MOV_RAX) {
 			return null;
 		}
@@ -77,7 +84,7 @@ class MachineCode {
 		The 32-bit form of the same JIT shape: `mov eax, imm32` (`B8`, no REX)
 		followed by `call eax` (`FF D0`). Returns the imm32 zero-extended.
 	**/
-	public static function movEaxImmThenCall(code:Bytes, at:Int, len:Int):Null<Pointer> {
+	static function movEaxImmThenCall(code:Bytes, at:Int, len:Int):Null<Pointer> {
 		if (at + 7 > len || code.get(at) != 0xB8) {
 			return null;
 		}
@@ -88,7 +95,7 @@ class MachineCode {
 	}
 
 	// `FF D0` within a short window from `from` (skips an optional `sub rsp,imm8`).
-	public static function hasCallRax(code:Bytes, from:Int, len:Int):Bool {
+	static function hasCallRax(code:Bytes, from:Int, len:Int):Bool {
 		var limit = from + 8 < len - 1 ? from + 8 : len - 1;
 		var j = from;
 		while (j < limit) {
@@ -100,7 +107,7 @@ class MachineCode {
 		return false;
 	}
 
-	public static function read64(code:Bytes, pos:Int):Pointer {
+	static function read64(code:Bytes, pos:Int):Pointer {
 		return Int64.make(code.getInt32(pos + 4), code.getInt32(pos));
 	}
 }

@@ -83,7 +83,7 @@ class NativeResolver {
 		var start = jit.addressOf(fidx, op);
 		var end = jit.addressOf(fidx, op + 1);
 		var len = Int64.toInt(Int64.sub(end, start));
-		if (len <= 0 || len > 256) {
+		if (len <= 0 || len > MachineCode.MAX_SITE_BYTES) {
 			return null;
 		}
 		var code = memory.read(start, len);

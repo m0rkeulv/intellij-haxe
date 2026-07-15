@@ -310,40 +310,7 @@ class DebugSession {
 			}
 			drainAttachEvents();
 
-			breakpoints = new Breakpoints(api, debuggeePid);
-			exceptionSites = new ExceptionSites(module, jit);
-			tryRegions = new TryRegions(module);
-			stackWalker = new StackWalker(api, debuggeePid, jit);
-			memReader = new MemoryReader(api, debuggeePid, jit.is64);
-			nativeThrowResolver = new NativeThrowResolver(module, jit, memReader, exceptionSites);
-			// one arch descriptor resolved from the handshake, shared by every
-			// raw-memory reader here (the inspector builds its own from the same jit)
-			var align = new Align(jit.is64, jit.boolSize4);
-			threadRegistry = new ThreadRegistry(memReader, align, jit.hlVersionMajor, jit.hlVersionMinor);
-			vmExceptions = new VmExceptionControl(api, debuggeePid, memReader, align, jit.threadsPtr);
-			inspector = new VariableInspector(module, jit, memReader);
-			// Frames parked at hl_throw's ENTRY serve the stop reported at hl_throw's
-			// own break: by then execution is deep inside hl_throw, where the frame
-			// chain is no longer walkable. Consumed on first use; framesFor caches it
-			// for the rest of the stop.
-			inspector.frameWalker = tid -> {
-				var parked = vmThrowFrames.get(tid);
-				if (parked != null) {
-					vmThrowFrames.remove(tid);
-					return parked;
-				}
-				return stackWalker.walk(tid);
-			};
-			var cpuRegisters = new CpuRegisters(api, debuggeePid);
-			// CPU registers are only readable while stopped; the callback is invoked
-			// for a stopped thread's top frame, but guard defensively.
-			inspector.cpuRegistersFor = tid -> state.match(Stopped(_)) ? cpuRegisters.rows(tid) : [];
-			inspector.enableWrites(new MemoryWriter(api, debuggeePid, jit.is64));
-			inspector.xmm0Writer = value ->
-				api.writeRegister(debuggeePid, stoppedThreadId, Xmm0, FPHelper.doubleToI64(value));
-			inspector.warnSink = text -> emit(EvOutput("console", text));
-			inspector.functionCaller = (funcAddr, args, floatBits) ->
-				callInDebuggee(stoppedThreadId, funcAddr, args, floatBits);
+			initializeSessionServices();
 			applyExceptionBreakpoints(); // honour a pre-launch setExceptionBreakpoints
 			state = Configured;
 			emit(EvLaunched(requestSeq));
@@ -354,6 +321,46 @@ class DebugSession {
 			cleanupAfterFailure();
 			emit(EvLaunchFailed(requestSeq, Std.string(e)));
 		}
+	}
+
+	// Builds every attached-session collaborator (breakpoints, walkers, readers,
+	// the inspector) and wires the inspector's session callbacks. Requires
+	// `module`, `jit`, `debuggeePid` and a started debug attach.
+	function initializeSessionServices():Void {
+		breakpoints = new Breakpoints(api, debuggeePid);
+		exceptionSites = new ExceptionSites(module, jit);
+		tryRegions = new TryRegions(module);
+		stackWalker = new StackWalker(api, debuggeePid, jit);
+		memReader = new MemoryReader(api, debuggeePid, jit.is64);
+		nativeThrowResolver = new NativeThrowResolver(module, jit, memReader, exceptionSites);
+		// one arch descriptor resolved from the handshake, shared by every
+		// raw-memory reader here (the inspector builds its own from the same jit)
+		var align = new Align(jit.is64, jit.boolSize4);
+		threadRegistry = new ThreadRegistry(memReader, align, jit.hlVersionMajor, jit.hlVersionMinor);
+		vmExceptions = new VmExceptionControl(api, debuggeePid, memReader, align, jit.threadsPtr);
+		inspector = new VariableInspector(module, jit, memReader);
+		// Frames parked at hl_throw's ENTRY serve the stop reported at hl_throw's
+		// own break: by then execution is deep inside hl_throw, where the frame
+		// chain is no longer walkable. Consumed on first use; framesFor caches it
+		// for the rest of the stop.
+		inspector.frameWalker = tid -> {
+			var parked = vmThrowFrames.get(tid);
+			if (parked != null) {
+				vmThrowFrames.remove(tid);
+				return parked;
+			}
+			return stackWalker.walk(tid);
+		};
+		var cpuRegisters = new CpuRegisters(api, debuggeePid);
+		// CPU registers are only readable while stopped; the callback is invoked
+		// for a stopped thread's top frame, but guard defensively.
+		inspector.cpuRegistersFor = tid -> state.match(Stopped(_)) ? cpuRegisters.rows(tid) : [];
+		inspector.enableWrites(new MemoryWriter(api, debuggeePid, jit.is64));
+		inspector.xmm0Writer = value ->
+			api.writeRegister(debuggeePid, stoppedThreadId, Xmm0, FPHelper.doubleToI64(value));
+		inspector.warnSink = text -> emit(EvOutput("console", text));
+		inspector.functionCaller = (funcAddr, args, floatBits) ->
+			callInDebuggee(stoppedThreadId, funcAddr, args, floatBits);
 	}
 
 	// Reads the entire handshake the VM sends before it blocks. Uses a read
@@ -552,20 +559,46 @@ class DebugSession {
 		// returns through EAX/ST0. Selected once from the handshake bitness.
 		var emitter:CallTrampoline = jit.is64 ? new X64CallEmitter(jit.winCall) : new X86CallEmitter();
 		var asm = emitter.build(funcAddr, args, floatBits);
-		var asmSize = asm.length;
-
-		var prevEax = api.readRegister(debuggeePid, threadId, Eax);
-		var prevEip = api.readRegister(debuggeePid, threadId, Eip);
-		var prevEsp = api.readRegister(debuggeePid, threadId, Esp);
 
 		// Lift every planted INT3 for the duration of the call: the called function
 		// may internally throw/catch (tripping the hl_throw trap when VM-exception
 		// breakpoints are on) or run through a user breakpoint — either would abort
 		// the call and leave a half-executed frame that corrupts later execution.
-		// Read `original` AFTER, so the trampoline's saved bytes are clean too.
+		// The lift also keeps the trampoline's saved bytes clean of our 0xCC.
 		if (breakpoints != null) {
 			breakpoints.suspendAll();
 		}
+		// no `finally` in Haxe: hold a failure so the breakpoints are ALWAYS
+		// re-planted, even when the injection itself throws
+		var error:Null<Dynamic> = null;
+		var result:Null<Pointer> = null;
+		try {
+			result = runInjectedCall(threadId, asm, floatBits);
+		} catch (e:Dynamic) {
+			error = e;
+		}
+		// Re-plant the lifted breakpoints, except the one we are stopped on (the
+		// stop/continue machinery keeps its byte restored until it steps past).
+		if (breakpoints != null) {
+			var keepSuspended = currentStoppedBreakpoint != null ? currentStoppedBreakpoint.address : null;
+			breakpoints.rearmAll(keepSuspended);
+		}
+		if (error != null) {
+			throw error;
+		}
+		return result;
+	}
+
+	// The inject/run/restore core of an eval-call: writes the trampoline over the
+	// stopped thread's Eip, runs it on a scratch stack to its trailing INT3, and
+	// restores the original code and the Eax/Eip/Esp registers. Exception-safe by
+	// ordering: the throws happen either before any state is modified or after
+	// everything is restored.
+	function runInjectedCall(threadId:Int, asm:Bytes, floatBits:Int):Pointer {
+		var asmSize = asm.length;
+		var prevEax = api.readRegister(debuggeePid, threadId, Eax);
+		var prevEip = api.readRegister(debuggeePid, threadId, Eip);
+		var prevEsp = api.readRegister(debuggeePid, threadId, Esp);
 
 		var original = Bytes.alloc(asmSize);
 		if (!api.readMemory(debuggeePid, prevEip, original, asmSize)) {
@@ -597,13 +630,6 @@ class DebugSession {
 		api.writeRegister(debuggeePid, threadId, Eax, prevEax);
 		api.writeRegister(debuggeePid, threadId, Eip, prevEip);
 		api.writeRegister(debuggeePid, threadId, Esp, prevEsp);
-
-		// Re-plant the breakpoints we lifted, except the one we are stopped on
-		// (the stop/continue machinery keeps its byte restored until it steps past).
-		if (breakpoints != null) {
-			var keepSuspended = currentStoppedBreakpoint != null ? currentStoppedBreakpoint.address : null;
-			breakpoints.rearmAll(keepSuspended);
-		}
 
 		if (!completed || !Int64.eq(landedEip, trapEnd)) {
 			throw new DebugError("The called function did not return normally (it threw an exception or hit a breakpoint)");
@@ -1355,6 +1381,10 @@ class DebugSession {
 		}
 	}
 
+	// Classifies an INT3 stop by what is patched at the trap address and routes
+	// it: a user breakpoint always wins, then an armed exception site, then the
+	// hl_throw entry trap, then a step temp; a trap nothing of ours is patched at
+	// is an unpatched trap (hl_throw's own break, or attach/loader noise).
 	function handleBreakpointHit(threadId:Int):Void {
 		// INT3 leaves the instruction pointer one byte past the trap
 		var eip = api.readRegister(debuggeePid, threadId, Eip);
@@ -1365,133 +1395,134 @@ class DebugSession {
 		var nativeThrow = breakpoints != null && breakpoints.isNativeThrow(hitAddress);
 
 		if (userBp == null && !temp && excEntry == null && !nativeThrow) {
-			// hl_throw's own hl_debug_break, requested at the entry trap: exc_value
-			// now holds the thrown vdynamic, readable at last. EIP is already past
-			// the VM's own int3 (nothing of ours is patched there), so a later
-			// continue resumes plainly with no trap dance.
-			if (pendingVmThrow.exists(threadId) && vmExceptions != null && vmExceptions.isThrowBreak(threadId)) {
-				pendingVmThrow.remove(threadId);
-				vmExceptions.disarmCatchAll(threadId);
-				enterStopped(threadId, null);
-				emit(EvStoppedException(threadId, describeVmThrow(threadId, vmExceptions.thrownValue(threadId))));
-				return;
-			}
-			// attach/loader breakpoint or spurious: just keep going
-			api.resume(debuggeePid, threadId);
+			handleUnpatchedTrap(threadId);
 			return;
 		}
 
 		// rewind past the INT3 so the trapped instruction can run on the next resume
 		api.writeRegister(debuggeePid, threadId, Eip, hitAddress);
 
-		// a real breakpoint always wins over a step landing
 		if (userBp != null) {
-			// A conditional breakpoint only stops when its expression is true.
-			// Evaluate it against the hitting thread's top frame; a false result
-			// resumes without stopping (and WITHOUT ending an in-flight step — the
-			// step's temps are still planted, so it keeps progressing).
-			if (userBp.condition != null && userBp.condition != "") {
-				inspector.startStop(threadId);
-				stoppedThreadId = threadId; // the condition's eval-calls target this thread
-				if (!breakpointConditionHolds(threadId, userBp)) {
-					inspector.invalidate();
-					var interrupted = resumePastUserBreakpoint(threadId, userBp);
-					if (state == Exited) {
-						return;
-					}
-					if (interrupted != null) {
-						handleWaitOutcome(interrupted);
-					}
-					return;
-				}
-			}
-			breakpoints.suspend(userBp);
-			enterStopped(threadId, userBp);
-			emit(EvStoppedBreakpoint(threadId, [userBp.id]));
+			handleUserBreakpointHit(threadId, userBp);
+		} else if (excEntry != null) {
+			handleExceptionSiteHit(threadId, excEntry);
+		} else if (nativeThrow) {
+			handleNativeThrowHit(threadId);
+		} else {
+			handleStepTempHit(threadId, hitAddress);
+		}
+	}
+
+	// A trap with nothing of ours patched at it. Either hl_throw's own
+	// hl_debug_break, requested at the entry trap: exc_value now holds the thrown
+	// vdynamic, readable at last (EIP is already past the VM's own int3, so a
+	// later continue resumes plainly with no trap dance) — or an attach/loader
+	// breakpoint / spurious trap, resumed past silently.
+	function handleUnpatchedTrap(threadId:Int):Void {
+		if (pendingVmThrow.exists(threadId) && vmExceptions != null && vmExceptions.isThrowBreak(threadId)) {
+			pendingVmThrow.remove(threadId);
+			vmExceptions.disarmCatchAll(threadId);
+			enterStopped(threadId, null);
+			emit(EvStoppedException(threadId, describeVmThrow(threadId, vmExceptions.thrownValue(threadId))));
 			return;
 		}
+		api.resume(debuggeePid, threadId);
+	}
 
-		// An exception is being thrown here and the exception breakpoint is armed.
-		// "all" stops on every throw; "uncaught" stops only when no live `try` will
-		// catch it — a caught throw under uncaught-only is resumed past silently
-		// (same trap-dance as a false conditional breakpoint), so the catch runs.
-		if (excEntry != null) {
-			var stop = exceptionBreakAll
-				|| (exceptionBreakUncaught && isUncaught(threadId))
-				|| throwMatchesTypes(threadId, excEntry.reg);
-			if (!stop) {
-				inspector.invalidate();
-				var interrupted = resumePastUserBreakpoint(threadId, excEntry.bp);
-				if (state == Exited) {
-					return;
-				}
-				if (interrupted != null) {
-					handleWaitOutcome(interrupted);
-				}
+	function handleUserBreakpointHit(threadId:Int, userBp:PatchedBreakpoint):Void {
+		// A conditional breakpoint only stops when its expression is true.
+		// Evaluate it against the hitting thread's top frame; a false result
+		// resumes without stopping (and WITHOUT ending an in-flight step — the
+		// step's temps are still planted, so it keeps progressing).
+		if (userBp.condition != null && userBp.condition != "") {
+			inspector.startStop(threadId);
+			stoppedThreadId = threadId; // the condition's eval-calls target this thread
+			if (!breakpointConditionHolds(threadId, userBp)) {
+				resumePastSuppressedTrap(threadId, userBp);
 				return;
 			}
-			// Restore the original byte so the throw itself runs on continue; the
-			// trap dance (stepOverAndResume) single-steps it and re-arms the site.
-			// Reported BEFORE the throw executes, so the frame is the throwing function.
-			breakpoints.suspend(excEntry.bp);
-			enterStopped(threadId, excEntry.bp);
-			emit(EvStoppedException(threadId, describeThrow(threadId, excEntry.reg)));
+		}
+		breakpoints.suspend(userBp);
+		enterStopped(threadId, userBp);
+		emit(EvStoppedBreakpoint(threadId, [userBp.id]));
+	}
+
+	// An exception is being thrown here and the exception breakpoint is armed.
+	// "all" stops on every throw; "uncaught" stops only when no live `try` will
+	// catch it — a caught throw under uncaught-only is resumed past silently
+	// (same trap-dance as a false conditional breakpoint), so the catch runs.
+	function handleExceptionSiteHit(threadId:Int, excEntry:{bp:PatchedBreakpoint, reg:Int}):Void {
+		var stop = exceptionBreakAll
+			|| (exceptionBreakUncaught && isUncaught(threadId))
+			|| throwMatchesTypes(threadId, excEntry.reg);
+		if (!stop) {
+			resumePastSuppressedTrap(threadId, excEntry.bp);
 			return;
 		}
+		// Restore the original byte so the throw itself runs on continue; the
+		// trap dance (stepOverAndResume) single-steps it and re-arms the site.
+		// Reported BEFORE the throw executes, so the frame is the throwing function.
+		breakpoints.suspend(excEntry.bp);
+		enterStopped(threadId, excEntry.bp);
+		emit(EvStoppedException(threadId, describeThrow(threadId, excEntry.reg)));
+	}
 
-		// hl_throw's entry: EVERY exception passes through here. We only surface
-		// VM-RAISED errors (null access, bounds, cast, ...) — i.e. throws whose
-		// immediate caller is C runtime code, not a jitted OThrow. A bytecode
-		// throw's caller IS jit code, so it is left to the OThrow-based breakpoints
-		// (avoiding a double stop) and resumed past silently here.
-		//
-		// The thrown value is UNREADABLE at this entry (it sits in an argument
-		// register HL's debug API does not expose), so a VM-raised throw does not
-		// stop here either: we set HL_EXC_CATCH_ALL on the throwing thread and let
-		// hl_throw run on — it stores exc_value and then executes its own
-		// hl_debug_break, where the pendingVmThrow branch above reports the stop
-		// WITH the actual error message. Only when the thread registry is
-		// unreadable do we stop here, with a generic description.
-		if (nativeThrow) {
-			var syntheticBp = breakpoints.nativeThrowBreakpoint();
-			var vmRaised = raisedByRuntime(threadId);
-			if (vmRaised && !(vmExceptions != null && vmExceptions.armCatchAll(threadId))) {
-				breakpoints.suspend(syntheticBp);
-				enterStopped(threadId, syntheticBp);
-				emit(EvStoppedException(threadId, describeVmThrow(threadId, null)));
-				return;
-			}
-			if (vmRaised) {
-				pendingVmThrow.set(threadId, true);
-				// walked HERE: at hl_throw's own break the chain is gone
-				vmThrowFrames.set(threadId, stackWalker.walk(threadId));
-			}
-			inspector.invalidate();
-			var interrupted = resumePastUserBreakpoint(threadId, syntheticBp);
-			if (state == Exited) {
-				return;
-			}
-			if (interrupted != null) {
-				handleWaitOutcome(interrupted);
-			}
+	// hl_throw's entry: EVERY exception passes through here. We only surface
+	// VM-RAISED errors (null access, bounds, cast, ...) — i.e. throws whose
+	// immediate caller is C runtime code, not a jitted OThrow. A bytecode
+	// throw's caller IS jit code, so it is left to the OThrow-based breakpoints
+	// (avoiding a double stop) and resumed past silently here.
+	//
+	// The thrown value is UNREADABLE at this entry (it sits in an argument
+	// register HL's debug API does not expose), so a VM-raised throw does not
+	// stop here either: we set HL_EXC_CATCH_ALL on the throwing thread and let
+	// hl_throw run on — it stores exc_value and then executes its own
+	// hl_debug_break, where handleUnpatchedTrap reports the stop WITH the
+	// actual error message. Only when the thread registry is unreadable do we
+	// stop here, with a generic description.
+	function handleNativeThrowHit(threadId:Int):Void {
+		var syntheticBp = breakpoints.nativeThrowBreakpoint();
+		var vmRaised = raisedByRuntime(threadId);
+		if (vmRaised && !(vmExceptions != null && vmExceptions.armCatchAll(threadId))) {
+			breakpoints.suspend(syntheticBp);
+			enterStopped(threadId, syntheticBp);
+			emit(EvStoppedException(threadId, describeVmThrow(threadId, null)));
 			return;
 		}
+		if (vmRaised) {
+			pendingVmThrow.set(threadId, true);
+			// walked HERE: at hl_throw's own break the chain is gone
+			vmThrowFrames.set(threadId, stackWalker.walk(threadId));
+		}
+		resumePastSuppressedTrap(threadId, syntheticBp);
+	}
 
-		// A temporary (step) breakpoint. Temps live at CODE addresses, so any
-		// thread executing that line traps: a hit by a thread that does NOT own
-		// the step is never its landing — step that thread past and keep going.
+	// A temporary (step) breakpoint. Temps live at CODE addresses, so any
+	// thread executing that line traps: a hit by a thread that does NOT own
+	// the step is never its landing — step that thread past and keep going.
+	// The owning thread also honours the recursion frame guard (step over/out).
+	function handleStepTempHit(threadId:Int, hitAddress:Pointer):Void {
 		var step = activeStep;
-		if (step != null && threadId != step.threadId) {
-			stepPastTempAndResume(threadId, hitAddress);
-			return;
-		}
-		// the owning thread: honour the recursion frame guard for step over/out
-		if (step != null && !frameGuardSatisfied(step)) {
+		if (step != null && (threadId != step.threadId || !frameGuardSatisfied(step))) {
 			stepPastTempAndResume(threadId, hitAddress);
 			return;
 		}
 		enterStopped(threadId, null);
 		emit(EvStoppedStep(threadId));
+	}
+
+	// Resume past a trap that must NOT stop the debuggee (a false breakpoint
+	// condition, a filtered exception, hl_throw's silent passthrough), and
+	// process any stop another thread raised while we were doing so.
+	function resumePastSuppressedTrap(threadId:Int, bp:PatchedBreakpoint):Void {
+		inspector.invalidate();
+		var interrupted = resumePastUserBreakpoint(threadId, bp);
+		if (state == Exited) {
+			return;
+		}
+		if (interrupted != null) {
+			handleWaitOutcome(interrupted);
+		}
 	}
 
 	// Evaluates a conditional breakpoint against the hitting thread's top frame.
