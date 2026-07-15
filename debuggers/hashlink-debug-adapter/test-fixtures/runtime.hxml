@@ -1,0 +1,4 @@
+-cp src
+-main RuntimeError
+-debug
+-hl ../build/hl/runtime-fixture.hl

@@ -5,7 +5,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
@@ -18,24 +17,24 @@ import org.junit.Before;
 import org.junit.Test;
 
 /**
- * The "native" exception filter: a VM-raised error (a null access, raised by
+ * The "runtime" exception filter: a VM-raised error (a null access, raised by
  * HashLink's C runtime through hl_throw with NO bytecode OThrow) must stop at
  * the offending Haxe line — recovered from a stop inside C code — with the
  * frame's locals inspectable, so the user can see the offending null value.
  * The OThrow-based "all" filter, by contrast, must NOT catch it.
  */
-public class NativeExceptionIntegrationTest extends DapIntegrationTestBase {
+public class RuntimeExceptionIntegrationTest extends DapIntegrationTestBase {
 
   @Before
-  public void requireNativeFixture() {
-    Assume.assumeTrue("native fixture not built - skipping", nativeFixtureHl != null);
+  public void requireRuntimeFixture() {
+    Assume.assumeTrue("runtime fixture not built - skipping", runtimeFixtureHl != null);
   }
 
   @Test
-  public void nativeFilterStopsAtTheNullAccessWithLocalsVisible() throws Exception {
+  public void runtimeFilterStopsAtTheNullAccessWithLocalsVisible() throws Exception {
     initialize();
-    assertTrue("launch succeeds", launch(nativeFixtureHl.toString()).isSuccess());
-    assertTrue("native filter enabled", request(exceptionBreakpoints("native")).isSuccess());
+    assertTrue("launch succeeds", launch(runtimeFixtureHl.toString()).isSuccess());
+    assertTrue("runtime filter enabled", request(exceptionBreakpoints("runtime")).isSuccess());
     assertTrue("configurationDone succeeds", request(new ConfigurationDoneRequest()).isSuccess());
 
     StoppedEvent stopped = awaitStopped();
@@ -43,13 +42,13 @@ public class NativeExceptionIntegrationTest extends DapIntegrationTestBase {
     int threadId = stopped.getBody().getThreadId();
 
     // the throwing Haxe frame is recovered even though the trap fired inside C:
-    // top frame is NativeError.main at the null-access line
+    // top frame is RuntimeError.main at the null-access line
     List<StackFrame> frames = stackTrace(threadId).getBody().getStackFrames();
     StackFrame top = frames.get(0);
-    assertTrue("top frame is '" + top.getName() + "', expected NativeError.main",
+    assertTrue("top frame is '" + top.getName() + "', expected RuntimeError.main",
                top.getName().contains("main"));
     assertNotNull("throwing frame has a source", top.getSource());
-    assertTrue("source is NativeError.hx", top.getSource().getPath().endsWith("NativeError.hx"));
+    assertTrue("source is RuntimeError.hx", top.getSource().getPath().endsWith("RuntimeError.hx"));
     assertEquals("stopped at the null-access line", nullAccessLine(), top.getLine());
 
     // and its locals are readable — `maybe` is the null that caused the access
@@ -63,13 +62,13 @@ public class NativeExceptionIntegrationTest extends DapIntegrationTestBase {
   @Test
   public void allFilterDoesNotCatchAVmRaisedError() throws Exception {
     initialize();
-    assertTrue("launch succeeds", launch(nativeFixtureHl.toString()).isSuccess());
+    assertTrue("launch succeeds", launch(runtimeFixtureHl.toString()).isSuccess());
     // the OThrow-based "all" filter has no bytecode throw site to trap here
     assertTrue("all filter enabled", request(exceptionBreakpoints("all")).isSuccess());
     assertTrue("configurationDone succeeds", request(new ConfigurationDoneRequest()).isSuccess());
 
     // the program runs to termination (the null access escapes the OThrow traps)
-    // rather than stopping — the very point the native filter exists to fix
+    // rather than stopping — the very point the runtime filter exists to fix
     boolean stoppedForException = false;
     long deadline = System.currentTimeMillis() + TIMEOUT;
     while (System.currentTimeMillis() < deadline) {
@@ -90,13 +89,13 @@ public class NativeExceptionIntegrationTest extends DapIntegrationTestBase {
   }
 
   private int nullAccessLine() throws Exception {
-    List<String> lines = java.nio.file.Files.readAllLines(fixtureSrcDir.resolve("NativeError.hx"));
+    List<String> lines = java.nio.file.Files.readAllLines(fixtureSrcDir.resolve("RuntimeError.hx"));
     for (int i = 0; i < lines.size(); i++) {
       if (lines.get(i).contains("// bp:nullaccess")) {
         return i + 1;
       }
     }
-    throw new AssertionError("no '// bp:nullaccess' marker in NativeError.hx");
+    throw new AssertionError("no '// bp:nullaccess' marker in RuntimeError.hx");
   }
 
   private static SetExceptionBreakpointsRequest exceptionBreakpoints(String... filters) {

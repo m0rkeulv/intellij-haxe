@@ -932,7 +932,7 @@ The old spawn path remains for headless debuggees and most integration tests.
 
 ---
 
-## 9. Native (VM-raised) exceptions: trapping hl_throw
+## 9. Runtime (VM-raised) exceptions: trapping hl_throw
 
 ### Symptom
 A runtime error — null access, array-out-of-bounds, invalid cast, division by
@@ -945,7 +945,12 @@ Those breakpoints plant an INT3 at every bytecode `OThrow`/`ORethrow` site
 (`hl_null_access` → `hl_throw`), which executes NO bytecode throw — so it
 never hits an OThrow trap and escapes to the root handler.
 
-### Fix: trap hl_throw itself (the "native" filter)
+### Fix: trap hl_throw itself (the "runtime" filter)
+(Named "runtime", not "native", everywhere user- or protocol-facing: "native"
+reads as the HXCPP/C native *target*. In the IDE it is the "HashLink runtime
+exceptions" row of the "HashLink Uncaught Exceptions" breakpoint category —
+a property-flagged sibling installed at project start, because the platform
+allows only one default breakpoint per `XBreakpointType`.)
 Every exception, bytecode or runtime, passes through the single C function
 `hl_throw(vdynamic*)`. `NativeThrowResolver` mines its address by
 disassembling an OThrow JIT site — hashlink `jit.c` compiles OThrow to
@@ -957,7 +962,7 @@ Three subtleties make it work:
 - **Distinguishing runtime from bytecode throws.** At the hl_throw hit we stop
   ONLY when the immediate caller ([Esp]) is NOT jitted code — i.e. a C runtime
   function raised it. A bytecode throw's caller IS jit code, so it is left to
-  the OThrow breakpoints (no double stop). This makes "native" mean exactly
+  the OThrow breakpoints (no double stop). This makes "runtime" mean exactly
   "VM-raised error".
 - **Recovering the Haxe frame from a C entry.** At hl_throw's entry RBP still
   belongs to the caller, so the normal RBP walk would be wrong.
@@ -971,7 +976,7 @@ Three subtleties make it work:
   offending value (a null field, an out-of-range index) is found in the
   recovered frame's LOCALS, which is what the user needs.
 
-Pinned by `NativeExceptionIntegrationTest` (stops at the null-access line with
+Pinned by `RuntimeExceptionIntegrationTest` (stops at the null-access line with
 `maybe == null` visible; the "all" filter does NOT catch it) and
 `StackWalkerTest` (C-entry seeding via both a C and a direct-JIT caller).
 
@@ -979,7 +984,7 @@ Pinned by `NativeExceptionIntegrationTest` (stops at the null-access line with
 
 | Concern | Rule |
 |---|---|
-| Native (VM-raised) exceptions | OThrow traps miss null access/bounds/cast (raised in C, no bytecode throw); the "native" filter traps hl_throw (mined from an OThrow site). Stop only when [Esp] is NOT jit code (runtime-raised); recover the Haxe frame via StackWalker.seedFromCEntry; no thrown value readable (arg registers not exposed) — read the locals |
+| Runtime (VM-raised) exceptions | OThrow traps miss null access/bounds/cast (raised in C, no bytecode throw); the "runtime" filter traps hl_throw (mined from an OThrow site). Stop only when [Esp] is NOT jit code (runtime-raised); recover the Haxe frame via StackWalker.seedFromCEntry; no thrown value readable (arg registers not exposed) — read the locals |
 | Blocking native call on a background thread | Wrap in `hl.Gc.blocking(true/false)`; read into a preallocated buffer; allocate nothing inside the section |
 | Socket vs process/file reads | Socket reads are GC-safe; process/file reads are not |
 | Reading a variable-length VM message off a socket | Drain-then-parse (with a read timeout) or length-prefix; never over-request |

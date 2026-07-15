@@ -96,9 +96,9 @@ class DebugSession {
 	var exceptionBreakUncaught:Bool = false;
 	// FQNs (or simple names) of exception classes to stop on — the per-type filter.
 	var exceptionBreakTypes:Array<String> = [];
-	// "native" filter: break on VM-raised errors (null access, bounds, cast, ...)
+	// "runtime" filter: break on VM-raised errors (null access, bounds, cast, ...)
 	// by trapping hl_throw. Resolved lazily from an OThrow site once, then cached.
-	var exceptionBreakNative:Bool = false;
+	var exceptionBreakRuntime:Bool = false;
 	var nativeThrowResolver:NativeThrowResolver;
 	var nativeThrowAddress:Null<Pointer> = null;
 	var memReader:MemoryReader;
@@ -714,7 +714,7 @@ class DebugSession {
 	function handleSetExceptionBreakpoints(requestSeq:Int, filters:Array<String>, filterTypes:Array<String>):Void {
 		exceptionBreakAll = filters != null && filters.indexOf("all") >= 0;
 		exceptionBreakUncaught = filters != null && filters.indexOf("uncaught") >= 0;
-		exceptionBreakNative = filters != null && filters.indexOf("native") >= 0;
+		exceptionBreakRuntime = filters != null && filters.indexOf("runtime") >= 0;
 		exceptionBreakTypes = filterTypes != null ? filterTypes : [];
 		applyExceptionBreakpoints();
 		emit(EvExceptionBreakpointsSet(requestSeq));
@@ -722,7 +722,7 @@ class DebugSession {
 
 	// Reconciles the armed exception INT3s with the desired state. Two independent
 	// traps: OThrow sites (armed while "all"/"uncaught"/types is on — the mode only
-	// changes whether a hit surfaces) and hl_throw's entry (the "native" filter,
+	// changes whether a hit surfaces) and hl_throw's entry (the "runtime" filter,
 	// catching VM-raised errors with no bytecode throw). A no-op before launch
 	// (breakpoints/sites not built yet — re-run once they are). Arming/disarming
 	// writes debuggee memory, so a running debuggee is briefly frozen first.
@@ -731,10 +731,10 @@ class DebugSession {
 			return;
 		}
 		var wantSites = exceptionBreakAll || exceptionBreakUncaught || exceptionBreakTypes.length > 0;
-		var wantNative = exceptionBreakNative && resolveNativeThrow() != null;
+		var wantRuntime = exceptionBreakRuntime && resolveNativeThrow() != null;
 		var sitesChange = wantSites != breakpoints.isExceptionsArmed();
-		var nativeChange = wantNative != breakpoints.isNativeThrowArmed();
-		if (!sitesChange && !nativeChange) {
+		var runtimeChange = wantRuntime != breakpoints.isNativeThrowArmed();
+		if (!sitesChange && !runtimeChange) {
 			return;
 		}
 		var wasRunning = switch (state) { case Running: true; default: false; };
@@ -745,8 +745,8 @@ class DebugSession {
 			if (wantSites) breakpoints.armExceptions(exceptionSites.all());
 			else breakpoints.disarmExceptions();
 		}
-		if (nativeChange) {
-			if (wantNative) breakpoints.armNativeThrow(nativeThrowAddress);
+		if (runtimeChange) {
+			if (wantRuntime) breakpoints.armNativeThrow(nativeThrowAddress);
 			else breakpoints.disarmNativeThrow();
 		}
 		if (wasRunning) {
@@ -756,13 +756,13 @@ class DebugSession {
 
 	// Resolves hl_throw's address once (mined from an OThrow site) and caches it;
 	// null when the program has no throw site to mine or the pattern is absent
-	// (the native-exception breakpoint then simply cannot arm).
+	// (the runtime-exceptions breakpoint then simply cannot arm).
 	function resolveNativeThrow():Null<Pointer> {
 		if (nativeThrowAddress == null && nativeThrowResolver != null) {
 			nativeThrowAddress = nativeThrowResolver.resolve();
 			if (nativeThrowAddress == null) {
 				emit(EvOutput("console",
-					"HashLink native exception breakpoint unavailable: could not locate hl_throw "
+					"HashLink runtime exceptions breakpoint unavailable: could not locate hl_throw "
 					+ "(the program has no throw site to mine, or the JIT pattern was not recognised).\n"));
 			}
 		}
@@ -820,7 +820,7 @@ class DebugSession {
 	// API exposes no argument register to read the thrown value — so we name the
 	// recovered throwing frame and point the user at the locals, which is where
 	// the offending value (a null field, an out-of-range index) is visible.
-	function describeNativeThrow(threadId:Int):String {
+	function describeRuntimeThrow(threadId:Int):String {
 		var frames = inspector.framesFor(threadId);
 		if (frames.length == 0) {
 			return "HashLink runtime exception (such as a null access or out-of-bounds); inspect the locals.";
@@ -1321,7 +1321,7 @@ class DebugSession {
 			}
 			breakpoints.suspend(syntheticBp);
 			enterStopped(threadId, syntheticBp);
-			emit(EvStoppedException(threadId, describeNativeThrow(threadId)));
+			emit(EvStoppedException(threadId, describeRuntimeThrow(threadId)));
 			return;
 		}
 
