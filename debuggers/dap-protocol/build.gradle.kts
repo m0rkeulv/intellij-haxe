@@ -27,3 +27,15 @@ dependencies {
 
     testImplementation(libs.junit)
 }
+
+// Debugger validation belongs to the dedicated windows CI job; the regular
+// build/release jobs pass -PdebuggerTests=false (compilation still runs).
+tasks.named<Test>("test") {
+    onlyIf {
+        val enabled = providers.gradleProperty("debuggerTests").getOrElse("true").toBoolean()
+        if (!enabled) {
+            logger.lifecycle("SKIPPING debugger tests (-PdebuggerTests=false); the dedicated CI job runs them")
+        }
+        enabled
+    }
+}

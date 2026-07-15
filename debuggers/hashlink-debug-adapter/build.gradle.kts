@@ -152,13 +152,18 @@ tasks.register<Exec>("buildDebugAdapter") {
     outputs.file(adapterHl)
 }
 
+// Debugger validation belongs to the dedicated windows CI job; the regular
+// build/release jobs pass -PdebuggerTests=false. The adapter bytecode that
+// ships in the plugin (buildDebugAdapter) is NOT affected by this flag.
+val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("true").toBoolean()
+
 tasks.register<Exec>("testHaxeAdapter") {
     group = "hashlink"
     description = "Runs the Haxe-side adapter tests with the Haxe interpreter (no HashLink runtime required)"
     dependsOn("installFormatHaxelib", "buildTestFixture")
     onlyIf {
-        (buildHashlinkAdapter && haxeAvailable).also {
-            if (!it) logger.warn("SKIPPING Haxe adapter tests (haxe compiler not found on PATH or buildHashlinkAdapter=false)")
+        (debuggerTests && buildHashlinkAdapter && haxeAvailable).also {
+            if (!it) logger.warn("SKIPPING Haxe adapter tests (-PdebuggerTests=false, haxe compiler not found on PATH, or buildHashlinkAdapter=false)")
         }
     }
     workingDir = projectDir
@@ -175,6 +180,12 @@ tasks.named("check") {
 }
 
 tasks.named<Test>("test") {
+    onlyIf {
+        if (!debuggerTests) {
+            logger.lifecycle("SKIPPING debugger tests (-PdebuggerTests=false); the dedicated CI job runs them")
+        }
+        debuggerTests
+    }
     dependsOn("buildDebugAdapter", "buildTestFixture", "buildThreadsFixture", "buildSpinFixture", "buildUncaughtFixture", "buildStackTraceFixture", "buildTypedThrowFixture")
     // integration tests locate the built adapter, the debuggee fixtures and
     // (optionally) the HashLink executable through these

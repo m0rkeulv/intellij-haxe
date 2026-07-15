@@ -77,7 +77,7 @@ jobs:
       # hxcpp debugger fixtures need the hxcpp toolchain + a C++ compiler and
       # only build on windows - the Debuggers job in build.yaml validates them
       - name: Build with Gradle
-        run: ./gradlew clean test buildPlugin verifyPlugin -PbuildHxcppFixtures=false
+        run: ./gradlew clean test buildPlugin verifyPlugin -PdebuggerTests=false
 
 
       - name: Find assets

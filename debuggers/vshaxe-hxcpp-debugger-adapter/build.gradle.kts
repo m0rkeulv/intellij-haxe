@@ -37,11 +37,11 @@ dependencies {
 val hxcppFixturePort = 6973
 val hxcppDebugServerVersion = "1.2.4" // pinned for reproducible fixture builds
 
-// Fixture builds need haxe + the hxcpp toolchain + a C++ compiler and take
-// minutes - CI's regular build/release jobs disable them with
-// -PbuildHxcppFixtures=false (the integration tests then skip themselves);
-// the dedicated debugger job on a windows runner keeps them on.
-val buildHxcppFixtures = providers.gradleProperty("buildHxcppFixtures").getOrElse("true").toBoolean()
+// Debugger validation belongs to the dedicated windows CI job: fixtures need
+// haxe + the hxcpp toolchain + a C++ compiler, and the tests target windows.
+// The regular build/release jobs pass -PdebuggerTests=false, which disables
+// this module's tests and fixture builds entirely (compilation still runs).
+val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("true").toBoolean()
 val exeSuffix = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
 
 // name -> (hxml, main class); each compiles to build/hxcpp/<name>/<Main>-debug(.exe)
@@ -69,7 +69,7 @@ val haxeAvailable: Boolean by lazy {
 tasks.register<Exec>("installHxcppDebugServerHaxelib") {
     group = "hxcpp"
     description = "Installs the pinned 'hxcpp-debug-server' haxelib compiled into the test fixture"
-    onlyIf { buildHxcppFixtures && haxeAvailable }
+    onlyIf { debuggerTests && haxeAvailable }
     commandLine = listOf("haxelib", "install", "hxcpp-debug-server", hxcppDebugServerVersion, "--quiet", "--always")
 }
 
@@ -78,12 +78,12 @@ hxcppFixtures.forEach { (name, spec) ->
         group = "hxcpp"
         description = "Compiles the '$name' debuggee fixture to a native exe (build/hxcpp/$name)"
         onlyIf {
-            if (!buildHxcppFixtures) {
-                logger.lifecycle("SKIPPING hxcpp '$name' fixture build (buildHxcppFixtures=false); integration tests will be skipped")
+            if (!debuggerTests) {
+                logger.lifecycle("SKIPPING hxcpp '$name' fixture build (-PdebuggerTests=false)")
             } else if (!haxeAvailable) {
                 logger.warn("SKIPPING hxcpp '$name' fixture build (haxe compiler not found on PATH); integration tests will be skipped")
             }
-            buildHxcppFixtures && haxeAvailable
+            debuggerTests && haxeAvailable
         }
         dependsOn("installHxcppDebugServerHaxelib")
         // run from the MODULE root, not test-fixtures: haxe builds generated-file
@@ -98,6 +98,12 @@ hxcppFixtures.forEach { (name, spec) ->
 }
 
 tasks.named<Test>("test") {
+    onlyIf {
+        if (!debuggerTests) {
+            logger.lifecycle("SKIPPING debugger tests (-PdebuggerTests=false); the dedicated CI job runs them")
+        }
+        debuggerTests
+    }
     hxcppFixtures.keys.forEach { name ->
         dependsOn("buildHxcpp${name.replaceFirstChar { it.uppercase() }}Fixture")
         // integration tests locate each built fixture through these
