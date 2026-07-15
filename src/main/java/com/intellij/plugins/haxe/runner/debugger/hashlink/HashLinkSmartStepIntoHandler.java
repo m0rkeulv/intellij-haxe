@@ -28,9 +28,11 @@ import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
 
 /**
- * Smart step into (Shift+F7) for HashLink: on a line with several calls
- * (chained {@code a().b()} or nested {@code a(b())}), lists them so the user
- * picks which one to enter. The variants come from the adapter's DAP
+ * Smart step into for HashLink: on a line with several calls (chained
+ * {@code a().b()} or nested {@code a(b())}), lists them so the user picks
+ * which one to enter. Both the dedicated action (Shift+F7) and the plain Step
+ * Into (F7, via {@link #computeStepIntoVariants}) show the chooser; F7 steps
+ * plainly when the line has at most one call. The variants come from the adapter's DAP
  * stepInTargets request — the calls on the stopped line, in execution order —
  * and choosing one sends stepIn with that targetId: the adapter plants a temp
  * breakpoint only at the chosen callee's entry, like a run-to-cursor aimed at
@@ -68,6 +70,16 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
   @Override
   public @NotNull List<Variant> computeSmartStepVariants(@NotNull XSourcePosition position) {
     return fetchVariants(position);
+  }
+
+  // The PLAIN Step Into action (F7) consults this — the base implementation
+  // returns a rejected promise, meaning "no variants, just step". Returning our
+  // variants makes F7 behave like the Java debugger: with more than one call on
+  // the line the same highlight/Tab chooser appears; with zero or one the
+  // platform performs an ordinary step into.
+  @Override
+  public @NotNull Promise<List<Variant>> computeStepIntoVariants(@NotNull XSourcePosition position) {
+    return computeSmartStepVariantsAsync(position);
   }
 
   private List<Variant> fetchVariants(XSourcePosition position) {
