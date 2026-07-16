@@ -75,7 +75,8 @@ public class HaxeExceptionBreakpointType
   @Override
   public XBreakpoint<HaxeExceptionBreakpointProperties> createDefaultBreakpoint(
     @NotNull XBreakpointCreator<HaxeExceptionBreakpointProperties> creator) {
-    // uncaught + critical on, caught off — see the properties' field defaults
+    // INTENTIONALLY enabled by default (unlike Java's "Any exception"):
+    // uncaught + critical stops on, caught off — see the properties' field defaults
     return creator.createBreakpoint(new HaxeExceptionBreakpointProperties());
   }
 
