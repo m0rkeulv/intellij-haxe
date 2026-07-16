@@ -83,8 +83,9 @@ jobs:
           key: ${{ matrix.IDEA_VERSION }}-idea
           restore-keys: ${{ matrix.IDEA_VERSION }}-idea
 
-      # hxcpp debugger fixtures need the hxcpp toolchain + a C++ compiler and
-      # only build on windows - the Debuggers job in build.yaml validates them
+      # debugger tests are skipped here (most need windows + the hxcpp
+      # toolchain); the parallel 'debuggers' job below runs them for this
+      # exact build, and 'finish' won't publish unless it passes
       - name: Build with Gradle
         run: ./gradlew clean test buildPlugin verifyPlugin -PdebuggerTests=false
 
@@ -110,9 +111,15 @@ jobs:
           asset_content_type: application/java-archive
 
 
+  # tag pushes never trigger the path-filtered debugger-*.yaml workflows, so
+  # test every debugger module here for the exact commit being released
+  debuggers:
+    name: Test debugger modules
+    uses: ./.github/workflows/debugger-all.yaml
+
   finish:
     name: publish release
-    needs: [prepare, build]
+    needs: [prepare, build, debuggers]
     runs-on: ubuntu-latest
     steps:
       - name: Publish release

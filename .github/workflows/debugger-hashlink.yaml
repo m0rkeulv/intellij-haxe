@@ -14,7 +14,7 @@ on:
       - 'gradlew*'
       # the CI definition itself
       - '.github/workflows/debugger-build.yaml'
-      - 'debugger-hashlink.yaml'
+      - '.github/workflows/debugger-hashlink.yaml'
   pull_request:
     branches: ['master', 'develop', 'feature/*']
     paths:
@@ -25,7 +25,7 @@ on:
       - 'settings.gradle.kts'
       - 'gradlew*'
       - '.github/workflows/debugger-build.yaml'
-      - 'debugger-hashlink.yaml'
+      - '.github/workflows/debugger-hashlink.yaml'
 
 jobs:
   hashlink-debug-adapter:
