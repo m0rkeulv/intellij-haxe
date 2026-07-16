@@ -123,6 +123,8 @@ public class HashLinkDebugProcess extends XDebugProcess {
   private final int debugPort;
   private final long debuggeePid;
   private final HashLinkBreakpointManager breakpoints = new HashLinkBreakpointManager(this);
+  private final com.intellij.openapi.Disposable exceptionListenerDisposable =
+    com.intellij.openapi.util.Disposer.newDisposable("Haxe exception filters");
   private final ExecutorService requestExecutor =
     Executors.newSingleThreadExecutor(r -> daemon(r, "HashLink DAP requests"));
 
@@ -180,6 +182,10 @@ public class HashLinkDebugProcess extends XDebugProcess {
   @Override
   public void sessionInitialized() {
     getSession().setPauseActionSupported(true);
+    // a Notifications-checkbox edit during the session fires breakpointChanged
+    // only, which the XBreakpointHandler does not see — listen for it here
+    HaxeExceptionBreakpointType.listenForChanges(
+      getSession().getProject(), exceptionListenerDisposable, this::updateExceptionFilters);
     requestExecutor.execute(this::initializeSession);
   }
 
@@ -505,6 +511,7 @@ public class HashLinkDebugProcess extends XDebugProcess {
     if (process != null) {
       process.destroy();
     }
+    com.intellij.openapi.util.Disposer.dispose(exceptionListenerDisposable);
     if (!processHandler.isProcessTerminated()) {
       processHandler.destroyProcess();
     }

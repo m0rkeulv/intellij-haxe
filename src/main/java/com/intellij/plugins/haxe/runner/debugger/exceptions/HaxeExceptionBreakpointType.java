@@ -83,6 +83,32 @@ public class HaxeExceptionBreakpointType
   }
 
   /**
+   * Recomputes the exception filters when a breakpoint's PROPERTIES change (a
+   * Notifications checkbox, a class rename) during a live session. The
+   * add/remove/enable/disable paths already reach the debug process through
+   * its {@code XBreakpointHandler}; a properties edit fires only
+   * {@code breakpointChanged}, which nothing else listens to. Bound to the
+   * given disposable so it dies with the session.
+   */
+  public static void listenForChanges(@NotNull Project project,
+                                      @NotNull com.intellij.openapi.Disposable disposable,
+                                      @NotNull Runnable onChanged) {
+    XBreakpointType<XBreakpoint<HaxeExceptionBreakpointProperties>, HaxeExceptionBreakpointProperties> type =
+      com.intellij.xdebugger.XDebuggerUtil.getInstance().findBreakpointType(HaxeExceptionBreakpointType.class);
+    if (type == null) {
+      return;
+    }
+    XBreakpointManager manager = XDebuggerManager.getInstance(project).getBreakpointManager();
+    manager.addBreakpointListener(type,
+      new com.intellij.xdebugger.breakpoints.XBreakpointListener<>() {
+        @Override
+        public void breakpointChanged(@NotNull XBreakpoint<HaxeExceptionBreakpointProperties> breakpoint) {
+          onChanged.run();
+        }
+      }, disposable);
+  }
+
+  /**
    * Runs `consumer` for every ENABLED Haxe exception breakpoint's properties —
    * the one loop both debug processes build their wire filters from. Call
    * inside a read action.

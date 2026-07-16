@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case "throwloop": TypedThrow.loop(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -191,6 +191,22 @@ class TypedThrow {
 			throw new AppError("kaboom"); // TYPED_THROW_LINE = 191
 		} catch (e:AppError) {
 			Sys.println("caught-app:" + e.message);
+		}
+	}
+
+	// throws (and catches) an AppError on a heartbeat, so a probe can flip the
+	// exception filter MID-SESSION and confirm the next throw stops
+	public static function loop():Void {
+		var beats = 0;
+		while (true) {
+			beats++;
+			if (beats % 20 == 0) {
+				Sys.println("beat:" + beats);
+			}
+			try {
+				throw new AppError("loop");
+			} catch (e:AppError) {}
+			Sys.sleep(0.02);
 		}
 	}
 }

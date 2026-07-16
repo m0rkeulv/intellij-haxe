@@ -111,6 +111,8 @@ public class HxcppDebugProcess extends XDebugProcess {
   private final ExecutorService requestExecutor =
     Executors.newSingleThreadExecutor(r -> daemon(r, "HXCPP DAP requests"));
 
+  private final com.intellij.openapi.Disposable exceptionListenerDisposable =
+    com.intellij.openapi.util.Disposer.newDisposable("Haxe exception filters");
   private volatile DapClient client;
   private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
@@ -141,6 +143,12 @@ public class HxcppDebugProcess extends XDebugProcess {
   @Override
   public void sessionInitialized() {
     getSession().setPauseActionSupported(true);
+    if (backend.supportsExceptionFilters()) {
+      // a Notifications-checkbox edit during the session fires breakpointChanged
+      // only, which the XBreakpointHandler does not see — listen for it here
+      HaxeExceptionBreakpointType.listenForChanges(
+        getSession().getProject(), exceptionListenerDisposable, this::updateExceptionFilters);
+    }
     requestExecutor.execute(this::initializeSession);
   }
 
@@ -404,6 +412,7 @@ public class HxcppDebugProcess extends XDebugProcess {
       backend.close();
     } catch (IOException ignored) {
     }
+    com.intellij.openapi.util.Disposer.dispose(exceptionListenerDisposable);
     if (!processHandler.isProcessTerminated()) {
       processHandler.destroyProcess();
     }

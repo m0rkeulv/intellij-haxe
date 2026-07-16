@@ -140,6 +140,27 @@ public class ExceptionsIT {
   }
 
   /**
+   * The user-reported bug's server half: enabling the "thrown" filter DURING a
+   * live session (not just at startup) must take effect. The debuggee loops
+   * throwing+catching an AppError; the session starts with thrown OFF (runs
+   * freely), then setExceptionBreakpoints turns it on and the next throw stops.
+   */
+  @Test
+  public void enablingTheThrownFilterMidSessionTakesEffect() throws Exception {
+    try (FixtureSession session = FixtureSession.launchScenario("throwloop")) {
+      session.initialize("uncaught", "critical"); // thrown OFF
+      session.configurationDone();
+      session.awaitOutputAbove("beat", -1); // looping, not stopped
+
+      session.setExceptionFilters(java.util.List.of("uncaught", "critical", "thrown"), java.util.List.of());
+      StoppedEvent stopped = session.awaitStopped();
+      assertEquals("exception", stopped.getBody().getReason());
+      assertTrue(stopped.getBody().getText(), stopped.getBody().getText().contains("AppError"));
+      session.resume(session.stoppedThread(stopped));
+    }
+  }
+
+  /**
    * Regression guard: ordinary LINE breakpoints inside a try AND inside its
    * catch fire like any other breakpoint. (The exception FILTERS are a
    * separate mechanism — "break on all/caught exceptions" is not supportable,
