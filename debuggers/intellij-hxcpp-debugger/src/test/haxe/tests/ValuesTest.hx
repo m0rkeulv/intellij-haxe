@@ -21,6 +21,29 @@ private enum Shape {
 	Empty;
 }
 
+// A property getter that records being called: rendering must NEVER invoke it
+// (getters run user code on the server thread while the debuggee is paused —
+// a lock-taking getter deadlocks the whole session).
+private class Gated {
+	public static var getterCalls = 0;
+
+	public var plain:Int = 7;
+	// @:isVar: the physical backing field IS listed by getInstanceFields, so a
+	// getProperty-based renderer would invoke get_computed here
+	@:isVar public var computed(get, set):Int = 13;
+
+	public function new() {}
+
+	function get_computed():Int {
+		getterCalls++;
+		return this.computed;
+	}
+
+	function set_computed(value:Int):Int {
+		return this.computed = value;
+	}
+}
+
 class ValuesTest {
 	public static function run(assert:Assert):Void {
 		primitivesAreLeaves(assert);
@@ -28,6 +51,22 @@ class ValuesTest {
 		objectsExpandToDataFieldsOnly(assert);
 		anonymousObjectsExpand(assert);
 		enumsExpandToParameters(assert);
+		renderingNeverInvokesGetters(assert);
+	}
+
+	static function renderingNeverInvokesGetters(assert:Assert):Void {
+		var gated = new Gated();
+		Gated.getterCalls = 0;
+		Values.describe(gated);
+		var kids = Values.children(gated);
+		assert.equals(0, Gated.getterCalls, "describe/children ran NO getter");
+		var names = [for (k in kids) k.name];
+		assert.isTrue(names.indexOf("plain") >= 0, "plain field listed");
+		for (kid in kids) {
+			if (kid.name == "plain") {
+				assert.equals(7, kid.value, "plain field read raw");
+			}
+		}
 	}
 
 	static function primitivesAreLeaves(assert:Assert):Void {

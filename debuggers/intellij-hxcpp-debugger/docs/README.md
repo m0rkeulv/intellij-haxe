@@ -203,6 +203,25 @@ NOT SUPPORTABLE (and why):
   as a C++ local in `checkedThrow`); only its `toString()` embedded in the
   description survives, which is not reliably a class name.
 
+## 16. Never run user code implicitly on the server thread
+
+Rendering variables happens on the server thread while the debuggee's threads
+are PAUSED. `Reflect.getProperty` invokes property getters — user code — and a
+getter that needs a lock held by a paused thread blocks the server thread
+FOREVER: the session wedges, every request times out, and resume is never
+processed (reproduced live: pause a thread holding a mutex while a local's
+`@:isVar` property getter acquires it; the first `variables` request never
+answers). The dangerous shape is a property WITH a physical backing field —
+`getInstanceFields` lists it and `getProperty` calls the getter; a
+storage-less `(get, never)` property is not even listed on cpp.
+
+Rule: `Values` reads fields RAW (`Reflect.field`, never invokes getters) and
+labels objects by class name (never `Std.string`/`toString`, same hazard). An
+`@:isVar` property therefore shows its backing value, not its computed one.
+Running a getter is what `evaluate` is for — explicit and user-initiated.
+The Java debugger gets away with evaluating getters because it runs them ON
+the suspended thread; hxcpp has no such primitive.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log
