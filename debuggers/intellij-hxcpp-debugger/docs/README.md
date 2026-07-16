@@ -171,6 +171,38 @@ Residual: `exprReturn` is also used inside hscript-defined function bodies, so
 an error inside a function DEFINED IN THE WATCH EXPRESSION still nulls on cpp;
 not worth reimplementing `EFunction` over.
 
+## 15. Exceptions: one runtime channel, string descriptions, resume asymmetry
+
+The runtime reports EVERY exception-ish stop as `STATUS_STOPPED_CRITICAL_ERROR`
+with a description string — `STATUS_STOPPED_UNCAUGHT_EXCEPTION` exists in the
+std API but is never emitted by hxcpp 4.3.2 (source-grepped). Two kinds share
+the channel, told apart by description:
+
+- **Uncatchable throw** (`"Uncatchable Throw: <value.toString()>"`): every
+  `throw` in an HXCPP_DEBUGGER build runs `__hxcpp_dbg_checkedThrow`, which
+  walks the enclosing frames' DECLARED catch types (`hx::CanBeCaught`) — real
+  typed uncaught-detection. The thread stops AT the throw site BEFORE
+  unwinding, so the full stack and locals are inspectable (verified live).
+  Continue unwinds and terminates normally (`Error : <value>`).
+- **Critical error** (`"Null Object Reference"`, GC errors, ...): with a
+  debugger attached `hx::NullReference` calls `__hxcpp_dbg_fix_critical_error`
+  UNCONDITIONALLY — a null access stops even inside a try/catch that would
+  have caught it (verified live), a deliberate behavior difference from an
+  undebugged run. Resume is NOT clean: the "fixup" path re-executes the
+  faulting access, so continue re-stops or hard-crashes (0xC0000005 observed).
+  With the "critical" filter off, the Dispatcher caps consecutive silent
+  resumes (MAX_SILENT_CRITICAL_RESUMES) so a resumable fault loop cannot
+  livelock the session.
+
+NOT SUPPORTABLE (and why):
+
+- **Break on caught/all exceptions** — no runtime hook: `checkedThrow` only
+  calls out when the value is uncatchable; a catchable throw is a plain
+  `hx::Throw` with no debugger involvement.
+- **Typed exception filters** — the thrown VALUE is never surfaced (it lives
+  as a C++ local in `checkedThrow`); only its `toString()` embedded in the
+  description survives, which is not reliably a class name.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log

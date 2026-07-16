@@ -50,7 +50,7 @@ class NativeDebuggerApi implements DebuggerApi {
 								end = i + 1; // last match = the innermost user frame
 							}
 						}
-						handler(ThreadStopped(threadNumber, info.status, info.breakpoint, stack.slice(0, end)));
+						handler(ThreadStopped(threadNumber, info.status, info.breakpoint, stack.slice(0, end), info.criticalErrorDescription));
 					}
 				}
 			});

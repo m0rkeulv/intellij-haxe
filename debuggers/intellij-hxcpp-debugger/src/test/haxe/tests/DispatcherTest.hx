@@ -24,6 +24,98 @@ class DispatcherTest {
 		evaluateReturnsAResult(assert);
 		aFalseConditionResumesWithoutStopping(assert);
 		aTrueConditionStops(assert);
+		anUncaughtThrowStopsAsException(assert);
+		aCriticalErrorStopsAsException(assert);
+		aDisabledFilterResumesSilently(assert);
+		exceptionInfoDescribesTheLastStop(assert);
+		exceptionInfoFailsWhenNotAtAnExceptionStop(assert);
+		repeatedSilentCriticalResumesBreakTheLivelock(assert);
+	}
+
+	// Resuming a critical error re-faults on the spot (observed live: null
+	// deref -> fixup -> segv -> stop again), so with the filter off the silent
+	// resumes are capped and the stop is then reported anyway.
+	static function repeatedSilentCriticalResumesBreakTheLivelock(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setFilters(t, ["uncaught"]); // critical OFF
+		t.sent.resize(0);
+		for (_ in 0...3) {
+			t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_CRITICAL_ERROR, -1,
+				"Main.hx", 43, "Null Object Reference"));
+		}
+		assert.equals(0, t.sent.length, "first three re-faults resume silently");
+		assert.equals(3, t.api.continueCalls.length, "three silent resumes");
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_CRITICAL_ERROR, -1,
+			"Main.hx", 43, "Null Object Reference"));
+		assert.equals(1, t.sent.length, "the fourth is reported despite the filter");
+		assert.equals("exception", t.sent[0].body.reason, "reported as an exception stop");
+		assert.equals(3, t.api.continueCalls.length, "no further silent resume");
+	}
+
+	static function setFilters(t, filters:Array<String>):Void {
+		t.dispatcher.handleRequest(Json.stringify({
+			seq: 2, type: "request", command: "setExceptionBreakpoints",
+			arguments: {filters: filters}
+		}));
+	}
+
+	static function anUncaughtThrowStopsAsException(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_CRITICAL_ERROR, -1,
+			"Main.hx", 16, "Uncatchable Throw: boom"));
+		assert.equals(1, t.sent.length, "one stopped event");
+		assert.equals("exception", t.sent[0].body.reason, "reason is exception");
+		assert.equals("Uncaught exception", t.sent[0].body.description, "classified as uncaught");
+		assert.equals("Uncatchable Throw: boom", t.sent[0].body.text, "carries the runtime message");
+	}
+
+	static function aCriticalErrorStopsAsException(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_CRITICAL_ERROR, -1,
+			"Main.hx", 16, "Null Object Reference"));
+		assert.equals("exception", t.sent[0].body.reason, "reason is exception");
+		assert.equals("Critical error", t.sent[0].body.description, "classified as critical");
+	}
+
+	static function aDisabledFilterResumesSilently(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setFilters(t, ["critical"]); // uncaught OFF
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_CRITICAL_ERROR, -1,
+			"Main.hx", 16, "Uncatchable Throw: boom"));
+		assert.equals(0, t.sent.length, "no stopped event for a disabled filter");
+		assert.equals(1, t.api.continueCalls.length, "resumed silently");
+		// the OTHER kind still stops
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_CRITICAL_ERROR, -1,
+			"Main.hx", 16, "Null Object Reference"));
+		assert.equals(1, t.sent.length, "critical still enabled");
+	}
+
+	static function exceptionInfoDescribesTheLastStop(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_CRITICAL_ERROR, -1,
+			"Main.hx", 16, "Uncatchable Throw: boom"));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({seq: 3, type: "request", command: "exceptionInfo", arguments: {threadId: 1}}));
+		assert.isTrue(t.sent[0].success, "exceptionInfo succeeds");
+		assert.equals("Uncatchable Throw: boom", t.sent[0].body.description, "returns the runtime message");
+		assert.equals("unhandled", t.sent[0].body.breakMode, "uncaught maps to unhandled");
+	}
+
+	static function exceptionInfoFailsWhenNotAtAnExceptionStop(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 9));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({seq: 3, type: "request", command: "exceptionInfo", arguments: {threadId: 1}}));
+		assert.isTrue(!t.sent[0].success, "exceptionInfo fails at a non-exception stop");
 	}
 
 	static function evaluateReturnsAResult(assert:Assert):Void {
@@ -76,12 +168,12 @@ class DispatcherTest {
 	}
 
 	// A ThreadStopped event with an optional single-frame stack.
-	static function stop(number:Int, status:Int, breakpoint:Int = -1, ?file:String, ?line:Int):DebugEvent {
+	static function stop(number:Int, status:Int, breakpoint:Int = -1, ?file:String, ?line:Int, ?description:String):DebugEvent {
 		var stack:Array<DebugStackFrame> = [];
 		if (file != null) {
 			stack.push(new DebugStackFrame(file, line != null ? line : 0, "Main", "fn"));
 		}
-		return ThreadStopped(number, status, breakpoint, stack);
+		return ThreadStopped(number, status, breakpoint, stack, description);
 	}
 
 	static function pauseBreaksTheWorld(assert:Assert):Void {
@@ -151,7 +243,7 @@ class DispatcherTest {
 			new DebugStackFrame("Main.hx", 11, "Main", "main"),
 			new DebugStackFrame("Main.hx", 17, "Main", "add")
 		];
-		t.dispatcher.handleDebugEvent(ThreadStopped(1, DebugThread.STATUS_STOPPED_BREAKPOINT, -1, stack));
+		t.dispatcher.handleDebugEvent(ThreadStopped(1, DebugThread.STATUS_STOPPED_BREAKPOINT, -1, stack, null));
 		t.sent.resize(0);
 		t.dispatcher.handleRequest(stepRequest("stackTrace", 5, 1));
 		var frames = t.sent[0].body.stackFrames;

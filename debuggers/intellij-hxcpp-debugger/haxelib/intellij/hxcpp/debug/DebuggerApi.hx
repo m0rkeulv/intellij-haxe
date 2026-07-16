@@ -84,8 +84,10 @@ enum DebugEvent {
 	// Captured ON THE STOPPING THREAD (status, hit breakpoint number, and the
 	// stack — already trimmed of the debugger's own frames), so the server
 	// thread reports the stop and serves stackTrace without a cross-thread
-	// getThreadInfo race. The stack is innermost-LAST.
-	ThreadStopped(threadNumber:Int, status:Int, breakpoint:Int, stack:Array<DebugStackFrame>);
+	// getThreadInfo race. The stack is innermost-LAST. `description` is the
+	// runtime's criticalErrorDescription: null except for exception/critical
+	// stops ("Uncatchable Throw: <value>", "Null Object Reference", ...).
+	ThreadStopped(threadNumber:Int, status:Int, breakpoint:Int, stack:Array<DebugStackFrame>, description:Null<String>);
 }
 
 /** The STEP_* constants mirror cpp.vm.Debugger. */

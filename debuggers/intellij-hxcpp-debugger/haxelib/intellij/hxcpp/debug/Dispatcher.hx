@@ -58,6 +58,23 @@ class Dispatcher {
 	var stepFromLine:Int = 0;
 	var stepIterations:Int = 0;
 
+	// Exception filters (both default ON, mirroring the advertised defaults —
+	// a client that never sends setExceptionBreakpoints gets the defaults) and
+	// the last exception stop, kept for the exceptionInfo request.
+	static inline var FILTER_UNCAUGHT = "uncaught";
+	static inline var FILTER_CRITICAL = "critical";
+	var breakOnUncaught:Bool = true;
+	var breakOnCritical:Bool = true;
+	var lastExceptionDescription:Null<String> = null;
+	var lastExceptionKind:Null<String> = null;
+
+	// Resuming a critical error usually re-faults on the spot (the runtime's
+	// "fixup" path re-executes the null access -> segv -> stop again; observed
+	// live), so auto-resuming with the filter off would livelock the program.
+	// After a few consecutive silent resumes the stop is reported regardless.
+	static inline var MAX_SILENT_CRITICAL_RESUMES = 3;
+	var silentCriticalResumes:Int = 0;
+
 	public function new(debugger:DebuggerApi, send:String->Void) {
 		this.debugger = debugger;
 		this.send = send;
@@ -89,7 +106,25 @@ class Dispatcher {
 					supportsConfigurationDoneRequest: true,
 					supportsConditionalBreakpoints: true,
 					supportsEvaluateForHovers: true,
-					supportsSetVariable: true
+					supportsSetVariable: true,
+					supportsExceptionInfoRequest: true,
+					// both kinds arrive from the runtime as CRITICAL_ERROR stops and
+					// are told apart by description (see exceptionKind); "break on
+					// caught exceptions" has no runtime hook — docs/README
+					exceptionBreakpointFilters: [
+						{
+							filter: FILTER_UNCAUGHT,
+							label: "Uncaught exceptions",
+							description: "Break where a value is thrown that no enclosing try/catch can catch (before unwinding).",
+							'default': true
+						},
+						{
+							filter: FILTER_CRITICAL,
+							label: "Critical errors",
+							description: "Break on runtime critical errors (null access, GC errors). Under a debugger these stop even inside try/catch.",
+							'default': true
+						}
+					]
 				});
 				// the spec requires the initialized event strictly after the response
 				sendEvent("initialized", null);
@@ -100,6 +135,10 @@ class Dispatcher {
 				pendingEvents.resize(0);
 			case "setBreakpoints":
 				handleSetBreakpoints(seq, command, request.arguments);
+			case "setExceptionBreakpoints":
+				handleSetExceptionBreakpoints(seq, command, request.arguments);
+			case "exceptionInfo":
+				handleExceptionInfo(seq, command);
 			case "continue":
 				// hxcpp's continueThreads wants the stopped thread as its "special"
 				// arg (count 1 = stop at the next breakpoint), not a wildcard.
@@ -266,16 +305,18 @@ class Dispatcher {
 			case ThreadStarted(_):
 				// a thread RESUMED (runtime "started" = running again); DAP resume
 				// reporting is implicit in our continue/step responses
-			case ThreadStopped(threadNumber, status, breakpoint, stack):
-				handleThreadStopped(threadNumber, status, breakpoint, stack);
+			case ThreadStopped(threadNumber, status, breakpoint, stack, description):
+				handleThreadStopped(threadNumber, status, breakpoint, stack, description);
 		}
 	}
 
-	function handleThreadStopped(threadNumber:Int, status:Int, breakpoint:Int, stack:Array<DebugStackFrame>):Void {
+	function handleThreadStopped(threadNumber:Int, status:Int, breakpoint:Int, stack:Array<DebugStackFrame>, description:Null<String>):Void {
 		lastStoppedThread = threadNumber;
 		stoppedStack = stack;
 		// every reference from the previous stop is stale now (the debuggee moved)
 		variablesView.reset();
+		lastExceptionDescription = null;
+		lastExceptionKind = null;
 
 		// A step landing that did not change the source line: re-issue the step
 		// (multi-expression line, or a loop-body line that never "changes"), up
@@ -297,6 +338,37 @@ class Dispatcher {
 		// Any other stop ends a pending step.
 		stepActive = false;
 
+		// An exception/critical-error stop: the thread is blocked AT the throw
+		// site (before unwinding), so the full stack and locals are inspectable.
+		// A disabled filter resumes silently; the runtime then unwinds/terminates
+		// exactly as it would have without the stop.
+		if (status == DebugThread.STATUS_STOPPED_UNCAUGHT_EXCEPTION || status == DebugThread.STATUS_STOPPED_CRITICAL_ERROR) {
+			var kind = exceptionKind(description);
+			var enabled = kind == FILTER_UNCAUGHT ? breakOnUncaught : breakOnCritical;
+			if (!enabled) {
+				// resuming an uncatchable throw unwinds/terminates cleanly; a
+				// critical error re-faults, so cap the silent resumes (livelock)
+				if (kind != FILTER_CRITICAL || silentCriticalResumes < MAX_SILENT_CRITICAL_RESUMES) {
+					if (kind == FILTER_CRITICAL) {
+						silentCriticalResumes++;
+					}
+					debugger.continueThreads(threadNumber, 1);
+					return;
+				}
+			}
+			silentCriticalResumes = 0;
+			lastExceptionDescription = description != null ? description : "Exception";
+			lastExceptionKind = kind;
+			sendEvent("stopped", {
+				reason: "exception",
+				threadId: threadNumber,
+				allThreadsStopped: true,
+				description: kind == FILTER_UNCAUGHT ? "Uncaught exception" : "Critical error",
+				text: lastExceptionDescription
+			});
+			return;
+		}
+
 		// A conditional breakpoint stops only when its condition is true; a false
 		// condition resumes silently. Evaluated against the INNERMOST frame,
 		// which is the highest hxcpp frame index (stack is innermost-last).
@@ -308,6 +380,7 @@ class Dispatcher {
 			}
 		}
 
+		silentCriticalResumes = 0; // any reported stop means the program moved on
 		var body:Dynamic = {
 			reason: stopReason(status),
 			threadId: threadNumber,
@@ -323,13 +396,43 @@ class Dispatcher {
 	}
 
 	// STATUS_* -> DAP stopped reason. BREAK_IMMEDIATE that is NOT a step landing
-	// is a user pause.
+	// is a user pause (exception statuses are handled before this is consulted).
 	static function stopReason(status:Int):String {
 		return switch (status) {
 			case DebugThread.STATUS_STOPPED_BREAKPOINT: "breakpoint";
-			case DebugThread.STATUS_STOPPED_UNCAUGHT_EXCEPTION, DebugThread.STATUS_STOPPED_CRITICAL_ERROR: "exception";
 			default: "pause";
 		}
+	}
+
+	// Which filter a stop belongs to. The runtime reports BOTH kinds as
+	// CRITICAL_ERROR (STATUS_STOPPED_UNCAUGHT_EXCEPTION is never emitted by
+	// hxcpp 4.3.2 — verified by source grep); an uncatchable user throw is
+	// distinguished by checkedThrow's "Uncatchable Throw: <value>" prefix.
+	static function exceptionKind(description:Null<String>):String {
+		return (description != null && StringTools.startsWith(description, "Uncatchable Throw"))
+			? FILTER_UNCAUGHT : FILTER_CRITICAL;
+	}
+
+	// DAP sends the full ACTIVE filter list each time (an omitted filter is off).
+	function handleSetExceptionBreakpoints(seq:Int, command:String, args:Dynamic):Void {
+		var filters:Array<String> = (args != null && args.filters != null) ? args.filters : [];
+		breakOnUncaught = filters.indexOf(FILTER_UNCAUGHT) >= 0;
+		breakOnCritical = filters.indexOf(FILTER_CRITICAL) >= 0;
+		sendResponse(seq, command, true, {breakpoints: [for (_ in filters) {verified: true}]});
+	}
+
+	function handleExceptionInfo(seq:Int, command:String):Void {
+		if (lastExceptionDescription == null) {
+			sendResponse(seq, command, false, null, "Not stopped on an exception");
+			return;
+		}
+		sendResponse(seq, command, true, {
+			exceptionId: lastExceptionKind == FILTER_UNCAUGHT ? "Uncaught exception" : "Critical error",
+			description: lastExceptionDescription,
+			// uncaught throws could not have been handled; critical errors stop
+			// unconditionally (even inside try/catch), hence "always"
+			breakMode: lastExceptionKind == FILTER_UNCAUGHT ? "unhandled" : "always"
+		});
 	}
 
 	static inline function topFrame(stack:Null<Array<DebugStackFrame>>):Null<DebugStackFrame> {

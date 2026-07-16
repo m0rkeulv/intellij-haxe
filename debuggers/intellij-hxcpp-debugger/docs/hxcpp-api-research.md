@@ -119,6 +119,16 @@ answer.
 - `Debug.cpp` also has a settable critical-error handler ("throw from it to
   prevent default action") — potentially the hook for turning fatal errors
   into resumable stops; probe in the spike.
+- **Spike answers (2026-07-16, verified live — details in docs/README #15):**
+  status UNCAUGHT_EXCEPTION is never emitted (both kinds arrive as
+  CRITICAL_ERROR, split by the description prefix "Uncatchable Throw"); the
+  thread stops at the throw site before unwinding with locals inspectable;
+  null access stops even inside try/catch (`NullReference` calls
+  fix_critical_error unconditionally) and does not resume cleanly (re-fault
+  -> crash), hence the Dispatcher's silent-resume cap; caught-throw synthesis
+  and typed filters are documented NOT SUPPORTABLE; the settable
+  critical-error handler is not needed (fix_critical_error runs first when a
+  debug handler is installed).
 
 ## M7/M8 — no hxcpp findings beyond the above
 
