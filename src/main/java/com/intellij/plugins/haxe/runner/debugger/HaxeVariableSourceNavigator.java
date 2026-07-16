@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger;
 
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiElement;
@@ -51,7 +52,23 @@ public final class HaxeVariableSourceNavigator {
     if (context == null) {
       return null; // without a frame context nothing (locals, imports) can resolve
     }
-    PsiFile fragment = HaxeElementGenerator.createExpressionCodeFragment(project, path, context, false);
+
+    // The `this` keyword does not reliably resolve through a detached code
+    // fragment (unlike an ordinary identifier, whose scope walk consults the
+    // context). Handle it against the context's enclosing class directly:
+    // bare `this` navigates to the class; `this.member…` resolves the remainder
+    // UNQUALIFIED — instance members are in method scope via implicit this, the
+    // same path by which `localVar.field` already resolves.
+    String expression = path;
+    if (expression.equals("this")) {
+      HaxeClass enclosing = PsiTreeUtil.getParentOfType(context, HaxeClass.class);
+      return enclosing != null ? XSourcePositionImpl.createByElement(enclosing.getNavigationElement()) : null;
+    }
+    if (expression.startsWith("this.")) {
+      expression = expression.substring("this.".length());
+    }
+
+    PsiFile fragment = HaxeElementGenerator.createExpressionCodeFragment(project, expression, context, false);
     HaxeReference chain = outermostReference(fragment);
     if (chain == null) {
       return null;
