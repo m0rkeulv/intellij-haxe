@@ -1,15 +1,20 @@
 package com.intellij.plugins.haxe.runner.debugger.exceptions;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.xdebugger.XDebuggerManager;
 import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.breakpoints.XBreakpoint;
 import com.intellij.xdebugger.breakpoints.XBreakpointManager;
 import com.intellij.xdebugger.breakpoints.XBreakpointType;
 import com.intellij.xdebugger.breakpoints.ui.XBreakpointCustomPropertiesPanel;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.Icon;
 import javax.swing.JComponent;
@@ -86,9 +91,47 @@ public class HaxeExceptionBreakpointType
   }
 
   /**
+   * Builds the {@code setExceptionBreakpoints} request from the CURRENT state
+   * of the exception breakpoints in the breakpoint manager (the single source
+   * of truth): a session started with breakpoints already enabled (e.g. after
+   * an IDE restart) arms them the same way as a live toggle. The "Any
+   * exception" breakpoint's Notifications checkboxes map onto the given wire
+   * words — each backend speaks its own vocabulary for the same three
+   * meanings — and per-class breakpoints go as filterTypes, matched
+   * debuggee-side against the thrown value's class chain.
+   */
+  public static SetExceptionBreakpointsRequest buildFiltersRequest(@NotNull Project project,
+                                                                   @NotNull String caughtWord,
+                                                                   @NotNull String uncaughtWord,
+                                                                   @NotNull String criticalWord) {
+    List<String> filters = new ArrayList<>();
+    List<String> filterTypes = new ArrayList<>();
+    ReadAction.run(() -> collectEnabled(project, properties -> {
+      if (properties.isTyped()) {
+        filterTypes.add(properties.className.trim());
+      } else {
+        if (properties.notifyCaught) {
+          filters.add(caughtWord);
+        }
+        if (properties.notifyUncaught) {
+          filters.add(uncaughtWord);
+        }
+        if (properties.notifyCritical) {
+          filters.add(criticalWord);
+        }
+      }
+    }));
+    SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
+    SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
+    arguments.setFilters(filters);
+    arguments.setFilterTypes(filterTypes);
+    request.setArguments(arguments);
+    return request;
+  }
+
+  /**
    * Runs `consumer` for every ENABLED Haxe exception breakpoint's properties —
-   * the one loop both debug processes build their wire filters from. Call
-   * inside a read action.
+   * the one loop the wire filters are built from. Call inside a read action.
    */
   public static void collectEnabled(@NotNull Project project,
                                     @NotNull Consumer<HaxeExceptionBreakpointProperties> consumer) {

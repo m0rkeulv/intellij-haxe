@@ -41,7 +41,6 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArgum
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
@@ -686,36 +685,20 @@ public class HashLinkDebugProcess extends XDebugProcess {
     onRequestThread(() -> sendRequest(exceptionFiltersRequest()));
   }
 
-  // Builds the setExceptionBreakpoints request by reading the CURRENT state of the
-  // exception breakpoints straight from the breakpoint manager: the
-  // "all"/"uncaught"/"vm" filters plus the class names of every enabled
-  // per-class breakpoint. Reading the manager (rather than tracking volatile
-  // flags) is the single source of truth, so a session started with breakpoints
-  // already enabled (e.g. after an IDE restart) arms them the same as a live toggle.
+  // This adapter's exception-filter vocabulary (must match the bundled
+  // hl-debug-adapter's ExceptionController):
+  /** Stop on every throw, caught or not. */
+  private static final String FILTER_ANY_THROW = "all";
+  /** Stop when no live try will handle the throw. */
+  private static final String FILTER_UNCAUGHT = "uncaught";
+  /** Stop on VM-raised errors: null access, out-of-bounds, cast, ... */
+  private static final String FILTER_CRITICAL_ERROR = "vm";
+
+  // The Notifications checkboxes mapped onto THIS adapter's filter vocabulary;
+  // see HaxeExceptionBreakpointType.buildFiltersRequest for how the set is built.
   private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
-    List<String> filters = new ArrayList<>();
-    List<String> filterTypes = new ArrayList<>();
-    ReadAction.run(() -> HaxeExceptionBreakpointType.collectEnabled(getSession().getProject(), properties -> {
-      if (properties.isTyped()) {
-        filterTypes.add(properties.className.trim());
-      } else {
-        if (properties.notifyCaught) {
-          filters.add("all"); // the HashLink wire name for every-throw stops
-        }
-        if (properties.notifyUncaught) {
-          filters.add("uncaught");
-        }
-        if (properties.notifyCritical) {
-          filters.add("vm"); // the HashLink wire name for runtime-raised errors
-        }
-      }
-    }));
-    SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
-    SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
-    arguments.setFilters(filters);
-    arguments.setFilterTypes(filterTypes);
-    request.setArguments(arguments);
-    return request;
+    return HaxeExceptionBreakpointType.buildFiltersRequest(
+      getSession().getProject(), FILTER_ANY_THROW, FILTER_UNCAUGHT, FILTER_CRITICAL_ERROR);
   }
 
   private static Thread daemon(Runnable work, String name) {

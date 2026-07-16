@@ -37,7 +37,6 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextReque
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
@@ -558,37 +557,20 @@ public class HxcppDebugProcess extends XDebugProcess {
     onRequestThread(() -> sendRequest(exceptionFiltersRequest()));
   }
 
-  // Builds the setExceptionBreakpoints request by reading the CURRENT state of
-  // the exception breakpoints straight from the breakpoint manager (the single
-  // source of truth): a session started with breakpoints already enabled (e.g.
-  // after an IDE restart) arms them the same way as a live toggle. The "Any
-  // exception" breakpoint's Notifications map onto this server's filter ids;
-  // per-class breakpoints go as filterTypes, matched server-side against the
-  // thrown value's class chain.
+  // This server's exception-filter vocabulary (must match the
+  // intellij-hxcpp-debug-server's Dispatcher / the vshaxe adapter):
+  /** Stop on every throw, caught or not (the haxe.Exception.new hook). */
+  private static final String FILTER_ANY_THROW = "thrown";
+  /** Stop when no catch will handle the throw. */
+  private static final String FILTER_UNCAUGHT = "uncaught";
+  /** Stop on hxcpp critical errors: null access, out-of-bounds, ... */
+  private static final String FILTER_CRITICAL_ERROR = "critical";
+
+  // The Notifications checkboxes mapped onto THIS server's filter vocabulary;
+  // see HaxeExceptionBreakpointType.buildFiltersRequest for how the set is built.
   private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
-    List<String> filters = new ArrayList<>();
-    List<String> filterTypes = new ArrayList<>();
-    ReadAction.run(() -> HaxeExceptionBreakpointType.collectEnabled(getSession().getProject(), properties -> {
-      if (properties.isTyped()) {
-        filterTypes.add(properties.className.trim());
-      } else {
-        if (properties.notifyCaught) {
-          filters.add("thrown");
-        }
-        if (properties.notifyUncaught) {
-          filters.add("uncaught");
-        }
-        if (properties.notifyCritical) {
-          filters.add("critical");
-        }
-      }
-    }));
-    SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
-    SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
-    arguments.setFilters(filters);
-    arguments.setFilterTypes(filterTypes);
-    request.setArguments(arguments);
-    return request;
+    return HaxeExceptionBreakpointType.buildFiltersRequest(
+      getSession().getProject(), FILTER_ANY_THROW, FILTER_UNCAUGHT, FILTER_CRITICAL_ERROR);
   }
 
   private static Thread daemon(Runnable work, String name) {
