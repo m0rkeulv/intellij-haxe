@@ -10,10 +10,12 @@ import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.frame.XNavigatable;
+import com.intellij.xdebugger.frame.XStackFrame;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -47,18 +49,41 @@ public final class HaxeVariableSourceNavigator {
   private HaxeVariableSourceNavigator() {
   }
 
+  /**
+   * Asynchronous by contract: the platform invokes computeSourcePosition on
+   * the EDT, so the PSI resolve runs in a non-blocking read action on the app
+   * pool (cancelled and retried around write actions) and {@code navigatable}
+   * is completed from there — the platform bounds the wait with its own
+   * navigation timeout. Only the frame OBJECT is captured on the caller's
+   * thread (a plain state read, pinning the frame the user clicked from);
+   * its source position resolves lazily through the source resolver's index
+   * lookup — a slow operation that must also stay off the EDT.
+   */
   public static void navigate(@Nullable XDebugSession session, @Nullable String path, XNavigatable navigatable) {
     if (session == null || path == null || path.isBlank()) {
       navigatable.setSourcePosition(null);
       return;
     }
     Project project = session.getProject();
-    XSourcePosition frame = session.getCurrentPosition();
-    XSourcePosition target = ReadAction.compute(() -> resolvePosition(project, frame, path));
-    if (target == null) {
-      LOG.debug("jump-to-source: no target for path '" + path + "'");
-    }
-    navigatable.setSourcePosition(target);
+    XStackFrame currentFrame = session.getCurrentStackFrame();
+
+    ReadAction.nonBlocking(() -> {
+        XSourcePosition frame = currentFrame != null ? currentFrame.getSourcePosition() : null;
+        return resolvePosition(project, frame, path);
+      })
+      // no parent disposable (a Project must not be one in plugin code):
+      // expire on the conditions that make the navigation pointless
+      .expireWhen(() -> project.isDisposed() || session.isStopped())
+      .submit(AppExecutorUtil.getAppExecutorService())
+      .onSuccess(target -> {
+        if (target == null) {
+          LOG.debug("jump-to-source: no target for path '" + path + "'");
+        }
+        navigatable.setSourcePosition(target);
+      })
+      // expired/cancelled/failed: complete with "no position" rather than
+      // leaving the platform to wait out its navigation timeout
+      .onError(error -> navigatable.setSourcePosition(null));
   }
 
   private static @Nullable XSourcePosition resolvePosition(Project project, @Nullable XSourcePosition frame, String path) {
