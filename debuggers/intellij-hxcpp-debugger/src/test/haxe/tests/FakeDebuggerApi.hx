@@ -69,6 +69,14 @@ class FakeDebuggerApi implements DebuggerApi {
 		return number;
 	}
 
+	public var installedFunctionBreakpoints:Array<{className:String, functionName:String, number:Int}> = [];
+
+	public function addClassFunctionBreakpoint(className:String, functionName:String):Int {
+		var number = nextBreakpointNumber++;
+		installedFunctionBreakpoints.push({className: className, functionName: functionName, number: number});
+		return number;
+	}
+
 	public function deleteBreakpoint(number:Int):Void {
 		deletedBreakpoints.push(number);
 	}

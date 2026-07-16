@@ -65,6 +65,11 @@ public class HxcppIntellijBackend implements HxcppDapBackend {
   }
 
   @Override
+  public boolean supportsSmartStepInto() {
+    return true; // the server implements intellij/stepIntoFunction
+  }
+
+  @Override
   public String startupHint() {
     return "Check that it was compiled with -debug and -lib intellij-hxcpp-debug-server.";
   }

@@ -60,6 +60,14 @@ interface DebuggerApi {
 	/** Installs a breakpoint on `file`:`line`, returning its runtime number. */
 	function addFileLineBreakpoint(file:String, line:Int):Int;
 
+	/**
+		Installs a breakpoint at the ENTRY of `className.functionName` (dotted
+		class path, bare function name — the names generated code carries in its
+		stack frames), returning its runtime number. Fires when a frame for that
+		function is at its first line — the smart-step-into landing.
+	**/
+	function addClassFunctionBreakpoint(className:String, functionName:String):Int;
+
 	/** Removes a previously installed breakpoint by its runtime number. */
 	function deleteBreakpoint(number:Int):Void;
 

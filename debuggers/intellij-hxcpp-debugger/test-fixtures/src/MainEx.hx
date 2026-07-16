@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -93,5 +93,27 @@ class LockBox {
 
 	function set_danger(value:Int):Int {
 		return this.danger = value;
+	}
+}
+
+// Smart-step-into scenario: a loop whose body line holds several calls
+// (nested + a packaged-class call), so a probe can break on the line and
+// enter a CHOSEN callee. Kept in its own class so the runtime class-name
+// matching is exercised for both a root class and a packaged one.
+class SmartStepTarget {
+	public static function run():Void {
+		var total = 0;
+		while (true) {
+			total = combine(one(), fix.PackCounter.bump(1)); // SMART_LINE = 107
+			Sys.sleep(0.05);
+		}
+	}
+
+	static function one():Int {
+		return 1; // SMART_ONE_LINE = 113
+	}
+
+	static function combine(a:Int, b:Int):Int {
+		return a + b; // SMART_COMBINE_LINE = 117
 	}
 }

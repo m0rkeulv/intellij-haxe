@@ -43,6 +43,11 @@ public class HxcppVshaxeBackend implements HxcppDapBackend {
   }
 
   @Override
+  public boolean supportsSmartStepInto() {
+    return false; // no such request in the vshaxe wire protocol
+  }
+
+  @Override
   public String startupHint() {
     return "Check that it was compiled with -debug and -lib hxcpp-debug-server, and that no previous\n"
            + "instance of the program is still running (a leftover instance blocks the debug port and\n"

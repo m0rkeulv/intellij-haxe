@@ -32,6 +32,59 @@ class DispatcherTest {
 		repeatedSilentCriticalResumesBreakTheLivelock(assert);
 		aCorruptLocalPoisonsOneRowNotTheRequest(assert);
 		aFaultingHandlerAnswersAndTheSessionLivesOn(assert);
+		smartStepEntersTheChosenCallee(assert);
+		smartStepFallsBackToStepOver(assert);
+		aUserBreakpointWinsTheSmartStepRace(assert);
+	}
+
+	static function smartStepRequest(t):Void {
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 12));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({
+			seq: 4, type: "request", command: "intellij/stepIntoFunction",
+			arguments: {threadId: 1, className: "my.pack.Target", functionName: "two"}
+		}));
+	}
+
+	static function smartStepEntersTheChosenCallee(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		smartStepRequest(t);
+		assert.isTrue(t.sent[0].success, "stepIntoFunction acknowledged");
+		assert.equals(1, t.api.installedFunctionBreakpoints.length, "temp entry breakpoint installed");
+		assert.equals("my.pack.Target", t.api.installedFunctionBreakpoints[0].className, "on the chosen class");
+		assert.equals(StepType.OVER, t.api.stepCalls[0].stepType, "races a step-over");
+		var temp = t.api.installedFunctionBreakpoints[0].number;
+		// the callee's entry: the temp fires (a breakpoint stop with its number)
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, temp, "Target.hx", 5));
+		assert.equals("step", t.sent[0].body.reason, "reported as a plain step stop");
+		assert.isTrue(t.sent[0].body.hitBreakpointIds == null, "no breakpoint id leaks to the client");
+		assert.isTrue(t.api.deletedBreakpoints.indexOf(temp) >= 0, "the temp died with the stop");
+	}
+
+	static function smartStepFallsBackToStepOver(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		smartStepRequest(t);
+		var temp = t.api.installedFunctionBreakpoints[0].number;
+		// the chosen call never executed: the step-over lands on the next line
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 13));
+		assert.equals("step", t.sent[0].body.reason, "degrades to a plain step over");
+		assert.isTrue(t.api.deletedBreakpoints.indexOf(temp) >= 0, "the unfired temp died with the stop");
+	}
+
+	static function aUserBreakpointWinsTheSmartStepRace(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		var user = conditionalBreakpoint(t, ""); // a plain user breakpoint
+		smartStepRequest(t);
+		var temp = t.api.installedFunctionBreakpoints[0].number;
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, user, "Main.hx", 20));
+		assert.equals("breakpoint", t.sent[0].body.reason, "the user breakpoint reports normally");
+		assert.isTrue(t.api.deletedBreakpoints.indexOf(temp) >= 0, "the temp still died with the stop");
 	}
 
 	// Real debuggees fault their readers (raw pointers, half-built state in

@@ -45,6 +45,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTrac
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
@@ -69,6 +71,7 @@ import com.intellij.xdebugger.breakpoints.XBreakpointType;
 import com.intellij.xdebugger.breakpoints.XLineBreakpoint;
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider;
 import com.intellij.xdebugger.frame.XSuspendContext;
+import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -348,6 +351,22 @@ public class HxcppDebugProcess extends XDebugProcess {
     StepOutRequest request = new StepOutRequest();
     StepOutArguments arguments = new StepOutArguments();
     arguments.setThreadId(currentThreadId);
+    request.setArguments(arguments);
+    onRequestThread(() -> sendRequest(request));
+  }
+
+  @Override
+  public @Nullable XSmartStepIntoHandler<?> getSmartStepIntoHandler() {
+    return backend.supportsSmartStepInto() ? new HxcppSmartStepIntoHandler(this) : null;
+  }
+
+  /** Smart step into the chosen callee (custom intellij/stepIntoFunction request). */
+  void stepIntoFunction(String className, String functionName) {
+    StepIntoFunctionRequest request = new StepIntoFunctionRequest();
+    StepIntoFunctionArguments arguments = new StepIntoFunctionArguments();
+    arguments.setThreadId(currentThreadId);
+    arguments.setClassName(className);
+    arguments.setFunctionName(functionName);
     request.setArguments(arguments);
     onRequestThread(() -> sendRequest(request));
   }

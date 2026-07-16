@@ -84,6 +84,10 @@ public function continueThreads(threadNumber:Int, count:Int):Void {
 		return Debugger.addFileLineBreakpoint(file, line);
 	}
 
+	public function addClassFunctionBreakpoint(className:String, functionName:String):Int {
+		return Debugger.addClassFunctionBreakpoint(className, functionName);
+	}
+
 	public function deleteBreakpoint(number:Int):Void {
 		Debugger.deleteBreakpoint(number);
 	}

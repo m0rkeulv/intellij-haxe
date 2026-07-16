@@ -1,5 +1,17 @@
 # Smart step into on hxcpp — research (2026-07-15)
 
+> **IMPLEMENTED 2026-07-16** exactly as designed below: server side is the
+> custom `intellij/stepIntoFunction` request (Dispatcher: temporary
+> `addClassFunctionBreakpoint` racing a STEP_OVER, reported as a step stop,
+> temp excluded from user-breakpoint bookkeeping); IDE side is
+> `HxcppSmartStepIntoHandler` (PSI-resolved variants, plain-F7 chooser
+> included), gated on `HxcppDapBackend.supportsSmartStepInto()`. Verified
+> live: entering the first call, a later call (running through earlier ones),
+> a PACKAGED callee — `fix.PackCounter` confirmed the runtime className is
+> the dotted FQN — and the step-over fallback for a never-executed callee.
+> Closures/locals/inline/externs are filtered IDE-side as planned (a call
+> that doesn't resolve to a class method simply yields no variant).
+
 Question: can our in-debuggee server support "choose which call on this line to
 step into" (the HashLink smart-step feature)? Answer: **yes, with a different
 division of labour** — the runtime primitives compose into exactly the

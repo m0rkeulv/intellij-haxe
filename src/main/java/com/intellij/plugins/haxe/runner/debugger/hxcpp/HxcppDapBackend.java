@@ -44,6 +44,12 @@ public interface HxcppDapBackend extends Closeable {
    */
   boolean supportsExceptionFilters();
 
+  /**
+   * Whether the server understands the custom {@code intellij/stepIntoFunction}
+   * request (smart step into with IDE-resolved targets).
+   */
+  boolean supportsSmartStepInto();
+
   /** Appended to the "program exited before the debugger could attach" failure. */
   String startupHint();
 }

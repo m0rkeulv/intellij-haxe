@@ -65,6 +65,13 @@ class Dispatcher {
 	var stepFromLine:Int = 0;
 	var stepIterations:Int = 0;
 
+	// Smart step into (custom request "intellij/stepIntoFunction"): a TEMPORARY
+	// class-function breakpoint at the chosen callee's entry races a STEP_OVER —
+	// whichever lands first is the stop, reported as a plain step. -1 = none.
+	// The temp lives outside the user-breakpoint bookkeeping (no DAP id, no
+	// condition), and dies with the next reported stop or resume.
+	var tempStepBreakpoint:Int = -1;
+
 	// Exception filters (both default ON, mirroring the advertised defaults —
 	// a client that never sends setExceptionBreakpoints gets the defaults) and
 	// the last exception stop, kept for the exceptionInfo request.
@@ -167,10 +174,13 @@ class Dispatcher {
 				// arg (count 1 = stop at the next breakpoint), not a wildcard. It
 				// resumes EVERY stopped thread, hence allThreadsContinued.
 				stepActive = false;
+				clearTempStepBreakpoint();
 				resumed();
 				stoppedStacks.clear();
 				debugger.continueThreads(resumeThread(request.arguments), 1);
 				sendResponse(seq, command, true, {allThreadsContinued: true});
+			case "intellij/stepIntoFunction":
+				handleStepIntoFunction(seq, command, request.arguments);
 			case "pause":
 				// break the world; the resulting BREAK_IMMEDIATE stop is reported
 				// as reason "pause" (no step is in flight)
@@ -228,6 +238,7 @@ class Dispatcher {
 	// re-step until it changes (see emitDebugEvent). Responds immediately; the
 	// stopped(reason:"step") event follows when the step lands.
 	function handleStep(seq:Int, command:String, args:Dynamic, type:Int):Void {
+		clearTempStepBreakpoint(); // a fresh user step cancels a pending smart step
 		var threadId = resumeThread(args);
 		var from = topFrame(stoppedStacks.get(threadId));
 		stepActive = true;
@@ -239,6 +250,46 @@ class Dispatcher {
 		stoppedStacks.remove(threadId); // stepThread resumes only this thread
 		debugger.stepThread(threadId, type);
 		sendResponse(seq, command, true, null);
+	}
+
+	/**
+		Smart step into: enter the CHOSEN call on the stopped line. The IDE
+		resolves the line's calls through its PSI (the server has no line→calls
+		knowledge — there is no bytecode to mine on hxcpp) and names the callee
+		as (className, functionName). A temporary entry breakpoint on the callee
+		races an ordinary step-over: entering the callee lands the temp (running
+		through earlier calls on the line); if the chosen call never executes
+		(short-circuit, conditional), the step-over lands instead — degrading to
+		a plain step over, exactly like the HashLink implementation. Either
+		landing is reported as reason "step".
+	**/
+	function handleStepIntoFunction(seq:Int, command:String, args:Dynamic):Void {
+		if (args == null || args.className == null || args.functionName == null) {
+			sendResponse(seq, command, false, null, "Missing className/functionName");
+			return;
+		}
+		clearTempStepBreakpoint(); // replace any previous pending smart step
+		var threadId = resumeThread(args);
+		var from = topFrame(stoppedStacks.get(threadId));
+		tempStepBreakpoint = debugger.addClassFunctionBreakpoint(args.className, args.functionName);
+		// bookkeep exactly like a step-over: the same-line re-step policy keeps
+		// the step racing while the temp stays armed
+		stepActive = true;
+		stepType = StepType.OVER;
+		stepFromFile = from != null ? from.fileName : "";
+		stepFromLine = from != null ? from.lineNumber : 0;
+		stepIterations = 0;
+		resumed();
+		stoppedStacks.remove(threadId);
+		debugger.stepThread(threadId, StepType.OVER);
+		sendResponse(seq, command, true, null);
+	}
+
+	function clearTempStepBreakpoint():Void {
+		if (tempStepBreakpoint >= 0) {
+			debugger.deleteBreakpoint(tempStepBreakpoint);
+			tempStepBreakpoint = -1;
+		}
 	}
 
 	function handleStackTrace(seq:Int, command:String, args:Dynamic):Void {
@@ -388,12 +439,25 @@ class Dispatcher {
 				return; // keep stepping; no stopped event yet
 			}
 			stepActive = false;
+			clearTempStepBreakpoint(); // the step-over won the smart-step race
 			sendEvent("stopped", {reason: "step", threadId: threadNumber, allThreadsStopped: true});
 			return;
 		}
 
 		// Any other stop ends a pending step.
 		stepActive = false;
+
+		// The smart-step temp landing: the chosen callee's entry. Reported as a
+		// plain step stop; any OTHER stop (user breakpoint, exception, pause)
+		// wins the race and reports normally — either way the temp dies here.
+		if (tempStepBreakpoint >= 0) {
+			var enteredTarget = status == DebugThread.STATUS_STOPPED_BREAKPOINT && breakpoint == tempStepBreakpoint;
+			clearTempStepBreakpoint();
+			if (enteredTarget) {
+				sendEvent("stopped", {reason: "step", threadId: threadNumber, allThreadsStopped: true});
+				return;
+			}
+		}
 
 		// An exception/critical-error stop: the thread is blocked AT the throw
 		// site (before unwinding), so the full stack and locals are inspectable.
