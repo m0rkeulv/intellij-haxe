@@ -1,18 +1,13 @@
 package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.icons.AllIcons;
-import com.intellij.plugins.haxe.HaxeLanguage;
-import com.intellij.plugins.haxe.runner.debugger.HaxeVariableSourceNavigator;
+import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerValue;
 import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.VariableKind;
 import javax.swing.Icon;
-import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XExpression;
-import com.intellij.xdebugger.evaluation.EvaluationMode;
 import com.intellij.xdebugger.frame.XCompositeNode;
-import com.intellij.xdebugger.frame.XNamedValue;
-import com.intellij.xdebugger.frame.XNavigatable;
 import com.intellij.xdebugger.frame.XValueChildrenList;
 import com.intellij.xdebugger.frame.XValueModifier;
 import com.intellij.xdebugger.frame.XValueNode;
@@ -20,28 +15,18 @@ import com.intellij.xdebugger.frame.XValuePlace;
 import com.intellij.xdebugger.frame.presentation.XRegularValuePresentation;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.concurrency.Promise;
-import org.jetbrains.concurrency.Promises;
-import org.jspecify.annotations.NonNull;
 
 /**
  * A variable from the adapter: value + type as reported, expandable when the
  * adapter handed out a variablesReference (objects, arrays, enums, ...).
  * Editable via {@link XValueModifier} when it belongs to a container reference
  * (a Locals scope, an object, an array), through the adapter's setVariable.
- *
- * Each value carries the access-path EXPRESSION from its frame's local down to
- * itself ("this.someObject.someArray[0].myVar"), built as the tree expands.
- * {@link #calculateEvaluationExpression()} hands it to the platform, which is
- * what pre-fills the Evaluate Expression dialog from a selected tree node —
- * the same convenience the Java debugger offers.
+ * Evaluate-prefill and Jump to Source come from {@link HaxeDebuggerValue}.
  */
-final class HashLinkValue extends XNamedValue {
+final class HashLinkValue extends HaxeDebuggerValue {
   private final HashLinkDebugProcess process;
   private final Variable variable;
   private final int containerReference;
-  private final @Nullable String evaluationPath;
-  private final @Nullable String containerTypeName;
 
   /**
    * @param containerReference the reference this variable is a child of (0 = not editable).
@@ -52,21 +37,13 @@ final class HashLinkValue extends XNamedValue {
     this(process, variable, containerReference, evaluationPath, null);
   }
 
-  /**
-   * @param containerTypeName the RUNTIME type of the object this variable is a
-   *                          member of (the adapter reports concrete types), or
-   *                          null for frame roots/scopes. Jump to Source falls
-   *                          back on it when the access path does not resolve
-   *                          through the DECLARED types.
-   */
   HashLinkValue(HashLinkDebugProcess process, Variable variable, int containerReference,
                 @Nullable String evaluationPath, @Nullable String containerTypeName) {
-    super(variable.getName() != null ? variable.getName() : "?");
+    super(variable.getName() != null ? variable.getName() : "?",
+          process.getSession(), evaluationPath, containerTypeName);
     this.process = process;
     this.variable = variable;
     this.containerReference = containerReference;
-    this.evaluationPath = evaluationPath;
-    this.containerTypeName = containerTypeName;
   }
 
   @Override
@@ -100,39 +77,11 @@ final class HashLinkValue extends XNamedValue {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable child : process.requestVariables(reference)) {
         children.add(new HashLinkValue(process, child, reference,
-                                       EvaluationPath.child(evaluationPath, child.getName()),
+                                       EvaluationPath.child(evaluationPath(), child.getName()),
                                        variable.getType()));
       }
       node.addChildren(children, true);
     }, () -> node.addChildren(XValueChildrenList.EMPTY, true));
-  }
-
-  // Pre-fills the Evaluate Expression dialog when this node is selected; no
-  // prefill (empty dialog) for a node whose path is not expressible.
-  @Override
-  public @NotNull Promise<XExpression> calculateEvaluationExpression() {
-    if (evaluationPath != null) {
-      return Promises.resolvedPromise(createExpression(evaluationPath));
-    } else {
-      return Promises.resolvedPromise(null);
-    }
-  }
-
-  private @NonNull XExpression createExpression(@NotNull String evaluationPath) {
-    return XDebuggerUtil.getInstance().createExpression(evaluationPath, HaxeLanguage.INSTANCE, null, EvaluationMode.EXPRESSION);
-  }
-
-  @Override
-  public boolean canNavigateToSource() {
-    return evaluationPath != null;
-  }
-
-  // "Jump to Source": resolve the access path through the Haxe resolver and
-  // land on the member's declaration (see HaxeVariableSourceNavigator).
-  @Override
-  public void computeSourcePosition(@NotNull XNavigatable navigatable) {
-    HaxeVariableSourceNavigator.navigate(process.getSession(), evaluationPath,
-                                         containerTypeName, variable.getName(), navigatable);
   }
 
   @Override
