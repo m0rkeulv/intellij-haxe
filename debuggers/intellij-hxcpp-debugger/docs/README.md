@@ -246,6 +246,19 @@ fault must never end the session. The serve loop also logs why it ended
 (HXCPP_DEBUG_LOG), because a silent exit here is indistinguishable from a
 hang.
 
+## 18. One-line call chains: step out/over never revisit the chain line
+
+On `cfg.test1().test2().test3();` (all one line), stepping OUT of test1 lands
+on the line AFTER the chain, and stepping over test1's last line lands inside
+test2 — the chain line itself is never revisited. This is hxcpp codegen, not
+the server: `__hxcpp_on_line_changed` fires only when a function's line
+REGISTER changes, and between the chained calls the caller stays on the same
+line — no instrumentation point executes at the caller's depth until the next
+source line. So STEP_OUT's first eligible event is the next line, and
+STEP_OVER's first same-depth event is inside the next callee (a sibling call
+frame has the same depth as the one just left). Not fixable without runtime
+changes; smart step into is the tool for navigating within such lines.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log

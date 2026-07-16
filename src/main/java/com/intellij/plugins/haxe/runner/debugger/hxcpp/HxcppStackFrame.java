@@ -89,7 +89,7 @@ final class HxcppStackFrame extends XStackFrame {
         if (first) {
           // the Locals scope: variables straight into the frame node
           for (Variable variable : process.requestVariables(scope.getVariablesReference())) {
-            children.add(new HxcppValue(process, variable, scope.getVariablesReference()));
+            children.add(new HxcppValue(process, variable, scope.getVariablesReference(), null));
           }
           first = false;
         } else {

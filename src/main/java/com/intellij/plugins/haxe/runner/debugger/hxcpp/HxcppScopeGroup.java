@@ -26,7 +26,7 @@ final class HxcppScopeGroup extends XValueGroup {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable variable : process.requestVariables(scope.getVariablesReference())) {
-        children.add(new HxcppValue(process, variable, scope.getVariablesReference()));
+        children.add(new HxcppValue(process, variable, scope.getVariablesReference(), null));
       }
       node.addChildren(children, true);
     });

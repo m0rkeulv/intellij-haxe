@@ -10,26 +10,48 @@ import com.intellij.xdebugger.frame.XValueModifier;
 import com.intellij.xdebugger.frame.XValueNode;
 import com.intellij.xdebugger.frame.XValuePlace;
 import com.intellij.xdebugger.frame.presentation.XRegularValuePresentation;
+import com.intellij.xdebugger.impl.breakpoints.XExpressionImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.concurrency.Promise;
+import org.jetbrains.concurrency.Promises;
 
 /**
  * A variable from the debugger: value + type as reported, expandable when the
  * server handed out a variablesReference (objects, arrays, maps, ...).
  * Editable via {@link XValueModifier} when it belongs to a container
  * reference, through the server's setVariable.
+ *
+ * Each value carries the access-path EXPRESSION from its frame's local down to
+ * itself ("this.someObject.someArray[0].myVar"), built as the tree expands.
+ * {@link #calculateEvaluationExpression()} hands it to the platform, which is
+ * what pre-fills the Evaluate Expression dialog from a selected tree node —
+ * the same convenience the Java debugger offers.
  */
 final class HxcppValue extends XNamedValue {
   private final HxcppDebugProcess process;
   private final Variable variable;
   private final int containerReference;
+  private final String evaluationPath;
 
-  /** @param containerReference the reference this variable is a child of (0 = not editable). */
-  HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference) {
+  /**
+   * @param containerReference the reference this variable is a child of (0 = not editable).
+   * @param parentPath the parent's access path, or null for a frame local (path = own name).
+   */
+  HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference, @Nullable String parentPath) {
     super(variable.getName() != null ? variable.getName() : "?");
     this.process = process;
     this.variable = variable;
     this.containerReference = containerReference;
+    this.evaluationPath = childPath(parentPath, getName());
+  }
+
+  // "[0]" children append without a dot; named fields join with one.
+  private static String childPath(@Nullable String parentPath, String name) {
+    if (parentPath == null || parentPath.isEmpty()) {
+      return name;
+    }
+    return name.startsWith("[") ? parentPath + name : parentPath + "." + name;
   }
 
   @Override
@@ -51,10 +73,16 @@ final class HxcppValue extends XNamedValue {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable child : process.requestVariables(reference)) {
-        children.add(new HxcppValue(process, child, reference));
+        children.add(new HxcppValue(process, child, reference, evaluationPath));
       }
       node.addChildren(children, true);
     });
+  }
+
+  // Pre-fills the Evaluate Expression dialog when this node is selected.
+  @Override
+  public @NotNull Promise<XExpression> calculateEvaluationExpression() {
+    return Promises.resolvedPromise(XExpressionImpl.fromText(evaluationPath));
   }
 
   @Override
