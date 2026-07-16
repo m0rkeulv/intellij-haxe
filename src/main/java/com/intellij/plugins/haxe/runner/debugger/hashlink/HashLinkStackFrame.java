@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
@@ -97,7 +98,8 @@ final class HashLinkStackFrame extends XStackFrame {
         if (first) {
           // the Locals scope: variables straight into the frame node
           for (Variable variable : process.requestVariables(scope.getVariablesReference())) {
-            children.add(new HashLinkValue(process, variable, scope.getVariablesReference(), null));
+            children.add(new HashLinkValue(process, variable, scope.getVariablesReference(),
+                                           EvaluationPath.root(variable.getName())));
           }
           first = false;
         } else {

@@ -44,9 +44,11 @@ final class HxcppDebuggerEvaluator extends XDebuggerEvaluator {
         result.setType(evaluated.getBody().getType());
         result.setVariablesReference(evaluated.getBody().getVariablesReference());
         // a watch/hover result has no editable container (0); child expansion
-        // still uses the result's own reference. Its name IS the expression,
-        // so children inherit "expr.field" evaluation paths naturally.
-        callback.evaluated(new HxcppValue(process, result, 0, null));
+        // still uses the result's own reference. Seed the path with the
+        // evaluated EXPRESSION verbatim (it already parsed), so children get
+        // "expr.field" paths and re-selecting the result prefills what was typed.
+        callback.evaluated(new HxcppValue(process, result, 0,
+                                          expression != null && !expression.isBlank() ? expression : null));
         // an assignment changed debuggee state: the Variables view must
         // re-read, or it keeps showing the old value
         if (HxcppDebugAdapter.topLevelAssignment(expression) >= 0) {

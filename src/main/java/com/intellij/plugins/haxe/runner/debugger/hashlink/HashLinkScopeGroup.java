@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
+import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.xdebugger.frame.XCompositeNode;
@@ -26,7 +27,8 @@ final class HashLinkScopeGroup extends XValueGroup {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable variable : process.requestVariables(scope.getVariablesReference())) {
-        children.add(new HashLinkValue(process, variable, scope.getVariablesReference(), null));
+        children.add(new HashLinkValue(process, variable, scope.getVariablesReference(),
+                                       EvaluationPath.root(variable.getName())));
       }
       node.addChildren(children, true);
     });

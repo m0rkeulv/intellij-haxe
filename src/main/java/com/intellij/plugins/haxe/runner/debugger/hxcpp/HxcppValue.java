@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.xdebugger.XExpression;
 import com.intellij.xdebugger.frame.XCompositeNode;
@@ -32,26 +33,19 @@ final class HxcppValue extends XNamedValue {
   private final HxcppDebugProcess process;
   private final Variable variable;
   private final int containerReference;
-  private final String evaluationPath;
+  private final @Nullable String evaluationPath;
 
   /**
    * @param containerReference the reference this variable is a child of (0 = not editable).
-   * @param parentPath the parent's access path, or null for a frame local (path = own name).
+   * @param evaluationPath this node's access-path expression, or null when it is
+   *                       not expressible (see {@link EvaluationPath}).
    */
-  HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference, @Nullable String parentPath) {
+  HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference, @Nullable String evaluationPath) {
     super(variable.getName() != null ? variable.getName() : "?");
     this.process = process;
     this.variable = variable;
     this.containerReference = containerReference;
-    this.evaluationPath = childPath(parentPath, getName());
-  }
-
-  // "[0]" children append without a dot; named fields join with one.
-  private static String childPath(@Nullable String parentPath, String name) {
-    if (parentPath == null || parentPath.isEmpty()) {
-      return name;
-    }
-    return name.startsWith("[") ? parentPath + name : parentPath + "." + name;
+    this.evaluationPath = evaluationPath;
   }
 
   @Override
@@ -73,16 +67,17 @@ final class HxcppValue extends XNamedValue {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable child : process.requestVariables(reference)) {
-        children.add(new HxcppValue(process, child, reference, evaluationPath));
+        children.add(new HxcppValue(process, child, reference, EvaluationPath.child(evaluationPath, child.getName())));
       }
       node.addChildren(children, true);
     });
   }
 
-  // Pre-fills the Evaluate Expression dialog when this node is selected.
+  // Pre-fills the Evaluate Expression dialog when this node is selected; no
+  // prefill (empty dialog) for a node whose path is not expressible.
   @Override
   public @NotNull Promise<XExpression> calculateEvaluationExpression() {
-    return Promises.resolvedPromise(XExpressionImpl.fromText(evaluationPath));
+    return Promises.resolvedPromise(evaluationPath != null ? XExpressionImpl.fromText(evaluationPath) : null);
   }
 
   @Override
