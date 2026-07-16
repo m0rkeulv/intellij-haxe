@@ -35,6 +35,22 @@ class DispatcherTest {
 		smartStepEntersTheChosenCallee(assert);
 		smartStepFallsBackToStepOver(assert);
 		aUserBreakpointWinsTheSmartStepRace(assert);
+		aRejectedClassNameIsANoOpStopNotARunaway(assert);
+	}
+
+	// hxcpp validates the class name against its class table and returns -1
+	// for an unknown one, arming NOTHING — stepping anyway could run unchecked
+	// forever (gotcha 8). The server must not resume: it re-reports the
+	// current stop instead.
+	static function aRejectedClassNameIsANoOpStopNotARunaway(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.api.knownClasses = ["ChainTarget"];
+		smartStepRequest(t); // requests class "my.pack.Target": rejected
+		assert.isTrue(t.sent[0].success, "the request is acknowledged");
+		assert.equals("step", t.sent[1].body.reason, "the current stop is re-reported as a step");
+		assert.equals(0, t.api.stepCalls.length, "the thread was NOT resumed");
+		assert.equals(0, t.api.installedFunctionBreakpoints.length, "no temp installed");
 	}
 
 	static function smartStepRequest(t):Void {

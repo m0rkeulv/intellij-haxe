@@ -271,7 +271,19 @@ class Dispatcher {
 		clearTempStepBreakpoint(); // replace any previous pending smart step
 		var threadId = resumeThread(args);
 		var from = topFrame(stoppedStacks.get(threadId));
-		tempStepBreakpoint = debugger.addClassFunctionBreakpoint(args.className, args.functionName);
+		var number = debugger.addClassFunctionBreakpoint(args.className, args.functionName);
+		if (number < 0) {
+			// The runtime REJECTED the class name (hxcpp validates it against its
+			// compiled-in class table; -1 arms nothing — and per gotcha 8, with no
+			// live breakpoint the per-line hook stays disarmed and a step can run
+			// unchecked forever). Do not gamble with the user's session: answer
+			// and re-report the current stop — a visible no-op the user can
+			// follow with a plain step.
+			sendResponse(seq, command, true, null);
+			sendEvent("stopped", {reason: "step", threadId: threadId, allThreadsStopped: true});
+			return;
+		}
+		tempStepBreakpoint = number;
 		// bookkeep exactly like a step-over: the same-line re-step policy keeps
 		// the step racing while the temp stays armed
 		stepActive = true;

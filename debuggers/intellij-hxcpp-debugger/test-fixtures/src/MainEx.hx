@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -115,5 +115,36 @@ class SmartStepTarget {
 
 	static function combine(a:Int, b:Int):Int {
 		return a + b; // SMART_COMBINE_LINE = 117
+	}
+}
+
+// Instance-method chain (`cfg.test1().test2().test3()`) for smart-step
+// probes: entry breakpoints must match instance frames too.
+class ChainTarget {
+	var count = 0;
+
+	public function new() {}
+
+	public static function loop():Void {
+		var cfg = new ChainTarget();
+		while (true) {
+			cfg.test1().test2().test3(); // CHAIN_LINE = 131
+			Sys.sleep(0.05);
+		}
+	}
+
+	public function test1():ChainTarget {
+		count++; // CHAIN_T1_LINE = 137
+		return this;
+	}
+
+	public function test2():ChainTarget {
+		count++; // CHAIN_T2_LINE = 142
+		return this;
+	}
+
+	public function test3():ChainTarget {
+		count++; // CHAIN_T3_LINE = 147
+		return this;
 	}
 }

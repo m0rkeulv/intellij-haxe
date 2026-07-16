@@ -70,8 +70,14 @@ class FakeDebuggerApi implements DebuggerApi {
 	}
 
 	public var installedFunctionBreakpoints:Array<{className:String, functionName:String, number:Int}> = [];
+	// when set, class names NOT in this list are rejected with -1, mirroring
+	// hxcpp's Add() which validates against the compiled-in class table
+	public var knownClasses:Null<Array<String>> = null;
 
 	public function addClassFunctionBreakpoint(className:String, functionName:String):Int {
+		if (knownClasses != null && knownClasses.indexOf(className) < 0) {
+			return -1;
+		}
 		var number = nextBreakpointNumber++;
 		installedFunctionBreakpoints.push({className: className, functionName: functionName, number: number});
 		return number;
