@@ -579,6 +579,16 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
   }
 
   @Test
+  public void testObjectLiteralWithClassAndInstanceTypes() throws Exception {
+    doTestNoFixWithWarnings();
+  }
+
+  @Test
+  public void testObjectLiteralWithTypedefArrayFields() throws Exception {
+    doTestNoFixWithWarnings();
+  }
+
+  @Test
   public void testAssignTypedefToInt() throws Exception {
     doTestNoFixWithWarnings();
   }
@@ -1120,6 +1130,11 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
 
   @Test
   public void testMacroSemantics() throws Throwable {
+    myFixture.enableInspections(HaxeUnresolvedSymbolInspection.class);
+    doTestNoFixWithWarnings();
+  }
+  @Test
+  public void testMacroStubReturnTypeIsNotVoid() throws Throwable {
     myFixture.enableInspections(HaxeUnresolvedSymbolInspection.class);
     doTestNoFixWithWarnings();
   }
