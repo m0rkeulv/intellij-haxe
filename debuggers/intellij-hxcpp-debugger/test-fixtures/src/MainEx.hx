@@ -180,24 +180,19 @@ class Workers {
 	}
 }
 
-// `throw new AppError(...)` INSIDE a try/catch that catches it — proves the
-// "break when this exception TYPE is constructed" proxy: a class-function
-// breakpoint on AppError.new fires at construction (the throw site) even
-// though the throw is catchable. See docs/README #15.
+// `throw new AppError(...)` INSIDE a try/catch that catches it — the
+// "thrown" exception filter (a class-function breakpoint on
+// haxe.Exception.new, which every subclass constructor runs through via
+// super()) must stop at construction even though the throw is caught.
+// See docs/README #15.
 class TypedThrow {
 	public static function run():Void {
 		try {
-			throw new AppError("kaboom");
+			throw new AppError("kaboom"); // TYPED_THROW_LINE = 195
 		} catch (e:AppError) {
-			Sys.println("caught-app:" + e.detail);
+			Sys.println("caught-app:" + e.message);
 		}
 	}
 }
 
-class AppError {
-	public var detail:String;
-
-	public function new(detail:String) {
-		this.detail = detail; // APP_ERROR_CTOR_LINE = 201
-	}
-}
+class AppError extends haxe.Exception {}

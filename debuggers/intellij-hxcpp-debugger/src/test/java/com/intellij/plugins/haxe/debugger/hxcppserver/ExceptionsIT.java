@@ -78,6 +78,30 @@ public class ExceptionsIT {
   }
 
   /**
+   * The "thrown" filter: a class-function breakpoint on haxe.Exception.new
+   * stops where an Exception (or subclass — here AppError) is CONSTRUCTED,
+   * i.e. at the throw expression, even though this throw is caught. The stop
+   * text names the concrete class and the message.
+   */
+  @Test
+  public void theThrownFilterStopsAtACaughtExceptionConstruction() throws Exception {
+    try (FixtureSession session = FixtureSession.launchScenario("typedthrow")) {
+      session.initialize("uncaught", "critical", "thrown");
+      session.configurationDone();
+
+      StoppedEvent stopped = session.awaitStopped();
+      assertEquals("exception", stopped.getBody().getReason());
+      assertEquals("Thrown exception", stopped.getBody().getDescription());
+      assertTrue(stopped.getBody().getText(), stopped.getBody().getText().contains("AppError"));
+      assertTrue(stopped.getBody().getText().contains("kaboom"));
+
+      session.resume(session.stoppedThread(stopped));
+      assertEquals(0, session.awaitExit());
+      assertTrue("the catch still ran", session.outputSnapshot().contains("caught-app:kaboom"));
+    }
+  }
+
+  /**
    * Regression guard: ordinary LINE breakpoints inside a try AND inside its
    * catch fire like any other breakpoint. (The exception FILTERS are a
    * separate mechanism — "break on all/caught exceptions" is not supportable,

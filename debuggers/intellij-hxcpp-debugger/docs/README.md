@@ -211,15 +211,19 @@ NOT SUPPORTABLE (and why):
   as a C++ local in `checkedThrow`); only its `toString()` embedded in the
   description survives, which is not reliably a class name.
 
-  PARTIAL PROXY (verified 2026-07-16, not yet wired to UI): for the
-  `throw new SomeError(...)` idiom, a class-function breakpoint on
-  `SomeError.new` fires at construction — i.e. at the throw site, even when
-  the throw is caught. This is the same `addClassFunctionBreakpoint`
-  machinery smart-step uses. Caveats that make it a "break when this type is
-  CONSTRUCTED", not "…THROWN": misses `throw "str"`/`throw 42`/`throw
-  someEnumCase` (no constructor), misses rethrows and any exception
-  constructed earlier than it is thrown, and fires on a construction that is
-  never thrown. Useful but honest only if labelled as construction-based.
+SHIPPED PROXY — the "thrown" filter (2026-07-16): generated code for
+`throw new haxe.Exception(...)` calls `haxe.Exception_obj::__alloc` — a HAXE
+constructor, and every subclass constructor chains through it via `super()`.
+So a class-function breakpoint on `haxe.Exception.new` IS "break where a
+haxe.Exception (or subclass) is thrown" for the whole hierarchy, caught or
+not, with the concrete class read from `this` and the message from the ctor
+parameter ("AppError: kaboom"). Exposed as the third exception filter
+("Thrown exceptions (haxe.Exception)", default OFF — exception-heavy code
+would stop constantly; reported unverified when the program never compiles
+haxe.Exception in). Honest caveats: raw-value throws (`throw "str"`, enums,
+ints) never construct an Exception and stay invisible; an Exception
+constructed but never thrown still stops; a rethrow of an existing instance
+does not re-stop. The full fix for those remains upstream (`checkedThrow`).
 
 CONFIRMED WORKING (not a gap): ordinary LINE breakpoints inside a try or a
 catch block fire normally — the exception FILTER limitation above is a

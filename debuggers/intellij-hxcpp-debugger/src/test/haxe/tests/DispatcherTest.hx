@@ -32,6 +32,9 @@ class DispatcherTest {
 		repeatedSilentCriticalResumesBreakTheLivelock(assert);
 		aCorruptLocalPoisonsOneRowNotTheRequest(assert);
 		aFaultingHandlerAnswersAndTheSessionLivesOn(assert);
+		theThrownFilterInstallsAndRemovesTheHook(assert);
+		aThrownHookStopReportsTheExceptionWithItsMessage(assert);
+		aMissingExceptionClassMakesTheThrownFilterUnverified(assert);
 		smartStepEntersTheChosenCallee(assert);
 		smartStepFallsBackToStepOver(assert);
 		aUserBreakpointWinsTheSmartStepRace(assert);
@@ -51,6 +54,52 @@ class DispatcherTest {
 		assert.equals("step", t.sent[1].body.reason, "the current stop is re-reported as a step");
 		assert.equals(0, t.api.stepCalls.length, "the thread was NOT resumed");
 		assert.equals(0, t.api.installedFunctionBreakpoints.length, "no temp installed");
+	}
+
+	// The "thrown" filter: a class-function breakpoint on haxe.Exception.new
+	// (every subclass constructor runs through it via super()).
+	static function theThrownFilterInstallsAndRemovesTheHook(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setFilters(t, ["uncaught", "critical", "thrown"]);
+		assert.equals(1, t.api.installedFunctionBreakpoints.length, "the hook is installed");
+		assert.equals("haxe.Exception", t.api.installedFunctionBreakpoints[0].className, "on haxe.Exception");
+		assert.equals("new", t.api.installedFunctionBreakpoints[0].functionName, "at the constructor");
+		var hook = t.api.installedFunctionBreakpoints[0].number;
+		setFilters(t, ["uncaught", "critical"]);
+		assert.isTrue(t.api.deletedBreakpoints.indexOf(hook) >= 0, "disabling removes the hook");
+		setFilters(t, ["thrown"]);
+		assert.equals(2, t.api.installedFunctionBreakpoints.length, "re-enabling reinstalls");
+	}
+
+	static function aThrownHookStopReportsTheExceptionWithItsMessage(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setFilters(t, ["thrown"]);
+		var hook = t.api.installedFunctionBreakpoints[0].number;
+		t.api.localNames = ["this", "message"];
+		t.api.localValues.set("message", "kaboom");
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, hook, "Exception.hx", 40));
+		assert.equals("exception", t.sent[0].body.reason, "reported as an exception stop");
+		assert.equals("Thrown exception", t.sent[0].body.description, "classified as thrown");
+		assert.equals("haxe.Exception: kaboom", t.sent[0].body.text, "carries class + message");
+		// exceptionInfo reflects the thrown stop
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({seq: 9, type: "request", command: "exceptionInfo", arguments: {threadId: 1}}));
+		assert.equals("Thrown exception", t.sent[0].body.exceptionId, "exceptionInfo id");
+		assert.equals("always", t.sent[0].body.breakMode, "thrown stops regardless of try/catch");
+	}
+
+	static function aMissingExceptionClassMakesTheThrownFilterUnverified(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.api.knownClasses = ["OnlyThisOne"]; // haxe.Exception not compiled in
+		t.sent.resize(0);
+		setFilters(t, ["thrown"]);
+		var results:Array<Dynamic> = t.sent[0].body.breakpoints;
+		assert.isTrue(!results[0].verified, "the inert filter reports unverified");
+		assert.equals(0, t.api.installedFunctionBreakpoints.length, "nothing installed");
 	}
 
 	static function smartStepRequest(t):Void {

@@ -77,8 +77,17 @@ class Dispatcher {
 	// the last exception stop, kept for the exceptionInfo request.
 	static inline var FILTER_UNCAUGHT = "uncaught";
 	static inline var FILTER_CRITICAL = "critical";
+	// "Thrown exceptions": there is no runtime hook for a CATCHABLE throw, but
+	// every `new haxe.Exception(...)` — including every subclass constructor,
+	// via super() — runs through haxe.Exception.new, and construction happens
+	// at the throw expression in idiomatic code. A class-function breakpoint
+	// there is "break where a haxe.Exception is thrown" for the whole
+	// hierarchy. Raw-value throws (`throw "str"`) never touch it.
+	static inline var FILTER_THROWN = "thrown";
+	static inline var THROWN_HOOK_CLASS = "haxe.Exception";
 	var breakOnUncaught:Bool = true;
 	var breakOnCritical:Bool = true;
+	var thrownHookBreakpoint:Int = -1; // installed while the filter is on
 	var lastExceptionDescription:Null<String> = null;
 	var lastExceptionKind:Null<String> = null;
 
@@ -153,6 +162,12 @@ class Dispatcher {
 							label: "Critical errors",
 							description: "Break on runtime critical errors (null access, GC errors). Under a debugger these stop even inside try/catch.",
 							'default': true
+						},
+						{
+							filter: FILTER_THROWN,
+							label: "Thrown exceptions (haxe.Exception)",
+							description: "Break where a haxe.Exception (or subclass) is constructed - normally the throw expression - even when it will be caught. Raw-value throws (strings, enums) are not visible to this filter.",
+							'default': false
 						}
 					]
 				});
@@ -471,6 +486,23 @@ class Dispatcher {
 			}
 		}
 
+		// The "thrown" filter's hook landing: haxe.Exception.new is running —
+		// an Exception (or subclass) is being constructed, normally by the
+		// throw expression. Report as an exception stop carrying the message.
+		if (thrownHookBreakpoint >= 0 && status == DebugThread.STATUS_STOPPED_BREAKPOINT && breakpoint == thrownHookBreakpoint) {
+			var text = thrownExceptionText(threadNumber, stack);
+			lastExceptionDescription = text;
+			lastExceptionKind = FILTER_THROWN;
+			sendEvent("stopped", {
+				reason: "exception",
+				threadId: threadNumber,
+				allThreadsStopped: true,
+				description: "Thrown exception",
+				text: text
+			});
+			return;
+		}
+
 		// An exception/critical-error stop: the thread is blocked AT the throw
 		// site (before unwinding), so the full stack and locals are inspectable.
 		// A disabled filter resumes silently; the runtime then unwinds/terminates
@@ -555,7 +587,18 @@ class Dispatcher {
 		var filters:Array<String> = (args != null && args.filters != null) ? args.filters : [];
 		breakOnUncaught = filters.indexOf(FILTER_UNCAUGHT) >= 0;
 		breakOnCritical = filters.indexOf(FILTER_CRITICAL) >= 0;
-		sendResponse(seq, command, true, {breakpoints: [for (_ in filters) {verified: true}]});
+		var thrownRequested = filters.indexOf(FILTER_THROWN) >= 0;
+		if (thrownRequested && thrownHookBreakpoint < 0) {
+			// -1 = the class is not compiled into this program (nothing ever
+			// constructs a haxe.Exception): the filter is inert, reported unverified
+			thrownHookBreakpoint = debugger.addClassFunctionBreakpoint(THROWN_HOOK_CLASS, "new");
+		} else if (!thrownRequested && thrownHookBreakpoint >= 0) {
+			debugger.deleteBreakpoint(thrownHookBreakpoint);
+			thrownHookBreakpoint = -1;
+		}
+		sendResponse(seq, command, true, {breakpoints: [
+			for (filter in filters) {verified: filter != FILTER_THROWN || thrownHookBreakpoint >= 0}
+		]});
 	}
 
 	function handleExceptionInfo(seq:Int, command:String):Void {
@@ -564,12 +607,37 @@ class Dispatcher {
 			return;
 		}
 		sendResponse(seq, command, true, {
-			exceptionId: lastExceptionKind == FILTER_UNCAUGHT ? "Uncaught exception" : "Critical error",
+			exceptionId: switch (lastExceptionKind) {
+				case FILTER_UNCAUGHT: "Uncaught exception";
+				case FILTER_THROWN: "Thrown exception";
+				case _: "Critical error";
+			},
 			description: lastExceptionDescription,
 			// uncaught throws could not have been handled; critical errors stop
 			// unconditionally (even inside try/catch), hence "always"
 			breakMode: lastExceptionKind == FILTER_UNCAUGHT ? "unhandled" : "always"
 		});
+	}
+
+	// The message of the exception being constructed at a thrown-hook stop:
+	// the ctor's `message` parameter, prefixed with the concrete class read
+	// from `this` (a subclass ctor chains here through super()). Best-effort —
+	// a corrupt frame must not fail the stop.
+	function thrownExceptionText(threadNumber:Int, stack:Array<DebugStackFrame>):String {
+		return try {
+			var frame = stack.length - 1; // innermost = haxe.Exception.new
+			var className = try {
+				var self:Dynamic = debugger.stackVariableValue(threadNumber, frame, "this");
+				var cls = Type.getClass(self);
+				cls != null ? Type.getClassName(cls) : THROWN_HOOK_CLASS;
+			} catch (e:Dynamic) {
+				THROWN_HOOK_CLASS;
+			}
+			var message:Dynamic = debugger.stackVariableValue(threadNumber, frame, "message");
+			className + ": " + Std.string(message);
+		} catch (e:Dynamic) {
+			"Thrown exception";
+		}
 	}
 
 	static inline function topFrame(stack:Null<Array<DebugStackFrame>>):Null<DebugStackFrame> {

@@ -11,6 +11,7 @@ import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppCriticalErrorBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppThrownExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppUncaughtExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
@@ -528,6 +529,19 @@ public class HxcppDebugProcess extends XDebugProcess {
         public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
           updateExceptionFilters();
         }
+      },
+      // "HXCPP Thrown Exceptions": any haxe.Exception construction (normally
+      // the throw expression), caught or not
+      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HxcppThrownExceptionBreakpointType.class) {
+        @Override
+        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
+          updateExceptionFilters();
+        }
+
+        @Override
+        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
+          updateExceptionFilters();
+        }
       }
     };
   }
@@ -553,6 +567,9 @@ public class HxcppDebugProcess extends XDebugProcess {
       }
       if (anyEnabled(manager, util.findBreakpointType(HxcppCriticalErrorBreakpointType.class))) {
         filters.add("critical");
+      }
+      if (anyEnabled(manager, util.findBreakpointType(HxcppThrownExceptionBreakpointType.class))) {
+        filters.add("thrown");
       }
     });
     SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
