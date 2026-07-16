@@ -87,7 +87,7 @@ final class HxcppExecutionStack extends XExecutionStack {
     process.onRequestThread(() -> {
       List<HxcppStackFrame> frames = toFrames(process.requestStackTrace(threadId));
       addFrom(frames, firstFrameIndex, container);
-    });
+    }, () -> container.addStackFrames(List.of(), true));
   }
 
   private static void addFrom(List<HxcppStackFrame> frames, int firstFrameIndex,

@@ -59,6 +59,6 @@ final class HxcppDebuggerEvaluator extends XDebuggerEvaluator {
                          ? response.getMessage() : "Cannot evaluate";
         callback.errorOccurred(message);
       }
-    });
+    }, () -> callback.errorOccurred("Debug session is shutting down"));
   }
 }

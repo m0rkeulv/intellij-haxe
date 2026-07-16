@@ -71,7 +71,7 @@ class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepInto
       } catch (Throwable t) {
         promise.setError(t);
       }
-    });
+    }, () -> promise.setError("Debug session is shutting down"));
     return promise;
   }
 

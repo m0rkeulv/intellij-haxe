@@ -75,7 +75,7 @@ final class HxcppValue extends XNamedValue {
         children.add(new HxcppValue(process, child, reference, EvaluationPath.child(evaluationPath, child.getName())));
       }
       node.addChildren(children, true);
-    });
+    }, () -> node.addChildren(XValueChildrenList.EMPTY, true));
   }
 
   // Pre-fills the Evaluate Expression dialog when this node is selected; no
@@ -129,7 +129,7 @@ final class HxcppValue extends XNamedValue {
           } catch (RuntimeException e) {
             callback.errorOccurred(e.getMessage() != null ? e.getMessage() : "Could not set value");
           }
-        });
+        }, () -> callback.errorOccurred("Debug session is shutting down"));
       }
     };
   }

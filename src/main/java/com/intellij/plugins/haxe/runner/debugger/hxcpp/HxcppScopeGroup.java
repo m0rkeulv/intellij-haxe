@@ -31,6 +31,6 @@ final class HxcppScopeGroup extends XValueGroup {
                                     EvaluationPath.root(variable.getName())));
       }
       node.addChildren(children, true);
-    });
+    }, () -> node.addChildren(XValueChildrenList.EMPTY, true));
   }
 }

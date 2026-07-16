@@ -125,6 +125,6 @@ final class HashLinkStackFrame extends XStackFrame {
         }
       }
       node.addChildren(children, true);
-    });
+    }, () -> node.addChildren(XValueChildrenList.EMPTY, true));
   }
 }

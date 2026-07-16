@@ -63,7 +63,7 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
       } catch (Throwable t) {
         promise.setError(t);
       }
-    });
+    }, () -> promise.setError("Debug session is shutting down"));
     return promise;
   }
 

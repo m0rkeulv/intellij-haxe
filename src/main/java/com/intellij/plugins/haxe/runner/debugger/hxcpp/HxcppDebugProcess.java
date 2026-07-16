@@ -75,6 +75,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -418,11 +419,34 @@ public class HxcppDebugProcess extends XDebugProcess {
 
   // --- plumbing for breakpoints/frames/values ---
 
-  /** Runs work on the single-thread DAP request executor. */
+  /**
+   * Runs work on the single-thread DAP request executor. Fire-and-forget:
+   * work submitted while the session tears down is silently dropped — fine
+   * for one-way requests, WRONG for work completing a promise, tree node or
+   * callback (use the two-argument overload there).
+   */
   void onRequestThread(Runnable work) {
+    onRequestThread(work, () -> {
+    });
+  }
+
+  /**
+   * Runs work on the single-thread DAP request executor; when the session is
+   * tearing down (executor already shut down), runs {@code onRejected} on the
+   * calling thread instead. A caller holding a promise, tree node or callback
+   * MUST complete it in {@code onRejected}, or the platform waits on it
+   * forever (a hung smart-step popup, a permanent "Collecting data" node).
+   */
+  void onRequestThread(Runnable work, Runnable onRejected) {
     if (!requestExecutor.isShutdown()) {
-      requestExecutor.execute(work);
+      try {
+        requestExecutor.execute(work);
+        return;
+      } catch (RejectedExecutionException ignored) {
+        // shut down between the check and the submit
+      }
     }
+    onRejected.run();
   }
 
   /** Blocking request; only call on the request executor or the event pump. */

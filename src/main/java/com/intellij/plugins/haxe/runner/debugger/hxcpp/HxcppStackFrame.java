@@ -117,6 +117,6 @@ final class HxcppStackFrame extends XStackFrame {
         }
       }
       node.addChildren(children, true);
-    });
+    }, () -> node.addChildren(XValueChildrenList.EMPTY, true));
   }
 }

@@ -89,7 +89,7 @@ final class HashLinkExecutionStack extends XExecutionStack {
     process.onRequestThread(() -> {
       List<HashLinkStackFrame> frames = toFrames(process.requestStackTrace(threadId));
       addFrom(frames, firstFrameIndex, container);
-    });
+    }, () -> container.addStackFrames(List.of(), true));
   }
 
   private static void addFrom(List<HashLinkStackFrame> frames, int firstFrameIndex,
