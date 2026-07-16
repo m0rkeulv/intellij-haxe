@@ -42,9 +42,16 @@ class Dispatcher {
 	// the thread most recently reported stopped — hxcpp's continueThreads wants
 	// the specific stopped thread as its "special" argument, not a wildcard
 	var lastStoppedThread:Int = -1;
-	// the currently-stopped thread's stack (innermost-last), captured on the
-	// stopping thread and cached to serve stackTrace (and scopes/variables in M4)
-	var stoppedStack:Null<Array<DebugStackFrame>> = null;
+	// Stacks (innermost-last) of EVERY currently-stopped thread, captured on
+	// each stopping thread — a pause stops them all, and the client asks for
+	// each one's stackTrace. Entries leave when their thread resumes.
+	final stoppedStacks = new Map<Int, Array<DebugStackFrame>>();
+	// DAP frameId -> (thread, hxcpp stack index). Frame ids must encode the
+	// thread because scopes/evaluate only receive a frameId. Valid until the
+	// next resume: references die when the program moves, not when another
+	// thread of the same stop-burst reports in.
+	var nextFrameId:Int = 1;
+	final framesById = new Map<Int, {thread:Int, index:Int}>();
 
 	// An in-flight source-level step: hxcpp stops on the SAME line for multi-
 	// expression lines (and never re-fires a loop-body line), so a step keeps
@@ -141,8 +148,11 @@ class Dispatcher {
 				handleExceptionInfo(seq, command);
 			case "continue":
 				// hxcpp's continueThreads wants the stopped thread as its "special"
-				// arg (count 1 = stop at the next breakpoint), not a wildcard.
+				// arg (count 1 = stop at the next breakpoint), not a wildcard. It
+				// resumes EVERY stopped thread, hence allThreadsContinued.
 				stepActive = false;
+				resumed();
+				stoppedStacks.clear();
 				debugger.continueThreads(resumeThread(request.arguments), 1);
 				sendResponse(seq, command, true, {allThreadsContinued: true});
 			case "pause":
@@ -190,34 +200,47 @@ class Dispatcher {
 		return (args != null && args.threadId != null) ? args.threadId : lastStoppedThread;
 	}
 
+	// Every resume path funnels through here: inspection references (variables
+	// and frame ids) die when the program moves.
+	function resumed():Void {
+		variablesView.reset();
+		framesById.clear();
+		nextFrameId = 1;
+	}
+
 	// Begins a source-level step. Records the current line so the stop policy can
 	// re-step until it changes (see emitDebugEvent). Responds immediately; the
 	// stopped(reason:"step") event follows when the step lands.
 	function handleStep(seq:Int, command:String, args:Dynamic, type:Int):Void {
 		var threadId = resumeThread(args);
-		var from = topFrame(stoppedStack);
+		var from = topFrame(stoppedStacks.get(threadId));
 		stepActive = true;
 		stepType = type;
 		stepFromFile = from != null ? from.fileName : "";
 		stepFromLine = from != null ? from.lineNumber : 0;
 		stepIterations = 0;
+		resumed();
+		stoppedStacks.remove(threadId); // stepThread resumes only this thread
 		debugger.stepThread(threadId, type);
 		sendResponse(seq, command, true, null);
 	}
 
 	function handleStackTrace(seq:Int, command:String, args:Dynamic):Void {
+		var threadId = resumeThread(args);
+		var stack = stoppedStacks.get(threadId);
 		var frames:Array<Dynamic> = [];
-		if (stoppedStack != null) {
-			var stack = stoppedStack;
+		if (stack != null) {
 			// hxcpp orders the stack innermost-LAST; DAP wants the newest frame
-			// first, so walk it in reverse. The frame id is its stack index for
-			// now (M4 builds a proper per-stop registry for scopes/variables).
+			// first, so walk it in reverse. Each frame gets a registry id that
+			// remembers its (thread, index) — scopes/evaluate only get the id.
 			var i = stack.length - 1;
 			while (i >= 0) {
 				var frame = stack[i];
+				var id = nextFrameId++;
+				framesById.set(id, {thread: threadId, index: i});
 				var source:Dynamic = {name: baseName(frame.fileName), path: fullPathFor(frame.fileName)};
 				frames.push({
-					id: i,
+					id: id,
 					name: frame.className + "." + frame.functionName,
 					line: frame.lineNumber,
 					column: 1,
@@ -229,30 +252,43 @@ class Dispatcher {
 		sendResponse(seq, command, true, {stackFrames: frames, totalFrames: frames.length});
 	}
 
-	// A frame's Locals scope. The DAP frameId is the hxcpp stack index (assigned
-	// in stackTrace); the thread is the current stop. hxcpp exposes one flat set
-	// of locals per frame (params + declared vars + `this`), so we surface a
-	// single "Locals" scope rather than splitting arguments out.
+	// A frame's Locals scope. The frameId names a (thread, stack index) pair via
+	// the registry built in stackTrace. hxcpp exposes one flat set of locals per
+	// frame (params + declared vars + `this`), so we surface a single "Locals"
+	// scope rather than splitting arguments out.
 	function handleScopes(seq:Int, command:String, args:Dynamic):Void {
 		var frameId = (args != null && args.frameId != null) ? args.frameId : 0;
-		var reference = variablesView.frameScope(lastStoppedThread, frameId);
+		var location = framesById.get(frameId);
+		if (location == null) {
+			sendResponse(seq, command, false, null, "Unknown or stale frameId " + frameId);
+			return;
+		}
+		var reference = variablesView.frameScope(location.thread, location.index);
 		sendResponse(seq, command, true, {
 			scopes: [{name: "Locals", variablesReference: reference, expensive: false}]
 		});
 	}
 
 	// evaluate a watch/hover/repl expression against a frame; a bare assignment
-	// writes back to the debuggee. The frameId is a hxcpp stack index (from
-	// stackTrace); default to the top frame (0) for a global/no-frame evaluate.
+	// writes back to the debuggee. The frameId comes from stackTrace's registry;
+	// a frameless evaluate targets the last stop's innermost frame.
 	function handleEvaluate(seq:Int, command:String, args:Dynamic):Void {
 		if (args == null || args.expression == null) {
 			sendResponse(seq, command, false, null, "Missing expression");
 			return;
 		}
-		// default to the innermost frame (highest hxcpp index) for a frameless evaluate
-		var frame = (args.frameId != null) ? args.frameId : (stoppedStack != null ? stoppedStack.length - 1 : 0);
+		var location = (args.frameId != null) ? framesById.get(args.frameId) : null;
+		var thread = location != null ? location.thread : lastStoppedThread;
+		var frame;
+		if (location != null) {
+			frame = location.index;
+		} else {
+			// default to the innermost frame (highest hxcpp index, innermost-last)
+			var stack = stoppedStacks.get(lastStoppedThread);
+			frame = stack != null ? stack.length - 1 : 0;
+		}
 		try {
-			var value = evaluator.evaluate(lastStoppedThread, frame, args.expression);
+			var value = evaluator.evaluate(thread, frame, args.expression);
 			var presented = variablesView.present(value);
 			sendResponse(seq, command, true, {result: presented.value, type: presented.type, variablesReference: presented.variablesReference});
 		} catch (e:Dynamic) {
@@ -302,9 +338,11 @@ class Dispatcher {
 				sendEvent("thread", {reason: "started", threadId: threadNumber});
 			case ThreadTerminated(threadNumber):
 				sendEvent("thread", {reason: "exited", threadId: threadNumber});
-			case ThreadStarted(_):
-				// a thread RESUMED (runtime "started" = running again); DAP resume
-				// reporting is implicit in our continue/step responses
+			case ThreadStarted(threadNumber):
+				// a thread RESUMED (runtime "started" = running again); its stack
+				// is stale now. DAP resume reporting is implicit in our
+				// continue/step responses.
+				stoppedStacks.remove(threadNumber);
 			case ThreadStopped(threadNumber, status, breakpoint, stack, description):
 				handleThreadStopped(threadNumber, status, breakpoint, stack, description);
 		}
@@ -312,9 +350,11 @@ class Dispatcher {
 
 	function handleThreadStopped(threadNumber:Int, status:Int, breakpoint:Int, stack:Array<DebugStackFrame>, description:Null<String>):Void {
 		lastStoppedThread = threadNumber;
-		stoppedStack = stack;
-		// every reference from the previous stop is stale now (the debuggee moved)
-		variablesView.reset();
+		stoppedStacks.set(threadNumber, stack);
+		// NO reference reset here: a pause stops every thread and their stop
+		// events arrive as a burst — resetting per event would invalidate frame
+		// ids the client just received for a sibling thread. References die on
+		// resume instead (resumed()).
 		lastExceptionDescription = null;
 		lastExceptionKind = null;
 
@@ -327,6 +367,7 @@ class Dispatcher {
 			if (top != null && top.fileName == stepFromFile && top.lineNumber == stepFromLine
 					&& stepIterations < MAX_STEP_ITERATIONS) {
 				stepIterations++;
+				stoppedStacks.remove(threadNumber);
 				debugger.stepThread(threadNumber, stepType);
 				return; // keep stepping; no stopped event yet
 			}
@@ -352,6 +393,8 @@ class Dispatcher {
 					if (kind == FILTER_CRITICAL) {
 						silentCriticalResumes++;
 					}
+					resumed();
+					stoppedStacks.clear(); // continueThreads resumes every thread
 					debugger.continueThreads(threadNumber, 1);
 					return;
 				}
@@ -375,6 +418,8 @@ class Dispatcher {
 		if (status == DebugThread.STATUS_STOPPED_BREAKPOINT && breakpoint >= 0) {
 			var condition = breakpoints.conditionForRuntimeNumber(breakpoint);
 			if (condition != null && condition != "" && !evaluator.conditionHolds(threadNumber, stack.length - 1, condition)) {
+				resumed();
+				stoppedStacks.clear(); // continueThreads resumes every thread
 				debugger.continueThreads(threadNumber, 1);
 				return;
 			}

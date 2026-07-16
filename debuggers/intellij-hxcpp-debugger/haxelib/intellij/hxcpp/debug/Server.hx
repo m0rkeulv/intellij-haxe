@@ -30,16 +30,24 @@ class Server {
 
 	// A gated diagnostic log: writes to the file named by HXCPP_DEBUG_LOG, off
 	// otherwise. The debug protocol is opaque and multi-threaded, so a low-tech
-	// append log is the practical way to trace a live session.
+	// append log is the practical way to trace a live session. With the env var
+	// set, the server also logs every wire message (see run's loop) — when a
+	// session wedges, the last logged line names the request that killed it.
+	static var logEnabled:Null<Bool> = null;
+
 	public static function log(msg:String):Void {
-		var path = Sys.getEnv("HXCPP_DEBUG_LOG");
-		if (path != null) {
-			try {
-				var out = sys.io.File.append(path, false);
-				out.writeString(msg + "\n");
-				out.close();
-			} catch (e:Dynamic) {}
+		if (logEnabled == null) {
+			logEnabled = Sys.getEnv("HXCPP_DEBUG_LOG") != null;
 		}
+		if (!logEnabled) {
+			return;
+		}
+		var path = Sys.getEnv("HXCPP_DEBUG_LOG");
+		try {
+			var out = sys.io.File.append(path, false);
+			out.writeString(Std.string(Sys.time()) + " " + msg + "\n");
+			out.close();
+		} catch (e:Dynamic) {}
 	}
 
 	static function __init__():Void {
@@ -109,6 +117,7 @@ class Server {
 
 		var framing = new DapFraming();
 		var dispatcher = new Dispatcher(api, payload -> {
+			log("OUT " + payload);
 			var frame = DapFraming.encode(payload);
 			socket.output.writeFullBytes(frame, 0, frame.length);
 		});
@@ -140,7 +149,9 @@ class Server {
 					var read = socket.input.readBytes(buffer, 0, READ_CHUNK); // Eof here = real close
 					if (read > 0) {
 						for (payload in framing.feed(buffer.sub(0, read))) {
+							log("IN  " + payload);
 							dispatcher.handleRequest(payload);
+							log("DONE");
 						}
 					}
 				}
