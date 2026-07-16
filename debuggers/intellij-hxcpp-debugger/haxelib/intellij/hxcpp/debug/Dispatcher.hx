@@ -505,7 +505,24 @@ class Dispatcher {
 				debugger.continueThreads(threadNumber, 1);
 				return;
 			}
+			// text reads the ctor frame's locals, so build it BEFORE trimming
 			var text = thrownExceptionText(threadNumber, stack, classChain);
+			// Trim the exception's OWN constructor frames (haxe.Exception.new and
+			// any subclass ctor chaining to it) so the reported top frame is the
+			// THROW SITE. Only ctors in the exception's class chain are trimmed —
+			// a user constructor that itself throws stays visible. Trimming the
+			// tail keeps lower hxcpp frame indices valid for scopes/evaluate.
+			var end = stack.length;
+			while (end > 1) {
+				var frame = stack[end - 1];
+				var ownCtor = frame.functionName == "new"
+					&& (frame.className == THROWN_HOOK_CLASS || classChain.indexOf(frame.className) >= 0);
+				if (!ownCtor) {
+					break;
+				}
+				end--;
+			}
+			stoppedStacks.set(threadNumber, stack.slice(0, end));
 			lastExceptionDescription = text;
 			lastExceptionKind = FILTER_THROWN;
 			sendEvent("stopped", {

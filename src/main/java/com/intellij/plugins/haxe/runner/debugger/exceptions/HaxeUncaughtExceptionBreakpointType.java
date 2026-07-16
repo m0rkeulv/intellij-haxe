@@ -1,8 +1,10 @@
 package com.intellij.plugins.haxe.runner.debugger.exceptions;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.xdebugger.breakpoints.XBreakpoint;
 import com.intellij.xdebugger.breakpoints.XBreakpointProperties;
 import com.intellij.xdebugger.breakpoints.XBreakpointType;
+import javax.swing.Icon;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -23,6 +25,17 @@ public class HaxeUncaughtExceptionBreakpointType
   @Override
   public @NotNull String getDisplayText(XBreakpoint<XBreakpointProperties> breakpoint) {
     return "Any uncaught exception";
+  }
+
+  // the lightning-bolt exception icons, like the Java debugger's
+  @Override
+  public @NotNull Icon getEnabledIcon() {
+    return AllIcons.Debugger.Db_exception_breakpoint;
+  }
+
+  @Override
+  public @NotNull Icon getDisabledIcon() {
+    return AllIcons.Debugger.Db_disabled_exception_breakpoint;
   }
 
   @Override

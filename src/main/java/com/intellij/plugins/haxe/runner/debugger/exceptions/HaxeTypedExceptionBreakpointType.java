@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.exceptions;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -46,6 +47,17 @@ public class HaxeTypedExceptionBreakpointType
   @Override
   public boolean isAddBreakpointButtonVisible() {
     return true;
+  }
+
+  // the lightning-bolt exception icons, like the Java debugger's
+  @Override
+  public @NotNull javax.swing.Icon getEnabledIcon() {
+    return AllIcons.Debugger.Db_exception_breakpoint;
+  }
+
+  @Override
+  public @NotNull javax.swing.Icon getDisabledIcon() {
+    return AllIcons.Debugger.Db_disabled_exception_breakpoint;
   }
 
   @Override

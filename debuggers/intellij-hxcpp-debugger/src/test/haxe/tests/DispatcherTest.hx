@@ -57,6 +57,7 @@ class DispatcherTest {
 		aTypedFilterAloneInstallsTheHook(assert);
 		aTypedFilterStopsMatchesAndResumesOthers(assert);
 		aBaseClassFilterMatchesSubclassThrows(assert);
+		aThrownStopTrimsTheExceptionsOwnCtorFramesOnly(assert);
 		smartStepEntersTheChosenCallee(assert);
 		smartStepFallsBackToStepOver(assert);
 		aUserBreakpointWinsTheSmartStepRace(assert);
@@ -131,6 +132,36 @@ class DispatcherTest {
 		hookStop(t, hook, new SubError("boom"), "boom");
 		assert.equals(1, t.sent.length, "the subclass throw stops on the base filter");
 		assert.isTrue(StringTools.endsWith(t.sent[0].body.text, "SubError: boom"), "text names the CONCRETE class");
+	}
+
+	// The stack reported for a thrown stop must END at the THROW SITE: the
+	// exception's own ctor chain (haxe.Exception.new + its subclass ctors) is
+	// trimmed, but a USER constructor that itself throws stays visible.
+	static function aThrownStopTrimsTheExceptionsOwnCtorFramesOnly(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setFilters(t, ["thrown"]);
+		var hook = t.api.installedFunctionBreakpoints[0].number;
+		t.api.localNames = ["this", "message"];
+		t.api.localValues.set("this", new SubError("boom"));
+		t.api.localValues.set("message", "boom");
+		var subName = Type.getClassName(SubError); // the runtime chain name
+		// Widget.new throws: [outermost .. innermost]
+		var frames:Array<DebugStackFrame> = [
+			new DebugStackFrame("Main.hx", 5, "Main", "main"),
+			new DebugStackFrame("Widget.hx", 9, "Widget", "new"), // the throw site — a USER ctor
+			new DebugStackFrame("Sub.hx", 3, subName, "new"),
+			new DebugStackFrame("Exception.hx", 40, "haxe.Exception", "new")
+		];
+		t.sent.resize(0);
+		t.dispatcher.handleDebugEvent(ThreadStopped(1, DebugThread.STATUS_STOPPED_BREAKPOINT, hook, frames, null));
+		assert.equals("exception", t.sent[0].body.reason, "reported as a thrown stop");
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({seq: 9, type: "request", command: "stackTrace", arguments: {threadId: 1}}));
+		var reported:Array<Dynamic> = t.sent[0].body.stackFrames;
+		assert.equals(2, reported.length, "the exception's ctor chain was trimmed");
+		assert.equals("Widget.new", reported[0].name, "the top frame is the throw site (a user ctor survives)");
+		assert.equals(9, reported[0].line, "at the throw line");
 	}
 
 	// The "thrown" filter: a class-function breakpoint on haxe.Exception.new

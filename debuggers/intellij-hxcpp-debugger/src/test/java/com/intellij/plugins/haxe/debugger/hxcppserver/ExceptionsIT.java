@@ -95,6 +95,11 @@ public class ExceptionsIT {
       assertTrue(stopped.getBody().getText(), stopped.getBody().getText().contains("AppError"));
       assertTrue(stopped.getBody().getText().contains("kaboom"));
 
+      // the Exception ctor frames are trimmed: the TOP frame is the throw site
+      var top = session.topFrame(session.stoppedThread(stopped));
+      assertEquals("TypedThrow.run", top.getName());
+      assertEquals(FixtureSession.TYPED_THROW_LINE, top.getLine());
+
       session.resume(session.stoppedThread(stopped));
       assertEquals(0, session.awaitExit());
       assertTrue("the catch still ran", session.outputSnapshot().contains("caught-app:kaboom"));

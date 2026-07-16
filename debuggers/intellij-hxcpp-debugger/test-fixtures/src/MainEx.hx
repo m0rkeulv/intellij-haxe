@@ -188,7 +188,7 @@ class Workers {
 class TypedThrow {
 	public static function run():Void {
 		try {
-			throw new AppError("kaboom"); // TYPED_THROW_LINE = 195
+			throw new AppError("kaboom"); // TYPED_THROW_LINE = 191
 		} catch (e:AppError) {
 			Sys.println("caught-app:" + e.message);
 		}
