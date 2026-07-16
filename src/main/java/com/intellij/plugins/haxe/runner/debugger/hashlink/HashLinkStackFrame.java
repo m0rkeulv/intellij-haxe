@@ -38,11 +38,11 @@ final class HashLinkStackFrame extends XStackFrame {
   /**
    * Identifies "the same frame" across steps so the platform
    * ({@code XVariablesViewBase}) restores the previously expanded variable nodes
-   * and highlights values that changed — instead of collapsing the whole tree on
+   * and highlights values that changed â€” instead of collapsing the whole tree on
    * every stop. Keyed by the function (independent of the current line, so a
    * step within a method restores) plus its source path to disambiguate
    * like-named functions; a step into a different function yields a different
-   * key, correctly rebuilding fresh. Null name → no stable identity, let the
+   * key, correctly rebuilding fresh. Null name â†’ no stable identity, let the
    * platform rebuild. Mirrors {@code JavaStackFrame.getEqualityObject()} keying
    * on the method.
    */
@@ -97,7 +97,7 @@ final class HashLinkStackFrame extends XStackFrame {
         if (first) {
           // the Locals scope: variables straight into the frame node
           for (Variable variable : process.requestVariables(scope.getVariablesReference())) {
-            children.add(new HashLinkValue(process, variable, scope.getVariablesReference()));
+            children.add(new HashLinkValue(process, variable, scope.getVariablesReference(), null));
           }
           first = false;
         } else {

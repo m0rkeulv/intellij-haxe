@@ -13,11 +13,11 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Watches/hover/Evaluate-dialog support. The adapter evaluates VARIABLE PATHS
  * (name, obj.field, arr[0], this-implicit fields, statics of the current
- * class) — arbitrary expressions come back with a descriptive error.
+ * class) â€” arbitrary expressions come back with a descriptive error.
  *
  * <p>Bare class references are qualified to their fully-qualified names against
  * the frame's source file (imports/scope) before being sent, so {@code
- * Point.ORIGIN} works without the user typing {@code geom.Point.ORIGIN} — see
+ * Point.ORIGIN} works without the user typing {@code geom.Point.ORIGIN} â€” see
  * {@link HashLinkExpressionQualifier}. The user still sees the text they typed.
  */
 final class HashLinkDebuggerEvaluator extends XDebuggerEvaluator {
@@ -54,7 +54,7 @@ final class HashLinkDebuggerEvaluator extends XDebuggerEvaluator {
         result.setVariablesReference(evaluated.getBody().getVariablesReference());
         // a watch/hover result has no editable container (0); child expansion
         // still uses the result's own reference
-        callback.evaluated(new HashLinkValue(process, result, 0));
+        callback.evaluated(new HashLinkValue(process, result, 0, null));
       } else {
         String message = response != null && response.getMessage() != null
                          ? response.getMessage() : "Cannot evaluate";
