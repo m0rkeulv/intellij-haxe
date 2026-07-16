@@ -55,15 +55,17 @@ final class HaxeExceptionBreakpointPropertiesPanel
     if (properties == null || properties.isTyped()) {
       return; // per-class breakpoints have no notification choices
     }
+    boolean changed = properties.notifyCaught != caught.isSelected()
+                      || properties.notifyUncaught != uncaught.isSelected()
+                      || properties.notifyCritical != critical.isSelected();
     properties.notifyCaught = caught.isSelected();
     properties.notifyUncaught = uncaught.isSelected();
     properties.notifyCritical = critical.isSelected();
-    // The framework does NOT fire a change for a CUSTOM-panel edit (only the
-    // standard setters — enabled, condition — do). The panel must fire it
-    // itself, exactly as the Java exception panel does, so a live session's
-    // breakpoint listener recomputes and resends the exception filters.
-    if (breakpoint instanceof com.intellij.xdebugger.impl.breakpoints.XBreakpointBase<?, ?, ?> base) {
-      base.fireBreakpointChanged();
+
+    if (changed && breakpoint.isEnabled()) {
+      // forces an "update state and notify" so our debugger can update its internal state
+      breakpoint.setEnabled(false);
+      breakpoint.setEnabled(true);
     }
   }
 }
