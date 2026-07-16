@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.plugins.haxe.runner.debugger.HaxeVariableSourceNavigator;
 import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.VariableKind;
@@ -8,6 +9,7 @@ import javax.swing.Icon;
 import com.intellij.xdebugger.XExpression;
 import com.intellij.xdebugger.frame.XCompositeNode;
 import com.intellij.xdebugger.frame.XNamedValue;
+import com.intellij.xdebugger.frame.XNavigatable;
 import com.intellij.xdebugger.frame.XValueChildrenList;
 import com.intellij.xdebugger.frame.XValueModifier;
 import com.intellij.xdebugger.frame.XValueNode;
@@ -91,6 +93,18 @@ final class HashLinkValue extends XNamedValue {
   @Override
   public @NotNull Promise<XExpression> calculateEvaluationExpression() {
     return Promises.resolvedPromise(evaluationPath != null ? XExpressionImpl.fromText(evaluationPath) : null);
+  }
+
+  @Override
+  public boolean canNavigateToSource() {
+    return evaluationPath != null;
+  }
+
+  // "Jump to Source": resolve the access path through the Haxe resolver and
+  // land on the member's declaration (see HaxeVariableSourceNavigator).
+  @Override
+  public void computeSourcePosition(@NotNull XNavigatable navigatable) {
+    HaxeVariableSourceNavigator.navigate(process.getSession(), evaluationPath, navigatable);
   }
 
   @Override
