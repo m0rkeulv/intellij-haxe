@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -32,7 +32,7 @@ class MainEx {
 	static function caughtNullAccess():Void {
 		try {
 			var a:Array<Int> = null;
-			Sys.println(a.length); // EX_CAUGHT_NULL_LINE = 34
+			Sys.println(a.length); // EX_CAUGHT_NULL_LINE = 35
 		} catch (e:Dynamic) {
 			Sys.println("caught-null:" + e);
 		}
@@ -146,5 +146,36 @@ class ChainTarget {
 	public function test3():ChainTarget {
 		count++; // CHAIN_T3_LINE = 147
 		return this;
+	}
+}
+
+// The multi-threaded shape real apps (lime ThreadPool) have: worker threads
+// that never opt into debugging keep RUNNING while main is paused — worker
+// heartbeats must keep flowing during a pause, and pause/resume must stay
+// healthy with them around.
+class Workers {
+	public static function run():Void {
+		for (i in 0...2) {
+			var id = i;
+			sys.thread.Thread.create(() -> {
+				var n = 0;
+				while (true) {
+					n++;
+					if (n % 25 == 0) {
+						Sys.println("worker" + id + ":" + n);
+					}
+					Sys.sleep(0.01);
+				}
+			});
+		}
+		// main heartbeat, pause-able like spin()
+		var beats = 0;
+		while (true) {
+			beats++;
+			if (beats % 100 == 0) {
+				Sys.println("beat:" + beats);
+			}
+			Sys.sleep(0.01);
+		}
 	}
 }

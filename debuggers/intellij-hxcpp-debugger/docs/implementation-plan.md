@@ -131,6 +131,20 @@ what made 392 unit checks possible there.
   test parity list from the HashLink suite where applicable, README gotchas
   document.
 
+  *Delivered (2026-07-16):* the module hosts the Java-client integration
+  suite (src/test/java, `FixtureSession` harness + RunControl/
+  BreakpointsAndEvaluate/Exceptions/SmartStep ITs — 17 scenarios ported from
+  the development-time python probes, driving the REAL DapClient stack).
+  Gradle builds both fixtures (`buildHxcppFixtureFixture`,
+  `buildHxcppFixtureExFixture`) with lazy haxe probing, haxelib-dev
+  registration of the server-under-test, and the haxelib/ dir as a build
+  input so server changes rebuild fixtures; `-PdebuggerTests=false` skips
+  fixtures and tests entirely (vshaxe-module pattern). Test discovery via
+  `hxcpp.server.fixture.*` system properties with build-relative fallbacks
+  for IDE runs; missing fixtures skip via Assume. New `threads` fixture mode
+  covers the multi-threaded shape (workers keep running while main is
+  paused). README gotchas (1–18) were written incrementally per milestone.
+
 Each milestone: sign-off before the next; unit + (from M8 backfilled to M2)
 integration tests green before commit.
 

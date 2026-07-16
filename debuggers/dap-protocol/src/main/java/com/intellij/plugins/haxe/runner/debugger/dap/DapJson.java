@@ -25,6 +25,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.Configura
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ExceptionInfoRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest;
@@ -44,6 +45,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreak
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetExceptionBreakpointsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ExceptionInfoResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetVariableResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.VariablesResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
@@ -110,6 +112,7 @@ public final class DapJson {
       case "stepOut" -> StepOutRequest.class;
       case "pause" -> PauseRequest.class;
       case "evaluate" -> EvaluateRequest.class;
+      case ExceptionInfoRequest.COMMAND -> ExceptionInfoRequest.class;
       case "setVariable" -> SetVariableRequest.class;
       case "disconnect" -> DisconnectRequest.class;
       default -> Request.class;
@@ -135,6 +138,7 @@ public final class DapJson {
       case "stepInTargets" -> StepInTargetsResponse.class;
       case "stepOut" -> StepOutResponse.class;
       case "pause" -> PauseResponse.class;
+      case ExceptionInfoRequest.COMMAND -> ExceptionInfoResponse.class;
       case "stackTrace" -> StackTraceResponse.class;
       case "scopes" -> ScopesResponse.class;
       case "variables" -> VariablesResponse.class;
