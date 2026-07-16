@@ -30,6 +30,47 @@ class DispatcherTest {
 		exceptionInfoDescribesTheLastStop(assert);
 		exceptionInfoFailsWhenNotAtAnExceptionStop(assert);
 		repeatedSilentCriticalResumesBreakTheLivelock(assert);
+		aCorruptLocalPoisonsOneRowNotTheRequest(assert);
+		aFaultingHandlerAnswersAndTheSessionLivesOn(assert);
+	}
+
+	// Real debuggees fault their readers (raw pointers, half-built state in
+	// frames like a thread pool's dispatch loop). One corrupt slot must render
+	// as an error row; the request — and the session — must keep working.
+	static function aCorruptLocalPoisonsOneRowNotTheRequest(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		t.api.localNames = ["ok", "bad"];
+		t.api.localValues.set("ok", 5);
+		t.api.corruptLocals = ["bad"];
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 9));
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({seq: 5, type: "request", command: "stackTrace", arguments: {threadId: 1}}));
+		var frameId = t.sent[0].body.stackFrames[0].id;
+		t.dispatcher.handleRequest(Json.stringify({seq: 6, type: "request", command: "scopes", arguments: {frameId: frameId}}));
+		var reference = t.sent[1].body.scopes[0].variablesReference;
+		t.dispatcher.handleRequest(Json.stringify({seq: 7, type: "request", command: "variables", arguments: {variablesReference: reference}}));
+		var response = t.sent[2];
+		assert.isTrue(response.success, "variables succeeds despite the corrupt slot");
+		var rows:Array<Dynamic> = response.body.variables;
+		assert.equals(2, rows.length, "both locals listed");
+		assert.equals("5", rows[0].value, "healthy local rendered");
+		assert.isTrue(StringTools.startsWith(rows[1].value, "<unreadable"), "corrupt local rendered as an error row");
+	}
+
+	static function aFaultingHandlerAnswersAndTheSessionLivesOn(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		// no stop happened, so this threads() call is fine — instead fault the
+		// handler itself: threads() over a null canned list throws inside dispatch
+		t.api.cannedThreads = null;
+		t.sent.resize(0);
+		t.dispatcher.handleRequest(Json.stringify({seq: 8, type: "request", command: "threads"}));
+		assert.isTrue(!t.sent[0].success, "the faulting request is answered with an error");
+		// and the session still serves the next request
+		t.api.cannedThreads = [];
+		t.dispatcher.handleRequest(Json.stringify({seq: 9, type: "request", command: "threads"}));
+		assert.isTrue(t.sent[1].success, "the session lives on after the fault");
 	}
 
 	// Resuming a critical error re-faults on the spot (observed live: null

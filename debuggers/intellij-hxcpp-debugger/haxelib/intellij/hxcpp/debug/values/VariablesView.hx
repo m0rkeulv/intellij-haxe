@@ -47,10 +47,22 @@ class VariablesView {
 		}
 		return switch (container) {
 			case Frame(thread, frame):
-				[for (name in debugger.stackVariables(thread, frame)) variable(name, debugger.stackVariableValue(thread, frame, name))];
+				[for (name in debugger.stackVariables(thread, frame)) safeVariable(name, () -> debugger.stackVariableValue(thread, frame, name))];
 			case ObjectValue(value):
-				[for (child in Values.children(value)) variable(child.name, child.value)];
+				[for (child in Values.children(value)) safeVariable(child.name, () -> child.value)];
 		};
+	}
+
+	// One corrupt value slot (real frames hold raw pointers and half-built
+	// state; hxcpp re-raises a critical read error as a THROW on the debug
+	// thread) must poison ONE row, not the whole request — render the error
+	// text in the value column and keep going.
+	function safeVariable(name:String, read:() -> Dynamic):Variable {
+		return try {
+			variable(name, read());
+		} catch (e:Dynamic) {
+			{name: name, value: "<unreadable: " + Std.string(e) + ">", type: "Unknown", variablesReference: 0};
+		}
 	}
 
 	/**

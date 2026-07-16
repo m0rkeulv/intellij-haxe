@@ -138,7 +138,14 @@ class Server {
 					if (event == null) {
 						break;
 					}
-					dispatcher.handleDebugEvent(event);
+					try {
+						dispatcher.handleDebugEvent(event);
+					} catch (e:Dynamic) {
+						// same fault isolation as requests: a faulting stop handler
+						// (e.g. a condition evaluated over a corrupt frame) must not
+						// kill the serve loop
+						log("event handling failed: " + Std.string(e));
+					}
 				}
 				// Poll readability with select rather than a read timeout: a
 				// timed-out blocking read can surface as Eof on cpp, which is
@@ -160,7 +167,10 @@ class Server {
 				}
 			}
 		} catch (e:Dynamic) {
-			// Eof (IDE went away) or a wire error: stop serving, let the app run
+			// Eof (IDE went away) or a wire error: stop serving, let the app run.
+			// Logged because a silent exit here looks like a frozen session from
+			// the IDE side — the log names what actually ended the loop.
+			log("serve loop ended: " + Std.string(e));
 		}
 		releaseMain(); // never leave the main thread frozen
 		try {

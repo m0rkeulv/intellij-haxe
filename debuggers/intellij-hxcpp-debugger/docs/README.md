@@ -222,6 +222,30 @@ Running a getter is what `evaluate` is for — explicit and user-initiated.
 The Java debugger gets away with evaluating getters because it runs them ON
 the suspended thread; hxcpp has no such primitive.
 
+## 17. Faults in the server's own reads re-throw ON the server thread
+
+When a critical error (e.g. a null access) happens on hxcpp's DEBUG thread —
+our server thread — the runtime cannot stop that thread, so
+`__hxcpp_dbg_fix_critical_error` re-raises it as `hx::Throw("Critical Error
+in the debugger thread")`. Real debuggees make this reachable just by being
+inspected: frames like a thread pool's dispatch loop hold raw pointers and
+half-built state that fault the reflection reads (observed with OpenFL's
+NyanCat sample — vshaxe printed this exact error from its renderer, and its
+deeper getProperty/toString chains crashed the app outright on
+`lime.app.Future` frames).
+
+Consequence for the serve loop: without isolation, that throw unwinds into
+the wire-death catch and the server SILENTLY stops serving — from the IDE it
+looks like a freeze (every request times out, resume never happens). Hence
+FAULT ISOLATION at three levels: every request is answered even when its
+handler throws (`handleRequest`'s catch), every event dispatch is guarded
+(Server loop), and every variable row degrades to `<unreadable: ...>` on its
+own (VariablesView.safeVariable; the Evaluator skips corrupt locals). A hard
+segfault still kills the process — nothing catches that — but a catchable
+fault must never end the session. The serve loop also logs why it ended
+(HXCPP_DEBUG_LOG), because a silent exit here is indistinguishable from a
+hang.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log

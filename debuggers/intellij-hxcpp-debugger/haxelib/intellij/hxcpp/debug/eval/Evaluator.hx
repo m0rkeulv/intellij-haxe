@@ -36,7 +36,11 @@ class Evaluator {
 
 		var interp = new ResolvingInterp();
 		for (name in debugger.stackVariables(thread, frame)) {
-			interp.variables.set(name, debugger.stackVariableValue(thread, frame, name));
+			// a corrupt slot must not break the whole expression: skip it (the
+			// expression then fails with EUnknownVariable only if it USES it)
+			try {
+				interp.variables.set(name, debugger.stackVariableValue(thread, frame, name));
+			} catch (e:Dynamic) {}
 		}
 
 		var source = assignment != null ? assignment.rhs : trimmed;

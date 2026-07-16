@@ -77,12 +77,19 @@ class FakeDebuggerApi implements DebuggerApi {
 	public var localNames:Array<String> = [];
 	public var localValues:Map<String, Dynamic> = new Map();
 	public var setVarCalls:Array<{thread:Int, frame:Int, name:String, value:Dynamic}> = [];
+	// names whose value READ throws — simulates a corrupt frame slot, which
+	// hxcpp re-raises on the debug thread ("Critical Error in the debugger
+	// thread")
+	public var corruptLocals:Array<String> = [];
 
 	public function stackVariables(threadNumber:Int, frame:Int):Array<String> {
 		return localNames;
 	}
 
 	public function stackVariableValue(threadNumber:Int, frame:Int, name:String):Dynamic {
+		if (corruptLocals.indexOf(name) >= 0) {
+			throw "Critical Error in the debugger thread";
+		}
 		return localValues.get(name);
 	}
 

@@ -107,6 +107,22 @@ class Dispatcher {
 			sendResponse(seq, command == null ? "" : command, false, null, "Not a valid DAP request");
 			return;
 		}
+		try {
+			dispatch(seq, command, request);
+		} catch (e:Dynamic) {
+			// FAULT ISOLATION: one faulting handler must not kill the session.
+			// Real debuggees fault their readers — a corrupt frame slot raises a
+			// critical error which hxcpp RE-THROWS on this (the debug) thread as
+			// "Critical Error in the debugger thread". Without this catch that
+			// throw unwound into the Server's wire-death catch and the server
+			// silently stopped serving: every later request timed out and resume
+			// never happened. Answer with the error and keep serving. (A hard
+			// segfault still kills the process; nothing catches that.)
+			sendResponse(seq, command, false, null, "Internal debugger error: " + Std.string(e));
+		}
+	}
+
+	function dispatch(seq:Int, command:String, request:Dynamic):Void {
 		switch (command) {
 			case "initialize":
 				sendResponse(seq, command, true, {
