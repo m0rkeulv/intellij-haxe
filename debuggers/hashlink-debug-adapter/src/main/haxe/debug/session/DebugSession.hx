@@ -227,7 +227,10 @@ class DebugSession {
 	}
 
 	function dispatchCommand(command:SessionCommand):Void {
-		dbg("cmd " + Type.enumConstructor(command));
+		// runs for every request: don't pay the concat + reflection when tracing is off
+		if (Trace.isEnabled()) {
+			dbg("cmd " + Type.enumConstructor(command));
+		}
 		switch (command) {
 			case CmdLaunch(seq, config):
 				handleLaunch(seq, config);

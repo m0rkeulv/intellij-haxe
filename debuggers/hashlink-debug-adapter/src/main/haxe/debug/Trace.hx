@@ -9,6 +9,15 @@ package debug;
 class Trace {
 	public static final ENABLED = Sys.getEnv("DAP_ADAPTER_TRACE") != null;
 
+	/**
+		Guard for hot-path call sites: skips building the message (string
+		concatenation, reflection) when tracing is off, which `log` alone
+		cannot — its argument is evaluated before the ENABLED check runs.
+	**/
+	public static inline function isEnabled():Bool {
+		return ENABLED;
+	}
+
 	// Worker, writer and session threads all trace; unsynchronized concurrent
 	// stderr writes interleave bytes and produce unreadable evidence.
 	static final lock = new sys.thread.Mutex();

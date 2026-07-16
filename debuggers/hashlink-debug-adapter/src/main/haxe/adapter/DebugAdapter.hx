@@ -55,7 +55,10 @@ class DebugAdapter {
 			var message = inbound.pop(true);
 			switch (message) {
 				case ClientPayload(payload):
-					Trace.log("recv " + preview(payload));
+					// runs for every message: don't pay preview() + concat when tracing is off
+					if (Trace.isEnabled()) {
+						Trace.log("recv " + preview(payload));
+					}
 					dispatcher.handleRawPayload(payload);
 				case FromSession(event):
 					dispatcher.handleSessionEvent(event);
@@ -150,7 +153,10 @@ class DebugAdapter {
 			try {
 				var json = Json.stringify(message);
 				writer.write(json);
-				Trace.log("sent " + preview(json));
+				// runs for every message: don't pay preview() + concat when tracing is off
+				if (Trace.isEnabled()) {
+					Trace.log("sent " + preview(json));
+				}
 			} catch (e:Dynamic) {
 				Trace.log("writer failed: " + Std.string(e));
 				break;
