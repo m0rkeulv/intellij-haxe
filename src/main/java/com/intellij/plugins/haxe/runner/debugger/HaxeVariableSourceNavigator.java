@@ -11,9 +11,9 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.xdebugger.XDebugSession;
+import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.frame.XNavigatable;
-import com.intellij.xdebugger.impl.XSourcePositionImpl;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -75,7 +75,7 @@ public final class HaxeVariableSourceNavigator {
     if (expression.equals("this")) {
       HaxeClass enclosing = PsiTreeUtil.getParentOfType(context, HaxeClass.class);
       LOG.debug("jump-to-source: bare this -> enclosing class " + (enclosing != null ? enclosing.getName() : null));
-      return enclosing != null ? XSourcePositionImpl.createByElement(enclosing.getNavigationElement()) : null;
+      return enclosing != null ? XDebuggerUtil.getInstance().createPositionByElement(enclosing.getNavigationElement()) : null;
     }
     if (expression.startsWith("this.")) {
       expression = expression.substring("this.".length());
@@ -107,7 +107,7 @@ public final class HaxeVariableSourceNavigator {
       LOG.debug("jump-to-source: '" + chain.getText() + "' did not resolve");
       return null;
     }
-    return XSourcePositionImpl.createByElement(resolved.getNavigationElement());
+    return XDebuggerUtil.getInstance().createPositionByElement(resolved.getNavigationElement());
   }
 
   private static @Nullable XSourcePosition resolveOnEnclosingClass(PsiElement context, String expression) {
@@ -127,7 +127,7 @@ public final class HaxeVariableSourceNavigator {
       LOG.debug("jump-to-source: member '" + member + "' not found on " + enclosing.getName());
       return null;
     }
-    return XSourcePositionImpl.createByElement(model.getBasePsi().getNavigationElement());
+    return XDebuggerUtil.getInstance().createPositionByElement(model.getBasePsi().getNavigationElement());
   }
 
   // The outermost (widest) reference expression in the fragment — the full

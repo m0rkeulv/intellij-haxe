@@ -1,10 +1,13 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.runner.debugger.HaxeVariableSourceNavigator;
 import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
+import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XExpression;
+import com.intellij.xdebugger.evaluation.EvaluationMode;
 import com.intellij.xdebugger.frame.XCompositeNode;
 import com.intellij.xdebugger.frame.XNamedValue;
 import com.intellij.xdebugger.frame.XValueChildrenList;
@@ -13,11 +16,11 @@ import com.intellij.xdebugger.frame.XValueModifier;
 import com.intellij.xdebugger.frame.XValueNode;
 import com.intellij.xdebugger.frame.XValuePlace;
 import com.intellij.xdebugger.frame.presentation.XRegularValuePresentation;
-import com.intellij.xdebugger.impl.breakpoints.XExpressionImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.concurrency.Promise;
 import org.jetbrains.concurrency.Promises;
+import org.jspecify.annotations.NonNull;
 
 /**
  * A variable from the debugger: value + type as reported, expandable when the
@@ -79,7 +82,15 @@ final class HxcppValue extends XNamedValue {
   // prefill (empty dialog) for a node whose path is not expressible.
   @Override
   public @NotNull Promise<XExpression> calculateEvaluationExpression() {
-    return Promises.resolvedPromise(evaluationPath != null ? XExpressionImpl.fromText(evaluationPath) : null);
+    if (evaluationPath != null) {
+      return Promises.resolvedPromise(createExpression(evaluationPath));
+    } else {
+      return Promises.resolvedPromise(null);
+    }
+  }
+
+  private @NonNull XExpression createExpression(@NotNull String evaluationPath) {
+    return XDebuggerUtil.getInstance().createExpression(evaluationPath, HaxeLanguage.INSTANCE, null, EvaluationMode.EXPRESSION);
   }
 
   @Override
