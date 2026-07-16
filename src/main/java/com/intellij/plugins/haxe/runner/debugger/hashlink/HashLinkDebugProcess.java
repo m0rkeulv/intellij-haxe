@@ -13,6 +13,11 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeCriticalErrorBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeThrownExceptionBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeTypedExceptionBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeUncaughtExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
@@ -631,54 +636,26 @@ public class HashLinkDebugProcess extends XDebugProcess {
           breakpoints.unregister(breakpoint);
         }
       },
-      // "Any HashLink exception": stop on every thrown exception
-      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HashLinkExceptionBreakpointType.class) {
-        @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
-          updateExceptionFilters();
-        }
+      // the shared Haxe exception breakpoint types (thrown/uncaught/critical/
+      // per-class) all funnel into one filter recomputation
+      exceptionHandler(HaxeThrownExceptionBreakpointType.class),
+      exceptionHandler(HaxeUncaughtExceptionBreakpointType.class),
+      exceptionHandler(HaxeCriticalErrorBreakpointType.class),
+      exceptionHandler(HaxeTypedExceptionBreakpointType.class)
+    };
+  }
 
-        @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
-          updateExceptionFilters();
-        }
-      },
-      // "Uncaught HashLink exception": stop only where no live try/catch handles it
-      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HashLinkUncaughtExceptionBreakpointType.class) {
-        @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
-          updateExceptionFilters();
-        }
+  private <P extends XBreakpointProperties<?>> XBreakpointHandler<XBreakpoint<P>> exceptionHandler(
+    Class<? extends XBreakpointType<XBreakpoint<P>, P>> type) {
+    return new XBreakpointHandler<>(type) {
+      @Override
+      public void registerBreakpoint(@NotNull XBreakpoint<P> breakpoint) {
+        updateExceptionFilters();
+      }
 
-        @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
-          updateExceptionFilters();
-        }
-      },
-      // "HashLink VM exception": VM-raised errors (null access, out-of-bounds,
-      // ...) that never execute a bytecode throw — trapped via hl_throw
-      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HashLinkVmExceptionBreakpointType.class) {
-        @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
-          updateExceptionFilters();
-        }
-
-        @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
-          updateExceptionFilters();
-        }
-      },
-      // Per-class exception breakpoints: stop on throws of a specific class (+ subclasses)
-      new XBreakpointHandler<XBreakpoint<HashLinkExceptionBreakpointProperties>>(HashLinkTypedExceptionBreakpointType.class) {
-        @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<HashLinkExceptionBreakpointProperties> breakpoint) {
-          updateExceptionFilters();
-        }
-
-        @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<HashLinkExceptionBreakpointProperties> breakpoint, boolean temporary) {
-          updateExceptionFilters();
-        }
+      @Override
+      public void unregisterBreakpoint(@NotNull XBreakpoint<P> breakpoint, boolean temporary) {
+        updateExceptionFilters();
       }
     };
   }
@@ -702,20 +679,20 @@ public class HashLinkDebugProcess extends XDebugProcess {
       XBreakpointManager manager =
         XDebuggerManager.getInstance(getSession().getProject()).getBreakpointManager();
       XDebuggerUtil util = XDebuggerUtil.getInstance();
-      if (anyEnabled(manager, util.findBreakpointType(HashLinkExceptionBreakpointType.class))) {
-        filters.add("all");
+      if (anyEnabled(manager, util.findBreakpointType(HaxeThrownExceptionBreakpointType.class))) {
+        filters.add("all"); // the HashLink wire name for every-throw stops
       }
-      if (anyEnabled(manager, util.findBreakpointType(HashLinkUncaughtExceptionBreakpointType.class))) {
+      if (anyEnabled(manager, util.findBreakpointType(HaxeUncaughtExceptionBreakpointType.class))) {
         filters.add("uncaught");
       }
-      if (anyEnabled(manager, util.findBreakpointType(HashLinkVmExceptionBreakpointType.class))) {
-        filters.add("vm");
+      if (anyEnabled(manager, util.findBreakpointType(HaxeCriticalErrorBreakpointType.class))) {
+        filters.add("vm"); // the HashLink wire name for runtime-raised errors
       }
-      XBreakpointType<?, ?> typedType = util.findBreakpointType(HashLinkTypedExceptionBreakpointType.class);
+      XBreakpointType<?, ?> typedType = util.findBreakpointType(HaxeTypedExceptionBreakpointType.class);
       if (typedType != null) {
         for (XBreakpoint<?> breakpoint : manager.getBreakpoints(typedType)) {
           if (breakpoint.isEnabled()
-              && breakpoint.getProperties() instanceof HashLinkExceptionBreakpointProperties properties
+              && breakpoint.getProperties() instanceof HaxeExceptionBreakpointProperties properties
               && properties.className != null && !properties.className.isBlank()) {
             filterTypes.add(properties.className.trim());
           }

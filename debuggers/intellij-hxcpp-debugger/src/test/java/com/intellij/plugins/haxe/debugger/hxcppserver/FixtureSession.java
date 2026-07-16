@@ -161,11 +161,17 @@ final class FixtureSession implements AutoCloseable {
     if (client.pollEvent(TIMEOUT_MILLIS) == null) {
       fail("no initialized event");
     }
-    SetExceptionBreakpointsRequest filters = new SetExceptionBreakpointsRequest();
-    SetExceptionBreakpointsArguments filterArguments = new SetExceptionBreakpointsArguments();
-    filterArguments.setFilters(List.of(exceptionFilters));
-    filters.setArguments(filterArguments);
-    assertTrue("setExceptionBreakpoints", request(filters).isSuccess());
+    setExceptionFilters(List.of(exceptionFilters), List.of());
+  }
+
+  /** Replaces the exception filters; filterTypes are typed exception class names. */
+  void setExceptionFilters(List<String> filters, List<String> filterTypes) throws IOException, InterruptedException {
+    SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
+    SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
+    arguments.setFilters(filters);
+    arguments.setFilterTypes(filterTypes);
+    request.setArguments(arguments);
+    assertTrue("setExceptionBreakpoints", request(request).isSuccess());
   }
 
   void configurationDone() throws IOException, InterruptedException {

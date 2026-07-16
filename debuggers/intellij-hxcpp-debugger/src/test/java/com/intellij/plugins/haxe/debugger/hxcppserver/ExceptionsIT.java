@@ -102,6 +102,39 @@ public class ExceptionsIT {
   }
 
   /**
+   * Typed exception filters: AppError extends haxe.Exception WITHOUT declaring
+   * a constructor (no AppError.new frame exists), so matching must come from
+   * the class chain read off `this` at the Exception.new hook. The "thrown"
+   * filter is OFF — only the typed filter can cause this stop.
+   */
+  @Test
+  public void aTypedFilterStopsItsClassEvenWithAnInheritedConstructor() throws Exception {
+    try (FixtureSession session = FixtureSession.launchScenario("typedthrow")) {
+      session.initialize("uncaught", "critical");
+      session.setExceptionFilters(java.util.List.of("uncaught", "critical"), java.util.List.of("AppError"));
+      session.configurationDone();
+
+      StoppedEvent stopped = session.awaitStopped();
+      assertEquals("exception", stopped.getBody().getReason());
+      assertTrue(stopped.getBody().getText(), stopped.getBody().getText().contains("AppError: kaboom"));
+
+      session.resume(session.stoppedThread(stopped));
+      assertEquals(0, session.awaitExit());
+    }
+  }
+
+  @Test
+  public void aTypedFilterForAnotherClassDoesNotStop() throws Exception {
+    try (FixtureSession session = FixtureSession.launchScenario("typedthrow")) {
+      session.initialize("uncaught", "critical");
+      session.setExceptionFilters(java.util.List.of("uncaught", "critical"), java.util.List.of("SomeOtherError"));
+      session.configurationDone();
+      assertEquals("the non-matching construction was resumed silently", 0, session.awaitExit());
+      assertTrue("the catch ran", session.outputSnapshot().contains("caught-app:kaboom"));
+    }
+  }
+
+  /**
    * Regression guard: ordinary LINE breakpoints inside a try AND inside its
    * catch fire like any other breakpoint. (The exception FILTERS are a
    * separate mechanism — "break on all/caught exceptions" is not supportable,

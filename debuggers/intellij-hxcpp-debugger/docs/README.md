@@ -207,23 +207,32 @@ NOT SUPPORTABLE (and why):
   "x"`/`throw new E()` throw the value directly). The clean fix is UPSTREAM:
   a "break on all" flag consulted by `checkedThrow` (same bucket as the
   string-classification backlog).
-- **Typed exception filters** — the thrown VALUE is never surfaced (it lives
-  as a C++ local in `checkedThrow`); only its `toString()` embedded in the
-  description survives, which is not reliably a class name.
+- **Break on raw-value throws** (`throw "str"`, enums, ints) — these never
+  construct a `haxe.Exception`, so the shipped hook (below) cannot see them,
+  and the runtime surfaces nothing for them until they are uncatchable. The
+  full fix remains upstream (`checkedThrow`).
 
-SHIPPED PROXY — the "thrown" filter (2026-07-16): generated code for
-`throw new haxe.Exception(...)` calls `haxe.Exception_obj::__alloc` — a HAXE
-constructor, and every subclass constructor chains through it via `super()`.
-So a class-function breakpoint on `haxe.Exception.new` IS "break where a
-haxe.Exception (or subclass) is thrown" for the whole hierarchy, caught or
-not, with the concrete class read from `this` and the message from the ctor
-parameter ("AppError: kaboom"). Exposed as the third exception filter
-("Thrown exceptions (haxe.Exception)", default OFF — exception-heavy code
-would stop constantly; reported unverified when the program never compiles
-haxe.Exception in). Honest caveats: raw-value throws (`throw "str"`, enums,
-ints) never construct an Exception and stay invisible; an Exception
-constructed but never thrown still stops; a rethrow of an existing instance
-does not re-stop. The full fix for those remains upstream (`checkedThrow`).
+SHIPPED — the "thrown" filter AND typed filters (2026-07-16): generated code
+for `throw new haxe.Exception(...)` calls `haxe.Exception_obj::__alloc` — a
+HAXE constructor, and every subclass constructor chains through it via
+`super()`. So ONE class-function breakpoint on `haxe.Exception.new` is
+"break where a haxe.Exception (or subclass) is thrown" for the whole
+hierarchy, caught or not, with the concrete class read from `this` and the
+message from the ctor parameter ("AppError: kaboom").
+
+- The "thrown" filter (default OFF) reports every hook hit; reported
+  unverified when the program never compiles haxe.Exception in.
+- TYPED filters (DAP `filterTypes`, the per-class breakpoints in the IDE)
+  reuse the same hook: at each hit the server walks the class chain read off
+  `this` (`Type.getClass`/`getSuperClass`) and matches dotted or bare names —
+  so a base-class filter stops subclass throws, and subclasses with
+  INHERITED constructors (no own `new` frame — the case a per-type entry
+  breakpoint could never catch) still match. Non-matching constructions
+  resume silently.
+
+Remaining honest caveats: raw-value throws stay invisible (above); an
+Exception constructed but never thrown still stops; a rethrow of an existing
+instance does not re-stop.
 
 CONFIRMED WORKING (not a gap): ordinary LINE breakpoints inside a try or a
 catch block fire normally — the exception FILTER limitation above is a

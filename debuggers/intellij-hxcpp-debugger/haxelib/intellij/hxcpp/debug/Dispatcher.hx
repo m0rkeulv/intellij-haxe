@@ -87,7 +87,13 @@ class Dispatcher {
 	static inline var THROWN_HOOK_CLASS = "haxe.Exception";
 	var breakOnUncaught:Bool = true;
 	var breakOnCritical:Bool = true;
-	var thrownHookBreakpoint:Int = -1; // installed while the filter is on
+	var breakOnThrown:Bool = false;
+	// Typed exception filters (DAP filterTypes): class names to stop on. The
+	// hook stop reads the CONCRETE class from `this` and matches it and its
+	// superclass chain, so subclasses match their base's filter and subclasses
+	// with inherited constructors (no own `new` frame) are still caught.
+	var thrownTypeFilters:Array<String> = [];
+	var thrownHookBreakpoint:Int = -1; // installed while thrown/typed filters are on
 	var lastExceptionDescription:Null<String> = null;
 	var lastExceptionKind:Null<String> = null;
 
@@ -486,11 +492,20 @@ class Dispatcher {
 			}
 		}
 
-		// The "thrown" filter's hook landing: haxe.Exception.new is running —
-		// an Exception (or subclass) is being constructed, normally by the
-		// throw expression. Report as an exception stop carrying the message.
+		// The thrown-hook landing: haxe.Exception.new is running — an Exception
+		// (or subclass) is being constructed, normally by the throw expression.
+		// Reported when the "thrown" filter is on, or when the concrete class
+		// (or any of its superclasses) matches a typed filter; otherwise resume
+		// silently (the hook also serves typed-only configurations).
 		if (thrownHookBreakpoint >= 0 && status == DebugThread.STATUS_STOPPED_BREAKPOINT && breakpoint == thrownHookBreakpoint) {
-			var text = thrownExceptionText(threadNumber, stack);
+			var classChain = thrownClassChain(threadNumber, stack);
+			if (!breakOnThrown && !matchesTypeFilter(classChain)) {
+				resumed();
+				stoppedStacks.clear(); // continueThreads resumes every thread
+				debugger.continueThreads(threadNumber, 1);
+				return;
+			}
+			var text = thrownExceptionText(threadNumber, stack, classChain);
 			lastExceptionDescription = text;
 			lastExceptionKind = FILTER_THROWN;
 			sendEvent("stopped", {
@@ -583,16 +598,20 @@ class Dispatcher {
 	}
 
 	// DAP sends the full ACTIVE filter list each time (an omitted filter is off).
+	// filterTypes (non-standard, shared with the HashLink adapter) lists class
+	// names for typed exception breakpoints.
 	function handleSetExceptionBreakpoints(seq:Int, command:String, args:Dynamic):Void {
 		var filters:Array<String> = (args != null && args.filters != null) ? args.filters : [];
 		breakOnUncaught = filters.indexOf(FILTER_UNCAUGHT) >= 0;
 		breakOnCritical = filters.indexOf(FILTER_CRITICAL) >= 0;
-		var thrownRequested = filters.indexOf(FILTER_THROWN) >= 0;
-		if (thrownRequested && thrownHookBreakpoint < 0) {
+		breakOnThrown = filters.indexOf(FILTER_THROWN) >= 0;
+		thrownTypeFilters = (args != null && args.filterTypes != null) ? args.filterTypes : [];
+		var hookWanted = breakOnThrown || thrownTypeFilters.length > 0;
+		if (hookWanted && thrownHookBreakpoint < 0) {
 			// -1 = the class is not compiled into this program (nothing ever
 			// constructs a haxe.Exception): the filter is inert, reported unverified
 			thrownHookBreakpoint = debugger.addClassFunctionBreakpoint(THROWN_HOOK_CLASS, "new");
-		} else if (!thrownRequested && thrownHookBreakpoint >= 0) {
+		} else if (!hookWanted && thrownHookBreakpoint >= 0) {
 			debugger.deleteBreakpoint(thrownHookBreakpoint);
 			thrownHookBreakpoint = -1;
 		}
@@ -619,22 +638,48 @@ class Dispatcher {
 		});
 	}
 
-	// The message of the exception being constructed at a thrown-hook stop:
-	// the ctor's `message` parameter, prefixed with the concrete class read
-	// from `this` (a subclass ctor chains here through super()). Best-effort —
-	// a corrupt frame must not fail the stop.
-	function thrownExceptionText(threadNumber:Int, stack:Array<DebugStackFrame>):String {
+	// The dotted names of the exception under construction: concrete class
+	// first (read from `this` in the haxe.Exception.new frame — a subclass
+	// ctor chains here through super()), then its superclasses. Best-effort —
+	// a corrupt frame yields just the hook class.
+	function thrownClassChain(threadNumber:Int, stack:Array<DebugStackFrame>):Array<String> {
 		return try {
 			var frame = stack.length - 1; // innermost = haxe.Exception.new
-			var className = try {
-				var self:Dynamic = debugger.stackVariableValue(threadNumber, frame, "this");
-				var cls = Type.getClass(self);
-				cls != null ? Type.getClassName(cls) : THROWN_HOOK_CLASS;
-			} catch (e:Dynamic) {
-				THROWN_HOOK_CLASS;
+			var self:Dynamic = debugger.stackVariableValue(threadNumber, frame, "this");
+			var cls = Type.getClass(self);
+			var chain = [];
+			while (cls != null) {
+				chain.push(Type.getClassName(cls));
+				cls = Type.getSuperClass(cls);
 			}
+			chain.length > 0 ? chain : [THROWN_HOOK_CLASS];
+		} catch (e:Dynamic) {
+			[THROWN_HOOK_CLASS];
+		}
+	}
+
+	// A typed filter matches the concrete class OR any superclass ("MyBase"
+	// stops subclass throws too), by dotted name or bare class name.
+	function matchesTypeFilter(classChain:Array<String>):Bool {
+		for (name in classChain) {
+			if (thrownTypeFilters.indexOf(name) >= 0) {
+				return true;
+			}
+			var shortName = name.substr(name.lastIndexOf(".") + 1);
+			if (thrownTypeFilters.indexOf(shortName) >= 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// "<ConcreteClass>: <message>" for a thrown-hook stop; the message is the
+	// ctor's parameter. Best-effort — a corrupt frame must not fail the stop.
+	function thrownExceptionText(threadNumber:Int, stack:Array<DebugStackFrame>, classChain:Array<String>):String {
+		return try {
+			var frame = stack.length - 1; // innermost = haxe.Exception.new
 			var message:Dynamic = debugger.stackVariableValue(threadNumber, frame, "message");
-			className + ": " + Std.string(message);
+			classChain[0] + ": " + Std.string(message);
 		} catch (e:Dynamic) {
 			"Thrown exception";
 		}

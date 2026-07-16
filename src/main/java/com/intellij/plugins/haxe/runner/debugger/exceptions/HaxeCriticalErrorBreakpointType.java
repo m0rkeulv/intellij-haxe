@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hashlink;
+package com.intellij.plugins.haxe.runner.debugger.exceptions;
 
 import com.intellij.xdebugger.breakpoints.XBreakpoint;
 import com.intellij.xdebugger.breakpoints.XBreakpointProperties;
@@ -7,23 +7,22 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The "Uncaught HashLink exception" breakpoint: like {@link HashLinkExceptionBreakpointType}
- * but the debugger stops only at a throw that no live {@code try/catch} will
- * handle. Enabling/disabling it drives the "uncaught" filter of
- * {@code setExceptionBreakpoints}; present by default but off. VM-raised
- * errors (null access, out-of-bounds, ...) never execute a bytecode throw and
- * are the separate {@link HashLinkVmExceptionBreakpointType}.
+ * "Haxe Critical Errors": runtime-raised errors that never execute a user
+ * {@code throw} — null access, out-of-bounds, invalid casts, GC errors —
+ * shared by the HashLink and HXCPP debuggers (HashLink maps it to its "vm"
+ * filter, HXCPP to "critical"). ON by default: an unstopped critical error
+ * just kills the debugged program with no stop.
  */
-public class HashLinkUncaughtExceptionBreakpointType
+public class HaxeCriticalErrorBreakpointType
   extends XBreakpointType<XBreakpoint<XBreakpointProperties>, XBreakpointProperties> {
 
-  public HashLinkUncaughtExceptionBreakpointType() {
-    super("hashlink-uncaught-exception", "HashLink Uncaught Exceptions");
+  public HaxeCriticalErrorBreakpointType() {
+    super("haxe-critical-error", "Haxe Critical Errors");
   }
 
   @Override
   public @NotNull String getDisplayText(XBreakpoint<XBreakpointProperties> breakpoint) {
-    return "Any uncaught HashLink exception";
+    return "Any critical error (null access, out-of-bounds, ...)";
   }
 
   @Override
@@ -31,6 +30,7 @@ public class HashLinkUncaughtExceptionBreakpointType
     return null;
   }
 
+  // only the single toggle — no user-added variants
   @Override
   public boolean isAddBreakpointButtonVisible() {
     return false;
@@ -39,7 +39,7 @@ public class HashLinkUncaughtExceptionBreakpointType
   @Override
   public XBreakpoint<XBreakpointProperties> createDefaultBreakpoint(@NotNull XBreakpointCreator<XBreakpointProperties> creator) {
     XBreakpoint<XBreakpointProperties> breakpoint = creator.createBreakpoint(null);
-    breakpoint.setEnabled(false); // off by default; the user opts in
+    breakpoint.setEnabled(true); // on by default: an unstopped critical error just kills the program
     return breakpoint;
   }
 }

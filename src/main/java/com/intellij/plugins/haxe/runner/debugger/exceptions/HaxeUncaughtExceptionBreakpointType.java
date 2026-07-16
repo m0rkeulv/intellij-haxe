@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hashlink;
+package com.intellij.plugins.haxe.runner.debugger.exceptions;
 
 import com.intellij.xdebugger.breakpoints.XBreakpoint;
 import com.intellij.xdebugger.breakpoints.XBreakpointProperties;
@@ -7,22 +7,22 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The "Any HashLink exception" breakpoint: a single, non-line breakpoint in the
- * Breakpoints dialog that, when enabled, makes the debugger stop wherever an
- * exception is thrown. Enabling/disabling it drives {@code setExceptionBreakpoints}
- * on the adapter (see {@code HashLinkDebugProcess}). Present by default but off,
- * so it costs nothing until the user turns it on.
+ * "Haxe Uncaught Exceptions": stop at a throw that no live {@code try/catch}
+ * will handle, before unwinding — shared by the HashLink and HXCPP debuggers
+ * (each maps it onto its own wire filter: HashLink "uncaught", HXCPP
+ * "uncaught"). ON by default: an uncaught throw is about to terminate the
+ * program, which is exactly what a debugging user wants to see.
  */
-public class HashLinkExceptionBreakpointType
+public class HaxeUncaughtExceptionBreakpointType
   extends XBreakpointType<XBreakpoint<XBreakpointProperties>, XBreakpointProperties> {
 
-  public HashLinkExceptionBreakpointType() {
-    super("hashlink-exception", "HashLink Exceptions");
+  public HaxeUncaughtExceptionBreakpointType() {
+    super("haxe-uncaught-exception", "Haxe Uncaught Exceptions");
   }
 
   @Override
   public @NotNull String getDisplayText(XBreakpoint<XBreakpointProperties> breakpoint) {
-    return "Any HashLink exception";
+    return "Any uncaught exception";
   }
 
   @Override
@@ -30,7 +30,7 @@ public class HashLinkExceptionBreakpointType
     return null;
   }
 
-  // only the single "any exception" toggle — no user-added variants
+  // only the single toggle — no user-added variants
   @Override
   public boolean isAddBreakpointButtonVisible() {
     return false;
@@ -39,7 +39,7 @@ public class HashLinkExceptionBreakpointType
   @Override
   public XBreakpoint<XBreakpointProperties> createDefaultBreakpoint(@NotNull XBreakpointCreator<XBreakpointProperties> creator) {
     XBreakpoint<XBreakpointProperties> breakpoint = creator.createBreakpoint(null);
-    breakpoint.setEnabled(false); // off by default; the user opts in
+    breakpoint.setEnabled(true); // on by default: an unstopped uncaught throw just kills the program
     return breakpoint;
   }
 }

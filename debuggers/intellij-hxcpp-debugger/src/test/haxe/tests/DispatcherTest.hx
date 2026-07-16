@@ -4,6 +4,25 @@ import haxe.Json;
 import intellij.hxcpp.debug.DebuggerApi;
 import intellij.hxcpp.debug.Dispatcher;
 
+// An exception hierarchy for the typed-filter tests. SubError inherits its
+// constructor — the case a per-type entry breakpoint could never catch, and
+// exactly what the this-chain matching exists for.
+private class BaseError {
+	public var message:String;
+
+	public function new(message:String) {
+		this.message = message;
+	}
+}
+
+private class SubError extends BaseError {}
+
+private class UnrelatedError {
+	public var message:String = "nope";
+
+	public function new() {}
+}
+
 class DispatcherTest {
 	public static function run(assert:Assert):Void {
 		initializeRespondsThenEmitsInitialized(assert);
@@ -35,6 +54,9 @@ class DispatcherTest {
 		theThrownFilterInstallsAndRemovesTheHook(assert);
 		aThrownHookStopReportsTheExceptionWithItsMessage(assert);
 		aMissingExceptionClassMakesTheThrownFilterUnverified(assert);
+		aTypedFilterAloneInstallsTheHook(assert);
+		aTypedFilterStopsMatchesAndResumesOthers(assert);
+		aBaseClassFilterMatchesSubclassThrows(assert);
 		smartStepEntersTheChosenCallee(assert);
 		smartStepFallsBackToStepOver(assert);
 		aUserBreakpointWinsTheSmartStepRace(assert);
@@ -54,6 +76,61 @@ class DispatcherTest {
 		assert.equals("step", t.sent[1].body.reason, "the current stop is re-reported as a step");
 		assert.equals(0, t.api.stepCalls.length, "the thread was NOT resumed");
 		assert.equals(0, t.api.installedFunctionBreakpoints.length, "no temp installed");
+	}
+
+	static function setTypedFilters(t, filters:Array<String>, types:Array<String>):Void {
+		t.dispatcher.handleRequest(Json.stringify({
+			seq: 2, type: "request", command: "setExceptionBreakpoints",
+			arguments: {filters: filters, filterTypes: types}
+		}));
+	}
+
+	// simulate a thrown-hook stop with `this` being the given exception object
+	static function hookStop(t:{api:FakeDebuggerApi, dispatcher:Dispatcher}, hook:Int, self:Dynamic, message:String):Void {
+		t.api.localNames = ["this", "message"];
+		t.api.localValues.set("this", self);
+		t.api.localValues.set("message", message);
+		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAKPOINT, hook, "Exception.hx", 40));
+	}
+
+	static function aTypedFilterAloneInstallsTheHook(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setTypedFilters(t, ["uncaught"], ["SubError"]);
+		assert.equals(1, t.api.installedFunctionBreakpoints.length, "typed filters alone arm the hook");
+		setTypedFilters(t, ["uncaught"], []);
+		assert.equals(1, t.api.deletedBreakpoints.length, "clearing the types disarms it");
+	}
+
+	static function aTypedFilterStopsMatchesAndResumesOthers(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setTypedFilters(t, [], ["SubError"]); // typed only — "thrown" is OFF
+		var hook = t.api.installedFunctionBreakpoints[0].number;
+
+		t.sent.resize(0);
+		hookStop(t, hook, new UnrelatedError(), "nope");
+		assert.equals(0, t.sent.length, "a non-matching class resumes silently");
+		assert.equals(1, t.api.continueCalls.length, "resumed");
+
+		hookStop(t, hook, new SubError("kaboom"), "kaboom");
+		assert.equals(1, t.sent.length, "the matching class stops");
+		assert.equals("exception", t.sent[0].body.reason, "as an exception stop");
+		assert.isTrue(StringTools.endsWith(t.sent[0].body.text, "SubError: kaboom"), "concrete class + message");
+	}
+
+	// SubError INHERITS its constructor (no own `new` frame exists), the case
+	// a per-type entry breakpoint could never catch: matching walks the class
+	// chain read from `this`, so a BaseError filter stops SubError throws.
+	static function aBaseClassFilterMatchesSubclassThrows(assert:Assert):Void {
+		var t = make();
+		initialize(t);
+		setTypedFilters(t, [], ["BaseError"]);
+		var hook = t.api.installedFunctionBreakpoints[0].number;
+		t.sent.resize(0);
+		hookStop(t, hook, new SubError("boom"), "boom");
+		assert.equals(1, t.sent.length, "the subclass throw stops on the base filter");
+		assert.isTrue(StringTools.endsWith(t.sent[0].body.text, "SubError: boom"), "text names the CONCRETE class");
 	}
 
 	// The "thrown" filter: a class-function breakpoint on haxe.Exception.new

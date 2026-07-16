@@ -10,9 +10,11 @@ import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppCriticalErrorBreakpointType;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppThrownExceptionBreakpointType;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppUncaughtExceptionBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeCriticalErrorBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeThrownExceptionBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeTypedExceptionBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeUncaughtExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
@@ -506,42 +508,26 @@ public class HxcppDebugProcess extends XDebugProcess {
     }
     return new XBreakpointHandler<?>[]{
       lineHandler,
-      // "HXCPP Uncaught Exceptions": stop where a throw cannot be caught
-      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HxcppUncaughtExceptionBreakpointType.class) {
-        @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
-          updateExceptionFilters();
-        }
+      // the shared Haxe exception breakpoint types (uncaught/critical/thrown/
+      // per-class) all funnel into one filter recomputation
+      exceptionHandler(HaxeUncaughtExceptionBreakpointType.class),
+      exceptionHandler(HaxeCriticalErrorBreakpointType.class),
+      exceptionHandler(HaxeThrownExceptionBreakpointType.class),
+      exceptionHandler(HaxeTypedExceptionBreakpointType.class)
+    };
+  }
 
-        @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
-          updateExceptionFilters();
-        }
-      },
-      // "HXCPP Critical Errors": null access, GC errors — runtime-raised stops
-      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HxcppCriticalErrorBreakpointType.class) {
-        @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
-          updateExceptionFilters();
-        }
+  private <P extends XBreakpointProperties<?>> XBreakpointHandler<XBreakpoint<P>> exceptionHandler(
+    Class<? extends XBreakpointType<XBreakpoint<P>, P>> type) {
+    return new XBreakpointHandler<>(type) {
+      @Override
+      public void registerBreakpoint(@NotNull XBreakpoint<P> breakpoint) {
+        updateExceptionFilters();
+      }
 
-        @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
-          updateExceptionFilters();
-        }
-      },
-      // "HXCPP Thrown Exceptions": any haxe.Exception construction (normally
-      // the throw expression), caught or not
-      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HxcppThrownExceptionBreakpointType.class) {
-        @Override
-        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
-          updateExceptionFilters();
-        }
-
-        @Override
-        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
-          updateExceptionFilters();
-        }
+      @Override
+      public void unregisterBreakpoint(@NotNull XBreakpoint<P> breakpoint, boolean temporary) {
+        updateExceptionFilters();
       }
     };
   }
@@ -555,26 +541,40 @@ public class HxcppDebugProcess extends XDebugProcess {
   // Builds the setExceptionBreakpoints request by reading the CURRENT state of
   // the exception breakpoints straight from the breakpoint manager (the single
   // source of truth): a session started with breakpoints already enabled (e.g.
-  // after an IDE restart) arms them the same way as a live toggle.
+  // after an IDE restart) arms them the same way as a live toggle. The shared
+  // Haxe types map onto this server's filter ids; per-class breakpoints go as
+  // filterTypes, matched server-side against the thrown value's class chain.
   private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
     List<String> filters = new ArrayList<>();
+    List<String> filterTypes = new ArrayList<>();
     ReadAction.run(() -> {
       XBreakpointManager manager =
         XDebuggerManager.getInstance(getSession().getProject()).getBreakpointManager();
       XDebuggerUtil util = XDebuggerUtil.getInstance();
-      if (anyEnabled(manager, util.findBreakpointType(HxcppUncaughtExceptionBreakpointType.class))) {
+      if (anyEnabled(manager, util.findBreakpointType(HaxeUncaughtExceptionBreakpointType.class))) {
         filters.add("uncaught");
       }
-      if (anyEnabled(manager, util.findBreakpointType(HxcppCriticalErrorBreakpointType.class))) {
+      if (anyEnabled(manager, util.findBreakpointType(HaxeCriticalErrorBreakpointType.class))) {
         filters.add("critical");
       }
-      if (anyEnabled(manager, util.findBreakpointType(HxcppThrownExceptionBreakpointType.class))) {
+      if (anyEnabled(manager, util.findBreakpointType(HaxeThrownExceptionBreakpointType.class))) {
         filters.add("thrown");
+      }
+      XBreakpointType<?, ?> typedType = util.findBreakpointType(HaxeTypedExceptionBreakpointType.class);
+      if (typedType != null) {
+        for (XBreakpoint<?> breakpoint : manager.getBreakpoints(typedType)) {
+          if (breakpoint.isEnabled()
+              && breakpoint.getProperties() instanceof HaxeExceptionBreakpointProperties properties
+              && properties.className != null && !properties.className.isBlank()) {
+            filterTypes.add(properties.className.trim());
+          }
+        }
       }
     });
     SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
     SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
     arguments.setFilters(filters);
+    arguments.setFilterTypes(filterTypes);
     request.setArguments(arguments);
     return request;
   }

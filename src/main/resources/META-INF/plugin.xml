@@ -143,13 +143,13 @@
     <programRunner implementation="com.intellij.plugins.haxe.runner.HaxeRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebugRunner"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkUncaughtExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkTypedExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkVmExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppUncaughtExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppCriticalErrorBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppThrownExceptionBreakpointType"/>
+    <!-- exception breakpoints are SHARED by the HashLink and HXCPP debuggers
+         (each debug process maps them onto its own wire filters), keeping the
+         Breakpoints dialog to one set of Haxe entries -->
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeThrownExceptionBreakpointType"/>
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeUncaughtExceptionBreakpointType"/>
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeCriticalErrorBreakpointType"/>
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeTypedExceptionBreakpointType"/>
 
     <lang.parserDefinition language="Haxe" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeParserDefinition"/>
     <lang.formatter language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.formatter.HaxeFormattingModelBuilder"/>
