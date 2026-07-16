@@ -63,7 +63,8 @@ public final class EvaluationPath {
     return inner;
   }
 
-  private static boolean isIdentifier(@Nullable String name) {
+  /** Whether the name is a plain Haxe identifier (usable as a field-access segment). */
+  public static boolean isIdentifier(@Nullable String name) {
     if (name == null || name.isEmpty()) {
       return false;
     }

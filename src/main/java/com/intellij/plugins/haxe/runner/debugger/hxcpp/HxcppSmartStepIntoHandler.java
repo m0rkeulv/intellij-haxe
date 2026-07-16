@@ -12,7 +12,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
-import com.intellij.plugins.haxe.util.HaxeResolveUtil;
+import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSupportUtils;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -107,29 +107,16 @@ class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepInto
         continue; // no runtime function to enter
       }
       HaxeClassModel declaringClass = model.getDeclaringClass();
-      String className = declaringClass != null ? runtimeClassName(declaringClass.haxeClass) : null;
+      // runtime name, not PSI's getQualifiedName(): a mismatched name means
+      // the entry breakpoint never fires and every choice degrades to step over
+      String className = declaringClass != null
+                         ? HaxeDebuggerSupportUtils.runtimeClassName(declaringClass.haxeClass) : null;
       if (className == null || className.isEmpty()) {
         continue; // closures/local functions: no class-function name to break on
       }
       variants.add(new Variant(className, model.getName(), name.getTextRange()));
     }
     return variants;
-  }
-
-  // The class name as hxcpp's RUNTIME knows it: package + bare class name.
-  // NOT PSI's getQualifiedName(): for an ancillary (secondary) class in a
-  // module that includes the module segment ("pack.FileName.ClassName"),
-  // while generated frames carry "pack.ClassName" — a mismatched name means
-  // the entry breakpoint never fires and every choice degrades to step over.
-  // (Verified live: a secondary class matched as its bare package+name.)
-  private static @Nullable String runtimeClassName(HaxeClass haxeClass) {
-    String name = haxeClass.getName();
-    if (name == null || name.isEmpty()) {
-      return null;
-    }
-    PsiFile file = haxeClass.getContainingFile();
-    String packageName = file != null ? HaxeResolveUtil.getPackageName(file) : null;
-    return packageName == null || packageName.isEmpty() ? name : packageName + "." + name;
   }
 
   // The call expressions whose NAME identifier sits on the position's line,

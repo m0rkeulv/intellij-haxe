@@ -39,6 +39,7 @@ final class HxcppValue extends XNamedValue {
   private final Variable variable;
   private final int containerReference;
   private final @Nullable String evaluationPath;
+  private final @Nullable String containerTypeName;
 
   /**
    * @param containerReference the reference this variable is a child of (0 = not editable).
@@ -46,11 +47,24 @@ final class HxcppValue extends XNamedValue {
    *                       not expressible (see {@link EvaluationPath}).
    */
   HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference, @Nullable String evaluationPath) {
+    this(process, variable, containerReference, evaluationPath, null);
+  }
+
+  /**
+   * @param containerTypeName the RUNTIME type of the object this variable is a
+   *                          member of (the debugger reports concrete types), or
+   *                          null for frame roots/scopes. Jump to Source falls
+   *                          back on it when the access path does not resolve
+   *                          through the DECLARED types.
+   */
+  HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference,
+             @Nullable String evaluationPath, @Nullable String containerTypeName) {
     super(variable.getName() != null ? variable.getName() : "?");
     this.process = process;
     this.variable = variable;
     this.containerReference = containerReference;
     this.evaluationPath = evaluationPath;
+    this.containerTypeName = containerTypeName;
   }
 
   @Override
@@ -72,7 +86,9 @@ final class HxcppValue extends XNamedValue {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable child : process.requestVariables(reference)) {
-        children.add(new HxcppValue(process, child, reference, EvaluationPath.child(evaluationPath, child.getName())));
+        children.add(new HxcppValue(process, child, reference,
+                                    EvaluationPath.child(evaluationPath, child.getName()),
+                                    variable.getType()));
       }
       node.addChildren(children, true);
     }, () -> node.addChildren(XValueChildrenList.EMPTY, true));
@@ -102,7 +118,8 @@ final class HxcppValue extends XNamedValue {
   // land on the member's declaration (see HaxeVariableSourceNavigator).
   @Override
   public void computeSourcePosition(@NotNull XNavigatable navigatable) {
-    HaxeVariableSourceNavigator.navigate(process.getSession(), evaluationPath, navigatable);
+    HaxeVariableSourceNavigator.navigate(process.getSession(), evaluationPath,
+                                         containerTypeName, variable.getName(), navigatable);
   }
 
   @Override

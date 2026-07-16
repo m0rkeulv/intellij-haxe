@@ -21,7 +21,9 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
+import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -41,6 +43,24 @@ public class HaxeDebuggerSupportUtils {
     }
     final PsiFile codeFragment = HaxeElementGenerator.createExpressionCodeFragment(project, text, context, true);
     return PsiDocumentManager.getInstance(project).getDocument(codeFragment);
+  }
+
+  /**
+   * The class name as the debugger RUNTIMES know it: package + bare class
+   * name. NOT PSI's getQualifiedName(): for an ancillary (secondary) class in
+   * a module that includes the module segment ("pack.FileName.ClassName"),
+   * while runtime frames and type names carry "pack.ClassName". (Verified
+   * live: a secondary class matched as its bare package+name.)
+   */
+  @Nullable
+  public static String runtimeClassName(HaxeClass haxeClass) {
+    String name = haxeClass.getName();
+    if (name == null || name.isEmpty()) {
+      return null;
+    }
+    PsiFile file = haxeClass.getContainingFile();
+    String packageName = file != null ? HaxeResolveUtil.getPackageName(file) : null;
+    return packageName == null || packageName.isEmpty() ? name : packageName + "." + name;
   }
 
   @Nullable

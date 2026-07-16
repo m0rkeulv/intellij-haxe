@@ -41,6 +41,7 @@ final class HashLinkValue extends XNamedValue {
   private final Variable variable;
   private final int containerReference;
   private final @Nullable String evaluationPath;
+  private final @Nullable String containerTypeName;
 
   /**
    * @param containerReference the reference this variable is a child of (0 = not editable).
@@ -48,11 +49,24 @@ final class HashLinkValue extends XNamedValue {
    *                       not expressible (see {@link EvaluationPath}).
    */
   HashLinkValue(HashLinkDebugProcess process, Variable variable, int containerReference, @Nullable String evaluationPath) {
+    this(process, variable, containerReference, evaluationPath, null);
+  }
+
+  /**
+   * @param containerTypeName the RUNTIME type of the object this variable is a
+   *                          member of (the adapter reports concrete types), or
+   *                          null for frame roots/scopes. Jump to Source falls
+   *                          back on it when the access path does not resolve
+   *                          through the DECLARED types.
+   */
+  HashLinkValue(HashLinkDebugProcess process, Variable variable, int containerReference,
+                @Nullable String evaluationPath, @Nullable String containerTypeName) {
     super(variable.getName() != null ? variable.getName() : "?");
     this.process = process;
     this.variable = variable;
     this.containerReference = containerReference;
     this.evaluationPath = evaluationPath;
+    this.containerTypeName = containerTypeName;
   }
 
   @Override
@@ -85,7 +99,9 @@ final class HashLinkValue extends XNamedValue {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable child : process.requestVariables(reference)) {
-        children.add(new HashLinkValue(process, child, reference, EvaluationPath.child(evaluationPath, child.getName())));
+        children.add(new HashLinkValue(process, child, reference,
+                                       EvaluationPath.child(evaluationPath, child.getName()),
+                                       variable.getType()));
       }
       node.addChildren(children, true);
     }, () -> node.addChildren(XValueChildrenList.EMPTY, true));
@@ -115,7 +131,8 @@ final class HashLinkValue extends XNamedValue {
   // land on the member's declaration (see HaxeVariableSourceNavigator).
   @Override
   public void computeSourcePosition(@NotNull XNavigatable navigatable) {
-    HaxeVariableSourceNavigator.navigate(process.getSession(), evaluationPath, navigatable);
+    HaxeVariableSourceNavigator.navigate(process.getSession(), evaluationPath,
+                                         containerTypeName, variable.getName(), navigatable);
   }
 
   @Override

@@ -5,10 +5,13 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
+import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIndex;
 import com.intellij.plugins.haxe.model.HaxeBaseMemberModel;
+import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.xdebugger.XDebugSession;
@@ -59,7 +62,9 @@ public final class HaxeVariableSourceNavigator {
    * its source position resolves lazily through the source resolver's index
    * lookup — a slow operation that must also stay off the EDT.
    */
-  public static void navigate(@Nullable XDebugSession session, @Nullable String path, XNavigatable navigatable) {
+  public static void navigate(@Nullable XDebugSession session, @Nullable String path,
+                              @Nullable String containerTypeName, @Nullable String memberName,
+                              XNavigatable navigatable) {
     if (session == null || path == null || path.isBlank()) {
       navigatable.setSourcePosition(null);
       return;
@@ -69,7 +74,7 @@ public final class HaxeVariableSourceNavigator {
 
     ReadAction.nonBlocking(() -> {
         XSourcePosition frame = currentFrame != null ? currentFrame.getSourcePosition() : null;
-        return resolvePosition(project, frame, path);
+        return resolvePosition(project, frame, path, containerTypeName, memberName);
       })
       // no parent disposable (a Project must not be one in plugin code):
       // expire on the conditions that make the navigation pointless
@@ -86,7 +91,9 @@ public final class HaxeVariableSourceNavigator {
       .onError(error -> navigatable.setSourcePosition(null));
   }
 
-  private static @Nullable XSourcePosition resolvePosition(Project project, @Nullable XSourcePosition frame, String path) {
+  // package-private for tests
+  static @Nullable XSourcePosition resolvePosition(Project project, @Nullable XSourcePosition frame, String path,
+                                                   @Nullable String containerTypeName, @Nullable String memberName) {
     PsiElement context = frame != null
                          ? HaxeDebuggerSupportUtils.getContextElement(frame.getFile(), frame.getOffset(), project)
                          : null;
@@ -110,6 +117,14 @@ public final class HaxeVariableSourceNavigator {
     if (byResolve != null) {
       return byResolve;
     }
+    // The chain resolves through DECLARED types, but the debugger reports each
+    // container's RUNTIME type — `var s:Shape = new Circle()` shows Circle's
+    // members, and `s.radius` has no meaning on Shape. The node's direct
+    // container's runtime type knows the member the declaration does not.
+    XSourcePosition byRuntimeType = resolveOnRuntimeType(project, containerTypeName, memberName);
+    if (byRuntimeType != null) {
+      return byRuntimeType;
+    }
     // Fallback for a member the fragment could not resolve (e.g. `this.x` in a
     // context where implicit-this lookup fails): find the FIRST segment on the
     // enclosing class model — exact for `this.x`; for deeper unresolvable
@@ -117,6 +132,49 @@ public final class HaxeVariableSourceNavigator {
     if (!expression.equals(path)) {
       return resolveOnEnclosingClass(context, expression);
     }
+    return null;
+  }
+
+  /**
+   * Looks the member up on the container's runtime type, as reported by the
+   * debug adapter: short or dotted name through the class-name index (dotted
+   * names must match the candidate's qualified name), member lookup including
+   * inherited ones. Null when the type or member cannot be found — primitives,
+   * anonymous structures and VM-internal type names simply miss the index.
+   */
+  private static @Nullable XSourcePosition resolveOnRuntimeType(Project project,
+                                                                @Nullable String typeName,
+                                                                @Nullable String memberName) {
+    if (typeName == null || memberName == null || !EvaluationPath.isIdentifier(memberName)) {
+      return null;
+    }
+    String bare = typeName;
+    int typeParams = bare.indexOf('<');
+    if (typeParams >= 0) {
+      bare = bare.substring(0, typeParams); // "Array<Circle>" -> "Array"
+    }
+    bare = bare.trim();
+    String shortName = bare.substring(bare.lastIndexOf('.') + 1);
+    boolean qualified = bare.indexOf('.') >= 0;
+    if (shortName.isBlank()) {
+      return null;
+    }
+    for (HaxeClass candidate : HaxeClassNameUnifiedIndex.getByNameFiltered(
+      shortName, project, GlobalSearchScope.allScope(project))) {
+      // compare RUNTIME-style names (package + bare name) — PSI's
+      // getQualifiedName() inserts the module segment for ancillary classes
+      // ("openfl.display.Preloader.DefaultPreloader") and would reject the
+      // adapter-reported "openfl.display.DefaultPreloader"
+      if (qualified && !bare.equals(HaxeDebuggerSupportUtils.runtimeClassName(candidate))) {
+        continue;
+      }
+      HaxeBaseMemberModel member = candidate.getModel().getMember(memberName, null);
+      if (member != null) {
+        LOG.debug("jump-to-source: member '" + memberName + "' found on runtime type '" + bare + "'");
+        return XDebuggerUtil.getInstance().createPositionByElement(member.getBasePsi().getNavigationElement());
+      }
+    }
+    LOG.debug("jump-to-source: runtime type '" + typeName + "' / member '" + memberName + "' not found");
     return null;
   }
 
