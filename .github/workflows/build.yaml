@@ -49,8 +49,9 @@ jobs:
         run: haxe -version
 
       # -PdebuggerTests=false: debugger tests and fixtures run ONLY in the
-      # dedicated Debuggers job below (they need windows + the hxcpp toolchain).
-      # The HashLink adapter (shipped in the plugin) still compiles here.
+      # path-filtered per-module workflows (debugger-*.yaml; most need windows
+      # + the hxcpp toolchain). The HashLink adapter (shipped in the plugin)
+      # still compiles here.
       - name: Build with Gradle (windows)
         timeout-minutes: 30
         if: ${{ matrix.os == 'windows-latest'}}
@@ -60,57 +61,6 @@ jobs:
         timeout-minutes: 30
         if: ${{ matrix.os != 'windows-latest'}}
         run: ./gradlew clean build -PdebuggerTests=false
-
-  Debuggers:
-    name: "Build and test debugger modules (windows-latest)"
-    # windows only: the hxcpp fixtures compile to native windows exes (MSVC is
-    # preinstalled on the runner) and the HashLink integration tests need hl.exe
-    runs-on: windows-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v6
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'zulu'
-          java-version: 21
-          cache: 'gradle'
-
-      - name: Set up Haxe
-        uses: krdlab/setup-haxe@v2
-        with:
-          haxe-version: 4.3.4
-
-      # format and hxcpp-debug-server versions mirror the pins in the debugger
-      # modules' build.gradle.kts (whose install tasks then no-op)
-      - name: Install haxelib dependencies
-        run: |
-          haxelib install hxcpp --quiet --always
-          haxelib install format 3.7.0 --quiet --always
-          haxelib install hxcpp-debug-server 1.2.4 --quiet --always
-
-      - name: Install HashLink (for the HashLink integration tests)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: pwsh
-        run: |
-          # release tag is "1.15"; the windows asset is hashlink-1.15.0-win.zip
-          gh release download 1.15 --repo HaxeFoundation/hashlink --pattern "*win*.zip" --dir hashlink-dist
-          Get-ChildItem hashlink-dist -Filter *.zip | Expand-Archive -DestinationPath hashlink-dist
-          $hl = Get-ChildItem hashlink-dist -Recurse -Filter hl.exe | Select-Object -First 1
-          if (-not $hl) { throw "hl.exe not found in the HashLink release archive" }
-          "HASHLINK_BIN=$($hl.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          & $hl.FullName --version
-
-      # build = compile + unit tests + fixture builds + integration tests
-      # against the real debuggee/VM for all three debugger modules
-      - name: Build and test debugger modules
-        timeout-minutes: 40
-        run: >-
-          .\gradlew.bat
-          :debuggers:dap-protocol:build
-          :debuggers:hashlink-debug-adapter:build
-          :debuggers:vshaxe-hxcpp-debugger-adapter:build
 
   verify:
     name: "Run verifyPlugin (ubuntu-latest)"
