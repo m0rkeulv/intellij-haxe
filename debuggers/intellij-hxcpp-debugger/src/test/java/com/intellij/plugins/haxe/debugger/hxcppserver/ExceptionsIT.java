@@ -77,6 +77,33 @@ public class ExceptionsIT {
     }
   }
 
+  /**
+   * Regression guard: ordinary LINE breakpoints inside a try AND inside its
+   * catch fire like any other breakpoint. (The exception FILTERS are a
+   * separate mechanism — "break on all/caught exceptions" is not supportable,
+   * see README gotcha 15 — but a line breakpoint on such a line always works.)
+   */
+  @Test
+  public void lineBreakpointsInsideTryAndCatchFire() throws Exception {
+    try (FixtureSession session = FixtureSession.launchScenario("caught")) {
+      session.initialize("uncaught", "critical");
+      // line 26 = the throw inside try; line 28 = the handler inside catch
+      session.setBreakpoints(FixtureSession.EX_SOURCE, new int[]{26, 28}, null);
+      session.configurationDone();
+
+      StoppedEvent insideTry = session.awaitStopped();
+      assertEquals("breakpoint", insideTry.getBody().getReason());
+      assertEquals(26, session.topFrame(session.stoppedThread(insideTry)).getLine());
+      session.resume(session.stoppedThread(insideTry));
+
+      StoppedEvent insideCatch = session.awaitStopped();
+      assertEquals("breakpoint", insideCatch.getBody().getReason());
+      assertEquals(28, session.topFrame(session.stoppedThread(insideCatch)).getLine());
+      session.resume(session.stoppedThread(insideCatch));
+      assertEquals("program completes normally", 0, session.awaitExit());
+    }
+  }
+
   @Test
   public void disabledFiltersResumeAnUncaughtThrowSilently() throws Exception {
     try (FixtureSession session = FixtureSession.launchScenario("uncaught")) {

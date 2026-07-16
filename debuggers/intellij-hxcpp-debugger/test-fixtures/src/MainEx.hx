@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -177,5 +177,27 @@ class Workers {
 			}
 			Sys.sleep(0.01);
 		}
+	}
+}
+
+// `throw new AppError(...)` INSIDE a try/catch that catches it — proves the
+// "break when this exception TYPE is constructed" proxy: a class-function
+// breakpoint on AppError.new fires at construction (the throw site) even
+// though the throw is catchable. See docs/README #15.
+class TypedThrow {
+	public static function run():Void {
+		try {
+			throw new AppError("kaboom");
+		} catch (e:AppError) {
+			Sys.println("caught-app:" + e.detail);
+		}
+	}
+}
+
+class AppError {
+	public var detail:String;
+
+	public function new(detail:String) {
+		this.detail = detail; // APP_ERROR_CTOR_LINE = 201
 	}
 }

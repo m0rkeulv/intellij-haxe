@@ -196,12 +196,35 @@ the channel, told apart by description:
 
 NOT SUPPORTABLE (and why):
 
-- **Break on caught/all exceptions** — no runtime hook: `checkedThrow` only
-  calls out when the value is uncatchable; a catchable throw is a plain
-  `hx::Throw` with no debugger involvement.
+- **Break on caught/all exceptions** — no HAXE-addressable hook. Re-confirmed
+  from generated C++ (2026-07-16): every `throw` compiles to
+  `HX_STACK_DO_THROW(e)` = `__hxcpp_dbg_checkedThrow(e)`, and every catch to
+  `HX_STACK_BEGIN_CATCH` = `__hxcpp_stack_begin_catch()` — BOTH are C++
+  runtime functions, not `.hx` class methods, so neither is reachable by our
+  file-line or class-function breakpoint APIs. `checkedThrow` self-reports
+  only uncatchable throws; a catchable one is a plain `hx::Throw`. There is
+  no `haxe.Exception` wrapping in the throw path to hook either (`throw
+  "x"`/`throw new E()` throw the value directly). The clean fix is UPSTREAM:
+  a "break on all" flag consulted by `checkedThrow` (same bucket as the
+  string-classification backlog).
 - **Typed exception filters** — the thrown VALUE is never surfaced (it lives
   as a C++ local in `checkedThrow`); only its `toString()` embedded in the
   description survives, which is not reliably a class name.
+
+  PARTIAL PROXY (verified 2026-07-16, not yet wired to UI): for the
+  `throw new SomeError(...)` idiom, a class-function breakpoint on
+  `SomeError.new` fires at construction — i.e. at the throw site, even when
+  the throw is caught. This is the same `addClassFunctionBreakpoint`
+  machinery smart-step uses. Caveats that make it a "break when this type is
+  CONSTRUCTED", not "…THROWN": misses `throw "str"`/`throw 42`/`throw
+  someEnumCase` (no constructor), misses rethrows and any exception
+  constructed earlier than it is thrown, and fires on a construction that is
+  never thrown. Useful but honest only if labelled as construction-based.
+
+CONFIRMED WORKING (not a gap): ordinary LINE breakpoints inside a try or a
+catch block fire normally — the exception FILTER limitation above is a
+separate mechanism and does not affect line breakpoints (regression-tested
+in ExceptionsIT.lineBreakpointsInsideTryAndCatchFire).
 
 ## 16. Never run user code implicitly on the server thread
 
