@@ -82,4 +82,28 @@ public class JsonRpcFramingTest {
     byte[] corrupt = {(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, '{', '}'};
     JsonRpcFraming.readPayload(new ByteArrayInputStream(corrupt));
   }
+
+  // The POSITIVE over-cap branch (a negative length is a different check):
+  // this binary prefix always "parses", so the plausibility cap is the only
+  // corruption detection the framing has — unlike the DAP framing, whose
+  // ASCII header self-detects garbage by failing integer parsing.
+  @Test(expected = IOException.class)
+  public void aPositiveLengthAboveTheCapIsRejected() throws IOException {
+    // MAX_FRAME_BYTES + 1 = 0x04000001, little-endian
+    byte[] oversized = {0x01, 0x00, 0x00, 0x04, '{', '}'};
+    JsonRpcFraming.readPayload(new ByteArrayInputStream(oversized));
+  }
+
+  @Test
+  public void aLengthAtTheCapIsAccepted() throws IOException {
+    // exactly MAX_FRAME_BYTES must NOT be rejected (boundary); the body is
+    // absent, so the read must fail as a mid-frame EOF, not as implausible
+    byte[] atCap = {0x00, 0x00, 0x00, 0x04};
+    try {
+      JsonRpcFraming.readPayload(new ByteArrayInputStream(atCap));
+      throw new AssertionError("expected EOFException");
+    } catch (EOFException expected) {
+      // the length passed the plausibility check and the body read began
+    }
+  }
 }
