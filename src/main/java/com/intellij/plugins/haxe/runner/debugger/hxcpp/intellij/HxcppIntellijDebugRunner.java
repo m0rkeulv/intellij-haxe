@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
@@ -12,6 +12,8 @@ import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.GenericProgramRunner;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppDebugProcess;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppRunningState;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugProcessStarter;
 import com.intellij.xdebugger.XDebugSession;
@@ -22,21 +24,22 @@ import java.nio.file.Path;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Debug runner for the dedicated HXCPP configuration (experimental). Keys on
- * {@link HxcppRunConfiguration} only, so the legacy Flash/hxcpp debugger is
- * never involved.
+ * Debug runner for the HXCPP (IntelliJ debug server) configuration. Keys on
+ * {@link HxcppIntellijRunConfiguration} only.
  *
- * Order matters: the in-process adapter backend binds its listener
- * FIRST (its constructor), then the debuggee is spawned — the executable's
- * embedded debug server connects out to that listener during startup and
- * holds the program before {@code main} until the adapter continues it, so
- * breakpoints are always installed before user code runs.
+ * Order matters: the backend binds its ephemeral loopback listener FIRST,
+ * then the debuggee is spawned with that listener's address in the
+ * HXCPP_DEBUG_HOST/PORT env vars — the executable's embedded debug server
+ * connects out during startup and holds the program before {@code main} until
+ * the IDE finishes configuring, so breakpoints are always installed before
+ * user code runs. An ephemeral port per session means no port setting, no
+ * collisions between concurrent sessions, and no leftover-instance poisoning.
  */
-public class HxcppDebugRunner extends GenericProgramRunner<RunnerSettings> {
-  public static final String RUNNER_ID = "HxcppDebugRunner";
+public class HxcppIntellijDebugRunner extends GenericProgramRunner<RunnerSettings> {
+  public static final String RUNNER_ID = "HxcppIntellijDebugRunner";
 
   /** Generous: the debuggee connects during process startup, typically instantly. */
-  private static final long DEBUGGEE_CONNECT_TIMEOUT_MILLIS = 30_000;
+  private static final int DEBUGGEE_CONNECT_TIMEOUT_MILLIS = 30_000;
 
   @NotNull
   @Override
@@ -46,35 +49,32 @@ public class HxcppDebugRunner extends GenericProgramRunner<RunnerSettings> {
 
   @Override
   public boolean canRun(@NotNull String executorId, @NotNull RunProfile profile) {
-    return DefaultDebugExecutor.EXECUTOR_ID.equals(executorId) && profile instanceof HxcppRunConfiguration;
+    return DefaultDebugExecutor.EXECUTOR_ID.equals(executorId) && profile instanceof HxcppIntellijRunConfiguration;
   }
 
   @Override
   protected RunContentDescriptor doExecute(@NotNull RunProfileState state, @NotNull ExecutionEnvironment environment)
     throws ExecutionException {
-    HxcppRunConfiguration configuration = (HxcppRunConfiguration)environment.getRunProfile();
+    HxcppIntellijRunConfiguration configuration = (HxcppIntellijRunConfiguration)environment.getRunProfile();
 
     // fail fast, before any UI is built
     configuration.requireModule();
     Path executable = configuration.resolveExecutable();
     Path workingDirectory = configuration.resolveWorkingDirectory();
-    String debugHost = configuration.getDebugHost();
-    int debugPort = configuration.resolveDebugPort();
 
-    // one debug session per port: the port is baked into the executable at
-    // compile time, so a second concurrent session cannot get its own
-    HxcppVshaxeBackend backend;
+    HxcppIntellijBackend backend;
     try {
-      backend = new HxcppVshaxeBackend(debugHost, debugPort, DEBUGGEE_CONNECT_TIMEOUT_MILLIS);
+      backend = new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS);
     } catch (IOException e) {
-      throw new ExecutionException(
-        HaxeBundle.message("hxcpp.runner.port.busy", debugHost, debugPort, e.getMessage()));
+      throw new ExecutionException(HaxeBundle.message("hxcpp.intellij.runner.listen.failed", e.getMessage()));
     }
 
     ColoredProcessHandler debuggeeHandler;
     try {
       GeneralCommandLine commandLine =
-        HxcppRunningState.createCommandLine(executable, workingDirectory, configuration.getProgramArguments());
+        HxcppRunningState.createCommandLine(executable, workingDirectory, configuration.getProgramArguments())
+          .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_HOST, backend.getHost())
+          .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_PORT, Integer.toString(backend.getPort()));
       debuggeeHandler = new ColoredProcessHandler(commandLine.createProcess(), commandLine.getCommandLineString());
     } catch (ExecutionException | RuntimeException e) {
       closeQuietly(backend);
@@ -105,7 +105,7 @@ public class HxcppDebugRunner extends GenericProgramRunner<RunnerSettings> {
     }
   }
 
-  private static void closeQuietly(HxcppVshaxeBackend backend) {
+  private static void closeQuietly(HxcppIntellijBackend backend) {
     try {
       backend.close();
     } catch (IOException ignored) {

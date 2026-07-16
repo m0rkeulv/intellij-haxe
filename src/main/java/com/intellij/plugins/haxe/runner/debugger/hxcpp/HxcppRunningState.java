@@ -41,7 +41,7 @@ public class HxcppRunningState extends CommandLineState {
     return new ColoredProcessHandler(commandLine.createProcess(), commandLine.getCommandLineString());
   }
 
-  static GeneralCommandLine createCommandLine(Path executable, @Nullable Path workingDirectory, String programArguments) {
+  public static GeneralCommandLine createCommandLine(Path executable, @Nullable Path workingDirectory, String programArguments) {
     Path workDir = workingDirectory != null ? workingDirectory : executable.getParent();
     GeneralCommandLine commandLine = new GeneralCommandLine()
       .withExePath(executable.toString())

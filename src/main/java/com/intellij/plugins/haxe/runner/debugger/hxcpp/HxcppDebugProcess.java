@@ -8,8 +8,10 @@ import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter.HxcppDebugAdapter;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppCriticalErrorBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppUncaughtExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
@@ -35,6 +37,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextReque
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
@@ -54,16 +58,19 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.Variable
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugSession;
+import com.intellij.xdebugger.XDebuggerManager;
+import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
+import com.intellij.xdebugger.breakpoints.XBreakpoint;
 import com.intellij.xdebugger.breakpoints.XBreakpointHandler;
+import com.intellij.xdebugger.breakpoints.XBreakpointManager;
 import com.intellij.xdebugger.breakpoints.XBreakpointProperties;
+import com.intellij.xdebugger.breakpoints.XBreakpointType;
 import com.intellij.xdebugger.breakpoints.XLineBreakpoint;
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider;
 import com.intellij.xdebugger.frame.XSuspendContext;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -71,17 +78,18 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * XDebugger process for HXCPP (experimental): drives the in-process
- * {@link HxcppDebugAdapter} as a DAP client and bridges its events into the
- * IDE. Mirrors the HashLink debug process, but simpler in two ways: the
- * adapter is a Java object connected over a loopback socket pair (no external
- * process to manage), and the debuggee is a plain child process (no OS-level
- * debug attachment, so killing it needs no special ceremony).
+ * XDebugger process for HXCPP (experimental): a DAP client over an {@link
+ * HxcppDapBackend} (the in-process vshaxe adapter, or the debuggee's embedded
+ * intellij-hxcpp-debug-server), bridging its events into the IDE. Mirrors the
+ * HashLink debug process, but simpler in two ways: the peer is reached over a
+ * loopback socket (no external process to manage), and the debuggee is a
+ * plain child process (no OS-level debug attachment, so killing it needs no
+ * special ceremony).
  *
- * The debuggee is spawned by {@link HxcppDebugRunner}; its {@link
- * ProcessHandler} is the session's process handler, so console output, stdin
- * and the exit code flow through the normal run machinery, and the session
- * ends when the debuggee does.
+ * The debuggee is spawned by the debug runner; its {@link ProcessHandler} is
+ * the session's process handler, so console output, stdin and the exit code
+ * flow through the normal run machinery, and the session ends when the
+ * debuggee does.
  *
  * Threading: the IDE calls resume/step/stop on the EDT — those only submit
  * work to a single-thread request executor. A dedicated event-pump thread is
@@ -94,22 +102,21 @@ public class HxcppDebugProcess extends XDebugProcess {
   private static final long DISCONNECT_TIMEOUT_MILLIS = 3_000;
   private static final long EVENT_POLL_MILLIS = 250;
 
-  private final HxcppDebugAdapter adapter;
+  private final HxcppDapBackend backend;
   private final ProcessHandler processHandler;
   private final HxcppBreakpointManager breakpoints = new HxcppBreakpointManager(this);
   private final ExecutorService requestExecutor =
     Executors.newSingleThreadExecutor(r -> daemon(r, "HXCPP DAP requests"));
 
   private volatile DapClient client;
-  private volatile ServerSocket dapListener;
   private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
   private volatile boolean launched = false;
 
   public HxcppDebugProcess(@NotNull XDebugSession session,
-                           HxcppDebugAdapter adapter, ProcessHandler debuggeeHandler) {
+                           HxcppDapBackend backend, ProcessHandler debuggeeHandler) {
     super(session);
-    this.adapter = adapter;
+    this.backend = backend;
     this.processHandler = debuggeeHandler;
     // A debuggee dying BEFORE the session is up is always a startup failure
     // (not compiled with the debug server, or its port is poisoned by a
@@ -120,9 +127,7 @@ public class HxcppDebugProcess extends XDebugProcess {
       public void processTerminated(@NotNull ProcessEvent event) {
         if (!shuttingDown && !launched) {
           fail("The program exited (code " + event.getExitCode() + ") before the debugger could attach.\n"
-               + "Check that it was compiled with -debug and -lib hxcpp-debug-server, and that no previous\n"
-               + "instance of the program is still running (a leftover instance blocks the debug port and\n"
-               + "makes new ones crash on startup).");
+               + backend.startupHint());
         }
       }
     });
@@ -149,13 +154,9 @@ public class HxcppDebugProcess extends XDebugProcess {
 
   private void initializeSession() {
     try {
-      // the adapter lives in-process; the DAP conversation still runs over a
-      // real (loopback) socket pair so this side is exactly a DAP client
-      ServerSocket listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
-      dapListener = listener;
-      Socket clientSide = new Socket("127.0.0.1", listener.getLocalPort());
-      adapter.start(new DapConnection(listener.accept()));
-      client = new DapClient(new DapConnection(clientSide));
+      // blocks until the DAP peer is up (the adapter's loopback pair, or the
+      // debuggee's embedded server connecting to the runner's listener)
+      client = backend.connect();
 
       InitializeRequest initialize = new InitializeRequest();
       InitializeRequestArguments initializeArguments = new InitializeRequestArguments();
@@ -165,15 +166,26 @@ public class HxcppDebugProcess extends XDebugProcess {
       client.sendRequest(initialize, REQUEST_TIMEOUT_MILLIS);
       client.pollEvent(REQUEST_TIMEOUT_MILLIS); // the initialized event
 
-      // launch = "the debuggee's server connected"; it is held before main
-      Response launchResponse = client.sendRequest(new LaunchRequest(), REQUEST_TIMEOUT_MILLIS);
-      if (!launchResponse.isSuccess()) {
-        fail("Cannot start the HXCPP debug session: " + launchResponse.getMessage());
-        return;
+      if (backend.requiresLaunchRequest()) {
+        // launch = "the debuggee's server connected"; it is held before main
+        Response launchResponse = client.sendRequest(new LaunchRequest(), REQUEST_TIMEOUT_MILLIS);
+        if (!launchResponse.isSuccess()) {
+          fail("Cannot start the HXCPP debug session: " + launchResponse.getMessage());
+          return;
+        }
       }
+      // either way the debuggee is attached now (a connected in-process server
+      // holds the program before main until configurationDone)
       launched = true;
 
       breakpoints.flushAll();
+      // Exception filters go IN-PHASE (before configurationDone), built by
+      // reading the breakpoint manager: a breakpoint already enabled from a
+      // previous IDE run arms here — the registerBreakpoint callbacks alone
+      // fire on the EDT and would race startup (the HashLink lesson).
+      if (backend.supportsExceptionFilters()) {
+        sendRequest(exceptionFiltersRequest());
+      }
       // releases the debuggee held by the server's startup break
       client.sendRequest(new ConfigurationDoneRequest(), REQUEST_TIMEOUT_MILLIS);
 
@@ -216,8 +228,10 @@ public class HxcppDebugProcess extends XDebugProcess {
     currentThreadId = threadId != null ? threadId : 0;
     String exceptionText = null;
     if ("exception".equals(stopped.getBody().getReason())) {
+      // prefer the runtime's own message (text) over the category (description)
+      String text = stopped.getBody().getText();
       String description = stopped.getBody().getDescription();
-      exceptionText = description != null ? description : "Exception thrown";
+      exceptionText = text != null ? text : (description != null ? description : "Exception thrown");
       // the gutter icon's tooltip is easy to miss - put the text where the
       // user is already looking
       print(exceptionText + "\n", true);
@@ -368,16 +382,8 @@ public class HxcppDebugProcess extends XDebugProcess {
       }
     }
     try {
-      adapter.close();
+      backend.close();
     } catch (IOException ignored) {
-    }
-    ServerSocket listener = dapListener;
-    dapListener = null;
-    if (listener != null) {
-      try {
-        listener.close();
-      } catch (IOException ignored) {
-      }
     }
     if (!processHandler.isProcessTerminated()) {
       processHandler.destroyProcess();
@@ -463,8 +469,8 @@ public class HxcppDebugProcess extends XDebugProcess {
 
   @Override
   public XBreakpointHandler<?> @NotNull [] getBreakpointHandlers() {
-    return new XBreakpointHandler<?>[]{
-      new XBreakpointHandler<XLineBreakpoint<XBreakpointProperties>>(HaxeBreakpointType.class) {
+    XBreakpointHandler<XLineBreakpoint<XBreakpointProperties>> lineHandler =
+      new XBreakpointHandler<>(HaxeBreakpointType.class) {
         @Override
         public void registerBreakpoint(@NotNull XLineBreakpoint<XBreakpointProperties> breakpoint) {
           breakpoints.register(breakpoint);
@@ -474,8 +480,71 @@ public class HxcppDebugProcess extends XDebugProcess {
         public void unregisterBreakpoint(@NotNull XLineBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
           breakpoints.unregister(breakpoint);
         }
+      };
+    if (!backend.supportsExceptionFilters()) {
+      return new XBreakpointHandler<?>[]{lineHandler};
+    }
+    return new XBreakpointHandler<?>[]{
+      lineHandler,
+      // "HXCPP Uncaught Exceptions": stop where a throw cannot be caught
+      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HxcppUncaughtExceptionBreakpointType.class) {
+        @Override
+        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
+          updateExceptionFilters();
+        }
+
+        @Override
+        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
+          updateExceptionFilters();
+        }
+      },
+      // "HXCPP Critical Errors": null access, GC errors — runtime-raised stops
+      new XBreakpointHandler<XBreakpoint<XBreakpointProperties>>(HxcppCriticalErrorBreakpointType.class) {
+        @Override
+        public void registerBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint) {
+          updateExceptionFilters();
+        }
+
+        @Override
+        public void unregisterBreakpoint(@NotNull XBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
+          updateExceptionFilters();
+        }
       }
     };
+  }
+
+  // Recomputed whenever an exception breakpoint toggles (live path — posted to
+  // the request thread). See exceptionFiltersRequest for how the set is built.
+  private void updateExceptionFilters() {
+    onRequestThread(() -> sendRequest(exceptionFiltersRequest()));
+  }
+
+  // Builds the setExceptionBreakpoints request by reading the CURRENT state of
+  // the exception breakpoints straight from the breakpoint manager (the single
+  // source of truth): a session started with breakpoints already enabled (e.g.
+  // after an IDE restart) arms them the same way as a live toggle.
+  private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
+    List<String> filters = new ArrayList<>();
+    ReadAction.run(() -> {
+      XBreakpointManager manager =
+        XDebuggerManager.getInstance(getSession().getProject()).getBreakpointManager();
+      XDebuggerUtil util = XDebuggerUtil.getInstance();
+      if (anyEnabled(manager, util.findBreakpointType(HxcppUncaughtExceptionBreakpointType.class))) {
+        filters.add("uncaught");
+      }
+      if (anyEnabled(manager, util.findBreakpointType(HxcppCriticalErrorBreakpointType.class))) {
+        filters.add("critical");
+      }
+    });
+    SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
+    SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
+    arguments.setFilters(filters);
+    request.setArguments(arguments);
+    return request;
+  }
+
+  private static boolean anyEnabled(XBreakpointManager manager, @Nullable XBreakpointType<?, ?> type) {
+    return type != null && manager.getBreakpoints(type).stream().anyMatch(XBreakpoint::isEnabled);
   }
 
   private static Thread daemon(Runnable work, String name) {

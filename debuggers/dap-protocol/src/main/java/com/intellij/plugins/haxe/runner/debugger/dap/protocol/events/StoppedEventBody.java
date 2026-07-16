@@ -4,7 +4,9 @@ import java.util.List;
 import lombok.Data;
 
 /**
- * Body of the "stopped" event. {@code reason} is e.g. "breakpoint" or "exception".
+ * Body of the "stopped" event. {@code reason} is e.g. "breakpoint" or
+ * "exception"; for exception stops {@code description} is the category and
+ * {@code text} carries the runtime's own message.
  */
 @Data
 public class StoppedEventBody {
@@ -13,4 +15,5 @@ public class StoppedEventBody {
   private Boolean allThreadsStopped;
   private List<Integer> hitBreakpointIds;
   private String description;
+  private String text;
 }

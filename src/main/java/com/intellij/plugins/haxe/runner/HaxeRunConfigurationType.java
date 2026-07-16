@@ -25,6 +25,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppConfigurationFactory;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -40,6 +41,7 @@ import javax.swing.*;
  *       Flash/Flex debugging)</li>
  *   <li>HashLink Application</li>
  *   <li>HXCPP Application (vshaxe)</li>
+ *   <li>HXCPP Application (IntelliJ)</li>
  * </ul>
  *
  * Compatibility: the type keeps the historical id
@@ -57,6 +59,7 @@ public class HaxeRunConfigurationType implements ConfigurationType {
       legacyFactory, // first: pre-group configurations saved without a factory name resolve to it
       new HashLinkConfigurationFactory(this),
       new HxcppConfigurationFactory(this),
+      new HxcppIntellijConfigurationFactory(this),
     };
   }
 

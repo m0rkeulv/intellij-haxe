@@ -110,6 +110,22 @@ what made 392 unit checks possible there.
   a DapClient-based debug process (the :dap-protocol module unchanged),
   breakpoint/exception-breakpoint wiring, smart step into only if M3 grew
   stepInTargets (see backlog).
+
+  *Delivered (2026-07-16):* the vshaxe M4 debug process was parameterized
+  over an `HxcppDapBackend` (connect strategy + launch/exception-filter
+  capabilities) instead of forking it, so both debuggers share one DAP
+  client, breakpoint manager and frame/value machinery. New
+  `hxcpp.intellij` package: `HxcppIntellijBackend` (ephemeral loopback
+  listener bound BEFORE spawn; debuggee guided in by HXCPP_DEBUG_HOST/PORT
+  env vars — no port setting, no concurrent-session collisions),
+  run configuration + editor (module/executable/workdir/args only,
+  browse-at-current-path, hints as help text not parentheticals), Run and
+  Debug runners, and "HXCPP Uncaught Exceptions"/"HXCPP Critical Errors"
+  breakpoint types (both default-ON, matching the server) driving the
+  uncaught/critical filters in-phase before configurationDone. Plain Run
+  sets no env vars: the embedded server sees an unconfigured session and
+  stays out of the way. IDE-side smoke testing happens in M8 alongside the
+  integration suite.
 - **M8 — integration suite + hardening.** Fixture matrix and gradle tasks
   mirroring the vshaxe module (toolchain probing, graceful skips), the full
   test parity list from the HashLink suite where applicable, README gotchas
