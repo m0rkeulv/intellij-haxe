@@ -1,14 +1,12 @@
 package com.intellij.plugins.haxe.runner.debugger.exceptions;
 
 import com.intellij.icons.AllIcons;
-import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.xdebugger.XDebuggerManager;
 import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.breakpoints.XBreakpoint;
-import com.intellij.xdebugger.breakpoints.XBreakpointListener;
 import com.intellij.xdebugger.breakpoints.XBreakpointManager;
 import com.intellij.xdebugger.breakpoints.XBreakpointType;
 import com.intellij.xdebugger.breakpoints.ui.XBreakpointCustomPropertiesPanel;
@@ -84,32 +82,6 @@ public class HaxeExceptionBreakpointType
   @Override
   public boolean isAddBreakpointButtonVisible() {
     return true;
-  }
-
-  /**
-   * Recomputes the exception filters when a breakpoint's PROPERTIES change (a
-   * Notifications checkbox, a class rename) during a live session. The
-   * add/remove/enable/disable paths already reach the debug process through
-   * its {@code XBreakpointHandler}; a properties edit fires only
-   * {@code breakpointChanged}, which nothing else listens to. Bound to the
-   * given disposable so it dies with the session.
-   */
-  public static void listenForChanges(@NotNull Project project,
-                                      @NotNull Disposable disposable,
-                                      @NotNull Runnable onChanged) {
-    XBreakpointType<XBreakpoint<HaxeExceptionBreakpointProperties>, HaxeExceptionBreakpointProperties> type =
-      XDebuggerUtil.getInstance().findBreakpointType(HaxeExceptionBreakpointType.class);
-    if (type == null) {
-      return;
-    }
-    XBreakpointManager manager = XDebuggerManager.getInstance(project).getBreakpointManager();
-    manager.addBreakpointListener(type,
-      new XBreakpointListener<>() {
-        @Override
-        public void breakpointChanged(@NotNull XBreakpoint<HaxeExceptionBreakpointProperties> breakpoint) {
-          onChanged.run();
-        }
-      }, disposable);
   }
 
   /**

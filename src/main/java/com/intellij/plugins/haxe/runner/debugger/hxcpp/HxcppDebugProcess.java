@@ -8,10 +8,8 @@ import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
-import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
@@ -62,14 +60,10 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.Variable
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugSession;
-import com.intellij.xdebugger.XDebuggerManager;
-import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.breakpoints.XBreakpoint;
 import com.intellij.xdebugger.breakpoints.XBreakpointHandler;
-import com.intellij.xdebugger.breakpoints.XBreakpointManager;
 import com.intellij.xdebugger.breakpoints.XBreakpointProperties;
-import com.intellij.xdebugger.breakpoints.XBreakpointType;
 import com.intellij.xdebugger.breakpoints.XLineBreakpoint;
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider;
 import com.intellij.xdebugger.frame.XSuspendContext;
@@ -113,7 +107,6 @@ public class HxcppDebugProcess extends XDebugProcess {
   private final ExecutorService requestExecutor =
     Executors.newSingleThreadExecutor(r -> daemon(r, "HXCPP DAP requests"));
 
-  private final Disposable exceptionListenerDisposable = Disposer.newDisposable("Haxe exception filters");
   private volatile DapClient client;
   private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
@@ -144,12 +137,6 @@ public class HxcppDebugProcess extends XDebugProcess {
   @Override
   public void sessionInitialized() {
     getSession().setPauseActionSupported(true);
-    if (backend.supportsExceptionFilters()) {
-      // a Notifications-checkbox edit during the session fires breakpointChanged
-      // only, which the XBreakpointHandler does not see — listen for it here
-      HaxeExceptionBreakpointType.listenForChanges(
-        getSession().getProject(), exceptionListenerDisposable, this::updateExceptionFilters);
-    }
     requestExecutor.execute(this::initializeSession);
   }
 
@@ -413,7 +400,6 @@ public class HxcppDebugProcess extends XDebugProcess {
       backend.close();
     } catch (IOException ignored) {
     }
-    Disposer.dispose(exceptionListenerDisposable);
     if (!processHandler.isProcessTerminated()) {
       processHandler.destroyProcess();
     }
