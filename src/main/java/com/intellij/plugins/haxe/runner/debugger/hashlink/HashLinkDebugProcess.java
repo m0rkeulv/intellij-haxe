@@ -13,11 +13,8 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
-import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeCriticalErrorBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
-import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeThrownExceptionBreakpointType;
-import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeTypedExceptionBreakpointType;
-import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeUncaughtExceptionBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
@@ -636,26 +633,18 @@ public class HashLinkDebugProcess extends XDebugProcess {
           breakpoints.unregister(breakpoint);
         }
       },
-      // the shared Haxe exception breakpoint types (thrown/uncaught/critical/
-      // per-class) all funnel into one filter recomputation
-      exceptionHandler(HaxeThrownExceptionBreakpointType.class),
-      exceptionHandler(HaxeUncaughtExceptionBreakpointType.class),
-      exceptionHandler(HaxeCriticalErrorBreakpointType.class),
-      exceptionHandler(HaxeTypedExceptionBreakpointType.class)
-    };
-  }
+      // the single shared Haxe exception category: any change (a toggle, a
+      // Notifications checkbox, a per-class add) recomputes the filters
+      new XBreakpointHandler<XBreakpoint<HaxeExceptionBreakpointProperties>>(HaxeExceptionBreakpointType.class) {
+        @Override
+        public void registerBreakpoint(@NotNull XBreakpoint<HaxeExceptionBreakpointProperties> breakpoint) {
+          updateExceptionFilters();
+        }
 
-  private <P extends XBreakpointProperties<?>> XBreakpointHandler<XBreakpoint<P>> exceptionHandler(
-    Class<? extends XBreakpointType<XBreakpoint<P>, P>> type) {
-    return new XBreakpointHandler<>(type) {
-      @Override
-      public void registerBreakpoint(@NotNull XBreakpoint<P> breakpoint) {
-        updateExceptionFilters();
-      }
-
-      @Override
-      public void unregisterBreakpoint(@NotNull XBreakpoint<P> breakpoint, boolean temporary) {
-        updateExceptionFilters();
+        @Override
+        public void unregisterBreakpoint(@NotNull XBreakpoint<HaxeExceptionBreakpointProperties> breakpoint, boolean temporary) {
+          updateExceptionFilters();
+        }
       }
     };
   }
@@ -675,30 +664,21 @@ public class HashLinkDebugProcess extends XDebugProcess {
   private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
     List<String> filters = new ArrayList<>();
     List<String> filterTypes = new ArrayList<>();
-    ReadAction.run(() -> {
-      XBreakpointManager manager =
-        XDebuggerManager.getInstance(getSession().getProject()).getBreakpointManager();
-      XDebuggerUtil util = XDebuggerUtil.getInstance();
-      if (anyEnabled(manager, util.findBreakpointType(HaxeThrownExceptionBreakpointType.class))) {
-        filters.add("all"); // the HashLink wire name for every-throw stops
-      }
-      if (anyEnabled(manager, util.findBreakpointType(HaxeUncaughtExceptionBreakpointType.class))) {
-        filters.add("uncaught");
-      }
-      if (anyEnabled(manager, util.findBreakpointType(HaxeCriticalErrorBreakpointType.class))) {
-        filters.add("vm"); // the HashLink wire name for runtime-raised errors
-      }
-      XBreakpointType<?, ?> typedType = util.findBreakpointType(HaxeTypedExceptionBreakpointType.class);
-      if (typedType != null) {
-        for (XBreakpoint<?> breakpoint : manager.getBreakpoints(typedType)) {
-          if (breakpoint.isEnabled()
-              && breakpoint.getProperties() instanceof HaxeExceptionBreakpointProperties properties
-              && properties.className != null && !properties.className.isBlank()) {
-            filterTypes.add(properties.className.trim());
-          }
+    ReadAction.run(() -> HaxeExceptionBreakpointType.collectEnabled(getSession().getProject(), properties -> {
+      if (properties.isTyped()) {
+        filterTypes.add(properties.className.trim());
+      } else {
+        if (properties.notifyCaught) {
+          filters.add("all"); // the HashLink wire name for every-throw stops
+        }
+        if (properties.notifyUncaught) {
+          filters.add("uncaught");
+        }
+        if (properties.notifyCritical) {
+          filters.add("vm"); // the HashLink wire name for runtime-raised errors
         }
       }
-    });
+    }));
     SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
     SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
     arguments.setFilters(filters);

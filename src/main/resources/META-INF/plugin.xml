@@ -143,13 +143,11 @@
     <programRunner implementation="com.intellij.plugins.haxe.runner.HaxeRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebugRunner"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType"/>
-    <!-- exception breakpoints are SHARED by the HashLink and HXCPP debuggers
-         (each debug process maps them onto its own wire filters), keeping the
-         Breakpoints dialog to one set of Haxe entries -->
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeThrownExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeUncaughtExceptionBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeCriticalErrorBreakpointType"/>
-    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeTypedExceptionBreakpointType"/>
+    <!-- ONE exception breakpoint category shared by the HashLink and HXCPP
+         debuggers (Java-style: a default "Any exception" with Notifications
+         checkboxes + user-added per-class entries); each debug process maps
+         it onto its own wire filters -->
+    <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointType"/>
 
     <lang.parserDefinition language="Haxe" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeParserDefinition"/>
     <lang.formatter language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.formatter.HaxeFormattingModelBuilder"/>
