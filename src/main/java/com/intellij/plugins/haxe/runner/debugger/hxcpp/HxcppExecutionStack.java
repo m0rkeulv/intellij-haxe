@@ -93,7 +93,14 @@ final class HxcppExecutionStack extends XExecutionStack {
   private static void addFrom(List<HxcppStackFrame> frames, int firstFrameIndex,
                               XStackFrameContainer container) {
     if (firstFrameIndex <= frames.size()) {
-      container.addStackFrames(frames.subList(firstFrameIndex, frames.size()), true);
+      List<HxcppStackFrame> visible = frames.subList(firstFrameIndex, frames.size());
+      // resolve source positions HERE (computeStackFrames contract: background
+      // thread), so selecting any frame in the panel only reads the cache and
+      // never runs the resolver's index lookups on the EDT
+      for (HxcppStackFrame frame : visible) {
+        frame.getSourcePosition();
+      }
+      container.addStackFrames(visible, true);
     } else {
       container.addStackFrames(List.of(), true);
     }

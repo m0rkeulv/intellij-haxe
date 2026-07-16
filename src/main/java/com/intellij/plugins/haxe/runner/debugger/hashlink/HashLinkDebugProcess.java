@@ -77,6 +77,8 @@ import com.intellij.xdebugger.breakpoints.XBreakpointHandler;
 import com.intellij.xdebugger.breakpoints.XBreakpointProperties;
 import com.intellij.xdebugger.breakpoints.XLineBreakpoint;
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider;
+import com.intellij.xdebugger.frame.XExecutionStack;
+import com.intellij.xdebugger.frame.XStackFrame;
 import com.intellij.xdebugger.frame.XSuspendContext;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import com.intellij.xdebugger.ui.XDebugTabLayouter;
@@ -310,8 +312,17 @@ public class HashLinkDebugProcess extends XDebugProcess {
     List<DapThread> threads = requestThreads();
     List<StackFrame> activeFrames = requestStackTrace(threadId);
     topFrameId = activeFrames.isEmpty() ? -1 : activeFrames.get(0).getId();
-    getSession().positionReached(
-      new HashLinkSuspendContext(this, threads, threadId, activeFrames, exceptionText));
+    HashLinkSuspendContext context =
+      new HashLinkSuspendContext(this, threads, threadId, activeFrames, exceptionText);
+    // resolve the top frame's source position HERE, on the pump thread:
+    // positionReached's sessionPaused listeners read getCurrentPosition on the
+    // EDT, where the resolver's index lookups are prohibited slow operations
+    XExecutionStack activeStack = context.getActiveExecutionStack();
+    XStackFrame topFrame = activeStack != null ? activeStack.getTopFrame() : null;
+    if (topFrame != null) {
+      topFrame.getSourcePosition();
+    }
+    getSession().positionReached(context);
   }
 
   List<DapThread> requestThreads() {

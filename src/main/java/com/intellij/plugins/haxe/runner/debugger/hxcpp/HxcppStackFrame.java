@@ -28,6 +28,16 @@ final class HxcppStackFrame extends XStackFrame {
   private final HxcppDebugProcess process;
   private final StackFrame frame;
 
+  // Resolved once and cached: the resolver's index lookups are prohibited slow
+  // operations on the EDT, yet platform/plugin listeners may call
+  // getSourcePosition there (e.g. sessionPaused -> getCurrentPosition). The
+  // debug process prewarms the top frame before reporting a stop and the
+  // execution stack prewarms the rest while computing frames, both off the
+  // EDT, so EDT callers only ever read the cache. (Benign race: concurrent
+  // first calls resolve the same value.)
+  private volatile @Nullable XSourcePosition position;
+  private volatile boolean positionResolved;
+
   HxcppStackFrame(HxcppDebugProcess process, StackFrame frame) {
     this.process = process;
     this.frame = frame;
@@ -61,6 +71,14 @@ final class HxcppStackFrame extends XStackFrame {
 
   @Override
   public @Nullable XSourcePosition getSourcePosition() {
+    if (!positionResolved) {
+      position = resolveSourcePosition();
+      positionResolved = true;
+    }
+    return position;
+  }
+
+  private @Nullable XSourcePosition resolveSourcePosition() {
     String path = frame.getSource() != null ? frame.getSource().getPath() : null;
     try {
       return HxcppSourceResolver.resolve(process.getSession().getProject(), path, frame.getLine());

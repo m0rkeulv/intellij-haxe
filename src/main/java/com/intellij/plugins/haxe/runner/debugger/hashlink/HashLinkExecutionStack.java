@@ -95,7 +95,14 @@ final class HashLinkExecutionStack extends XExecutionStack {
   private static void addFrom(List<HashLinkStackFrame> frames, int firstFrameIndex,
                               XStackFrameContainer container) {
     if (firstFrameIndex <= frames.size()) {
-      container.addStackFrames(frames.subList(firstFrameIndex, frames.size()), true);
+      List<HashLinkStackFrame> visible = frames.subList(firstFrameIndex, frames.size());
+      // resolve source positions HERE (computeStackFrames contract: background
+      // thread), so selecting any frame in the panel only reads the cache and
+      // never runs the resolver's index lookups on the EDT
+      for (HashLinkStackFrame frame : visible) {
+        frame.getSourcePosition();
+      }
+      container.addStackFrames(visible, true);
     } else {
       container.addStackFrames(List.of(), true);
     }
