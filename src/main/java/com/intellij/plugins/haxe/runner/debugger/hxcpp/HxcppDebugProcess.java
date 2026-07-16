@@ -8,8 +8,10 @@ import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
@@ -111,8 +113,7 @@ public class HxcppDebugProcess extends XDebugProcess {
   private final ExecutorService requestExecutor =
     Executors.newSingleThreadExecutor(r -> daemon(r, "HXCPP DAP requests"));
 
-  private final com.intellij.openapi.Disposable exceptionListenerDisposable =
-    com.intellij.openapi.util.Disposer.newDisposable("Haxe exception filters");
+  private final Disposable exceptionListenerDisposable = Disposer.newDisposable("Haxe exception filters");
   private volatile DapClient client;
   private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
@@ -412,7 +413,7 @@ public class HxcppDebugProcess extends XDebugProcess {
       backend.close();
     } catch (IOException ignored) {
     }
-    com.intellij.openapi.util.Disposer.dispose(exceptionListenerDisposable);
+    Disposer.dispose(exceptionListenerDisposable);
     if (!processHandler.isProcessTerminated()) {
       processHandler.destroyProcess();
     }

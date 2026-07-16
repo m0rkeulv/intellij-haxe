@@ -1,14 +1,18 @@
 package com.intellij.plugins.haxe.runner.debugger.exceptions;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.xdebugger.XDebuggerManager;
+import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.breakpoints.XBreakpoint;
+import com.intellij.xdebugger.breakpoints.XBreakpointListener;
 import com.intellij.xdebugger.breakpoints.XBreakpointManager;
 import com.intellij.xdebugger.breakpoints.XBreakpointType;
 import com.intellij.xdebugger.breakpoints.ui.XBreakpointCustomPropertiesPanel;
+import java.util.function.Consumer;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import org.jetbrains.annotations.NotNull;
@@ -91,16 +95,16 @@ public class HaxeExceptionBreakpointType
    * given disposable so it dies with the session.
    */
   public static void listenForChanges(@NotNull Project project,
-                                      @NotNull com.intellij.openapi.Disposable disposable,
+                                      @NotNull Disposable disposable,
                                       @NotNull Runnable onChanged) {
     XBreakpointType<XBreakpoint<HaxeExceptionBreakpointProperties>, HaxeExceptionBreakpointProperties> type =
-      com.intellij.xdebugger.XDebuggerUtil.getInstance().findBreakpointType(HaxeExceptionBreakpointType.class);
+      XDebuggerUtil.getInstance().findBreakpointType(HaxeExceptionBreakpointType.class);
     if (type == null) {
       return;
     }
     XBreakpointManager manager = XDebuggerManager.getInstance(project).getBreakpointManager();
     manager.addBreakpointListener(type,
-      new com.intellij.xdebugger.breakpoints.XBreakpointListener<>() {
+      new XBreakpointListener<>() {
         @Override
         public void breakpointChanged(@NotNull XBreakpoint<HaxeExceptionBreakpointProperties> breakpoint) {
           onChanged.run();
@@ -114,8 +118,8 @@ public class HaxeExceptionBreakpointType
    * inside a read action.
    */
   public static void collectEnabled(@NotNull Project project,
-                                    @NotNull java.util.function.Consumer<HaxeExceptionBreakpointProperties> consumer) {
-    XBreakpointType<?, ?> type = com.intellij.xdebugger.XDebuggerUtil.getInstance()
+                                    @NotNull Consumer<HaxeExceptionBreakpointProperties> consumer) {
+    XBreakpointType<?, ?> type = XDebuggerUtil.getInstance()
       .findBreakpointType(HaxeExceptionBreakpointType.class);
     if (type == null) {
       return;
