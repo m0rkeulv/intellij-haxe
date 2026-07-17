@@ -109,6 +109,71 @@ public class HaxeVariableSourceNavigatorTest extends HaxeCodeInsightFixtureTestC
                   resolve("o.marker", "pack.Secondary", "marker"));
   }
 
+  // --- this-rooted paths (the resolver's fragment-context fallback) ---
+
+  /** Instance frame: stopped inside Widget.update(), where `this` is a Widget extends Base. */
+  private void instanceFrameProject() {
+    myFixture.addFileToProject("Base.hx", "class Base { public var inherited:Int = 2; }");
+    myFixture.configureByText("Widget.hx",
+                              "class Widget extends Base { var count:Int = 1;\n"
+                              + "  function update() { trace<caret>(count); }\n"
+                              + "  static function main() { new Widget().update(); } }");
+  }
+
+  public void testThisMemberResolvesThroughTheFragment() {
+    instanceFrameProject();
+    assertNotNull("this.count resolves through the fragment: the resolver falls back to the"
+                  + " fragment's creation context when the enclosing-class parent walk dead-ends",
+                  resolve("this.count", null, null));
+  }
+
+  public void testThisInheritedMemberResolvesThroughTheFragment() {
+    instanceFrameProject();
+    assertNotNull("this.inherited resolves via the super-class walk from the context class",
+                  resolve("this.inherited", null, null));
+  }
+
+  public void testBareThisNavigatesToTheEnclosingClass() {
+    instanceFrameProject();
+    assertNotNull("bare this names no member; it navigates to the enclosing class",
+                  resolve("this", null, null));
+  }
+
+  /**
+   * Same as instanceFrameProject, but stopped INSIDE a callback defined in an
+   * object literal. Object literals are HaxeClass in the PSI but don't rebind
+   * {@code this} in Haxe, so both fragment-context fallbacks must walk past
+   * them — the literal is the first HaxeClass the context walk finds.
+   */
+  private void objectLiteralFrameProject() {
+    myFixture.addFileToProject("Base.hx", "class Base { public var inherited:Int = 2; }");
+    myFixture.configureByText("Widget.hx",
+                              "class Widget extends Base { var count:Int = 1;\n"
+                              + "  function update() { var o = { cb: function() { trace<caret>(0); } }; }\n"
+                              + "  static function main() { new Widget().update(); } }");
+  }
+
+  public void testThisOwnMemberFromAFrameInsideAnObjectLiteral() {
+    objectLiteralFrameProject();
+    assertNotNull("this.count needs HaxeReferenceImpl's fallback to skip the literal",
+                  resolve("this.count", null, null));
+  }
+
+  public void testThisInheritedMemberFromAFrameInsideAnObjectLiteral() {
+    objectLiteralFrameProject();
+    assertNotNull("this.inherited needs HaxeResolver's fallback to skip the literal",
+                  resolve("this.inherited", null, null));
+  }
+
+  /** The parity baseline the two tests above must match: real-file resolution skips literals. */
+  public void testRealFileThisMemberInsideAnObjectLiteralResolves() {
+    myFixture.configureByText("Widget.hx",
+                              "class Widget { var count:Int = 1;\n"
+                              + "  function update() { var o = { cb: function() { trace(this.cou<caret>nt); } }; } }");
+    assertNotNull("this.count written in a REAL file inside an object-literal closure",
+                  myFixture.getFile().findReferenceAt(myFixture.getCaretOffset()).resolve());
+  }
+
   // --- graceful misses ---
 
   public void testUnknownRuntimeTypeFallsThroughToNoNavigation() {

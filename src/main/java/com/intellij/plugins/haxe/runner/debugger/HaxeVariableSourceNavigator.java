@@ -37,14 +37,12 @@ import org.jetbrains.annotations.Nullable;
  * discarded afterwards; resolve-cache entries keyed on its elements die with
  * it. No path or no resolution simply means no navigation.
  *
- * The {@code this} keyword is special-cased: it does not reliably resolve
- * through a detached fragment (both adapters name the receiver local "this",
- * and such paths never navigated on either debugger). Bare {@code this} goes
- * to the enclosing class; {@code this.member…} drops the prefix and resolves
- * the remainder unqualified (instance members are in method scope via
- * implicit this), with a class-model lookup of the first member as a
- * fallback. Every bail-out is debug-logged so a silent non-navigation is
- * diagnosable from idea.log.
+ * Bare {@code this} is special-cased to the enclosing class (it names no
+ * member to navigate to); {@code this.member…} paths resolve through the
+ * fragment like any other chain — the resolver falls back to the fragment's
+ * creation context when the enclosing-class parent walk dead-ends at the
+ * fragment file. Every bail-out is debug-logged so a silent non-navigation
+ * is diagnosable from idea.log.
  */
 public final class HaxeVariableSourceNavigator {
   private static final Logger LOG = Logger.getInstance(HaxeVariableSourceNavigator.class);
@@ -103,17 +101,13 @@ public final class HaxeVariableSourceNavigator {
       return null;
     }
 
-    String expression = path;
-    if (expression.equals("this")) {
+    if (path.equals("this")) {
       HaxeClass enclosing = PsiTreeUtil.getParentOfType(context, HaxeClass.class);
       LOG.debug("jump-to-source: bare this -> enclosing class " + (enclosing != null ? enclosing.getName() : null));
       return enclosing != null ? XDebuggerUtil.getInstance().createPositionByElement(enclosing.getNavigationElement()) : null;
     }
-    if (expression.startsWith("this.")) {
-      expression = expression.substring("this.".length());
-    }
 
-    XSourcePosition byResolve = resolveChain(project, context, expression);
+    XSourcePosition byResolve = resolveChain(project, context, path);
     if (byResolve != null) {
       return byResolve;
     }
@@ -121,18 +115,7 @@ public final class HaxeVariableSourceNavigator {
     // container's RUNTIME type — `var s:Shape = new Circle()` shows Circle's
     // members, and `s.radius` has no meaning on Shape. The node's direct
     // container's runtime type knows the member the declaration does not.
-    XSourcePosition byRuntimeType = resolveOnRuntimeType(project, containerTypeName, memberName);
-    if (byRuntimeType != null) {
-      return byRuntimeType;
-    }
-    // Fallback for a member the fragment could not resolve (e.g. `this.x` in a
-    // context where implicit-this lookup fails): find the FIRST segment on the
-    // enclosing class model — exact for `this.x`; for deeper unresolvable
-    // chains, landing on the first member still beats not navigating.
-    if (!expression.equals(path)) {
-      return resolveOnEnclosingClass(context, expression);
-    }
-    return null;
+    return resolveOnRuntimeType(project, containerTypeName, memberName);
   }
 
   /**
@@ -191,26 +174,6 @@ public final class HaxeVariableSourceNavigator {
       return null;
     }
     return XDebuggerUtil.getInstance().createPositionByElement(resolved.getNavigationElement());
-  }
-
-  private static @Nullable XSourcePosition resolveOnEnclosingClass(PsiElement context, String expression) {
-    HaxeClass enclosing = PsiTreeUtil.getParentOfType(context, HaxeClass.class);
-    if (enclosing == null) {
-      LOG.debug("jump-to-source: no enclosing class for this-fallback");
-      return null;
-    }
-    int dot = expression.indexOf('.');
-    int bracket = expression.indexOf('[');
-    int end = expression.length();
-    if (dot >= 0) end = Math.min(end, dot);
-    if (bracket >= 0) end = Math.min(end, bracket);
-    String member = expression.substring(0, end);
-    HaxeBaseMemberModel model = enclosing.getModel().getMember(member, null);
-    if (model == null) {
-      LOG.debug("jump-to-source: member '" + member + "' not found on " + enclosing.getName());
-      return null;
-    }
-    return XDebuggerUtil.getInstance().createPositionByElement(model.getBasePsi().getNavigationElement());
   }
 
   // The outermost (widest) reference expression in the fragment — the full

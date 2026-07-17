@@ -1237,6 +1237,19 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
       while (type instanceof HaxeObjectLiteral) {
         type = PsiTreeUtil.getStubOrPsiParentOfType(type, HaxeClass.class);
       }
+      if (type == null) {
+        // detached code fragments (debugger evaluate / jump-to-source) have no PSI parent past
+        // the fragment file; the enclosing class is only reachable through the fragment's
+        // creation context. Ordinary file elements have getContext() == getParent(), so this
+        // fires only when the stub/parent walk above dead-ended.
+        HaxeExpressionCodeFragment fragment = PsiTreeUtil.getStubOrPsiParentOfType(reference, HaxeExpressionCodeFragment.class);
+        if(fragment != null) {
+          type = PsiTreeUtil.getContextOfType(fragment, HaxeClass.class);
+          while (type instanceof HaxeObjectLiteral) {
+            type = PsiTreeUtil.getContextOfType(type, HaxeClass.class);
+          }
+        }
+      }
       if (type instanceof HaxeAbstractTypeDeclaration) {
 
         if(isAbstract || isEmpty) {

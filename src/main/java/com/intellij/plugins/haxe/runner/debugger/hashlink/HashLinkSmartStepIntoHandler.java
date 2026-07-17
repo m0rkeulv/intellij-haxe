@@ -54,7 +54,7 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
     AsyncPromise<List<Variant>> promise = new AsyncPromise<>();
     process.onRequestThread(() -> {
       try {
-        promise.setResult(fetchVariants(position));
+        promise.setResult(computeSmartStepVariants(position));
       } catch (Throwable t) {
         promise.setError(t);
       }
@@ -62,22 +62,10 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
     return promise;
   }
 
+  // The single implementation, reached only through the async entry points
+  // above (on the request thread, where the blocking DAP round-trip belongs).
   @Override
   public @NotNull List<Variant> computeSmartStepVariants(@NotNull XSourcePosition position) {
-    return fetchVariants(position);
-  }
-
-  // The PLAIN Step Into action (F7) consults this — the base implementation
-  // returns a rejected promise, meaning "no variants, just step". Returning our
-  // variants makes F7 behave like the Java debugger: with more than one call on
-  // the line the same highlight/Tab chooser appears; with zero or one the
-  // platform performs an ordinary step into.
-  @Override
-  public @NotNull Promise<List<Variant>> computeStepIntoVariants(@NotNull XSourcePosition position) {
-    return computeSmartStepVariantsAsync(position);
-  }
-
-  private List<Variant> fetchVariants(XSourcePosition position) {
     List<StepInTarget> targets = process.requestStepInTargets();
     if (targets.isEmpty()) {
       return List.of();
@@ -90,6 +78,16 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
       variants.add(new Variant(targets.get(i), ranges.get(i)));
     }
     return variants;
+  }
+
+  // The PLAIN Step Into action (F7) consults this — the base implementation
+  // returns a rejected promise, meaning "no variants, just step". Returning our
+  // variants makes F7 behave like the Java debugger: with more than one call on
+  // the line the same highlight/Tab chooser appears; with zero or one the
+  // platform performs an ordinary step into.
+  @Override
+  public @NotNull Promise<List<Variant>> computeStepIntoVariants(@NotNull XSourcePosition position) {
+    return computeSmartStepVariantsAsync(position);
   }
 
   // For each adapter target, the text range of the matching call's NAME
