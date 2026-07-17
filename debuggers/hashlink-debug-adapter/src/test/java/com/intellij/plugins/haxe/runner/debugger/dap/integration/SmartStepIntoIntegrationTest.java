@@ -11,6 +11,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArg
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInTargetsResponse;
 import java.util.List;
 import org.junit.Test;
@@ -65,6 +67,43 @@ public class SmartStepIntoIntegrationTest extends DapIntegrationTestBase {
     var frame = stackTrace(landed.getBody().getThreadId()).getBody().getStackFrames().get(0);
     assertTrue("landed in Rich.demo (was " + frame.getName() + ")", frame.getName().endsWith("Rich.demo"));
     assertFalse("did not stop in the earlier calls", frame.getName().contains("throwDemo"));
+
+    request(new DisconnectRequest());
+  }
+
+  /**
+   * Stepping out of an entered call parks the debuggee at the return address,
+   * which maps MID-op back onto the finished call's opcode — the finished call
+   * must NOT be offered as a target again (it was, before startOpCallDone),
+   * while the not-yet-executed calls later on the line still are.
+   */
+  @Test
+  public void aFinishedCallIsNotOfferedAgainAfterSteppingOut() throws Exception {
+    StoppedEvent atDemo = runToBreakpoint(FIXTURE_MAIN, FIXTURE_DEMO_LINE);
+    int threadId = atDemo.getBody().getThreadId();
+    List<StepInTarget> targets = requestStepInTargets(newestFrameId(threadId));
+    StepInTarget first = targets.get(0); // Main.throwDemo, per the ordering test
+
+    StepInRequest stepIn = new StepInRequest();
+    StepInArguments stepInArguments = new StepInArguments();
+    stepInArguments.setThreadId(threadId);
+    stepInArguments.setTargetId(first.getId());
+    stepIn.setArguments(stepInArguments);
+    assertTrue("targeted stepIn accepted", request(stepIn).isSuccess());
+    awaitStopped(); // inside the chosen callee
+
+    StepOutRequest stepOut = new StepOutRequest();
+    StepOutArguments stepOutArguments = new StepOutArguments();
+    stepOutArguments.setThreadId(threadId);
+    stepOut.setArguments(stepOutArguments);
+    assertTrue("stepOut accepted", request(stepOut).isSuccess());
+    StoppedEvent back = awaitStopped(); // back on the demo line, at the finished call's return
+
+    List<StepInTarget> after = requestStepInTargets(newestFrameId(back.getBody().getThreadId()));
+    assertFalse("the finished call is not offered again (targets: " + after + ")",
+                after.stream().anyMatch(t -> t.getLabel().equals(first.getLabel())));
+    assertTrue("the later calls on the line are still offered (targets: " + after + ")",
+               after.stream().anyMatch(t -> t.getLabel().endsWith("Main.inspectDemo")));
 
     request(new DisconnectRequest());
   }

@@ -2,23 +2,19 @@ package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeCallExpression;
-import com.intellij.plugins.haxe.lang.psi.HaxeReference;
+import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSupportUtils;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
-import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiManager;
-import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.frame.XSuspendContext;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import com.intellij.xdebugger.stepping.XSmartStepIntoVariant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import javax.swing.Icon;
 import org.jetbrains.annotations.NotNull;
@@ -98,71 +94,43 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
 
   // For each adapter target, the text range of the matching call's NAME
   // identifier on the stopped line, or null when no call with that simple name
-  // is (left to) match. BOTH lists are in execution order, so same-named calls
-  // on different receivers (`a.reset(b.reset())` — two targets labeled
-  // ".reset") consume their own occurrence instead of first-match-wins
-  // stealing the leftmost one and swapping the highlights.
+  // is (left to) match. BOTH lists are in execution order, and the pairing
+  // runs BACK-TO-FRONT: the adapter only reports the calls still AHEAD of the
+  // current position — a suffix of the line's execution order — while the PSI
+  // list covers the whole line. Aligning from the end pairs each target with
+  // its own occurrence even when an already-executed call earlier on the line
+  // shares the name (`cfg.test1(1)...test1(2)` after test1(1) ran), and it
+  // keeps same-named calls from swapping (`a.reset(b.reset())`).
   // (package-private, static: exercised directly by tests)
   static List<TextRange> matchCallRanges(List<StepInTarget> targets, List<PsiElement> names) {
-    List<TextRange> result = new ArrayList<>();
+    TextRange[] result = new TextRange[targets.size()];
     List<PsiElement> remaining = new ArrayList<>(names);
-    for (StepInTarget target : targets) {
-      String label = target.getLabel();
+    for (int t = targets.size() - 1; t >= 0; t--) {
+      String label = targets.get(t).getLabel();
       String simpleName = label.substring(label.lastIndexOf('.') + 1);
-      TextRange matched = null;
-      for (int i = 0; i < remaining.size(); i++) {
-        PsiElement name = remaining.get(i);
-        if (name.getText().equals(simpleName)) {
-          matched = name.getTextRange();
+      for (int i = remaining.size() - 1; i >= 0; i--) {
+        if (remaining.get(i).getText().equals(simpleName)) {
+          result[t] = remaining.get(i).getTextRange();
           remaining.remove(i); // consume, so a repeated callee highlights each occurrence once
           break;
         }
       }
-      result.add(matched);
     }
-    return result;
+    return Arrays.asList(result);
   }
 
-  // The name identifiers of the call expressions whose name sits on the
-  // position's line, in EXECUTION order — the order the adapter reports
-  // targets (bytecode order). A call executes after its receiver and its
-  // arguments, so a post-order walk of the PSI matches: `a.reset(b.reset())`
-  // yields [b.reset, a.reset], a chain `x.first().second()` yields
-  // [first, second]. (package-private, static: exercised directly by tests)
+  // The name identifiers of the call expressions on the position's line, in
+  // EXECUTION order — the order the adapter reports targets (bytecode order).
+  // (package-private, static: exercised directly by tests)
   static List<PsiElement> callNameElementsInExecutionOrder(Project project, XSourcePosition position) {
     List<PsiElement> names = new ArrayList<>();
-    PsiFile file = PsiManager.getInstance(project).findFile(position.getFile());
-    if (file == null) {
-      return names;
-    }
-    Document document = PsiDocumentManager.getInstance(project).getDocument(file);
-    if (document == null || position.getLine() < 0 || position.getLine() >= document.getLineCount()) {
-      return names;
-    }
-    int lineStart = document.getLineStartOffset(position.getLine());
-    int lineEnd = document.getLineEndOffset(position.getLine());
-    collectCallNamesPostOrder(file, lineStart, lineEnd, names);
-    return names;
-  }
-
-  private static void collectCallNamesPostOrder(PsiElement element, int lineStart, int lineEnd,
-                                                List<PsiElement> out) {
-    // skip subtrees that cannot contain the line (keeps the walk cheap-ish)
-    TextRange range = element.getTextRange();
-    if (range == null || range.getEndOffset() < lineStart || range.getStartOffset() > lineEnd) {
-      return;
-    }
-    for (PsiElement child : element.getChildren()) {
-      collectCallNamesPostOrder(child, lineStart, lineEnd, out);
-    }
-    if (element instanceof HaxeCallExpression call && call.getExpression() instanceof HaxeReference reference) {
-      PsiElement name = reference.getReferenceNameElement();
-      if (name != null
-          && name.getTextRange().getStartOffset() >= lineStart
-          && name.getTextRange().getEndOffset() <= lineEnd) {
-        out.add(name);
+    for (HaxeCallExpression call : HaxeDebuggerSupportUtils.callExpressionsOnLine(project, position)) {
+      PsiElement name = HaxeDebuggerSupportUtils.callNameElement(call);
+      if (name != null) {
+        names.add(name);
       }
     }
+    return names;
   }
 
   // The base implementation throws AbstractMethodError, and the frontend/backend

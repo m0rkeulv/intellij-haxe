@@ -9,6 +9,7 @@ class CodeGraphTest {
 		successorsFollowJumpArithmetic(assert);
 		successorsForSwitchAndTerminal(assert);
 		stepTargetsFindsCallsAndLineChange(assert);
+		stepTargetsSkipsTheStartCallWhenItAlreadyRan(assert);
 		stepTargetsStopsAtLineChangeAndBranches(assert);
 		stepTargetsDetectsReturn(assert);
 		guardedThrowFlowsToTheCatchHandler(assert);
@@ -71,6 +72,20 @@ class CodeGraphTest {
 		assert.equals("2", t.lineChangeOps.join(","), "next line target is first op of line 11");
 		assert.equals("1", t.callOps.join(","), "call on the start line is recorded");
 		assert.isFalse(t.returns, "no return reachable before the line change");
+	}
+
+	// After stepping out of a call, the debuggee parks at the return address —
+	// which maps MID-op back onto the call op that just finished. With
+	// startOpCallDone that call is not offered again; a fresh stop AT the op
+	// (call not yet executed) still offers it.
+	static function stepTargetsSkipsTheStartCallWhenItAlreadyRan(assert:Assert):Void {
+		var g = new CodeGraph(fixtureOps());
+		var t = g.stepTargets(1, 10, lineOf, true);
+		assert.equals("", t.callOps.join(","), "the just-returned call is not offered again");
+		assert.equals("2", t.lineChangeOps.join(","), "line-change landings are unaffected");
+
+		var fresh = g.stepTargets(1, 10, lineOf);
+		assert.equals("1", fresh.callOps.join(","), "a not-yet-executed call at the stop op is still offered");
 	}
 
 	static function stepTargetsStopsAtLineChangeAndBranches(assert:Assert):Void {

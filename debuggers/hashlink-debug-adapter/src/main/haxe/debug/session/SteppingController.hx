@@ -50,8 +50,8 @@ class SteppingController {
 
 	public function handleStepInTargets(requestSeq:Int, frameId:Int):Void {
 		switch (session.state) {
-			case Stopped(_):
-				session.emit(EvStepInTargets(requestSeq, computeStepInTargets(frameId)));
+			case Stopped(threadId):
+				session.emit(EvStepInTargets(requestSeq, computeStepInTargets(frameId, threadId)));
 			default:
 				session.reject(requestSeq, "Cannot list step-in targets: debuggee is not stopped");
 		}
@@ -61,7 +61,7 @@ class SteppingController {
 	// newest frame can step, so any other frame gets an empty list (not an error:
 	// the client asks per its UI state). Unresolvable callees (closures, virtual
 	// dispatch through a vtable) are omitted — the plain stepIn still enters them.
-	function computeStepInTargets(frameId:Int):Array<StepInTargetInfo> {
+	function computeStepInTargets(frameId:Int, threadId:Int):Array<StepInTargetInfo> {
 		var frame = session.inspector.frameAt(frameId);
 		if (frame == null || frame.index != 0) {
 			return [];
@@ -70,7 +70,9 @@ class SteppingController {
 		var startOp = frame.location.op;
 		var startLine = session.module.lineOf(fidx, startOp);
 		var graph = new CodeGraph(session.module.opcodes(fidx));
-		var targets = graph.stepTargets(startOp, startLine, (op) -> session.module.lineOf(fidx, op));
+		var eip = session.api.readRegister(session.debuggeePid, threadId, Eip);
+		var targets = graph.stepTargets(startOp, startLine, (op) -> session.module.lineOf(fidx, op),
+			callAtOpAlreadyRan(eip, fidx, startOp));
 		var callOps = targets.callOps.copy();
 		callOps.sort((a, b) -> a - b); // the CFG walk is DFS; present in execution order
 		var result:Array<StepInTargetInfo> = [];
@@ -106,8 +108,11 @@ class SteppingController {
 		var fidx = position.fidx;
 		var startLine = session.module.lineOf(fidx, position.op);
 		var graph = new CodeGraph(session.module.opcodes(fidx));
-		var targets = graph.stepTargets(position.op, startLine, (op) -> session.module.lineOf(fidx, op));
+		var targets = graph.stepTargets(position.op, startLine, (op) -> session.module.lineOf(fidx, op),
+			callAtOpAlreadyRan(eip, fidx, position.op));
 		var returnAddress = currentReturnAddress(threadId);
+		var targetedEntry:Null<Pointer> = null;
+		var targetedCallSite:Null<{fidx:Int, op:Int}> = null;
 
 		if (mode == StepOut) {
 			// step out: stop only when the current function returns
@@ -128,14 +133,22 @@ class SteppingController {
 					}
 					var callee = session.module.callTargetFunction(fidx, op);
 					if (callee >= 0) {
-						session.breakpoints.addTemp(session.jit.addressOf(callee, 0)); // callee entry = first opcode
+						var entry = session.jit.addressOf(callee, 0); // callee entry = first opcode
+						session.breakpoints.addTemp(entry);
+						if (targetId != null) {
+							targetedEntry = entry;
+							targetedCallSite = {fidx: fidx, op: op};
+						}
 					}
 				}
 			}
 		}
 
 		if (session.breakpoints.hasTemps()) {
-			session.activeStep = {threadId: threadId, mode: mode, startEsp: startEsp};
+			session.activeStep = {
+				threadId: threadId, mode: mode, startEsp: startEsp,
+				targetEntry: targetedEntry, targetCallSite: targetedCallSite
+			};
 		}
 		return session.stepOverAndResume(threadId);
 	}
@@ -143,6 +156,14 @@ class SteppingController {
 	function currentReturnAddress(threadId:Int):Null<Pointer> {
 		var frames = session.stackWalker.walk(threadId);
 		return frames.length >= 2 ? frames[1].address : null;
+	}
+
+	// Parked MID-op — EIP past the op's first native byte — means the op's call
+	// instruction already ran and we sit at its return address (the only
+	// user-visible mid-op stop: temps/user breakpoints are planted at op
+	// starts). That call must not be offered or planted as enterable again.
+	function callAtOpAlreadyRan(eip:Pointer, fidx:Int, op:Int):Bool {
+		return Int64.compare(eip, session.jit.addressOf(fidx, op)) > 0;
 	}
 
 	// A temporary (step) breakpoint. Temps live at CODE addresses, so any
@@ -155,8 +176,36 @@ class SteppingController {
 			session.stepPastTempAndResume(threadId, hitAddress);
 			return;
 		}
+		if (step != null && !targetedCallSiteSatisfied(step, threadId, hitAddress)) {
+			session.stepPastTempAndResume(threadId, hitAddress);
+			return;
+		}
 		session.enterStopped(threadId, null);
 		session.emit(EvStoppedStep(threadId));
+	}
+
+	// A targeted step-in's entry temp is at the callee FUNCTION, which the line
+	// may invoke more than once (cfg.test1(1)...test1(2)): the landing is ours
+	// only when the new frame's return address points back at the CHOSEN call
+	// op. Non-entry landings (line change, return fallback) and untargeted
+	// steps are always valid.
+	function targetedCallSiteSatisfied(step:ActiveStep, threadId:Int, hitAddress:Pointer):Bool {
+		if (step.targetEntry == null || Int64.compare(hitAddress, step.targetEntry) != 0) {
+			return true;
+		}
+		var site = step.targetCallSite;
+		if (site == null) {
+			return true;
+		}
+		var frames = session.stackWalker.walk(threadId);
+		if (frames.length < 2) {
+			return false; // no caller frame: cannot be the chosen call site
+		}
+		// resolve one byte BEFORE the return address: that is always inside the
+		// call instruction's op, while the return address itself can fall on the
+		// next op's boundary (a call whose op emits nothing after the call)
+		var caller = session.jit.resolveAddress(Int64.sub(frames[1].address, Int64.ofInt(1)));
+		return caller != null && caller.fidx == site.fidx && caller.op == site.op;
 	}
 
 	// Stack grows down: a shallower-or-equal frame has esp >= the step-start

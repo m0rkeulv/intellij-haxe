@@ -74,6 +74,27 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
                ranges.get(0).getStartOffset() > ranges.get(1).getStartOffset());
   }
 
+  /**
+   * Mid-line, the adapter reports only the calls still AHEAD — a suffix of the
+   * line's execution order — while the PSI names cover the whole line. A
+   * duplicate callee must pair with its LATER occurrence, not steal the
+   * already-executed one at the start of the line.
+   */
+  public void testRemainingTargetsPairWithTheLaterOccurrenceOfADuplicateName() {
+    // full line: first, second, first (execution order = source order for a chain)
+    List<PsiElement> names = namesOnCaretLine("a.first().second().first();");
+    assertEquals(3, names.size());
+    // the initial first() already ran; the adapter offers the rest
+    List<StepInTarget> targets = List.of(target(1, "A.second"), target(2, "A.first"));
+
+    List<TextRange> ranges = HashLinkSmartStepIntoHandler.matchCallRanges(targets, names);
+
+    assertEquals(2, ranges.size());
+    assertEquals("second highlights its own call", names.get(1).getTextRange(), ranges.get(0));
+    assertEquals("the remaining first() highlights the LAST occurrence",
+                 names.get(2).getTextRange(), ranges.get(1));
+  }
+
   public void testUnmatchableTargetGetsNoHighlightButKeepsAlignment() {
     List<PsiElement> names = namesOnCaretLine("a.first().second();");
     // an extra target the PSI knows nothing about (e.g. an inlined helper)

@@ -18,4 +18,11 @@ typedef ActiveStep = {
 	var mode:StepMode;
 	// the stepping thread's stack pointer at step start (recursion frame guard)
 	var startEsp:Pointer;
+	// TARGETED step-in only (smart step into a chosen call): the callee's entry
+	// address and the chosen call op. The entry temp is at the FUNCTION, which
+	// the line may invoke more than once (cfg.test1(1)...test1(2)) — a hit only
+	// lands the step when the new frame's return address points back at the
+	// chosen op; other invocations are stepped past.
+	var ?targetEntry:Pointer;
+	var ?targetCallSite:{fidx:Int, op:Int};
 }

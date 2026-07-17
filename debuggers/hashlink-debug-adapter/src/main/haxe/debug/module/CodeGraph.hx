@@ -122,8 +122,15 @@ class CodeGraph {
 		source line of an opcode (0/negative = unknown). The walk stops expanding at
 		any opcode whose known line differs from `startLine` (that opcode is a
 		line-change target) and at terminals; it is guarded against loops.
+
+		`startOpCallDone`: the debuggee is parked MID-op (at a return address
+		inside `startOp`'s generated code), so if `startOp` is a call it has
+		already executed and must not be offered/planted as an enterable target
+		again — without this, stepping out of a call landed back "on" the call
+		op and smart step offered the just-finished call a second time.
 	**/
-	public function stepTargets(startOp:Int, startLine:Int, lineOf:Int->Int):StepTargets {
+	public function stepTargets(startOp:Int, startLine:Int, lineOf:Int->Int,
+			startOpCallDone:Bool = false):StepTargets {
 		var lineChangeOps:Array<Int> = [];
 		var callOps:Array<Int> = [];
 		var returns = false;
@@ -145,7 +152,7 @@ class CodeGraph {
 				}
 			}
 
-			if (isCall(op)) {
+			if (isCall(op) && !(startOpCallDone && op == startOp)) {
 				callOps.push(op);
 			}
 			if (isTerminal(op)) {
