@@ -43,6 +43,15 @@ class Values {
 			case TClass(c) if (c == Array):
 				var arr:Array<Dynamic> = value;
 				{value: "Array (" + arr.length + ")", type: "Array", expandable: arr.length > 0};
+			// Maps BEFORE the generic object case: raw fields are the native
+			// hash handle ("h = Dynamic"), useless to a user — render the entry
+			// count and expand to the entries, like the HashLink adapter does.
+			// std map iteration is library code, not user code (the safety rule
+			// is about getters/toString), so listing entries is fair game.
+			case TClass(c) if (c == haxe.ds.StringMap || c == haxe.ds.IntMap || c == haxe.ds.ObjectMap
+					|| Std.isOfType(value, haxe.ds.BalancedTree)):
+				var count = mapEntries(value).length;
+				{value: "Map(" + count + ")", type: Type.getClassName(c), expandable: count > 0};
 			case TClass(c):
 				var name = Type.getClassName(c);
 				{value: objectLabel(value, c, name), type: name, expandable: dataFields(value, c).length > 0};
@@ -62,6 +71,9 @@ class Values {
 			case TClass(c) if (c == Array):
 				var arr:Array<Dynamic> = value;
 				[for (i in 0...arr.length) {name: "[" + i + "]", value: arr[i]}];
+			case TClass(c) if (c == haxe.ds.StringMap || c == haxe.ds.IntMap || c == haxe.ds.ObjectMap
+					|| Std.isOfType(value, haxe.ds.BalancedTree)):
+				mapEntries(value);
 			case TClass(c):
 				[for (f in dataFields(value, c)) {name: f, value: rawField(value, f)}];
 			case TObject:
@@ -71,6 +83,24 @@ class Values {
 				[for (i in 0...params.length) {name: "[" + i + "]", value: params[i]}];
 			default: [];
 		};
+	}
+
+	// The entries of any haxe.ds map (StringMap/IntMap/ObjectMap, and
+	// BalancedTree covering EnumValueMap), one child per entry. Entry names:
+	// string keys quoted (like string VALUES render), int keys bare, and
+	// object/enum keys named by the same describe() policy as values — so an
+	// object key follows the user's toString opt-in and an enum key shows its
+	// constructor. All maps share the keys()/get() iteration surface.
+	static function mapEntries(value:Dynamic):Array<{name:String, value:Dynamic}> {
+		var entries:Array<{name:String, value:Dynamic}> = [];
+		var keys:Iterator<Dynamic> = value.keys();
+		for (key in keys) {
+			var name = Std.isOfType(key, String) ? '"' + key + '"'
+				: Std.isOfType(key, Int) ? Std.string(key)
+				: describe(key).value;
+			entries.push({name: name, value: value.get(key)});
+		}
+		return entries;
 	}
 
 	// The object's display label: its own toString() result when the user

@@ -58,4 +58,30 @@ public class ToStringRenderingIT {
       assertEquals("clean exit after the toggles", 0, session.awaitExit());
     }
   }
+
+  @Test
+  public void mapsListTheirEntries() throws Exception {
+    // A haxe.ds map's raw fields are its native hash handle ("h = Dynamic"),
+    // which is what used to render — entries must list instead, like the
+    // HashLink adapter's map handling (found live on an OpenFL StringMap).
+    try (FixtureSession session = FixtureSession.launchScenario("tostring")) {
+      session.initialize();
+      session.setBreakpoints(FixtureSession.EX_SOURCE, new int[]{FixtureSession.TOSTRING_LINE}, null);
+      session.configurationDone();
+      int threadId = session.stoppedThread(session.awaitStopped());
+      int frameId = session.topFrame(threadId).getId();
+
+      List<Variable> locals = session.variables(session.localsReference(frameId));
+      Variable meta = session.variable(locals, "meta");
+      assertEquals("entry-count summary, not the class name", "Map(2)", meta.getValue());
+      assertTrue("a populated map expands", meta.getVariablesReference() > 0);
+
+      List<Variable> entries = session.variables(meta.getVariablesReference());
+      assertEquals("92", session.variable(entries, "\"build\"").getValue());
+      assertEquals("7", session.variable(entries, "\"name\"").getValue());
+
+      session.resume(threadId);
+      assertEquals("clean exit", 0, session.awaitExit());
+    }
+  }
 }

@@ -87,6 +87,63 @@ class ValuesTest {
 		toStringNeverRunsWithoutADeclaration(assert);
 		throwingToStringDegradesToTheClassName(assert);
 		recursingToStringDegradesWhereCatchable(assert);
+		stringMapListsItsEntries(assert);
+		intMapListsItsEntries(assert);
+		objectMapKeysFollowTheDescribePolicy(assert);
+		enumValueMapListsItsEntries(assert);
+	}
+
+	static function entry(entries:Array<{name:String, value:Dynamic}>, name:String):Dynamic {
+		for (candidate in entries) {
+			if (candidate.name == name) {
+				return candidate.value;
+			}
+		}
+		return null;
+	}
+
+	static function stringMapListsItsEntries(assert:Assert):Void {
+		var map = new haxe.ds.StringMap<Int>();
+		map.set("build", 92);
+		map.set("name", 7);
+		var described = Values.describe(map);
+		assert.equals("Map(2)", described.value, "entry-count summary, not the raw hash handle");
+		assert.isTrue(described.expandable, "a populated map expands");
+		var entries = Values.children(map);
+		assert.equals(2, entries.length, "one child per entry");
+		assert.equals(92, entry(entries, '"build"'), "string keys are quoted like string values");
+		assert.equals(7, entry(entries, '"name"'), "every entry is listed");
+		assert.isTrue(!Values.describe(new haxe.ds.StringMap<Int>()).expandable, "an empty map is a leaf");
+	}
+
+	static function intMapListsItsEntries(assert:Assert):Void {
+		var map = new haxe.ds.IntMap<String>();
+		map.set(3, "three");
+		assert.equals("Map(1)", Values.describe(map).value, "IntMap summary");
+		assert.equals("three", entry(Values.children(map), "3"), "int keys are bare");
+	}
+
+	static function objectMapKeysFollowTheDescribePolicy(assert:Assert):Void {
+		var map = new haxe.ds.ObjectMap<Labeled, Int>();
+		var key = new Labeled(7);
+		map.set(key, 42);
+		assert.equals(42, entry(Values.children(map), className(key)),
+			"off: an object key is named by its class, running no code");
+		Values.renderWithToString = true;
+		assert.equals(42, entry(Values.children(map), "Labeled#7"),
+			"on: an object key follows the same toString policy as values");
+		Values.renderWithToString = false;
+	}
+
+	static function enumValueMapListsItsEntries(assert:Assert):Void {
+		// EnumValueMap extends BalancedTree — the isOfType guard must catch it
+		var map = new haxe.ds.EnumValueMap<Shape, Int>();
+		map.set(Empty, 1);
+		map.set(Circle(5), 2);
+		assert.equals("Map(2)", Values.describe(map).value, "tree-map summary");
+		var entries = Values.children(map);
+		assert.equals(1, entry(entries, "Empty"), "a paramless enum key by its constructor");
+		assert.equals(2, entry(entries, "Circle(…)"), "an enum key with params by its constructor");
 	}
 
 	static function className(value:Dynamic):String {
