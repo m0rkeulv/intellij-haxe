@@ -312,6 +312,49 @@ public class HxcppDebugAdapterTest {
   }
 
   @Test
+  public void objectValuesDropTheDoubledClassNamePrefix() throws Exception {
+    // The server prints a class instance as "ShortName, Std.string(obj)" and
+    // Std.string without a custom toString is the class name AGAIN — raw
+    // values read "ClassB, ClassB". The IDE shows the type separately, so
+    // the adapter keeps only the informative part.
+    server.handle("getVariables", params -> "["
+      + "{\"name\":\"b\",\"type\":\"ClassB\",\"value\":\"ClassB, ClassB\",\"variablesReference\":7},"
+      + "{\"name\":\"w\",\"type\":\"pkg.Widget\",\"value\":\"Widget, Widget#3\",\"variablesReference\":8},"
+      + "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"7\",\"variablesReference\":0},"
+      + "{\"name\":\"m\",\"type\":\"haxe.ds.StringMap\",\"value\":\"{a => 1}\",\"variablesReference\":9}]");
+
+    VariablesArguments arguments = new VariablesArguments();
+    arguments.setVariablesReference(100);
+    VariablesRequest request = new VariablesRequest();
+    request.setArguments(arguments);
+    VariablesResponse response = (VariablesResponse)dapClient.sendRequest(request, TIMEOUT);
+
+    assertEquals("no toString: the class name once, not doubled",
+                 "ClassB", response.getBody().getVariables().get(0).getValue());
+    assertEquals("custom toString: its text (the type is already shown separately)",
+                 "Widget#3", response.getBody().getVariables().get(1).getValue());
+    assertEquals("primitives pass through untouched",
+                 "7", response.getBody().getVariables().get(2).getValue());
+    assertEquals("maps pass through untouched (no short-name prefix)",
+                 "{a => 1}", response.getBody().getVariables().get(3).getValue());
+  }
+
+  @Test
+  public void evaluateResultDropsTheDoubledClassNamePrefix() throws Exception {
+    server.handle("evaluate", params ->
+      "{\"name\":\"b\",\"type\":\"ClassB\",\"value\":\"ClassB, ClassB\",\"variablesReference\":7}");
+
+    EvaluateArguments arguments = new EvaluateArguments();
+    arguments.setExpression("b");
+    arguments.setFrameId(0);
+    EvaluateRequest request = new EvaluateRequest();
+    request.setArguments(arguments);
+    EvaluateResponse response = (EvaluateResponse)dapClient.sendRequest(request, TIMEOUT);
+
+    assertEquals("ClassB", response.getBody().getResult());
+  }
+
+  @Test
   public void numericChildNamesBecomeIndexExpressions() throws Exception {
     server.handle("getScopes", params -> "[{\"id\":100,\"name\":\"Locals\"}]");
     server.handle("getVariables", params -> switch (params.path("variablesReference").asInt()) {

@@ -488,7 +488,7 @@ public class HxcppDebugAdapter implements Closeable {
       HxcppVarInfo written = setVariableVerified(target, value, frameId);
       variablePaths.registerExpression(written.reference(), target, frameId);
       EvaluateResponseBody body = new EvaluateResponseBody();
-      body.setResult(written.value());
+      body.setResult(displayValue(written));
       body.setType(written.type());
       body.setVariablesReference(written.reference());
       EvaluateResponse response = new EvaluateResponse();
@@ -501,7 +501,7 @@ public class HxcppDebugAdapter implements Closeable {
       decode(call(HxcppProtocol.EVALUATE, Map.of("expr", expression, "frameId", frameId)), HxcppVarInfo.class);
     variablePaths.registerExpression(varInfo.reference(), expression, frameId);
     EvaluateResponseBody body = new EvaluateResponseBody();
-    body.setResult(varInfo.value());
+    body.setResult(displayValue(varInfo));
     body.setType(varInfo.type());
     body.setVariablesReference(varInfo.reference());
     EvaluateResponse response = new EvaluateResponse();
@@ -522,7 +522,7 @@ public class HxcppDebugAdapter implements Closeable {
     HxcppVarInfo varInfo = setVariableVerified(expression, request.getArguments().getValue(), frameId);
     variablePaths.registerExpression(varInfo.reference(), expression, frameId);
     SetVariableResponseBody body = new SetVariableResponseBody();
-    body.setValue(varInfo.value());
+    body.setValue(displayValue(varInfo));
     body.setType(varInfo.type());
     body.setVariablesReference(varInfo.reference());
     SetVariableResponse response = new SetVariableResponse();
@@ -755,10 +755,35 @@ public class HxcppDebugAdapter implements Closeable {
     }
   }
 
+  /**
+   * The server prints a class instance as {@code "ShortName, Std.string(value)"}
+   * (VariablesPrinter.hx) — and {@code Std.string} of an object WITHOUT a custom
+   * {@code toString()} is the short class name AGAIN, so the raw value reads
+   * "ClassB, ClassB". The IDE already renders the type separately ({ClassB}),
+   * so keep only the informative part: the toString text when there is one,
+   * the class name once when there is not. Every other value shape
+   * (primitives, quoted strings, arrays, maps, anonymous objects) lacks the
+   * {@code "ShortName, "} prefix and passes through untouched.
+   */
+  private static String displayValue(HxcppVarInfo varInfo) {
+    String value = varInfo.value();
+    String type = varInfo.type();
+    if (value == null || type == null) {
+      return value;
+    }
+    String shortType = type.substring(type.lastIndexOf('.') + 1);
+    String prefix = shortType + ", ";
+    if (!value.startsWith(prefix)) {
+      return value;
+    }
+    String printed = value.substring(prefix.length());
+    return printed.isEmpty() || printed.equals(shortType) ? shortType : printed;
+  }
+
   private static Variable toVariable(HxcppVarInfo varInfo) {
     Variable variable = new Variable();
     variable.setName(varInfo.name());
-    variable.setValue(varInfo.value());
+    variable.setValue(displayValue(varInfo));
     variable.setType(varInfo.type());
     variable.setVariablesReference(varInfo.reference());
     variable.setNamedVariables(varInfo.namedVariables());
