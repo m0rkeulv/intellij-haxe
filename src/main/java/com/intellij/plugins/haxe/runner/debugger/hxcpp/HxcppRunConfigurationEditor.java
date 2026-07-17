@@ -1,15 +1,13 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp;
 
 import com.intellij.application.options.ModulesComboBox;
-import com.intellij.openapi.fileChooser.FileChooser;
-import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
@@ -36,8 +34,10 @@ public class HxcppRunConfigurationEditor extends SettingsEditor<HxcppRunConfigur
 
   public HxcppRunConfigurationEditor(Project project) {
     this.project = project;
-    browseInto(executableField, FileChooserDescriptorFactory.createSingleFileDescriptor());
-    browseInto(workingDirectoryField, FileChooserDescriptorFactory.createSingleFolderDescriptor());
+    HaxeRunConfigurationEditorUtil.browseInto(project, executableField,
+                                              FileChooserDescriptorFactory.createSingleFileDescriptor());
+    HaxeRunConfigurationEditorUtil.browseInto(project, workingDirectoryField,
+                                              FileChooserDescriptorFactory.createSingleFolderDescriptor());
     JBLabel debugHint = new JBLabel(HaxeBundle.message("hxcpp.runner.debug.hint"));
     debugHint.setComponentStyle(UIUtil.ComponentStyle.SMALL);
     debugHint.setForeground(UIUtil.getContextHelpForeground());
@@ -51,15 +51,6 @@ public class HxcppRunConfigurationEditor extends SettingsEditor<HxcppRunConfigur
       .addComponent(debugHint)
       .addComponentFillVertically(new JPanel(), 0)
       .getPanel();
-  }
-
-  private void browseInto(TextFieldWithBrowseButton field, FileChooserDescriptor descriptor) {
-    field.addActionListener(e -> {
-      VirtualFile file = FileChooser.chooseFile(descriptor, project, null);
-      if (file != null) {
-        field.setText(FileUtil.toSystemDependentName(file.getPath()));
-      }
-    });
   }
 
   @Override
