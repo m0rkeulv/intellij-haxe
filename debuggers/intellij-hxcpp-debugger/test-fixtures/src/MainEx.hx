@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case "throwloop": TypedThrow.loop(); case "dupchain": DupChainTarget.loop(); case "tostring": ToStringScene.run(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case "throwloop": TypedThrow.loop(); case "dupchain": DupChainTarget.loop(); case "tostring": ToStringScene.run(); case "closurecall": ClosureCallScene.run(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -284,5 +284,29 @@ class MoodyLabel {
 
 	public function toString():String {
 		throw "no label";
+	}
+}
+
+// Closure-call step-into scenario (mode "closurecall"): the callee lives in
+// a VARIABLE, so only the runtime knows it. cpp.vm.Debugger's STEP_INTO is
+// line-based and depth-agnostic - it should enter the target's body without
+// any server-side help; the IT pins whether it actually does.
+class ClosureCallScene {
+	public static function run():Void {
+		var scene = new ClosureCallScene();
+		Sys.println("closurecall:" + scene.value);
+	}
+
+	public var value:Int;
+
+	public function new() {
+		var fn = grab;
+		value = fn(); // CLOSURE_CALL_LINE = 304
+		var functions = [grab];
+		value += functions[0](); // CLOSURE_ARRAY_CALL_LINE = 306
+	}
+
+	public function grab():Int {
+		return 41; // CLOSURE_BODY_LINE = 310
 	}
 }

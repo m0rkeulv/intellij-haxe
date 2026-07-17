@@ -27,6 +27,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExcept
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
@@ -77,6 +79,9 @@ final class FixtureSession implements AutoCloseable {
   static final int TYPED_THROW_LINE = 191;
   static final int DUP_CHAIN_LINE = 228;
   static final int TOSTRING_LINE = 258;
+  static final int CLOSURE_CALL_LINE = 304;
+  static final int CLOSURE_ARRAY_CALL_LINE = 306;
+  static final int CLOSURE_BODY_LINE = 310;
 
   private final ServerSocket listener;
   private final Process debuggee;
@@ -242,6 +247,14 @@ final class FixtureSession implements AutoCloseable {
     arguments.setThreadId(threadId);
     request.setArguments(arguments);
     assertTrue("next", request(request).isSuccess());
+  }
+
+  void stepIn(int threadId) throws IOException, InterruptedException {
+    StepInRequest request = new StepInRequest();
+    StepInArguments arguments = new StepInArguments();
+    arguments.setThreadId(threadId);
+    request.setArguments(arguments);
+    assertTrue("stepIn", request(request).isSuccess());
   }
 
   // --- inspection ---
