@@ -13,6 +13,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
@@ -190,6 +191,49 @@ public class JsonRpcClientTest {
     // drain the unanswered request so teardown doesn't race the reader
     JsonNode unanswered = serverReceive();
     assertEquals("threads", unanswered.path("method").asString());
+  }
+
+  @Test
+  public void inFlightRequestFailsFastWhenTheConnectionDies() throws Exception {
+    // the timeout is deliberately huge: the failure must come from the
+    // connection death, not from waiting out the timer
+    CompletableFuture<Exception> failure = new CompletableFuture<>();
+    Thread caller = new Thread(() -> {
+      try {
+        client.sendRequest("threads", null, 60_000);
+        failure.complete(null);
+      } catch (Exception e) {
+        failure.complete(e);
+      }
+    });
+    caller.start();
+    serverReceive(); // the request is on the wire; the caller is parked
+    serverSide.close(); // the debuggee dies mid-request
+
+    Exception e = failure.get(2, TimeUnit.SECONDS); // must beat the 60s timer by far
+    assertNotNull("the in-flight request must fail, not report success", e);
+    assertTrue("an honest message, not a timeout: " + e.getMessage(),
+               e.getMessage().contains("connection"));
+    caller.join(TIMEOUT);
+  }
+
+  @Test
+  public void requestAfterConnectionDeathFailsImmediately() throws Exception {
+    serverSide.close();
+    long deadline = System.currentTimeMillis() + TIMEOUT;
+    while (!client.isConnectionFinished() && System.currentTimeMillis() < deadline) {
+      Thread.sleep(10);
+    }
+    assertTrue("reader noticed the death", client.isConnectionFinished());
+
+    long start = System.currentTimeMillis();
+    try {
+      client.sendRequest("threads", null, 60_000);
+      fail("expected IOException");
+    } catch (IOException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains("connection"));
+    }
+    assertTrue("failed by the flag, not the timer", System.currentTimeMillis() - start < 5_000);
   }
 
   @Test

@@ -23,11 +23,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * callers drain with {@link #pollEvent}. Owns the client-side seq counter.
  */
 public class DapClient implements Closeable {
+  /** Poison pill offered to every pending request when the reader exits. */
+  private static final Response CONNECTION_CLOSED = new Response();
+
   private final DapConnection connection;
   private final Thread readerThread;
   private final AtomicInteger nextSeq = new AtomicInteger(1);
   private final ConcurrentMap<Integer, BlockingQueue<Response>> pendingResponses = new ConcurrentHashMap<>();
   private final BlockingQueue<Event> events = new LinkedBlockingQueue<>();
+  private volatile boolean closed = false;
+  private volatile boolean readerFinished = false;
+  private volatile Throwable readerDeathCause;
 
   public static DapClient connect(String host, int port, int connectTimeoutMillis) throws IOException {
     return new DapClient(DapConnection.connect(host, port, connectTimeoutMillis));
@@ -50,15 +56,43 @@ public class DapClient implements Closeable {
     BlockingQueue<Response> pending = new ArrayBlockingQueue<>(1);
     pendingResponses.put(seq, pending);
     try {
+      // registered BEFORE this check: a reader exiting in between either
+      // trips the flag here or poisons our queue (its sweep runs after the
+      // flag is set, so it sees the entry) — no window where we'd wait out
+      // the full timeout against a connection that can never answer
+      if (readerFinished) {
+        throw connectionClosed(request);
+      }
       connection.send(request);
       Response response = pending.poll(timeoutMillis, TimeUnit.MILLISECONDS);
       if (response == null) {
         throw new IOException("Timed out waiting for response to '" + request.getCommand() + "' (seq " + seq + ")");
       }
+      if (response == CONNECTION_CLOSED) {
+        throw connectionClosed(request);
+      }
       return response;
     } finally {
       pendingResponses.remove(seq);
     }
+  }
+
+  private IOException connectionClosed(Request request) {
+    Throwable cause = readerDeathCause;
+    String how = closed ? "closed by this client"
+                        : cause != null ? "lost (" + cause + ")"
+                                        : "closed by the peer";
+    return new IOException("The DAP connection was " + how
+                           + " before '" + request.getCommand() + "' got its response", cause);
+  }
+
+  /**
+   * True once the reader saw EOF or died — the connection carries no further
+   * messages. Lets an event pump distinguish "no event yet" from "there will
+   * never be another".
+   */
+  public boolean isConnectionFinished() {
+    return readerFinished;
   }
 
   /** Returns the next event, waiting up to the timeout; null when none arrived. */
@@ -87,14 +121,20 @@ public class DapClient implements Closeable {
       // A framing/decode failure must not silently kill the demultiplexer —
       // after this thread dies every later request times out with no hint why.
       // Only a deliberate close() is an expected way for the read to end.
+      readerDeathCause = e;
       if (!closed) {
         System.err.println("DapClient reader died: " + e);
         e.printStackTrace();
       }
+    } finally {
+      // fail-fast for waiters: the flag is set FIRST, then every pending
+      // request is poisoned (see the ordering note in sendRequest)
+      readerFinished = true;
+      for (BlockingQueue<Response> pending : pendingResponses.values()) {
+        pending.offer(CONNECTION_CLOSED);
+      }
     }
   }
-
-  private volatile boolean closed = false;
 
   @Override
   public void close() throws IOException {

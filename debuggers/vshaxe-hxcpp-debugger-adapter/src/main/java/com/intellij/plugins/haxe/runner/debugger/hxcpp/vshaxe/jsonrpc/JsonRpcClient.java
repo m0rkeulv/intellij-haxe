@@ -19,6 +19,9 @@ import tools.jackson.databind.JsonNode;
  * drain with {@link #pollNotification}. Owns the client-side id counter.
  */
 public class JsonRpcClient implements Closeable {
+  /** Poison pill offered to every pending request when the reader exits. */
+  private static final JsonRpcResponse CONNECTION_CLOSED = new JsonRpcResponse(-1, null, null);
+
   private final JsonRpcConnection connection;
   private final Thread readerThread;
   private final AtomicInteger nextId = new AtomicInteger(1);
@@ -26,6 +29,7 @@ public class JsonRpcClient implements Closeable {
   private final BlockingQueue<JsonRpcNotification> notifications = new LinkedBlockingQueue<>();
   private volatile boolean closed = false;
   private volatile boolean readerFinished = false;
+  private volatile Throwable readerDeathCause;
 
   public JsonRpcClient(JsonRpcConnection connection) {
     this.connection = connection;
@@ -44,15 +48,34 @@ public class JsonRpcClient implements Closeable {
     BlockingQueue<JsonRpcResponse> pending = new ArrayBlockingQueue<>(1);
     pendingResponses.put(id, pending);
     try {
+      // registered BEFORE this check: a reader exiting in between either
+      // trips the flag here or poisons our queue (its sweep runs after the
+      // flag is set, so it sees the entry) — no window where we'd wait out
+      // the full timeout against a connection that can never answer
+      if (readerFinished) {
+        throw connectionClosed(method);
+      }
       connection.send(new JsonRpcRequest(id, method, params));
       JsonRpcResponse response = pending.poll(timeoutMillis, TimeUnit.MILLISECONDS);
       if (response == null) {
         throw new IOException("Timed out waiting for response to '" + method + "' (id " + id + ")");
       }
+      if (response == CONNECTION_CLOSED) {
+        throw connectionClosed(method);
+      }
       return response;
     } finally {
       pendingResponses.remove(id);
     }
+  }
+
+  private IOException connectionClosed(String method) {
+    Throwable cause = readerDeathCause;
+    String how = closed ? "closed by this client"
+                        : cause != null ? "lost (" + cause + ")"
+                                        : "closed by the debuggee";
+    return new IOException("The debugger connection was " + how
+                           + " before '" + method + "' got its response", cause);
   }
 
   /**
@@ -104,12 +127,18 @@ public class JsonRpcClient implements Closeable {
       // A framing/decode failure must not silently kill the demultiplexer —
       // after this thread dies every later request times out with no hint why.
       // Only a deliberate close() is an expected way for the read to end.
+      readerDeathCause = e;
       if (!closed) {
         System.err.println("JsonRpcClient reader died: " + e);
         e.printStackTrace();
       }
     } finally {
+      // fail-fast for waiters: the flag is set FIRST, then every pending
+      // request is poisoned (see the ordering note in sendRequest)
       readerFinished = true;
+      for (BlockingQueue<JsonRpcResponse> pending : pendingResponses.values()) {
+        pending.offer(CONNECTION_CLOSED);
+      }
     }
   }
 
