@@ -20,11 +20,17 @@ package com.intellij.plugins.haxe.runner.debugger;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.lang.psi.HaxeCallExpression;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
+import com.intellij.plugins.haxe.lang.psi.HaxeReference;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.*;
+import com.intellij.xdebugger.XSourcePosition;
+import java.util.ArrayList;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,6 +49,60 @@ public class HaxeDebuggerSupportUtils {
     }
     final PsiFile codeFragment = HaxeElementGenerator.createExpressionCodeFragment(project, text, context, true);
     return PsiDocumentManager.getInstance(project).getDocument(codeFragment);
+  }
+
+  /**
+   * The call expressions whose callee NAME identifier sits on the position's
+   * line, in EXECUTION order — a post-order walk over the PSI, since a call
+   * executes after its receiver and its arguments: {@code a.reset(b.reset())}
+   * yields [b.reset, a.reset], a chain {@code x.first().second()} yields
+   * [first, second]. Execution order is what the smart-step handlers need:
+   * it is the order the debugger runtimes see the calls in. Subtrees that
+   * cannot intersect the line are pruned, so cost scales with the line, not
+   * the file. Call inside a read action.
+   */
+  @NotNull
+  public static List<HaxeCallExpression> callExpressionsOnLine(@NotNull Project project,
+                                                               @NotNull XSourcePosition position) {
+    List<HaxeCallExpression> calls = new ArrayList<>();
+    PsiFile file = PsiManager.getInstance(project).findFile(position.getFile());
+    if (file == null) {
+      return calls;
+    }
+    Document document = PsiDocumentManager.getInstance(project).getDocument(file);
+    if (document == null || position.getLine() < 0 || position.getLine() >= document.getLineCount()) {
+      return calls;
+    }
+    int lineStart = document.getLineStartOffset(position.getLine());
+    int lineEnd = document.getLineEndOffset(position.getLine());
+    collectCallsPostOrder(file, lineStart, lineEnd, calls);
+    return calls;
+  }
+
+  private static void collectCallsPostOrder(PsiElement element, int lineStart, int lineEnd,
+                                            List<HaxeCallExpression> out) {
+    // skip subtrees that cannot contain the line
+    TextRange range = element.getTextRange();
+    if (range == null || range.getEndOffset() < lineStart || range.getStartOffset() > lineEnd) {
+      return;
+    }
+    for (PsiElement child : element.getChildren()) {
+      collectCallsPostOrder(child, lineStart, lineEnd, out);
+    }
+    if (element instanceof HaxeCallExpression call) {
+      PsiElement name = callNameElement(call);
+      if (name != null
+          && name.getTextRange().getStartOffset() >= lineStart
+          && name.getTextRange().getEndOffset() <= lineEnd) {
+        out.add(call);
+      }
+    }
+  }
+
+  /** The call's callee NAME identifier, or null for non-reference callees. */
+  @Nullable
+  public static PsiElement callNameElement(@NotNull HaxeCallExpression call) {
+    return call.getExpression() instanceof HaxeReference reference ? reference.getReferenceNameElement() : null;
   }
 
   /**
