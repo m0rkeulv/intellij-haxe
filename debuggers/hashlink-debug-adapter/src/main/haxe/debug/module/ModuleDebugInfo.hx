@@ -253,6 +253,26 @@ class ModuleDebugInfo {
 		dynamic/virtual/closure calls whose target isn't statically known, in which
 		case step-in falls back to step-over behaviour.
 	**/
+	/**
+		The closure-operand REGISTER of an OCallClosure at `op`, or -1 when the
+		op is not a closure call. The callee of a closure call is only knowable
+		at RUNTIME: step-into reads this register's frame slot (a vclosure
+		pointer) at the stop to resolve the entry address.
+	**/
+	public function closureCallRegister(fidx:Int, op:Int):Int {
+		if (fidx < 0 || fidx >= data.functions.length) {
+			return -1;
+		}
+		var ops = data.functions[fidx].ops;
+		if (op < 0 || op >= ops.length) {
+			return -1;
+		}
+		return switch (ops[op]) {
+			case OCallClosure(_, fun, _): fun;
+			default: -1;
+		}
+	}
+
 	public function callTargetFunction(fidx:Int, op:Int):Int {
 		if (fidx < 0 || fidx >= data.functions.length) {
 			return -1;

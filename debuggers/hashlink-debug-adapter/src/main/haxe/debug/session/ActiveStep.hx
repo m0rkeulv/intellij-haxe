@@ -25,4 +25,10 @@ typedef ActiveStep = {
 	// chosen op; other invocations are stepped past.
 	var ?targetEntry:Pointer;
 	var ?targetCallSite:{fidx:Int, op:Int};
+	// Step-in only: closure call sites whose operand register was NOT yet
+	// populated at the stop (the closure is produced earlier on the same line,
+	// e.g. `functions[0]()`). Each site's op start carries a temp; hitting it
+	// is never a landing — the operand is in hand THERE, so the callee entry
+	// resolves and gets its temp, and execution runs on into it.
+	var ?pendingClosureSites:Array<{address:Pointer, fidx:Int, op:Int}>;
 }

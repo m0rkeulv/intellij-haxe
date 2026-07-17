@@ -48,6 +48,19 @@ public class SmartStepIntoIntegrationTest extends DapIntegrationTestBase {
   }
 
   @Test
+  public void aClosureCallIsOfferedWithItsRuntimeTarget() throws Exception {
+    // `fn()` has no static callee (OCallClosure): the target list resolves
+    // the closure's RUNTIME fun pointer and labels it with the actual function
+    StoppedEvent atCall = runToBreakpoint(FIXTURE_CLOSURE, FIXTURE_CLOSURE_CALL_LINE);
+    List<StepInTarget> targets = requestStepInTargets(newestFrameId(atCall.getBody().getThreadId()));
+
+    assertTrue("the closure's runtime target is offered (targets: " + targets + ")",
+               targets.stream().anyMatch(t -> t.getLabel().endsWith("Holder.grab")));
+
+    request(new DisconnectRequest());
+  }
+
+  @Test
   public void stepInWithATargetIdEntersTheChosenCallSkippingTheOnesBefore() throws Exception {
     StoppedEvent atDemo = runToBreakpoint(FIXTURE_MAIN, FIXTURE_DEMO_LINE);
     int threadId = atDemo.getBody().getThreadId();

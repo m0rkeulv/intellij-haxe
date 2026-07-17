@@ -91,6 +91,12 @@ public abstract class DapIntegrationTestBase {
   protected static final int FIXTURE_INT_ARG_LINE = 50; // Mutate.intParam(): Int arg traced on the callee's first line
   protected static final String FIXTURE_CALL = "Call.hx";
   protected static final int FIXTURE_CALL_LINE = 52; // Call.demo(): add/scale/negate/label callable, s reassignable, boost/plus bound
+  protected static final String FIXTURE_CLOSURE = "ClosureCalls.hx";
+  protected static final int FIXTURE_CLOSURE_CALL_LINE = 29; // Holder.new(): fn() where fn = grab
+  protected static final int FIXTURE_CLOSURE_ARRAY_CALL_LINE = 31; // Holder.new(): functions[0]() (analyzer-folded)
+  protected static final int FIXTURE_CLOSURE_REAL_ARRAY_LINE = 34; // Holder.new(): callbacks[idx]() (a REAL array)
+  protected static final int FIXTURE_CLOSURE_BODY_LINE = 39; // Holder.grab(): first body line
+  protected static final int FIXTURE_CLOSURE_BODY_LINE2 = 40; // Holder.grab(): second body line
 
   protected Process adapterProcess;
   protected DapClient client;

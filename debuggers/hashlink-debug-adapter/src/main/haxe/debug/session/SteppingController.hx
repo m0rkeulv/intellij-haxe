@@ -1,6 +1,8 @@
 package debug.session;
 
 import debug.Pointer;
+import debug.layout.Align;
+import debug.layout.FrameLayout;
 import debug.module.CodeGraph;
 import debug.target.WaitOutcome;
 
@@ -19,9 +21,19 @@ import haxe.Int64;
 @:access(debug.session.DebugSession)
 class SteppingController {
 	final session:DebugSession;
+	// Register->frame-slot arithmetic for reading a closure operand at a stop
+	// (same layout the locals view uses); lazy — jit exists only after launch.
+	var frameLayout:Null<FrameLayout> = null;
 
 	public function new(session:DebugSession) {
 		this.session = session;
+	}
+
+	function layout():FrameLayout {
+		if (frameLayout == null) {
+			frameLayout = new FrameLayout(new Align(session.jit.is64, session.jit.boolSize4), session.jit.winCall);
+		}
+		return frameLayout;
 	}
 
 	public function handleStep(requestSeq:Int, threadId:Int, mode:StepMode, targetId:Null<Int>):Void {
@@ -59,8 +71,10 @@ class SteppingController {
 
 	// The calls on `frameId`'s stopped line, as smart-step-into choices. Only the
 	// newest frame can step, so any other frame gets an empty list (not an error:
-	// the client asks per its UI state). Unresolvable callees (closures, virtual
-	// dispatch through a vtable) are omitted — the plain stepIn still enters them.
+	// the client asks per its UI state). A closure call's callee resolves from
+	// its RUNTIME value (see closureCallEntry) and is labeled with the actual
+	// function; only truly unresolvable callees (an unassigned register, a
+	// native-function closure, vtable dispatch) are omitted.
 	function computeStepInTargets(frameId:Int, threadId:Int):Array<StepInTargetInfo> {
 		var frame = session.inspector.frameAt(frameId);
 		if (frame == null || frame.index != 0) {
@@ -80,9 +94,59 @@ class SteppingController {
 			var callee = session.module.callTargetFunction(fidx, op);
 			if (callee >= 0) {
 				result.push({id: op, label: session.module.functionName(callee)});
+			} else {
+				var entry = closureCallEntry(threadId, fidx, op);
+				var position = entry != null ? session.jit.resolveAddress(entry) : null;
+				if (position != null) {
+					result.push({id: op, label: session.module.functionName(position.fidx)});
+				}
 			}
 		}
 		return result;
+	}
+
+	// The runtime callee entry of the closure call at `op`, or null. The
+	// closure operand REGISTER's frame slot holds the vclosure pointer, whose
+	// `fun` field (@ +ptr) is the callee's jitted entry — the one thing a
+	// closure call has instead of a static findex. Null when the op is no
+	// closure call, the register does not (yet) hold a closure (assigned later
+	// on the same line), or the entry is outside known jitted code (a
+	// native-function closure): an INT3 must NEVER land on a guessed address.
+	//
+	// The returned address is the callee's OP-0 address (addressOf), NOT the
+	// raw `fun` pointer: `fun` is the function's true entry (prologue start),
+	// which is BEFORE op 0's line-table address, so landing there parks
+	// mid-prologue at an address resolveAddress cannot map — the NEXT step
+	// then finds no bytecode position and degrades to a plain resume (the
+	// callee returns immediately / the caller resumes on the wrong line). A
+	// static call plants at addressOf(callee, 0); a closure landing must match.
+	function closureCallEntry(threadId:Int, fidx:Int, op:Int):Null<Pointer> {
+		var closureReg = session.module.closureCallRegister(fidx, op);
+		if (closureReg < 0) {
+			return null;
+		}
+		var frames = session.stackWalker.walk(threadId);
+		if (frames.length == 0) {
+			return null; // stepping always parks on the newest frame; no frame = no read
+		}
+		var offsets = layout().registerOffsets(session.module.registers(fidx), session.module.argCount(fidx));
+		if (closureReg >= offsets.length) {
+			return null;
+		}
+		var closurePtr = session.memReader.readPointer(
+			Int64.add(frames[0].ebp, Int64.ofInt(offsets[closureReg].offset)));
+		if (closurePtr.isNull()) {
+			return null;
+		}
+		var fun = session.memReader.readPointer(closurePtr.offset(session.jit.is64 ? 8 : 4));
+		if (fun.isNull()) {
+			return null;
+		}
+		var position = session.jit.resolveAddress(fun);
+		if (position == null) {
+			return null; // outside known jitted code (a native-function closure)
+		}
+		return session.jit.addressOf(position.fidx, 0);
 	}
 
 	// Plant the temporary breakpoints that mark where this step should land, then
@@ -113,6 +177,7 @@ class SteppingController {
 		var returnAddress = currentReturnAddress(threadId);
 		var targetedEntry:Null<Pointer> = null;
 		var targetedCallSite:Null<{fidx:Int, op:Int}> = null;
+		var pendingClosureSites:Array<{address:Pointer, fidx:Int, op:Int}> = [];
 
 		if (mode == StepOut) {
 			// step out: stop only when the current function returns
@@ -132,13 +197,26 @@ class SteppingController {
 						continue; // targeted step: only the chosen call's entry
 					}
 					var callee = session.module.callTargetFunction(fidx, op);
-					if (callee >= 0) {
-						var entry = session.jit.addressOf(callee, 0); // callee entry = first opcode
+					// a static callee's entry is its first opcode; a closure call's
+					// entry resolves from the closure's RUNTIME value at this stop
+					var entry:Null<Pointer> = callee >= 0
+						? session.jit.addressOf(callee, 0)
+						: closureCallEntry(threadId, fidx, op);
+					if (entry != null) {
 						session.breakpoints.addTemp(entry);
 						if (targetId != null) {
 							targetedEntry = entry;
 							targetedCallSite = {fidx: fidx, op: op};
 						}
+					} else if (targetId == null && session.module.closureCallRegister(fidx, op) >= 0) {
+						// a closure call whose operand register is not populated YET
+						// (the closure is produced earlier on this same line, e.g.
+						// `functions[0]()`): DEFER — trap the call op itself; when
+						// execution reaches it the operand is in hand, the entry
+						// resolves there and the hit resumes into it (never a landing)
+						var siteAddress = session.jit.addressOf(fidx, op);
+						session.breakpoints.addTemp(siteAddress);
+						pendingClosureSites.push({address: siteAddress, fidx: fidx, op: op});
 					}
 				}
 			}
@@ -147,7 +225,8 @@ class SteppingController {
 		if (session.breakpoints.hasTemps()) {
 			session.activeStep = {
 				threadId: threadId, mode: mode, startEsp: startEsp,
-				targetEntry: targetedEntry, targetCallSite: targetedCallSite
+				targetEntry: targetedEntry, targetCallSite: targetedCallSite,
+				pendingClosureSites: pendingClosureSites.length > 0 ? pendingClosureSites : null
 			};
 		}
 		return session.stepOverAndResume(threadId);
@@ -176,12 +255,42 @@ class SteppingController {
 			session.stepPastTempAndResume(threadId, hitAddress);
 			return;
 		}
+		if (step != null && resolvePendingClosureSite(step, threadId, hitAddress)) {
+			// not a landing: this temp exists only to LOOK at the closure operand
+			// at its call site — the callee entry temp is planted now (or the
+			// callee is unresolvable and the step degrades to its line/return
+			// landings); either way, run on
+			session.stepPastTempAndResume(threadId, hitAddress);
+			return;
+		}
 		if (step != null && !targetedCallSiteSatisfied(step, threadId, hitAddress)) {
 			session.stepPastTempAndResume(threadId, hitAddress);
 			return;
 		}
 		session.enterStopped(threadId, null);
 		session.emit(EvStoppedStep(threadId));
+	}
+
+	// True when `hitAddress` is one of this step's DEFERRED closure call sites:
+	// everything before the call has executed, so the closure operand register
+	// finally holds its value — resolve the callee entry and plant its temp.
+	// Consumed on first hit (a loop re-entering the line replants via a new step).
+	function resolvePendingClosureSite(step:ActiveStep, threadId:Int, hitAddress:Pointer):Bool {
+		var sites = step.pendingClosureSites;
+		if (sites == null) {
+			return false;
+		}
+		for (site in sites) {
+			if (Int64.compare(hitAddress, site.address) == 0) {
+				var entry = closureCallEntry(threadId, site.fidx, site.op);
+				if (entry != null) {
+					session.breakpoints.addTemp(entry);
+				}
+				sites.remove(site);
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// A targeted step-in's entry temp is at the callee FUNCTION, which the line
