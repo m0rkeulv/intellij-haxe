@@ -255,7 +255,7 @@ class ToStringScene {
 		var meta = new Map<String, Int>(); // haxe.ds.StringMap: entries must LIST, not the raw hash handle
 		meta.set("build", 92);
 		meta.set("name", 7);
-		Sys.println("tostring:" + labeled.id + plain.x + moody.y + meta.get("build")); // TOSTRING_LINE = 258
+		Sys.println("tostring:" + labeled.id + plain.x + moody.y + meta.get("build") + meta.toString().length); // keeps StringMap.toString from DCE, like real apps that trace maps — TOSTRING_LINE = 258
 	}
 }
 

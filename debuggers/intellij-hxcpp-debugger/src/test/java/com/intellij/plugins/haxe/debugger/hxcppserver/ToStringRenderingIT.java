@@ -46,6 +46,10 @@ public class ToStringRenderingIT {
                    "PlainBox", session.variable(on, "plain").getValue());
       assertEquals("on: a THROWING toString degrades to the class name",
                    "MoodyLabel", session.variable(on, "moody").getValue());
+      // maps switch from the entry count to their own content preview
+      String mapPreview = session.variable(on, "meta").getValue();
+      assertTrue("on: a map summary is its content preview, got: " + mapPreview,
+                 mapPreview.startsWith("[") && mapPreview.contains("build => 92"));
 
       // toggle OFF again: back to class names - the flag is truly live
       assertTrue("toggle off accepted",

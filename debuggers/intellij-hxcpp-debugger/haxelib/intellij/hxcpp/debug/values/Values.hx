@@ -50,8 +50,12 @@ class Values {
 			// is about getters/toString), so listing entries is fair game.
 			case TClass(c) if (c == haxe.ds.StringMap || c == haxe.ds.IntMap || c == haxe.ds.ObjectMap
 					|| Std.isOfType(value, haxe.ds.BalancedTree)):
+				// with the toString opt-in ON the summary is the map's own
+				// content preview ("[build => 92, name => 7]", the std maps all
+				// declare toString) — objectLabel applies the usual policy and
+				// falls back to the entry count when off or on failure
 				var count = mapEntries(value).length;
-				{value: "Map(" + count + ")", type: Type.getClassName(c), expandable: count > 0};
+				{value: objectLabel(value, c, "Map(" + count + ")"), type: Type.getClassName(c), expandable: count > 0};
 			case TClass(c):
 				var name = Type.getClassName(c);
 				{value: objectLabel(value, c, name), type: name, expandable: dataFields(value, c).length > 0};
@@ -113,10 +117,19 @@ class Values {
 		}
 		return try {
 			var text:String = value.toString();
-			(text == null || text.length == 0) ? className : text;
+			(text == null || text.length == 0) ? className : truncate(text);
 		} catch (e:Dynamic) {
 			className; // a throwing toString degrades to the class name
 		}
+	}
+
+	// A value LABEL is a one-line summary; a runaway toString (a big map's
+	// content preview, a verbose user render) must not flood the wire or the
+	// tree row. 200 chars comfortably fills the Variables column.
+	static inline var MAX_LABEL = 200;
+
+	static function truncate(text:String):String {
+		return text.length <= MAX_LABEL ? text : text.substr(0, MAX_LABEL - 1) + "…";
 	}
 
 	// Instance fields that hold data (not methods) — the ones a user inspects.

@@ -109,6 +109,13 @@ class ValuesTest {
 		var described = Values.describe(map);
 		assert.equals("Map(2)", described.value, "entry-count summary, not the raw hash handle");
 		assert.isTrue(described.expandable, "a populated map expands");
+		// with the opt-in ON the summary becomes the map's own content preview
+		Values.renderWithToString = true;
+		var preview = Values.describe(map).value;
+		assert.isTrue(StringTools.startsWith(preview, "["), "content preview with the opt-in on: " + preview);
+		assert.isTrue(preview.indexOf("build => 92") >= 0, "preview shows entries: " + preview);
+		assert.isTrue(preview.indexOf("name => 7") >= 0, "preview shows every entry: " + preview);
+		Values.renderWithToString = false;
 		var entries = Values.children(map);
 		assert.equals(2, entries.length, "one child per entry");
 		assert.equals(92, entry(entries, '"build"'), "string keys are quoted like string values");
