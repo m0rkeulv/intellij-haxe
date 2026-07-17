@@ -17,6 +17,10 @@ public class HaxeDebuggerSettingsForm {
   private JTextPane myWarningText;
   private JCheckBox myRenderWithToString;
 
+  public HaxeDebuggerSettingsForm() {
+    myWarningText.setEditable(false);
+  }
+
   public JComponent getPanel() {
     return myPanel;
   }
