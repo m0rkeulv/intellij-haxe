@@ -422,6 +422,15 @@
                          key="haxe.settings.name" bundle="messages.HaxeBundle"
                          nonDefaultProject="true" />
 
+    <!-- parentId is the Debugger node's LEGACY configurable id (verified in
+         the platform's DebuggerConfigurable), NOT "debugger" - an unknown
+         parent silently drops the page to the settings ROOT -->
+    <projectConfigurable instance="com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettingsConfigurable"
+                         parentId="project.propDebugger"
+                         id="haxe.debugger.settings"
+                         key="haxe.debugger.settings.display.name" bundle="messages.HaxeBundle"
+                         nonDefaultProject="true" />
+
     <importFilteringRule implementation="com.intellij.plugins.haxe.ide.HaxeImportFilteringRule"/>
     <targetElementEvaluator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.HaxeTargetElementEvaluator"/>
 

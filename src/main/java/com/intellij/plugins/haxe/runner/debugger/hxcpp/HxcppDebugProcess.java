@@ -392,7 +392,12 @@ public class HxcppDebugProcess extends XDebugProcess {
 
   // Live toggle: tell the server, then rebuild the views so the CURRENT
   // stop's variables re-render with the new labels (no restart needed).
-  private void pushToStringRendering(boolean enabled) {
+  // Public: the settings page pushes to every running session on apply; a
+  // backend that cannot honor the request (vshaxe) is a no-op.
+  public void pushToStringRendering(boolean enabled) {
+    if (!backend.supportsToStringRendering()) {
+      return;
+    }
     onRequestThread(() -> {
       sendRequest(SetToStringRenderingRequest.of(enabled));
       getSession().rebuildViews();

@@ -709,8 +709,9 @@ public class HashLinkDebugProcess extends XDebugProcess {
   // Live toggle: tell the adapter, then rebuild the views so the CURRENT
   // stop's variables re-render (no restart needed). The adapter currently
   // only stores the flag — labels stay class names until the
-  // hl_dyn_call_safe rendering lands.
-  private void pushToStringRendering(boolean enabled) {
+  // hl_dyn_call_safe rendering lands. Public: the settings page pushes to
+  // every running session on apply.
+  public void pushToStringRendering(boolean enabled) {
     onRequestThread(() -> {
       sendRequest(SetToStringRenderingRequest.of(enabled));
       getSession().rebuildViews();
