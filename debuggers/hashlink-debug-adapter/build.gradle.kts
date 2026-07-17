@@ -212,6 +212,11 @@ tasks.named<Test>("test") {
         debuggerTests
     }
     dependsOn("buildDebugAdapter", "buildTestFixture", "buildThreadsFixture", "buildSpinFixture", "buildUncaughtFixture", "buildVmFixture", "buildStackTraceFixture", "buildTypedThrowFixture")
+    // the binaries under test ARE test inputs: without this, a Haxe-only
+    // change reuses a cached (FROM-CACHE/UP-TO-DATE) test result and the
+    // rebuilt adapter is never actually exercised
+    inputs.files(adapterHl, fixtureHl, threadsFixtureHl, spinFixtureHl,
+                 uncaughtFixtureHl, vmFixtureHl, stacktraceFixtureHl, typedThrowFixtureHl)
     // integration tests locate the built adapter, the debuggee fixtures and
     // (optionally) the HashLink executable through these
     systemProperty("dap.adapter.hl", adapterHl.get().asFile.absolutePath)

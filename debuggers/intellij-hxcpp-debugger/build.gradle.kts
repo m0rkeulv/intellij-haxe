@@ -142,6 +142,10 @@ tasks.named<Test>("test") {
         dependsOn(fixtureTaskName(name))
         // integration tests locate each built fixture through these
         systemProperty("hxcpp.server.fixture.$name.exe", fixtureExe(name).get().asFile.absolutePath)
+        // the fixture (with the server compiled in) IS a test input: without
+        // this, a haxelib-only change reuses a cached test result and the new
+        // server is never actually exercised
+        inputs.file(fixtureExe(name))
     }
     systemProperty("hxcpp.server.fixture.src.dir", File(projectDir, "test-fixtures/src").absolutePath)
 }
