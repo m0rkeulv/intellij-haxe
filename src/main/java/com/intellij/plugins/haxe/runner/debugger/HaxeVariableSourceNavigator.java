@@ -14,6 +14,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import java.util.concurrent.ExecutorService;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
@@ -47,18 +48,31 @@ import org.jetbrains.annotations.Nullable;
 public final class HaxeVariableSourceNavigator {
   private static final Logger LOG = Logger.getInstance(HaxeVariableSourceNavigator.class);
 
+  // computeSourcePosition is NOT only the explicit Jump to Source: the
+  // frontend/backend-split debugger also routes every node's INLINE-values
+  // lookup through it (FrontendXValue.computeInlineDebuggerData), so one
+  // re-render of a populated Variables view fires dozens of navigations at
+  // once. Unbounded, those tripped the platform's submission tracker ("Too
+  // many non-blocking read actions submitted at once"). A small bounded
+  // executor queues the resolves instead of stampeding them — still off the
+  // EDT, still cancellable/expirable, and the platform's own per-call
+  // navigation timeout keeps a queued laggard from being waited on forever.
+  private static final ExecutorService RESOLVE_EXECUTOR =
+    AppExecutorUtil.createBoundedApplicationPoolExecutor("HaxeVariableSourceNavigator", 2);
+
   private HaxeVariableSourceNavigator() {
   }
 
   /**
    * Asynchronous by contract: the platform invokes computeSourcePosition on
-   * the EDT, so the PSI resolve runs in a non-blocking read action on the app
-   * pool (cancelled and retried around write actions) and {@code navigatable}
-   * is completed from there — the platform bounds the wait with its own
-   * navigation timeout. Only the frame OBJECT is captured on the caller's
-   * thread (a plain state read, pinning the frame the user clicked from);
-   * its source position resolves lazily through the source resolver's index
-   * lookup — a slow operation that must also stay off the EDT.
+   * the EDT, so the PSI resolve runs in a non-blocking read action on the
+   * bounded resolver executor (cancelled and retried around write actions)
+   * and {@code navigatable} is completed from there — the platform bounds
+   * the wait with its own navigation timeout. Only the frame OBJECT is
+   * captured on the caller's thread (a plain state read, pinning the frame
+   * the user clicked from); its source position resolves lazily through the
+   * source resolver's index lookup — a slow operation that must also stay
+   * off the EDT.
    */
   public static void navigate(@Nullable XDebugSession session, @Nullable String path,
                               @Nullable String containerTypeName, @Nullable String memberName,
@@ -77,7 +91,7 @@ public final class HaxeVariableSourceNavigator {
       // no parent disposable (a Project must not be one in plugin code):
       // expire on the conditions that make the navigation pointless
       .expireWhen(() -> project.isDisposed() || session.isStopped())
-      .submit(AppExecutorUtil.getAppExecutorService())
+      .submit(RESOLVE_EXECUTOR)
       .onSuccess(target -> {
         if (target == null) {
           LOG.debug("jump-to-source: no target for path '" + path + "'");
