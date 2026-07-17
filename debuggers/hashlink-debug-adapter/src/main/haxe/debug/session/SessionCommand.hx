@@ -29,5 +29,8 @@ enum SessionCommand {
 	CmdVariables(requestSeq:Int, reference:Int);
 	CmdSetVariable(requestSeq:Int, reference:Int, name:String, value:String);
 	CmdEvaluate(requestSeq:Int, frameId:Int, expression:String);
+	// The user's opt-in for toString object labels (custom
+	// intellij/setToStringRendering request), toggleable live.
+	CmdSetToStringRendering(requestSeq:Int, enabled:Bool);
 	CmdDisconnect(requestSeq:Int);
 }

@@ -414,6 +414,8 @@
     <projectService serviceImplementation="com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorCacheService"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCacheService"/>
 
+    <projectService serviceImplementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings"/>
+
     <projectConfigurable instance="com.intellij.plugins.haxe.config.HaxeProjectSettingsConfigurable"
                          parentId="build"
                          id="com.intellij.plugins.haxe.config.HaxeProjectSettingsConfigurable"

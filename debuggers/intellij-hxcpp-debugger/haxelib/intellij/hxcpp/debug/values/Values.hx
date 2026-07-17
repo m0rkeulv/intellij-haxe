@@ -16,6 +16,21 @@ package intellij.hxcpp.debug.values;
 	user-initiated risk.
 **/
 class Values {
+	/**
+		Object labels via the object's own toString() — a DELIBERATE, opt-in
+		exception to the safety rule above, controlled by the user through the
+		custom `intellij/setToStringRendering` request (a project-level IDE
+		setting, off by default, toggleable live from the Variables view).
+		Only a class whose chain DECLARES toString ever runs code (the
+		reflection probe itself calls nothing), and a THROWING toString
+		degrades to the class name. What cannot be defended in-process: a
+		STACK-OVERFLOWING toString (self-recursion, circular references) kills
+		the debuggee before any handler runs — on hxcpp the overflow is a
+		fatal 0xC00000FD, uncatchable by design (probe-verified). That risk is
+		exactly why the default is OFF and turning it on is the user's call.
+	**/
+	public static var renderWithToString:Bool = false;
+
 	/** Display string + type name + whether the value has expandable children. */
 	public static function describe(value:Dynamic):{value:String, type:String, expandable:Bool} {
 		return switch (Type.typeof(value)) {
@@ -30,7 +45,7 @@ class Values {
 				{value: "Array (" + arr.length + ")", type: "Array", expandable: arr.length > 0};
 			case TClass(c):
 				var name = Type.getClassName(c);
-				{value: name, type: name, expandable: dataFields(value, c).length > 0};
+				{value: objectLabel(value, c, name), type: name, expandable: dataFields(value, c).length > 0};
 			case TObject: {value: "{ }", type: "Anonymous", expandable: Reflect.fields(value).length > 0};
 			case TEnum(e):
 				var params = Type.enumParameters(value);
@@ -56,6 +71,22 @@ class Values {
 				[for (i in 0...params.length) {name: "[" + i + "]", value: params[i]}];
 			default: [];
 		};
+	}
+
+	// The object's display label: its own toString() result when the user
+	// opted in AND the class chain declares one; the class name otherwise.
+	// getInstanceFields includes inherited fields, so one probe covers the
+	// whole chain without running anything.
+	static function objectLabel(value:Dynamic, c:Class<Dynamic>, className:String):String {
+		if (!renderWithToString || Type.getInstanceFields(c).indexOf("toString") == -1) {
+			return className; // no opt-in, or no user toString: never run code
+		}
+		return try {
+			var text:String = value.toString();
+			(text == null || text.length == 0) ? className : text;
+		} catch (e:Dynamic) {
+			className; // a throwing toString degrades to the class name
+		}
 	}
 
 	// Instance fields that hold data (not methods) — the ones a user inspects.

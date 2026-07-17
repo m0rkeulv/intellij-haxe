@@ -20,6 +20,7 @@ enum DebugEvent {
 	EvStepStarted(requestSeq:Int); // ack for a next/stepIn/stepOut request; the stop follows
 	EvPaused(requestSeq:Int); // ack for a pause request; the stopped(reason:"pause") event follows
 	EvExceptionBreakpointsSet(requestSeq:Int); // ack for a setExceptionBreakpoints request
+	EvToStringRenderingSet(requestSeq:Int); // ack for an intellij/setToStringRendering request
 	EvThreads(requestSeq:Int, threads:Array<ThreadInfo>);
 	EvStepInTargets(requestSeq:Int, targets:Array<StepInTargetInfo>);
 	EvStackTrace(requestSeq:Int, frames:Array<FrameInfo>);

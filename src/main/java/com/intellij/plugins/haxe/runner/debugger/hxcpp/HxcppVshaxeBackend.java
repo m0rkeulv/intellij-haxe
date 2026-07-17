@@ -48,6 +48,11 @@ public class HxcppVshaxeBackend implements HxcppDapBackend {
   }
 
   @Override
+  public boolean supportsToStringRendering() {
+    return false; // the vshaxe server ALWAYS Std.string()s objects; not controllable
+  }
+
+  @Override
   public String startupHint() {
     return "Check that it was compiled with -debug and -lib hxcpp-debug-server, and that no previous\n"
            + "instance of the program is still running (a leftover instance blocks the debug port and\n"

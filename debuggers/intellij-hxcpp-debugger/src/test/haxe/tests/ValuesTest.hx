@@ -21,6 +21,37 @@ private enum Shape {
 	Empty;
 }
 
+private class Labeled {
+	public var id:Int;
+
+	public function new(id:Int) {
+		this.id = id;
+	}
+
+	public function toString():String {
+		return "Labeled#" + id;
+	}
+}
+
+private class MoodyLabel {
+	public function new() {}
+
+	public function toString():String {
+		throw "no label";
+	}
+}
+
+private class LoopyLabel {
+	public function new() {}
+
+	// non-tail self-recursion: on the eval target the overflow is a CATCHABLE
+	// exception, so the label degrades gracefully — on real cpp it is fatal
+	// to the process, which is why toString rendering defaults OFF there
+	public function toString():String {
+		return "x" + toString();
+	}
+}
+
 // A property getter that records being called: rendering must NEVER invoke it
 // (getters run user code on the server thread while the debuggee is paused —
 // a lock-taking getter deadlocks the whole session).
@@ -52,6 +83,50 @@ class ValuesTest {
 		anonymousObjectsExpand(assert);
 		enumsExpandToParameters(assert);
 		renderingNeverInvokesGetters(assert);
+		toStringLabelsAreOptIn(assert);
+		toStringNeverRunsWithoutADeclaration(assert);
+		throwingToStringDegradesToTheClassName(assert);
+		recursingToStringDegradesWhereCatchable(assert);
+	}
+
+	static function className(value:Dynamic):String {
+		return Type.getClassName(Type.getClass(value));
+	}
+
+	static function toStringLabelsAreOptIn(assert:Assert):Void {
+		var labeled = new Labeled(7);
+		assert.equals(className(labeled), Values.describe(labeled).value,
+			"off (the default): the class name, even with a declared toString");
+		Values.renderWithToString = true;
+		assert.equals("Labeled#7", Values.describe(labeled).value, "on: the object's own toString");
+		Values.renderWithToString = false;
+	}
+
+	static function toStringNeverRunsWithoutADeclaration(assert:Assert):Void {
+		Values.renderWithToString = true;
+		var gated = new Gated();
+		Gated.getterCalls = 0;
+		var described = Values.describe(gated);
+		assert.equals(0, Gated.getterCalls, "still no getter runs with the opt-in on");
+		assert.equals(className(gated), described.value, "no declared toString: the class name, no code run");
+		Values.renderWithToString = false;
+	}
+
+	static function throwingToStringDegradesToTheClassName(assert:Assert):Void {
+		Values.renderWithToString = true;
+		var moody = new MoodyLabel();
+		assert.equals(className(moody), Values.describe(moody).value, "a throwing toString degrades");
+		Values.renderWithToString = false;
+	}
+
+	static function recursingToStringDegradesWhereCatchable(assert:Assert):Void {
+		// the eval target raises a CATCHABLE overflow for runaway recursion; on
+		// real cpp the same toString kills the process (the reason the feature
+		// defaults off) — this pins the graceful path where one exists
+		Values.renderWithToString = true;
+		var loopy = new LoopyLabel();
+		assert.equals(className(loopy), Values.describe(loopy).value, "a self-recursing toString degrades");
+		Values.renderWithToString = false;
 	}
 
 	static function renderingNeverInvokesGetters(assert:Assert):Void {

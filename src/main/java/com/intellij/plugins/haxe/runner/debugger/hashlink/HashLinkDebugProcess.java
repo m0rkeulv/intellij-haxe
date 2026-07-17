@@ -12,7 +12,10 @@ import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings;
+import com.intellij.plugins.haxe.runner.debugger.HaxeToStringRenderToggleAction;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
@@ -42,6 +45,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextReque
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetToStringRenderingRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
@@ -246,6 +250,14 @@ public class HashLinkDebugProcess extends XDebugProcess {
       // why a persisted breakpoint used to appear armed but did nothing until
       // toggled. This mirrors how line breakpoints flush.
       sendRequest(exceptionFiltersRequest());
+      // object labels via toString: an off-default project setting; only a
+      // non-default needs announcing (the adapter starts with it off). NOTE:
+      // the adapter currently only STORES the flag — the labels stay class
+      // names until the hl_dyn_call_safe rendering lands (a faulting toString
+      // must be impossible, not merely handled; see the adapter docs).
+      if (HaxeDebuggerSettings.getInstance(getSession().getProject()).isRenderObjectsWithToString()) {
+        sendRequest(SetToStringRenderingRequest.of(true));
+      }
       client.sendRequest(new ConfigurationDoneRequest(), REQUEST_TIMEOUT_MILLIS);
 
       Thread pump = daemon(this::pumpEvents, "HashLink DAP events");
@@ -683,6 +695,26 @@ public class HashLinkDebugProcess extends XDebugProcess {
   // the request thread). See exceptionFiltersRequest for how the union is built.
   private void updateExceptionFilters() {
     onRequestThread(() -> sendRequest(exceptionFiltersRequest()));
+  }
+
+  // The Variables view's settings (gear) menu gets the toString-label toggle.
+  @Override
+  public void registerAdditionalActions(@NotNull DefaultActionGroup leftToolbar,
+                                        @NotNull DefaultActionGroup topToolbar,
+                                        @NotNull DefaultActionGroup settings) {
+    super.registerAdditionalActions(leftToolbar, topToolbar, settings);
+    settings.add(new HaxeToStringRenderToggleAction(getSession(), this::pushToStringRendering));
+  }
+
+  // Live toggle: tell the adapter, then rebuild the views so the CURRENT
+  // stop's variables re-render (no restart needed). The adapter currently
+  // only stores the flag — labels stay class names until the
+  // hl_dyn_call_safe rendering lands.
+  private void pushToStringRendering(boolean enabled) {
+    onRequestThread(() -> {
+      sendRequest(SetToStringRenderingRequest.of(enabled));
+      getSession().rebuildViews();
+    });
   }
 
   // This adapter's exception-filter vocabulary (must match the bundled

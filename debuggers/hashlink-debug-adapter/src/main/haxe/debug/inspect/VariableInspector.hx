@@ -262,6 +262,13 @@ class VariableInspector {
 		return mutator.setVariable(reference, name, valueExpr);
 	}
 
+	// intellij/setToStringRendering: the user's opt-in for toString object
+	// labels. STORED but not rendered through yet — labels only switch once
+	// the injected call is fault-PROOF via hl_dyn_call_safe (an SO inside a
+	// plain injected call is unrecoverable: the HL debug API cannot continue
+	// past a fault). See the project memory/docs for the worked design.
+	public var renderWithToString:Bool = false;
+
 	// Set by DebugSession: runs a function inside the debuggee. Forwarded to the
 	// call service; null until the eval-call machinery is enabled.
 	public var functionCaller(never, set):Null<(Pointer, Array<CallArg>, Int)->Pointer>;

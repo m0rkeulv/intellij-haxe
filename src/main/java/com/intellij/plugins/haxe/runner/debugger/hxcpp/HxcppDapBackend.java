@@ -50,6 +50,14 @@ public interface HxcppDapBackend extends Closeable {
    */
   boolean supportsSmartStepInto();
 
+  /**
+   * Whether the server understands the custom
+   * {@code intellij/setToStringRendering} request (object labels via the
+   * object's own toString, toggleable live). The vshaxe server does not —
+   * it always renders through Std.string and offers no control.
+   */
+  boolean supportsToStringRendering();
+
   /** Appended to the "program exited before the debugger could attach" failure. */
   String startupHint();
 }

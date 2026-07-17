@@ -108,6 +108,8 @@ class RequestDispatcher {
 				handleSetBreakpoints(request);
 			case "setExceptionBreakpoints":
 				handleSetExceptionBreakpoints(request);
+			case "intellij/setToStringRendering":
+				handleSetToStringRendering(request);
 			case "configurationDone":
 				handleConfigurationDone(request);
 			case "continue":
@@ -212,6 +214,18 @@ class RequestDispatcher {
 		// throw sites once (or immediately, if already launched).
 		defer(request);
 		sessionCommands(CmdSetExceptionBreakpoints(request.seq, filters, filterTypes));
+	}
+
+	// Custom request: the user's opt-in for toString object labels (a live
+	// IDE toggle). The session stores the flag; labels only actually switch
+	// once the fault-proof (hl_dyn_call_safe) rendering lands — a plain
+	// injected toString that faults is unrecoverable, so until then objects
+	// keep their class-name labels either way.
+	function handleSetToStringRendering(request:Request):Void {
+		var args:Dynamic = request.arguments;
+		var enabled = args != null && args.enabled == true;
+		defer(request);
+		sessionCommands(CmdSetToStringRendering(request.seq, enabled));
 	}
 
 	function handleConfigurationDone(request:Request):Void {
@@ -379,6 +393,8 @@ class RequestDispatcher {
 			case EvPaused(seq):
 				completeSuccess(seq, null);
 			case EvExceptionBreakpointsSet(seq):
+				completeSuccess(seq, null);
+			case EvToStringRenderingSet(seq):
 				completeSuccess(seq, null);
 			case EvThreads(seq, threads):
 				completeSuccess(seq, threadsBody(threads));

@@ -6,6 +6,7 @@ import haxe.Json;
 import intellij.hxcpp.debug.DebuggerApi;
 import intellij.hxcpp.debug.breakpoints.Breakpoints;
 import intellij.hxcpp.debug.eval.Evaluator;
+import intellij.hxcpp.debug.values.Values;
 import intellij.hxcpp.debug.values.VariablesView;
 
 /**
@@ -213,6 +214,12 @@ class Dispatcher {
 				sendResponse(seq, command, true, {allThreadsContinued: true});
 			case "intellij/stepIntoFunction":
 				handleStepIntoFunction(seq, command, request.arguments);
+			case "intellij/setToStringRendering":
+				// live toggle for toString object labels (see Values.objectLabel);
+				// the client re-requests variables afterwards, so the current
+				// stop's rows re-describe with the new labels
+				Values.renderWithToString = request.arguments != null && request.arguments.enabled == true;
+				sendResponse(seq, command, true, null);
 			case "pause":
 				// break the world; the resulting BREAK_IMMEDIATE stop is reported
 				// as reason "pause" (no step is in flight)

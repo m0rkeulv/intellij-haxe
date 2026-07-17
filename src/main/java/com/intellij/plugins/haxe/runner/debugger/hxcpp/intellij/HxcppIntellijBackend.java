@@ -70,6 +70,11 @@ public class HxcppIntellijBackend implements HxcppDapBackend {
   }
 
   @Override
+  public boolean supportsToStringRendering() {
+    return true; // the server implements intellij/setToStringRendering
+  }
+
+  @Override
   public String startupHint() {
     return "Check that it was compiled with -debug and -lib intellij-hxcpp-debug-server.";
   }

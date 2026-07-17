@@ -9,6 +9,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetToStringRenderingRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.DebugErrorCode;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ErrorResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
@@ -99,6 +100,25 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
 
     // an object's members carry the "field" classification (drives the field icon)
     assertEquals("Point.x is a field", VariableKind.FIELD, findVariable(variables(p.getVariablesReference()), "x").getKind());
+
+    request(new DisconnectRequest());
+  }
+
+  @Test
+  public void toStringRenderingToggleIsAcceptedAndInertForNow() throws Exception {
+    // The custom intellij/setToStringRendering request is part of the wire
+    // contract (the IDE's live gear toggle sends it), but the adapter only
+    // STORES the flag: labels must stay class names until the fault-proof
+    // (hl_dyn_call_safe) rendering lands — a plain injected toString that
+    // faults is unrecoverable, the debug API cannot continue past it.
+    StoppedEvent stopped = runToBreakpoint(FIXTURE_MAIN, FIXTURE_INSPECT_LINE);
+
+    assertTrue("toggle on accepted",
+               request(SetToStringRenderingRequest.of(true)).isSuccess());
+    Variable p = findVariable(topFrameVariables(stopped.getBody().getThreadId()), "p");
+    assertEquals("labels unchanged until the safe rendering lands", "Point", p.getValue());
+    assertTrue("toggle off accepted",
+               request(SetToStringRenderingRequest.of(false)).isSuccess());
 
     request(new DisconnectRequest());
   }

@@ -216,6 +216,7 @@ class DebugSession {
 			case CmdStepInTargets(seq, _): seq;
 			case CmdPause(seq, _): seq;
 			case CmdSetExceptionBreakpoints(seq, _, _): seq;
+			case CmdSetToStringRendering(seq, _): seq;
 			case CmdThreads(seq): seq;
 			case CmdStackTrace(seq, _): seq;
 			case CmdScopes(seq, _): seq;
@@ -248,6 +249,16 @@ class DebugSession {
 				handlePause(seq, threadId);
 			case CmdSetExceptionBreakpoints(seq, filters, filterTypes):
 				exceptions.setFilters(seq, filters, filterTypes);
+			case CmdSetToStringRendering(seq, enabled):
+				// stored for the fault-proof (hl_dyn_call_safe) rendering to come;
+				// labels stay class names until an injected toString CANNOT fault
+				// (a faulted injected call is unrecoverable — the debug API cannot
+				// continue past it). Accepting and remembering the flag now keeps
+				// the wire contract stable for the IDE's live toggle.
+				if (inspector != null) {
+					inspector.renderWithToString = enabled;
+				}
+				emit(EvToStringRenderingSet(seq));
 			case CmdThreads(seq):
 				handleThreads(seq);
 			case CmdStackTrace(seq, threadId):

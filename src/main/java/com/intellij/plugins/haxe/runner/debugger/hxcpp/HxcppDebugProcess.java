@@ -10,10 +10,13 @@ import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
+import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings;
+import com.intellij.plugins.haxe.runner.debugger.HaxeToStringRenderToggleAction;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
@@ -38,6 +41,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequ
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetToStringRenderingRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
@@ -186,6 +190,12 @@ public class HxcppDebugProcess extends XDebugProcess {
       // fire on the EDT and would race startup (the HashLink lesson).
       if (backend.supportsExceptionFilters()) {
         sendRequest(exceptionFiltersRequest());
+      }
+      // object labels via toString: an off-default project setting; only a
+      // non-default needs announcing (the server starts with it off)
+      if (backend.supportsToStringRendering()
+          && HaxeDebuggerSettings.getInstance(getSession().getProject()).isRenderObjectsWithToString()) {
+        sendRequest(SetToStringRenderingRequest.of(true));
       }
       // releases the debuggee held by the server's startup break
       client.sendRequest(new ConfigurationDoneRequest(), REQUEST_TIMEOUT_MILLIS);
@@ -365,6 +375,28 @@ public class HxcppDebugProcess extends XDebugProcess {
   @Override
   public @Nullable XSmartStepIntoHandler<?> getSmartStepIntoHandler() {
     return backend.supportsSmartStepInto() ? new HxcppSmartStepIntoHandler(this) : null;
+  }
+
+  // The Variables view's settings (gear) menu gets the toString-label toggle
+  // when the backend can honor it (the vshaxe server cannot — it always
+  // stringifies and offers no control, so no toggle is shown there).
+  @Override
+  public void registerAdditionalActions(@NotNull DefaultActionGroup leftToolbar,
+                                        @NotNull DefaultActionGroup topToolbar,
+                                        @NotNull DefaultActionGroup settings) {
+    super.registerAdditionalActions(leftToolbar, topToolbar, settings);
+    if (backend.supportsToStringRendering()) {
+      settings.add(new HaxeToStringRenderToggleAction(getSession(), this::pushToStringRendering));
+    }
+  }
+
+  // Live toggle: tell the server, then rebuild the views so the CURRENT
+  // stop's variables re-render with the new labels (no restart needed).
+  private void pushToStringRendering(boolean enabled) {
+    onRequestThread(() -> {
+      sendRequest(SetToStringRenderingRequest.of(enabled));
+      getSession().rebuildViews();
+    });
   }
 
   /**

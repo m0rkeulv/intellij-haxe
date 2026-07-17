@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case "throwloop": TypedThrow.loop(); case "dupchain": DupChainTarget.loop(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case "throwloop": TypedThrow.loop(); case "dupchain": DupChainTarget.loop(); case "tostring": ToStringScene.run(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -238,5 +238,48 @@ class DupChainTarget {
 	public function mid():DupChainTarget {
 		count++;
 		return this;
+	}
+}
+
+// Object-label scenario (mode "tostring"): a class WITH toString, one
+// WITHOUT, and one whose toString THROWS - probes toggle labels live via
+// intellij/setToStringRendering. A SELF-RECURSING toString is deliberately
+// absent: on hxcpp that overflow kills the process before any handler runs
+// (see Values.renderWithToString), which is what the off-default protects
+// against - the unit tests cover recursion on the eval target instead.
+class ToStringScene {
+	public static function run():Void {
+		var labeled = new Labeled(7);
+		var plain = new PlainBox();
+		var moody = new MoodyLabel();
+		Sys.println("tostring:" + labeled.id + plain.x + moody.y); // TOSTRING_LINE = 255
+	}
+}
+
+class Labeled {
+	public var id:Int;
+
+	public function new(id:Int) {
+		this.id = id;
+	}
+
+	public function toString():String {
+		return "Labeled#" + id;
+	}
+}
+
+class PlainBox {
+	public var x:Int = 1;
+
+	public function new() {}
+}
+
+class MoodyLabel {
+	public var y:Int = 2;
+
+	public function new() {}
+
+	public function toString():String {
+		throw "no label";
 	}
 }
