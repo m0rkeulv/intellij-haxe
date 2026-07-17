@@ -553,15 +553,51 @@ class ModuleDebugInfo {
 					// super-class field count to index into this type's own fields.
 					var inherited = fieldCount(proto.tsuper);
 					for (binding in proto.bindings) {
+						if (binding.mid < 0) {
+							continue;
+						}
 						var ownIndex = binding.fid - inherited;
-						if (binding.mid >= 0 && ownIndex >= 0 && ownIndex < proto.fields.length) {
+						if (ownIndex >= 0 && ownIndex < proto.fields.length) {
 							names.set(binding.mid, className + "." + proto.fields[ownIndex].name);
+						} else if (fieldNameAtGlobalFid(proto, binding.fid) == "__constructor__") {
+							// the CONSTRUCTOR is bound on the statics container "$X" at the
+							// INHERITED hl.Class.__constructor__ field (fid past this type's
+							// own fields), so the branch above skips it — a constructor
+							// frame would render as its "fn@N" fallback. Name it "X.new".
+							names.set(binding.mid, className + ".new");
 						}
 					}
 				default:
 			}
 		}
 		return names;
+	}
+
+	// The field name at a GLOBAL field index (inherited fields counted first),
+	// walking the super chain; null when out of range. Used to spot the
+	// inherited hl.Class.__constructor__ binding on a statics container.
+	function fieldNameAtGlobalFid(proto:ObjPrototype, fid:Int):Null<String> {
+		var chain:Array<ObjPrototype> = [];
+		var cur:Null<HLType> = HObj(proto);
+		while (cur != null) {
+			switch (cur) {
+				case HObj(p) | HStruct(p):
+					chain.unshift(p);
+					cur = p.tsuper;
+				default:
+					cur = null;
+			}
+		}
+		var index = 0;
+		for (link in chain) {
+			for (f in link.fields) {
+				if (index == fid) {
+					return f.name;
+				}
+				index++;
+			}
+		}
+		return null;
 	}
 
 	// Haxe names the static container "$Main"; strip the leading $ for display.

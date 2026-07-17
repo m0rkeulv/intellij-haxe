@@ -42,6 +42,15 @@ class ModuleDebugInfoTest {
 		var addName = module.functionName(addHits[0].fidx);
 		assert.isTrue(StringTools.endsWith(addName, "add"), "add frame name ends with 'add' (was " + addName + ")");
 
+		// a CONSTRUCTOR is named "Class.new", not the "fn@N" fallback: its findex
+		// is bound on the "$Class" statics container at the inherited
+		// hl.Class.__constructor__ field. ClosureCalls.Holder.new is line 29.
+		var ctorHits = module.resolveLine("ClosureCalls.hx", 29);
+		assert.isTrue(ctorHits.length > 0, "constructor line resolves to code");
+		var ctorName = module.functionName(ctorHits[0].fidx);
+		assert.isTrue(StringTools.endsWith(ctorName, "Holder.new"),
+			"constructor frame named Holder.new (was " + ctorName + ")");
+
 		// absolute path with backslashes should still match (Windows client paths)
 		var abs = "C:\\some\\project\\src\\Main.hx";
 		assert.isTrue(module.resolveLine(abs, FIXTURE_LOOP_LINE).length > 0, "absolute backslash path matches");

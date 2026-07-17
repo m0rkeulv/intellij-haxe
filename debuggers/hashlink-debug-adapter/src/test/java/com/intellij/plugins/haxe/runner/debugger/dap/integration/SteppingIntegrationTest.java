@@ -36,12 +36,8 @@ public class SteppingIntegrationTest extends DapIntegrationTestBase {
     // has no static findex). Step-into resolves the closure register's
     // vclosure `fun` pointer at the stop and plants the entry temp there;
     // without that, the step degraded to a step-over (user-reported).
-    // NOTE: the constructor frame has no resolvable name (constructors are
-    // called directly by findex, with no proto/binding entry — they render
-    // as the "fn@N" fallback), so the precondition asserts by LINE
     StoppedEvent atCall = runToBreakpoint(FIXTURE_CLOSURE, FIXTURE_CLOSURE_CALL_LINE);
-    int atCallLine = stackTrace(atCall.getBody().getThreadId()).getBody().getStackFrames().get(0).getLine();
-    assertEquals("stopped on the closure call line", FIXTURE_CLOSURE_CALL_LINE, atCallLine);
+    assertTrue("stopped in the constructor", topFrameName(atCall.getBody().getThreadId()).endsWith("Holder.new"));
 
     assertTrue("stepIn accepted", request(stepInRequest(atCall.getBody().getThreadId())).isSuccess());
     StoppedEvent inGrab = awaitStopped();
