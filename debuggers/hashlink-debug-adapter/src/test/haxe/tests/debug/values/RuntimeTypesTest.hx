@@ -14,6 +14,27 @@ class RuntimeTypesTest {
 		objectKindResolvesByName(assert);
 		nullKindWrapsInner(assert);
 		unknownReturnsNull(assert);
+		funKindReconstructsTheSignature(assert);
+	}
+
+	static function funKindReconstructsTheSignature(assert:Assert):Void {
+		var api = new FakeDebugApi();
+		pokeI32(api, 0x100, 3); // HI32
+		// hl_type @0x600: kind=10 (HFUN), data @0x608 -> hl_type_fun @0x700
+		pokeI32(api, 0x600, 10);
+		pokePtr(api, 0x608, 0x700);
+		// hl_type_fun: args (hl_type**) @ +0 -> 0x800, ret @ +8 -> i32, nargs @ +16
+		pokePtr(api, 0x700, 0x800);
+		pokePtr(api, 0x708, 0x100);
+		pokeI32(api, 0x710, 1);
+		pokePtr(api, 0x800, 0x100); // arg[0] = i32
+
+		var resolved = types(api, _ -> null).typeAt(addr(0x600));
+		var ok = switch (resolved) {
+			case HFun(f) if (f != null): f.args.length == 1 && f.args[0].match(HI32) && f.ret.match(HI32);
+			default: false;
+		}
+		assert.isTrue(ok, "fun kind reconstructs (Int) -> Int (was " + Std.string(resolved) + ")");
 	}
 
 	static function addr(v:Int):Pointer {

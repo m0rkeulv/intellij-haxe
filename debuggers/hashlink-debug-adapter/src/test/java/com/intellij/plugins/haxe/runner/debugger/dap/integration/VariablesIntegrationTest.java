@@ -105,6 +105,28 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
   }
 
   @Test
+  public void closureArrayElementsRenderAsFunctions() throws Exception {
+    // An Array<()->Int> element reaches its value through a DYNAMIC slot: the
+    // runtime fun-type header must resolve (RuntimeTypes KFUN) so the element
+    // renders like a statically typed closure variable — name and signature —
+    // instead of a bare "Dynamic" (user-reported).
+    StoppedEvent stopped = runToBreakpoint(FIXTURE_CLOSURE, FIXTURE_CLOSURE_REAL_ARRAY_LINE);
+    List<Variable> locals = topFrameVariables(stopped.getBody().getThreadId());
+
+    Variable callbacks = findVariable(locals, "callbacks");
+    assertNotNull("local callbacks present in " + locals, callbacks);
+    assertTrue("the array expands", callbacks.getVariablesReference() > 0);
+
+    Variable element = findVariable(variables(callbacks.getVariablesReference()), "0");
+    assertNotNull("element 0 present", element);
+    assertTrue("the element names its function (was " + element.getValue() + ")",
+               element.getValue().startsWith("function ") && element.getValue().contains("grab"));
+    assertEquals("with the reconstructed signature as its type", "() -> Int", element.getType());
+
+    request(new DisconnectRequest());
+  }
+
+  @Test
   public void toStringRenderingToggleIsAcceptedAndInertForNow() throws Exception {
     // The custom intellij/setToStringRendering request is part of the wire
     // contract (the IDE's live gear toggle sends it), but the adapter only
