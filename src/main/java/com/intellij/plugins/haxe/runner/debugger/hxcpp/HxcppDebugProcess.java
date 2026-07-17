@@ -367,13 +367,18 @@ public class HxcppDebugProcess extends XDebugProcess {
     return backend.supportsSmartStepInto() ? new HxcppSmartStepIntoHandler(this) : null;
   }
 
-  /** Smart step into the chosen callee (custom intellij/stepIntoFunction request). */
-  void stepIntoFunction(String className, String functionName) {
+  /**
+   * Smart step into the chosen callee (custom intellij/stepIntoFunction
+   * request). {@code occurrence} picks WHICH invocation on the line when the
+   * same function is called more than once (1-based).
+   */
+  void stepIntoFunction(String className, String functionName, int occurrence) {
     StepIntoFunctionRequest request = new StepIntoFunctionRequest();
     StepIntoFunctionArguments arguments = new StepIntoFunctionArguments();
     arguments.setThreadId(currentThreadId);
     arguments.setClassName(className);
     arguments.setFunctionName(functionName);
+    arguments.setOccurrence(occurrence);
     request.setArguments(arguments);
     onRequestThread(() -> sendRequest(request));
   }

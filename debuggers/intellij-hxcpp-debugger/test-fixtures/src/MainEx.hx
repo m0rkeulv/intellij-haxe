@@ -11,7 +11,7 @@ class MainEx {
 			case "caught": caughtThrow();
 			case "caught-null": caughtNullAccess();
 			case "null": nullAccess();
-			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case "throwloop": TypedThrow.loop(); case _: // one line: markers below must not shift
+			case "spin": spin(); case "getterlock": getterLock(); case "smartstep": SmartStepTarget.run(); case "chain": ChainTarget.loop(); case "threads": Workers.run(); case "typedthrow": TypedThrow.run(); case "throwloop": TypedThrow.loop(); case "dupchain": DupChainTarget.loop(); case _: // one line: markers below must not shift
 		}
 		Sys.println("ex-end");
 	}
@@ -212,3 +212,31 @@ class TypedThrow {
 }
 
 class AppError extends haxe.Exception {}
+
+// A callee invoked TWICE on one line (`cfg.dup(1).mid().dup(2)`): a targeted
+// smart step with occurrence=2 must skip the first entry breakpoint hit and
+// land in the SECOND invocation (v == 2). See the Dispatcher's occurrence
+// handling.
+class DupChainTarget {
+	var count = 0;
+
+	public function new() {}
+
+	public static function loop():Void {
+		var cfg = new DupChainTarget();
+		while (true) {
+			cfg.dup(1).mid().dup(2); // DUP_CHAIN_LINE = 228
+			Sys.sleep(0.05);
+		}
+	}
+
+	public function dup(v:Int):DupChainTarget {
+		count += v;
+		return this;
+	}
+
+	public function mid():DupChainTarget {
+		count++;
+		return this;
+	}
+}

@@ -75,6 +75,7 @@ final class FixtureSession implements AutoCloseable {
   static final int SMART_COMBINE_LINE = 117;
   static final int CHAIN_LINE = 131;
   static final int TYPED_THROW_LINE = 191;
+  static final int DUP_CHAIN_LINE = 228;
 
   private final ServerSocket listener;
   private final Process debuggee;

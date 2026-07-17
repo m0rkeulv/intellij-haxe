@@ -2,29 +2,24 @@ package com.intellij.plugins.haxe.runner.debugger.hxcpp;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeCallExpression;
-import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSupportUtils;
-import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiManager;
-import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.frame.XSuspendContext;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import com.intellij.xdebugger.stepping.XSmartStepIntoVariant;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.swing.Icon;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -91,10 +86,16 @@ class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepInto
   }
 
   // Every call on the stopped line whose callee resolves to a steppable class
-  // method, in source order, with the call name's text range for highlighting.
+  // method, in EXECUTION order (matching the HashLink chooser and the order a
+  // plain step would reach them), with the call name's text range for
+  // highlighting.
   private List<Variant> resolveVariants(XSourcePosition position) {
     List<Variant> variants = new ArrayList<>();
-    for (HaxeCallExpression call : callsOnLine(position)) {
+    Project project = process.getSession().getProject();
+    // per-callee invocation counter: the calls come in EXECUTION order, so the
+    // Nth same-callee call on the line is its Nth runtime invocation
+    Map<String, Integer> invocations = new HashMap<>();
+    for (HaxeCallExpression call : HaxeDebuggerSupportUtils.callExpressionsOnLine(project, position)) {
       if (!(call.getExpression() instanceof HaxeReference reference)) {
         continue;
       }
@@ -114,38 +115,10 @@ class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepInto
       if (className == null || className.isEmpty()) {
         continue; // closures/local functions: no class-function name to break on
       }
-      variants.add(new Variant(className, model.getName(), name.getTextRange()));
+      int occurrence = invocations.merge(className + "#" + model.getName(), 1, Integer::sum);
+      variants.add(new Variant(className, model.getName(), occurrence, name.getTextRange()));
     }
     return variants;
-  }
-
-  // The call expressions whose NAME identifier sits on the position's line,
-  // in source order.
-  private List<HaxeCallExpression> callsOnLine(XSourcePosition position) {
-    List<HaxeCallExpression> calls = new ArrayList<>();
-    Project project = process.getSession().getProject();
-    PsiFile file = PsiManager.getInstance(project).findFile(position.getFile());
-    if (file == null) {
-      return calls;
-    }
-    Document document = PsiDocumentManager.getInstance(project).getDocument(file);
-    if (document == null || position.getLine() < 0 || position.getLine() >= document.getLineCount()) {
-      return calls;
-    }
-    int lineStart = document.getLineStartOffset(position.getLine());
-    int lineEnd = document.getLineEndOffset(position.getLine());
-    for (HaxeCallExpression call : PsiTreeUtil.findChildrenOfType(file, HaxeCallExpression.class)) {
-      if (call.getExpression() instanceof HaxeReference reference) {
-        PsiElement name = reference.getReferenceNameElement();
-        if (name != null
-            && name.getTextRange().getStartOffset() >= lineStart
-            && name.getTextRange().getEndOffset() <= lineEnd) {
-          calls.add(call);
-        }
-      }
-    }
-    calls.sort(Comparator.comparingInt(call -> call.getTextRange().getStartOffset()));
-    return calls;
   }
 
   // The base implementation throws AbstractMethodError, and the frontend/backend
@@ -158,7 +131,7 @@ class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepInto
 
   @Override
   public void startStepInto(@NotNull Variant variant) {
-    process.stepIntoFunction(variant.className, variant.functionName);
+    process.stepIntoFunction(variant.className, variant.functionName, variant.occurrence);
   }
 
   @Override
@@ -169,11 +142,16 @@ class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepInto
   static final class Variant extends XSmartStepIntoVariant {
     private final String className;
     private final String functionName;
+    // which invocation of this callee on the line (1-based): the server's
+    // entry breakpoint hits the FIRST invocation, so choosing a later one
+    // (cfg.test1(1)...test1(2)) must tell it how many entries to skip
+    private final int occurrence;
     private final @Nullable TextRange highlightRange;
 
-    Variant(String className, String functionName, @Nullable TextRange highlightRange) {
+    Variant(String className, String functionName, int occurrence, @Nullable TextRange highlightRange) {
       this.className = className;
       this.functionName = functionName;
+      this.occurrence = occurrence;
       this.highlightRange = highlightRange;
     }
 

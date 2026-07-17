@@ -20,13 +20,19 @@ public class SmartStepIT {
 
   private void stepIntoFunction(FixtureSession session, int threadId,
                                 String className, String functionName) throws Exception {
+    stepIntoFunction(session, threadId, className, functionName, 1);
+  }
+
+  private void stepIntoFunction(FixtureSession session, int threadId,
+                                String className, String functionName, int occurrence) throws Exception {
     StepIntoFunctionRequest request = new StepIntoFunctionRequest();
     StepIntoFunctionArguments arguments = new StepIntoFunctionArguments();
     arguments.setThreadId(threadId);
     arguments.setClassName(className);
     arguments.setFunctionName(functionName);
+    arguments.setOccurrence(occurrence);
     request.setArguments(arguments);
-    assertTrue("stepIntoFunction " + className + "." + functionName,
+    assertTrue("stepIntoFunction " + className + "." + functionName + " #" + occurrence,
                session.request(request).isSuccess());
   }
 
@@ -99,6 +105,32 @@ public class SmartStepIT {
       StoppedEvent entered = session.awaitStopped();
       assertEquals("step", entered.getBody().getReason());
       assertEquals("ChainTarget.test2", session.topFrame(session.stoppedThread(entered)).getName());
+    }
+  }
+
+  /**
+   * A callee invoked TWICE on one line ({@code cfg.dup(1).mid().dup(2)}):
+   * occurrence=2 must land in the SECOND invocation — the entry breakpoint
+   * alone stops at the first. The argument value proves which one we entered.
+   */
+  @Test
+  public void occurrencePicksTheLaterInvocationOfADuplicatedCallee() throws Exception {
+    try (FixtureSession session = FixtureSession.launchScenario("dupchain")) {
+      session.initialize("uncaught", "critical");
+      session.configurationDone();
+      session.setBreakpoints(FixtureSession.EX_SOURCE, new int[]{FixtureSession.DUP_CHAIN_LINE}, null);
+      StoppedEvent stopped = session.awaitStopped();
+      int threadId = session.stoppedThread(stopped);
+      session.clearBreakpoints(FixtureSession.EX_SOURCE);
+
+      stepIntoFunction(session, threadId, "DupChainTarget", "dup", 2);
+      StoppedEvent entered = session.awaitStopped();
+      assertEquals("step", entered.getBody().getReason());
+      StackFrame top = session.topFrame(session.stoppedThread(entered));
+      assertEquals("DupChainTarget.dup", top.getName());
+      // no exact-line assert: the entry stop reports the signature line for
+      // functions with parameters. The ARGUMENT proves which invocation.
+      assertEquals("the SECOND invocation passes v=2", "2", session.evaluate("v", top.getId()));
     }
   }
 

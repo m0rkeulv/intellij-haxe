@@ -72,6 +72,17 @@ class Dispatcher {
 	// condition), and dies with the next reported stop or resume.
 	var tempStepBreakpoint:Int = -1;
 
+	// Occurrence handling for a callee invoked MORE THAN ONCE on the line
+	// (cfg.test1(1)...test1(2)): the class-function breakpoint hits on the
+	// FIRST invocation regardless of which one was chosen, so the request's
+	// optional `occurrence` (1-based) tells how many entries to SKIP. A
+	// skipped entry steps OUT with the temp STILL ARMED — hxcpp's step-out
+	// never lands back on a one-line chain (the remaining chain ops carry no
+	// line marker), so the next invocation's entry hit is what interrupts the
+	// OUT. Known limit: a skipped invocation that recursively calls the same
+	// function lands the leftover entries early (best effort).
+	var tempStepSkipsRemaining:Int = 0;
+
 	// Exception filters (both default ON, mirroring the advertised defaults —
 	// a client that never sends setExceptionBreakpoints gets the defaults) and
 	// the last exception stop, kept for the exceptionInfo request.
@@ -305,6 +316,10 @@ class Dispatcher {
 			return;
 		}
 		tempStepBreakpoint = number;
+		// which invocation of the callee on this line was chosen (1-based;
+		// absent/old clients = the first): entries before it are skipped
+		var occurrence:Null<Int> = args.occurrence;
+		tempStepSkipsRemaining = occurrence != null && occurrence > 1 ? occurrence - 1 : 0;
 		// bookkeep exactly like a step-over: the same-line re-step policy keeps
 		// the step racing while the temp stays armed
 		stepActive = true;
@@ -485,6 +500,19 @@ class Dispatcher {
 		// wins the race and reports normally — either way the temp dies here.
 		if (tempStepBreakpoint >= 0) {
 			var enteredTarget = status == DebugThread.STATUS_STOPPED_BREAKPOINT && breakpoint == tempStepBreakpoint;
+			if (enteredTarget && tempStepSkipsRemaining > 0) {
+				// a LATER invocation of this callee was chosen: this entry is not
+				// it. Step OUT with the temp STILL ARMED — the next invocation's
+				// entry hit interrupts the OUT (the OUT itself cannot land back
+				// on a one-line chain: its remaining ops carry no line marker,
+				// so an unfired OUT falls through to the next line, the same
+				// step-over degradation as a call that never runs).
+				tempStepSkipsRemaining--;
+				stepActive = true;
+				stoppedStacks.remove(threadNumber);
+				debugger.stepThread(threadNumber, StepType.OUT);
+				return;
+			}
 			clearTempStepBreakpoint();
 			if (enteredTarget) {
 				sendEvent("stopped", {reason: "step", threadId: threadNumber, allThreadsStopped: true});
