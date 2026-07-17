@@ -81,7 +81,22 @@ class ExpressionEvaluator {
 		// exactly like the Variables view (map entries, enum params, ...)
 		var path = chainToPath(e);
 		if (path != null) {
-			return evaluatePath(frameId, path);
+			try {
+				return evaluatePath(frameId, path);
+			} catch (walkError:DebugError) {
+				// The view renders some REAL objects as childless leaves (a String
+				// shows its content, not bytes/length), so the walk cannot descend
+				// into them even though the typed resolver can (`s.length` is a real
+				// I32 field of the String HObj). A pure path has no side effects, so
+				// retrying through the interpreter is safe; if that fails too, the
+				// walk's error (including its UnresolvedName code, which the client
+				// uses to qualify class names) is the one to surface.
+				try {
+					return renderValue(exprText, evalExpr(frameId, e));
+				} catch (_:DebugError) {
+					throw walkError;
+				}
+			}
 		}
 		// anything else is an operator expression: interpret it
 		return renderValue(exprText, evalExpr(frameId, e));

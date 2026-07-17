@@ -36,6 +36,9 @@ class Rich {
 		enumMap.set(Shade.Tinted(n, "x"), n * 2);
 		var holder = new PackedHolder(n, n - 0.5, n + 0.5); // @:packed Vec2 inlined at a fixed offset
 		var vec = new Vec2(n + 1.25, n * 3.5); // a standalone @:struct local (HStruct)
-		Sys.println("rich:" + ints[n] + names[n - n] + Std.string(dyn) + Std.string(shade) + Std.string(anon) + f(n, n) + captured + dynArray[n - n] + byRef.get() + dynObj.score + stringMap.get("b") + intMap.get(n) + enumMap.get(Shade.Plain) + holder.pos.x + vec.y); // FIXTURE_RICH_LINE = 39
+		var pushed:Array<String> = []; // built by push (not a literal): the everyday string-array shape
+		pushed.push("x" + n);
+		pushed.push("z");
+		Sys.println("rich:" + ints[n] + names[n - n] + Std.string(dyn) + Std.string(shade) + Std.string(anon) + f(n, n) + captured + dynArray[n - n] + byRef.get() + dynObj.score + stringMap.get("b") + intMap.get(n) + enumMap.get(Shade.Plain) + holder.pos.x + vec.y + pushed[n - n]); // FIXTURE_RICH_LINE = 42
 	}
 }

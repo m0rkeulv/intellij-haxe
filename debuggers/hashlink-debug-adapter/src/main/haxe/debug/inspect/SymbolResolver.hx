@@ -267,6 +267,17 @@ class SymbolResolver {
 					throw new DebugError('"' + parent.name + '" is null');
 				}
 				effectiveType = parent.type.match(HObj(_)) ? refineObjectType(base, parent.type) : parent.type;
+			case HDyn:
+				// a Dynamic slot: pointer kinds carry their own type header — refine
+				// and descend as the runtime type, so `dynArray[1].length` reaches the
+				// String fields even though the STATIC element type is Dynamic
+				// (vdynamic-boxed primitives refine to non-object types and fall out
+				// through childTargetFromBase like any other memberless value)
+				base = memory.readPointer(parent.address);
+				if (Int64.eq(base, Int64.ofInt(0))) {
+					throw new DebugError('"' + parent.name + '" is null');
+				}
+				effectiveType = refineObjectType(base, parent.type);
 			default:
 				return null;
 		}

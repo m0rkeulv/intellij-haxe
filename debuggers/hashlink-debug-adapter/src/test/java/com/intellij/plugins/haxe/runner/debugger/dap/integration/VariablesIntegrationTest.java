@@ -467,6 +467,45 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
   }
 
   @Test
+  public void evaluatesLeafMemberPaths() throws Exception {
+    // The Variables view renders a String as a childless leaf (its content,
+    // not bytes/length), so the direct reference walk cannot descend into it;
+    // these paths must fall back to the typed interpreter, which reads the
+    // REAL HObj fields (String.length and ArrayBase.length are physical I32s).
+    runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_LINE);
+    int frameId = topFrameId(lastStoppedThreadId());
+
+    assertEquals("string element length", "2", evaluate(frameId, "names[0].length").getBody().getResult());
+    assertEquals("array length (bytes-backed)", "3", evaluate(frameId, "ints.length").getBody().getResult());
+    assertEquals("array length (object-backed)", "2", evaluate(frameId, "names.length").getBody().getResult());
+    assertEquals("array length (dynamic)", "2", evaluate(frameId, "dynArray.length").getBody().getResult());
+    // a push-built Array<String> (not a literal) — the everyday shape
+    assertEquals("pushed array length", "2", evaluate(frameId, "pushed.length").getBody().getResult());
+    assertEquals("pushed string element length", "2", evaluate(frameId, "pushed[0].length").getBody().getResult());
+    // a String element behind a DYNAMIC slot: the static element type says
+    // nothing, the value's own header does — dynArray[1] is "s2"
+    assertEquals("dynamic-slot string length", "2", evaluate(frameId, "dynArray[1].length").getBody().getResult());
+
+    // a genuinely missing member still fails, with the walk's message
+    Response missing = evaluateRaw(frameId, "names[0].nope");
+    assertFalse("bogus member rejected", missing.isSuccess());
+
+    request(new DisconnectRequest());
+  }
+
+  @Test
+  public void evaluatesStringLocalLength() throws Exception {
+    // the reported case: `s.length` on a plain String local (s = "orig10")
+    runToBreakpoint(FIXTURE_CALL, FIXTURE_CALL_LINE);
+    int frameId = topFrameId(lastStoppedThreadId());
+
+    assertEquals("string local length", "6", evaluate(frameId, "s.length").getBody().getResult());
+    assertEquals("length inside an expression", "7", evaluate(frameId, "s.length + 1").getBody().getResult());
+
+    request(new DisconnectRequest());
+  }
+
+  @Test
   public void evaluatesThisFieldAndStatics() throws Exception {
     runToBreakpoint(FIXTURE_POINT, FIXTURE_POINT_METHOD_LINE);
     int frameId = topFrameId(lastStoppedThreadId());

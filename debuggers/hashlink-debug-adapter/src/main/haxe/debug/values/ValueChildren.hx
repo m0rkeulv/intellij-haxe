@@ -78,10 +78,17 @@ class ValueChildren {
 	**/
 	public function targetOf(pointer:Pointer, t:HLType, childName:String):Null<AddressedValue> {
 		return switch (t) {
+			// arrays: a numeric name is an element; anything else falls through to the
+			// class's REAL fields (ArrayBase declares `length` as a physical I32), so
+			// `arr.length` resolves like any object field
 			case HObj(proto) if (proto != null && ValueReader.arrayBytesElementType(proto.name) != null):
-				arrayBytesElementTarget(pointer, ValueReader.arrayBytesElementType(proto.name), childName);
+				asIndex(childName) >= 0
+					? arrayBytesElementTarget(pointer, ValueReader.arrayBytesElementType(proto.name), childName)
+					: objectFieldTarget(pointer, t, childName);
 			case HObj(proto) if (proto != null && proto.name == "hl.types.ArrayObj"):
-				arrayObjElementTarget(pointer, childName);
+				asIndex(childName) >= 0
+					? arrayObjElementTarget(pointer, childName)
+					: objectFieldTarget(pointer, t, childName);
 			case HObj(proto) if (proto != null && proto.name == ValueReader.ARRAY_DYN):
 				arrayDynElementTarget(pointer, childName);
 			case HDynObj if (dynObjects != null):
