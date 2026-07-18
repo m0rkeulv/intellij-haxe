@@ -20,7 +20,16 @@ class Macro {
 			// define FIRST: Server's whole class is #if HXCPP_DEBUGGER guarded,
 			// so pulling the type in before the define finds an empty module
 			Compiler.define("HXCPP_DEBUGGER");
+			// force Server (which self-starts from its static init) into the build.
+			// haxe 5 forbids Context.getType from an initialization macro, so defer
+			// it to onAfterInitMacros there — the define above is already set, so the
+			// deferred load still sees an HXCPP_DEBUGGER-enabled module. onAfterInitMacros
+			// only exists on 4.3+, and the direct call is still allowed on 4.1/4.2.
+			#if (haxe_ver >= 4.3)
+			Context.onAfterInitMacros(() -> Context.getType("intellij.hxcpp.debug.Server"));
+			#else
 			Context.getType("intellij.hxcpp.debug.Server");
+			#end
 		}
 		#end
 	}
