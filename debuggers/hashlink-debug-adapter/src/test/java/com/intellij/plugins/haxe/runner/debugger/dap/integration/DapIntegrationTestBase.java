@@ -68,6 +68,12 @@ public abstract class DapIntegrationTestBase {
   protected static final String LISTENING_PREFIX = "DAP-ADAPTER-LISTENING:";
   // generous: the first run after a rebuild can be slow (JIT warmup / AV scans)
   protected static final long TIMEOUT = 15_000;
+  // Hard ceiling on the adapter announcing its port. A HashLink that cannot
+  // load the adapter module (missing std native on old VMs) pops a MODAL
+  // Windows error dialog and STAYS ALIVE behind it, so its stdout never closes
+  // and a plain readLine() would block forever. When this elapses we kill the
+  // process tree, which closes the pipe and turns the hang into a clean failure.
+  private static final long PORT_TIMEOUT_MS = 20_000;
 
   protected static final String FIXTURE_MAIN = "Main.hx";
   protected static final int FIXTURE_LOOP_LINE = 18; // total = add(total, i)
@@ -195,7 +201,7 @@ public abstract class DapIntegrationTestBase {
     }
     if (adapterProcess != null) {
       if (!adapterProcess.waitFor(3, TimeUnit.SECONDS)) {
-        adapterProcess.destroyForcibly();
+        killTree(adapterProcess);
         adapterProcess.waitFor(5, TimeUnit.SECONDS);
       }
       if (outputGobbler != null) {
@@ -203,6 +209,14 @@ public abstract class DapIntegrationTestBase {
       }
       printAdapterOutput();
     }
+  }
+
+  // Destroys a process AND its descendants: the adapter spawns the debuggee as
+  // a child, and destroyForcibly() alone leaves that child (another hl.exe)
+  // orphaned — it lingers, holds the fixture file, and can wedge the next run.
+  private static void killTree(Process process) {
+    process.descendants().forEach(ProcessHandle::destroyForcibly);
+    process.destroyForcibly();
   }
 
   // The trace breadcrumbs (DAP_ADAPTER_TRACE) can exceed the OS pipe buffer, so
@@ -220,21 +234,41 @@ public abstract class DapIntegrationTestBase {
     }
   }
 
-  // Reads until the port line, then keeps draining into adapterOutput.
+  // Reads until the port line, then keeps draining into adapterOutput. Guarded
+  // by a watchdog: if the port has not appeared within PORT_TIMEOUT_MS the
+  // adapter is presumed wedged (e.g. a modal HL error dialog on an unsupported
+  // VM), so we kill its process tree — that closes stdout, unblocks the
+  // readLine below, and surfaces as the IOException instead of a forever-hang.
   private int awaitListeningPort() throws IOException {
     BufferedReader stdout = new BufferedReader(
       new InputStreamReader(adapterProcess.getInputStream(), StandardCharsets.UTF_8));
-    String line;
-    while ((line = stdout.readLine()) != null) {
-      if (line.startsWith(LISTENING_PREFIX)) {
-        int port = Integer.parseInt(line.substring(LISTENING_PREFIX.length()).trim());
-        outputGobbler = new Thread(() -> gobble(stdout), "adapter-output-gobbler");
-        outputGobbler.setDaemon(true);
-        outputGobbler.start();
-        return port;
+    Thread watchdog = new Thread(() -> {
+      try {
+        if (!adapterProcess.waitFor(PORT_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+          killTree(adapterProcess);
+        }
+      } catch (InterruptedException ignored) {
+        // cancelled: the port arrived in time
       }
+    }, "adapter-port-watchdog");
+    watchdog.setDaemon(true);
+    watchdog.start();
+    try {
+      String line;
+      while ((line = stdout.readLine()) != null) {
+        if (line.startsWith(LISTENING_PREFIX)) {
+          int port = Integer.parseInt(line.substring(LISTENING_PREFIX.length()).trim());
+          outputGobbler = new Thread(() -> gobble(stdout), "adapter-output-gobbler");
+          outputGobbler.setDaemon(true);
+          outputGobbler.start();
+          return port;
+        }
+      }
+    } finally {
+      watchdog.interrupt();
     }
-    throw new IOException("Adapter exited before announcing its listening port");
+    throw new IOException("Adapter exited or was killed before announcing its listening port "
+                          + "(waited up to " + PORT_TIMEOUT_MS + "ms)");
   }
 
   private void gobble(BufferedReader stdout) {
