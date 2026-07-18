@@ -46,10 +46,14 @@ public class ToStringRenderingIT {
                    "PlainBox", session.variable(on, "plain").getValue());
       assertEquals("on: a THROWING toString degrades to the class name",
                    "MoodyLabel", session.variable(on, "moody").getValue());
-      // maps switch from the entry count to their own content preview
+      // maps switch from the entry count to their own content preview. The
+      // preview comes from the map's std toString, whose punctuation varies by
+      // haxe version ([k => v] on 4.3+, { k => v } on 4.1/4.2), so assert only
+      // that the entries' keys and values are present — never the separators.
       String mapPreview = session.variable(on, "meta").getValue();
-      assertTrue("on: a map summary is its content preview, got: " + mapPreview,
-                 mapPreview.startsWith("[") && mapPreview.contains("build => 92"));
+      assertTrue("on: a map renders its entries as a content preview, got: " + mapPreview,
+                 mapPreview.contains("build") && mapPreview.contains("92")
+                 && mapPreview.contains("name") && mapPreview.contains("7"));
 
       // toggle OFF again: back to class names - the flag is truly live
       assertTrue("toggle off accepted",
