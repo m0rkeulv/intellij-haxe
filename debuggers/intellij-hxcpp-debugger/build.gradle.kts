@@ -3,6 +3,9 @@
 // and the Java-client integration suite driving the REAL DapClient stack
 // against those fixtures. See docs/implementation-plan.md (M8).
 
+import org.gradle.kotlin.dsl.support.serviceOf
+import org.gradle.process.ExecOperations
+
 plugins {
     id("org.jetbrains.intellij.platform.module")
 }
@@ -48,6 +51,41 @@ val haxeAvailable: Boolean by lazy {
     }
 }
 
+// ---------------------------------------------------------------------------
+// hxcpp version pinning ( makes sure we can build for  haxe 4 & 5 ).
+// v4.3.114 is  backward compatible with haxe 4.1-4.3 (api level 430)
+// and compatible with haxe 5 preview.
+// ---------------------------------------------------------------------------
+val hxcppGitUrl = "https://github.com/HaxeFoundation/hxcpp"
+val hxcppPinnedTag = "v4.3.114"
+
+// Gradle 9 forbids Project.exec {} inside a task action; run external processes
+// through the injected ExecOperations service instead (captured at config time).
+val execOperations = serviceOf<ExecOperations>()
+
+fun hxcppLibPath(): File? = try {
+    val process = ProcessBuilder("haxelib", "libpath", "hxcpp").redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    process.waitFor()
+    if (process.exitValue() == 0 && output.isNotEmpty()) File(output) else null
+} catch (e: Exception) {
+    null
+}
+
+
+fun hxcppIsPinned(): Boolean {
+    val path = hxcppLibPath() ?: return false
+    return try {
+        val process = ProcessBuilder("git", "-C", path.absolutePath, "describe", "--tags")
+            .redirectErrorStream(true).start()
+        val described = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        process.exitValue() == 0 && described == hxcppPinnedTag
+    } catch (e: Exception) {
+        false
+    }
+}
+
 // the DAP message typedefs come from the shared :debuggers:dap-protocol
 // module (haxelib "intellij-dap-protocol"); registration is idempotent
 tasks.register<Exec>("registerDapProtocolHaxelib") {
@@ -75,6 +113,27 @@ tasks.register<Exec>("installHscript") {
     onlyIf { haxeAvailable }
     commandLine = listOf("haxelib", "install", "hscript", "--always", "--quiet")
     isIgnoreExitValue = true
+}
+
+// Pin hxcpp to the version that can build haxe 5 (see the block above the
+// hxcpp version constants). Guarded to run only when the current hxcpp is not
+// already the pinned tag, so it is a one-time setup on a fresh machine and a
+// no-op afterwards. Scoped to debugger-test builds: a regular plugin build
+// (-PdebuggerTests=false) never touches the global toolchain.
+tasks.register("installHxcpp") {
+    group = "hxcpp"
+    description = "Pins hxcpp to $hxcppPinnedTag (needs api level 500 for haxe 5; backward compatible with 4.1-4.3)"
+    onlyIf { debuggerTests && haxeAvailable && !hxcppIsPinned() }
+    doLast {
+        logger.lifecycle("Pinning hxcpp to $hxcppPinnedTag (api level 500 for haxe 5 support)")
+        execOperations.exec { commandLine("haxelib", "git", "hxcpp", hxcppGitUrl, hxcppPinnedTag) }
+        // a git checkout ships hxcpp as source: rebuild its command-line tool
+        val toolDir = File(hxcppLibPath() ?: error("hxcpp libpath unresolved after install"), "tools/hxcpp")
+        execOperations.exec {
+            workingDir = toolDir
+            commandLine("haxe", "compile.hxml")
+        }
+    }
 }
 
 tasks.register<Exec>("testHaxeServer") {
@@ -117,7 +176,7 @@ hxcppFixtures.forEach { (name, spec) ->
             }
             debuggerTests && haxeAvailable
         }
-        dependsOn("registerDapProtocolHaxelib", "registerServerHaxelib", "installHscript")
+        dependsOn("registerDapProtocolHaxelib", "registerServerHaxelib", "installHscript", "installHxcpp")
         // run from the MODULE root, not test-fixtures: haxe builds generated-file
         // paths from the cwd without normalizing, and a "test-fixtures/../" segment
         // pushes the longest generated names past Windows' 260-char MAX_PATH
