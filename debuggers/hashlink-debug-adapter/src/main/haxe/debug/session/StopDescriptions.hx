@@ -63,7 +63,7 @@ class StopDescriptions {
 		if (frames.length == 0) {
 			return "Exception thrown";
 		}
-		var value = inspector.readRegisterValue(frames[0].frameId, reg);
+		var value = inspector.thrownRegisterPreview(frames[0].frameId, reg);
 		if (value == null || value.value == null) {
 			return "Exception thrown";
 		}

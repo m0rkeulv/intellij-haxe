@@ -212,6 +212,14 @@ class VariableInspector {
 	}
 
 	/**
+		Register value rendered for an exception-stop description: a thrown
+		haxe.Exception is unwrapped to its carried text (see VariablesView).
+	**/
+	public inline function thrownRegisterPreview(frameId:Int, reg:Int):Null<VariableInfo> {
+		return view.thrownRegisterPreview(frameId, reg);
+	}
+
+	/**
 		True when register `reg` holds an object matching one of the type filters.
 	**/
 	public inline function registerValueMatchesType(frameId:Int, reg:Int, wanted:Array<String>):Bool {

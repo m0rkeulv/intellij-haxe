@@ -191,6 +191,54 @@ class VariablesView {
 	}
 
 	/**
+		The value in register `reg` rendered for an EXCEPTION-STOP description.
+		Same decoding as `readRegisterValue`, except a thrown haxe.Exception is
+		unwrapped to the text it carries: haxe 5 wraps EVERY non-Exception throw
+		in a haxe.ValueException at the throw site, so the raw preview
+		degenerates to the wrapper's class name ("haxe.ValueException:
+		haxe.ValueException") and the actual thrown value ends up one field
+		deep. ValueException unwraps through `value`, any other haxe.Exception
+		through `__exceptionMessage`; everything else renders as-is.
+	**/
+	public function thrownRegisterPreview(frameId:Int, reg:Int):Null<VariableInfo> {
+		var base = readRegisterValue(frameId, reg);
+		if (base == null || base.value == null) {
+			return base;
+		}
+		var handle = stops.frameAt(frameId);
+		var frame = handle.location;
+		var offsets = frameLayout.registerOffsets(module.registers(frame.fidx), module.argCount(frame.fidx));
+		var slot = offsets[reg];
+		var address = Int64.add(frame.ebp, Int64.ofInt(slot.offset));
+		var runtime = runtimeClassOf(address, slot.t);
+		if (runtime == null) {
+			return base;
+		}
+		var carried = exceptionMessageOf(memory.readPointer(address), runtime);
+		if (carried != null) {
+			base.value = carried;
+		}
+		return base;
+	}
+
+	// The text a thrown haxe.Exception-family object carries; null for any
+	// other class (or when the field cannot be read — degrade to the raw preview).
+	function exceptionMessageOf(objPtr:Pointer, runtime:HLType):Null<String> {
+		var fieldName = ClassChain.matches(runtime, "haxe.ValueException") ? "value"
+			: ClassChain.matches(runtime, "haxe.Exception") ? "__exceptionMessage"
+			: null;
+		if (fieldName == null || Int64.eq(objPtr, Int64.ofInt(0))) {
+			return null;
+		}
+		var target = valueChildren.targetOf(objPtr, runtime, fieldName);
+		if (target == null) {
+			return null;
+		}
+		var read = try valueReader.read(target.address, target.type) catch (e:Dynamic) null;
+		return read == null ? null : read.value;
+	}
+
+	/**
 		True when the value in register `reg` of `frameId` is an object whose
 		runtime class (or a superclass) matches one of `wanted` (FQN or simple
 		name) — the type filter for exception breakpoints. False for a non-object
