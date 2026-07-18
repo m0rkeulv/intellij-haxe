@@ -63,11 +63,15 @@ val hxcppPinnedTag = "v4.3.114"
 // through the injected ExecOperations service instead (captured at config time).
 val execOperations = serviceOf<ExecOperations>()
 
+// haxelib may print WARNING lines around the path (haxe 5's haxelib emits a
+// "Repository requires reformatting" notice), so take the line that actually
+// IS an existing directory rather than the raw output.
 fun hxcppLibPath(): File? = try {
     val process = ProcessBuilder("haxelib", "libpath", "hxcpp").redirectErrorStream(true).start()
-    val output = process.inputStream.bufferedReader().readText().trim()
+    val lines = process.inputStream.bufferedReader().readLines()
     process.waitFor()
-    if (process.exitValue() == 0 && output.isNotEmpty()) File(output) else null
+    if (process.exitValue() != 0) null
+    else lines.map { it.trim() }.firstOrNull { it.isNotEmpty() && File(it).isDirectory }?.let { File(it) }
 } catch (e: Exception) {
     null
 }
@@ -126,7 +130,9 @@ tasks.register("installHxcpp") {
     onlyIf { debuggerTests && haxeAvailable && !hxcppIsPinned() }
     doLast {
         logger.lifecycle("Pinning hxcpp to $hxcppPinnedTag (api level 500 for haxe 5 support)")
-        execOperations.exec { commandLine("haxelib", "git", "hxcpp", hxcppGitUrl, hxcppPinnedTag) }
+        // --always: haxelib asks "Overwrite branch [y/n/a]?" when a git install
+        // already exists, and a non-interactive build would default to "n"
+        execOperations.exec { commandLine("haxelib", "git", "hxcpp", hxcppGitUrl, hxcppPinnedTag, "--always") }
         // a git checkout ships hxcpp as source: rebuild its command-line tool
         val toolDir = File(hxcppLibPath() ?: error("hxcpp libpath unresolved after install"), "tools/hxcpp")
         execOperations.exec {
