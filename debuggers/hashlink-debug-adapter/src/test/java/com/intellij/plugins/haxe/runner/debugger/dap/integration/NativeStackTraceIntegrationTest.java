@@ -34,6 +34,10 @@ public class NativeStackTraceIntegrationTest extends DapIntegrationTestBase {
 
   @Test
   public void resolvesNativeStackEntriesToSourceLocations() throws Exception {
+    // pre-4.3 compilers store __nativeStack in a shape whose entries the
+    // adapter cannot resolve to source locations (they stay raw Bytes
+    // addresses) — not supported by the current adapter
+    assumeFixtureHaxe43Plus();
     initialize();
     assertTrue("launch succeeds", launch(stacktraceFixtureHl.toString()).isSuccess());
     assertTrue("setBreakpoints succeeds", setBreakpoint("StackTrace.hx", STACKTRACE_BREAK_LINE).isSuccess());

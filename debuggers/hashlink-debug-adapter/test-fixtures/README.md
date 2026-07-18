@@ -26,6 +26,23 @@ cover 32-bit and 64-bit runtimes uniformly.
 The debug adapter itself is built the same way and for the same reason — see
 the comment atop `../build.hxml`.
 
+## Known limitations below haxe 4.3
+
+A few behaviours of pre-4.3 compilers are **not supported by the current
+debugger adapter**, and the tests covering them self-skip (via
+`assumeFixtureHaxe43Plus()` in `DapIntegrationTestBase`) when the fixtures are
+built with an older haxe:
+
+- exception-stop **descriptions** don't name the thrown value (pre-4.3 wraps
+  every throw through `Exception.thrown` with a message layout the adapter
+  does not decode),
+- **native stack entries** of `haxe.Exception` stay unresolved raw addresses,
+- on haxe **4.1** only, stepping over a caught `throw` cannot identify the
+  catch-block landing (4.1 emits bogus "line 1" debug info for catch
+  handlers).
+
+Sessions stay healthy in all three cases — the output is just degraded.
+
 ## Adding a fixture
 
 Copy an existing `*.hxml`, point `-main`/`-hl` at your new program and output,

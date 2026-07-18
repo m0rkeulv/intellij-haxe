@@ -219,6 +219,56 @@ public abstract class DapIntegrationTestBase {
     process.destroyForcibly();
   }
 
+  // --- fixture-compiler version gate ---
+
+  private static String fixtureHaxeVersion;
+  private static boolean fixtureHaxeVersionProbed;
+
+  /**
+   * Skips the calling test when the fixtures were compiled with haxe older than
+   * 4.3. Pre-4.3 compilers emit bytecode the current debugger adapter does not
+   * support in a few corners (throw sites wrapped through Exception.thrown with
+   * a message layout it cannot decode; 4.1's catch handlers carry bogus "line 1"
+   * debug info) — those behaviours are documented as unsupported rather than
+   * worked around. The version is probed from the `haxe` on PATH, which is what
+   * the gradle fixture build resolves too.
+   */
+  protected static void assumeFixtureHaxe43Plus() {
+    Assume.assumeTrue("not supported by the current debugger adapter below haxe 4.3 "
+                      + "(pre-4.3 throw wrapping / catch-handler debug info) - skipping",
+                      fixtureHaxeAtLeast(4, 3));
+  }
+
+  // True when the PATH haxe reports at least major.minor; also true when the
+  // version cannot be probed (no haxe / unparseable) so tests are only ever
+  // skipped on a POSITIVE identification of an old compiler.
+  private static boolean fixtureHaxeAtLeast(int major, int minor) {
+    if (!fixtureHaxeVersionProbed) {
+      fixtureHaxeVersionProbed = true;
+      try {
+        Process probe = new ProcessBuilder("haxe", "--version").redirectErrorStream(true).start();
+        try (BufferedReader reader = new BufferedReader(
+               new InputStreamReader(probe.getInputStream(), StandardCharsets.UTF_8))) {
+          fixtureHaxeVersion = reader.readLine();
+        }
+        probe.waitFor(10, TimeUnit.SECONDS);
+      } catch (Exception ignored) {
+        fixtureHaxeVersion = null;
+      }
+    }
+    if (fixtureHaxeVersion == null) {
+      return true;
+    }
+    java.util.regex.Matcher version =
+      java.util.regex.Pattern.compile("(\\d+)\\.(\\d+)").matcher(fixtureHaxeVersion.trim());
+    if (!version.find()) {
+      return true;
+    }
+    int haveMajor = Integer.parseInt(version.group(1));
+    int haveMinor = Integer.parseInt(version.group(2));
+    return haveMajor > major || (haveMajor == major && haveMinor >= minor);
+  }
+
   // The trace breadcrumbs (DAP_ADAPTER_TRACE) can exceed the OS pipe buffer, so
   // a background thread must drain the adapter's merged stdout/stderr for the
   // whole test — otherwise the adapter would block mid-write and we would be

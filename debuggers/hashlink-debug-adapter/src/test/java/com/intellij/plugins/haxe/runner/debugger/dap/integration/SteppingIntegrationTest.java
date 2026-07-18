@@ -172,6 +172,9 @@ public class SteppingIntegrationTest extends DapIntegrationTestBase {
     // so the step planted no temp at the catch and ran through it to the caller.
     // Uncaught.hx: line 11 `throw "caught-one"` inside try, catch body prints
     // on line 13.
+    // haxe 4.1 emits bogus "line 1" debug info for catch-handler ops, so the
+    // landing cannot be identified — not supported by the current adapter
+    assumeFixtureHaxe43Plus();
     org.junit.Assume.assumeTrue("uncaught fixture not built - skipping", uncaughtFixtureHl != null);
     initialize();
     assertTrue("launch", launch(uncaughtFixtureHl.toString()).isSuccess());
