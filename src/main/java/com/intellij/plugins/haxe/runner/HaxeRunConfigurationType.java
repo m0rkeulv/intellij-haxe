@@ -26,6 +26,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
+import com.intellij.plugins.haxe.runner.debugger.interp.InterpConfigurationFactory;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -60,6 +61,7 @@ public class HaxeRunConfigurationType implements ConfigurationType {
       new HashLinkConfigurationFactory(this),
       new HxcppConfigurationFactory(this),
       new HxcppIntellijConfigurationFactory(this),
+      new InterpConfigurationFactory(this),
     };
   }
 

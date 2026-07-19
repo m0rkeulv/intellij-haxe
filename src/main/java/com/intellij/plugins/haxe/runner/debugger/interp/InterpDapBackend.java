@@ -1,0 +1,80 @@
+package com.intellij.plugins.haxe.runner.debugger.interp;
+
+import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
+import com.intellij.plugins.haxe.runner.debugger.eval.EvalDebugAdapter;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppDapBackend;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+/**
+ * Backend over the in-process {@link EvalDebugAdapter} (the haxe compiler's
+ * eval-debugger wire protocol). The adapter binds its VM listener in the
+ * constructor — before the runner spawns haxe — and the DAP conversation runs
+ * over a loopback socket pair created at connect time, so the IDE side is
+ * exactly a DAP client (the same {@code HxcppDebugProcess} machinery drives
+ * this session).
+ */
+public class InterpDapBackend implements HxcppDapBackend {
+  private final EvalDebugAdapter adapter;
+  private volatile ServerSocket loopback;
+
+  public InterpDapBackend(long vmConnectTimeoutMillis) throws IOException {
+    this.adapter = new EvalDebugAdapter(vmConnectTimeoutMillis);
+  }
+
+  /** The port for the spawned haxe's {@code -D eval-debugger=127.0.0.1:<port>}. */
+  public int getVmPort() {
+    return adapter.getVmPort();
+  }
+
+  @Override
+  public DapClient connect() throws IOException {
+    ServerSocket listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
+    loopback = listener;
+    Socket clientSide = new Socket("127.0.0.1", listener.getLocalPort());
+    adapter.start(new DapConnection(listener.accept()));
+    return new DapClient(new DapConnection(clientSide));
+  }
+
+  @Override
+  public boolean requiresLaunchRequest() {
+    return true; // launch = "the eval VM connected and is waiting before main"
+  }
+
+  @Override
+  public boolean supportsExceptionFilters() {
+    return false; // the VM's setExceptionOptions mapping is a follow-up (M5)
+  }
+
+  @Override
+  public boolean supportsSmartStepInto() {
+    return false; // no such request in the eval wire protocol
+  }
+
+  @Override
+  public boolean supportsToStringRendering() {
+    return false; // eval values are already rendered by the VM; not controllable
+  }
+
+  @Override
+  public String startupHint() {
+    return "The haxe process exited before its eval VM attached. Check the compiler arguments\n"
+           + "(they must form a valid compilation) and that haxe is version 4.0 or newer.";
+  }
+
+  @Override
+  public void close() throws IOException {
+    try {
+      adapter.close();
+    } finally {
+      ServerSocket listener = loopback;
+      loopback = null;
+      if (listener != null) {
+        listener.close();
+      }
+    }
+  }
+}

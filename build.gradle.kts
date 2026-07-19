@@ -121,6 +121,7 @@ dependencies {
         pluginComposedModule(implementation(project(":debuggers:dap-protocol")))
         pluginComposedModule(implementation(project(":debuggers:hashlink-debug-adapter")))
         pluginComposedModule(implementation(project(":debuggers:vshaxe-hxcpp-debugger-adapter")))
+        pluginComposedModule(implementation(project(":debuggers:eval-debugger")))
 
     }
 
