@@ -28,6 +28,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequ
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExpressionSteppingRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionArguments;
@@ -116,6 +117,8 @@ public class EvalDebugAdapter implements Closeable {
   private Thread acceptThread;
   private Thread requestThread;
   private volatile boolean closed = false;
+  /** ON = raw sub-expression steps + exact expression spans in stack frames. */
+  private volatile boolean expressionStepping = false;
   /** Thread the VM last reported stopped; null while running. */
   private volatile Integer stoppedThreadId;
 
@@ -232,6 +235,10 @@ public class EvalDebugAdapter implements Closeable {
       case StepInRequest r -> handleStep(r);
       case StepOutRequest r -> handleStep(r);
       case StepIntoFunctionRequest r -> handleStepIntoFunction(r);
+      case SetExpressionSteppingRequest r -> {
+        expressionStepping = r.getArguments() != null && r.getArguments().isEnabled();
+        sendResponse(r, new Response());
+      }
       case PauseRequest r -> handlePause(r);
       case EvaluateRequest r -> handleEvaluate(r);
       case DisconnectRequest r -> handleDisconnect(r);
@@ -343,6 +350,11 @@ public class EvalDebugAdapter implements Closeable {
       stackFrame.setName(frame.name());
       stackFrame.setLine(frame.line());
       stackFrame.setColumn(frame.column());
+      if (expressionStepping) {
+        // the exact span of the expression about to run - the IDE highlights it
+        stackFrame.setEndLine(frame.endLine());
+        stackFrame.setEndColumn(frame.endColumn());
+      }
       stackFrame.setSource(toSource(frame.source()));
       stackFrames.add(stackFrame);
     }
@@ -403,9 +415,11 @@ public class EvalDebugAdapter implements Closeable {
     boolean programEnded;
     try {
       programEnded = switch (request) {
-        case StepInRequest r -> coalescedStepIn(thread);
-        case NextRequest r -> coalescedNext(thread);
-        default -> emulatedStepOut(thread);
+        // expression mode: every step is ONE raw interpreter sub-step, and
+        // the frames' column/endColumn spans show which expression is next
+        case StepInRequest r -> expressionStepping ? rawStep(Verb.STEP_IN) : coalescedStepIn(thread);
+        case NextRequest r -> expressionStepping ? rawStep(Verb.NEXT) : coalescedNext(thread);
+        default -> expressionStepping ? rawStep(Verb.STEP_OUT) : emulatedStepOut(thread);
       };
     } catch (EvalConnectionClosedException ignored) {
       programEnded = true;
@@ -589,6 +603,22 @@ public class EvalDebugAdapter implements Closeable {
       }
     }
     return false;
+  }
+
+  private enum Verb { STEP_IN, NEXT, STEP_OUT }
+
+  /** One raw VM step; true when the program ran to completion during it. */
+  private boolean rawStep(Verb verb) throws IOException {
+    try {
+      switch (verb) {
+        case STEP_IN -> vm().stepIn();
+        case NEXT -> vm().next();
+        case STEP_OUT -> vm().stepOut();
+      }
+      return false;
+    } catch (EvalConnectionClosedException ended) {
+      return true;
+    }
   }
 
   /** The stopped thread's top frame as (function, line), or null if unavailable. */

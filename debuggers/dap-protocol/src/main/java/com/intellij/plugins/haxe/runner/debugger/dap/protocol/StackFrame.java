@@ -11,5 +11,8 @@ public class StackFrame {
   private String name;
   private int line;
   private int column;
+  // exact end of the frame's current expression (eval target); null elsewhere
+  private Integer endLine;
+  private Integer endColumn;
   private Source source;
 }
