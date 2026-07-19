@@ -303,28 +303,6 @@ tasks.register<Delete>("cleanGenerated") {
     delete = setOf("src/main/gen/")
 }
 
-// Provisions the haxe/HashLink toolchains into <repo>/debuggerResources
-// (downloading what this OS has release binaries for), runs every debugger's
-// test suite against each of them, and writes the matrix report to
-// build/reports/debugger-matrix/index.html — the "full check on all our
-// debugger work" button. Cross-platform (JVM tool, no PowerShell/python);
-// see debuggers/compat-matrix/README.md.
-tasks.register<JavaExec>("debuggerCompatibilityReport") {
-    group = "verification"
-    description = "Debugger compatibility matrix across provisioned haxe/HL versions + HTML report"
-    dependsOn(":debuggers:compat-matrix:classes")
-    mainClass = "com.intellij.plugins.haxe.matrix.MatrixMain"
-    classpath = files(provider {
-        project(":debuggers:compat-matrix").extensions
-            .getByType<SourceSetContainer>()["main"].runtimeClasspath
-    })
-    systemProperty("matrix.root", rootDir.absolutePath)
-    (findProperty("matrixLanes") as String?)?.let { args("--lanes=$it") }
-    (findProperty("matrixResources") as String?)?.let { args("--resources=$it") }
-    if ((findProperty("matrixFull") as String?)?.toBoolean() == true) args("--full")
-    if ((findProperty("matrixReportOnly") as String?)?.toBoolean() == true) args("--report-only")
-}
-
 tasks.register<GenerateParserTask>("generateHaxeParser") {
     group = "parsers"
     sourceFile.set(File("src/main/java/com/intellij/plugins/haxe/lang/parser/haxe.bnf"))
