@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.runner.debugger.hxcpp;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter.HxcppDebugAdapter;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
@@ -49,11 +48,11 @@ final class HxcppDebuggerEvaluator extends XDebuggerEvaluator {
         // "expr.field" paths and re-selecting the result prefills what was typed.
         callback.evaluated(new HxcppValue(process, result, 0,
                                           expression != null && !expression.isBlank() ? expression : null));
-        // an assignment changed debuggee state: the Variables view must
-        // re-read, or it keeps showing the old value
-        if (HxcppDebugAdapter.topLevelAssignment(expression) >= 0) {
-          process.getSession().rebuildViews();
-        }
+        // NOTE: we do NOT rebuildViews() here even though an assignment changed
+        // debuggee state. The evaluate dialog already calls session.rebuildViews()
+        // in its own evaluationDone(), so a second one from this (request) thread
+        // races the platform's post-evaluation refresh and intermittently doubled
+        // the "result" node in the dialog. The platform's refresh covers it.
       } else {
         String message = response != null && response.getMessage() != null
                          ? response.getMessage() : "Cannot evaluate";
