@@ -51,7 +51,10 @@ public class InterpDapBackend implements HxcppDapBackend {
 
   @Override
   public boolean supportsSmartStepInto() {
-    return false; // no such request in the eval wire protocol
+    // no such request in the eval WIRE protocol, but the adapter emulates
+    // intellij/stepIntoFunction via sub-expression stepping (see
+    // EvalDebugAdapter.handleStepIntoFunction)
+    return true;
   }
 
   @Override

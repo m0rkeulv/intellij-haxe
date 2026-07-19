@@ -30,6 +30,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakp
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
@@ -97,6 +99,12 @@ import tools.jackson.databind.JsonNode;
 public class EvalDebugAdapter implements Closeable {
   /** Ceiling on sub-expression step-in coalescing; a normal line needs a handful. */
   private static final int MAX_STEP_IN_SUBSTEPS = 64;
+  /**
+   * Ceiling for the smart-step walk: skipped callees are traversed
+   * sub-expression by sub-expression (stepOut would overshoot the line), so
+   * allow plenty; each sub-step is one fast local RPC.
+   */
+  private static final int MAX_SMART_STEP_SUBSTEPS = 4096;
 
   private final ServerSocket vmListener;
   private final long vmConnectTimeoutMillis;
@@ -223,6 +231,7 @@ public class EvalDebugAdapter implements Closeable {
       case NextRequest r -> handleStep(r);
       case StepInRequest r -> handleStep(r);
       case StepOutRequest r -> handleStep(r);
+      case StepIntoFunctionRequest r -> handleStepIntoFunction(r);
       case PauseRequest r -> handlePause(r);
       case EvaluateRequest r -> handleEvaluate(r);
       case DisconnectRequest r -> handleDisconnect(r);
@@ -442,6 +451,83 @@ public class EvalDebugAdapter implements Closeable {
       }
     }
     return false; // safety cap hit: stop where we are rather than loop forever
+  }
+
+  /**
+   * Smart step into the NAMED callee (custom intellij/stepIntoFunction, sent
+   * by the IDE with PSI-resolved (className, functionName, occurrence)). The
+   * eval protocol has no such method, but its sub-expression stepIn makes an
+   * exact emulation possible while STAYING ON THE LINE: single-step through
+   * the line's sub-expressions; when a callee is entered, either it is the
+   * chosen one (report the landing) or it is stepped OUT of and the walk
+   * continues. Leaving the line means the target was not (or no longer)
+   * callable there — like the hxcpp server, that landing is reported as the
+   * step stop rather than an error.
+   */
+  private void handleStepIntoFunction(StepIntoFunctionRequest request) throws IOException {
+    Integer thread = stoppedThreadId;
+    if (thread == null) {
+      sendErrorResponse(request, "Cannot step: the debuggee is not stopped");
+      return;
+    }
+    StepIntoFunctionArguments arguments = request.getArguments();
+    String className = arguments != null ? arguments.getClassName() : null;
+    String functionName = arguments != null ? arguments.getFunctionName() : null;
+    int occurrence = arguments != null ? Math.max(1, arguments.getOccurrence()) : 1;
+
+    int startDepth = vm().stackTrace(thread).size();
+    FrameSignature start = topFrame(thread);
+    boolean programEnded = false;
+    int matched = 0;
+    // NOTE: a non-target callee is skipped by WALKING THROUGH it with raw
+    // sub-steps, never stepOut — eval's stepOut resumes at the caller's NEXT
+    // LINE, which abandons the line the target still sits on (observed live).
+    for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS && !programEnded; step++) {
+      try {
+        vm().stepIn();
+        List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+        if (frames.isEmpty()) {
+          break;
+        }
+        EvalProtocol.EvalStackFrame top = frames.get(0);
+        if (frames.size() > startDepth) {
+          // entered SOME callee: the chosen one ends the walk, anything else
+          // (including deeper calls it makes) is stepped through
+          if (frames.size() == startDepth + 1
+              && isTargetFrame(top.name(), className, functionName) && ++matched >= occurrence) {
+            break; // landed in the chosen callee
+          }
+          continue;
+        }
+        if (start == null || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
+          break; // line finished without the target: report the landing as the stop
+        }
+      } catch (EvalConnectionClosedException ended) {
+        programEnded = true;
+      }
+    }
+    sendResponse(request, new Response());
+    if (!programEnded) {
+      sendStopped("step", thread, null);
+    }
+  }
+
+  // Eval frame names are "pack.Class.method"; the IDE sends the class path
+  // ("pack.Class" or "Class") plus the bare function name.
+  private static boolean isTargetFrame(String frameName, String className, String functionName) {
+    if (frameName == null || functionName == null) {
+      return false;
+    }
+    if (className == null || className.isBlank()) {
+      return frameName.equals(functionName) || frameName.endsWith("." + functionName);
+    }
+    String qualified = className + "." + functionName;
+    if (frameName.equals(qualified) || frameName.endsWith("." + qualified)) {
+      return true;
+    }
+    String simpleClass = className.substring(className.lastIndexOf('.') + 1);
+    String simpleQualified = simpleClass + "." + functionName;
+    return frameName.equals(simpleQualified) || frameName.endsWith("." + simpleQualified);
   }
 
   /** The stopped thread's top frame as (function, line), or null if unavailable. */

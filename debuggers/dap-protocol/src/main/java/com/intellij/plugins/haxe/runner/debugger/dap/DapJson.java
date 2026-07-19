@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.dap;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ConfigurationDoneResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ContinueResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.NextResponse;
@@ -115,6 +116,9 @@ public final class DapJson {
       case ExceptionInfoRequest.COMMAND -> ExceptionInfoRequest.class;
       case "setVariable" -> SetVariableRequest.class;
       case "disconnect" -> DisconnectRequest.class;
+      // custom: needed by JAVA-side DAP servers (the eval adapter emulates
+      // smart step into); the haxe-side servers decode it themselves
+      case StepIntoFunctionRequest.COMMAND -> StepIntoFunctionRequest.class;
       default -> Request.class;
     };
     return MAPPER.treeToValue(root, target);

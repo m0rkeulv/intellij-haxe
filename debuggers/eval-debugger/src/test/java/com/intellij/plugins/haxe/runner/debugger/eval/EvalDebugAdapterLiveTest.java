@@ -34,6 +34,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTrac
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
@@ -66,6 +68,7 @@ public class EvalDebugAdapterLiveTest {
   private static final int BREAK_LINE = 10;
   private static final int NESTED_CALL_LINE = 11; // `var nested = outer(inner(3));`
   private static final int INNER_LINE = 16;       // first EXECUTABLE line inside inner() (the return)
+  private static final int OUTER_LINE = 20;       // first executable line inside outer()
   private static final long TIMEOUT = 15_000;
 
   private EvalDebugAdapter adapter;
@@ -305,5 +308,55 @@ public class EvalDebugAdapterLiveTest {
     assertTrue("ONE step-into entered inner() (was " + landed.getName() + " line " + landed.getLine() + ")",
                landed.getName().endsWith("inner"));
     assertEquals("landed inside inner()", INNER_LINE, landed.getLine());
+  }
+
+  @Test
+  public void smartStepIntoSkipsToTheChosenCallee() throws Exception {
+    // `var nested = outer(inner(3));` — smart-step to OUTER must walk the
+    // line's sub-expressions, step THROUGH inner() without reporting it, and
+    // land inside outer() (the eval protocol has no smart-step; the adapter
+    // emulates intellij/stepIntoFunction with sub-expression steps).
+    InitializeRequest initialize = new InitializeRequest();
+    initialize.setArguments(new InitializeRequestArguments());
+    assertTrue("initialize", request(initialize).isSuccess());
+    dapClient.pollEvent(TIMEOUT);
+    assertTrue("launch", request(new LaunchRequest()).isSuccess());
+
+    String fixture = fixtureDir().resolve("EvalMain.hx").toString();
+    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(fixture);
+    bpArgs.setSource(source);
+    SourceBreakpoint breakpoint = new SourceBreakpoint();
+    breakpoint.setLine(NESTED_CALL_LINE);
+    bpArgs.setBreakpoints(List.of(breakpoint));
+    setBreakpoints.setArguments(bpArgs);
+    assertTrue("setBreakpoints", request(setBreakpoints).isSuccess());
+    assertTrue("configurationDone", request(new ConfigurationDoneRequest()).isSuccess());
+
+    StoppedEvent atCall = awaitStopped();
+    int threadId = atCall.getBody().getThreadId();
+
+    StepIntoFunctionRequest smartStep = new StepIntoFunctionRequest();
+    StepIntoFunctionArguments ssArgs = new StepIntoFunctionArguments();
+    ssArgs.setThreadId(threadId);
+    ssArgs.setClassName("EvalMain");
+    ssArgs.setFunctionName("outer");
+    ssArgs.setOccurrence(1);
+    smartStep.setArguments(ssArgs);
+    assertTrue("stepIntoFunction", request(smartStep).isSuccess());
+
+    StoppedEvent afterStep = awaitStopped();
+    assertEquals("step stop", "step", afterStep.getBody().getReason());
+    StackTraceRequest stackTrace = new StackTraceRequest();
+    StackTraceArguments stArgs = new StackTraceArguments();
+    stArgs.setThreadId(threadId);
+    stackTrace.setArguments(stArgs);
+    StackFrame landed = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+    assertTrue("smart-step landed in outer(), skipping inner() (was "
+               + landed.getName() + " line " + landed.getLine() + ")",
+               landed.getName().endsWith("outer"));
+    assertEquals("on outer's executable line", OUTER_LINE, landed.getLine());
   }
 }
