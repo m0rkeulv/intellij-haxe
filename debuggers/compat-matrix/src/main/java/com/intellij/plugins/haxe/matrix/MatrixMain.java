@@ -360,7 +360,7 @@ public final class MatrixMain {
       // an explicit --hl selection overrides the smart-reduced grid
       List<Path> runtimes = (full || !hlFilter.isEmpty() || !VersionManifest.DEGRADED_HAXE_ON_HL.contains(haxe))
         ? hlDirs
-        : hlDirs.stream().filter(d -> d.getFileName().toString().equals(VersionManifest.REFERENCE_RUNTIME)).toList();
+        : hlDirs.stream().filter(d -> VersionManifest.REFERENCE_RUNTIMES.contains(d.getFileName().toString())).toList();
       for (Path hlDir : runtimes) {
         String runtime = hlDir.getFileName().toString();
         Path hlBinary = Platform.findBinary(hlDir, "hl");

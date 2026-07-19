@@ -79,8 +79,9 @@ manifest simply not listing older versions.
 - eval lane: ~1 minute per haxe version (live suite against the real VM).
 - hashlink lane: fixture build per haxe version + a test run per runtime;
   the default "smart-reduced" grid runs known-degraded old haxe versions
-  against one reference runtime only (their failures were proven identical
-  on every runtime); `-PmatrixFull=true` runs every combination.
+  (4.1.5/4.2.5) against the reference runtimes only — latest release and
+  nightly — since their behaviour was proven identical on every runtime;
+  `-PmatrixFull=true` runs every combination.
 - hxcpp lane: the slowest — every haxe version compiles the C++ fixtures,
   and the machine needs a working hxcpp/haxelib setup per version (see the
   main debugger docs); this lane is not provisioned automatically.

@@ -61,9 +61,10 @@ final class VersionManifest {
   }
 
   /**
-   * haxe versions whose HL fixture failures were proven identical on every
-   * runtime: unless --full, they run against the reference runtime only.
+   * haxe versions whose HL fixture behaviour was proven identical on every
+   * runtime: unless --full, they run against the reference runtimes only
+   * (latest release + nightly, so a runtime regression still gets caught).
    */
   static final List<String> DEGRADED_HAXE_ON_HL = List.of("haxe_4_1_5", "haxe_4_2_5");
-  static final String REFERENCE_RUNTIME = "hashlink-1.15.0";
+  static final List<String> REFERENCE_RUNTIMES = List.of("hashlink-1.15.0", "hashlink-nightly");
 }
