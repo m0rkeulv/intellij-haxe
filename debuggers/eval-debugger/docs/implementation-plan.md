@@ -95,20 +95,21 @@ extracted to a shared location or the eval variants kept module-local
   point (debug a build's macros), integration test suite (fixtures are plain
   .hx scripts run under `--interp` — no compilation artifacts, very fast).
 
-## Open decisions (need sign-off)
+## Decisions (signed off 2026-07-18)
 
-1. **Run configuration UX**: (a) new "Haxe interpreter (--interp)" run
-   config type, or (b) extend the existing Haxe application configuration
-   with an interp target + Debug executor. Recommendation: (a) — mirrors
-   the HashLink config's pattern and keeps hxml/target handling simple.
-2. **Macro debugging entry point**: same run config pointed at a build hxml
-   (debug the macros of any compilation) — in scope from M3, or defer to a
-   follow-up? Recommendation: design the config so both fit, implement
-   script debugging first.
-3. **jsonrpc code sharing**: extract `vshaxe-hxcpp-debugger-adapter`'s
-   jsonrpc package into a shared module vs. an eval-local copy.
-   Recommendation: decide at M1 by measuring the actual diff (framing
-   asymmetry + strict jsonrpc envelope may make sharing awkward).
+1. **Run configuration UX**: a NEW "Haxe interpreter (--interp)" run
+   configuration type, mirroring the HashLink config pattern.
+2. **Macro debugging**: design for BOTH scripts and macros from the start;
+   implement/validate scripts first. VERIFIED (probe): with an init macro
+   and `-D eval-debugger`, the VM connects DURING COMPILATION and answers
+   requests — macro debugging uses the identical protocol. Caveat agreed
+   with the user: if important differences surface (a macro session wraps a
+   COMPILATION and ends with it, vs. a script session wrapping a program
+   run), we may split them into two run-config flavours/debuggers later —
+   keep launch/session code factored so that split stays cheap.
+3. **jsonrpc code sharing**: decide at M1 by measuring the actual diff
+   (framing asymmetry + strict jsonrpc envelope may make sharing awkward);
+   an eval-local implementation is acceptable if the shared surface is thin.
 
 ## Version notes
 
