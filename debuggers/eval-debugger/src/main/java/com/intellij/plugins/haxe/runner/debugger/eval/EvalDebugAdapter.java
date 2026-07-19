@@ -95,6 +95,8 @@ import tools.jackson.databind.JsonNode;
  * VM id — no path registry), and stops always carry the thread id.
  */
 public class EvalDebugAdapter implements Closeable {
+  /** Ceiling on sub-expression step-in coalescing; a normal line needs a handful. */
+  private static final int MAX_STEP_IN_SUBSTEPS = 64;
 
   private final ServerSocket vmListener;
   private final long vmConnectTimeoutMillis;
@@ -389,18 +391,23 @@ public class EvalDebugAdapter implements Closeable {
     // same). The thread stays logically stopped through the whole step.
     // A step over the program's LAST line races process exit like continue
     // does: connection close during the step means it ran off the end.
-    boolean programEnded = false;
-    Response response;
+    boolean programEnded;
     try {
-      switch (request) {
-        case NextRequest r -> vm().next();
-        case StepInRequest r -> vm().stepIn();
-        default -> vm().stepOut();
-      }
+      programEnded = switch (request) {
+        case StepInRequest r -> coalescedStepIn(thread);
+        case NextRequest r -> {
+          vm().next();
+          yield false;
+        }
+        default -> {
+          vm().stepOut();
+          yield false;
+        }
+      };
     } catch (EvalConnectionClosedException ignored) {
       programEnded = true;
     }
-    response = switch (request) {
+    Response response = switch (request) {
       case NextRequest r -> new NextResponse();
       case StepInRequest r -> new StepInResponse();
       default -> new StepOutResponse();
@@ -408,6 +415,48 @@ public class EvalDebugAdapter implements Closeable {
     sendResponse(request, response);
     if (!programEnded) {
       sendStopped("step", thread, null);
+    }
+  }
+
+  /**
+   * The eval VM's {@code stepIn} is SUB-EXPRESSION granular: on a line like
+   * {@code outer(inner(x))} it stops at each sub-expression position before
+   * finally entering a callee, so a plain DAP step-into would need several
+   * presses to enter a function. DAP step-into means "advance to a different
+   * line, or enter a function" — so keep single-stepping while the top frame
+   * stays on the SAME function AND the SAME line (pure column moves), and stop
+   * the moment the function or line changes. Bounded so a pathological program
+   * cannot spin. Returns true when the program ran to completion mid-step.
+   */
+  private boolean coalescedStepIn(int thread) throws IOException {
+    FrameSignature start = topFrame(thread);
+    for (int step = 0; step < MAX_STEP_IN_SUBSTEPS; step++) {
+      try {
+        vm().stepIn();
+      } catch (EvalConnectionClosedException ended) {
+        return true;
+      }
+      FrameSignature now = topFrame(thread);
+      if (now == null || start == null || !now.sameStop(start)) {
+        return false; // entered/left a function, or reached a new line
+      }
+    }
+    return false; // safety cap hit: stop where we are rather than loop forever
+  }
+
+  /** The stopped thread's top frame as (function, line), or null if unavailable. */
+  private FrameSignature topFrame(int thread) throws IOException {
+    List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+    if (frames.isEmpty()) {
+      return null;
+    }
+    EvalProtocol.EvalStackFrame top = frames.get(0);
+    return new FrameSignature(top.name(), top.line());
+  }
+
+  private record FrameSignature(String function, int line) {
+    boolean sameStop(FrameSignature other) {
+      return line == other.line && java.util.Objects.equals(function, other.function);
     }
   }
 
@@ -422,7 +471,7 @@ public class EvalDebugAdapter implements Closeable {
       sendErrorResponse(request, "evaluate requires a frameId (no frame context without a stopped stack)");
       return;
     }
-    EvalProtocol.EvalVar result = vm().evaluate(request.getArguments().getExpression(), frameId);
+    EvalProtocol.EvalVar result = vm().evaluate(stripTrailingSemicolons(request.getArguments().getExpression()), frameId);
     EvaluateResponseBody body = new EvaluateResponseBody();
     body.setResult(result.value());
     body.setType(result.type());
@@ -486,6 +535,24 @@ public class EvalDebugAdapter implements Closeable {
   }
 
   // ------------------------------------------------------------------ helpers
+
+  /**
+   * The eval VM parses an evaluate expression with the haxe EXPRESSION parser,
+   * which rejects a trailing {@code ;} ("Unexpected ;") - a statement
+   * terminator, not part of an expression. IDE evaluate/watch input commonly
+   * carries one (copied from source, or typed by habit), so drop trailing
+   * semicolons and surrounding whitespace. Verified against the VM.
+   */
+  static String stripTrailingSemicolons(String expression) {
+    if (expression == null) {
+      return null;
+    }
+    String trimmed = expression.strip();
+    while (trimmed.endsWith(";")) {
+      trimmed = trimmed.substring(0, trimmed.length() - 1).strip();
+    }
+    return trimmed;
+  }
 
   private static Source toSource(String sourcePath) {
     if (sourcePath == null || sourcePath.isEmpty() || sourcePath.equals("?")) {

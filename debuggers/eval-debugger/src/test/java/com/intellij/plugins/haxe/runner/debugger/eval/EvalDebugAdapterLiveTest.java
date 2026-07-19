@@ -32,6 +32,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakp
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
@@ -62,6 +64,8 @@ import org.junit.Test;
  */
 public class EvalDebugAdapterLiveTest {
   private static final int BREAK_LINE = 10;
+  private static final int NESTED_CALL_LINE = 11; // `var nested = outer(inner(3));`
+  private static final int INNER_LINE = 16;       // first EXECUTABLE line inside inner() (the return)
   private static final long TIMEOUT = 15_000;
 
   private EvalDebugAdapter adapter;
@@ -252,5 +256,54 @@ public class EvalDebugAdapterLiveTest {
     assertTrue("terminated event when the script finishes", awaitTerminated());
     assertTrue("haxe exited", haxe.waitFor(TIMEOUT, TimeUnit.MILLISECONDS));
     assertEquals("clean exit", 0, haxe.exitValue());
+  }
+
+  @Test
+  public void singleStepIntoEntersTheNestedCallee() throws Exception {
+    // `var nested = outer(inner(3));` — eval's raw stepIn is sub-expression
+    // granular (it stops on each column of the line before entering a callee),
+    // so a plain step-into would need several presses. The adapter coalesces
+    // those same-line sub-steps: ONE DAP step-into must land inside inner().
+    InitializeRequest initialize = new InitializeRequest();
+    initialize.setArguments(new InitializeRequestArguments());
+    assertTrue("initialize", request(initialize).isSuccess());
+    dapClient.pollEvent(TIMEOUT);
+    assertTrue("launch", request(new LaunchRequest()).isSuccess());
+
+    String fixture = fixtureDir().resolve("EvalMain.hx").toString();
+    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(fixture);
+    bpArgs.setSource(source);
+    SourceBreakpoint breakpoint = new SourceBreakpoint();
+    breakpoint.setLine(NESTED_CALL_LINE);
+    bpArgs.setBreakpoints(List.of(breakpoint));
+    setBreakpoints.setArguments(bpArgs);
+    assertTrue("setBreakpoints", request(setBreakpoints).isSuccess());
+    assertTrue("configurationDone", request(new ConfigurationDoneRequest()).isSuccess());
+
+    StoppedEvent atCall = awaitStopped();
+    int threadId = atCall.getBody().getThreadId();
+    StackTraceRequest stackTrace = new StackTraceRequest();
+    StackTraceArguments stArgs = new StackTraceArguments();
+    stArgs.setThreadId(threadId);
+    stackTrace.setArguments(stArgs);
+    StackFrame atBreak = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+    assertEquals("stopped on the nested-call line", NESTED_CALL_LINE, atBreak.getLine());
+    assertTrue("stopped in main", atBreak.getName().endsWith("main"));
+
+    StepInRequest stepIn = new StepInRequest();
+    StepInArguments siArgs = new StepInArguments();
+    siArgs.setThreadId(threadId);
+    stepIn.setArguments(siArgs);
+    assertTrue("stepIn", request(stepIn).isSuccess());
+
+    StoppedEvent afterStep = awaitStopped();
+    assertEquals("step stop", "step", afterStep.getBody().getReason());
+    StackFrame landed = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+    assertTrue("ONE step-into entered inner() (was " + landed.getName() + " line " + landed.getLine() + ")",
+               landed.getName().endsWith("inner"));
+    assertEquals("landed inside inner()", INNER_LINE, landed.getLine());
   }
 }
