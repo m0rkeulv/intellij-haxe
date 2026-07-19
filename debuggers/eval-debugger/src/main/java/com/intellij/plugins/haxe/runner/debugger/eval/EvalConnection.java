@@ -35,6 +35,7 @@ public final class EvalConnection implements AutoCloseable {
   private final Map<Integer, CompletableFuture<JsonNode>> pending = new ConcurrentHashMap<>();
   // volatile: set once by the owner before/around start, read by the reader thread
   private volatile BiConsumer<String, JsonNode> eventListener = (method, params) -> { };
+  private volatile Runnable onDisconnected = () -> { };
   private volatile boolean closed;
   private Thread reader;
 
@@ -46,6 +47,15 @@ public final class EvalConnection implements AutoCloseable {
   /** Registers the sink for id-less notifications (method name, params). */
   public void setEventListener(BiConsumer<String, JsonNode> listener) {
     this.eventListener = listener;
+  }
+
+  /**
+   * Registers a callback for the VM ending the connection (its process — the
+   * interpreted program or the compilation being macro-debugged — finished).
+   * Not invoked when WE close the connection.
+   */
+  public void setOnDisconnected(Runnable listener) {
+    this.onDisconnected = listener;
   }
 
   /** Starts the reader thread; call once after the listener is registered. */
@@ -83,6 +93,9 @@ public final class EvalConnection implements AutoCloseable {
       if (e.getCause() instanceof EvalProtocolException protocol) {
         throw protocol;
       }
+      if (e.getCause() instanceof EvalConnectionClosedException closedEnd) {
+        throw closedEnd; // resume-shaped callers treat this as the program ending
+      }
       throw new IOException("Eval request '" + method + "' failed", e.getCause());
     } catch (TimeoutException e) {
       throw new IOException("Eval request '" + method + "' got no response within " + timeoutMs + "ms");
@@ -97,10 +110,14 @@ public final class EvalConnection implements AutoCloseable {
       while ((payload = EvalFraming.readResponse(in)) != null) {
         dispatch(MAPPER.readTree(payload));
       }
-      failPending(new IOException("Eval debug connection closed by the VM"));
+      failPending(new EvalConnectionClosedException("Eval debug connection closed by the VM"));
+      if (!closed) {
+        onDisconnected.run();
+      }
     } catch (Exception e) {
       if (!closed) {
-        failPending(new IOException("Eval debug connection lost", e));
+        failPending(new EvalConnectionClosedException("Eval debug connection lost: " + e));
+        onDisconnected.run();
       } else {
         failPending(new IOException("Eval debug connection closed"));
       }
