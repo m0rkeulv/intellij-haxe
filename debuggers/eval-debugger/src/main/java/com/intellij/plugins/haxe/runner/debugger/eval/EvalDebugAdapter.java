@@ -455,8 +455,32 @@ public class EvalDebugAdapter implements Closeable {
       vm().resume();
     } catch (EvalConnectionClosedException alreadyEnded) {
       // the process beat us to exiting; the disconnect sends terminated
+      return StepOutcome.PROGRAM_ENDED;
     } catch (IOException unresponsive) {
       endSessionWithUnresponsiveVm();
+      return StepOutcome.PROGRAM_ENDED;
+    }
+    // On haxe <= 4.3 the resumed exception runs the program off within
+    // milliseconds (disconnect -> terminated). The haxe 5 preview's VM
+    // instead survives as a ZOMBIE: resume acknowledged, stack permanently
+    // gone, program never finishes, no event ever pushed (live-verified,
+    // including that further resumes and pause change nothing). Give the
+    // legitimate death a moment, then probe: a VM still answering from the
+    // frame-less state is that zombie - end the session deterministically
+    // (the IDE tears the process down with it).
+    try {
+      Thread.sleep(800);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return StepOutcome.PROGRAM_ENDED;
+    }
+    try {
+      vm().getThreads(); // answered = the VM is still there
+      endSessionWithUnresponsiveVm();
+    } catch (EvalProtocolException stillTalking) {
+      endSessionWithUnresponsiveVm(); // an error REPLY is also "still there"
+    } catch (IOException dyingOrDead) {
+      // connection gone (or going): the normal death; disconnect terminates
     }
     return StepOutcome.PROGRAM_ENDED;
   }
