@@ -46,7 +46,12 @@ public class InterpDapBackend implements HxcppDapBackend {
 
   @Override
   public boolean supportsExceptionFilters() {
-    return false; // the VM's setExceptionOptions mapping is a follow-up (M5)
+    // the adapter maps the IDE's filter words onto the VM's setExceptionOptions
+    // ("thrown" -> "all", "uncaught" -> "uncaught"). This must stay ON even
+    // with every exception breakpoint disabled: the VM's DEFAULT is to stop on
+    // uncaught exceptions, so the empty filter set the IDE then sends is what
+    // lets an uncaught throw kill the program naturally instead of stopping.
+    return true;
   }
 
   @Override
