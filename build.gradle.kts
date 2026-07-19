@@ -303,6 +303,21 @@ tasks.register<Delete>("cleanGenerated") {
     delete = setOf("src/main/gen/")
 }
 
+// Runs every debugger's test suite against every stored haxe version (and HL
+// runtime) and writes build/reports/debugger-matrix/index.html — the "full
+// check on all our debugger work" button. Windows-only; see
+// debuggers/compat-matrix/README.md for the version-store layout and options.
+tasks.register<Exec>("debuggerCompatibilityReport") {
+    group = "verification"
+    description = "Debugger compatibility matrix across stored haxe/HL versions + HTML report"
+    val script = layout.projectDirectory.file("debuggers/compat-matrix/run-matrix.ps1").asFile
+    val args = mutableListOf("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.absolutePath)
+    (findProperty("matrixTestData") as String?)?.let { args += listOf("-TestData", it) }
+    (findProperty("matrixLanes") as String?)?.let { args += listOf("-Lanes", it) }
+    if ((findProperty("matrixFull") as String?)?.toBoolean() == true) args += "-Full"
+    commandLine(args)
+}
+
 tasks.register<GenerateParserTask>("generateHaxeParser") {
     group = "parsers"
     sourceFile.set(File("src/main/java/com/intellij/plugins/haxe/lang/parser/haxe.bnf"))
