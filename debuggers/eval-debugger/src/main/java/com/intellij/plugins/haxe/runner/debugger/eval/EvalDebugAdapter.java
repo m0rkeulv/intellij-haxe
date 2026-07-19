@@ -121,6 +121,46 @@ public class EvalDebugAdapter implements Closeable {
   private volatile boolean expressionStepping = false;
   /** Thread the VM last reported stopped; null while running. */
   private volatile Integer stoppedThreadId;
+  /**
+   * User breakpoint lines by normalized source path, mirroring what was sent
+   * to the VM. The step-emulation loops consult this so a landing on a
+   * breakpoint line ends the step there (breakpoints WIN over steps, like
+   * hxcpp's HandleBreakpoints and the hashlink adapter's temp-vs-user hits).
+   */
+  private final java.util.Map<String, java.util.Set<Integer>> breakpointLines =
+    new java.util.concurrent.ConcurrentHashMap<>();
+  /** Thread whose step loop is running on the request thread; null otherwise. */
+  private volatile Integer steppingThreadId;
+  /**
+   * Set by the reader thread when the VM pushes breakpointStop DURING a step:
+   * the VM answers the step verb normally and ADDITIONALLY notifies that the
+   * landing is a user breakpoint (live-verified). The loop consumes this and
+   * reports the stop as "breakpoint" instead of stepping onward past it.
+   */
+  private volatile Integer breakpointHitDuringStep;
+  /** Like {@link #breakpointHitDuringStep} for an exceptionStop pushed mid-step. */
+  private volatile String exceptionDuringStepText;
+  /**
+   * True from an exception stop until the next resume: the debuggee is inside
+   * exception dispatch, where the step-coalescing heuristics are meaningless
+   * (positions barely move, stacks unwind or wedge) — a coalescing loop there
+   * can spin its whole cap in futile RPCs, freezing the IDE for tens of
+   * seconds (reported live). While unwinding, every step press is ONE raw
+   * verb: it visibly walks the unwind chain one position at a time and is
+   * bounded by construction.
+   */
+  private volatile boolean unwindingException;
+  /** Ensures exactly one terminated event however the session ends. */
+  private final java.util.concurrent.atomic.AtomicBoolean terminatedSent =
+    new java.util.concurrent.atomic.AtomicBoolean();
+  /**
+   * True while the "all"-throws exception option is armed on the VM. Without
+   * it, every exceptionStop is by construction an UNCAUGHT exception — the
+   * state the VM can never leave (see {@link #letUncaughtExceptionKillTheProgram}).
+   */
+  private volatile boolean caughtExceptionFilterActive;
+  /** Whether the IDE ever configured exception options this session. */
+  private volatile boolean exceptionOptionsConfigured;
 
   public EvalDebugAdapter(long vmConnectTimeoutMillis) throws IOException {
     this.vmConnectTimeoutMillis = vmConnectTimeoutMillis;
@@ -160,7 +200,7 @@ public class EvalDebugAdapter implements Closeable {
         // the eval VM's socket closing means the program (or the compilation
         // being macro-debugged) finished — that IS session termination
         if (!closed) {
-          sendEventQuietly(new TerminatedEvent());
+          sendTerminatedOnce();
         }
       });
       vmConnection.start();
@@ -269,10 +309,14 @@ public class EvalDebugAdapter implements Closeable {
     List<SourceBreakpoint> requested = request.getArguments().getBreakpoints() != null
                                        ? request.getArguments().getBreakpoints() : List.of();
     int[] lines = new int[requested.size()];
+    java.util.Set<Integer> lineSet = new java.util.HashSet<>();
     for (int i = 0; i < requested.size(); i++) {
       lines[i] = requested.get(i).getLine();
+      lineSet.add(requested.get(i).getLine());
     }
     List<EvalProtocol.EvalBreakpoint> registered = vm().setBreakpoints(file, lines);
+    // mirror for the step loops; setBreakpoints REPLACES the file's set
+    breakpointLines.put(normalizePath(file), lineSet);
 
     List<Breakpoint> verified = new ArrayList<>();
     for (int i = 0; i < requested.size(); i++) {
@@ -295,13 +339,42 @@ public class EvalDebugAdapter implements Closeable {
   private void handleSetExceptionBreakpoints(SetExceptionBreakpointsRequest request) throws IOException {
     List<String> filters = request.getArguments() != null && request.getArguments().getFilters() != null
                            ? request.getArguments().getFilters() : List.of();
-    // the VM understands "all"/"uncaught" exception options; anything we
-    // cannot express is dropped rather than failing the whole configure
-    vm().setExceptionOptions(filters);
+    List<String> options = toVmExceptionOptions(filters);
+    vm().setExceptionOptions(options);
+    exceptionOptionsConfigured = true;
+    caughtExceptionFilterActive = options.contains("all");
     sendResponse(request, new SetExceptionBreakpointsResponse());
   }
 
+  /**
+   * The IDE speaks the shared filter vocabulary ("thrown"/"uncaught"/
+   * "critical", from the hxcpp server); the eval VM's setExceptionOptions
+   * understands "all" and "uncaught". Translate, dropping what cannot be
+   * expressed (no critical-error category exists in eval) rather than
+   * failing the configure.
+   */
+  private static List<String> toVmExceptionOptions(List<String> filters) {
+    List<String> options = new ArrayList<>();
+    for (String filter : filters) {
+      switch (filter) {
+        case "thrown", "all" -> options.add("all"); // every throw, caught or not
+        case "uncaught" -> options.add("uncaught");
+        default -> { }
+      }
+    }
+    return options;
+  }
+
   private void handleConfigurationDone(ConfigurationDoneRequest request) throws IOException {
+    if (!exceptionOptionsConfigured) {
+      // the VM's DEFAULT is to stop on uncaught exceptions (live-verified) —
+      // an unconfigured session must not stop where the user set nothing up
+      try {
+        vm().setExceptionOptions(List.of());
+      } catch (IOException tolerated) {
+        // an old VM without the method still debugs; it just keeps its default
+      }
+    }
     // release the VM, which waits before main (script) / the macro (build)
     resumed();
     resumeToleratingExit();
@@ -313,14 +386,65 @@ public class EvalDebugAdapter implements Closeable {
    * SUCCESS: the VM acks continue from a helper thread while the resumed
    * program runs, and when the program finishes the process can exit before
    * that ack is flushed — the resume happened, the terminated event (from
-   * the disconnect callback) ends the session. Live-observed race.
+   * the disconnect callback) ends the session. Live-observed race. Any OTHER
+   * failure (a request timeout, a socket reset mid-write) means the VM is
+   * gone or wedged — the session is ended deterministically rather than
+   * letting every later request burn its own timeout.
    */
   private void resumeToleratingExit() throws IOException {
     try {
       vm().resume();
     } catch (EvalConnectionClosedException ignored) {
       // program ran to completion during the resume
+    } catch (IOException unresponsive) {
+      endSessionWithUnresponsiveVm();
     }
+  }
+
+  private void sendTerminatedOnce() {
+    if (terminatedSent.compareAndSet(false, true)) {
+      sendEventQuietly(new TerminatedEvent());
+    }
+  }
+
+  /**
+   * The VM stopped answering (request timeout, or the socket reset under a
+   * write) without closing its socket, so no disconnect — and thus no
+   * terminated event — would ever come on its own. Left alone, the session
+   * sits "sort of stuck" while every queued request burns a full timeout (the
+   * reported 25-50s IDE freezes). Close the connection ourselves — pending
+   * and future requests fail fast — and end the session with ONE terminated.
+   */
+  private void endSessionWithUnresponsiveVm() {
+    if (vmConnection != null) {
+      vmConnection.close();
+    }
+    sendTerminatedOnce();
+  }
+
+  /**
+   * A step drove the interpreter into an UNCAUGHT exception. The eval VM does
+   * NOT raise an exceptionStop for a step the way it does for continue (verified
+   * live); instead the stack unwinds out from under us and further VM calls
+   * report "No frame found" (an {@link EvalProtocolException}), leaving the
+   * process WEDGED with the exception pending — no stop, no exit. Resuming runs
+   * the exception off the end, which exits the process (its message printed to
+   * the debuggee's stderr, shown in the IDE console), exactly like continuing
+   * into an uncaught throw. Reports the step as program-ended so no phantom
+   * stop is synthesized; the terminated event comes from the VM disconnect.
+   * Without this, stepping onto a throw hangs the session (the caller loops
+   * on / errors out of the vanished stack).
+   */
+  private StepOutcome resumeOffUncaughtException() throws IOException {
+    resumed();
+    try {
+      vm().resume();
+    } catch (EvalConnectionClosedException alreadyEnded) {
+      // the process beat us to exiting; the disconnect sends terminated
+    } catch (IOException unresponsive) {
+      endSessionWithUnresponsiveVm();
+    }
+    return StepOutcome.PROGRAM_ENDED;
   }
 
   private void handleThreads(ThreadsRequest request) throws IOException {
@@ -395,10 +519,46 @@ public class EvalDebugAdapter implements Closeable {
   }
 
   private void handleContinue(ContinueRequest request) throws IOException {
-    resumed();
-    resumeToleratingExit();
+    if (unwindingException && !caughtExceptionFilterActive) {
+      letUncaughtExceptionKillTheProgram();
+    } else {
+      resumed();
+      resumeToleratingExit();
+    }
     sendResponse(request, new ContinueResponse());
   }
+
+  /**
+   * An UNCAUGHT exception stop is a state the VM can never leave forward:
+   * every continue or step RE-EXECUTES the whole throw expression (the
+   * exception constructor runs again, then the same exceptionStop — an
+   * infinite loop, live-verified; the program cannot die while the option is
+   * armed, and closing the socket wedges the process instead of freeing it).
+   * The one working exit: clear the exception options FIRST, then resume —
+   * the re-executed throw finally propagates for real and the program dies
+   * naturally, with its own uncaught-exception stderr and exit code.
+   * Only called when the caught-throws option is off, which makes every
+   * exceptionStop uncaught by construction; with "all" armed a caught
+   * exception's stop resumes normally instead.
+   */
+  private void letUncaughtExceptionKillTheProgram() throws IOException {
+    try {
+      vm().setExceptionOptions(List.of());
+    } catch (IOException tolerated) {
+      // resume regardless; worst case the VM re-stops at the same throw
+    }
+    resumed();
+    resumeToleratingExit();
+  }
+
+  /** Step-shaped wrapper: the step "lands" in the program's death. */
+  private StepOutcome letUncaughtExceptionKillTheProgramAsStep() throws IOException {
+    letUncaughtExceptionKillTheProgram();
+    return StepOutcome.PROGRAM_ENDED;
+  }
+
+  /** How a step emulation ended: where the debuggee is and why. */
+  private enum StepOutcome { STEPPED, HIT_BREAKPOINT, PROGRAM_ENDED }
 
   private void handleStep(Request request) throws IOException {
     Integer thread = stoppedThreadId;
@@ -406,23 +566,52 @@ public class EvalDebugAdapter implements Closeable {
       sendErrorResponse(request, "Cannot step: the debuggee is not stopped");
       return;
     }
+    if (unwindingException && !caughtExceptionFilterActive) {
+      // stepping at an uncaught exception stop only re-runs the throw
+      // expression forever (the user reported stepping in circles through the
+      // exception constructor); the sole way forward is the program's death
+      letUncaughtExceptionKillTheProgram();
+      Response deathResponse = switch (request) {
+        case NextRequest r -> new NextResponse();
+        case StepInRequest r -> new StepInResponse();
+        default -> new StepOutResponse();
+      };
+      sendResponse(request, deathResponse);
+      return; // the terminated event follows from the process's disconnect
+    }
     // the VM's step request is SYNCHRONOUS: its response arrives when the
-    // step has LANDED, and no notification follows — the adapter must
-    // synthesize the DAP stopped("step") itself (vshaxe's Main.hx does the
-    // same). The thread stays logically stopped through the whole step.
+    // step has LANDED, and the only notification that can follow is a
+    // breakpointStop when the landing is a user breakpoint — the adapter must
+    // synthesize the DAP stopped itself (vshaxe's Main.hx does the same). The
+    // thread stays logically stopped through the whole step.
     // A step over the program's LAST line races process exit like continue
     // does: connection close during the step means it ran off the end.
-    boolean programEnded;
+    StepOutcome outcome;
+    String vmException = null;
+    steppingThreadId = thread;
+    breakpointHitDuringStep = null;
+    exceptionDuringStepText = null;
     try {
-      programEnded = switch (request) {
-        // expression mode: every step is ONE raw interpreter sub-step, and
-        // the frames' column/endColumn spans show which expression is next
-        case StepInRequest r -> expressionStepping ? rawStep(Verb.STEP_IN) : coalescedStepIn(thread);
-        case NextRequest r -> expressionStepping ? rawStep(Verb.NEXT) : coalescedNext(thread);
-        default -> expressionStepping ? rawStep(Verb.STEP_OUT) : emulatedStepOut(thread);
+      Verb verb = switch (request) {
+        case StepInRequest r -> Verb.STEP_IN;
+        case NextRequest r -> Verb.NEXT;
+        default -> Verb.STEP_OUT;
+      };
+      // raw single verbs when the user asked for expression stepping, and
+      // ALWAYS inside exception dispatch — the coalescing heuristics are
+      // meaningless mid-unwind and can spin their caps for tens of seconds
+      outcome = (expressionStepping || unwindingException) ? rawStep(verb, thread) : switch (request) {
+        case StepInRequest r -> coalescedStepIn(thread);
+        case NextRequest r -> coalescedNext(thread);
+        default -> emulatedStepOut(thread);
       };
     } catch (EvalConnectionClosedException ignored) {
-      programEnded = true;
+      outcome = StepOutcome.PROGRAM_ENDED;
+    } finally {
+      steppingThreadId = null;
+      vmException = exceptionDuringStepText;
+      exceptionDuringStepText = null;
+      breakpointHitDuringStep = null;
     }
     Response response = switch (request) {
       case NextRequest r -> new NextResponse();
@@ -430,8 +619,15 @@ public class EvalDebugAdapter implements Closeable {
       default -> new StepOutResponse();
     };
     sendResponse(request, response);
-    if (!programEnded) {
-      sendStopped("step", thread, null);
+    if (vmException != null) {
+      // the verb ran into a (new) exception stop: that is the real landing
+      sendStopped("exception", thread, vmException);
+    } else {
+      switch (outcome) {
+        case STEPPED -> sendStopped("step", thread, null);
+        case HIT_BREAKPOINT -> sendStopped("breakpoint", thread, null);
+        case PROGRAM_ENDED -> { } // terminated event follows from the disconnect
+      }
     }
   }
 
@@ -445,20 +641,32 @@ public class EvalDebugAdapter implements Closeable {
    * the moment the function or line changes. Bounded so a pathological program
    * cannot spin. Returns true when the program ran to completion mid-step.
    */
-  private boolean coalescedStepIn(int thread) throws IOException {
-    FrameSignature start = topFrame(thread);
-    for (int step = 0; step < MAX_STEP_IN_SUBSTEPS; step++) {
-      try {
+  private StepOutcome coalescedStepIn(int thread) throws IOException {
+    try {
+      FrameSignature start = topFrame(thread);
+      for (int step = 0; step < MAX_STEP_IN_SUBSTEPS; step++) {
         vm().stepIn();
-      } catch (EvalConnectionClosedException ended) {
-        return true;
+        EvalProtocol.EvalStackFrame top = topStackFrame(thread);
+        FrameSignature now = signatureOf(top);
+        if (exceptionDuringStepText != null) {
+          return StepOutcome.STEPPED; // the caller reports the exception stop
+        }
+        if (landedOnBreakpoint(top, start)) {
+          return StepOutcome.HIT_BREAKPOINT;
+        }
+        if (now == null || start == null || !now.sameStop(start)) {
+          return StepOutcome.STEPPED; // entered/left a function, or reached a new line
+        }
       }
-      FrameSignature now = topFrame(thread);
-      if (now == null || start == null || !now.sameStop(start)) {
-        return false; // entered/left a function, or reached a new line
-      }
+      return StepOutcome.STEPPED; // safety cap hit: stop rather than loop forever
+    } catch (EvalProtocolException unwound) {
+      return resumeOffUncaughtException(); // stepped onto a throw: the stack unwound
+    } catch (EvalConnectionClosedException ended) {
+      return StepOutcome.PROGRAM_ENDED; // stepped off the program's end
+    } catch (IOException unresponsive) {
+      endSessionWithUnresponsiveVm();
+      return StepOutcome.PROGRAM_ENDED;
     }
-    return false; // safety cap hit: stop where we are rather than loop forever
   }
 
   /**
@@ -483,40 +691,87 @@ public class EvalDebugAdapter implements Closeable {
     String functionName = arguments != null ? arguments.getFunctionName() : null;
     int occurrence = arguments != null ? Math.max(1, arguments.getOccurrence()) : 1;
 
-    int startDepth = vm().stackTrace(thread).size();
-    FrameSignature start = topFrame(thread);
-    boolean programEnded = false;
+    StepOutcome outcome = StepOutcome.STEPPED;
+    String vmException = null;
     int matched = 0;
-    // NOTE: a non-target callee is skipped by WALKING THROUGH it with raw
-    // sub-steps, never stepOut — eval's stepOut resumes at the caller's NEXT
-    // LINE, which abandons the line the target still sits on (observed live).
-    for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS && !programEnded; step++) {
-      try {
-        vm().stepIn();
-        List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
-        if (frames.isEmpty()) {
-          break;
+    int startDepth = 0;
+    FrameSignature start = null;
+    steppingThreadId = thread;
+    breakpointHitDuringStep = null;
+    exceptionDuringStepText = null;
+    try {
+      if (unwindingException && !caughtExceptionFilterActive) {
+        // same as plain steps: at an uncaught stop the only way is death
+        outcome = letUncaughtExceptionKillTheProgramAsStep();
+      } else if (unwindingException) {
+        // inside exception dispatch a smart-step target cannot exist; a raw
+        // step (bounded by construction) walks the unwind one position on
+        outcome = rawStep(Verb.STEP_IN, thread);
+      } else {
+        try {
+          startDepth = vm().stackTrace(thread).size();
+          start = topFrame(thread);
+        } catch (EvalProtocolException unwound) {
+          outcome = resumeOffUncaughtException();
+        } catch (EvalConnectionClosedException ended) {
+          outcome = StepOutcome.PROGRAM_ENDED;
+        } catch (IOException unresponsive) {
+          endSessionWithUnresponsiveVm();
+          outcome = StepOutcome.PROGRAM_ENDED;
         }
-        EvalProtocol.EvalStackFrame top = frames.get(0);
-        if (frames.size() > startDepth) {
-          // entered SOME callee: the chosen one ends the walk, anything else
-          // (including deeper calls it makes) is stepped through
-          if (frames.size() == startDepth + 1
-              && isTargetFrame(top.name(), className, functionName) && ++matched >= occurrence) {
-            break; // landed in the chosen callee
+        // NOTE: a non-target callee is skipped by WALKING THROUGH it with raw
+        // sub-steps, never stepOut — eval's stepOut resumes at the caller's NEXT
+        // LINE, which abandons the line the target still sits on (observed live).
+        for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS && outcome == StepOutcome.STEPPED; step++) {
+          try {
+            vm().stepIn();
+            List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+            if (exceptionDuringStepText != null || frames.isEmpty()) {
+              break;
+            }
+            EvalProtocol.EvalStackFrame top = frames.get(0);
+            // even a smart-step walk yields to a user breakpoint on its way
+            if (landedOnBreakpoint(top, start)) {
+              outcome = StepOutcome.HIT_BREAKPOINT;
+              break;
+            }
+            if (frames.size() > startDepth) {
+              // entered SOME callee: the chosen one ends the walk, anything else
+              // (including deeper calls it makes) is stepped through
+              if (frames.size() == startDepth + 1
+                  && isTargetFrame(top.name(), className, functionName) && ++matched >= occurrence) {
+                break; // landed in the chosen callee
+              }
+              continue;
+            }
+            if (start == null || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
+              break; // line finished without the target: report the landing as the stop
+            }
+          } catch (EvalProtocolException unwound) {
+            outcome = resumeOffUncaughtException(); // a callee threw uncaught
+          } catch (EvalConnectionClosedException ended) {
+            outcome = StepOutcome.PROGRAM_ENDED;
+          } catch (IOException unresponsive) {
+            endSessionWithUnresponsiveVm();
+            outcome = StepOutcome.PROGRAM_ENDED;
           }
-          continue;
         }
-        if (start == null || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
-          break; // line finished without the target: report the landing as the stop
-        }
-      } catch (EvalConnectionClosedException ended) {
-        programEnded = true;
       }
+    } finally {
+      steppingThreadId = null;
+      vmException = exceptionDuringStepText;
+      exceptionDuringStepText = null;
+      breakpointHitDuringStep = null;
     }
     sendResponse(request, new Response());
-    if (!programEnded) {
-      sendStopped("step", thread, null);
+    if (vmException != null) {
+      sendStopped("exception", thread, vmException);
+    } else {
+      switch (outcome) {
+        case STEPPED -> sendStopped("step", thread, null);
+        case HIT_BREAKPOINT -> sendStopped("breakpoint", thread, null);
+        case PROGRAM_ENDED -> { }
+      }
     }
   }
 
@@ -545,29 +800,42 @@ public class EvalDebugAdapter implements Closeable {
    * to DAP semantics: keep stepping until the position leaves the line at the
    * starting depth (or above it, when the line ended the function).
    */
-  private boolean coalescedNext(int thread) throws IOException {
-    int startDepth = vm().stackTrace(thread).size();
-    FrameSignature start = topFrame(thread);
-    for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS; step++) {
-      try {
+  private StepOutcome coalescedNext(int thread) throws IOException {
+    try {
+      int startDepth = vm().stackTrace(thread).size();
+      FrameSignature start = topFrame(thread);
+      for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS; step++) {
         vm().next();
-      } catch (EvalConnectionClosedException ended) {
-        return true;
+        List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+        if (exceptionDuringStepText != null) {
+          return StepOutcome.STEPPED; // the caller reports the exception stop
+        }
+        if (frames.isEmpty()) {
+          return StepOutcome.STEPPED;
+        }
+        // BEFORE the depth logic: the VM's own next stops mid-verb at a user
+        // breakpoint even INSIDE the call being stepped over — honour it there
+        if (landedOnBreakpoint(frames.get(0), start)) {
+          return StepOutcome.HIT_BREAKPOINT;
+        }
+        if (frames.size() > startDepth) {
+          continue; // mid-call bookkeeping frame; keep going
+        }
+        EvalProtocol.EvalStackFrame top = frames.get(0);
+        if (frames.size() < startDepth || start == null
+            || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
+          return StepOutcome.STEPPED; // reached a new line (or returned out of the function)
+        }
       }
-      List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
-      if (frames.isEmpty()) {
-        return false;
-      }
-      if (frames.size() > startDepth) {
-        continue; // mid-call bookkeeping frame; keep going
-      }
-      EvalProtocol.EvalStackFrame top = frames.get(0);
-      if (frames.size() < startDepth || start == null
-          || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
-        return false; // reached a new line (or returned out of the function)
-      }
+      return StepOutcome.STEPPED;
+    } catch (EvalProtocolException unwound) {
+      return resumeOffUncaughtException(); // stepped onto a throw: the stack unwound
+    } catch (EvalConnectionClosedException ended) {
+      return StepOutcome.PROGRAM_ENDED; // stepped off the program's end
+    } catch (IOException unresponsive) {
+      endSessionWithUnresponsiveVm();
+      return StepOutcome.PROGRAM_ENDED;
     }
-    return false;
   }
 
   /**
@@ -579,62 +847,131 @@ public class EvalDebugAdapter implements Closeable {
    * never silently running the rest of the chain like the VM's raw stepOut
    * does. Coalesced next still finishes the whole line from anywhere.
    */
-  private boolean emulatedStepOut(int thread) throws IOException {
-    List<EvalProtocol.EvalStackFrame> startFrames = vm().stackTrace(thread);
-    int startDepth = startFrames.size();
-    String startFunction = startFrames.isEmpty() ? null : startFrames.get(0).name();
-    for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS; step++) {
-      try {
+  private StepOutcome emulatedStepOut(int thread) throws IOException {
+    try {
+      List<EvalProtocol.EvalStackFrame> startFrames = vm().stackTrace(thread);
+      int startDepth = startFrames.size();
+      String startFunction = startFrames.isEmpty() ? null : startFrames.get(0).name();
+      FrameSignature start = startFrames.isEmpty() ? null : signatureOf(startFrames.get(0));
+      for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS; step++) {
         vm().stepIn();
-      } catch (EvalConnectionClosedException ended) {
-        return true;
+        List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+        if (exceptionDuringStepText != null) {
+          return StepOutcome.STEPPED; // the caller reports the exception stop
+        }
+        // breakpoints WIN over the walk to the caller, wherever they sit
+        if (!frames.isEmpty() && landedOnBreakpoint(frames.get(0), start)) {
+          return StepOutcome.HIT_BREAKPOINT;
+        }
+        if (frames.isEmpty() || frames.size() < startDepth) {
+          return StepOutcome.STEPPED; // back in the caller (the line finished)
+        }
+        // a SIBLING call of a chained line (a.f().g()) runs at the SAME depth
+        // with no caller-position stop in between — stopping at its entry is
+        // what makes step-out hop chain element to chain element instead of
+        // silently walking through the rest of the chain
+        if (frames.size() == startDepth
+            && !java.util.Objects.equals(frames.get(0).name(), startFunction)) {
+          return StepOutcome.STEPPED;
+        }
       }
-      List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
-      if (frames.isEmpty() || frames.size() < startDepth) {
-        return false; // back in the caller (the line finished)
-      }
-      // a SIBLING call of a chained line (a.f().g()) runs at the SAME depth
-      // with no caller-position stop in between — stopping at its entry is
-      // what makes step-out hop chain element to chain element instead of
-      // silently walking through the rest of the chain
-      if (frames.size() == startDepth
-          && !java.util.Objects.equals(frames.get(0).name(), startFunction)) {
-        return false;
-      }
+      return StepOutcome.STEPPED;
+    } catch (EvalProtocolException unwound) {
+      return resumeOffUncaughtException(); // stepped onto a throw: the stack unwound
+    } catch (EvalConnectionClosedException ended) {
+      return StepOutcome.PROGRAM_ENDED; // stepped off the program's end
+    } catch (IOException unresponsive) {
+      endSessionWithUnresponsiveVm();
+      return StepOutcome.PROGRAM_ENDED;
     }
-    return false;
   }
 
   private enum Verb { STEP_IN, NEXT, STEP_OUT }
 
-  /** One raw VM step; true when the program ran to completion during it. */
-  private boolean rawStep(Verb verb) throws IOException {
+  /** One raw VM step (expression-stepping mode) and its outcome. */
+  private StepOutcome rawStep(Verb verb, int thread) throws IOException {
     try {
+      FrameSignature start = topFrame(thread);
       switch (verb) {
         case STEP_IN -> vm().stepIn();
         case NEXT -> vm().next();
         case STEP_OUT -> vm().stepOut();
       }
-      return false;
+      // the follow-up stackTrace doubles as an ordering barrier: the VM emits
+      // the verb's breakpointStop/exceptionStop right after the verb's
+      // response, so it precedes this stackTrace's response on the wire and
+      // the single reader thread has dispatched it before this returns
+      EvalProtocol.EvalStackFrame top = topStackFrame(thread);
+      if (exceptionDuringStepText != null) {
+        return StepOutcome.STEPPED; // the caller reports the exception stop
+      }
+      return landedOnBreakpoint(top, start) ? StepOutcome.HIT_BREAKPOINT : StepOutcome.STEPPED;
+    } catch (EvalProtocolException unwound) {
+      return resumeOffUncaughtException(); // stepping onto a throw unwound the stack
     } catch (EvalConnectionClosedException ended) {
-      return true;
+      return StepOutcome.PROGRAM_ENDED; // stepped off the program's end
+    } catch (IOException unresponsive) {
+      endSessionWithUnresponsiveVm();
+      return StepOutcome.PROGRAM_ENDED;
     }
+  }
+
+  /** The stopped thread's top frame, or null if the stack is unavailable. */
+  private EvalProtocol.EvalStackFrame topStackFrame(int thread) throws IOException {
+    List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+    return frames.isEmpty() ? null : frames.get(0);
   }
 
   /** The stopped thread's top frame as (function, line), or null if unavailable. */
   private FrameSignature topFrame(int thread) throws IOException {
-    List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
-    if (frames.isEmpty()) {
-      return null;
-    }
-    EvalProtocol.EvalStackFrame top = frames.get(0);
-    return new FrameSignature(top.name(), top.line());
+    return signatureOf(topStackFrame(thread));
+  }
+
+  private static FrameSignature signatureOf(EvalProtocol.EvalStackFrame frame) {
+    return frame == null ? null : new FrameSignature(frame.name(), frame.line());
   }
 
   private record FrameSignature(String function, int line) {
     boolean sameStop(FrameSignature other) {
       return line == other.line && java.util.Objects.equals(function, other.function);
     }
+  }
+
+  /**
+   * True when a step landing must end the step as a BREAKPOINT stop: the VM
+   * pushed breakpointStop for the step's thread mid-verb (authoritative — it
+   * evaluates its own breakpoint state), or the landing sits on a line the IDE
+   * registered a breakpoint on (belt and braces for landings the VM does not
+   * flag). The step's own STARTING line is exempt either way, so stepping off
+   * a line whose breakpoint we are already parked on cannot insta-stop.
+   */
+  private boolean landedOnBreakpoint(EvalProtocol.EvalStackFrame top, FrameSignature start) {
+    if (top == null) {
+      return false;
+    }
+    boolean vmFlagged = breakpointHitDuringStep != null;
+    boolean onRegisteredLine = isBreakpointLine(top.source(), top.line());
+    if (!vmFlagged && !onRegisteredLine) {
+      return false;
+    }
+    breakpointHitDuringStep = null; // consumed (or a same-line duplicate)
+    return start == null || top.line() != start.line()
+           || !java.util.Objects.equals(top.name(), start.function());
+  }
+
+  private boolean isBreakpointLine(String source, int line) {
+    if (source == null) {
+      return false;
+    }
+    java.util.Set<Integer> lines = breakpointLines.get(normalizePath(source));
+    return lines != null && lines.contains(line);
+  }
+
+  // Windows paths reach us with mixed separators and drive-letter casing
+  // (IDE-sent breakpoint paths vs VM-reported frame sources); haxe source
+  // trees do not distinguish files by case, so fold both for the lookup.
+  private static String normalizePath(String path) {
+    return path.replace('\\', '/').toLowerCase(java.util.Locale.ROOT);
   }
 
   private void handlePause(PauseRequest request) throws IOException {
@@ -672,10 +1009,31 @@ public class EvalDebugAdapter implements Closeable {
   private void handleVmEvent(String method, JsonNode params) {
     try {
       switch (method) {
-        case EvalProtocol.EVENT_BREAKPOINT_STOP ->
-          sendStopped("breakpoint", params.path("threadId").asInt(0), null);
-        case EvalProtocol.EVENT_EXCEPTION_STOP ->
-          sendStopped("exception", params.path("threadId").asInt(0), params.path("text").asString(""));
+        case EvalProtocol.EVENT_BREAKPOINT_STOP -> {
+          int threadId = params.path("threadId").asInt(0);
+          Integer stepping = steppingThreadId;
+          if (stepping != null && stepping == threadId) {
+            // the VM flags a user breakpoint reached DURING a step verb with
+            // this notification (the verb's response arrives separately); the
+            // running step loop consumes it and reports the stop itself, so
+            // forwarding here would double-report and out-order the response
+            breakpointHitDuringStep = threadId;
+          } else {
+            sendStopped("breakpoint", threadId, null);
+          }
+        }
+        case EvalProtocol.EVENT_EXCEPTION_STOP -> {
+          int threadId = params.path("threadId").asInt(0);
+          String text = params.path("text").asString("");
+          Integer stepping = steppingThreadId;
+          if (stepping != null && stepping == threadId) {
+            // a step verb ran into an exception stop: the running loop ends
+            // and handleStep reports it AFTER the verb's response (ordering)
+            exceptionDuringStepText = text;
+          } else {
+            sendStopped("exception", threadId, text);
+          }
+        }
         case EvalProtocol.EVENT_THREAD_EVENT ->
           sendThreadEvent(params.path("reason").asString(""), params.path("threadId").asInt(0));
         default -> System.err.println("EvalDebugAdapter: unknown notification '" + method + "'");
@@ -687,6 +1045,9 @@ public class EvalDebugAdapter implements Closeable {
 
   private void sendStopped(String reason, int threadId, String description) throws IOException {
     stoppedThreadId = threadId;
+    if ("exception".equals(reason)) {
+      unwindingException = true; // raw single-verb steps until the next resume
+    }
     StoppedEventBody body = new StoppedEventBody();
     body.setReason(reason);
     body.setThreadId(threadId);
@@ -709,6 +1070,7 @@ public class EvalDebugAdapter implements Closeable {
   /** The debuggee is about to run again: references die with the stop. */
   private void resumed() {
     stoppedThreadId = null;
+    unwindingException = false;
   }
 
   // ------------------------------------------------------------------ helpers
