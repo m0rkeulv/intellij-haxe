@@ -85,6 +85,11 @@ function pill(cell) {
   const { tests, fails } = cellTotals(cell);
   if (tests === 0) return '<span class="pill warn">no tests</span>';
   if (fails > 0) return '<span class="pill bad">' + fails + ' fail</span>';
+  const flaky = (cell.flaky || []).length;
+  if (flaky > 0) {
+    return '<span class="pill ok" title="' + flaky + ' flaky test(s) passed on retry">'
+      + tests + '/' + tests + ' ~</span>';
+  }
   return '<span class="pill ok">' + tests + '/' + tests + '</span>';
 }
 function failuresOf(cells) {
@@ -149,9 +154,12 @@ for (const lane of Object.keys(LANE_TITLES)) {
         if (!cell || cell.status === "compile-fail" || cell.status === "timeout") { html += "<td>" + pill(cell) + "</td>"; continue; }
         if (!cls) { html += "<td><span class='pill na'>&mdash;</span></td>"; continue; }
         const fails = cls.failures + cls.errors;
+        const flakyHere = (cell.flaky || []).some(t => t.startsWith(name + "::"));
         html += "<td>" + (fails > 0
           ? "<span class='pill bad'>" + fails + " fail</span>"
-          : "<span class='pill ok'>" + cls.tests + "/" + cls.tests + "</span>") + "</td>";
+          : (flakyHere
+             ? "<span class='pill ok' title='flaky: passed on retry'>" + cls.tests + "/" + cls.tests + " ~</span>"
+             : "<span class='pill ok'>" + cls.tests + "/" + cls.tests + "</span>")) + "</td>";
       }
       html += "</tr>";
     }
@@ -162,6 +170,14 @@ for (const lane of Object.keys(LANE_TITLES)) {
     html += "<details open><summary>" + fails.length + " failing test" + (fails.length > 1 ? "s" : "") + "</summary>"
       + fails.map(f => "<div class='fail-item'><code>" + f.what + "</code> on " + f.where
                        + (f.message ? "<br>" + f.message.replace(/&/g, "&amp;").replace(/</g, "&lt;") : "") + "</div>").join("")
+      + "</details>";
+  }
+  const flakies = cells.flatMap(cell => (cell.flaky || []).map(t =>
+    ({ where: shortHaxe(cell.haxe) + (cell.runtime ? " × " + shortHl(cell.runtime) : ""), what: t })));
+  if (flakies.length > 0) {
+    html += "<details><summary style='color: var(--warn-text);'>" + flakies.length
+      + " flaky test" + (flakies.length > 1 ? "s" : "") + " (failed once, passed on retry — machine load, not a version problem)</summary>"
+      + flakies.map(f => "<div class='fail-item'><code>" + f.what + "</code> on " + f.where + "</div>").join("")
       + "</details>";
   }
   lanes.insertAdjacentHTML("beforeend", html);

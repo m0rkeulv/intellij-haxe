@@ -133,6 +133,60 @@ public final class MatrixMain {
 
   // ------------------------------------------------------------------ lanes
 
+  private record SuiteRun(Gradle.Status status, List<Results.ClassResult> classes, List<String> flaky) {
+  }
+
+  /**
+   * Runs a cell's test suite; when a HANDFUL of suites fail, they are rerun
+   * once and the results merged — a test that fails then passes is reported
+   * as FLAKY (machine load, not a version incompatibility) instead of
+   * failing the cell. The debugger ITs drive real debuggees against wait
+   * timeouts, so contention flakes are a fact of life; the certified-green
+   * combos kept "failing surprisingly" on busy machines without this.
+   */
+  private SuiteRun runSuite(String modulePath, List<String> extraArgs, Map<String, String> env,
+                            Path logFile, int timeoutSec, Path moduleResults, Path evidence) throws IOException {
+    List<String> first = new ArrayList<>(List.of(modulePath + ":cleanTest", modulePath + ":test"));
+    first.addAll(extraArgs);
+    Gradle.Status status = gradle.run(first, env, logFile, timeoutSec, true);
+    Gradle.killStrays();
+    List<Results.ClassResult> classes = Results.collect(moduleResults, evidence);
+    List<Results.ClassResult> failing = classes.stream()
+      .filter(c -> c.failures() + c.errors() > 0).toList();
+    if (failing.isEmpty() || failing.size() > 8 || status == Gradle.Status.TIMEOUT) {
+      return new SuiteRun(status, classes, List.of());
+    }
+    log.line("      " + failing.size() + " suite(s) failed - retrying them once to tell machine flakes from real failures");
+    List<String> before = failing.stream()
+      .flatMap(c -> c.failed().stream().map(f -> c.name() + "::" + f.test())).toList();
+    List<String> retry = new ArrayList<>(List.of(modulePath + ":cleanTest", modulePath + ":test"));
+    for (Results.ClassResult failed : failing) {
+      retry.add("--tests");
+      retry.add(failed.fqName());
+    }
+    retry.addAll(extraArgs);
+    gradle.run(retry, env, Path.of(logFile + ".retry"), timeoutSec, true);
+    Gradle.killStrays();
+    // the retry results REPLACE the retried suites' evidence; untouched
+    // suites keep their first-run XMLs
+    if (Files.isDirectory(moduleResults)) {
+      try (var files = Files.list(moduleResults)) {
+        for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".xml")).toList()) {
+          Files.copy(file, evidence.resolve(file.getFileName()),
+                     java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+      }
+    }
+    List<Results.ClassResult> merged = Results.parse(evidence);
+    List<String> after = merged.stream()
+      .flatMap(c -> c.failed().stream().map(f -> c.name() + "::" + f.test())).toList();
+    List<String> flaky = before.stream().filter(t -> !after.contains(t)).toList();
+    if (!flaky.isEmpty()) {
+      log.line("      flaky (passed on retry): " + String.join(", ", flaky));
+    }
+    return new SuiteRun(status, merged, flaky);
+  }
+
   private Map<String, String> haxeEnv(Path haxeDir) {
     Path binDir = Platform.findBinary(haxeDir, "haxe").getParent();
     Map<String, String> env = new LinkedHashMap<>();
@@ -148,13 +202,12 @@ public final class MatrixMain {
       String haxe = haxeDir.getFileName().toString();
       log.line("    " + haxe + " : running the eval suite");
       long start = System.nanoTime();
-      Gradle.Status status = gradle.run(
-        List.of(":debuggers:eval-debugger:cleanTest", ":debuggers:eval-debugger:test",
-                "-PdebuggerTests=true", "--no-build-cache", "--continue"),
-        haxeEnv(haxeDir), out.resolve("logs/eval-" + haxe + ".log"), 900, true);
-      Gradle.killStrays();
-      List<Results.ClassResult> classes = Results.collect(moduleResults, out.resolve("results/eval_" + haxe));
-      addCell("eval", haxe, null, status.name().toLowerCase(Locale.ROOT), classes, start);
+      SuiteRun run = runSuite(":debuggers:eval-debugger",
+                              List.of("-PdebuggerTests=true", "--no-build-cache", "--continue"),
+                              haxeEnv(haxeDir), out.resolve("logs/eval-" + haxe + ".log"), 900,
+                              moduleResults, out.resolve("results/eval_" + haxe));
+      addCell("eval", haxe, null, run.status().name().toLowerCase(Locale.ROOT),
+              run.classes(), run.flaky(), start);
     }
   }
 
@@ -178,23 +231,41 @@ public final class MatrixMain {
         .filter(e -> !Files.isRegularFile(moduleBuild.resolve(e.getValue())))
         .map(Map.Entry::getKey).toList();
       if (missing.size() == fixtures.size()) {
-        addCell("hxcpp", haxe, null, "compile-fail", List.of(), start);
+        diagnoseCompileFail(out.resolve("logs/hxcpp-" + haxe + "-build.log"));
+        addCell("hxcpp", haxe, null, "compile-fail", List.of(), List.of(), start);
         continue;
       }
       log.line("    " + haxe + " : fixtures built"
                + (missing.isEmpty() ? "" : " (missing " + missing.size() + ")") + ", running the suite");
-      List<String> test = new ArrayList<>(List.of(
-        ":debuggers:intellij-hxcpp-debugger:cleanTest", ":debuggers:intellij-hxcpp-debugger:test",
-        "--no-build-cache"));
-      test.addAll(EXCLUDE_HAXELIB);
-      missing.forEach(t -> test.addAll(List.of("-x", t)));
-      test.add("--continue");
-      Gradle.Status status = gradle.run(test, haxeEnv(haxeDir),
-                                        out.resolve("logs/hxcpp-" + haxe + "-test.log"), 1500, true);
-      Gradle.killStrays();
-      List<Results.ClassResult> classes = Results.collect(
-        moduleBuild.resolve("test-results/test"), out.resolve("results/hxcpp_" + haxe));
-      addCell("hxcpp", haxe, null, status.name().toLowerCase(Locale.ROOT), classes, start);
+      List<String> extra = new ArrayList<>(List.of("--no-build-cache"));
+      extra.addAll(EXCLUDE_HAXELIB);
+      missing.forEach(t -> extra.addAll(List.of("-x", t)));
+      extra.add("--continue");
+      SuiteRun run = runSuite(":debuggers:intellij-hxcpp-debugger", extra, haxeEnv(haxeDir),
+                              out.resolve("logs/hxcpp-" + haxe + "-test.log"), 1500,
+                              moduleBuild.resolve("test-results/test"), out.resolve("results/hxcpp_" + haxe));
+      addCell("hxcpp", haxe, null, run.status().name().toLowerCase(Locale.ROOT),
+              run.classes(), run.flaky(), start);
+    }
+  }
+
+  /**
+   * Reads a failed fixture build's error output for KNOWN toolchain problems
+   * and logs an actionable hint — "compile-fail" alone sent the first user
+   * hunting through log files for what was an environment issue.
+   */
+  private void diagnoseCompileFail(Path buildLog) {
+    try {
+      Path err = Path.of(buildLog + ".err");
+      String text = (Files.isRegularFile(err) ? Files.readString(err) : "")
+                    + (Files.isRegularFile(buildLog) ? Files.readString(buildLog) : "");
+      if (text.contains("cl.exe")) {
+        log.line("      HINT: MSVC (cl.exe) was not usable in this build's environment.");
+        log.line("      The gradle daemon keeps the environment it was STARTED with - if it was");
+        log.line("      started from an IDE or a stale shell, hxcpp cannot find Visual Studio.");
+        log.line("      Run `gradlew --stop`, then rerun from a shell where a plain hxcpp build works.");
+      }
+    } catch (IOException ignored) {
     }
   }
 
@@ -222,8 +293,9 @@ public final class MatrixMain {
         .filter(t -> !Files.isRegularFile(moduleBuild.resolve("hl/" + HL_FIXTURE_FILES.get(t))))
         .toList();
       if (missing.contains("buildTestFixture")) {
+        diagnoseCompileFail(out.resolve("logs/hl-" + haxe + "-build.log"));
         for (Path hlDir : hlDirs) {
-          addCell("hashlink", haxe, hlDir.getFileName().toString(), "compile-fail", List.of(), start);
+          addCell("hashlink", haxe, hlDir.getFileName().toString(), "compile-fail", List.of(), List.of(), start);
         }
         continue;
       }
@@ -235,24 +307,23 @@ public final class MatrixMain {
         Path hlBinary = Platform.findBinary(hlDir, "hl");
         log.line("    " + haxe + " x " + runtime + " : running the HL suite");
         long cellStart = System.nanoTime();
-        List<String> test = new ArrayList<>(List.of(
-          ":debuggers:hashlink-debug-adapter:cleanTest", ":debuggers:hashlink-debug-adapter:test",
+        List<String> extra = new ArrayList<>(List.of(
           "-PhashlinkBin=" + hlBinary, "--no-build-cache", "-x", "buildDebugAdapter"));
-        HL_FIXTURE_TASKS.forEach(t -> test.addAll(List.of("-x", t)));
-        test.addAll(EXCLUDE_HAXELIB);
-        test.add("--continue");
+        HL_FIXTURE_TASKS.forEach(t -> extra.addAll(List.of("-x", t)));
+        extra.addAll(EXCLUDE_HAXELIB);
+        extra.add("--continue");
         Map<String, String> env = haxeEnv(haxeDir);
         if (!Platform.WINDOWS) {
           // linux: hl finds libhl.so and the std .hdll libraries beside itself
           String previous = System.getenv("LD_LIBRARY_PATH");
           env.put("LD_LIBRARY_PATH", hlBinary.getParent() + (previous != null ? ":" + previous : ""));
         }
-        Gradle.Status status = gradle.run(test, env, out.resolve("logs/hl-" + haxe + "-" + runtime + ".log"),
-                                          1500, true);
-        Gradle.killStrays();
-        List<Results.ClassResult> classes = Results.collect(
-          moduleBuild.resolve("test-results/test"), out.resolve("results/hl_" + haxe + "__" + runtime));
-        addCell("hashlink", haxe, runtime, status.name().toLowerCase(Locale.ROOT), classes, cellStart);
+        SuiteRun run = runSuite(":debuggers:hashlink-debug-adapter", extra, env,
+                                out.resolve("logs/hl-" + haxe + "-" + runtime + ".log"), 1500,
+                                moduleBuild.resolve("test-results/test"),
+                                out.resolve("results/hl_" + haxe + "__" + runtime));
+        addCell("hashlink", haxe, runtime, run.status().name().toLowerCase(Locale.ROOT),
+                run.classes(), run.flaky(), cellStart);
       }
       if (lastModified(adapter) != pinned) {
         log.line("  WARNING: pinned adapter was rebuilt during " + haxe);
@@ -296,7 +367,7 @@ public final class MatrixMain {
             lane = name.substring(0, split);
             haxe = name.substring(split + 1);
           }
-          cells.add(new Results.Cell(lane, haxe, runtime, "ok", Results.parse(dir), 0));
+          cells.add(new Results.Cell(lane, haxe, runtime, "ok", Results.parse(dir), List.of(), 0));
         }
       }
     }
@@ -318,13 +389,14 @@ public final class MatrixMain {
   // ---------------------------------------------------------------- helpers
 
   private void addCell(String lane, String haxe, String runtime, String status,
-                       List<Results.ClassResult> classes, long startNanos) {
+                       List<Results.ClassResult> classes, List<String> flaky, long startNanos) {
     long seconds = (System.nanoTime() - startNanos) / 1_000_000_000L;
-    Results.Cell cell = new Results.Cell(lane, haxe, runtime, status, classes, seconds);
+    Results.Cell cell = new Results.Cell(lane, haxe, runtime, status, classes, flaky, seconds);
     cells.add(cell);
-    log.line(String.format("  %s %s%s : %s classes=%d failures=%d (%ds)",
+    log.line(String.format("  %s %s%s : %s classes=%d failures=%d%s (%ds)",
                            lane, haxe, runtime != null ? " x " + runtime : "", status,
-                           classes.size(), cell.totalFailures(), seconds));
+                           classes.size(), cell.totalFailures(),
+                           flaky.isEmpty() ? "" : " flaky=" + flaky.size(), seconds));
   }
 
   private static List<String> names(List<Path> dirs) {

@@ -17,10 +17,12 @@ final class Results {
   record FailedTest(String test, String message) {
   }
 
-  record ClassResult(String name, int tests, int failures, int errors, int skipped, List<FailedTest> failed) {
+  record ClassResult(String name, String fqName, int tests, int failures, int errors, int skipped,
+                     List<FailedTest> failed) {
   }
 
-  record Cell(String lane, String haxe, String runtime, String status, List<ClassResult> classes, long seconds) {
+  record Cell(String lane, String haxe, String runtime, String status, List<ClassResult> classes,
+              List<String> flakyTests, long seconds) {
     int totalFailures() {
       return classes.stream().mapToInt(c -> c.failures() + c.errors()).sum();
     }
@@ -66,7 +68,7 @@ final class Results {
       }
       String name = suite.getAttribute("name");
       return new ClassResult(
-        name.substring(name.lastIndexOf('.') + 1),
+        name.substring(name.lastIndexOf('.') + 1), name,
         intAttr(suite, "tests"), intAttr(suite, "failures"),
         intAttr(suite, "errors"), intAttr(suite, "skipped"), failed);
     } catch (Exception e) {

@@ -38,6 +38,7 @@ final class Report {
       json.append(",\"runtime\":").append(cell.runtime() == null ? "null" : quote(cell.runtime()));
       json.append(",\"status\":").append(quote(cell.status()));
       json.append(",\"seconds\":").append(cell.seconds());
+      json.append(",\"flaky\":").append(array(cell.flakyTests()));
       json.append(",\"classes\":[");
       List<Results.ClassResult> classes = cell.classes();
       for (int c = 0; c < classes.size(); c++) {
