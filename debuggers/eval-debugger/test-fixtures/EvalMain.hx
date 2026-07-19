@@ -9,7 +9,7 @@ class EvalMain {
 		var greeting = "hello";
 		var count = greeting.length + 2; // BREAK_LINE = 10
 		var nested = outer(inner(3)); // NESTED_CALL_LINE = 11
-		Sys.println("eval-fixture:" + greeting + ":" + count + ":" + nested); chain(); // same line: keeps constants below stable
+		Sys.println("eval-fixture:" + greeting + ":" + count + ":" + nested); chain(); Coll.collections(); // same line: keeps constants below stable
 	}
 
 	static function inner(x:Int):Int {
@@ -41,5 +41,16 @@ class Chain {
 	public function test3():Chain {
 		sum += 100; // TEST3_LINE = 42
 		return this;
+	}
+}
+
+class Coll {
+	public static function collections() {
+		var items = make(); // via a call, or the analyzer scalar-replaces the array
+		var chain = new Chain();
+		Sys.println("coll:" + items[1] + ":" + chain.sum); // COLL_LINE = 51
+	}
+	static function make():Array<Int> {
+		return [10, 20, 30];
 	}
 }

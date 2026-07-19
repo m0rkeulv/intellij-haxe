@@ -77,6 +77,7 @@ public class EvalDebugAdapterLiveTest {
   private static final int OUTER_LINE = 20;       // first executable line inside outer()
   private static final int CHAIN_LINE = 25;       // `cfg.test1(1).test2().test3().test1(2);`
   private static final int CHAIN_AFTER_LINE = 26; // the println after the chain
+  private static final int COLL_LINE = 51;        // Coll.collections println (items array live)
   private static final long TIMEOUT = 15_000;
 
   private EvalDebugAdapter adapter;
@@ -565,5 +566,88 @@ public class EvalDebugAdapterLiveTest {
     assertTrue("evaluate after the edit", eResponse.isSuccess());
     assertTrue("the edit stuck (was " + eResponse.getBody().getResult() + ")",
                eResponse.getBody().getResult().contains("edited"));
+  }
+
+  @Test
+  public void setVariableEditsAnArrayElementByItsBracketName() throws Exception {
+    // array children are named "[0]"/"[1]"/... by the VM and edited against
+    // the ARRAY's variablesReference with that bracket name — exactly what
+    // the variables view sends for an element row
+    InitializeRequest initialize = new InitializeRequest();
+    initialize.setArguments(new InitializeRequestArguments());
+    assertTrue("initialize", request(initialize).isSuccess());
+    dapClient.pollEvent(TIMEOUT);
+    assertTrue("launch", request(new LaunchRequest()).isSuccess());
+
+    String fixture = fixtureDir().resolve("EvalMain.hx").toString();
+    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(fixture);
+    bpArgs.setSource(source);
+    SourceBreakpoint breakpoint = new SourceBreakpoint();
+    breakpoint.setLine(COLL_LINE);
+    bpArgs.setBreakpoints(List.of(breakpoint));
+    setBreakpoints.setArguments(bpArgs);
+    assertTrue("setBreakpoints", request(setBreakpoints).isSuccess());
+    assertTrue("configurationDone", request(new ConfigurationDoneRequest()).isSuccess());
+
+    StoppedEvent stopped = awaitStopped();
+    int threadId = stopped.getBody().getThreadId();
+    StackTraceRequest stackTrace = new StackTraceRequest();
+    StackTraceArguments stArgs = new StackTraceArguments();
+    stArgs.setThreadId(threadId);
+    stackTrace.setArguments(stArgs);
+    StackFrame top = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+
+    ScopesRequest scopes = new ScopesRequest();
+    ScopesArguments scArgs = new ScopesArguments();
+    scArgs.setFrameId(top.getId());
+    scopes.setArguments(scArgs);
+    ScopesResponse scResponse = (ScopesResponse)request(scopes);
+    assertTrue("scopes", scResponse.isSuccess());
+
+    Variable items = null;
+    for (Scope scope : scResponse.getBody().getScopes()) {
+      VariablesRequest variables = new VariablesRequest();
+      VariablesArguments vArgs = new VariablesArguments();
+      vArgs.setVariablesReference(scope.getVariablesReference());
+      variables.setArguments(vArgs);
+      for (Variable variable : ((VariablesResponse)request(variables)).getBody().getVariables()) {
+        if ("items".equals(variable.getName())) {
+          items = variable;
+        }
+      }
+    }
+    assertNotNull("found the 'items' array local", items);
+    assertTrue("items is expandable", items.getVariablesReference() > 0);
+
+    // the element rows carry the VM's bracket names
+    VariablesRequest elements = new VariablesRequest();
+    VariablesArguments elArgs = new VariablesArguments();
+    elArgs.setVariablesReference(items.getVariablesReference());
+    elements.setArguments(elArgs);
+    List<Variable> children = ((VariablesResponse)request(elements)).getBody().getVariables();
+    assertEquals("three elements", 3, children.size());
+    assertEquals("bracket-named element", "[1]", children.get(1).getName());
+
+    SetVariableRequest setVariable = new SetVariableRequest();
+    SetVariableArguments svArgs = new SetVariableArguments();
+    svArgs.setVariablesReference(items.getVariablesReference());
+    svArgs.setName("[1]");
+    svArgs.setValue("99");
+    setVariable.setArguments(svArgs);
+    SetVariableResponse svResponse = (SetVariableResponse)request(setVariable);
+    assertTrue("setVariable on the element succeeded: " + svResponse.getMessage(), svResponse.isSuccess());
+    assertEquals("response carries the new element value", "99", svResponse.getBody().getValue());
+
+    EvaluateRequest evaluate = new EvaluateRequest();
+    EvaluateArguments eArgs = new EvaluateArguments();
+    eArgs.setExpression("items[1]");
+    eArgs.setFrameId(top.getId());
+    evaluate.setArguments(eArgs);
+    EvaluateResponse eResponse = (EvaluateResponse)request(evaluate);
+    assertTrue("evaluate after the edit", eResponse.isSuccess());
+    assertEquals("the element edit stuck", "99", eResponse.getBody().getResult());
   }
 }
