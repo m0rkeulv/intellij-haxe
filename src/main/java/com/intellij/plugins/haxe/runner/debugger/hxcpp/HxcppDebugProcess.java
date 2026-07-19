@@ -61,6 +61,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.Variables
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetVariableResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetVariableResponseBody;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.VariablesResponse;
@@ -588,10 +589,13 @@ public class HxcppDebugProcess extends XDebugProcess {
   }
 
   /**
-   * Sets the named child of a container reference to `value`. Returns the new
-   * rendered value; throws with the server's message on failure.
+   * Sets the named child of a container reference to `value`. Returns the
+   * variable's NEW state (value, type, variablesReference) — the caller must
+   * adopt ALL of it: assigning a container value creates a fresh reference,
+   * and keeping the old one shows the old children after the edit. Throws
+   * with the server's message on failure.
    */
-  String requestSetVariable(int containerReference, String name, String value) {
+  SetVariableResponseBody requestSetVariable(int containerReference, String name, String value) {
     SetVariableRequest request = new SetVariableRequest();
     SetVariableArguments arguments = new SetVariableArguments();
     arguments.setVariablesReference(containerReference);
@@ -599,8 +603,8 @@ public class HxcppDebugProcess extends XDebugProcess {
     arguments.setValue(value);
     request.setArguments(arguments);
     Response response = sendRequest(request);
-    if (response instanceof SetVariableResponse ok && response.isSuccess()) {
-      return ok.getBody() != null ? ok.getBody().getValue() : value;
+    if (response instanceof SetVariableResponse ok && response.isSuccess() && ok.getBody() != null) {
+      return ok.getBody();
     }
     throw new IllegalStateException(response != null && response.getMessage() != null
                                     ? response.getMessage() : "the debugger rejected the change");

@@ -76,6 +76,11 @@ final class HxcppValue extends HaxeDebuggerValue {
     if (containerReference <= 0) {
       return null; // no container to set this value against
     }
+    if ("String".equals(containerTypeName())) {
+      // a String's exposed rows (length/byteLength) are derived, not fields;
+      // no backend can write them — and the eval VM CRASHES on the attempt
+      return null;
+    }
     return new XValueModifier() {
       @Override
       public @Nullable String getInitialValueEditorText() {
@@ -87,10 +92,16 @@ final class HxcppValue extends HaxeDebuggerValue {
         String text = expression.getExpression();
         process.onRequestThread(() -> {
           try {
-            String newValue = process.requestSetVariable(containerReference, variable.getName(), text);
-            // the node re-presents THIS instance after the edit: update the
-            // cached variable or the view keeps showing the old value
-            variable.setValue(newValue);
+            var updated = process.requestSetVariable(containerReference, variable.getName(), text);
+            // the node re-presents THIS instance after the edit: adopt the
+            // WHOLE new state. Assigning a container value (an array, an
+            // object) creates a fresh variablesReference — keeping the old
+            // one makes the expanded row keep showing the old children.
+            variable.setValue(updated.getValue());
+            if (updated.getType() != null) {
+              variable.setType(updated.getType());
+            }
+            variable.setVariablesReference(updated.getVariablesReference());
             callback.valueModified();
           } catch (RuntimeException e) {
             callback.errorOccurred(e.getMessage() != null ? e.getMessage() : "Could not set value");

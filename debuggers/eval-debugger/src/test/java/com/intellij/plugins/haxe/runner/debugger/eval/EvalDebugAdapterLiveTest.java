@@ -649,5 +649,107 @@ public class EvalDebugAdapterLiveTest {
     EvaluateResponse eResponse = (EvaluateResponse)request(evaluate);
     assertTrue("evaluate after the edit", eResponse.isSuccess());
     assertEquals("the element edit stuck", "99", eResponse.getBody().getResult());
+
+    // replacing the WHOLE array through its scope: the response must carry a
+    // FRESH variablesReference whose children are the new elements — the
+    // view adopts it, or an expanded row keeps showing the old array
+    Integer itemsScope = null;
+    for (Scope scope : ((ScopesResponse)request(scopesRequestFor(top.getId()))).getBody().getScopes()) {
+      for (Variable variable : requestChildren(scope.getVariablesReference())) {
+        if ("items".equals(variable.getName())) {
+          itemsScope = scope.getVariablesReference();
+        }
+      }
+    }
+    assertNotNull("scope holding items", itemsScope);
+    SetVariableRequest replaceAll = new SetVariableRequest();
+    SetVariableArguments raArgs = new SetVariableArguments();
+    raArgs.setVariablesReference(itemsScope);
+    raArgs.setName("items");
+    raArgs.setValue("[0, 10, 30]");
+    replaceAll.setArguments(raArgs);
+    SetVariableResponse raResponse = (SetVariableResponse)request(replaceAll);
+    assertTrue("whole-array replace succeeded: " + raResponse.getMessage(), raResponse.isSuccess());
+    int freshReference = raResponse.getBody().getVariablesReference();
+    assertTrue("replacement carries a fresh expandable reference", freshReference > 0);
+    List<Variable> fresh = requestChildren(freshReference);
+    assertEquals("new array has three elements", 3, fresh.size());
+    assertEquals("new middle element", "10", fresh.get(1).getValue());
+  }
+
+  @Test
+  public void settingAStringsDerivedRowsIsRefusedWithoutTouchingTheVm() throws Exception {
+    // a String expands to length/byteLength; WRITING those crashes the eval
+    // VM ("Cannot run Haxe code in a non-Haxe thread" assert, then a 10s
+    // timeout killed the session — user-reported). The adapter must refuse
+    // fast, and the VM must stay healthy afterwards.
+    InitializeRequest initialize = new InitializeRequest();
+    initialize.setArguments(new InitializeRequestArguments());
+    assertTrue("initialize", request(initialize).isSuccess());
+    dapClient.pollEvent(TIMEOUT);
+    assertTrue("launch", request(new LaunchRequest()).isSuccess());
+
+    String fixture = fixtureDir().resolve("EvalMain.hx").toString();
+    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(fixture);
+    bpArgs.setSource(source);
+    SourceBreakpoint breakpoint = new SourceBreakpoint();
+    breakpoint.setLine(BREAK_LINE);
+    bpArgs.setBreakpoints(List.of(breakpoint));
+    setBreakpoints.setArguments(bpArgs);
+    assertTrue("setBreakpoints", request(setBreakpoints).isSuccess());
+    assertTrue("configurationDone", request(new ConfigurationDoneRequest()).isSuccess());
+
+    StoppedEvent stopped = awaitStopped();
+    StackTraceRequest stackTrace = new StackTraceRequest();
+    StackTraceArguments stArgs = new StackTraceArguments();
+    stArgs.setThreadId(stopped.getBody().getThreadId());
+    stackTrace.setArguments(stArgs);
+    StackFrame top = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+
+    // the String local 'greeting' hands out an expandable reference
+    EvaluateRequest evaluate = new EvaluateRequest();
+    EvaluateArguments eArgs = new EvaluateArguments();
+    eArgs.setExpression("greeting");
+    eArgs.setFrameId(top.getId());
+    evaluate.setArguments(eArgs);
+    EvaluateResponse eResponse = (EvaluateResponse)request(evaluate);
+    assertTrue("evaluate greeting", eResponse.isSuccess());
+    int stringReference = eResponse.getBody().getVariablesReference();
+    assertTrue("a String is expandable in eval", stringReference > 0);
+
+    SetVariableRequest write = new SetVariableRequest();
+    SetVariableArguments wArgs = new SetVariableArguments();
+    wArgs.setVariablesReference(stringReference);
+    wArgs.setName("length");
+    wArgs.setValue("9");
+    write.setArguments(wArgs);
+    long before = System.currentTimeMillis();
+    Response refused = request(write);
+    long elapsed = System.currentTimeMillis() - before;
+    assertFalse("the write is refused", refused.isSuccess());
+    assertTrue("refused FAST, not via a VM timeout (was " + elapsed + "ms)", elapsed < 5_000);
+
+    // and the VM survived: a normal request still answers
+    EvaluateResponse after = (EvaluateResponse)request(evaluate);
+    assertTrue("VM still healthy after the refused write", after.isSuccess());
+  }
+
+  private ScopesRequest scopesRequestFor(int frameId) {
+    ScopesRequest scopes = new ScopesRequest();
+    ScopesArguments scArgs = new ScopesArguments();
+    scArgs.setFrameId(frameId);
+    scopes.setArguments(scArgs);
+    return scopes;
+  }
+
+  private List<Variable> requestChildren(int variablesReference) throws Exception {
+    VariablesRequest variables = new VariablesRequest();
+    VariablesArguments vArgs = new VariablesArguments();
+    vArgs.setVariablesReference(variablesReference);
+    variables.setArguments(vArgs);
+    return ((VariablesResponse)request(variables)).getBody().getVariables();
   }
 }

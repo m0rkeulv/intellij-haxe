@@ -53,6 +53,11 @@ public abstract class HaxeDebuggerValue extends XNamedValue {
     return evaluationPath;
   }
 
+  /** The runtime type of the container this value is a member of, or null. */
+  protected final @Nullable String containerTypeName() {
+    return containerTypeName;
+  }
+
   // Pre-fills the Evaluate Expression dialog when this node is selected; no
   // prefill (empty dialog) for a node whose path is not expressible.
   @Override

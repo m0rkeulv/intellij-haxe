@@ -133,6 +133,15 @@ public class EvalDebugAdapter implements Closeable {
    */
   private final java.util.Map<String, java.util.Set<Integer>> breakpointLines =
     new java.util.concurrent.ConcurrentHashMap<>();
+  /**
+   * Runtime type by variablesReference, remembered as values are handed out.
+   * Consulted before a setVariable: writing a String's derived rows
+   * (length/byteLength) CRASHES the eval VM ("Cannot run Haxe code in a
+   * non-Haxe thread" assert, live-reproduced), so those are refused here.
+   * References die with each resume.
+   */
+  private final java.util.Map<Integer, String> referenceTypes =
+    new java.util.concurrent.ConcurrentHashMap<>();
   /** Thread whose step loop is running on the request thread; null otherwise. */
   private volatile Integer steppingThreadId;
   /**
@@ -514,6 +523,7 @@ public class EvalDebugAdapter implements Closeable {
   private void handleVariables(VariablesRequest request) throws IOException {
     List<Variable> variables = new ArrayList<>();
     for (EvalProtocol.EvalVar var : vm().getVariables(request.getArguments().getVariablesReference())) {
+      rememberReferenceType(var);
       variables.add(toVariable(var));
     }
     VariablesResponseBody body = new VariablesResponseBody();
@@ -988,9 +998,16 @@ public class EvalDebugAdapter implements Closeable {
    */
   private void handleSetVariable(SetVariableRequest request) throws IOException {
     SetVariableArguments arguments = request.getArguments();
+    if ("String".equals(referenceTypes.get(arguments.getVariablesReference()))) {
+      // a String's rows (length/byteLength) are derived values; the VM does
+      // not survive the write attempt (non-Haxe-thread assert), so refuse
+      sendErrorResponse(request, "String contents are read-only");
+      return;
+    }
     EvalProtocol.EvalVar updated = vm().setVariable(
       arguments.getVariablesReference(), arguments.getName(),
       stripTrailingSemicolons(arguments.getValue()));
+    rememberReferenceType(updated);
     SetVariableResponseBody body = new SetVariableResponseBody();
     body.setValue(updated.value());
     body.setType(updated.type());
@@ -1012,6 +1029,7 @@ public class EvalDebugAdapter implements Closeable {
       return;
     }
     EvalProtocol.EvalVar result = vm().evaluate(stripTrailingSemicolons(request.getArguments().getExpression()), frameId);
+    rememberReferenceType(result);
     EvaluateResponseBody body = new EvaluateResponseBody();
     body.setResult(result.value());
     body.setType(result.type());
@@ -1097,6 +1115,14 @@ public class EvalDebugAdapter implements Closeable {
   private void resumed() {
     stoppedThreadId = null;
     unwindingException = false;
+    referenceTypes.clear();
+  }
+
+  /** Remembers the runtime type behind a handed-out variablesReference. */
+  private void rememberReferenceType(EvalProtocol.EvalVar var) {
+    if (var.id() > 0 && var.numChildren() > 0 && var.type() != null) {
+      referenceTypes.put(var.id(), var.type());
+    }
   }
 
   // ------------------------------------------------------------------ helpers
