@@ -16,3 +16,6 @@ intellij-haxe*.jar
 hs_err_pid*.log
 replay_pid*.log
 
+
+# provisioned debugger toolchains (downloaded by debuggerCompatibilityReport)
+/debuggerResources/

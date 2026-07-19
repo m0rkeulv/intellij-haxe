@@ -15,4 +15,5 @@ include(":debuggers:vshaxe-hxcpp-debugger-adapter")
 include(":debuggers:intellij-hxcpp-debugger")
 include(":debuggers:hxcpp-debugger-protocol-legacy")
 include(":debuggers:eval-debugger")
+include(":debuggers:compat-matrix")
 
