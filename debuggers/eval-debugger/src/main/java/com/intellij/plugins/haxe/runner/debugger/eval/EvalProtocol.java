@@ -123,6 +123,19 @@ public final class EvalProtocol {
     return parseVar(connection.request("evaluate", params, DEFAULT_TIMEOUT_MS));
   }
 
+  /**
+   * Sets the named member of container {@code id} (a scope or a value id — the
+   * VM's single id space) to the parsed {@code value} expression; returns the
+   * variable's new state (evalDebugSocket.ml: id/name/value, var_to_json back).
+   */
+  public EvalVar setVariable(int id, String name, String value) throws IOException {
+    ObjectNode params = MAPPER.createObjectNode();
+    params.put("id", id);
+    params.put("name", name);
+    params.put("value", value);
+    return parseVar(connection.request("setVariable", params, DEFAULT_TIMEOUT_MS));
+  }
+
   // --- breakpoints ---
 
   /** Replaces the file's breakpoints; returns the VM-assigned ids in order. */

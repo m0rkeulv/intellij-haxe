@@ -31,6 +31,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesReq
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExpressionSteppingRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
@@ -44,6 +46,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.Variables
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetVariableResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.VariablesResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
@@ -483,5 +486,84 @@ public class EvalDebugAdapterLiveTest {
     assertTrue("position advanced within the line (col " + before.getColumn() + " -> " + after.getColumn() + ")",
                after.getColumn() != before.getColumn());
     assertNotNull("span still present", after.getEndColumn());
+  }
+
+  @Test
+  public void setVariableEditsALocalThroughTheVariablesView() throws Exception {
+    // the variables view's inline Set Value: DAP setVariable against the
+    // scope's variablesReference, answered with the variable's NEW state,
+    // and the change must actually stick in the debuggee
+    InitializeRequest initialize = new InitializeRequest();
+    initialize.setArguments(new InitializeRequestArguments());
+    assertTrue("initialize", request(initialize).isSuccess());
+    dapClient.pollEvent(TIMEOUT);
+    assertTrue("launch", request(new LaunchRequest()).isSuccess());
+
+    String fixture = fixtureDir().resolve("EvalMain.hx").toString();
+    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(fixture);
+    bpArgs.setSource(source);
+    SourceBreakpoint breakpoint = new SourceBreakpoint();
+    breakpoint.setLine(BREAK_LINE);
+    bpArgs.setBreakpoints(List.of(breakpoint));
+    setBreakpoints.setArguments(bpArgs);
+    assertTrue("setBreakpoints", request(setBreakpoints).isSuccess());
+    assertTrue("configurationDone", request(new ConfigurationDoneRequest()).isSuccess());
+
+    StoppedEvent stopped = awaitStopped();
+    int threadId = stopped.getBody().getThreadId();
+    StackTraceRequest stackTrace = new StackTraceRequest();
+    StackTraceArguments stArgs = new StackTraceArguments();
+    stArgs.setThreadId(threadId);
+    stackTrace.setArguments(stArgs);
+    StackFrame top = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+
+    ScopesRequest scopes = new ScopesRequest();
+    ScopesArguments scArgs = new ScopesArguments();
+    scArgs.setFrameId(top.getId());
+    scopes.setArguments(scArgs);
+    ScopesResponse scResponse = (ScopesResponse)request(scopes);
+    assertTrue("scopes", scResponse.isSuccess());
+
+    // find the scope that holds the local 'greeting'
+    Integer greetingScope = null;
+    for (Scope scope : scResponse.getBody().getScopes()) {
+      VariablesRequest variables = new VariablesRequest();
+      VariablesArguments vArgs = new VariablesArguments();
+      vArgs.setVariablesReference(scope.getVariablesReference());
+      variables.setArguments(vArgs);
+      VariablesResponse vResponse = (VariablesResponse)request(variables);
+      assertTrue("variables of scope " + scope.getName(), vResponse.isSuccess());
+      for (Variable variable : vResponse.getBody().getVariables()) {
+        if ("greeting".equals(variable.getName())) {
+          greetingScope = scope.getVariablesReference();
+        }
+      }
+    }
+    assertNotNull("found the scope holding 'greeting'", greetingScope);
+
+    SetVariableRequest setVariable = new SetVariableRequest();
+    SetVariableArguments svArgs = new SetVariableArguments();
+    svArgs.setVariablesReference(greetingScope);
+    svArgs.setName("greeting");
+    svArgs.setValue("\"edited\";"); // trailing ';' must be cleaned like evaluate's
+    setVariable.setArguments(svArgs);
+    SetVariableResponse svResponse = (SetVariableResponse)request(setVariable);
+    assertTrue("setVariable succeeded: " + svResponse.getMessage(), svResponse.isSuccess());
+    assertTrue("response carries the NEW value (was " + svResponse.getBody().getValue() + ")",
+               svResponse.getBody().getValue().contains("edited"));
+
+    // the edit must be visible to the debuggee, not just echoed back
+    EvaluateRequest evaluate = new EvaluateRequest();
+    EvaluateArguments eArgs = new EvaluateArguments();
+    eArgs.setExpression("greeting");
+    eArgs.setFrameId(top.getId());
+    evaluate.setArguments(eArgs);
+    EvaluateResponse eResponse = (EvaluateResponse)request(evaluate);
+    assertTrue("evaluate after the edit", eResponse.isSuccess());
+    assertTrue("the edit stuck (was " + eResponse.getBody().getResult() + ")",
+               eResponse.getBody().getResult().contains("edited"));
   }
 }

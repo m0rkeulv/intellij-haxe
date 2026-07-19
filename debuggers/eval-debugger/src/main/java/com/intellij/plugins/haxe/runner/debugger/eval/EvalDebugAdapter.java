@@ -29,6 +29,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesReq
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExpressionSteppingRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionArguments;
@@ -54,6 +56,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesRe
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponseBody;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetExceptionBreakpointsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetVariableResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetVariableResponseBody;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponseBody;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInResponse;
@@ -275,6 +279,7 @@ public class EvalDebugAdapter implements Closeable {
       case StepInRequest r -> handleStep(r);
       case StepOutRequest r -> handleStep(r);
       case StepIntoFunctionRequest r -> handleStepIntoFunction(r);
+      case SetVariableRequest r -> handleSetVariable(r);
       case SetExpressionSteppingRequest r -> {
         expressionStepping = r.getArguments() != null && r.getArguments().isEnabled();
         sendResponse(r, new Response());
@@ -972,6 +977,27 @@ public class EvalDebugAdapter implements Closeable {
   // trees do not distinguish files by case, so fold both for the lookup.
   private static String normalizePath(String path) {
     return path.replace('\\', '/').toLowerCase(java.util.Locale.ROOT);
+  }
+
+  /**
+   * Variables-view inline editing (Set Value): DAP's (variablesReference,
+   * name, value) maps 1:1 onto the VM's setVariable (id, name, value) — the
+   * VM's single id space IS variablesReference, and its response is the
+   * variable's new state (value parsed with the haxe expression parser, so
+   * the same trailing-semicolon cleanup as evaluate applies).
+   */
+  private void handleSetVariable(SetVariableRequest request) throws IOException {
+    SetVariableArguments arguments = request.getArguments();
+    EvalProtocol.EvalVar updated = vm().setVariable(
+      arguments.getVariablesReference(), arguments.getName(),
+      stripTrailingSemicolons(arguments.getValue()));
+    SetVariableResponseBody body = new SetVariableResponseBody();
+    body.setValue(updated.value());
+    body.setType(updated.type());
+    body.setVariablesReference(updated.numChildren() > 0 ? updated.id() : 0);
+    SetVariableResponse response = new SetVariableResponse();
+    response.setBody(body);
+    sendResponse(request, response);
   }
 
   private void handlePause(PauseRequest request) throws IOException {
