@@ -17,6 +17,14 @@ gradlew debuggerCompatibilityReport                       # all lanes
 gradlew debuggerCompatibilityReport -PmatrixLanes=eval    # one lane
 gradlew debuggerCompatibilityReport -PmatrixHaxe=haxe_4_1_5  # one haxe
                                      # version (handy for rerunning one cell)
+gradlew debuggerCompatibilityReport -PmatrixHl=hashlink-1.15.0  # one HL
+                                     # runtime (overrides the smart-reduced
+                                     # grid; combine with -PmatrixHaxe for
+                                     # targeted bughunting, e.g. the HL
+                                     # timing-flake investigation:
+                                     #   -PmatrixLanes=hashlink
+                                     #   -PmatrixHaxe=haxe_4_1_5,haxe_4_2_5
+                                     #   -PmatrixHl=hashlink-1.15.0)
 gradlew debuggerCompatibilityReport -PmatrixFull=true     # exhaustive HL grid
 gradlew debuggerCompatibilityReport -PmatrixReportOnly=true  # re-render the
                                      # report from the previous run's results
@@ -43,7 +51,9 @@ debuggerResources/            (gitignored)
     haxe_5_preview_1/
   hashlink/
     hashlink-1.15.0/          hl(.exe)           [downloaded on Windows]
-    ...
+    hashlink-nightly/         hl(.exe)           [downloaded on Windows AND
+    ...                        linux - master CI artifacts via nightly.link;
+                               delete the directory to pick up a newer build]
 ```
 
 A `.provisioned` marker makes re-runs free; delete a version directory to
@@ -78,6 +88,12 @@ First run adds the downloads (roughly 200 MB for the haxe versions).
 - `--no-daemon` on every child gradle call: the forked test JVM must inherit
   the lane's `PATH`/`HAXE_STD_PATH`; a warm daemon keeps the env it was born
   with and silently tests the wrong haxe.
+- Every lane cell logs `children resolve haxe <version>` first — a WARNING
+  there means the lane environment leaked (a stale daemon, an IDE-started
+  build, a surviving `Path` case-variant) and the cell would compile with
+  the wrong haxe against the lane's std, producing a confusing salad of
+  std-typing errors ("Compiler.hx ... Too many arguments"). Run
+  `gradlew --stop` and rerun from a normal shell.
 - `cleanTest --no-build-cache` per cell: the lane's haxe/runtime is not a
   tracked test input, so the build cache happily replays a previous cell's
   result as an 8-second "run".

@@ -26,6 +26,7 @@ public final class MatrixMain {
   private final Path out;
   private final List<String> lanes;
   private final List<String> haxeFilter;
+  private final List<String> hlFilter;
   private final boolean full;
   private final Log log;
   private final Gradle gradle;
@@ -47,12 +48,13 @@ public final class MatrixMain {
     "-x", "registerServerHaxelib", "-x", "installHscript");
 
   private MatrixMain(Path root, Path resources, Path out, List<String> lanes,
-                     List<String> haxeFilter, boolean full) throws IOException {
+                     List<String> haxeFilter, List<String> hlFilter, boolean full) throws IOException {
     this.root = root;
     this.resources = resources;
     this.out = out;
     this.lanes = lanes;
     this.haxeFilter = haxeFilter;
+    this.hlFilter = hlFilter;
     this.full = full;
     this.log = new Log(out.resolve("progress.log"));
     this.gradle = new Gradle(root, log);
@@ -64,6 +66,7 @@ public final class MatrixMain {
     Path out = root.resolve("build/reports/debugger-matrix");
     List<String> lanes = new ArrayList<>(List.of("eval", "hashlink", "hxcpp"));
     List<String> haxeFilter = List.of();
+    List<String> hlFilter = List.of();
     boolean full = false;
     boolean reportOnly = false;
     for (String arg : args) {
@@ -72,6 +75,9 @@ public final class MatrixMain {
                                   .map(s -> s.trim().toLowerCase(Locale.ROOT)).filter(s -> !s.isEmpty()).toList());
       } else if (arg.startsWith("--haxe=")) {
         haxeFilter = Arrays.stream(arg.substring(7).split(","))
+          .map(String::trim).filter(s -> !s.isEmpty()).toList();
+      } else if (arg.startsWith("--hl=")) {
+        hlFilter = Arrays.stream(arg.substring(5).split(","))
           .map(String::trim).filter(s -> !s.isEmpty()).toList();
       } else if (arg.startsWith("--resources=")) {
         resources = Path.of(arg.substring(12)).toAbsolutePath().normalize();
@@ -86,7 +92,7 @@ public final class MatrixMain {
         System.exit(2);
       }
     }
-    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, haxeFilter, full);
+    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, haxeFilter, hlFilter, full);
     if (reportOnly) {
       matrix.reportOnly();
     } else {
@@ -102,6 +108,10 @@ public final class MatrixMain {
         .filter(d -> haxeFilter.contains(d.getFileName().toString())).toList();
     }
     hlDirs = lanes.contains("hashlink") ? provisioner.hashlinkDirs() : List.of();
+    if (!hlFilter.isEmpty()) {
+      hlDirs = hlDirs.stream()
+        .filter(d -> hlFilter.contains(d.getFileName().toString())).toList();
+    }
     log.line("matrix start: lanes=" + String.join("+", lanes)
              + " haxe=" + names(haxeDirs) + " hl=" + names(hlDirs));
     if (haxeDirs.isEmpty()) {
@@ -195,16 +205,46 @@ public final class MatrixMain {
     return env;
   }
 
+  /**
+   * Tripwire: logs the haxe a CHILD process actually resolves under the
+   * lane's environment. A leaked environment (a stale daemon, a surviving
+   * "Path" case-variant) makes a lane compile with the WRONG haxe against
+   * the lane's std — a confusing salad of std-typing errors on one user
+   * machine — so a mismatch is called out loudly before the cell runs.
+   */
+  private void verifyLaneHaxe(String laneName, Map<String, String> env) {
+    try {
+      List<String> command = Platform.WINDOWS
+        ? List.of("cmd", "/c", "haxe", "--version")
+        : List.of("sh", "-c", "haxe --version");
+      ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
+      Gradle.applyEnv(builder.environment(), env);
+      Process process = builder.start();
+      String version = new String(process.getInputStream().readAllBytes()).trim();
+      process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS);
+      String expected = laneName.replaceFirst("^haxe_", "").replace('_', '.');
+      boolean plainVersion = expected.matches("\\d+\\.\\d+\\.\\d+");
+      String note = (plainVersion && !version.startsWith(expected))
+        ? "   <-- WARNING: expected " + expected + "; the lane environment leaked (see README)"
+        : "";
+      log.line("    " + laneName + " : children resolve haxe " + version + note);
+    } catch (Exception e) {
+      log.line("    " + laneName + " : haxe resolution check failed (" + e.getMessage() + ")");
+    }
+  }
+
   private void evalLane() throws IOException {
     log.line("EVAL LANE");
     Path moduleResults = root.resolve("debuggers/eval-debugger/build/test-results/test");
     for (Path haxeDir : haxeDirs) {
       String haxe = haxeDir.getFileName().toString();
+      Map<String, String> env = haxeEnv(haxeDir);
+      verifyLaneHaxe(haxe, env);
       log.line("    " + haxe + " : running the eval suite");
       long start = System.nanoTime();
       SuiteRun run = runSuite(":debuggers:eval-debugger",
                               List.of("-PdebuggerTests=true", "--no-build-cache", "--continue"),
-                              haxeEnv(haxeDir), out.resolve("logs/eval-" + haxe + ".log"), 900,
+                              env, out.resolve("logs/eval-" + haxe + ".log"), 900,
                               moduleResults, out.resolve("results/eval_" + haxe));
       addCell("eval", haxe, null, run.status().name().toLowerCase(Locale.ROOT),
               run.classes(), run.flaky(), start);
@@ -221,6 +261,7 @@ public final class MatrixMain {
       String haxe = haxeDir.getFileName().toString();
       long start = System.nanoTime();
       deleteQuietly(moduleBuild.resolve("hxcpp"));
+      verifyLaneHaxe(haxe, haxeEnv(haxeDir));
       log.line("    " + haxe + " : building the C++ fixtures (this is the slow part)");
       List<String> build = new ArrayList<>();
       fixtures.keySet().stream().sorted().forEach(t -> build.add(":debuggers:intellij-hxcpp-debugger:" + t));
@@ -283,6 +324,7 @@ public final class MatrixMain {
       String haxe = haxeDir.getFileName().toString();
       HL_FIXTURE_FILES.values().forEach(f -> deleteQuietly(moduleBuild.resolve("hl/" + f)));
       long start = System.nanoTime();
+      verifyLaneHaxe(haxe, haxeEnv(haxeDir));
       log.line("    " + haxe + " : building the HL fixtures");
       List<String> build = new ArrayList<>();
       HL_FIXTURE_TASKS.forEach(t -> build.add(":debuggers:hashlink-debug-adapter:" + t));
@@ -299,7 +341,8 @@ public final class MatrixMain {
         }
         continue;
       }
-      List<Path> runtimes = (full || !VersionManifest.DEGRADED_HAXE_ON_HL.contains(haxe))
+      // an explicit --hl selection overrides the smart-reduced grid
+      List<Path> runtimes = (full || !hlFilter.isEmpty() || !VersionManifest.DEGRADED_HAXE_ON_HL.contains(haxe))
         ? hlDirs
         : hlDirs.stream().filter(d -> d.getFileName().toString().equals(VersionManifest.REFERENCE_RUNTIME)).toList();
       for (Path hlDir : runtimes) {

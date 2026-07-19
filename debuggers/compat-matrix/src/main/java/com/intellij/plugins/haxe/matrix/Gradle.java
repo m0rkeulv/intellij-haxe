@@ -55,7 +55,7 @@ final class Gradle {
       .directory(root.toFile())
       .redirectOutput(logFile.toFile())
       .redirectError(new File(logFile + ".err"));
-    builder.environment().putAll(extraEnv);
+    applyEnv(builder.environment(), extraEnv);
     try {
       Process process = builder.start();
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec);
@@ -82,6 +82,20 @@ final class Gradle {
       Thread.currentThread().interrupt();
       return Status.FAIL;
     }
+  }
+
+  /**
+   * Applies the lane's env overrides, first REMOVING any case-variant of the
+   * overridden keys ("Path" vs "PATH"): Windows environments are
+   * case-insensitive but java maps are not everywhere in the chain, and a
+   * surviving variant with the dev toolchain first produced a lane compiling
+   * with the WRONG haxe on one machine (std-typing error salad).
+   */
+  static void applyEnv(Map<String, String> environment, Map<String, String> overrides) {
+    for (String key : overrides.keySet()) {
+      environment.keySet().removeIf(existing -> existing.equalsIgnoreCase(key));
+    }
+    environment.putAll(overrides);
   }
 
   private static void killTree(ProcessHandle handle) {

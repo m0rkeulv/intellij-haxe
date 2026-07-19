@@ -120,6 +120,39 @@ final class Provisioner {
         throw new IOException("unsupported archive type: " + url);
       }
     }
+    unwrapNestedArchives(dir, 2);
+  }
+
+  /**
+   * CI artifacts are zips OF the uploaded files — and hashlink's CI uploads
+   * a zip, so the download extracts to a single nested archive. Unwrap any
+   * archives found at the top level (bounded depth; each nested archive is
+   * extracted beside itself and deleted).
+   */
+  private void unwrapNestedArchives(Path dir, int depth) throws IOException {
+    if (depth <= 0) {
+      return;
+    }
+    List<Path> archives;
+    try (var files = Files.list(dir)) {
+      archives = files.filter(f -> {
+        String name = f.getFileName().toString();
+        return Files.isRegularFile(f)
+               && (name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz"));
+      }).toList();
+    }
+    for (Path archive : archives) {
+      String name = archive.getFileName().toString();
+      try (InputStream in = Files.newInputStream(archive)) {
+        if (name.endsWith(".zip")) {
+          extractZip(in, dir);
+        } else {
+          extractTarGz(in, dir);
+        }
+      }
+      Files.delete(archive);
+      unwrapNestedArchives(dir, depth - 1);
+    }
   }
 
   private void extractZip(InputStream in, Path dir) throws IOException {

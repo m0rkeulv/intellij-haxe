@@ -36,6 +36,7 @@ tasks.register<JavaExec>("debuggerCompatibilityReport") {
     systemProperty("matrix.root", rootDir.absolutePath)
     (findProperty("matrixLanes") as String?)?.let { args("--lanes=$it") }
     (findProperty("matrixHaxe") as String?)?.let { args("--haxe=$it") }
+    (findProperty("matrixHl") as String?)?.let { args("--hl=$it") }
     (findProperty("matrixResources") as String?)?.let { args("--resources=$it") }
     if ((findProperty("matrixFull") as String?)?.toBoolean() == true) args("--full")
     if ((findProperty("matrixReportOnly") as String?)?.toBoolean() == true) args("--report-only")

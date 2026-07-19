@@ -22,6 +22,9 @@ final class VersionManifest {
 
   private static final String HAXE = "https://github.com/HaxeFoundation/haxe/releases/download/";
   private static final String HL = "https://github.com/HaxeFoundation/hashlink/releases/download/";
+  // GitHub Actions artifacts need an auth token; nightly.link is the
+  // standard tokenless mirror for a branch's latest successful artifacts
+  private static final String HL_NIGHTLY = "https://nightly.link/HaxeFoundation/hashlink/workflows/build/master/";
 
   private static Tool haxe(String name, String tag) {
     String asset = Platform.WINDOWS ? "haxe-" + tag + "-win64.zip" : "haxe-" + tag + "-linux64.tar.gz";
@@ -30,6 +33,14 @@ final class VersionManifest {
 
   private static Tool hashlink(String name, String tag, String windowsAsset) {
     return new Tool(name, Platform.WINDOWS ? HL + tag + "/" + windowsAsset : null);
+  }
+
+  private static Tool hashlinkNightly() {
+    // the nightly is re-downloaded when its version directory is deleted;
+    // unlike releases it MOVES, so delete debuggerResources/hashlink/
+    // hashlink-nightly to pick up a newer master build
+    String asset = Platform.WINDOWS ? "windows-cmake-64.zip" : "linux-cmake-64.zip";
+    return new Tool("hashlink-nightly", HL_NIGHTLY + asset);
   }
 
   static List<Tool> haxeVersions() {
@@ -45,7 +56,8 @@ final class VersionManifest {
     return List.of(
       hashlink("hashlink-1.13.0", "1.13", "hashlink-1.13.0-win.zip"),
       hashlink("hashlink-1.14.0", "1.14", "hashlink-1.14.0-win.zip"),
-      hashlink("hashlink-1.15.0", "1.15", "hashlink-1.15.0-win.zip"));
+      hashlink("hashlink-1.15.0", "1.15", "hashlink-1.15.0-win.zip"),
+      hashlinkNightly());
   }
 
   /**
