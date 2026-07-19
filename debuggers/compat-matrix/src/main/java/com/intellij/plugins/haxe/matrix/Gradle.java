@@ -103,8 +103,23 @@ final class Gradle {
     handle.destroyForcibly();
   }
 
+  /**
+   * In parallel-lane mode the per-suite stray sweep must be deferred: it
+   * kills by executable NAME system-wide, so one lane's sweep would murder
+   * another lane's live compiler/VM. The matrix sets this before spawning
+   * lane threads and calls {@link #killStraysNow()} once after they join.
+   */
+  static volatile boolean deferStrayKills = false;
+
   /** Kills leftover debuggee/toolchain processes by exact executable name. */
   static void killStrays() {
+    if (deferStrayKills) {
+      return;
+    }
+    killStraysNow();
+  }
+
+  static void killStraysNow() {
     ProcessHandle.allProcesses().forEach(handle -> {
       String cmd = handle.info().command().orElse("");
       if (cmd.isEmpty()) {

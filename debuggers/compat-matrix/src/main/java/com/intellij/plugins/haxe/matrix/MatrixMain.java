@@ -28,6 +28,7 @@ public final class MatrixMain {
   private final List<String> haxeFilter;
   private final List<String> hlFilter;
   private final boolean full;
+  private final boolean parallelLanes;
   // run start, baked into the report filename so successive runs never
   // overwrite each other's results
   private final String startedAt = java.time.LocalDateTime.now()
@@ -51,8 +52,8 @@ public final class MatrixMain {
     "-x", "installFormatHaxelib", "-x", "registerDapProtocolHaxelib",
     "-x", "registerServerHaxelib", "-x", "installHscript");
 
-  private MatrixMain(Path root, Path resources, Path out, List<String> lanes,
-                     List<String> haxeFilter, List<String> hlFilter, boolean full) throws IOException {
+  private MatrixMain(Path root, Path resources, Path out, List<String> lanes, List<String> haxeFilter,
+                     List<String> hlFilter, boolean full, boolean parallelLanes) throws IOException {
     this.root = root;
     this.resources = resources;
     this.out = out;
@@ -60,6 +61,7 @@ public final class MatrixMain {
     this.haxeFilter = haxeFilter;
     this.hlFilter = hlFilter;
     this.full = full;
+    this.parallelLanes = parallelLanes;
     this.log = new Log(out.resolve("progress.log"));
     this.gradle = new Gradle(root, log);
   }
@@ -72,6 +74,7 @@ public final class MatrixMain {
     List<String> haxeFilter = List.of();
     List<String> hlFilter = List.of();
     boolean full = false;
+    boolean parallelLanes = false;
     boolean reportOnly = false;
     for (String arg : args) {
       if (arg.startsWith("--lanes=")) {
@@ -89,6 +92,8 @@ public final class MatrixMain {
         out = Path.of(arg.substring(6)).toAbsolutePath().normalize();
       } else if (arg.equals("--full")) {
         full = true;
+      } else if (arg.equals("--parallel-lanes")) {
+        parallelLanes = true;
       } else if (arg.equals("--report-only")) {
         reportOnly = true;
       } else {
@@ -96,7 +101,7 @@ public final class MatrixMain {
         System.exit(2);
       }
     }
-    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, haxeFilter, hlFilter, full);
+    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, haxeFilter, hlFilter, full, parallelLanes);
     if (reportOnly) {
       matrix.reportOnly();
     } else {
@@ -131,18 +136,76 @@ public final class MatrixMain {
                  Map.of(), out.resolve("logs/preflight.log"), 300);
     }
 
-    if (lanes.contains("eval")) {
-      evalLane();
-    }
-    if (lanes.contains("hashlink")) {
-      hashlinkLane();
-    }
-    if (lanes.contains("hxcpp")) {
-      hxcppLane();
+    if (parallelLanes && lanes.size() > 1) {
+      runLanesInParallel();
+    } else {
+      if (lanes.contains("eval")) {
+        evalLane();
+      }
+      if (lanes.contains("hashlink")) {
+        hashlinkLane();
+      }
+      if (lanes.contains("hxcpp")) {
+        hxcppLane();
+      }
     }
     restore();
     report();
     log.line("matrix done");
+  }
+
+  /**
+   * One thread per lane. The lanes are disjoint by construction — separate
+   * gradle modules, separate fixtures, separate debugger binaries, and each
+   * child build carries its own environment — so the only shared state is
+   * this process (log/cells, synchronized) and the machine-wide stray-process
+   * sweep, which must be deferred until every lane is done: it kills hl/haxe
+   * by NAME, and one lane's sweep would kill another lane's live compiler.
+   * Note the wall-clock win is bounded by the slowest lane (hashlink, by
+   * far); eval+hxcpp just disappear inside it.
+   */
+  private void runLanesInParallel() {
+    log.line("running " + lanes.size() + " lanes in parallel (one thread per lane)");
+    Gradle.deferStrayKills = true;
+    try {
+      List<Thread> threads = new ArrayList<>();
+      if (lanes.contains("eval")) {
+        threads.add(laneThread("eval", this::evalLane));
+      }
+      if (lanes.contains("hashlink")) {
+        threads.add(laneThread("hashlink", this::hashlinkLane));
+      }
+      if (lanes.contains("hxcpp")) {
+        threads.add(laneThread("hxcpp", this::hxcppLane));
+      }
+      threads.forEach(Thread::start);
+      for (Thread thread : threads) {
+        try {
+          thread.join();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+      }
+    } finally {
+      Gradle.deferStrayKills = false;
+      Gradle.killStraysNow();
+    }
+  }
+
+  private interface Lane {
+    void run() throws IOException;
+  }
+
+  // the "-lane" suffix makes Log tag every line this thread writes
+  private Thread laneThread(String name, Lane lane) {
+    return new Thread(() -> {
+      try {
+        lane.run();
+      } catch (Exception e) {
+        log.line("LANE CRASHED: " + e);
+      }
+    }, name + "-lane");
   }
 
   // ------------------------------------------------------------------ lanes
@@ -452,8 +515,9 @@ public final class MatrixMain {
 
   // ---------------------------------------------------------------- helpers
 
-  private void addCell(String lane, String haxe, String runtime, String status,
-                       List<Results.ClassResult> classes, List<String> flaky, long startNanos) {
+  // synchronized: lane threads report cells concurrently in parallel mode
+  private synchronized void addCell(String lane, String haxe, String runtime, String status,
+                                    List<Results.ClassResult> classes, List<String> flaky, long startNanos) {
     long seconds = (System.nanoTime() - startNanos) / 1_000_000_000L;
     Results.Cell cell = new Results.Cell(lane, haxe, runtime, status, classes, flaky, seconds);
     cells.add(cell);

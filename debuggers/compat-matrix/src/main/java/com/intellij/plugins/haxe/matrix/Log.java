@@ -17,8 +17,15 @@ final class Log {
     Files.createDirectories(file.getParent());
   }
 
-  void line(String message) {
-    String stamped = "[" + LocalTime.now().format(TIME) + "] " + message;
+  // synchronized: in parallel-lane mode three threads log concurrently and
+  // lines must not interleave mid-write. The lane tag comes from the thread
+  // name ("<lane>-lane", set by MatrixMain) so every message a lane thread
+  // logs - including live test-progress lines - says which lane it is.
+  synchronized void line(String message) {
+    String thread = Thread.currentThread().getName();
+    String tag = thread.endsWith("-lane")
+      ? thread.substring(0, thread.length() - "-lane".length()) + " | " : "";
+    String stamped = "[" + LocalTime.now().format(TIME) + "] " + tag + message;
     System.out.println(stamped);
     try {
       Files.writeString(file, stamped + System.lineSeparator(),

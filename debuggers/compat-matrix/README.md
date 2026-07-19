@@ -26,6 +26,9 @@ gradlew debuggerCompatibilityReport -PmatrixHl=hashlink-1.15.0  # one HL
                                      #   -PmatrixHaxe=haxe_4_1_5,haxe_4_2_5
                                      #   -PmatrixHl=hashlink-1.15.0)
 gradlew debuggerCompatibilityReport -PmatrixFull=true     # exhaustive HL grid
+gradlew debuggerCompatibilityReport -PmatrixParallel=true # one thread per
+                                     # lane (eval/hashlink/hxcpp run
+                                     # concurrently; see Duration)
 gradlew debuggerCompatibilityReport -PmatrixReportOnly=true  # re-render the
                                      # report from the previous run's results
 gradlew debuggerCompatibilityReport -PmatrixResources=D:\elsewhere  # custom
@@ -82,6 +85,13 @@ manifest simply not listing older versions.
   (4.1.5/4.2.5) against the reference runtimes only — latest release and
   nightly — since their behaviour was proven identical on every runtime;
   `-PmatrixFull=true` runs every combination.
+- `-PmatrixParallel=true` runs each lane in its own thread. The lanes are
+  disjoint (separate modules, fixtures, and debugger binaries), so this is
+  safe; the stray-process sweep is deferred to the end because it kills
+  hl/haxe by name machine-wide. Honest expectation: the total becomes the
+  HASHLINK lane's duration — eval and hxcpp (~9 min combined) simply hide
+  inside it — so a ~55 min full run drops to ~45–48 min, not half. Progress
+  lines are prefixed with `<lane> |` so the interleaved log stays readable.
 - hxcpp lane: the slowest — every haxe version compiles the C++ fixtures,
   and the machine needs a working hxcpp/haxelib setup per version (see the
   main debugger docs); this lane is not provisioned automatically.
