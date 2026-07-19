@@ -63,6 +63,11 @@ public class InterpDapBackend implements HxcppDapBackend {
   }
 
   @Override
+  public boolean supportsExpressionStepping() {
+    return true; // the adapter's intellij/setExpressionStepping mode (eval only)
+  }
+
+  @Override
   public String startupHint() {
     return "The haxe process exited before its eval VM attached. Check the compiler arguments\n"
            + "(they must form a valid compilation) and that haxe is version 4.0 or newer.";

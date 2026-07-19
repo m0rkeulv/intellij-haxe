@@ -41,7 +41,11 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequ
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExpressionSteppingRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetToStringRenderingRequest;
+import com.intellij.plugins.haxe.runner.debugger.HaxeExpressionPointHighlighter;
+import com.intellij.plugins.haxe.runner.debugger.HaxeExpressionSteppingToggleAction;
+import com.intellij.xdebugger.XDebugSessionListener;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetVariableRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
@@ -114,6 +118,10 @@ public class HxcppDebugProcess extends XDebugProcess {
     Executors.newSingleThreadExecutor(r -> daemon(r, "HXCPP DAP requests"));
 
   private volatile DapClient client;
+  /** Eval-only: raw sub-expression steps + expression-span highlight. Session-scoped. */
+  private volatile boolean expressionStepping = false;
+  private HaxeExpressionPointHighlighter expressionHighlighter;
+  private boolean resumeListenerInstalled = false;
   private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
   private volatile boolean launched = false;
@@ -268,6 +276,36 @@ public class HxcppDebugProcess extends XDebugProcess {
       topFrame.getSourcePosition();
     }
     getSession().positionReached(context);
+    updateExpressionHighlight(activeFrames);
+  }
+
+  // Expression-stepping visualization: highlight the exact span of the
+  // expression the interpreter will run next (top frame's column..endColumn).
+  private void updateExpressionHighlight(List<StackFrame> activeFrames) {
+    if (expressionHighlighter == null) {
+      expressionHighlighter = new HaxeExpressionPointHighlighter(getSession().getProject());
+    }
+    if (!resumeListenerInstalled) {
+      resumeListenerInstalled = true;
+      getSession().addSessionListener(new XDebugSessionListener() {
+        @Override
+        public void sessionResumed() {
+          expressionHighlighter.clear();
+        }
+
+        @Override
+        public void sessionStopped() {
+          expressionHighlighter.clear();
+        }
+      });
+    }
+    if (!expressionStepping || activeFrames.isEmpty()) {
+      expressionHighlighter.clear();
+      return;
+    }
+    StackFrame top = activeFrames.get(0);
+    String path = top.getSource() != null ? top.getSource().getPath() : null;
+    expressionHighlighter.show(path, top.getLine(), top.getColumn(), top.getEndLine(), top.getEndColumn());
   }
 
   List<DapThread> requestThreads() {
@@ -388,6 +426,28 @@ public class HxcppDebugProcess extends XDebugProcess {
     if (backend.supportsToStringRendering()) {
       settings.add(new HaxeToStringRenderToggleAction(getSession(), this::pushToStringRendering));
     }
+    if (backend.supportsExpressionStepping()) {
+      settings.add(new HaxeExpressionSteppingToggleAction(() -> expressionStepping, this::pushExpressionStepping));
+    }
+  }
+
+  // Live toggle (eval only): tell the adapter, then re-report the current stop
+  // so the frames carry (or drop) the expression spans and the highlight
+  // appears/disappears without another step.
+  private void pushExpressionStepping(boolean enabled) {
+    if (!backend.supportsExpressionStepping()) {
+      return;
+    }
+    expressionStepping = enabled;
+    if (!enabled && expressionHighlighter != null) {
+      expressionHighlighter.clear();
+    }
+    onRequestThread(() -> {
+      sendRequest(SetExpressionSteppingRequest.of(enabled));
+      if (getSession().isSuspended()) {
+        reportStopped(currentThreadId, null);
+      }
+    });
   }
 
   // Live toggle: tell the server, then rebuild the views so the CURRENT

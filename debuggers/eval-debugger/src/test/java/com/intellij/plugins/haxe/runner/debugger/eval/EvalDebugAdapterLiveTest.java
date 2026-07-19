@@ -30,6 +30,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArg
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExpressionSteppingRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
@@ -433,5 +434,54 @@ public class EvalDebugAdapterLiveTest {
     assertTrue("final step-out returns to chain() (was " + afterChain.getName() + ")",
                afterChain.getName().endsWith("chain"));
     assertEquals("on the line after the chain", CHAIN_AFTER_LINE, afterChain.getLine());
+  }
+
+  @Test
+  public void expressionSteppingModeStepsOneSubExpressionWithSpans() throws Exception {
+    // toggle ON: a single DAP stepIn performs ONE raw interpreter sub-step
+    // (same line, position advanced) and the frame carries the exact span
+    // (endColumn) of the expression about to run - the highlight's data.
+    InitializeRequest initialize = new InitializeRequest();
+    initialize.setArguments(new InitializeRequestArguments());
+    assertTrue("initialize", request(initialize).isSuccess());
+    dapClient.pollEvent(TIMEOUT);
+    assertTrue("launch", request(new LaunchRequest()).isSuccess());
+
+    String fixture = fixtureDir().resolve("EvalMain.hx").toString();
+    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(fixture);
+    bpArgs.setSource(source);
+    SourceBreakpoint breakpoint = new SourceBreakpoint();
+    breakpoint.setLine(NESTED_CALL_LINE);
+    bpArgs.setBreakpoints(List.of(breakpoint));
+    setBreakpoints.setArguments(bpArgs);
+    assertTrue("setBreakpoints", request(setBreakpoints).isSuccess());
+    assertTrue("expression stepping ON", request(SetExpressionSteppingRequest.of(true)).isSuccess());
+    assertTrue("configurationDone", request(new ConfigurationDoneRequest()).isSuccess());
+
+    StoppedEvent atCall = awaitStopped();
+    int threadId = atCall.getBody().getThreadId();
+    StackTraceRequest stackTrace = new StackTraceRequest();
+    StackTraceArguments stArgs = new StackTraceArguments();
+    stArgs.setThreadId(threadId);
+    stackTrace.setArguments(stArgs);
+    StackFrame before = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+    assertNotNull("expression span present at the stop", before.getEndColumn());
+
+    StepInRequest stepIn = new StepInRequest();
+    StepInArguments siArgs = new StepInArguments();
+    siArgs.setThreadId(threadId);
+    stepIn.setArguments(siArgs);
+    assertTrue("raw stepIn", request(stepIn).isSuccess());
+    awaitStopped();
+    StackFrame after = ((StackTraceResponse)request(stackTrace)).getBody().getStackFrames().get(0);
+    assertTrue("still in main (one SUB-step, not a callee: was " + after.getName() + ")",
+               after.getName().endsWith("main"));
+    assertEquals("same line", NESTED_CALL_LINE, after.getLine());
+    assertTrue("position advanced within the line (col " + before.getColumn() + " -> " + after.getColumn() + ")",
+               after.getColumn() != before.getColumn());
+    assertNotNull("span still present", after.getEndColumn());
   }
 }

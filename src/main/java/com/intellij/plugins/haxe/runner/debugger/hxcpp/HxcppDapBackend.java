@@ -58,6 +58,16 @@ public interface HxcppDapBackend extends Closeable {
    */
   boolean supportsToStringRendering();
 
+  /**
+   * Whether the server understands the custom
+   * {@code intellij/setExpressionStepping} request (eval only: each step
+   * becomes one raw interpreter sub-step and stack frames carry the exact
+   * expression span for the editor highlight).
+   */
+  default boolean supportsExpressionStepping() {
+    return false;
+  }
+
   /** Appended to the "program exited before the debugger could attach" failure. */
   String startupHint();
 }
