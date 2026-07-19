@@ -28,6 +28,10 @@ public final class MatrixMain {
   private final List<String> haxeFilter;
   private final List<String> hlFilter;
   private final boolean full;
+  // run start, baked into the report filename so successive runs never
+  // overwrite each other's results
+  private final String startedAt = java.time.LocalDateTime.now()
+    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
   private final Log log;
   private final Gradle gradle;
   private final List<Results.Cell> cells = new ArrayList<>();
@@ -169,6 +173,18 @@ public final class MatrixMain {
     log.line("      " + failing.size() + " suite(s) failed - retrying them once to tell machine flakes from real failures");
     List<String> before = failing.stream()
       .flatMap(c -> c.failed().stream().map(f -> c.name() + "::" + f.test())).toList();
+    // keep the FIRST attempt's failure XMLs (stack traces, adapter output):
+    // the retry overwrites the suite's evidence, and a flake that "passed on
+    // retry" is undiagnosable without what actually failed the first time
+    Path firstAttempt = evidence.resolve("first-attempt");
+    Files.createDirectories(firstAttempt);
+    for (Results.ClassResult failed : failing) {
+      Path xml = evidence.resolve("TEST-" + failed.fqName() + ".xml");
+      if (Files.isRegularFile(xml)) {
+        Files.copy(xml, firstAttempt.resolve(xml.getFileName()),
+                   java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      }
+    }
     List<String> retry = new ArrayList<>(List.of(modulePath + ":cleanTest", modulePath + ":test"));
     for (Results.ClassResult failed : failing) {
       retry.add("--tests");
@@ -424,9 +440,14 @@ public final class MatrixMain {
       : cells.stream().map(Results.Cell::haxe).distinct().sorted().toList();
     List<String> hlNames = !hlDirs.isEmpty() ? names(hlDirs)
       : cells.stream().map(Results.Cell::runtime).filter(r -> r != null).distinct().sorted().toList();
+    // one timestamped report per run (so results stay traceable to WHEN they
+    // ran) plus index.html always mirroring the newest run
+    Path stamped = out.resolve("matrix-" + startedAt + ".html");
     Report.write(root.resolve("debuggers/compat-matrix/report-template.html"),
-                 out.resolve("index.html"), cells, haxeNames, hlNames, resources, full);
-    log.line("report: " + out.resolve("index.html"));
+                 stamped, cells, haxeNames, hlNames, resources, full);
+    Files.copy(stamped, out.resolve("index.html"),
+               java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    log.line("report: " + stamped + " (also copied to index.html)");
   }
 
   // ---------------------------------------------------------------- helpers

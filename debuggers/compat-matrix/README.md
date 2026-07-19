@@ -33,8 +33,12 @@ gradlew debuggerCompatibilityReport -PmatrixResources=D:\elsewhere  # custom
                                      # <repo>/debuggerResources)
 ```
 
-The report lands in `build/reports/debugger-matrix/index.html`; per-cell
-gradle logs and the copied junit XMLs sit next to it (`logs/`, `results/`).
+The report lands in `build/reports/debugger-matrix/matrix-<date>_<time>.html`
+(one self-contained file per run, so successive runs never overwrite each
+other; `index.html` always mirrors the newest). Per-cell gradle logs and the
+copied junit XMLs sit next to it (`logs/`, `results/`). When a failed suite
+passes on its once-only retry (reported as *flaky*), the first attempt's
+failure XMLs are kept in `results/<cell>/first-attempt/` for diagnosis.
 Progress streams to the console and `progress.log`.
 
 ## Toolchain provisioning
