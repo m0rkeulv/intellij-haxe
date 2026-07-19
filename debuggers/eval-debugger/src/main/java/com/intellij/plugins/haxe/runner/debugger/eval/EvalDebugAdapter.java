@@ -404,14 +404,8 @@ public class EvalDebugAdapter implements Closeable {
     try {
       programEnded = switch (request) {
         case StepInRequest r -> coalescedStepIn(thread);
-        case NextRequest r -> {
-          vm().next();
-          yield false;
-        }
-        default -> {
-          vm().stepOut();
-          yield false;
-        }
+        case NextRequest r -> coalescedNext(thread);
+        default -> emulatedStepOut(thread);
       };
     } catch (EvalConnectionClosedException ignored) {
       programEnded = true;
@@ -528,6 +522,73 @@ public class EvalDebugAdapter implements Closeable {
     String simpleClass = className.substring(className.lastIndexOf('.') + 1);
     String simpleQualified = simpleClass + "." + functionName;
     return frameName.equals(simpleQualified) || frameName.endsWith("." + simpleQualified);
+  }
+
+  /**
+   * The VM's {@code next} is sub-expression granular like its stepIn: on a
+   * chained line ({@code a.f().g().h()}) each press would stop at the next
+   * chain element while the IDE's line display shows nothing moving. Coalesce
+   * to DAP semantics: keep stepping until the position leaves the line at the
+   * starting depth (or above it, when the line ended the function).
+   */
+  private boolean coalescedNext(int thread) throws IOException {
+    int startDepth = vm().stackTrace(thread).size();
+    FrameSignature start = topFrame(thread);
+    for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS; step++) {
+      try {
+        vm().next();
+      } catch (EvalConnectionClosedException ended) {
+        return true;
+      }
+      List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+      if (frames.isEmpty()) {
+        return false;
+      }
+      if (frames.size() > startDepth) {
+        continue; // mid-call bookkeeping frame; keep going
+      }
+      EvalProtocol.EvalStackFrame top = frames.get(0);
+      if (frames.size() < startDepth || start == null
+          || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
+        return false; // reached a new line (or returned out of the function)
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Step out with CHAIN-HOPPING: on {@code a.f().g().h()} the interpreter has
+   * NO caller-position stop between the calls (after f returns, the very next
+   * stop is inside g — verified live), so a literal "back to the caller
+   * mid-line" cannot exist. Instead, step-out stops at the ENTRY of the next
+   * sibling call — one press per chain element (f -> g -> h -> next line),
+   * never silently running the rest of the chain like the VM's raw stepOut
+   * does. Coalesced next still finishes the whole line from anywhere.
+   */
+  private boolean emulatedStepOut(int thread) throws IOException {
+    List<EvalProtocol.EvalStackFrame> startFrames = vm().stackTrace(thread);
+    int startDepth = startFrames.size();
+    String startFunction = startFrames.isEmpty() ? null : startFrames.get(0).name();
+    for (int step = 0; step < MAX_SMART_STEP_SUBSTEPS; step++) {
+      try {
+        vm().stepIn();
+      } catch (EvalConnectionClosedException ended) {
+        return true;
+      }
+      List<EvalProtocol.EvalStackFrame> frames = vm().stackTrace(thread);
+      if (frames.isEmpty() || frames.size() < startDepth) {
+        return false; // back in the caller (the line finished)
+      }
+      // a SIBLING call of a chained line (a.f().g()) runs at the SAME depth
+      // with no caller-position stop in between — stopping at its entry is
+      // what makes step-out hop chain element to chain element instead of
+      // silently walking through the rest of the chain
+      if (frames.size() == startDepth
+          && !java.util.Objects.equals(frames.get(0).name(), startFunction)) {
+        return false;
+      }
+    }
+    return false;
   }
 
   /** The stopped thread's top frame as (function, line), or null if unavailable. */
