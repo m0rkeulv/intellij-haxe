@@ -31,9 +31,24 @@ final class Gradle {
   enum Status { OK, FAIL, TIMEOUT }
 
   Status run(List<String> tasks, Map<String, String> extraEnv, Path logFile, int timeoutSec) {
+    return run(tasks, extraEnv, logFile, timeoutSec, false);
+  }
+
+  /**
+   * With {@code liveTestProgress}, the child build gets the tool's init
+   * script (per-test events on stdout — gradle only writes junit XMLs at
+   * task END, so those cannot drive live progress) and the log file is
+   * tailed while the build runs: each finished suite is logged with its
+   * counts, each failing test immediately.
+   */
+  Status run(List<String> tasks, Map<String, String> extraEnv, Path logFile, int timeoutSec, boolean liveTestProgress) {
     List<String> command = new ArrayList<>();
     command.add(root.resolve(Platform.gradlew()).toString());
     command.addAll(tasks);
+    if (liveTestProgress) {
+      command.add("-I");
+      command.add(root.resolve("debuggers/compat-matrix/test-events.init.gradle").toString());
+    }
     command.add("--no-daemon");
     command.add("--console=plain");
     ProcessBuilder builder = new ProcessBuilder(command)
@@ -43,10 +58,21 @@ final class Gradle {
     builder.environment().putAll(extraEnv);
     try {
       Process process = builder.start();
-      if (!process.waitFor(timeoutSec, TimeUnit.SECONDS)) {
-        killTree(process.toHandle());
-        killStrays();
-        return Status.TIMEOUT;
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec);
+      TestEventTail tail = liveTestProgress ? new TestEventTail(logFile, log) : null;
+      while (!process.waitFor(2, TimeUnit.SECONDS)) {
+        if (tail != null) {
+          tail.poll();
+        }
+        if (System.nanoTime() > deadline) {
+          killTree(process.toHandle());
+          killStrays();
+          return Status.TIMEOUT;
+        }
+      }
+      if (tail != null) {
+        tail.poll();
+        tail.flush();
       }
       return process.exitValue() == 0 ? Status.OK : Status.FAIL;
     } catch (IOException e) {

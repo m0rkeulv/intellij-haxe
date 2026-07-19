@@ -37,33 +37,41 @@ final class Results {
     }
     try (var files = Files.list(dir)) {
       for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".xml")).sorted().toList()) {
-        try {
-          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-          factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-          Document doc = factory.newDocumentBuilder().parse(file.toFile());
-          Element suite = doc.getDocumentElement();
-          List<FailedTest> failed = new ArrayList<>();
-          NodeList cases = suite.getElementsByTagName("testcase");
-          for (int i = 0; i < cases.getLength(); i++) {
-            Element testcase = (Element)cases.item(i);
-            NodeList failures = testcase.getElementsByTagName("failure");
-            if (failures.getLength() > 0) {
-              failed.add(new FailedTest(testcase.getAttribute("name"),
-                                        ((Element)failures.item(0)).getAttribute("message")));
-            }
-          }
-          String name = suite.getAttribute("name");
-          classes.add(new ClassResult(
-            name.substring(name.lastIndexOf('.') + 1),
-            intAttr(suite, "tests"), intAttr(suite, "failures"),
-            intAttr(suite, "errors"), intAttr(suite, "skipped"), failed));
-        } catch (Exception ignored) {
-          // an unparsable result file counts as absent rather than aborting the matrix
+        ClassResult suite = parseOne(file);
+        if (suite != null) {
+          classes.add(suite);
         }
       }
     } catch (IOException ignored) {
     }
     return classes;
+  }
+
+  /** One junit XML, or null when unparsable (mid-write, or not a result file). */
+  private static ClassResult parseOne(Path file) {
+    try {
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+      Document doc = factory.newDocumentBuilder().parse(file.toFile());
+      Element suite = doc.getDocumentElement();
+      List<FailedTest> failed = new ArrayList<>();
+      NodeList cases = suite.getElementsByTagName("testcase");
+      for (int i = 0; i < cases.getLength(); i++) {
+        Element testcase = (Element)cases.item(i);
+        NodeList failures = testcase.getElementsByTagName("failure");
+        if (failures.getLength() > 0) {
+          failed.add(new FailedTest(testcase.getAttribute("name"),
+                                    ((Element)failures.item(0)).getAttribute("message")));
+        }
+      }
+      String name = suite.getAttribute("name");
+      return new ClassResult(
+        name.substring(name.lastIndexOf('.') + 1),
+        intAttr(suite, "tests"), intAttr(suite, "failures"),
+        intAttr(suite, "errors"), intAttr(suite, "skipped"), failed);
+    } catch (Exception e) {
+      return null;
+    }
   }
 
   /** Copies a module's junit XMLs into the report's evidence dir and parses them. */

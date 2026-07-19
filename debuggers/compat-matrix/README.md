@@ -15,6 +15,8 @@ linux — with no PowerShell or python requirement.
 ```
 gradlew debuggerCompatibilityReport                       # all lanes
 gradlew debuggerCompatibilityReport -PmatrixLanes=eval    # one lane
+gradlew debuggerCompatibilityReport -PmatrixHaxe=haxe_4_1_5  # one haxe
+                                     # version (handy for rerunning one cell)
 gradlew debuggerCompatibilityReport -PmatrixFull=true     # exhaustive HL grid
 gradlew debuggerCompatibilityReport -PmatrixReportOnly=true  # re-render the
                                      # report from the previous run's results

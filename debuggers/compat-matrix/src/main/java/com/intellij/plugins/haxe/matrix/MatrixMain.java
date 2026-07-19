@@ -25,6 +25,7 @@ public final class MatrixMain {
   private final Path resources;
   private final Path out;
   private final List<String> lanes;
+  private final List<String> haxeFilter;
   private final boolean full;
   private final Log log;
   private final Gradle gradle;
@@ -45,11 +46,13 @@ public final class MatrixMain {
     "-x", "installFormatHaxelib", "-x", "registerDapProtocolHaxelib",
     "-x", "registerServerHaxelib", "-x", "installHscript");
 
-  private MatrixMain(Path root, Path resources, Path out, List<String> lanes, boolean full) throws IOException {
+  private MatrixMain(Path root, Path resources, Path out, List<String> lanes,
+                     List<String> haxeFilter, boolean full) throws IOException {
     this.root = root;
     this.resources = resources;
     this.out = out;
     this.lanes = lanes;
+    this.haxeFilter = haxeFilter;
     this.full = full;
     this.log = new Log(out.resolve("progress.log"));
     this.gradle = new Gradle(root, log);
@@ -60,12 +63,16 @@ public final class MatrixMain {
     Path resources = root.resolve("debuggerResources");
     Path out = root.resolve("build/reports/debugger-matrix");
     List<String> lanes = new ArrayList<>(List.of("eval", "hashlink", "hxcpp"));
+    List<String> haxeFilter = List.of();
     boolean full = false;
     boolean reportOnly = false;
     for (String arg : args) {
       if (arg.startsWith("--lanes=")) {
         lanes = new ArrayList<>(Arrays.stream(arg.substring(8).split(","))
                                   .map(s -> s.trim().toLowerCase(Locale.ROOT)).filter(s -> !s.isEmpty()).toList());
+      } else if (arg.startsWith("--haxe=")) {
+        haxeFilter = Arrays.stream(arg.substring(7).split(","))
+          .map(String::trim).filter(s -> !s.isEmpty()).toList();
       } else if (arg.startsWith("--resources=")) {
         resources = Path.of(arg.substring(12)).toAbsolutePath().normalize();
       } else if (arg.startsWith("--out=")) {
@@ -79,7 +86,7 @@ public final class MatrixMain {
         System.exit(2);
       }
     }
-    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, full);
+    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, haxeFilter, full);
     if (reportOnly) {
       matrix.reportOnly();
     } else {
@@ -90,6 +97,10 @@ public final class MatrixMain {
   private void run() throws IOException {
     Provisioner provisioner = new Provisioner(resources, log);
     haxeDirs = provisioner.haxeDirs();
+    if (!haxeFilter.isEmpty()) {
+      haxeDirs = haxeDirs.stream()
+        .filter(d -> haxeFilter.contains(d.getFileName().toString())).toList();
+    }
     hlDirs = lanes.contains("hashlink") ? provisioner.hashlinkDirs() : List.of();
     log.line("matrix start: lanes=" + String.join("+", lanes)
              + " haxe=" + names(haxeDirs) + " hl=" + names(hlDirs));
@@ -132,17 +143,17 @@ public final class MatrixMain {
 
   private void evalLane() throws IOException {
     log.line("EVAL LANE");
+    Path moduleResults = root.resolve("debuggers/eval-debugger/build/test-results/test");
     for (Path haxeDir : haxeDirs) {
       String haxe = haxeDir.getFileName().toString();
+      log.line("    " + haxe + " : running the eval suite");
       long start = System.nanoTime();
       Gradle.Status status = gradle.run(
         List.of(":debuggers:eval-debugger:cleanTest", ":debuggers:eval-debugger:test",
                 "-PdebuggerTests=true", "--no-build-cache", "--continue"),
-        haxeEnv(haxeDir), out.resolve("logs/eval-" + haxe + ".log"), 900);
+        haxeEnv(haxeDir), out.resolve("logs/eval-" + haxe + ".log"), 900, true);
       Gradle.killStrays();
-      List<Results.ClassResult> classes = Results.collect(
-        root.resolve("debuggers/eval-debugger/build/test-results/test"),
-        out.resolve("results/eval_" + haxe));
+      List<Results.ClassResult> classes = Results.collect(moduleResults, out.resolve("results/eval_" + haxe));
       addCell("eval", haxe, null, status.name().toLowerCase(Locale.ROOT), classes, start);
     }
   }
@@ -157,6 +168,7 @@ public final class MatrixMain {
       String haxe = haxeDir.getFileName().toString();
       long start = System.nanoTime();
       deleteQuietly(moduleBuild.resolve("hxcpp"));
+      log.line("    " + haxe + " : building the C++ fixtures (this is the slow part)");
       List<String> build = new ArrayList<>();
       fixtures.keySet().stream().sorted().forEach(t -> build.add(":debuggers:intellij-hxcpp-debugger:" + t));
       build.addAll(EXCLUDE_HAXELIB);
@@ -169,13 +181,16 @@ public final class MatrixMain {
         addCell("hxcpp", haxe, null, "compile-fail", List.of(), start);
         continue;
       }
+      log.line("    " + haxe + " : fixtures built"
+               + (missing.isEmpty() ? "" : " (missing " + missing.size() + ")") + ", running the suite");
       List<String> test = new ArrayList<>(List.of(
         ":debuggers:intellij-hxcpp-debugger:cleanTest", ":debuggers:intellij-hxcpp-debugger:test",
         "--no-build-cache"));
       test.addAll(EXCLUDE_HAXELIB);
       missing.forEach(t -> test.addAll(List.of("-x", t)));
       test.add("--continue");
-      Gradle.Status status = gradle.run(test, haxeEnv(haxeDir), out.resolve("logs/hxcpp-" + haxe + "-test.log"), 1500);
+      Gradle.Status status = gradle.run(test, haxeEnv(haxeDir),
+                                        out.resolve("logs/hxcpp-" + haxe + "-test.log"), 1500, true);
       Gradle.killStrays();
       List<Results.ClassResult> classes = Results.collect(
         moduleBuild.resolve("test-results/test"), out.resolve("results/hxcpp_" + haxe));
@@ -197,6 +212,7 @@ public final class MatrixMain {
       String haxe = haxeDir.getFileName().toString();
       HL_FIXTURE_FILES.values().forEach(f -> deleteQuietly(moduleBuild.resolve("hl/" + f)));
       long start = System.nanoTime();
+      log.line("    " + haxe + " : building the HL fixtures");
       List<String> build = new ArrayList<>();
       HL_FIXTURE_TASKS.forEach(t -> build.add(":debuggers:hashlink-debug-adapter:" + t));
       build.addAll(EXCLUDE_HAXELIB);
@@ -217,6 +233,7 @@ public final class MatrixMain {
       for (Path hlDir : runtimes) {
         String runtime = hlDir.getFileName().toString();
         Path hlBinary = Platform.findBinary(hlDir, "hl");
+        log.line("    " + haxe + " x " + runtime + " : running the HL suite");
         long cellStart = System.nanoTime();
         List<String> test = new ArrayList<>(List.of(
           ":debuggers:hashlink-debug-adapter:cleanTest", ":debuggers:hashlink-debug-adapter:test",
@@ -230,7 +247,8 @@ public final class MatrixMain {
           String previous = System.getenv("LD_LIBRARY_PATH");
           env.put("LD_LIBRARY_PATH", hlBinary.getParent() + (previous != null ? ":" + previous : ""));
         }
-        Gradle.Status status = gradle.run(test, env, out.resolve("logs/hl-" + haxe + "-" + runtime + ".log"), 1500);
+        Gradle.Status status = gradle.run(test, env, out.resolve("logs/hl-" + haxe + "-" + runtime + ".log"),
+                                          1500, true);
         Gradle.killStrays();
         List<Results.ClassResult> classes = Results.collect(
           moduleBuild.resolve("test-results/test"), out.resolve("results/hl_" + haxe + "__" + runtime));
