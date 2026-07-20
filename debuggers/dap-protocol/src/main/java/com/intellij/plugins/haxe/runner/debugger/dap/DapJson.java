@@ -83,12 +83,14 @@ public final class DapJson {
   public static ProtocolMessage decode(String json) {
     JsonNode root = MAPPER.readTree(json);
     String type = root.path("type").asString("");
+    // @formatter:off
     return switch (type) {
       case Response.TYPE -> decodeResponse(root);
-      case Event.TYPE -> decodeEvent(root);
-      case Request.TYPE -> decodeRequest(root);
-      default -> throw new IllegalArgumentException("Unknown DAP message type '" + type + "' in: " + json);
+      case Event.TYPE    -> decodeEvent(root);
+      case Request.TYPE  -> decodeRequest(root);
+      default            -> throw new IllegalArgumentException("Unknown DAP message type '" + type + "' in: " + json);
     };
+    // @formatter:on
   }
 
   /**
@@ -97,32 +99,34 @@ public final class DapJson {
    */
   private static Request decodeRequest(JsonNode root) {
     String command = root.path("command").asString("");
+    // @formatter:off
     Class<? extends Request> target = switch (command) {
-      case InitializeRequest.COMMAND -> InitializeRequest.class;
-      case LaunchRequest.COMMAND -> LaunchRequest.class;
-      case SetBreakpointsRequest.COMMAND -> SetBreakpointsRequest.class;
+      case InitializeRequest.COMMAND              -> InitializeRequest.class;
+      case LaunchRequest.COMMAND                  -> LaunchRequest.class;
+      case SetBreakpointsRequest.COMMAND          -> SetBreakpointsRequest.class;
       case SetExceptionBreakpointsRequest.COMMAND -> SetExceptionBreakpointsRequest.class;
-      case ConfigurationDoneRequest.COMMAND -> ConfigurationDoneRequest.class;
-      case ThreadsRequest.COMMAND -> ThreadsRequest.class;
-      case StackTraceRequest.COMMAND -> StackTraceRequest.class;
-      case ScopesRequest.COMMAND -> ScopesRequest.class;
-      case VariablesRequest.COMMAND -> VariablesRequest.class;
-      case ContinueRequest.COMMAND -> ContinueRequest.class;
-      case NextRequest.COMMAND -> NextRequest.class;
-      case StepInRequest.COMMAND -> StepInRequest.class;
-      case StepInTargetsRequest.COMMAND -> StepInTargetsRequest.class;
-      case StepOutRequest.COMMAND -> StepOutRequest.class;
-      case PauseRequest.COMMAND -> PauseRequest.class;
-      case EvaluateRequest.COMMAND -> EvaluateRequest.class;
-      case ExceptionInfoRequest.COMMAND -> ExceptionInfoRequest.class;
-      case SetVariableRequest.COMMAND -> SetVariableRequest.class;
-      case DisconnectRequest.COMMAND -> DisconnectRequest.class;
+      case ConfigurationDoneRequest.COMMAND       -> ConfigurationDoneRequest.class;
+      case ThreadsRequest.COMMAND                 -> ThreadsRequest.class;
+      case StackTraceRequest.COMMAND              -> StackTraceRequest.class;
+      case ScopesRequest.COMMAND                  -> ScopesRequest.class;
+      case VariablesRequest.COMMAND               -> VariablesRequest.class;
+      case ContinueRequest.COMMAND                -> ContinueRequest.class;
+      case NextRequest.COMMAND                    -> NextRequest.class;
+      case StepInRequest.COMMAND                  -> StepInRequest.class;
+      case StepInTargetsRequest.COMMAND           -> StepInTargetsRequest.class;
+      case StepOutRequest.COMMAND                 -> StepOutRequest.class;
+      case PauseRequest.COMMAND                   -> PauseRequest.class;
+      case EvaluateRequest.COMMAND                -> EvaluateRequest.class;
+      case ExceptionInfoRequest.COMMAND           -> ExceptionInfoRequest.class;
+      case SetVariableRequest.COMMAND             -> SetVariableRequest.class;
+      case DisconnectRequest.COMMAND              -> DisconnectRequest.class;
       // custom: needed by JAVA-side DAP servers (the eval adapter emulates
       // smart step into); the haxe-side servers decode it themselves
-      case StepIntoFunctionRequest.COMMAND -> StepIntoFunctionRequest.class;
-      case SetExpressionSteppingRequest.COMMAND -> SetExpressionSteppingRequest.class;
-      default -> Request.class;
+      case StepIntoFunctionRequest.COMMAND        -> StepIntoFunctionRequest.class;
+      case SetExpressionSteppingRequest.COMMAND   -> SetExpressionSteppingRequest.class;
+      default                                     -> Request.class;
     };
+    // @formatter:on
     return MAPPER.treeToValue(root, target);
   }
 
@@ -133,44 +137,48 @@ public final class DapJson {
     String command = root.path("command").asString("");
     // a response is keyed by the command it answers, so it switches on the
     // request classes' COMMAND constants
+    // @formatter:off
     Class<? extends Response> target = switch (command) {
-      case InitializeRequest.COMMAND -> InitializeResponse.class;
-      case SetBreakpointsRequest.COMMAND -> SetBreakpointsResponse.class;
+      case InitializeRequest.COMMAND              -> InitializeResponse.class;
+      case SetBreakpointsRequest.COMMAND          -> SetBreakpointsResponse.class;
       case SetExceptionBreakpointsRequest.COMMAND -> SetExceptionBreakpointsResponse.class;
-      case ConfigurationDoneRequest.COMMAND -> ConfigurationDoneResponse.class;
-      case LaunchRequest.COMMAND -> LaunchResponse.class;
-      case ThreadsRequest.COMMAND -> ThreadsResponse.class;
-      case ContinueRequest.COMMAND -> ContinueResponse.class;
-      case NextRequest.COMMAND -> NextResponse.class;
-      case StepInRequest.COMMAND -> StepInResponse.class;
-      case StepInTargetsRequest.COMMAND -> StepInTargetsResponse.class;
-      case StepOutRequest.COMMAND -> StepOutResponse.class;
-      case PauseRequest.COMMAND -> PauseResponse.class;
-      case ExceptionInfoRequest.COMMAND -> ExceptionInfoResponse.class;
-      case StackTraceRequest.COMMAND -> StackTraceResponse.class;
-      case ScopesRequest.COMMAND -> ScopesResponse.class;
-      case VariablesRequest.COMMAND -> VariablesResponse.class;
-      case SetVariableRequest.COMMAND -> SetVariableResponse.class;
-      case EvaluateRequest.COMMAND -> EvaluateResponse.class;
-      case DisconnectRequest.COMMAND -> DisconnectResponse.class;
-      default -> Response.class;
+      case ConfigurationDoneRequest.COMMAND       -> ConfigurationDoneResponse.class;
+      case LaunchRequest.COMMAND                  -> LaunchResponse.class;
+      case ThreadsRequest.COMMAND                 -> ThreadsResponse.class;
+      case ContinueRequest.COMMAND                -> ContinueResponse.class;
+      case NextRequest.COMMAND                    -> NextResponse.class;
+      case StepInRequest.COMMAND                  -> StepInResponse.class;
+      case StepInTargetsRequest.COMMAND           -> StepInTargetsResponse.class;
+      case StepOutRequest.COMMAND                 -> StepOutResponse.class;
+      case PauseRequest.COMMAND                   -> PauseResponse.class;
+      case ExceptionInfoRequest.COMMAND           -> ExceptionInfoResponse.class;
+      case StackTraceRequest.COMMAND              -> StackTraceResponse.class;
+      case ScopesRequest.COMMAND                  -> ScopesResponse.class;
+      case VariablesRequest.COMMAND               -> VariablesResponse.class;
+      case SetVariableRequest.COMMAND             -> SetVariableResponse.class;
+      case EvaluateRequest.COMMAND                -> EvaluateResponse.class;
+      case DisconnectRequest.COMMAND              -> DisconnectResponse.class;
+      default                                     -> Response.class;
     };
+    // @formatter:on
     return MAPPER.treeToValue(root, target);
   }
 
   private static Event decodeEvent(JsonNode root) {
     String event = root.path("event").asString("");
+    // @formatter:off
     Class<? extends Event> target = switch (event) {
       case InitializedEvent.EVENT -> InitializedEvent.class;
-      case StoppedEvent.EVENT -> StoppedEvent.class;
-      case TerminatedEvent.EVENT -> TerminatedEvent.class;
-      case ExitedEvent.EVENT -> ExitedEvent.class;
-      case OutputEvent.EVENT -> OutputEvent.class;
-      case BreakpointEvent.EVENT -> BreakpointEvent.class;
-      case ContinuedEvent.EVENT -> ContinuedEvent.class;
-      case ThreadEvent.EVENT -> ThreadEvent.class;
-      default -> Event.class;
+      case StoppedEvent.EVENT     -> StoppedEvent.class;
+      case TerminatedEvent.EVENT  -> TerminatedEvent.class;
+      case ExitedEvent.EVENT      -> ExitedEvent.class;
+      case OutputEvent.EVENT      -> OutputEvent.class;
+      case BreakpointEvent.EVENT  -> BreakpointEvent.class;
+      case ContinuedEvent.EVENT   -> ContinuedEvent.class;
+      case ThreadEvent.EVENT      -> ThreadEvent.class;
+      default                     -> Event.class;
     };
+    // @formatter:on
     return MAPPER.treeToValue(root, target);
   }
 }
