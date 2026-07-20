@@ -6,8 +6,8 @@ before touching the launch/port/lifecycle code.
 
 The module is named `vshaxe-hxcpp-debugger-adapter` because it specifically
 targets the VSHAXE hxcpp debug server (vshaxe/hxcpp-debugger's
-hxcpp-debug-server haxelib) — see docs/future-native-dap-server.md for the
-possible second, home-grown server this naming keeps unambiguous.
+hxcpp-debug-server haxelib) — as opposed to our own in-debuggee server in
+`debuggers/intellij-hxcpp-debugger`. Both are fully supported.
 
 ---
 
