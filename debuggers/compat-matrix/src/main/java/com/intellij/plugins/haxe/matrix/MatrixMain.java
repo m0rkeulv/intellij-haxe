@@ -57,9 +57,33 @@ public final class MatrixMain {
     "buildSpinFixture", "spin-fixture.hl", "buildUncaughtFixture", "uncaught-fixture.hl",
     "buildVmFixture", "vm-fixture.hl", "buildStackTraceFixture", "stacktrace-fixture.hl",
     "buildTypedThrowFixture", "typedthrow-fixture.hl");
+  // CLI flags (see README). Value flags end with '=' and are read with flagValue(),
+  // which slices at the flag's own length - no hand-counted substring offsets.
+  private static final String FLAG_LANES = "--lanes=";
+  private static final String FLAG_HAXE = "--haxe=";
+  private static final String FLAG_HL = "--hl=";
+  private static final String FLAG_RESOURCES = "--resources=";
+  private static final String FLAG_OUT = "--out=";
+  private static final String FLAG_HL_FORKS = "--hl-forks=";
+  private static final String FLAG_FULL = "--full";
+  private static final String FLAG_PARALLEL_LANES = "--parallel-lanes";
+  private static final String FLAG_REPORT_ONLY = "--report-only";
+
+  // gradle argument literals reused across the lanes (named once so a rename is
+  // one edit, not a hunt through every lane)
+  private static final String GRADLE_CONTINUE = "--continue";
+  private static final String GRADLE_NO_BUILD_CACHE = "--no-build-cache";
+  private static final String GRADLE_EXCLUDE = "-x";
+  private static final String GRADLE_TESTS = "--tests";
+  private static final String TASK_CLEAN_TEST = ":cleanTest";
+  private static final String TASK_TEST = ":test";
+  private static final String TASK_BUILD_ADAPTER = "buildDebugAdapter";
+  private static final String PROP_HASHLINK_BIN = "-PhashlinkBin=";
+  private static final String PROP_DAP_TEST_FORKS = "-PdapTestForks=";
+
   private static final List<String> EXCLUDE_HAXELIB = List.of(
-    "-x", "installFormatHaxelib", "-x", "registerDapProtocolHaxelib",
-    "-x", "registerServerHaxelib", "-x", "installHscript");
+    GRADLE_EXCLUDE, "installFormatHaxelib", GRADLE_EXCLUDE, "registerDapProtocolHaxelib",
+    GRADLE_EXCLUDE, "registerServerHaxelib", GRADLE_EXCLUDE, "installHscript");
 
   private MatrixMain(Path root, Path resources, Path out, List<String> lanes, List<String> haxeFilter,
                      List<String> hlFilter, boolean full, boolean parallelLanes, int hlForks) throws IOException {
@@ -88,26 +112,26 @@ public final class MatrixMain {
     int hlForks = 4;
     boolean reportOnly = false;
     for (String arg : args) {
-      if (arg.startsWith("--lanes=")) {
-        lanes = new ArrayList<>(Arrays.stream(arg.substring(8).split(","))
+      if (arg.startsWith(FLAG_LANES)) {
+        lanes = new ArrayList<>(Arrays.stream(flagValue(arg, FLAG_LANES).split(","))
                                   .map(s -> s.trim().toLowerCase(Locale.ROOT)).filter(s -> !s.isEmpty()).toList());
-      } else if (arg.startsWith("--haxe=")) {
-        haxeFilter = Arrays.stream(arg.substring(7).split(","))
+      } else if (arg.startsWith(FLAG_HAXE)) {
+        haxeFilter = Arrays.stream(flagValue(arg, FLAG_HAXE).split(","))
           .map(String::trim).filter(s -> !s.isEmpty()).toList();
-      } else if (arg.startsWith("--hl=")) {
-        hlFilter = Arrays.stream(arg.substring(5).split(","))
+      } else if (arg.startsWith(FLAG_HL)) {
+        hlFilter = Arrays.stream(flagValue(arg, FLAG_HL).split(","))
           .map(String::trim).filter(s -> !s.isEmpty()).toList();
-      } else if (arg.startsWith("--resources=")) {
-        resources = Path.of(arg.substring(12)).toAbsolutePath().normalize();
-      } else if (arg.startsWith("--out=")) {
-        out = Path.of(arg.substring(6)).toAbsolutePath().normalize();
-      } else if (arg.equals("--full")) {
+      } else if (arg.startsWith(FLAG_RESOURCES)) {
+        resources = Path.of(flagValue(arg, FLAG_RESOURCES)).toAbsolutePath().normalize();
+      } else if (arg.startsWith(FLAG_OUT)) {
+        out = Path.of(flagValue(arg, FLAG_OUT)).toAbsolutePath().normalize();
+      } else if (arg.equals(FLAG_FULL)) {
         full = true;
-      } else if (arg.equals("--parallel-lanes")) {
+      } else if (arg.equals(FLAG_PARALLEL_LANES)) {
         parallelLanes = true;
-      } else if (arg.startsWith("--hl-forks=")) {
-        hlForks = Integer.parseInt(arg.substring(11).trim());
-      } else if (arg.equals("--report-only")) {
+      } else if (arg.startsWith(FLAG_HL_FORKS)) {
+        hlForks = Integer.parseInt(flagValue(arg, FLAG_HL_FORKS).trim());
+      } else if (arg.equals(FLAG_REPORT_ONLY)) {
         reportOnly = true;
       } else {
         System.err.println("unknown argument: " + arg);
@@ -120,6 +144,11 @@ public final class MatrixMain {
     } else {
       matrix.run();
     }
+  }
+
+  /** The value of a {@code --flag=value} argument, sliced at the flag's own length. */
+  private static String flagValue(String arg, String flag) {
+    return arg.substring(flag.length());
   }
 
   private void run() throws IOException {
@@ -245,7 +274,7 @@ public final class MatrixMain {
    */
   private SuiteRun runSuite(String modulePath, List<String> extraArgs, Map<String, String> env,
                             Path logFile, int timeoutSec, Path moduleResults, Path evidence) throws IOException {
-    List<String> first = new ArrayList<>(List.of(modulePath + ":cleanTest", modulePath + ":test"));
+    List<String> first = new ArrayList<>(List.of(modulePath + TASK_CLEAN_TEST, modulePath + TASK_TEST));
     first.addAll(extraArgs);
     Gradle.Status status = gradle.run(first, env, logFile, timeoutSec, true);
     Gradle.killStrays();
@@ -270,9 +299,9 @@ public final class MatrixMain {
                    StandardCopyOption.REPLACE_EXISTING);
       }
     }
-    List<String> retry = new ArrayList<>(List.of(modulePath + ":cleanTest", modulePath + ":test"));
+    List<String> retry = new ArrayList<>(List.of(modulePath + TASK_CLEAN_TEST, modulePath + TASK_TEST));
     for (Results.ClassResult failed : failing) {
-      retry.add("--tests");
+      retry.add(GRADLE_TESTS);
       retry.add(failed.fqName());
     }
     retry.addAll(extraArgs);
@@ -344,7 +373,7 @@ public final class MatrixMain {
       log.line("    " + haxe + " : running the eval suite");
       long start = System.nanoTime();
       SuiteRun run = runSuite(":debuggers:eval-debugger",
-                              List.of("-PdebuggerTests=true", "--no-build-cache", "--continue"),
+                              List.of("-PdebuggerTests=true", GRADLE_NO_BUILD_CACHE, GRADLE_CONTINUE),
                               env, out.resolve("logs/eval-" + haxe + ".log"), 900,
                               moduleResults, out.resolve("results/eval_" + haxe));
       addCell("eval", haxe, null, run.status().name().toLowerCase(Locale.ROOT),
@@ -367,7 +396,7 @@ public final class MatrixMain {
       List<String> build = new ArrayList<>();
       fixtures.keySet().stream().sorted().forEach(t -> build.add(":debuggers:intellij-hxcpp-debugger:" + t));
       build.addAll(EXCLUDE_HAXELIB);
-      build.add("--continue");
+      build.add(GRADLE_CONTINUE);
       gradle.run(build, haxeEnv(haxeDir), out.resolve("logs/hxcpp-" + haxe + "-build.log"), 1200);
       List<String> missing = fixtures.entrySet().stream()
         .filter(e -> !Files.isRegularFile(moduleBuild.resolve(e.getValue())))
@@ -379,10 +408,10 @@ public final class MatrixMain {
       }
       log.line("    " + haxe + " : fixtures built"
                + (missing.isEmpty() ? "" : " (missing " + missing.size() + ")") + ", running the suite");
-      List<String> extra = new ArrayList<>(List.of("--no-build-cache"));
+      List<String> extra = new ArrayList<>(List.of(GRADLE_NO_BUILD_CACHE));
       extra.addAll(EXCLUDE_HAXELIB);
-      missing.forEach(t -> extra.addAll(List.of("-x", t)));
-      extra.add("--continue");
+      missing.forEach(t -> extra.addAll(List.of(GRADLE_EXCLUDE, t)));
+      extra.add(GRADLE_CONTINUE);
       SuiteRun run = runSuite(":debuggers:intellij-hxcpp-debugger", extra, haxeEnv(haxeDir),
                               out.resolve("logs/hxcpp-" + haxe + "-test.log"), 1500,
                               moduleBuild.resolve("test-results/test"), out.resolve("results/hxcpp_" + haxe));
@@ -416,7 +445,7 @@ public final class MatrixMain {
     Path adapter = moduleBuild.resolve("hl/hl-debug-adapter.hl");
     if (!Files.isRegularFile(adapter)) {
       // the shipped adapter is a DEV-haxe artifact; build it once and PIN it
-      gradle.run(List.of(":debuggers:hashlink-debug-adapter:buildDebugAdapter"),
+      gradle.run(List.of(":debuggers:hashlink-debug-adapter:" + TASK_BUILD_ADAPTER),
                  Map.of(), out.resolve("logs/hl-adapter.log"), 600);
     }
     long pinned = lastModified(adapter);
@@ -430,7 +459,7 @@ public final class MatrixMain {
       List<String> build = new ArrayList<>();
       HL_FIXTURE_TASKS.forEach(t -> build.add(":debuggers:hashlink-debug-adapter:" + t));
       build.addAll(EXCLUDE_HAXELIB);
-      build.add("--continue");
+      build.add(GRADLE_CONTINUE);
       gradle.run(build, haxeEnv(haxeDir), out.resolve("logs/hl-" + haxe + "-build.log"), 600);
       List<String> missing = HL_FIXTURE_TASKS.stream()
         .filter(t -> !Files.isRegularFile(moduleBuild.resolve("hl/" + HL_FIXTURE_FILES.get(t))))
@@ -452,15 +481,15 @@ public final class MatrixMain {
         log.line("    " + haxe + " x " + runtime + " : running the HL suite");
         long cellStart = System.nanoTime();
         List<String> extra = new ArrayList<>(List.of(
-          "-PhashlinkBin=" + hlBinary, "--no-build-cache", "-x", "buildDebugAdapter"));
+          PROP_HASHLINK_BIN + hlBinary, GRADLE_NO_BUILD_CACHE, GRADLE_EXCLUDE, TASK_BUILD_ADAPTER));
         if (hlForks > 1) {
           // parallel test-class forks WITHIN the cell; fixture builds are
           // excluded tasks here, so they can never overlap a running test
-          extra.add("-PdapTestForks=" + hlForks);
+          extra.add(PROP_DAP_TEST_FORKS + hlForks);
         }
-        HL_FIXTURE_TASKS.forEach(t -> extra.addAll(List.of("-x", t)));
+        HL_FIXTURE_TASKS.forEach(t -> extra.addAll(List.of(GRADLE_EXCLUDE, t)));
         extra.addAll(EXCLUDE_HAXELIB);
-        extra.add("--continue");
+        extra.add(GRADLE_CONTINUE);
         Map<String, String> env = haxeEnv(haxeDir);
         if (!Platform.WINDOWS) {
           // linux: hl finds libhl.so and the std .hdll libraries beside itself
@@ -490,7 +519,7 @@ public final class MatrixMain {
     List<String> build = new ArrayList<>();
     HL_FIXTURE_TASKS.forEach(t -> build.add(":debuggers:hashlink-debug-adapter:" + t));
     build.addAll(EXCLUDE_HAXELIB);
-    build.add("--continue");
+    build.add(GRADLE_CONTINUE);
     gradle.run(build, Map.of(), out.resolve("logs/restore-hl-fixtures.log"), 600);
   }
 
