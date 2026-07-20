@@ -59,6 +59,9 @@ self-starting Server class into the build.
   static access through dotted package paths, `new`, and assignments.
 - **Exception breakpoints**: uncaught throws, critical errors (both default
   ON), the "thrown" haxe.Exception filter and per-class typed filters.
+- **toString rendering toggle** (`intellij/setToStringRendering`): object
+  labels via `toString()` can be switched on live from the Variables view;
+  OFF by default (running user code implicitly is opt-in — see Decisions).
 
 ## Dependencies
 

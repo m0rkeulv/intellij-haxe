@@ -205,9 +205,9 @@ execution, and it only happens for expressions the user explicitly wrote.
 
 ## How features work
 
-### Launch and the handshake (drain, then parse)
+### Launch and the handshake
 
-Reading the VM's `--debug` handshake directly from the socket either was far
+Reading the VM's `--debug` handshake naively off the socket either was far
 too slow or **hung ~10 KB into the ~15 KB message**. Two independent causes,
 both from "HL reading a socket another HL is writing":
 
@@ -219,24 +219,21 @@ both from "HL reading a socket another HL is writing":
   `recv` waiting to be released. If a read ever asks for more bytes than
   remain before that point, it waits forever.
 
-`DebugSession.readHandshake` therefore drains the **whole** handshake into
-memory first, then parses from an in-memory `BytesInput` which cannot block:
-loop `readBytes` into a `BytesBuffer` until a read times out. The VM sends
-everything and then goes quiet — that quiet is the end-of-message signal.
-`JitInfoReader` reads exact-size chunks safely from the buffer; the same code
-deadlocks on a live socket.
-
-Buffer/timeout sizes: drain buffer 8192 bytes (the handshake is ~15 KB, two
-reads; partial reads are fine — whatever each read returns is accumulated);
-drain timeout 0.5 s (comfortably longer than loopback latency so the message
-is never cut short, small enough to add no noticeable launch delay; it fires
-exactly once, at the true end). Pump buffer 4096 bytes (streaming, size just
-bounds one copy).
+The handshake format is **self-delimiting** — `JitInfoReader` derives every
+size as it parses and never over-reads — so the parse runs straight off a
+buffered view (`HandshakeInput` in `DebugSession.hx`): it recvs in large
+chunks (64 KB) but only refills when the parser still NEEDS bytes, and a
+refill accepts a partial chunk, so it cannot block after the final handshake
+byte. The socket timeout (`HANDSHAKE_READ_TIMEOUT_S`, 3 s) is a truncation
+guard only — on a healthy handshake it never fires. (An earlier approach
+slurped the whole message until a 0.5 s read timeout marked the end — that
+timeout fired on EVERY launch, a dead half-second each time.) The pump buffer
+is 4096 bytes (streaming, size just bounds one copy).
 
 Rules for any future VM socket exchange where the peer sends a
-variable-length message and then waits: don't parse incrementally straight
-off the socket; drain-then-parse or length-prefix the protocol; never issue a
-socket read larger than the bytes known to be coming.
+variable-length message and then waits: don't issue exact-size reads straight
+off the socket unless the format is self-delimiting and the reader never
+over-requests; otherwise drain-then-parse or length-prefix the protocol.
 
 Attach mode adds two rules learned the hard way:
 
@@ -704,12 +701,13 @@ hidden.
 ### The per-stop reference registry
 
 `variablesReference`s (and the frame cache) are handed out lazily from
-`REF_BASE` (1000) and **cleared on every resume/step** (`refreshFrames`,
-`stepOverAndResume`). A reference outlives its stop only as freed/moved
-memory — the GC can relocate objects — so a stale expand must never read.
-Numbers are never reused across stops: a stale reference must resolve to
-nothing, not alias the new stop's allocations. Keep the clear in the same
-places the frame cache is invalidated.
+`REF_BASE` (1000, `StopState`) and **cleared on every resume/step**
+(`VariableInspector.invalidate()`, called wherever the debuggee is released).
+A reference outlives its stop only as freed/moved memory — the GC can
+relocate objects — so a stale expand must never read. Numbers are never
+reused across stops: a stale reference must resolve to nothing, not alias the
+new stop's allocations. Keep the clear in the same places the frame cache is
+invalidated.
 
 ### Evaluate: expressions
 
@@ -1171,7 +1169,7 @@ capability — hence parked until a real expression fails.
 | VM version/bitness drift | Never crash/freeze/corrupt — degrade to missing data or a clear refusal; no per-version branches. Adapter builds with -D hl-legacy32 (loads on HL32); register access takes the DEBUGGEE's bitness (setTargetIs64); padded structs sit at FIXED offsets on both bitnesses (vdynamic payload +8, threads array +8) while hl_type_obj.name shrinks (+16 → +12) — check hl.h before using align.ptr; JIT patterns differ (mov eax,imm32 on x86); eval-calls work on both. Test any build via -PhashlinkBin |
 | Blocking native call on a background thread | Wrap in `hl.Gc.blocking(true/false)`; read into a preallocated buffer; allocate nothing inside the section |
 | Socket vs process/file reads | Socket reads are GC-safe; process/file reads are not |
-| Reading a variable-length VM message off a socket | Drain-then-parse (with a read timeout) or length-prefix; never over-request |
+| Reading a variable-length VM message off a socket | Never over-request: parse through a buffered view that refills only when the parser needs bytes (self-delimiting formats, see HandshakeInput), or drain-then-parse / length-prefix |
 | HL socket `readBytes` | Blocks until the full requested length is read — do not ask for more than is coming |
 | Trap flag for single-step | Always clear what you set |
 | Test fixtures for breakpoints | Use runtime values so the compiler can't unroll/inline the target away |
