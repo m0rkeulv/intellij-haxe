@@ -187,8 +187,22 @@ public abstract class DapIntegrationTestBase {
     ProcessBuilder builder = new ProcessBuilder(hlExecutable, adapter, "--port", "0")
       .redirectErrorStream(true);
     builder.environment().put("DAP_ADAPTER_TRACE", "1");
+    // the debuggee inherits the adapter's environment, so this also reaches
+    // the fixture (e.g. FIXTURE_SLOW; see adapterEnv())
+    builder.environment().putAll(adapterEnv());
     adapterProcess = builder.start();
     client = DapClient.connect("127.0.0.1", awaitListeningPort(), (int)TIMEOUT);
+  }
+
+  /**
+   * Extra environment for the adapter process (inherited by the debuggee it
+   * spawns). Suites whose scenario needs the fixture's slow call at its full
+   * 3s length override this with {@code FIXTURE_SLOW=1}; by default the
+   * fixture's {@code slowDemo()} sleep is near-instant, because ~20
+   * run-to-completion tests per suite run were each paying the full 3s.
+   */
+  protected java.util.Map<String, String> adapterEnv() {
+    return java.util.Map.of();
   }
 
   @After

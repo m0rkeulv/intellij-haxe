@@ -14,6 +14,14 @@ import org.junit.Test;
  */
 public class SteppingIntegrationTest extends DapIntegrationTestBase {
 
+  // stepOverALongRunningCallWaitsForTheLanding needs the fixture's slow call
+  // at its full 3s (it asserts elapsed >= 2500ms - which also fails loudly if
+  // this plumbing ever breaks). Everywhere else the sleep is near-instant.
+  @Override
+  protected java.util.Map<String, String> adapterEnv() {
+    return java.util.Map.of("FIXTURE_SLOW", "1");
+  }
+
   @Test
   public void stepIntoEntersCallee() throws Exception {
     StoppedEvent atLoop = runToBreakpoint(FIXTURE_MAIN, FIXTURE_LOOP_LINE);

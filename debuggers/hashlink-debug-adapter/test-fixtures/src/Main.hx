@@ -41,7 +41,7 @@ class Main {
 	// landing however long the call runs — never give up and resume freely.
 	static function slowDemo():Void {
 		var before = Std.parseInt("7") + 0; // plain Int 7
-		Sys.sleep(3.0); // FIXTURE_SLOW_LINE = 44 — step over waits ~3s
+		Sys.sleep(slowSeconds()); // FIXTURE_SLOW_LINE = 44 — step over waits (3s when FIXTURE_SLOW=1)
 		Sys.println("slow-done:" + before); // FIXTURE_SLOW_AFTER_LINE = 45
 	}
 
@@ -54,5 +54,14 @@ class Main {
 		} catch (e:String) {
 			Sys.println("caught:" + e);
 		}
+	}
+
+	// The slow call's duration. main() runs slowDemo() unconditionally, so the
+	// full 3s only happens for the step-over-a-slow-call test (FIXTURE_SLOW=1);
+	// every other run-to-completion test was paying a flat 3s of pure sleep —
+	// over half of a whole integration suite run. Added BELOW the other
+	// functions so the load-bearing line constants above stay put.
+	static function slowSeconds():Float {
+		return Sys.getEnv("FIXTURE_SLOW") != null ? 3.0 : 0.05;
 	}
 }
