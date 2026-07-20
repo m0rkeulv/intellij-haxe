@@ -104,7 +104,7 @@ public final class MatrixMain {
     Path root = Path.of(System.getProperty("matrix.root", ".")).toAbsolutePath().normalize();
     Path resources = root.resolve("debuggerResources");
     Path out = root.resolve("build/reports/debugger-matrix");
-    List<String> lanes = new ArrayList<>(List.of("eval", "hashlink", "hxcpp"));
+    List<String> lanes = List.of("eval", "hashlink", "hxcpp");
     List<String> haxeFilter = List.of();
     List<String> hlFilter = List.of();
     boolean full = false;
@@ -113,24 +113,22 @@ public final class MatrixMain {
     boolean reportOnly = false;
     for (String arg : args) {
       if (arg.startsWith(FLAG_LANES)) {
-        lanes = new ArrayList<>(Arrays.stream(flagValue(arg, FLAG_LANES).split(","))
-                                  .map(s -> s.trim().toLowerCase(Locale.ROOT)).filter(s -> !s.isEmpty()).toList());
+        // lane names are matched lowercase (run() tests contains("hashlink") etc.)
+        lanes = flagValueList(arg, FLAG_LANES).stream().map(s -> s.toLowerCase(Locale.ROOT)).toList();
       } else if (arg.startsWith(FLAG_HAXE)) {
-        haxeFilter = Arrays.stream(flagValue(arg, FLAG_HAXE).split(","))
-          .map(String::trim).filter(s -> !s.isEmpty()).toList();
+        haxeFilter = flagValueList(arg, FLAG_HAXE);
       } else if (arg.startsWith(FLAG_HL)) {
-        hlFilter = Arrays.stream(flagValue(arg, FLAG_HL).split(","))
-          .map(String::trim).filter(s -> !s.isEmpty()).toList();
+        hlFilter = flagValueList(arg, FLAG_HL);
       } else if (arg.startsWith(FLAG_RESOURCES)) {
-        resources = Path.of(flagValue(arg, FLAG_RESOURCES)).toAbsolutePath().normalize();
+        resources = flagValuePath(arg, FLAG_RESOURCES);
       } else if (arg.startsWith(FLAG_OUT)) {
-        out = Path.of(flagValue(arg, FLAG_OUT)).toAbsolutePath().normalize();
+        out = flagValuePath(arg, FLAG_OUT);
       } else if (arg.equals(FLAG_FULL)) {
         full = true;
       } else if (arg.equals(FLAG_PARALLEL_LANES)) {
         parallelLanes = true;
       } else if (arg.startsWith(FLAG_HL_FORKS)) {
-        hlForks = Integer.parseInt(flagValue(arg, FLAG_HL_FORKS).trim());
+        hlForks = flagValueInt(arg, FLAG_HL_FORKS);
       } else if (arg.equals(FLAG_REPORT_ONLY)) {
         reportOnly = true;
       } else {
@@ -149,6 +147,22 @@ public final class MatrixMain {
   /** The value of a {@code --flag=value} argument, sliced at the flag's own length. */
   private static String flagValue(String arg, String flag) {
     return arg.substring(flag.length());
+  }
+
+  /** A {@code --flag=a,b,c} value as a trimmed, empty-free list. */
+  private static List<String> flagValueList(String arg, String flag) {
+    return Arrays.stream(flagValue(arg, flag).split(","))
+      .map(String::trim).filter(s -> !s.isEmpty()).toList();
+  }
+
+  /** A {@code --flag=path} value as an absolute, normalized path. */
+  private static Path flagValuePath(String arg, String flag) {
+    return Path.of(flagValue(arg, flag)).toAbsolutePath().normalize();
+  }
+
+  /** A {@code --flag=N} value as an int. */
+  private static int flagValueInt(String arg, String flag) {
+    return Integer.parseInt(flagValue(arg, flag).trim());
   }
 
   private void run() throws IOException {
