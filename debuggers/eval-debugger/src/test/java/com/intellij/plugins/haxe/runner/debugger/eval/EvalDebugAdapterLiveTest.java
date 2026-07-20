@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.eval;
 
+import com.intellij.plugins.haxe.runner.debugger.dap.DapPaths;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -210,7 +211,7 @@ public class EvalDebugAdapterLiveTest {
     assertEquals("stopped on the break line", BREAK_LINE, top.getLine());
     assertNotNull("top frame has a source", top.getSource());
     assertTrue("top frame is the fixture",
-               top.getSource().getPath().replace('\\', '/').endsWith("EvalMain.hx"));
+               DapPaths.toSlashes(top.getSource().getPath()).endsWith("EvalMain.hx"));
 
     ScopesRequest scopes = new ScopesRequest();
     ScopesArguments scArgs = new ScopesArguments();

@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter;
 
+import com.intellij.plugins.haxe.runner.debugger.dap.DapPaths;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
@@ -211,7 +212,7 @@ abstract class HxcppIntegrationTestBase {
     // deliberately IDE-shaped (forward slashes, as VirtualFile.getPath()
     // reports on Windows): the adapter must convert before the server's
     // exact-string path matching
-    source.setPath(fixtureSource.toString().replace('\\', '/'));
+    source.setPath(DapPaths.toSlashes(fixtureSource.toString()));
     SetBreakpointsArguments arguments = new SetBreakpointsArguments();
     arguments.setSource(source);
     arguments.setBreakpoints(List.of(breakpoints));

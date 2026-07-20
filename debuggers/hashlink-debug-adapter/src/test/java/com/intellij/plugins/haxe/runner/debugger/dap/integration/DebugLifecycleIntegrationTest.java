@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.dap.integration;
 
+import com.intellij.plugins.haxe.runner.debugger.dap.DapPaths;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -61,7 +62,7 @@ public class DebugLifecycleIntegrationTest extends DapIntegrationTestBase {
           StackTraceResponse frames = stackTrace(threadId);
           assertEquals("top frame at breakpoint line", FIXTURE_LOOP_LINE,
                        frames.getBody().getStackFrames().get(0).getLine());
-          String topPath = frames.getBody().getStackFrames().get(0).getSource().getPath().replace('\\', '/');
+          String topPath = DapPaths.toSlashes(frames.getBody().getStackFrames().get(0).getSource().getPath());
           assertTrue("top frame in Main.hx (" + topPath + ")", topPath.endsWith("Main.hx"));
         }
 

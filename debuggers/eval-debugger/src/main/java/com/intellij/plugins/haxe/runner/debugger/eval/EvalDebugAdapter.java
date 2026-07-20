@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.eval;
 
+import com.intellij.plugins.haxe.runner.debugger.dap.DapPaths;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Breakpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Capabilities;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
@@ -77,7 +78,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -337,7 +337,7 @@ public class EvalDebugAdapter implements Closeable {
     }
     List<EvalProtocol.EvalBreakpoint> registered = vm().setBreakpoints(file, lines);
     // mirror for the step loops; setBreakpoints REPLACES the file's set
-    breakpointLines.put(normalizePath(file), lineSet);
+    breakpointLines.put(DapPaths.normalizeKey(file), lineSet);
 
     List<Breakpoint> verified = new ArrayList<>();
     for (int i = 0; i < requested.size(); i++) {
@@ -1024,15 +1024,8 @@ public class EvalDebugAdapter implements Closeable {
     if (source == null) {
       return false;
     }
-    Set<Integer> lines = breakpointLines.get(normalizePath(source));
+    Set<Integer> lines = breakpointLines.get(DapPaths.normalizeKey(source));
     return lines != null && lines.contains(line);
-  }
-
-  // Windows paths reach us with mixed separators and drive-letter casing
-  // (IDE-sent breakpoint paths vs VM-reported frame sources); haxe source
-  // trees do not distinguish files by case, so fold both for the lookup.
-  private static String normalizePath(String path) {
-    return path.replace('\\', '/').toLowerCase(Locale.ROOT);
   }
 
   /**
