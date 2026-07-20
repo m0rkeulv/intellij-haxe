@@ -16,14 +16,14 @@ import java.util.concurrent.TimeUnit;
  * timeout the whole process TREE dies, plus known stray debuggees — a stuck
  * runtime error dialog must not wedge the matrix.
  */
-final class Gradle {
+final class GradleRunner {
   private static final List<String> STRAY_BASENAMES =
     List.of("hl", "hl.exe", "haxe", "haxe.exe", "Main-debug", "Main-debug.exe", "MainEx-debug", "MainEx-debug.exe");
 
   private final Path root;
   private final Log log;
 
-  Gradle(Path root, Log log) {
+  GradleRunner(Path root, Log log) {
     this.root = root;
     this.log = log;
   }

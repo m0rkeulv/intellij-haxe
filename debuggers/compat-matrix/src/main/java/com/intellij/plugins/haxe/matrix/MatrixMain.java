@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  *
  * The lane mechanics encode hard-won lessons from the runs that certified
  * the version support policy — see the comments at the decision points and
- * in {@link Gradle} before "simplifying" any of them.
+ * in {@link GradleRunner} before "simplifying" any of them.
  */
 public final class MatrixMain {
   private final Path root;
@@ -38,7 +38,7 @@ public final class MatrixMain {
   private final String startedAt = LocalDateTime.now()
     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
   private final Log log;
-  private final Gradle gradle;
+  private final GradleRunner gradle;
   private final List<Results.Cell> cells = new ArrayList<>();
 
   private List<Path> haxeDirs = List.of();
@@ -92,7 +92,7 @@ public final class MatrixMain {
     this.parallelLanes = parallelLanes;
     this.hlForks = Math.max(1, hlForks);
     this.log = new Log(out.resolve("progress.log"));
-    this.gradle = new Gradle(root, log);
+    this.gradle = new GradleRunner(root, log);
   }
 
   public static void main(String[] args) throws Exception {
@@ -232,7 +232,7 @@ public final class MatrixMain {
    */
   private void runLanesInParallel() {
     log.line("running " + lanes.size() + " lanes in parallel (one thread per lane)");
-    Gradle.deferStrayKills = true;
+    GradleRunner.deferStrayKills = true;
     try {
       List<Thread> threads = new ArrayList<>();
       if (lanes.contains("eval")) {
@@ -254,8 +254,8 @@ public final class MatrixMain {
         }
       }
     } finally {
-      Gradle.deferStrayKills = false;
-      Gradle.killStraysNow();
+      GradleRunner.deferStrayKills = false;
+      GradleRunner.killStraysNow();
     }
   }
 
@@ -276,7 +276,7 @@ public final class MatrixMain {
 
   // ------------------------------------------------------------------ lanes
 
-  private record SuiteRun(Gradle.Status status, List<Results.ClassResult> classes, List<String> flaky) {
+  private record SuiteRun(GradleRunner.Status status, List<Results.ClassResult> classes, List<String> flaky) {
   }
 
   /**
@@ -291,12 +291,12 @@ public final class MatrixMain {
                             Path logFile, int timeoutSec, Path moduleResults, Path evidence) throws IOException {
     List<String> first = new ArrayList<>(List.of(modulePath + TASK_CLEAN_TEST, modulePath + TASK_TEST));
     first.addAll(extraArgs);
-    Gradle.Status status = gradle.run(first, env, logFile, timeoutSec, true);
-    Gradle.killStrays();
+    GradleRunner.Status status = gradle.run(first, env, logFile, timeoutSec, true);
+    GradleRunner.killStrays();
     List<Results.ClassResult> classes = Results.collect(moduleResults, evidence);
     List<Results.ClassResult> failing = classes.stream()
       .filter(c -> c.failures() + c.errors() > 0).toList();
-    if (failing.isEmpty() || failing.size() > 8 || status == Gradle.Status.TIMEOUT) {
+    if (failing.isEmpty() || failing.size() > 8 || status == GradleRunner.Status.TIMEOUT) {
       return new SuiteRun(status, classes, List.of());
     }
     log.line("      " + failing.size() + " suite(s) failed - retrying them once to tell machine flakes from real failures");
@@ -310,7 +310,7 @@ public final class MatrixMain {
     }
     retry.addAll(extraArgs);
     gradle.run(retry, env, Path.of(logFile + ".retry"), timeoutSec, true);
-    Gradle.killStrays();
+    GradleRunner.killStrays();
     overlayResults(moduleResults, evidence);
     List<Results.ClassResult> merged = Results.parse(evidence);
     List<String> after = merged.stream()
@@ -376,7 +376,7 @@ public final class MatrixMain {
         ? List.of("cmd", "/c", "haxe", "--version")
         : List.of("sh", "-c", "haxe --version");
       ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
-      Gradle.applyEnv(builder.environment(), env);
+      GradleRunner.applyEnv(builder.environment(), env);
       Process process = builder.start();
       String version = new String(process.getInputStream().readAllBytes()).trim();
       process.waitFor(15, TimeUnit.SECONDS);
