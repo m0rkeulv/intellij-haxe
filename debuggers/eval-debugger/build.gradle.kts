@@ -23,12 +23,12 @@ dependencies {
 
     implementation(project(":debuggers:dap-protocol"))
 
-    implementation("tools.jackson.core:jackson-databind:3.1.0")
+    implementation(libs.jacksonDatabind)
 
-    compileOnly("org.projectlombok:lombok:1.18.44")
-    testCompileOnly("org.projectlombok:lombok:1.18.44")
-    annotationProcessor("org.projectlombok:lombok:1.18.44")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.44")
+    compileOnly(libs.lombok)
+    testCompileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+    testAnnotationProcessor(libs.lombok)
 
     testImplementation(libs.junit)
 }

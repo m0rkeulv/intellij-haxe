@@ -21,7 +21,7 @@ java {
 
 dependencies {
     // tar.gz extraction (haxe linux archives); the JDK only covers zip
-    implementation("org.apache.commons:commons-compress:1.26.2")
+    implementation(libs.commonsCompress)
 }
 
 // Provisions toolchains (downloading what this OS has release binaries for),

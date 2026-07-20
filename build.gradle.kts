@@ -62,12 +62,12 @@ dependencies {
     val ideaTargetDir = "${ideaBaseDir}/idea${platformType}-${platformVersion}"
 
 
-    implementation("org.commonmark:commonmark:0.21.0")
-    implementation("org.commonmark:commonmark-ext-autolink:0.21.0")
-    implementation("org.commonmark:commonmark-ext-gfm-tables:0.21.0")
+    implementation(libs.commonmark)
+    implementation(libs.commonmarkAutolink)
+    implementation(libs.commonmarkGfmTables)
 
-    implementation("tools.jackson.core:jackson-databind:3.1.0")
-    implementation("org.apache.commons:commons-text:1.14.0")
+    implementation(libs.jacksonDatabind)
+    implementation(libs.commonsText)
 
     val flexShared = "${ideaTargetDir}/config/plugins/flex/lib/flex-shared.jar"
     val flexSupport = "${ideaTargetDir}/config/plugins/flex/lib/FlexSupport.jar"
@@ -84,10 +84,10 @@ dependencies {
     testCompileOnly(files("${ideaTargetDir}/lib/openapi.jar"))
     testCompileOnly(files("${ideaTargetDir}/lib/util.jar"))
 
-    compileOnly("org.projectlombok:lombok:1.18.44")
-    testCompileOnly("org.projectlombok:lombok:1.18.44")
-    annotationProcessor ("org.projectlombok:lombok:1.18.44")
-    testAnnotationProcessor ("org.projectlombok:lombok:1.18.44")
+    compileOnly(libs.lombok)
+    testCompileOnly(libs.lombok)
+    annotationProcessor (libs.lombok)
+    testAnnotationProcessor (libs.lombok)
 
     // TODO upgrade to junit5 (testFramework(TestFrameworkType.JUnit5))
     testImplementation(libs.junit)
