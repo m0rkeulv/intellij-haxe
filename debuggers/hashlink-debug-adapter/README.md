@@ -54,14 +54,14 @@ communicates with the rest of the adapter only through queues.
 
 The `.hl` bytecode debug tables are read with the `format` haxelib (installed by a
 pinned Gradle task). Reading the debuggee's memory, INT3 patching, single-stepping and
-register access go through the HashLink VM's own `debug_*` natives, so no native code of
-our own is needed.
+register access go through the HashLink VM's own `debug_*` natives, so no additional
+native code is needed.
 
 > **Working on the session, launch, handshake, stepping, or threading code?**
 > Read [docs/README.md](docs/README.md) first. It explains the HashLink-specific
-> pitfalls we hit — the GC deadlock and the `hl.Gc.blocking` workaround, why the
+> pitfalls — the GC deadlock and the `hl.Gc.blocking` workaround, why the
 > handshake is drained before parsing, the buffer/timeout sizes, the trap-flag
-> single-step, and where these problems will resurface as we add features.
+> single-step — and where these problems will resurface when adding features.
 
 ## Running the adapter
 
