@@ -790,7 +790,7 @@ public class EvalDebugAdapter implements Closeable {
               }
               continue;
             }
-            if (start == null || top.line() != start.line() || !Objects.equals(top.name(), start.function())) {
+            if (reachedNewPosition(top, start)) {
               break; // line finished without the target: report the landing as the stop
             }
           } catch (EvalProtocolException unwound) {
@@ -868,8 +868,7 @@ public class EvalDebugAdapter implements Closeable {
           continue; // mid-call bookkeeping frame; keep going
         }
         EvalProtocol.EvalStackFrame top = frames.get(0);
-        if (frames.size() < startDepth || start == null
-            || top.line() != start.line() || !Objects.equals(top.name(), start.function())) {
+        if (frames.size() < startDepth || reachedNewPosition(top, start)) {
           return StepOutcome.STEPPED; // reached a new line (or returned out of the function)
         }
       }
@@ -984,6 +983,17 @@ public class EvalDebugAdapter implements Closeable {
   }
 
   /**
+   * True when the step's top frame has reached a position DIFFERENT from where
+   * the step started — a new line, or a return into a different function — or
+   * there is no start baseline. The shared "the step arrived somewhere new,
+   * report the landing" test used by the step-over / step-into loops and by the
+   * breakpoint-landing check (which exempts the step's own starting line).
+   */
+  private static boolean reachedNewPosition(EvalProtocol.EvalStackFrame top, FrameSignature start) {
+    return start == null || top == null || !start.sameStop(signatureOf(top));
+  }
+
+  /**
    * True when a step landing must end the step as a BREAKPOINT stop: the VM
    * pushed breakpointStop for the step's thread mid-verb (authoritative — it
    * evaluates its own breakpoint state), or the landing sits on a line the IDE
@@ -1001,8 +1011,7 @@ public class EvalDebugAdapter implements Closeable {
       return false;
     }
     breakpointHitDuringStep = null; // consumed (or a same-line duplicate)
-    return start == null || top.line() != start.line()
-           || !Objects.equals(top.name(), start.function());
+    return reachedNewPosition(top, start);
   }
 
   private boolean isBreakpointLine(String source, int line) {
