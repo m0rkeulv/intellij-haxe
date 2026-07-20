@@ -144,18 +144,15 @@ public final class MatrixMain {
     return arg.substring(flag.length());
   }
 
-  /** A {@code --flag=a,b,c} value as a trimmed, empty-free list. */
   private static List<String> flagValueList(String arg, String flag) {
     return Arrays.stream(flagValue(arg, flag).split(","))
       .map(String::trim).filter(s -> !s.isEmpty()).toList();
   }
 
-  /** A {@code --flag=path} value as an absolute, normalized path. */
   private static Path flagValuePath(String arg, String flag) {
     return Path.of(flagValue(arg, flag)).toAbsolutePath().normalize();
   }
 
-  /** A {@code --flag=N} value as an int. */
   private static int flagValueInt(String arg, String flag) {
     return Integer.parseInt(flagValue(arg, flag).trim());
   }
