@@ -117,6 +117,15 @@ public final class MatrixMain {
   }
 
   private void run() throws IOException {
+    // the effective flag values, before provisioning resolves anything - so a
+    // surprising run self-documents which knobs it was started with
+    log.line("matrix config: lanes=" + String.join("+", lanes)
+             + " haxe=" + (haxeFilter.isEmpty() ? "all" : String.join(",", haxeFilter))
+             + " hl=" + (hlFilter.isEmpty() ? "all" : String.join(",", hlFilter))
+             + " full=" + full
+             + " parallelLanes=" + parallelLanes
+             + " hlForks=" + hlForks);
+    log.line("matrix paths: resources=" + resources + " out=" + out);
     Provisioner provisioner = new Provisioner(resources, log);
     haxeDirs = provisioner.haxeDirs();
     if (!haxeFilter.isEmpty()) {
