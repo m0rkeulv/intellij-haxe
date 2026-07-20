@@ -84,7 +84,7 @@ jobs:
       # toolchain); the parallel 'debuggers' job below runs them for this
       # exact build, and 'finish' won't publish unless it passes
       - name: Build with Gradle
-        run: ./gradlew clean test buildPlugin verifyPlugin -PdebuggerTests=false
+        run: ./gradlew clean test buildPlugin verifyPlugin
 
 
       - name: Find assets

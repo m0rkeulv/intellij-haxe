@@ -39,9 +39,9 @@ val hxcppDebugServerVersion = "1.2.4" // pinned for reproducible fixture builds
 
 // Debugger validation belongs to the dedicated windows CI job: fixtures need
 // haxe + the hxcpp toolchain + a C++ compiler, and the tests target windows.
-// The regular build/release jobs pass -PdebuggerTests=false, which disables
+// Debugger tests are OPT-IN (-PdebuggerTests=true); without the flag this disables
 // this module's tests and fixture builds entirely (compilation still runs).
-val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("true").toBoolean()
+val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("false").toBoolean()
 val exeSuffix = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
 
 // name -> (hxml, main class); each compiles to build/hxcpp/<name>/<Main>-debug(.exe)
@@ -79,7 +79,7 @@ hxcppFixtures.forEach { (name, spec) ->
         description = "Compiles the '$name' debuggee fixture to a native exe (build/hxcpp/$name)"
         onlyIf {
             if (!debuggerTests) {
-                logger.lifecycle("SKIPPING hxcpp '$name' fixture build (-PdebuggerTests=false)")
+                logger.lifecycle("SKIPPING hxcpp '$name' fixture build (opt in with -PdebuggerTests=true)")
             } else if (!haxeAvailable) {
                 logger.warn("SKIPPING hxcpp '$name' fixture build (haxe compiler not found on PATH); integration tests will be skipped")
             }
@@ -100,7 +100,7 @@ hxcppFixtures.forEach { (name, spec) ->
 tasks.named<Test>("test") {
     onlyIf {
         if (!debuggerTests) {
-            logger.lifecycle("SKIPPING debugger tests (-PdebuggerTests=false); the dedicated CI job runs them")
+            logger.lifecycle("SKIPPING debugger tests (opt in with -PdebuggerTests=true)")
         }
         debuggerTests
     }

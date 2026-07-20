@@ -33,15 +33,16 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-// Debugger validation belongs to the dedicated windows CI job; the regular
-// build/release jobs pass -PdebuggerTests=false (same pattern as the other
-// debugger modules). The live tests also self-skip when haxe is not on PATH.
-val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("true").toBoolean()
+// Debugger tests are OPT-IN (-PdebuggerTests=true): most plugin work does not
+// touch the debuggers; the compat-matrix tool passes the flag itself (same
+// pattern as the other debugger modules). The live tests also self-skip when
+// haxe is not on PATH.
+val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("false").toBoolean()
 
 tasks.named<Test>("test") {
     onlyIf {
         if (!debuggerTests) {
-            logger.lifecycle("SKIPPING eval debugger tests (-PdebuggerTests=false); the dedicated CI job runs them")
+            logger.lifecycle("SKIPPING eval debugger tests (opt in with -PdebuggerTests=true)")
         }
         debuggerTests
     }

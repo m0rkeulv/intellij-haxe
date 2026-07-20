@@ -138,8 +138,8 @@ what made 392 unit checks possible there.
   Gradle builds both fixtures (`buildHxcppFixtureFixture`,
   `buildHxcppFixtureExFixture`) with lazy haxe probing, haxelib-dev
   registration of the server-under-test, and the haxelib/ dir as a build
-  input so server changes rebuild fixtures; `-PdebuggerTests=false` skips
-  fixtures and tests entirely (vshaxe-module pattern). Test discovery via
+  input so server changes rebuild fixtures; fixtures and tests are opt-in
+  and skipped entirely without `-PdebuggerTests=true` (vshaxe-module pattern). Test discovery via
   `hxcpp.server.fixture.*` system properties with build-relative fallbacks
   for IDE runs; missing fixtures skip via Assume. New `threads` fixture mode
   covers the multi-threaded shape (workers keep running while main is

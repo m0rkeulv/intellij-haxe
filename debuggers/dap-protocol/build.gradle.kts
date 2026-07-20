@@ -28,13 +28,14 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-// Debugger validation belongs to the dedicated windows CI job; the regular
-// build/release jobs pass -PdebuggerTests=false (compilation still runs).
+// Debugger tests are OPT-IN (-PdebuggerTests=true): most plugin work does not
+// touch the debuggers, and the compat-matrix tool passes the flag itself.
+// Compilation still runs in every build.
 tasks.named<Test>("test") {
     onlyIf {
-        val enabled = providers.gradleProperty("debuggerTests").getOrElse("true").toBoolean()
+        val enabled = providers.gradleProperty("debuggerTests").getOrElse("false").toBoolean()
         if (!enabled) {
-            logger.lifecycle("SKIPPING debugger tests (-PdebuggerTests=false); the dedicated CI job runs them")
+            logger.lifecycle("SKIPPING debugger tests (opt in with -PdebuggerTests=true)")
         }
         enabled
     }

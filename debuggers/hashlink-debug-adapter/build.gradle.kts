@@ -177,10 +177,11 @@ tasks.register<Exec>("buildDebugAdapter") {
     outputs.file(adapterHl)
 }
 
-// Debugger validation belongs to the dedicated windows CI job; the regular
-// build/release jobs pass -PdebuggerTests=false. The adapter bytecode that
-// ships in the plugin (buildDebugAdapter) is NOT affected by this flag.
-val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("true").toBoolean()
+// Debugger tests are OPT-IN (-PdebuggerTests=true): most plugin work does not
+// touch the debuggers; the compat-matrix tool passes the flag itself. The
+// adapter bytecode that ships in the plugin (buildDebugAdapter) is NOT
+// affected by this flag.
+val debuggerTests = providers.gradleProperty("debuggerTests").getOrElse("false").toBoolean()
 
 tasks.register<Exec>("testHaxeAdapter") {
     group = "hashlink"
@@ -188,7 +189,7 @@ tasks.register<Exec>("testHaxeAdapter") {
     dependsOn("installFormatHaxelib", "registerDapProtocolHaxelib", "buildTestFixture")
     onlyIf {
         (debuggerTests && buildHashlinkAdapter && haxeAvailable).also {
-            if (!it) logger.warn("SKIPPING Haxe adapter tests (-PdebuggerTests=false, haxe compiler not found on PATH, or buildHashlinkAdapter=false)")
+            if (!it) logger.warn("SKIPPING Haxe adapter tests (opt in with -PdebuggerTests=true; also needs haxe on PATH and buildHashlinkAdapter=true)")
         }
     }
     workingDir = projectDir
@@ -207,7 +208,7 @@ tasks.named("check") {
 tasks.named<Test>("test") {
     onlyIf {
         if (!debuggerTests) {
-            logger.lifecycle("SKIPPING debugger tests (-PdebuggerTests=false); the dedicated CI job runs them")
+            logger.lifecycle("SKIPPING debugger tests (opt in with -PdebuggerTests=true)")
         }
         debuggerTests
     }

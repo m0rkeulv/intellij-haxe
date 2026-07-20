@@ -401,7 +401,7 @@ public final class MatrixMain {
       log.line("    " + haxe + " : running the eval suite");
       long start = System.nanoTime();
       SuiteRun run = runSuite(":debuggers:eval-debugger",
-                              List.of("-PdebuggerTests=true", GRADLE_NO_BUILD_CACHE, GRADLE_CONTINUE),
+                              List.of(GRADLE_NO_BUILD_CACHE, GRADLE_CONTINUE),
                               env, out.resolve("logs/eval-" + haxe + ".log"), 900,
                               moduleResults, out.resolve("results/eval_" + haxe));
       addCell("eval", haxe, null, run.status().name().toLowerCase(Locale.ROOT),

@@ -49,6 +49,9 @@ final class Gradle {
       command.add("-I");
       command.add(root.resolve("debuggers/compat-matrix/test-events.init.gradle").toString());
     }
+    // debugger tests and fixture builds are OPT-IN repo-wide; the matrix IS
+    // the debugger-test runner, so every child build gets the flag
+    command.add("-PdebuggerTests=true");
     command.add("--no-daemon");
     command.add("--console=plain");
     ProcessBuilder builder = new ProcessBuilder(command)
