@@ -12,7 +12,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Source;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.SourceBreakpoint;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import java.io.BufferedReader;
 import java.io.IOException;

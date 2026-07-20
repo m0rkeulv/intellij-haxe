@@ -3,8 +3,7 @@ package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter;
 import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.TerminatedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;

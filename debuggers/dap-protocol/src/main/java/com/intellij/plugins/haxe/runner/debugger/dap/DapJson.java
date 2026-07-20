@@ -1,20 +1,13 @@
 package com.intellij.plugins.haxe.runner.debugger.dap;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ContinuedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ExitedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.OutputEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.ProtocolMessage;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.TerminatedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ThreadEvent;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
