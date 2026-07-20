@@ -231,4 +231,11 @@ tasks.named<Test>("test") {
     providers.gradleProperty("hashlinkBin").orNull?.let {
         systemProperty("hashlink.executable", it)
     }
+    // -PdapTestForks=N runs N test CLASSES in parallel fork JVMs. Safe in
+    // principle (each test spawns its own adapter+debuggee on dynamic ports,
+    // and fixture compilation is a separate task that never overlaps a test
+    // run) but deliberately opt-in: default 1 = fully sequential, the
+    // certified configuration. Soak before trusting a higher value.
+    maxParallelForks = (providers.gradleProperty("dapTestForks").orNull?.toIntOrNull() ?: 1)
+        .coerceAtLeast(1)
 }

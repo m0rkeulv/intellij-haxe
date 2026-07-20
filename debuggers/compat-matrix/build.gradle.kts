@@ -40,5 +40,6 @@ tasks.register<JavaExec>("debuggerCompatibilityReport") {
     (findProperty("matrixResources") as String?)?.let { args("--resources=$it") }
     if ((findProperty("matrixFull") as String?)?.toBoolean() == true) args("--full")
     if ((findProperty("matrixParallel") as String?)?.toBoolean() == true) args("--parallel-lanes")
+    (findProperty("matrixHlForks") as String?)?.let { args("--hl-forks=$it") }
     if ((findProperty("matrixReportOnly") as String?)?.toBoolean() == true) args("--report-only")
 }

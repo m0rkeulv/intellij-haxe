@@ -29,6 +29,12 @@ gradlew debuggerCompatibilityReport -PmatrixFull=true     # exhaustive HL grid
 gradlew debuggerCompatibilityReport -PmatrixParallel=true # one thread per
                                      # lane (eval/hashlink/hxcpp run
                                      # concurrently; see Duration)
+gradlew debuggerCompatibilityReport -PmatrixHlForks=4     # HL test classes in
+                                     # N parallel fork JVMs per cell. Default 1
+                                     # (sequential, the certified config) -
+                                     # soak a higher value before trusting it.
+                                     # Fixtures always compile BEFORE the cell
+                                     # runs, never concurrently with tests.
 gradlew debuggerCompatibilityReport -PmatrixReportOnly=true  # re-render the
                                      # report from the previous run's results
 gradlew debuggerCompatibilityReport -PmatrixResources=D:\elsewhere  # custom

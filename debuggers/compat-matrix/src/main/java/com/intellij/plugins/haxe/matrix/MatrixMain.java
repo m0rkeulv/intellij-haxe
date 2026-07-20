@@ -29,6 +29,9 @@ public final class MatrixMain {
   private final List<String> hlFilter;
   private final boolean full;
   private final boolean parallelLanes;
+  // >1 = pass -PdapTestForks to the HL lane's child builds (test classes in
+  // parallel fork JVMs). 1 = sequential, the certified default.
+  private final int hlForks;
   // run start, baked into the report filename so successive runs never
   // overwrite each other's results
   private final String startedAt = java.time.LocalDateTime.now()
@@ -53,7 +56,7 @@ public final class MatrixMain {
     "-x", "registerServerHaxelib", "-x", "installHscript");
 
   private MatrixMain(Path root, Path resources, Path out, List<String> lanes, List<String> haxeFilter,
-                     List<String> hlFilter, boolean full, boolean parallelLanes) throws IOException {
+                     List<String> hlFilter, boolean full, boolean parallelLanes, int hlForks) throws IOException {
     this.root = root;
     this.resources = resources;
     this.out = out;
@@ -62,6 +65,7 @@ public final class MatrixMain {
     this.hlFilter = hlFilter;
     this.full = full;
     this.parallelLanes = parallelLanes;
+    this.hlForks = Math.max(1, hlForks);
     this.log = new Log(out.resolve("progress.log"));
     this.gradle = new Gradle(root, log);
   }
@@ -75,6 +79,7 @@ public final class MatrixMain {
     List<String> hlFilter = List.of();
     boolean full = false;
     boolean parallelLanes = false;
+    int hlForks = 1;
     boolean reportOnly = false;
     for (String arg : args) {
       if (arg.startsWith("--lanes=")) {
@@ -94,6 +99,8 @@ public final class MatrixMain {
         full = true;
       } else if (arg.equals("--parallel-lanes")) {
         parallelLanes = true;
+      } else if (arg.startsWith("--hl-forks=")) {
+        hlForks = Integer.parseInt(arg.substring(11).trim());
       } else if (arg.equals("--report-only")) {
         reportOnly = true;
       } else {
@@ -101,7 +108,7 @@ public final class MatrixMain {
         System.exit(2);
       }
     }
-    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, haxeFilter, hlFilter, full, parallelLanes);
+    MatrixMain matrix = new MatrixMain(root, resources, out, lanes, haxeFilter, hlFilter, full, parallelLanes, hlForks);
     if (reportOnly) {
       matrix.reportOnly();
     } else {
@@ -431,6 +438,11 @@ public final class MatrixMain {
         long cellStart = System.nanoTime();
         List<String> extra = new ArrayList<>(List.of(
           "-PhashlinkBin=" + hlBinary, "--no-build-cache", "-x", "buildDebugAdapter"));
+        if (hlForks > 1) {
+          // parallel test-class forks WITHIN the cell; fixture builds are
+          // excluded tasks here, so they can never overlap a running test
+          extra.add("-PdapTestForks=" + hlForks);
+        }
         HL_FIXTURE_TASKS.forEach(t -> extra.addAll(List.of("-x", t)));
         extra.addAll(EXCLUDE_HAXELIB);
         extra.add("--continue");
