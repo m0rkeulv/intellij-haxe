@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -29,11 +30,11 @@ public class EvalConnectionTest {
   private Thread fakeVm;
 
   /**
-   * Starts a fake VM whose reply is computed from each decoded request. A
-   * newline-separated reply means several messages, each framed alone (raw
-   * newlines never occur inside single-line JSON).
+   * Starts a fake VM whose reply is computed from each decoded request: the
+   * function returns the JSON messages to send back (each framed on its own),
+   * or null to stay silent.
    */
-  private void startFake(Function<JsonNode, String> replyFor) throws IOException {
+  private void startFake(Function<JsonNode, List<String>> replyFor) throws IOException {
     PipedInputStream vmSees = new PipedInputStream(1 << 16);
     PipedOutputStream toVm = new PipedOutputStream(vmSees);
     PipedInputStream weSee = new PipedInputStream(1 << 16);
@@ -49,10 +50,10 @@ public class EvalConnectionTest {
           int high = vmSees.read();
           byte[] body = vmSees.readNBytes(low | (high << 8));
           JsonNode request = MAPPER.readTree(new String(body, StandardCharsets.UTF_8));
-          String reply = replyFor.apply(request);
+          List<String> reply = replyFor.apply(request);
           if (reply != null) {
-            for (String part : reply.split("\n")) {
-              byte[] replyBody = part.getBytes(StandardCharsets.UTF_8);
+            for (String message : reply) {
+              byte[] replyBody = message.getBytes(StandardCharsets.UTF_8);
               fromVm.write(new byte[]{(byte)replyBody.length, (byte)(replyBody.length >>> 8),
                                       (byte)(replyBody.length >>> 16), (byte)(replyBody.length >>> 24)});
               fromVm.write(replyBody);
@@ -81,8 +82,14 @@ public class EvalConnectionTest {
   public void correlatesResponsesByIdAndUnwrapsResult() throws Exception {
     startFake(request -> {
       assertEquals("strict envelope", "2.0", request.path("jsonrpc").asString());
-      return "{\"jsonrpc\":\"2.0\",\"id\":" + request.path("id").asInt()
-             + ",\"result\":[{\"id\":0,\"name\":\"Thread 0\"}]}";
+      return List.of("""
+          {
+            "jsonrpc": "2.0",
+            "id": %d,
+            "result": [
+              { "id": 0, "name": "Thread 0" }
+            ]
+          }""".formatted(request.path("id").asInt()));
     });
     connection.start();
     JsonNode result = connection.request("getThreads", null, 5000);
@@ -91,8 +98,12 @@ public class EvalConnectionTest {
 
   @Test
   public void errorResponsesSurfaceAsProtocolExceptions() throws Exception {
-    startFake(request -> "{\"jsonrpc\":\"2.0\",\"id\":" + request.path("id").asInt()
-                         + ",\"error\":{\"code\":-32601,\"message\":\"Method not found\"}}");
+    startFake(request -> List.of("""
+        {
+          "jsonrpc": "2.0",
+          "id": %d,
+          "error": { "code": -32601, "message": "Method not found" }
+        }""".formatted(request.path("id").asInt())));
     connection.start();
     EvalProtocolException error = assertThrows(EvalProtocolException.class,
                                                () -> connection.request("bogus", null, 5000));
@@ -102,13 +113,20 @@ public class EvalConnectionTest {
 
   @Test
   public void idLessMessagesRouteToTheEventListener() throws Exception {
-    startFake(request -> {
-      // reply to the request, then push an unrelated notification
-      String id = Integer.toString(request.path("id").asInt());
-      return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":null}"
-             + "\n"
-             + "{\"jsonrpc\":\"2.0\",\"method\":\"breakpointStop\",\"params\":{\"threadId\":0}}";
-    });
+    // reply to the request, then push an unrelated notification
+    startFake(request -> List.of(
+        """
+        {
+          "jsonrpc": "2.0",
+          "id": %d,
+          "result": null
+        }""".formatted(request.path("id").asInt()),
+        """
+        {
+          "jsonrpc": "2.0",
+          "method": "breakpointStop",
+          "params": { "threadId": 0 }
+        }"""));
     BlockingQueue<String> events = new LinkedBlockingQueue<>();
     connection.setEventListener((method, params) -> events.add(method + ":" + params.path("threadId").asInt(-1)));
     connection.start();
