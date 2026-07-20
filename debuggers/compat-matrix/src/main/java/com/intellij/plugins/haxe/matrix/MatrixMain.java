@@ -1,14 +1,20 @@
 package com.intellij.plugins.haxe.matrix;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Debugger compatibility matrix: provisions the haxe/HashLink toolchains
@@ -34,8 +40,8 @@ public final class MatrixMain {
   private final int hlForks;
   // run start, baked into the report filename so successive runs never
   // overwrite each other's results
-  private final String startedAt = java.time.LocalDateTime.now()
-    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+  private final String startedAt = LocalDateTime.now()
+    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
   private final Log log;
   private final Gradle gradle;
   private final List<Results.Cell> cells = new ArrayList<>();
@@ -79,7 +85,7 @@ public final class MatrixMain {
     List<String> hlFilter = List.of();
     boolean full = false;
     boolean parallelLanes = false;
-    int hlForks = 1;
+    int hlForks = 4;
     boolean reportOnly = false;
     for (String arg : args) {
       if (arg.startsWith("--lanes=")) {
@@ -261,7 +267,7 @@ public final class MatrixMain {
       Path xml = evidence.resolve("TEST-" + failed.fqName() + ".xml");
       if (Files.isRegularFile(xml)) {
         Files.copy(xml, firstAttempt.resolve(xml.getFileName()),
-                   java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                   StandardCopyOption.REPLACE_EXISTING);
       }
     }
     List<String> retry = new ArrayList<>(List.of(modulePath + ":cleanTest", modulePath + ":test"));
@@ -278,7 +284,7 @@ public final class MatrixMain {
       try (var files = Files.list(moduleResults)) {
         for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".xml")).toList()) {
           Files.copy(file, evidence.resolve(file.getFileName()),
-                     java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                     StandardCopyOption.REPLACE_EXISTING);
         }
       }
     }
@@ -295,7 +301,7 @@ public final class MatrixMain {
   private Map<String, String> haxeEnv(Path haxeDir) {
     Path binDir = Platform.findBinary(haxeDir, "haxe").getParent();
     Map<String, String> env = new LinkedHashMap<>();
-    env.put("PATH", binDir + java.io.File.pathSeparator + System.getenv("PATH"));
+    env.put("PATH", binDir + File.pathSeparator + System.getenv("PATH"));
     env.put("HAXE_STD_PATH", binDir.resolve("std").toString());
     return env;
   }
@@ -316,7 +322,7 @@ public final class MatrixMain {
       Gradle.applyEnv(builder.environment(), env);
       Process process = builder.start();
       String version = new String(process.getInputStream().readAllBytes()).trim();
-      process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS);
+      process.waitFor(15, TimeUnit.SECONDS);
       String expected = laneName.replaceFirst("^haxe_", "").replace('_', '.');
       boolean plainVersion = expected.matches("\\d+\\.\\d+\\.\\d+");
       String note = (plainVersion && !version.startsWith(expected))
@@ -530,7 +536,7 @@ public final class MatrixMain {
     Report.write(root.resolve("debuggers/compat-matrix/report-template.html"),
                  stamped, cells, haxeNames, hlNames, resources, full);
     Files.copy(stamped, out.resolve("index.html"),
-               java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+               StandardCopyOption.REPLACE_EXISTING);
     log.line("report: " + stamped + " (also copied to index.html)");
   }
 
@@ -564,7 +570,7 @@ public final class MatrixMain {
     try {
       if (Files.isDirectory(path)) {
         try (var walk = Files.walk(path)) {
-          for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+          for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
             Files.deleteIfExists(p);
           }
         }

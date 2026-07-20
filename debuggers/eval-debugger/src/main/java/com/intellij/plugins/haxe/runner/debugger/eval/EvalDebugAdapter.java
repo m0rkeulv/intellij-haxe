@@ -75,9 +75,15 @@ import java.net.Socket;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -131,8 +137,8 @@ public class EvalDebugAdapter implements Closeable {
    * breakpoint line ends the step there (breakpoints WIN over steps, like
    * hxcpp's HandleBreakpoints and the hashlink adapter's temp-vs-user hits).
    */
-  private final java.util.Map<String, java.util.Set<Integer>> breakpointLines =
-    new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<String, Set<Integer>> breakpointLines =
+    new ConcurrentHashMap<>();
   /**
    * Runtime type by variablesReference, remembered as values are handed out.
    * Consulted before a setVariable: writing a String's derived rows
@@ -140,8 +146,8 @@ public class EvalDebugAdapter implements Closeable {
    * non-Haxe thread" assert, live-reproduced), so those are refused here.
    * References die with each resume.
    */
-  private final java.util.Map<Integer, String> referenceTypes =
-    new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<Integer, String> referenceTypes =
+    new ConcurrentHashMap<>();
   /** Thread whose step loop is running on the request thread; null otherwise. */
   private volatile Integer steppingThreadId;
   /**
@@ -323,7 +329,7 @@ public class EvalDebugAdapter implements Closeable {
     List<SourceBreakpoint> requested = request.getArguments().getBreakpoints() != null
                                        ? request.getArguments().getBreakpoints() : List.of();
     int[] lines = new int[requested.size()];
-    java.util.Set<Integer> lineSet = new java.util.HashSet<>();
+    Set<Integer> lineSet = new HashSet<>();
     for (int i = 0; i < requested.size(); i++) {
       lines[i] = requested.get(i).getLine();
       lineSet.add(requested.get(i).getLine());
@@ -783,7 +789,7 @@ public class EvalDebugAdapter implements Closeable {
               }
               continue;
             }
-            if (start == null || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
+            if (start == null || top.line() != start.line() || !Objects.equals(top.name(), start.function())) {
               break; // line finished without the target: report the landing as the stop
             }
           } catch (EvalProtocolException unwound) {
@@ -862,7 +868,7 @@ public class EvalDebugAdapter implements Closeable {
         }
         EvalProtocol.EvalStackFrame top = frames.get(0);
         if (frames.size() < startDepth || start == null
-            || top.line() != start.line() || !java.util.Objects.equals(top.name(), start.function())) {
+            || top.line() != start.line() || !Objects.equals(top.name(), start.function())) {
           return StepOutcome.STEPPED; // reached a new line (or returned out of the function)
         }
       }
@@ -910,7 +916,7 @@ public class EvalDebugAdapter implements Closeable {
         // what makes step-out hop chain element to chain element instead of
         // silently walking through the rest of the chain
         if (frames.size() == startDepth
-            && !java.util.Objects.equals(frames.get(0).name(), startFunction)) {
+            && !Objects.equals(frames.get(0).name(), startFunction)) {
           return StepOutcome.STEPPED;
         }
       }
@@ -972,7 +978,7 @@ public class EvalDebugAdapter implements Closeable {
 
   private record FrameSignature(String function, int line) {
     boolean sameStop(FrameSignature other) {
-      return line == other.line && java.util.Objects.equals(function, other.function);
+      return line == other.line && Objects.equals(function, other.function);
     }
   }
 
@@ -995,14 +1001,14 @@ public class EvalDebugAdapter implements Closeable {
     }
     breakpointHitDuringStep = null; // consumed (or a same-line duplicate)
     return start == null || top.line() != start.line()
-           || !java.util.Objects.equals(top.name(), start.function());
+           || !Objects.equals(top.name(), start.function());
   }
 
   private boolean isBreakpointLine(String source, int line) {
     if (source == null) {
       return false;
     }
-    java.util.Set<Integer> lines = breakpointLines.get(normalizePath(source));
+    Set<Integer> lines = breakpointLines.get(normalizePath(source));
     return lines != null && lines.contains(line);
   }
 
@@ -1010,7 +1016,7 @@ public class EvalDebugAdapter implements Closeable {
   // (IDE-sent breakpoint paths vs VM-reported frame sources); haxe source
   // trees do not distinguish files by case, so fold both for the lookup.
   private static String normalizePath(String path) {
-    return path.replace('\\', '/').toLowerCase(java.util.Locale.ROOT);
+    return path.replace('\\', '/').toLowerCase(Locale.ROOT);
   }
 
   /**

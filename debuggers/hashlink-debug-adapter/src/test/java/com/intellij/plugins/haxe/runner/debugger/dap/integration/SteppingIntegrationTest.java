@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
+import java.util.Map;
 import org.junit.Test;
 
 /**
@@ -18,8 +19,8 @@ public class SteppingIntegrationTest extends DapIntegrationTestBase {
   // at its full 3s (it asserts elapsed >= 2500ms - which also fails loudly if
   // this plumbing ever breaks). Everywhere else the sleep is near-instant.
   @Override
-  protected java.util.Map<String, String> adapterEnv() {
-    return java.util.Map.of("FIXTURE_SLOW", "1");
+  protected Map<String, String> adapterEnv() {
+    return Map.of("FIXTURE_SLOW", "1");
   }
 
   @Test

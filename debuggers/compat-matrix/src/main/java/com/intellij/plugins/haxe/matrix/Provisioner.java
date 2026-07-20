@@ -13,6 +13,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -214,7 +215,7 @@ final class Provisioner {
       return;
     }
     try (var walk = Files.walk(path)) {
-      for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+      for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
         Files.deleteIfExists(p);
       }
     }

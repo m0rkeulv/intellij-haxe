@@ -201,8 +201,8 @@ public abstract class DapIntegrationTestBase {
    * fixture's {@code slowDemo()} sleep is near-instant, because ~20
    * run-to-completion tests per suite run were each paying the full 3s.
    */
-  protected java.util.Map<String, String> adapterEnv() {
-    return java.util.Map.of();
+  protected Map<String, String> adapterEnv() {
+    return Map.of();
   }
 
   @After

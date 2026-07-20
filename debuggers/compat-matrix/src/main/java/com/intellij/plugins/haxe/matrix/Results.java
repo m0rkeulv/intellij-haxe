@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
@@ -80,7 +81,7 @@ final class Results {
   static List<ClassResult> collect(Path moduleResults, Path evidenceDir) throws IOException {
     if (Files.exists(evidenceDir)) {
       try (var walk = Files.walk(evidenceDir)) {
-        for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+        for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
           Files.deleteIfExists(p);
         }
       }

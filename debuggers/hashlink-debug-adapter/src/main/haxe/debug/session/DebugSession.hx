@@ -1,7 +1,5 @@
 package debug.session;
 import haxe.io.Bytes;
-import haxe.io.BytesBuffer;
-import haxe.io.BytesInput;
 import haxe.io.FPHelper;
 import debug.DebugErrorCode;
 import debug.Trace;
