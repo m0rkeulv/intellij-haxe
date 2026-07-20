@@ -71,7 +71,7 @@ class ExpressionEvaluator {
 				return evaluateCall(frameId, calleePath, values);
 			case ENew(className, args):
 				var values = [for (a in args) evalExpr(frameId, a)];
-				return decodeReturn("new " + className + "()", calls.construct(frameId, className, values), constructedType(className));
+				return decodeReturn('new $className()', calls.construct(frameId, className, values), constructedType(className));
 			case EIndex(_, _):
 				// the interpreter decides map-get vs array element (incl. computed keys)
 				return renderValue(exprText, evalExpr(frameId, e));
@@ -131,7 +131,7 @@ class ExpressionEvaluator {
 			if (cls != null) {
 				current = {
 					name: cls.className,
-					value: "class " + cls.className,
+					value: 'class ${cls.className}',
 					type: SymbolResolver.staticsContainerName(cls.className),
 					reference: stops.allocReference(RefStatics(cls.singleton, cls.proto)),
 				};
@@ -155,8 +155,8 @@ class ExpressionEvaluator {
 			}
 			var next = findByName(view.variablesFor(current.reference), childName);
 			if (next == null) {
-				var what = accessor.match(Index(_)) ? "index [" + childName + "]" : 'field "' + childName + '"';
-				throw new DebugError('"' + current.name + '" has no ' + what);
+				var what = accessor.match(Index(_)) ? 'index [$childName]' : 'field "$childName"';
+				throw new DebugError('"${current.name}" has no $what');
 			}
 			current = next;
 		}
@@ -425,7 +425,7 @@ class ExpressionEvaluator {
 			case VFloat(f): {name: name, value: Std.string(f), type: "Float", reference: 0};
 			case VBool(b): {name: name, value: b ? "true" : "false", type: "Bool", reference: 0};
 			case VNull: {name: name, value: "null", type: "Dynamic", reference: 0};
-			case VString(s, _): {name: name, value: "\"" + s + "\"", type: "String", reference: 0};
+			case VString(s, _): {name: name, value: '"$s"', type: "String", reference: 0};
 			case VObject(raw, t): decodeReturn(name, raw, t);
 		}
 	}

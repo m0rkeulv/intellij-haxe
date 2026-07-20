@@ -104,7 +104,7 @@ class DebuggeeCallService {
 		var bound = memory.readI32(closurePtr.offset(align.ptr * 2)) != 0;
 		var funcAddr = memory.readPointer(closurePtr.offset(align.ptr));
 		if (args.length != fn.args.length) {
-			throw new DebugError('"' + callee + '" takes ' + fn.args.length + " argument(s), got " + args.length);
+			throw new DebugError('"$callee" takes ${fn.args.length} argument(s), got ${args.length}');
 		}
 		var callArgs:Array<CallArg> = [];
 		if (bound) {
@@ -228,8 +228,7 @@ class DebuggeeCallService {
 		};
 		var paramTypes = ctorFun.args.slice(1); // drop the leading `this`
 		if (args.length != paramTypes.length) {
-			throw new DebugError('new ' + className + " takes " + paramTypes.length
-				+ " argument(s), got " + args.length);
+			throw new DebugError('new $className takes ${paramTypes.length} argument(s), got ${args.length}');
 		}
 		// allocate: hl_alloc_obj(classType) -> fresh zeroed instance
 		var instance = functionCaller(site.allocFunction, [{isFloat: false, bits: site.typePointer}], 0);

@@ -145,7 +145,7 @@ class VariablesView {
 			var slot = offsets[i];
 			var address = Int64.add(frame.ebp, Int64.ofInt(slot.offset));
 			var bound = boundNames.get(i);
-			var name = bound == null ? "r" + i : "r" + i + " (" + bound + ")";
+			var name = bound == null ? 'r$i' : 'r$i ($bound)';
 			// Only slots bound to an in-scope local hold live values. Unbound
 			// slots are leftovers from earlier calls: decoding one as a
 			// pointer type would chase arbitrary garbage (a bogus String
@@ -178,7 +178,7 @@ class VariablesView {
 		var slot = offsets[reg];
 		var address = Int64.add(frame.ebp, Int64.ofInt(slot.offset));
 		var decoded = try valueReader.read(address, slot.t) catch (e:Dynamic) rawSlot(address, slot.t);
-		return {name: "r" + reg, value: decoded.value, type: decoded.type, reference: decoded.reference};
+		return {name: 'r$reg', value: decoded.value, type: decoded.type, reference: decoded.reference};
 	}
 
 	/**
@@ -320,7 +320,7 @@ class VariablesView {
 		var display = module.functionName(fidx);
 		var dot = display.indexOf(".");
 		var className = dot > 0 ? display.substr(0, dot) : display;
-		return {name: "Statics (" + className + ")", reference: stops.allocReference(RefStatics(address, proto))};
+		return {name: 'Statics ($className)', reference: stops.allocReference(RefStatics(address, proto))};
 	}
 
 	// A statics container also holds its static methods (function-typed fields)

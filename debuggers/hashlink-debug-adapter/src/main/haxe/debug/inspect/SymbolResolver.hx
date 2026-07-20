@@ -203,7 +203,7 @@ class SymbolResolver {
 			}
 			switch (path.accessors[i]) {
 				case Field(segment):
-					name += "." + segment;
+					name += '.$segment';
 					i++;
 				default:
 					return null;
@@ -281,7 +281,7 @@ class SymbolResolver {
 			default:
 				return null;
 		}
-		return childTargetFromBase(parent.name + "." + childName, base, effectiveType, childName);
+		return childTargetFromBase('${parent.name}.$childName', base, effectiveType, childName);
 	}
 
 	function childTargetFromBase(displayName:String, base:Pointer, type:HLType, childName:String):WriteTarget {

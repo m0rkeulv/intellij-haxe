@@ -48,10 +48,10 @@ class StopDescriptions {
 		var message = thrown != null ? inspector.previewDynamicPointer(thrown) : null;
 		var where = topFrameWhere(threadId);
 		if (message != null) {
-			return "HashLink VM exception: " + message + (where != null ? " — in " + where : "");
+			return 'HashLink VM exception: $message' + (where != null ? ' — in $where' : '');
 		}
-		return "HashLink VM exception" + (where != null ? " in " + where : "")
-			+ " (such as a null access or out-of-bounds — inspect the locals to see the offending value).";
+		return 'HashLink VM exception' + (where != null ? ' in $where' : '')
+			+ ' (such as a null access or out-of-bounds — inspect the locals to see the offending value).';
 	}
 
 	/**

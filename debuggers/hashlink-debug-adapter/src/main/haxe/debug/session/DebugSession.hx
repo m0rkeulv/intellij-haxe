@@ -185,7 +185,7 @@ class DebugSession {
 			rejectError(seqOf(command), e);
 		} catch (e:Dynamic) {
 			dbg("cmd " + Type.enumConstructor(command) + " failed: " + Std.string(e));
-			reject(seqOf(command), "Internal debugger error: " + Std.string(e));
+			reject(seqOf(command), 'Internal debugger error: ${Std.string(e)}');
 		}
 		// an eval-call may have been interrupted by another thread's stop; that
 		// event owns the process freeze and is processed only now, after the
@@ -318,7 +318,7 @@ class DebugSession {
 			} catch (e:haxe.io.Eof) {
 				throw new DebugError("The debuggee closed the connection mid-handshake");
 			} catch (e:Dynamic) {
-				throw new DebugError("Debug handshake stalled or unreadable: " + Std.string(e));
+				throw new DebugError('Debug handshake stalled or unreadable: ${Std.string(e)}');
 			}
 			// register reads/writes must use the DEBUGGEE's context layout: with the
 			// wrong bitness a 32-bit debuggee's registers read as garbage and EIP
@@ -403,7 +403,7 @@ class DebugSession {
 				Sys.sleep(CONNECT_DELAY_MS / 1000);
 			}
 		}
-		throw new DebugError("Could not connect to the debuggee debug port: " + Std.string(lastError));
+		throw new DebugError('Could not connect to the debuggee debug port: ${Std.string(lastError)}');
 	}
 
 	// Consume the events the OS raises at attach time (e.g. the Windows attach
@@ -716,7 +716,7 @@ class DebugSession {
 				} catch (e:DebugError) {
 					rejectError(requestSeq, e);
 				} catch (e:Dynamic) {
-					reject(requestSeq, "Cannot evaluate: " + Std.string(e));
+					reject(requestSeq, 'Cannot evaluate: ${Std.string(e)}');
 				}
 			default:
 				reject(requestSeq, "Cannot evaluate: debuggee is not stopped");
@@ -740,7 +740,7 @@ class DebugSession {
 				} catch (e:DebugError) {
 					rejectError(requestSeq, e);
 				} catch (e:Dynamic) {
-					reject(requestSeq, "Cannot set value: " + Std.string(e));
+					reject(requestSeq, 'Cannot set value: ${Std.string(e)}');
 				}
 			default:
 				reject(requestSeq, "Cannot set a value: debuggee is not stopped");

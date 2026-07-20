@@ -545,7 +545,7 @@ class ModuleDebugInfo {
 					// instance methods live in the virtual table
 					for (entry in proto.proto) {
 						if (entry.findex >= 0) {
-							names.set(entry.findex, className + "." + entry.name);
+							names.set(entry.findex, '$className.${entry.name}');
 						}
 					}
 					// static methods live as field bindings; the binding's field id is an
@@ -558,13 +558,13 @@ class ModuleDebugInfo {
 						}
 						var ownIndex = binding.fid - inherited;
 						if (ownIndex >= 0 && ownIndex < proto.fields.length) {
-							names.set(binding.mid, className + "." + proto.fields[ownIndex].name);
+							names.set(binding.mid, '$className.${proto.fields[ownIndex].name}');
 						} else if (fieldNameAtGlobalFid(proto, binding.fid) == "__constructor__") {
 							// the CONSTRUCTOR is bound on the statics container "$X" at the
 							// INHERITED hl.Class.__constructor__ field (fid past this type's
 							// own fields), so the branch above skips it — a constructor
 							// frame would render as its "fn@N" fallback. Name it "X.new".
-							names.set(binding.mid, className + ".new");
+							names.set(binding.mid, '$className.new');
 						}
 					}
 				default:

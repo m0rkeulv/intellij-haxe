@@ -134,7 +134,7 @@ class VariableInspector {
 			var name = module.functionName(location.fidx);
 			var source = module.lookup(location.fidx, location.op);
 			if (source == null || source.file == null) return name;
-			return name + " (" + Path.withoutDirectory(source.file) + ":" + source.line + ")";
+			return '$name (${Path.withoutDirectory(source.file)}:${source.line})';
 		};
 		dynObjects = new DynObjReader(memory, align, runtimeTypes, hash -> module.reverseHash(hash));
 		var maps = new MapReader(memory, align,
