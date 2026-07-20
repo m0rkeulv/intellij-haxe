@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe;
 
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.configurations.ConfigurationType;
@@ -12,13 +12,13 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * The HXCPP (vshaxe debug server) flavour of the Haxe run configuration
- * group (experimental). The runners key on {@link HxcppRunConfiguration}, so
+ * group (experimental). The runners key on {@link HxcppVshaxeRunConfiguration}, so
  * the legacy runners (which also carry Flash/Flex debugging) never see an
  * HXCPP run and vice versa.
  */
-public class HxcppConfigurationFactory extends ConfigurationFactory {
+public class HxcppVshaxeConfigurationFactory extends ConfigurationFactory {
 
-  public HxcppConfigurationFactory(ConfigurationType type) {
+  public HxcppVshaxeConfigurationFactory(ConfigurationType type) {
     super(type);
   }
 
@@ -35,7 +35,7 @@ public class HxcppConfigurationFactory extends ConfigurationFactory {
 
   @Override
   public @NotNull RunConfiguration createTemplateConfiguration(@NotNull Project project) {
-    return new HxcppRunConfiguration(HaxeBundle.message("hxcpp.runner.configuration.name"), project, this);
+    return new HxcppVshaxeRunConfiguration(HaxeBundle.message("hxcpp.runner.configuration.name"), project, this);
   }
 
   @Override

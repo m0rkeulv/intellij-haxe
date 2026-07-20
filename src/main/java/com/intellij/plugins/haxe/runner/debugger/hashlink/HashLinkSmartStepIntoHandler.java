@@ -7,6 +7,7 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeCallExpression;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSupportUtils;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.psi.PsiElement;
 import com.intellij.xdebugger.XSourcePosition;
@@ -41,9 +42,9 @@ import org.jetbrains.concurrency.Promise;
  * found in the PSI still works — it just isn't highlighted.
  */
 class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartStepIntoHandler.Variant> {
-  private final HashLinkDebugProcess process;
+  private final DapDebugProcess process;
 
-  HashLinkSmartStepIntoHandler(HashLinkDebugProcess process) {
+  HashLinkSmartStepIntoHandler(DapDebugProcess process) {
     this.process = process;
   }
 
@@ -71,8 +72,8 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
       return List.of();
     }
     Project project = process.getSession().getProject();
-    List<TextRange> ranges = ReadAction.compute(
-      () -> matchCallRanges(targets, callNameElementsInExecutionOrder(project, position)));
+    List<TextRange> ranges = ReadAction.nonBlocking(
+      () -> matchCallRanges(targets, callNameElementsInExecutionOrder(project, position))).executeSynchronously();
     List<Variant> variants = new ArrayList<>(targets.size());
     for (int i = 0; i < targets.size(); i++) {
       variants.add(new Variant(targets.get(i), ranges.get(i)));

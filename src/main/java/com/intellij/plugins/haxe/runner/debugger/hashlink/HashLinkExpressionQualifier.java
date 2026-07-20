@@ -67,11 +67,11 @@ final class HashLinkExpressionQualifier {
       return expression;
     }
     try {
-      return ReadAction.compute(() -> {
+      return ReadAction.nonBlocking(() -> {
         PsiElement context = HaxeDebuggerSupportUtils.getContextElement(
           position.getFile(), position.getOffset(), project);
         return context == null ? expression : rewrite(project, context, expression);
-      });
+      }).executeSynchronously();
     }
     catch (RuntimeException e) {
       LOG.warn("Could not qualify evaluate expression '" + expression + "'", e);

@@ -34,7 +34,7 @@ public class HashLinkRunner extends GenericProgramRunner<RunnerSettings> {
   @Override
   protected RunContentDescriptor doExecute(@NotNull RunProfileState state, @NotNull ExecutionEnvironment environment)
     throws ExecutionException {
-    // the state comes from HashLinkRunConfiguration.getState -> HashLinkRunningState
+    // the state comes from HashLinkRunConfiguration.getState -> DapCommandLineRunningState
     ExecutionResult result = state.execute(environment.getExecutor(), this);
     return ExecutionUiService.getInstance().showRunContent(result, environment);
   }

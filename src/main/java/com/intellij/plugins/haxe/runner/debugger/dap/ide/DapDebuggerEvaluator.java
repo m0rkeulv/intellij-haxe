@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
@@ -10,26 +10,30 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Watches/hover/Evaluate-dialog support: the expression is sent as written to
- * the hxcpp-debug-server, whose own interpreter evaluates it against the
- * frame (locals, members, statics, field/index access).
+ * Watches/hover/Evaluate-dialog support: the expression goes to the server's
+ * own interpreter, optionally rewritten first by the backend (e.g. bare class
+ * names qualified against the frame file's imports).
  */
-final class HxcppDebuggerEvaluator extends XDebuggerEvaluator {
-  private final HxcppDebugProcess process;
+final class DapDebuggerEvaluator extends XDebuggerEvaluator {
+  private final DapDebugProcess process;
   private final int frameId;
+  private final @Nullable XSourcePosition framePosition;
 
-  HxcppDebuggerEvaluator(HxcppDebugProcess process, int frameId) {
+  DapDebuggerEvaluator(DapDebugProcess process, int frameId, @Nullable XSourcePosition framePosition) {
     this.process = process;
     this.frameId = frameId;
+    this.framePosition = framePosition;
   }
 
   @Override
   public void evaluate(@NotNull String expression, @NotNull XEvaluationCallback callback,
                        @Nullable XSourcePosition expressionPosition) {
     process.onRequestThread(() -> {
+      String qualified = process.backend().qualifyExpression(
+        process.getSession().getProject(), framePosition, expression);
       EvaluateRequest request = new EvaluateRequest();
       EvaluateArguments arguments = new EvaluateArguments();
-      arguments.setExpression(expression);
+      arguments.setExpression(qualified);
       arguments.setFrameId(frameId);
       arguments.setContext("watch");
       request.setArguments(arguments);
@@ -45,8 +49,8 @@ final class HxcppDebuggerEvaluator extends XDebuggerEvaluator {
         // still uses the result's own reference. Seed the path with the
         // evaluated EXPRESSION verbatim (it already parsed), so children get
         // "expr.field" paths and re-selecting the result prefills what was typed.
-        callback.evaluated(new HxcppValue(process, result, 0,
-                                          expression != null && !expression.isBlank() ? expression : null));
+        callback.evaluated(new DapValue(process, result, 0,
+                                          !expression.isBlank() ? expression : null));
         // NOTE: we do NOT rebuildViews() here even though an assignment changed
         // debuggee state. The evaluate dialog already calls session.rebuildViews()
         // in its own evaluationDone(), so a second one from this (request) thread

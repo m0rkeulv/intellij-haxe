@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
@@ -19,8 +19,8 @@ import org.jetbrains.annotations.Nullable;
  * compiler saw it — usually project-relative like {@code src/Main.hx},
  * sometimes absolute) to an IDE source position.
  */
-final class HxcppSourceResolver {
-  private HxcppSourceResolver() {
+final class DapSourceResolver {
+  private DapSourceResolver() {
   }
 
   /** Resolves to a position, or null when the file cannot be found. 1-based line. */
@@ -29,10 +29,12 @@ final class HxcppSourceResolver {
       return null;
     }
     String normalized = FileUtil.toSystemIndependentName(path);
-    return ReadAction.compute(() -> {
+    // synchronous read on the DAP request/pump thread (never the EDT);
+    // nonBlocking + executeSynchronously retries around write actions
+    return ReadAction.nonBlocking(() -> {
       VirtualFile file = findFile(project, normalized);
       return file != null ? XDebuggerUtil.getInstance().createPosition(file, Math.max(0, line - 1)) : null;
-    });
+    }).executeSynchronously();
   }
 
   private static @Nullable VirtualFile findFile(Project project, String normalized) {

@@ -4,26 +4,22 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.configurations.GeneralCommandLine;
-import com.intellij.execution.configurations.ModuleBasedConfiguration;
 import com.intellij.execution.configurations.RunConfiguration;
-import com.intellij.execution.configurations.RunConfigurationModule;
 import com.intellij.execution.configurations.RunProfileState;
 import com.intellij.execution.configurations.RuntimeConfigurationError;
 import com.intellij.execution.configurations.RuntimeConfigurationException;
 import com.intellij.execution.runners.ExecutionEnvironment;
-import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import com.intellij.util.execution.ParametersListUtil;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import lombok.Getter;
 import org.jdom.Element;
@@ -43,7 +39,7 @@ import org.jetbrains.annotations.Nullable;
  * compilation. Debugging needs nothing compiled in — the debug server is
  * part of haxe itself (4.0+).
  */
-public class InterpRunConfiguration extends ModuleBasedConfiguration<RunConfigurationModule, Element> {
+public class InterpRunConfiguration extends DapRunConfigurationBase {
   private static final String COMPILER_ARGUMENTS = "compilerArguments";
   private static final String WORKING_DIRECTORY = "workingDirectory";
   private static final String RUN_AS_INTERPRETER = "runAsInterpreter";
@@ -53,7 +49,7 @@ public class InterpRunConfiguration extends ModuleBasedConfiguration<RunConfigur
   @Getter private boolean runAsInterpreter = true;
 
   public InterpRunConfiguration(String name, Project project, ConfigurationFactory factory) {
-    super(name, new RunConfigurationModule(project), factory);
+    super(name, project, factory);
   }
 
   public void setCompilerArguments(@Nullable String arguments) {
@@ -68,27 +64,9 @@ public class InterpRunConfiguration extends ModuleBasedConfiguration<RunConfigur
     runAsInterpreter = interpret;
   }
 
-  // --- ModuleBasedConfiguration ---
-
-  @Override
-  public Collection<Module> getValidModules() {
-    return Arrays.asList(ModuleManager.getInstance(getProject()).getModules());
-  }
-
   @Override
   public @NotNull SettingsEditor<? extends RunConfiguration> getConfigurationEditor() {
     return new InterpRunConfigurationEditor(getProject());
-  }
-
-  @Override
-  public void onNewConfigurationCreated() {
-    super.onNewConfigurationCreated();
-    if (getConfigurationModule().getModule() == null) {
-      Module[] modules = ModuleManager.getInstance(getProject()).getModules();
-      if (modules.length > 0) {
-        setModule(modules[0]);
-      }
-    }
   }
 
   @Override
@@ -103,19 +81,11 @@ public class InterpRunConfiguration extends ModuleBasedConfiguration<RunConfigur
 
   @Override
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
-    Module module = requireModule();
-    return new InterpRunningState(env, module, createCommandLine(List.of()));
+    requireModule();
+    return new DapCommandLineRunningState(env, getProject(), createCommandLine(List.of()));
   }
 
   // --- resolution ---
-
-  Module requireModule() throws ExecutionException {
-    Module module = getConfigurationModule().getModule();
-    if (module == null) {
-      throw new ExecutionException(HaxeBundle.message("no.module.for.run.configuration", getName()));
-    }
-    return module;
-  }
 
   /**
    * The haxe invocation for this configuration, with {@code extraArguments}
@@ -163,14 +133,10 @@ public class InterpRunConfiguration extends ModuleBasedConfiguration<RunConfigur
 
   @Override
   public void writeExternal(@NotNull Element element) throws WriteExternalException {
-    super.writeExternal(element);
-    writeModule(element);
+    super.writeExternal(element); // also serializes the module
     JDOMExternalizerUtil.writeField(element, COMPILER_ARGUMENTS, compilerArguments);
     JDOMExternalizerUtil.writeField(element, WORKING_DIRECTORY, workingDirectory);
     JDOMExternalizerUtil.writeField(element, RUN_AS_INTERPRETER, Boolean.toString(runAsInterpreter));
   }
 
-  private static String orEmpty(@Nullable String value) {
-    return value == null ? "" : value;
-  }
 }

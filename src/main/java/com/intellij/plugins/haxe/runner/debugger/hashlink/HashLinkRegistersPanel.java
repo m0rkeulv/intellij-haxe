@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.ui.components.JBScrollPane;
@@ -40,11 +42,11 @@ final class HashLinkRegistersPanel extends JPanel implements XDebugSessionListen
     }
   };
 
-  private final HashLinkDebugProcess process;
+  private final DapDebugProcess process;
   private final ListTableModel<Variable> model =
     new ListTableModel<>(REGISTER, VALUE, TYPE);
 
-  HashLinkRegistersPanel(HashLinkDebugProcess process) {
+  HashLinkRegistersPanel(DapDebugProcess process) {
     super(new BorderLayout());
     this.process = process;
     TableView<Variable> table = new TableView<>(model);
@@ -67,7 +69,7 @@ final class HashLinkRegistersPanel extends JPanel implements XDebugSessionListen
   /** Re-reads the current frame's registers (also called after a value write). */
   void refresh() {
     XStackFrame current = process.getSession().getCurrentStackFrame();
-    if (!(current instanceof HashLinkStackFrame frame)) {
+    if (!(current instanceof DapStackFrame frame)) {
       return;
     }
     int frameId = frame.frameId();

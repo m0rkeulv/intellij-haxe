@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.diagnostic.Logger;
@@ -22,10 +22,10 @@ import org.jetbrains.annotations.Nullable;
  * variables (Locals) inline, any further scopes (e.g. "Members", "Statics")
  * as lazy groups.
  */
-final class HxcppStackFrame extends XStackFrame {
-  private static final Logger LOG = Logger.getInstance(HxcppStackFrame.class);
+public final class DapStackFrame extends XStackFrame {
+  private static final Logger LOG = Logger.getInstance(DapStackFrame.class);
 
-  private final HxcppDebugProcess process;
+  private final DapDebugProcess process;
   private final StackFrame frame;
 
   // Resolved once and cached: the resolver's index lookups are prohibited slow
@@ -38,12 +38,12 @@ final class HxcppStackFrame extends XStackFrame {
   private volatile @Nullable XSourcePosition position;
   private volatile boolean positionResolved;
 
-  HxcppStackFrame(HxcppDebugProcess process, StackFrame frame) {
+  DapStackFrame(DapDebugProcess process, StackFrame frame) {
     this.process = process;
     this.frame = frame;
   }
 
-  int frameId() {
+  public int frameId() {
     return frame.getId();
   }
 
@@ -66,7 +66,9 @@ final class HxcppStackFrame extends XStackFrame {
 
   @Override
   public @Nullable XDebuggerEvaluator getEvaluator() {
-    return new HxcppDebuggerEvaluator(process, frame.getId());
+    // the frame's own position is the context for qualifying bare class names
+    // (imports/scope of the frame's file), independent of any expression editor
+    return new DapDebuggerEvaluator(process, frame.getId(), getSourcePosition());
   }
 
   @Override
@@ -81,7 +83,7 @@ final class HxcppStackFrame extends XStackFrame {
   private @Nullable XSourcePosition resolveSourcePosition() {
     String path = frame.getSource() != null ? frame.getSource().getPath() : null;
     try {
-      return HxcppSourceResolver.resolve(process.getSession().getProject(), path, frame.getLine());
+      return process.backend().resolveSource(process.getSession().getProject(), path, frame);
     } catch (RuntimeException e) {
       // one unresolvable frame must never wedge the whole Frames panel
       LOG.warn("Cannot resolve source for frame '" + frame.getName() + "' (" + path + ")", e);
@@ -105,15 +107,18 @@ final class HxcppStackFrame extends XStackFrame {
       XValueChildrenList children = new XValueChildrenList();
       boolean first = true;
       for (Scope scope : scopes) {
+        if ("registers".equals(scope.getPresentationHint())) {
+          continue; // shown in a dedicated tab when the backend provides one
+        }
         if (first) {
           // the Locals scope: variables straight into the frame node
           for (Variable variable : process.requestVariables(scope.getVariablesReference())) {
-            children.add(new HxcppValue(process, variable, scope.getVariablesReference(),
+            children.add(new DapValue(process, variable, scope.getVariablesReference(),
                                         EvaluationPath.root(variable.getName())));
           }
           first = false;
         } else {
-          children.addTopGroup(new HxcppScopeGroup(process, scope));
+          children.addTopGroup(new DapScopeGroup(process, scope));
         }
       }
       node.addChildren(children, true);

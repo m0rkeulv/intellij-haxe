@@ -40,10 +40,10 @@ final class HashLinkSourceResolver {
     }
     int line = frame.getLine();
     String normalized = FileUtil.toSystemIndependentName(path);
-    return ReadAction.compute(() -> {
+    return ReadAction.nonBlocking(() -> {
       VirtualFile file = findFile(project, normalized, frame);
       return file != null ? XDebuggerUtil.getInstance().createPosition(file, Math.max(0, line - 1)) : null;
-    });
+    }).executeSynchronously();
   }
 
   private static @Nullable VirtualFile findFile(Project project, String normalized, StackFrame frame) {

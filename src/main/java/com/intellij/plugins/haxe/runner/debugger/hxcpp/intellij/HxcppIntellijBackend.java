@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppDapBackend;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -18,7 +18,7 @@ import java.net.SocketTimeoutException;
  * vars the runner sets. An ephemeral port per session means concurrent debug
  * sessions never collide and nothing is baked into the executable.
  */
-public class HxcppIntellijBackend implements HxcppDapBackend {
+public class HxcppIntellijBackend implements DapBackend {
   /** Env vars read by the haxelib's Config.resolve (env beats defines beats defaults). */
   public static final String ENV_DEBUG_HOST = "HXCPP_DEBUG_HOST";
   public static final String ENV_DEBUG_PORT = "HXCPP_DEBUG_PORT";

@@ -2,41 +2,29 @@ package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
-import com.intellij.execution.configurations.RunProfile;
-import com.intellij.execution.configurations.RunProfileState;
-import com.intellij.execution.configurations.RunnerSettings;
-import com.intellij.execution.executors.DefaultDebugExecutor;
-import com.intellij.execution.process.ColoredProcessHandler;
-import com.intellij.execution.process.ProcessTerminatedListener;
-import com.intellij.execution.runners.ExecutionEnvironment;
-import com.intellij.execution.runners.GenericProgramRunner;
-import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.module.Module;
-import com.intellij.xdebugger.XDebugProcess;
-import com.intellij.xdebugger.XDebugProcessStarter;
-import com.intellij.xdebugger.XDebugSession;
-import com.intellij.xdebugger.XDebuggerManager;
-import com.intellij.xdebugger.XSessionStartedResult;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Path;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Debug runner for the dedicated HashLink configuration (experimental):
- * spawns the debuggee itself ({@code hl --debug <port> --debug-wait <program>}),
- * then the bundled DAP adapter, which ATTACHES to the debuggee by pid via
- * {@link HashLinkDebugProcess}. Keys on {@link HashLinkRunConfiguration} only,
- * so the legacy Flash/hxcpp debugger is never involved.
+ * Debug runner for the dedicated HashLink configuration (experimental).
+ * Keys on {@link HashLinkRunConfiguration} only, so the legacy Flash/hxcpp
+ * debugger is never involved.
  *
- * The debuggee must be spawned from Java, not from the adapter: the adapter is
- * itself a HashLink process, and HL's process.c spawns children with
- * STARTF_USESHOWWINDOW + SW_HIDE — Windows then overrides the child's first
- * ShowWindow call, leaving a GUI debuggee's window permanently invisible.
- * Java's spawn (same as plain Run) has no such flag, so windows show normally,
- * and the debuggee's stdio/lifetime belong to the IDE's process handler.
+ * The runner spawns the debuggee itself
+ * ({@code hl --debug <port> --debug-wait <program>}), suspended under the
+ * VM's debug server until the adapter connects — so no user code runs before
+ * breakpoints are installed. The debuggee must be spawned from Java, not from
+ * the adapter: the adapter is itself a HashLink process, and HL's process.c
+ * spawns children with STARTF_USESHOWWINDOW + SW_HIDE — Windows then
+ * overrides the child's first ShowWindow call, leaving a GUI debuggee's
+ * window permanently invisible. The {@link HashLinkBackend} launches the
+ * external adapter later (at connect time) and attaches it by pid.
  */
-public class HashLinkDebugRunner extends GenericProgramRunner<RunnerSettings> {
+public class HashLinkDebugRunner extends DapDebugRunnerBase<HashLinkRunConfiguration, HashLinkBackend> {
   public static final String RUNNER_ID = "HashLinkDebugRunner";
 
   @NotNull
@@ -46,57 +34,37 @@ public class HashLinkDebugRunner extends GenericProgramRunner<RunnerSettings> {
   }
 
   @Override
-  public boolean canRun(@NotNull String executorId, @NotNull RunProfile profile) {
-    return DefaultDebugExecutor.EXECUTOR_ID.equals(executorId) && profile instanceof HashLinkRunConfiguration;
+  protected Class<HashLinkRunConfiguration> configurationClass() {
+    return HashLinkRunConfiguration.class;
   }
 
   @Override
-  protected RunContentDescriptor doExecute(@NotNull RunProfileState state, @NotNull ExecutionEnvironment environment)
-    throws ExecutionException {
-    HashLinkRunConfiguration configuration = (HashLinkRunConfiguration)environment.getRunProfile();
+  protected void validate(HashLinkRunConfiguration configuration) throws ExecutionException {
     Module module = configuration.requireModule();
+    configuration.resolveHlExecutable(module);
+    configuration.resolveProgram(module);
+  }
 
-    // fail fast, before any UI is built
+  @Override
+  protected HashLinkBackend createBackend(HashLinkRunConfiguration configuration) throws ExecutionException {
+    Module module = configuration.requireModule();
+    return new HashLinkBackend(configuration.resolveHlExecutable(module),
+                               configuration.resolveProgram(module),
+                               findFreePort());
+  }
 
+  @Override
+  protected GeneralCommandLine createCommandLine(HashLinkRunConfiguration configuration, HashLinkBackend backend)
+    throws ExecutionException {
+    Module module = configuration.requireModule();
     Path hlExecutable = configuration.resolveHlExecutable(module);
     Path hlProgram = configuration.resolveProgram(module);
     Path workingDirectory = configuration.resolveWorkingDirectory(module);
-
-    // Spawn the debuggee suspended under the VM's debug server: --debug-wait
-    // blocks it until the adapter connects, so no user code runs before
-    // breakpoints are installed.
     Path workDir = workingDirectory != null ? workingDirectory : hlProgram.getParent();
-    int debugPort = findFreePort();
-    GeneralCommandLine commandLine = new GeneralCommandLine()
+    return new GeneralCommandLine()
       .withExePath(hlExecutable.toString())
-      .withParameters("--debug", Integer.toString(debugPort), "--debug-wait", hlProgram.toString())
+      .withParameters("--debug", Integer.toString(backend.getDebugPort()), "--debug-wait", hlProgram.toString())
       .withWorkDirectory(workDir != null ? workDir.toString() : null);
-    ColoredProcessHandler debuggeeHandler =
-      new ColoredProcessHandler(commandLine.createProcess(), commandLine.getCommandLineString());
-    ProcessTerminatedListener.attach(debuggeeHandler, environment.getProject());
-    long debuggeePid = debuggeeHandler.getProcess().pid();
-
-    try {
-      // the session builder is the split-debugger-safe way to hand the
-      // descriptor back to the execution manager (XDebugSession's own
-      // getRunContentDescriptor is deprecated and logs an error)
-      XSessionStartedResult started = XDebuggerManager.getInstance(environment.getProject())
-        .newSessionBuilder(new XDebugProcessStarter() {
-          @NotNull
-          @Override
-          public XDebugProcess start(@NotNull XDebugSession session) {
-            // lightweight: the adapter is spawned asynchronously in sessionInitialized()
-            return new HashLinkDebugProcess(session, module, hlExecutable, hlProgram,
-                                            debuggeeHandler, debugPort, debuggeePid);
-          }
-        })
-        .environment(environment)
-        .startSession();
-      return started.getRunContentDescriptor();
-    } catch (ExecutionException | RuntimeException e) {
-      debuggeeHandler.destroyProcess();
-      throw e;
-    }
   }
 
   private static int findFreePort() throws ExecutionException {

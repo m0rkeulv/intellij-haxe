@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
@@ -12,11 +12,11 @@ import org.jetbrains.annotations.NotNull;
  * A non-Locals DAP scope (e.g. "Members") shown as a collapsible group in the
  * Variables view; its variables are fetched on expand.
  */
-final class HxcppScopeGroup extends XValueGroup {
-  private final HxcppDebugProcess process;
+final class DapScopeGroup extends XValueGroup {
+  private final DapDebugProcess process;
   private final Scope scope;
 
-  HxcppScopeGroup(HxcppDebugProcess process, Scope scope) {
+  DapScopeGroup(DapDebugProcess process, Scope scope) {
     super(scope.getName() != null ? scope.getName() : "Scope");
     this.process = process;
     this.scope = scope;
@@ -27,7 +27,7 @@ final class HxcppScopeGroup extends XValueGroup {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable variable : process.requestVariables(scope.getVariablesReference())) {
-        children.add(new HxcppValue(process, variable, scope.getVariablesReference(),
+        children.add(new DapValue(process, variable, scope.getVariablesReference(),
                                     EvaluationPath.root(variable.getName())));
       }
       node.addChildren(children, true);

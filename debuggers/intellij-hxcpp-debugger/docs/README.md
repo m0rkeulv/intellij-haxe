@@ -21,8 +21,8 @@ the embedded server sees an unconfigured session and stays out of the way.
 
 ```mermaid
 sequenceDiagram
-    participant IDE as IDE (HxcppDebugProcess = DAP client)
-    participant Runner as HxcppDebugRunner
+    participant IDE as IDE (DapDebugProcess = DAP client)
+    participant Runner as HxcppIntellijDebugRunner
     participant App as Debuggee (server thread inside)
 
     Runner->>Runner: bind loopback listener on an ephemeral port
@@ -86,8 +86,10 @@ src/test/java/                    DAP integration tests against real fixtures
 test-fixtures/                    debuggee programs compiled with the haxelib
 ```
 
-The IDE-side classes live in the main plugin at
-`src/main/java/com/intellij/plugins/haxe/runner/debugger/hxcpp`.
+The IDE side lives in the main plugin: the DAP machinery shared by every
+DAP debugger (`DapDebugProcess`, breakpoints, stacks, values) under
+`runner/debugger/dap/ide`, and this debugger's run configuration, runner and
+`HxcppIntellijBackend` under `runner/debugger/hxcpp/intellij`.
 
 ---
 
@@ -247,7 +249,7 @@ handler and travels with the event; the server thread only formats and sends.
 
 ### Smart step into
 
-Target discovery is IDE-side: `HxcppSmartStepIntoHandler` walks the Haxe PSI
+Target discovery is IDE-side: `DapSmartStepIntoHandler` walks the Haxe PSI
 for the calls on the stopped line and resolves each to its declaring class
 (the server has no line→calls knowledge — there is no bytecode to mine).
 Choosing a variant sends the custom `intellij/stepIntoFunction` request with

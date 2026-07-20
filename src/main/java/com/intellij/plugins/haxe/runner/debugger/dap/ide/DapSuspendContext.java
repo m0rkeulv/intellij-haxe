@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hashlink;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
@@ -8,29 +8,29 @@ import java.util.List;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * One stop of the (suspend-all) HashLink debuggee: every live thread as an
+ * One stop of the (suspend-all) debuggee: every live thread as an
  * execution stack, with the stopped thread active and its frames pre-fetched.
  * Selecting another thread lazily walks its stack.
  */
-final class HashLinkSuspendContext extends XSuspendContext {
-  private final HashLinkExecutionStack[] stacks;
-  private final HashLinkExecutionStack active;
+final class DapSuspendContext extends XSuspendContext {
+  private final DapExecutionStack[] stacks;
+  private final DapExecutionStack active;
 
-  HashLinkSuspendContext(HashLinkDebugProcess process, List<DapThread> threads,
-                         int activeThreadId, List<StackFrame> activeFrames,
-                         @Nullable String exceptionText) {
+  DapSuspendContext(DapDebugProcess process, List<DapThread> threads,
+                      int activeThreadId, List<StackFrame> activeFrames,
+                      @Nullable String exceptionText) {
     // fall back to a single synthetic thread if the list is somehow empty
     if (threads.isEmpty()) {
-      this.active = new HashLinkExecutionStack(process, activeThreadId, "main", activeFrames, exceptionText);
-      this.stacks = new HashLinkExecutionStack[]{active};
+      this.active = new DapExecutionStack(process, activeThreadId, "main", activeFrames, exceptionText);
+      this.stacks = new DapExecutionStack[]{active};
       return;
     }
-    this.stacks = new HashLinkExecutionStack[threads.size()];
-    HashLinkExecutionStack activeStack = null;
+    this.stacks = new DapExecutionStack[threads.size()];
+    DapExecutionStack activeStack = null;
     for (int i = 0; i < threads.size(); i++) {
       DapThread thread = threads.get(i);
       boolean isActive = thread.getId() == activeThreadId;
-      HashLinkExecutionStack stack = new HashLinkExecutionStack(
+      DapExecutionStack stack = new DapExecutionStack(
         process, thread.getId(), threadLabel(thread), isActive ? activeFrames : null,
         // the exception gutter marker belongs only on the thread that threw
         isActive ? exceptionText : null);

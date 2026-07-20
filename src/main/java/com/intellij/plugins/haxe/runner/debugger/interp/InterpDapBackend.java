@@ -3,7 +3,7 @@ package com.intellij.plugins.haxe.runner.debugger.interp;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import com.intellij.plugins.haxe.runner.debugger.eval.EvalDebugAdapter;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppDapBackend;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -14,10 +14,10 @@ import java.net.Socket;
  * eval-debugger wire protocol). The adapter binds its VM listener in the
  * constructor — before the runner spawns haxe — and the DAP conversation runs
  * over a loopback socket pair created at connect time, so the IDE side is
- * exactly a DAP client (the same {@code HxcppDebugProcess} machinery drives
+ * exactly a DAP client (the same {@code DapDebugProcess} machinery drives
  * this session).
  */
-public class InterpDapBackend implements HxcppDapBackend {
+public class InterpDapBackend implements DapBackend {
   private final EvalDebugAdapter adapter;
   private volatile ServerSocket loopback;
 
@@ -74,8 +74,9 @@ public class InterpDapBackend implements HxcppDapBackend {
 
   @Override
   public String startupHint() {
-    return "The haxe process exited before its eval VM attached. Check the compiler arguments\n"
-           + "(they must form a valid compilation) and that haxe is version 4.0 or newer.";
+    return """
+      The haxe process exited before its eval VM attached. Check the compiler arguments
+      (they must form a valid compilation) and that haxe is version 4.0 or newer.""";
   }
 
   @Override

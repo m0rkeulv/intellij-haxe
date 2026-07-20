@@ -105,7 +105,7 @@ public class HaxeExceptionBreakpointType
                                                                    @NotNull String criticalWord) {
     List<String> filters = new ArrayList<>();
     List<String> filterTypes = new ArrayList<>();
-    ReadAction.run(() -> collectEnabled(project, properties -> {
+    ReadAction.nonBlocking(() -> collectEnabled(project, properties -> {
       if (properties.isTyped()) {
         filterTypes.add(properties.className.trim());
       } else {
@@ -119,7 +119,7 @@ public class HaxeExceptionBreakpointType
           filters.add(criticalWord);
         }
       }
-    }));
+    })).executeSynchronously();
     SetExceptionBreakpointsRequest request = new SetExceptionBreakpointsRequest();
     SetExceptionBreakpointsArguments arguments = new SetExceptionBreakpointsArguments();
     arguments.setFilters(filters);

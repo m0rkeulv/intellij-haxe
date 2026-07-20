@@ -16,7 +16,7 @@ protocol and server code, and cannot be fixed from the adapter side.
 ## How it connects
 
 The adapter is in-process Java — no Node.js, no external process. The IDE's
-`HxcppDebugProcess` is a plain DAP client talking to `HxcppDebugAdapter`
+`DapDebugProcess` is a plain DAP client talking to `HxcppDebugAdapter`
 over a loopback socket pair (`HxcppVshaxeBackend`); the adapter speaks
 jsonrpc to the debug server compiled INTO the debuggee.
 
@@ -30,7 +30,7 @@ triggers, so the build and the debugger always agree.
 
 ```mermaid
 sequenceDiagram
-    participant IDE as IDE (HxcppDebugProcess = DAP client)
+    participant IDE as IDE (DapDebugProcess = DAP client)
     participant A as HxcppDebugAdapter (in-process)
     participant App as Debuggee (hxcpp.debug.jsonrpc.Server inside)
 
@@ -88,12 +88,13 @@ reports honestly what it cannot:
 | `:dap-protocol` Java module | DAP POJOs + the `DapClient` the plugin connects with |
 | own `jsonrpc` package (zero IDE deps) | framing, message model, request/response correlation |
 
-The IDE-side classes (`HxcppDebugProcess`, breakpoint manager, run
-configuration) live in the main plugin under
-`src/main/java/com/intellij/plugins/haxe/runner/debugger/hxcpp` and are
-SHARED with the intellij HXCPP debugger through the `HxcppDapBackend`
-interface — this module provides `HxcppDebugAdapter`, the vshaxe-protocol
-backend.
+The IDE side lives in the main plugin: the DAP machinery shared by every
+DAP debugger (`DapDebugProcess`, breakpoints, stacks, values — behind the
+`DapBackend` interface) under `runner/debugger/dap/ide`, and this debugger's
+run configuration, runner and `HxcppVshaxeBackend` under
+`runner/debugger/hxcpp/vshaxe` (the intellij-server variant lives beside it
+in `hxcpp/intellij`). This module provides `HxcppDebugAdapter`, the
+vshaxe-protocol backend the runner plugs in.
 
 ---
 
@@ -217,7 +218,7 @@ Mitigations in place:
 - `HxcppDebugAdapter` binds with `SO_REUSEADDR` off, so an occupied port
   fails the session upfront with the port-busy message instead of silently
   double-binding (Windows would otherwise sometimes allow it).
-- `HxcppDebugProcess` watches the debuggee's process handler: death before
+- `DapDebugProcess` watches the debuggee's process handler: death before
   the `launch` handshake completes fails the session IMMEDIATELY with the
   exit code and the leftover-instance hint, instead of a 30 s timeout.
 - The run-configuration hint warns that debug builds wait for a debugger

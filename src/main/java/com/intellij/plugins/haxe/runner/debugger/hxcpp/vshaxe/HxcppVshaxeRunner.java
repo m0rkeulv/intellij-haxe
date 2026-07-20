@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionResult;
@@ -14,11 +14,11 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Plain Run for the dedicated HXCPP configuration (experimental). Keys on
- * {@link HxcppRunConfiguration} only, so the legacy Haxe runners are never
+ * {@link HxcppVshaxeRunConfiguration} only, so the legacy Haxe runners are never
  * involved in an HXCPP launch and vice versa.
  */
-public class HxcppRunner extends GenericProgramRunner<RunnerSettings> {
-  public static final String RUNNER_ID = "HxcppRunner";
+public class HxcppVshaxeRunner extends GenericProgramRunner<RunnerSettings> {
+  public static final String RUNNER_ID = "HxcppVshaxeRunner";
 
   @NotNull
   @Override
@@ -28,13 +28,13 @@ public class HxcppRunner extends GenericProgramRunner<RunnerSettings> {
 
   @Override
   public boolean canRun(@NotNull String executorId, @NotNull RunProfile profile) {
-    return DefaultRunExecutor.EXECUTOR_ID.equals(executorId) && profile instanceof HxcppRunConfiguration;
+    return DefaultRunExecutor.EXECUTOR_ID.equals(executorId) && profile instanceof HxcppVshaxeRunConfiguration;
   }
 
   @Override
   protected RunContentDescriptor doExecute(@NotNull RunProfileState state, @NotNull ExecutionEnvironment environment)
     throws ExecutionException {
-    // the state comes from HxcppRunConfiguration.getState -> HxcppRunningState
+    // the state comes from HxcppVshaxeRunConfiguration.getState -> DapCommandLineRunningState
     ExecutionResult result = state.execute(environment.getExecutor(), this);
     return ExecutionUiService.getInstance().showRunContent(result, environment);
   }

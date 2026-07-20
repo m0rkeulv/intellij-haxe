@@ -3,8 +3,7 @@ package com.intellij.plugins.haxe.runner.debugger;
 import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkDebugProcess;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppDebugProcess;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerManager;
 import javax.swing.JComponent;
@@ -60,11 +59,8 @@ public final class HaxeDebuggerSettingsConfigurable implements SearchableConfigu
     // live: every running Haxe session re-renders with the new labels
     boolean enabled = settings().isRenderObjectsWithToString();
     for (XDebugSession session : XDebuggerManager.getInstance(project).getDebugSessions()) {
-      if (session.getDebugProcess() instanceof HxcppDebugProcess hxcpp) {
+      if (session.getDebugProcess() instanceof DapDebugProcess hxcpp) {
         hxcpp.pushToStringRendering(enabled);
-      }
-      else if (session.getDebugProcess() instanceof HashLinkDebugProcess hashLink) {
-        hashLink.pushToStringRendering(enabled);
       }
     }
   }

@@ -1,6 +1,5 @@
-package com.intellij.plugins.haxe.runner.debugger.hashlink;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
-import com.intellij.execution.ExecutionException;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
@@ -11,30 +10,28 @@ import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.module.Module;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
-import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
-import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings;
-import com.intellij.plugins.haxe.runner.debugger.HaxeToStringRenderToggleAction;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointType;
+import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
+import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings;
+import com.intellij.plugins.haxe.runner.debugger.HaxeToStringRenderToggleAction;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
+import com.intellij.plugins.haxe.runner.debugger.HaxeExpressionPointHighlighter;
+import com.intellij.plugins.haxe.runner.debugger.HaxeExpressionSteppingToggleAction;
+import com.intellij.xdebugger.XDebugSessionListener;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
-import com.intellij.execution.ui.RunnerLayoutUi;
-import com.intellij.execution.ui.layout.PlaceInGrid;
-import com.intellij.icons.AllIcons;
-import com.intellij.ui.content.Content;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XSourcePosition;
@@ -46,95 +43,88 @@ import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider;
 import com.intellij.xdebugger.frame.XExecutionStack;
 import com.intellij.xdebugger.frame.XStackFrame;
 import com.intellij.xdebugger.frame.XSuspendContext;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import com.intellij.xdebugger.ui.XDebugTabLayouter;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * XDebugger process for HashLink (experimental): spawns the bundled DAP
- * adapter, drives it as a DAP client, and bridges its events into the IDE.
+ * The shared XDebugger process for every DAP-based debugger: a DAP client
+ * over a {@link DapBackend} (the in-process vshaxe adapter, the debuggee's
+ * embedded intellij-hxcpp-debug-server, or the eval adapter), bridging its
+ * events into the IDE. Mirrors the
+ * HashLink debug process, but simpler in two ways: the peer is reached over a
+ * loopback socket (no external process to manage), and the debuggee is a
+ * plain child process (no OS-level debug attachment, so killing it needs no
+ * special ceremony).
  *
- * The debuggee itself is spawned by {@link HashLinkDebugRunner} (never by the
- * adapter — HL's process.c would force SW_HIDE onto its first window); the
- * adapter attaches to it by pid. Its {@link ProcessHandler} is the session's
- * process handler, so console output, stdin and the exit code flow through
- * the normal run machinery, and the session ends when the debuggee does.
+ * The debuggee is spawned by the debug runner; its {@link ProcessHandler} is
+ * the session's process handler, so console output, stdin and the exit code
+ * flow through the normal run machinery, and the session ends when the
+ * debuggee does.
  *
  * Threading: the IDE calls resume/step/stop on the EDT — those only submit
  * work to a single-thread request executor. A dedicated event-pump thread is
- * the sole {@code pollEvent} caller and issues its own follow-up requests
- * (stackTrace on stop); DapClient correlates concurrent requests by seq.
+ * the sole {@code pollEvent} caller; DapClient correlates concurrent requests
+ * by seq.
  */
-public class HashLinkDebugProcess extends XDebugProcess {
-  private static final Logger LOG = Logger.getInstance(HashLinkDebugProcess.class);
+public class DapDebugProcess extends XDebugProcess {
+  private static final Logger LOG = Logger.getInstance(DapDebugProcess.class);
   private static final long REQUEST_TIMEOUT_MILLIS = 15_000;
   private static final long DISCONNECT_TIMEOUT_MILLIS = 3_000;
   private static final long EVENT_POLL_MILLIS = 250;
 
-  private final Module module;
-  private final Path hlExecutable;
-  private final Path hlProgram;
+  private final DapBackend backend;
   private final ProcessHandler processHandler;
-  private final int debugPort;
-  private final long debuggeePid;
-  private final HashLinkBreakpointManager breakpoints = new HashLinkBreakpointManager(this);
+  private final DapBreakpointManager breakpoints = new DapBreakpointManager(this);
   private final ExecutorService requestExecutor =
-    Executors.newSingleThreadExecutor(r -> daemon(r, "HashLink DAP requests"));
+    Executors.newSingleThreadExecutor(r -> daemon(r, "DAP requests"));
 
-  private volatile Process adapterProcess;
   private volatile DapClient client;
-  private volatile int currentThreadId = 1;
-  // the DAP frame id of the newest frame at the current stop (-1 before the first);
-  // smart step into asks the adapter for that frame's step-in targets
+  // the DAP frame id of the newest frame at the current stop (-1 before the
+  // first); smart-step handlers that query the adapter need it
   private volatile int topFrameId = -1;
+  /** Eval-only: raw sub-expression steps + expression-span highlight. Session-scoped. */
+  private volatile boolean expressionStepping = false;
+  private HaxeExpressionPointHighlighter expressionHighlighter;
+  private boolean resumeListenerInstalled = false;
+  private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
-  private volatile HashLinkRegistersPanel registersPanel;
-  // which exception breakpoints are enabled (union sent to the adapter)
+  private volatile boolean launched = false;
 
-  public HashLinkDebugProcess(@NotNull XDebugSession session, Module module,
-                              Path hlExecutable, Path hlProgram,
-                              ProcessHandler debuggeeHandler, int debugPort, long debuggeePid) {
+  public DapDebugProcess(@NotNull XDebugSession session,
+                           DapBackend backend, ProcessHandler debuggeeHandler) {
     super(session);
-    this.module = module;
-    this.hlExecutable = hlExecutable;
-    this.hlProgram = hlProgram;
+    this.backend = backend;
     this.processHandler = debuggeeHandler;
-    this.debugPort = debugPort;
-    this.debuggeePid = debuggeePid;
-    // "Terminate" (destroy, not detach) kills the debuggee handler. But the debuggee is
-    // debug-attached by the adapter and suspended at a breakpoint — Windows cannot
-    // TerminateProcess it from a third party while a debugger holds it, so destroyProcess
-    // hangs on "waiting for process detach". Killing the adapter (the debugger) instead
-    // ends the debug session; DebugActiveProcess's kill-on-exit then tears the debuggee
-    // down. Gated on client != null so our own graceful teardown (which nulls client
-    // before destroying the handler) and Disconnect (detach, willBeDestroyed=false) are
-    // left to the normal disconnect path.
+    // A debuggee dying BEFORE the session is up is always a startup failure
+    // (not compiled with the debug server, or its port is poisoned by a
+    // leftover instance) — fail immediately with the exit code instead of
+    // letting the launch request run into its timeout.
     processHandler.addProcessListener(new ProcessListener() {
+      @Override
+      public void processTerminated(@NotNull ProcessEvent event) {
+        if (!shuttingDown && !launched) {
+          fail("The program exited (code " + event.getExitCode() + ") before the debugger could attach.\n"
+               + backend.startupHint());
+        }
+      }
+
+      // "Terminate" is about to destroy the debuggee; a backend holding an OS
+      // debug attachment must release it first or the destroy hangs. Gated on
+      // client != null so the graceful teardown (which nulls client before
+      // destroying the handler) and Disconnect skip it.
       @Override
       public void processWillTerminate(@NotNull ProcessEvent event, boolean willBeDestroyed) {
         if (willBeDestroyed && client != null) {
-          Process adapter = adapterProcess;
-          if (adapter != null) {
-            adapter.destroyForcibly();
-            // wait until the adapter is gone so the debug session is fully torn down
-            // before the debuggee handler's own destroy runs, avoiding a race where it
-            // TerminateProcess-es a still-attached debuggee
-            try {
-              adapter.waitFor(2, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            }
-          }
+          backend.beforeDebuggeeDestroyed();
         }
       }
     });
@@ -148,7 +138,6 @@ public class HashLinkDebugProcess extends XDebugProcess {
     requestExecutor.execute(this::initializeSession);
   }
 
-
   // The default XDebugProcess.createConsole() builds a console but never
   // attaches it to the process handler (unlike CommandLineState, which does) —
   // without this override the debuggee's stdout/stderr go nowhere.
@@ -160,28 +149,12 @@ public class HashLinkDebugProcess extends XDebugProcess {
     return console;
   }
 
-  @Override
-  public @NotNull XDebugTabLayouter createTabLayouter() {
-    return new XDebugTabLayouter() {
-      @Override
-      public void registerAdditionalContent(@NotNull RunnerLayoutUi ui) {
-        HashLinkRegistersPanel panel = new HashLinkRegistersPanel(HashLinkDebugProcess.this);
-        registersPanel = panel;
-        getSession().addSessionListener(panel);
-        Content content = ui.createContent("HashLinkRegisters", panel, "Registers",
-                                           AllIcons.Debugger.Value, null);
-        content.setCloseable(false);
-        ui.addContent(content, 0, PlaceInGrid.center, false);
-      }
-    };
-  }
-
   private void initializeSession() {
     try {
-      HashLinkAdapterLauncher.LaunchedAdapter launched = HashLinkAdapterLauncher.launch(hlExecutable);
-      adapterProcess = launched.process();
-      drainAdapterOutput(launched.stdout());
-      client = DapClient.connect("127.0.0.1", launched.port(), (int)REQUEST_TIMEOUT_MILLIS);
+      // blocks until the DAP peer is up (the adapter's loopback pair, or the
+      // debuggee's embedded server connecting to the runner's listener)
+      client = backend.connect();
+      backend.onConnected(this);
 
       InitializeRequest initialize = new InitializeRequest();
       InitializeRequestArguments initializeArguments = new InitializeRequestArguments();
@@ -191,42 +164,39 @@ public class HashLinkDebugProcess extends XDebugProcess {
       client.sendRequest(initialize, REQUEST_TIMEOUT_MILLIS);
       client.pollEvent(REQUEST_TIMEOUT_MILLIS); // the initialized event
 
-      LaunchRequest launch = new LaunchRequest();
-      LaunchRequestArguments launchArguments = new LaunchRequestArguments();
-      // attach mode: the runner already spawned the debuggee (program is still
-      // needed for the adapter's bytecode/debug-info parse)
-      launchArguments.setProgram(hlProgram.toString());
-      launchArguments.setAttachPid((int)debuggeePid);
-      launchArguments.setDebugPort(debugPort);
-      launch.setArguments(launchArguments);
-      Response launchResponse = client.sendRequest(launch, REQUEST_TIMEOUT_MILLIS);
-      if (!launchResponse.isSuccess()) {
-        fail("Cannot launch the HashLink program: " + launchResponse.getMessage());
-        return;
+      if (backend.requiresLaunchRequest()) {
+        // launch = "the debuggee's server connected"; it is held before main
+        Response launchResponse = client.sendRequest(backend.launchRequest(), REQUEST_TIMEOUT_MILLIS);
+        if (!launchResponse.isSuccess()) {
+          fail("Cannot start the debug session: " + launchResponse.getMessage());
+          return;
+        }
       }
+      // either way the debuggee is attached now (a connected in-process server
+      // holds the program before main until configurationDone)
+      launched = true;
 
       breakpoints.flushAll();
-      // Send the exception filters IN-PHASE (before configurationDone). The request
-      // is built by reading the breakpoint manager, so a breakpoint already enabled
-      // from a previous IDE run arms here — the registerBreakpoint callbacks alone
-      // fire on the EDT and land after configurationDone (racing startup), which is
-      // why a persisted breakpoint used to appear armed but did nothing until
-      // toggled. This mirrors how line breakpoints flush.
-      sendRequest(exceptionFiltersRequest());
+      // Exception filters go IN-PHASE (before configurationDone), built by
+      // reading the breakpoint manager: a breakpoint already enabled from a
+      // previous IDE run arms here — the registerBreakpoint callbacks alone
+      // fire on the EDT and would race startup (the HashLink lesson).
+      if (backend.supportsExceptionFilters()) {
+        sendRequest(exceptionFiltersRequest());
+      }
       // object labels via toString: an off-default project setting; only a
-      // non-default needs announcing (the adapter starts with it off). NOTE:
-      // the adapter currently only STORES the flag — the labels stay class
-      // names until the hl_dyn_call_safe rendering lands (a faulting toString
-      // must be impossible, not merely handled; see the adapter docs).
-      if (HaxeDebuggerSettings.getInstance(getSession().getProject()).isRenderObjectsWithToString()) {
+      // non-default needs announcing (the server starts with it off)
+      if (backend.supportsToStringRendering()
+          && HaxeDebuggerSettings.getInstance(getSession().getProject()).isRenderObjectsWithToString()) {
         sendRequest(SetToStringRenderingRequest.of(true));
       }
+      // releases the debuggee held by the server's startup break
       client.sendRequest(new ConfigurationDoneRequest(), REQUEST_TIMEOUT_MILLIS);
 
-      Thread pump = daemon(this::pumpEvents, "HashLink DAP events");
+      Thread pump = daemon(this::pumpEvents, "DAP events");
       pump.start();
-    } catch (ExecutionException | IOException e) {
-      fail("Cannot start the HashLink debug session: " + e.getMessage());
+    } catch (IOException e) {
+      fail("Cannot start the debug session: " + e.getMessage());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
@@ -241,44 +211,43 @@ public class HashLinkDebugProcess extends XDebugProcess {
         switch (event) {
           case null -> { /* poll again */ }
           case StoppedEvent stopped -> handleStopped(stopped);
-          case ContinuedEvent ignored ->
-            // a step with no user-code landing (e.g. past a thread entry's last
-            // statement) was downgraded to a continue: reflect that we are running
-            getSession().sessionResumed();
+          case ContinuedEvent ignored -> getSession().sessionResumed();
           case OutputEvent output -> handleOutput(output);
           case ExitedEvent ignored -> {
             // the debuggee's own ProcessHandler reports termination (with the
-            // real exit code); the adapter's attach-mode code would be a guess
+            // real exit code); an adapter-reported code would be a guess
           }
           case TerminatedEvent ignored -> {
             terminateSession();
             return;
           }
-          default -> { /* breakpoint re-verification etc.: nothing to do yet */ }
+          default -> { /* thread start/exit etc.: the views refresh on the next stop */ }
         }
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     } catch (RuntimeException e) {
-      LOG.warn("HashLink event pump failed", e);
+      LOG.warn("DAP event pump failed", e);
       terminateSession();
     }
   }
 
   private void handleStopped(StoppedEvent stopped) {
-    currentThreadId = stopped.getBody().getThreadId();
-    // stopped on a thrown exception → mark the throw line in the gutter, tooltip = the value
+    Integer threadId = stopped.getBody().getThreadId();
+    currentThreadId = threadId != null ? threadId : 0;
     String exceptionText = null;
     if ("exception".equals(stopped.getBody().getReason())) {
+      // prefer the runtime's own message (text) over the category (description)
+      String text = stopped.getBody().getText();
       String description = stopped.getBody().getDescription();
-      exceptionText = description != null ? description : "Exception thrown";
+      exceptionText = text != null ? text : (description != null ? description : "Exception thrown");
       // the gutter icon's tooltip is easy to miss - put the text where the
       // user is already looking
       print(exceptionText + "\n", true);
     }
     reportStopped(currentThreadId, exceptionText);
-    // run-to-cursor is one-shot: any stop (including a breakpoint reached before the
-    // cursor) cancels a pending run-to breakpoint.
+    // run-to-cursor is one-shot: any stop (including a breakpoint reached before
+    // the cursor) cancels a pending run-to breakpoint
     breakpoints.clearRunToBreakpoint();
   }
 
@@ -287,8 +256,8 @@ public class HashLinkDebugProcess extends XDebugProcess {
     List<DapThread> threads = requestThreads();
     List<StackFrame> activeFrames = requestStackTrace(threadId);
     topFrameId = activeFrames.isEmpty() ? -1 : activeFrames.get(0).getId();
-    HashLinkSuspendContext context =
-      new HashLinkSuspendContext(this, threads, threadId, activeFrames, exceptionText);
+    DapSuspendContext context =
+      new DapSuspendContext(this, threads, threadId, activeFrames, exceptionText);
     // resolve the top frame's source position HERE, on the pump thread:
     // positionReached's sessionPaused listeners read getCurrentPosition on the
     // EDT, where the resolver's index lookups are prohibited slow operations
@@ -298,6 +267,36 @@ public class HashLinkDebugProcess extends XDebugProcess {
       topFrame.getSourcePosition();
     }
     getSession().positionReached(context);
+    updateExpressionHighlight(activeFrames);
+  }
+
+  // Expression-stepping visualization: highlight the exact span of the
+  // expression the interpreter will run next (top frame's column..endColumn).
+  private void updateExpressionHighlight(List<StackFrame> activeFrames) {
+    if (expressionHighlighter == null) {
+      expressionHighlighter = new HaxeExpressionPointHighlighter(getSession().getProject());
+    }
+    if (!resumeListenerInstalled) {
+      resumeListenerInstalled = true;
+      getSession().addSessionListener(new XDebugSessionListener() {
+        @Override
+        public void sessionResumed() {
+          expressionHighlighter.clear();
+        }
+
+        @Override
+        public void sessionStopped() {
+          expressionHighlighter.clear();
+        }
+      });
+    }
+    if (!expressionStepping || activeFrames.isEmpty()) {
+      expressionHighlighter.clear();
+      return;
+    }
+    StackFrame top = activeFrames.get(0);
+    String path = top.getSource() != null ? top.getSource().getPath() : null;
+    expressionHighlighter.show(path, top.getLine(), top.getColumn(), top.getEndLine(), top.getEndColumn());
   }
 
   List<DapThread> requestThreads() {
@@ -321,20 +320,8 @@ public class HashLinkDebugProcess extends XDebugProcess {
     }
   }
 
-  // The debuggee's stdout/stderr flow through its own ProcessHandler; DAP
-  // output events only carry adapter-side messages (eval warnings, errors).
-  // Print those straight into the session's Console view (with stdout/stderr
-  // colouring); fall back to the process handler until the console exists.
-  private void print(String text, boolean stderr) {
-    ConsoleView console = getSession().getConsoleView();
-    if (console != null) {
-      console.print(text, stderr ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.NORMAL_OUTPUT);
-    } else {
-      processHandler.notifyTextAvailable(text, stderr ? ProcessOutputTypes.STDERR : ProcessOutputTypes.STDOUT);
-    }
-  }
-
-  private void printSystem(String text) {
+  /** Grey system-output line (e.g. an external adapter's own chatter). */
+  public void printSystem(String text) {
     ConsoleView console = getSession().getConsoleView();
     if (console != null) {
       console.print(text, ConsoleViewContentType.SYSTEM_OUTPUT);
@@ -343,22 +330,15 @@ public class HashLinkDebugProcess extends XDebugProcess {
     }
   }
 
-  // Keeps the adapter's own stdout/stderr drained after the port announcement:
-  // otherwise a chatty adapter (crash traces, DAP_ADAPTER_TRACE) would fill the
-  // OS pipe and block, and its error output would be invisible. Shown as grey
-  // system output, prefixed so it cannot be mistaken for program output.
-  private void drainAdapterOutput(BufferedReader adapterStdout) {
-    Thread gobbler = daemon(() -> {
-      try (BufferedReader reader = adapterStdout) {
-        String line;
-        while ((line = reader.readLine()) != null) {
-          printSystem("[adapter] " + line + "\n");
-        }
-      } catch (IOException ignored) {
-        // adapter ended
-      }
-    }, "HashLink adapter output");
-    gobbler.start();
+  private void print(String text, boolean stderr) {
+    ConsoleView console = getSession().getConsoleView();
+    if (console != null) {
+      console.print(text, stderr ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.NORMAL_OUTPUT);
+    } else {
+      // startup failures can precede the console; the process handler's
+      // listeners (the Console tab once built) still deliver the text
+      processHandler.notifyTextAvailable(text, stderr ? ProcessOutputTypes.STDERR : ProcessOutputTypes.STDOUT);
+    }
   }
 
   private void fail(String message) {
@@ -382,10 +362,9 @@ public class HashLinkDebugProcess extends XDebugProcess {
     onRequestThread(() -> sendRequest(request));
   }
 
-  // Run to cursor: plant a transient breakpoint at the target line (alongside the
-  // existing breakpoints) and resume. Any stop clears it (handleStopped). If the line
-  // has no executable code, don't resume — that would run away with no place to
-  // stop — and re-assert the current position so the UI leaves the "running" state.
+  // Run to cursor: plant a transient breakpoint at the target line and resume.
+  // Any stop clears it (handleStopped). If the line has no executable code,
+  // don't resume — re-assert the current position so the UI leaves "running".
   @Override
   public void runToPosition(@NotNull XSourcePosition position, @Nullable XSuspendContext context) {
     String path = position.getFile().getPath();
@@ -407,8 +386,8 @@ public class HashLinkDebugProcess extends XDebugProcess {
 
   @Override
   public void startPausing() {
-    // interrupt the running debuggee; the adapter replies, then sends a
-    // stopped(reason:"pause") event that the existing stop handling renders
+    // the server interrupts the debuggee and reports a stopped(reason:"pause")
+    // event; the thread id rides along for servers that pause per-thread
     PauseRequest request = new PauseRequest();
     PauseArguments arguments = new PauseArguments();
     arguments.setThreadId(currentThreadId);
@@ -434,21 +413,87 @@ public class HashLinkDebugProcess extends XDebugProcess {
     onRequestThread(() -> sendRequest(request));
   }
 
-  /** Smart step into: enter the specific call chosen from the step-in targets. */
-  void stepIntoTarget(int targetId) {
-    StepInRequest request = new StepInRequest();
-    StepInArguments arguments = new StepInArguments();
-    arguments.setThreadId(currentThreadId);
-    arguments.setTargetId(targetId);
-    request.setArguments(arguments);
-    onRequestThread(() -> sendRequest(request));
-  }
-
   @Override
   public void startStepOut(@Nullable XSuspendContext context) {
     StepOutRequest request = new StepOutRequest();
     StepOutArguments arguments = new StepOutArguments();
     arguments.setThreadId(currentThreadId);
+    request.setArguments(arguments);
+    onRequestThread(() -> sendRequest(request));
+  }
+
+  @Override
+  public @Nullable XSmartStepIntoHandler<?> getSmartStepIntoHandler() {
+    return backend.createSmartStepIntoHandler(this);
+  }
+
+  @Override
+  public @NotNull XDebugTabLayouter createTabLayouter() {
+    XDebugTabLayouter layouter = backend.createTabLayouter(this);
+    return layouter != null ? layouter : super.createTabLayouter();
+  }
+
+  // The Variables view's settings (gear) menu gets the toString-label toggle
+  // when the backend can honor it (the vshaxe server cannot — it always
+  // stringifies and offers no control, so no toggle is shown there).
+  @Override
+  public void registerAdditionalActions(@NotNull DefaultActionGroup leftToolbar,
+                                        @NotNull DefaultActionGroup topToolbar,
+                                        @NotNull DefaultActionGroup settings) {
+    super.registerAdditionalActions(leftToolbar, topToolbar, settings);
+    if (backend.supportsToStringRendering()) {
+      settings.add(new HaxeToStringRenderToggleAction(getSession(), this::pushToStringRendering));
+    }
+    if (backend.supportsExpressionStepping()) {
+      settings.add(new HaxeExpressionSteppingToggleAction(() -> expressionStepping, this::pushExpressionStepping));
+    }
+  }
+
+  // Live toggle (eval only): tell the adapter, then re-report the current stop
+  // so the frames carry (or drop) the expression spans and the highlight
+  // appears/disappears without another step.
+  private void pushExpressionStepping(boolean enabled) {
+    if (!backend.supportsExpressionStepping()) {
+      return;
+    }
+    expressionStepping = enabled;
+    if (!enabled && expressionHighlighter != null) {
+      expressionHighlighter.clear();
+    }
+    onRequestThread(() -> {
+      sendRequest(SetExpressionSteppingRequest.of(enabled));
+      if (getSession().isSuspended()) {
+        reportStopped(currentThreadId, null);
+      }
+    });
+  }
+
+  // Live toggle: tell the server, then rebuild the views so the CURRENT
+  // stop's variables re-render with the new labels (no restart needed).
+  // Public: the settings page pushes to every running session on apply; a
+  // backend that cannot honor the request (vshaxe) is a no-op.
+  public void pushToStringRendering(boolean enabled) {
+    if (!backend.supportsToStringRendering()) {
+      return;
+    }
+    onRequestThread(() -> {
+      sendRequest(SetToStringRenderingRequest.of(enabled));
+      getSession().rebuildViews();
+    });
+  }
+
+  /**
+   * Smart step into the chosen callee (custom intellij/stepIntoFunction
+   * request). {@code occurrence} picks WHICH invocation on the line when the
+   * same function is called more than once (1-based).
+   */
+  void stepIntoFunction(String className, String functionName, int occurrence) {
+    StepIntoFunctionRequest request = new StepIntoFunctionRequest();
+    StepIntoFunctionArguments arguments = new StepIntoFunctionArguments();
+    arguments.setThreadId(currentThreadId);
+    arguments.setClassName(className);
+    arguments.setFunctionName(functionName);
+    arguments.setOccurrence(occurrence);
     request.setArguments(arguments);
     onRequestThread(() -> sendRequest(request));
   }
@@ -482,10 +527,9 @@ public class HashLinkDebugProcess extends XDebugProcess {
       } catch (IOException ignored) {
       }
     }
-    Process process = adapterProcess;
-    adapterProcess = null;
-    if (process != null) {
-      process.destroy();
+    try {
+      backend.close();
+    } catch (IOException ignored) {
     }
     if (!processHandler.isProcessTerminated()) {
       processHandler.destroyProcess();
@@ -500,7 +544,7 @@ public class HashLinkDebugProcess extends XDebugProcess {
    * for one-way requests, WRONG for work completing a promise, tree node or
    * callback (use the two-argument overload there).
    */
-  void onRequestThread(Runnable work) {
+  public void onRequestThread(Runnable work) {
     onRequestThread(work, () -> {
     });
   }
@@ -512,7 +556,7 @@ public class HashLinkDebugProcess extends XDebugProcess {
    * MUST complete it in {@code onRejected}, or the platform waits on it
    * forever (a hung smart-step popup, a permanent "Collecting data" node).
    */
-  void onRequestThread(Runnable work, Runnable onRejected) {
+  public void onRequestThread(Runnable work, Runnable onRejected) {
     if (!requestExecutor.isShutdown()) {
       try {
         requestExecutor.execute(work);
@@ -543,7 +587,7 @@ public class HashLinkDebugProcess extends XDebugProcess {
     }
   }
 
-  List<Scope> requestScopes(int frameId) {
+  public List<Scope> requestScopes(int frameId) {
     ScopesRequest request = new ScopesRequest();
     ScopesArguments arguments = new ScopesArguments();
     arguments.setFrameId(frameId);
@@ -552,11 +596,21 @@ public class HashLinkDebugProcess extends XDebugProcess {
            ? response.getBody().getScopes() : List.of();
   }
 
+  public List<Variable> requestVariables(int variablesReference) {
+    VariablesRequest request = new VariablesRequest();
+    VariablesArguments arguments = new VariablesArguments();
+    arguments.setVariablesReference(variablesReference);
+    request.setArguments(arguments);
+    return sendRequest(request) instanceof VariablesResponse response && response.isSuccess()
+           ? response.getBody().getVariables() : List.of();
+  }
+
   /**
    * The calls on the stopped line the user can choose to step into (empty when
-   * running, no frames, or the adapter can't resolve any callee).
+   * running, no frames, or the adapter cannot resolve any callee) - DAP
+   * stepInTargets, for backends whose adapter reports targets.
    */
-  List<StepInTarget> requestStepInTargets() {
+  public List<StepInTarget> requestStepInTargets() {
     int frameId = topFrameId;
     if (frameId < 0) {
       return List.of();
@@ -570,29 +624,29 @@ public class HashLinkDebugProcess extends XDebugProcess {
            ? response.getBody().getTargets() : List.of();
   }
 
-  List<Variable> requestVariables(int variablesReference) {
-    VariablesRequest request = new VariablesRequest();
-    VariablesArguments arguments = new VariablesArguments();
-    arguments.setVariablesReference(variablesReference);
+  /** Smart step into: enter the specific call chosen from the step-in targets. */
+  public void stepIntoTarget(int targetId) {
+    StepInRequest request = new StepInRequest();
+    StepInArguments arguments = new StepInArguments();
+    arguments.setThreadId(currentThreadId);
+    arguments.setTargetId(targetId);
     request.setArguments(arguments);
-    return sendRequest(request) instanceof VariablesResponse response && response.isSuccess()
-           ? response.getBody().getVariables() : List.of();
+    onRequestThread(() -> sendRequest(request));
   }
 
-  /** Reloads the Registers tab (after a value write; register rows may have changed). */
-  void refreshRegistersTab() {
-    HashLinkRegistersPanel panel = registersPanel;
-    if (panel != null) {
-      panel.refresh();
-    }
+  /** The backend driving this session (for same-package collaborators). */
+  DapBackend backend() {
+    return backend;
   }
 
   /**
-   * Sets the named child of a container reference to `value` (a literal or
-   * another variable path). Returns the new rendered value; throws with the
-   * adapter's message on failure (invalid type, allocation needed, ...).
+   * Sets the named child of a container reference to `value`. Returns the
+   * variable's NEW state (value, type, variablesReference) — the caller must
+   * adopt ALL of it: assigning a container value creates a fresh reference,
+   * and keeping the old one shows the old children after the edit. Throws
+   * with the server's message on failure.
    */
-  String requestSetVariable(int containerReference, String name, String value) {
+  SetVariableResponseBody requestSetVariable(int containerReference, String name, String value) {
     SetVariableRequest request = new SetVariableRequest();
     SetVariableArguments arguments = new SetVariableArguments();
     arguments.setVariablesReference(containerReference);
@@ -600,11 +654,11 @@ public class HashLinkDebugProcess extends XDebugProcess {
     arguments.setValue(value);
     request.setArguments(arguments);
     Response response = sendRequest(request);
-    if (response instanceof SetVariableResponse ok && response.isSuccess()) {
-      return ok.getBody() != null ? ok.getBody().getValue() : value;
+    if (response instanceof SetVariableResponse ok && response.isSuccess() && ok.getBody() != null) {
+      return ok.getBody();
     }
     throw new IllegalStateException(response != null && response.getMessage() != null
-                                    ? response.getMessage() : "the adapter rejected the change");
+                                    ? response.getMessage() : "the debugger rejected the change");
   }
 
   // --- XDebugProcess wiring ---
@@ -620,14 +674,9 @@ public class HashLinkDebugProcess extends XDebugProcess {
   }
 
   @Override
-  public XSmartStepIntoHandler<?> getSmartStepIntoHandler() {
-    return new HashLinkSmartStepIntoHandler(this);
-  }
-
-  @Override
   public XBreakpointHandler<?> @NotNull [] getBreakpointHandlers() {
-    return new XBreakpointHandler<?>[]{
-      new XBreakpointHandler<XLineBreakpoint<XBreakpointProperties>>(HaxeBreakpointType.class) {
+    XBreakpointHandler<XLineBreakpoint<XBreakpointProperties>> lineHandler =
+      new XBreakpointHandler<>(HaxeBreakpointType.class) {
         @Override
         public void registerBreakpoint(@NotNull XLineBreakpoint<XBreakpointProperties> breakpoint) {
           breakpoints.register(breakpoint);
@@ -637,7 +686,12 @@ public class HashLinkDebugProcess extends XDebugProcess {
         public void unregisterBreakpoint(@NotNull XLineBreakpoint<XBreakpointProperties> breakpoint, boolean temporary) {
           breakpoints.unregister(breakpoint);
         }
-      },
+      };
+    if (!backend.supportsExceptionFilters()) {
+      return new XBreakpointHandler<?>[]{lineHandler};
+    }
+    return new XBreakpointHandler<?>[]{
+      lineHandler,
       // the single shared Haxe exception category: any change (a toggle, a
       // Notifications checkbox, a per-class add) recomputes the filters
       new XBreakpointHandler<XBreakpoint<HaxeExceptionBreakpointProperties>>(HaxeExceptionBreakpointType.class) {
@@ -654,47 +708,18 @@ public class HashLinkDebugProcess extends XDebugProcess {
     };
   }
 
-  // Recomputed whenever any exception breakpoint toggles (live path — posted to
-  // the request thread). See exceptionFiltersRequest for how the union is built.
+  // Recomputed whenever an exception breakpoint toggles (live path — posted to
+  // the request thread). See exceptionFiltersRequest for how the set is built.
   private void updateExceptionFilters() {
     onRequestThread(() -> sendRequest(exceptionFiltersRequest()));
   }
 
-  // The Variables view's settings (gear) menu gets the toString-label toggle.
-  @Override
-  public void registerAdditionalActions(@NotNull DefaultActionGroup leftToolbar,
-                                        @NotNull DefaultActionGroup topToolbar,
-                                        @NotNull DefaultActionGroup settings) {
-    super.registerAdditionalActions(leftToolbar, topToolbar, settings);
-    settings.add(new HaxeToStringRenderToggleAction(getSession(), this::pushToStringRendering));
-  }
-
-  // Live toggle: tell the adapter, then rebuild the views so the CURRENT
-  // stop's variables re-render (no restart needed). The adapter currently
-  // only stores the flag — labels stay class names until the
-  // hl_dyn_call_safe rendering lands. Public: the settings page pushes to
-  // every running session on apply.
-  public void pushToStringRendering(boolean enabled) {
-    onRequestThread(() -> {
-      sendRequest(SetToStringRenderingRequest.of(enabled));
-      getSession().rebuildViews();
-    });
-  }
-
-  // This adapter's exception-filter vocabulary (must match the bundled
-  // hl-debug-adapter's ExceptionController):
-  /** Stop on every throw, caught or not. */
-  private static final String FILTER_ANY_THROW = "all";
-  /** Stop when no live try will handle the throw. */
-  private static final String FILTER_UNCAUGHT = "uncaught";
-  /** Stop on VM-raised errors: null access, out-of-bounds, cast, ... */
-  private static final String FILTER_CRITICAL_ERROR = "vm";
-
-  // The Notifications checkboxes mapped onto THIS adapter's filter vocabulary;
+  // The Notifications checkboxes mapped onto THIS backend's filter vocabulary;
   // see HaxeExceptionBreakpointType.buildFiltersRequest for how the set is built.
   private SetExceptionBreakpointsRequest exceptionFiltersRequest() {
     return HaxeExceptionBreakpointType.buildFiltersRequest(
-      getSession().getProject(), FILTER_ANY_THROW, FILTER_UNCAUGHT, FILTER_CRITICAL_ERROR);
+      getSession().getProject(), backend.anyThrowFilterId(), backend.uncaughtFilterId(),
+      backend.criticalFilterId());
   }
 
   private static Thread daemon(Runnable work, String name) {

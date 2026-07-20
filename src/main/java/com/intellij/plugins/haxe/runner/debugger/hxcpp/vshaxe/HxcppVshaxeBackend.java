@@ -1,4 +1,6 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe;
+
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.adapter.HxcppDebugAdapter;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
@@ -15,7 +17,7 @@ import java.net.Socket;
  * conversation runs over a loopback socket pair created at connect time, so
  * the IDE side is exactly a DAP client.
  */
-public class HxcppVshaxeBackend implements HxcppDapBackend {
+public class HxcppVshaxeBackend implements DapBackend {
   private final HxcppDebugAdapter adapter;
   private volatile ServerSocket loopback;
 
@@ -54,9 +56,10 @@ public class HxcppVshaxeBackend implements HxcppDapBackend {
 
   @Override
   public String startupHint() {
-    return "Check that it was compiled with -debug and -lib hxcpp-debug-server, and that no previous\n"
-           + "instance of the program is still running (a leftover instance blocks the debug port and\n"
-           + "makes new ones crash on startup).";
+    return """
+      Check that it was compiled with -debug and -lib hxcpp-debug-server, and that no previous
+      instance of the program is still running (a leftover instance blocks the debug port and
+      makes new ones crash on startup).""";
   }
 
   @Override

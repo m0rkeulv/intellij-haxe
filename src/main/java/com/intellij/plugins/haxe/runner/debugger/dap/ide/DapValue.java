@@ -1,9 +1,11 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerValue;
 import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.VariableKind;
+import javax.swing.Icon;
 import com.intellij.xdebugger.XExpression;
 import com.intellij.xdebugger.frame.XCompositeNode;
 import com.intellij.xdebugger.frame.XValueChildrenList;
@@ -21,8 +23,8 @@ import org.jetbrains.annotations.Nullable;
  * reference, through the server's setVariable.
  * Evaluate-prefill and Jump to Source come from {@link HaxeDebuggerValue}.
  */
-final class HxcppValue extends HaxeDebuggerValue {
-  private final HxcppDebugProcess process;
+final class DapValue extends HaxeDebuggerValue {
+  private final DapDebugProcess process;
   private final Variable variable;
   private final int containerReference;
 
@@ -31,11 +33,11 @@ final class HxcppValue extends HaxeDebuggerValue {
    * @param evaluationPath this node's access-path expression, or null when it is
    *                       not expressible (see {@link EvaluationPath}).
    */
-  HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference, @Nullable String evaluationPath) {
+  DapValue(DapDebugProcess process, Variable variable, int containerReference, @Nullable String evaluationPath) {
     this(process, variable, containerReference, evaluationPath, null);
   }
 
-  HxcppValue(HxcppDebugProcess process, Variable variable, int containerReference,
+  DapValue(DapDebugProcess process, Variable variable, int containerReference,
              @Nullable String evaluationPath, @Nullable String containerTypeName) {
     super(variable.getName() != null ? variable.getName() : "?",
           process.getSession(), evaluationPath, containerTypeName);
@@ -48,9 +50,20 @@ final class HxcppValue extends HaxeDebuggerValue {
   public void computePresentation(@NotNull XValueNode node, @NotNull XValuePlace place) {
     boolean expandable = variable.getVariablesReference() > 0;
     String value = variable.getValue() != null ? variable.getValue() : "";
-    node.setPresentation(AllIcons.Debugger.Value,
+    node.setPresentation(iconFor(variable.getKind()),
                          new XRegularValuePresentation(value, variable.getType()),
                          expandable);
+  }
+
+  /** Maps the server's classification to a node icon; a plain value otherwise. */
+  private static Icon iconFor(VariableKind kind) {
+    return switch (kind) {
+      case ARGUMENT -> AllIcons.Nodes.Parameter;
+      case LOCAL -> AllIcons.Nodes.Variable;
+      case STATIC -> AllIcons.Nodes.Static;
+      case FIELD -> AllIcons.Nodes.Field;
+      case UNSPECIFIED -> AllIcons.Debugger.Value;
+    };
   }
 
   @Override
@@ -63,7 +76,7 @@ final class HxcppValue extends HaxeDebuggerValue {
     process.onRequestThread(() -> {
       XValueChildrenList children = new XValueChildrenList();
       for (Variable child : process.requestVariables(reference)) {
-        children.add(new HxcppValue(process, child, reference,
+        children.add(new DapValue(process, child, reference,
                                     EvaluationPath.child(evaluationPath(), child.getName()),
                                     variable.getType()));
       }
@@ -102,6 +115,7 @@ final class HxcppValue extends HaxeDebuggerValue {
               variable.setType(updated.getType());
             }
             variable.setVariablesReference(updated.getVariablesReference());
+            process.backend().afterSetVariable(process);
             callback.valueModified();
           } catch (RuntimeException e) {
             callback.errorOccurred(e.getMessage() != null ? e.getMessage() : "Could not set value");

@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hashlink;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.editor.markup.GutterIconRenderer;
@@ -13,19 +13,18 @@ import org.jetbrains.annotations.Nullable;
 /**
  * One thread's call stack. The active (stopped) thread is built eagerly from the
  * frames already fetched at the stop; other threads compute their frames lazily
- * (a stackTrace request for that thread) only if the user selects them. All
- * threads are frozen at the stop, so any thread's stack is walkable.
+ * (a stackTrace request for that thread) only if the user selects them.
  */
-final class HashLinkExecutionStack extends XExecutionStack {
-  private final HashLinkDebugProcess process;
+final class DapExecutionStack extends XExecutionStack {
+  private final DapDebugProcess process;
   private final int threadId;
-  private final @Nullable List<HashLinkStackFrame> eagerFrames;
+  private final @Nullable List<DapStackFrame> eagerFrames;
   // non-null when this thread stopped on a thrown exception: the value's text,
   // used for the gutter marker + tooltip at the throw line
   private final @Nullable String exceptionText;
 
-  HashLinkExecutionStack(HashLinkDebugProcess process, int threadId, String displayName,
-                         @Nullable List<StackFrame> activeFrames, @Nullable String exceptionText) {
+  DapExecutionStack(DapDebugProcess process, int threadId, String displayName,
+                      @Nullable List<StackFrame> activeFrames, @Nullable String exceptionText) {
     super(displayName, AllIcons.Debugger.ThreadCurrent);
     this.process = process;
     this.threadId = threadId;
@@ -34,8 +33,7 @@ final class HashLinkExecutionStack extends XExecutionStack {
   }
 
   // When stopped on an exception, mark the throw line in the gutter with the
-  // exception glyph (tooltip = the thrown value); otherwise the default (null =
-  // just the execution-line highlight).
+  // exception glyph (tooltip = the thrown value); otherwise the default.
   @Override
   public @Nullable GutterIconRenderer getExecutionLineIconRenderer() {
     return exceptionText == null ? null : new ExceptionGutterIconRenderer(exceptionText);
@@ -69,8 +67,8 @@ final class HashLinkExecutionStack extends XExecutionStack {
     }
   }
 
-  private List<HashLinkStackFrame> toFrames(List<StackFrame> dapFrames) {
-    return dapFrames.stream().map(frame -> new HashLinkStackFrame(process, frame)).toList();
+  private List<DapStackFrame> toFrames(List<StackFrame> dapFrames) {
+    return dapFrames.stream().map(frame -> new DapStackFrame(process, frame)).toList();
   }
 
   @Override
@@ -87,19 +85,19 @@ final class HashLinkExecutionStack extends XExecutionStack {
     }
     // a non-active thread the user selected: fetch its stack off the EDT
     process.onRequestThread(() -> {
-      List<HashLinkStackFrame> frames = toFrames(process.requestStackTrace(threadId));
+      List<DapStackFrame> frames = toFrames(process.requestStackTrace(threadId));
       addFrom(frames, firstFrameIndex, container);
     }, () -> container.addStackFrames(List.of(), true));
   }
 
-  private static void addFrom(List<HashLinkStackFrame> frames, int firstFrameIndex,
+  private static void addFrom(List<DapStackFrame> frames, int firstFrameIndex,
                               XStackFrameContainer container) {
     if (firstFrameIndex <= frames.size()) {
-      List<HashLinkStackFrame> visible = frames.subList(firstFrameIndex, frames.size());
+      List<DapStackFrame> visible = frames.subList(firstFrameIndex, frames.size());
       // resolve source positions HERE (computeStackFrames contract: background
       // thread), so selecting any frame in the panel only reads the cache and
       // never runs the resolver's index lookups on the EDT
-      for (HashLinkStackFrame frame : visible) {
+      for (DapStackFrame frame : visible) {
         frame.getSourcePosition();
       }
       container.addStackFrames(visible, true);

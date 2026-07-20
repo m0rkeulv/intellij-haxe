@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Breakpoint;
@@ -27,8 +27,8 @@ import java.util.Map;
  * Conditions are passed through as written — the hxcpp-debug-server evaluates
  * them with its own expression interpreter at each hit.
  */
-final class HxcppBreakpointManager {
-  private final HxcppDebugProcess process;
+final class DapBreakpointManager {
+  private final DapDebugProcess process;
   private final Map<String, LinkedHashSet<XLineBreakpoint<XBreakpointProperties>>> byFile = new LinkedHashMap<>();
   private boolean live = false;
   // A transient "run to cursor" line breakpoint (file path + 1-based line): appended
@@ -36,7 +36,7 @@ final class HxcppBreakpointManager {
   private String runToPath;
   private int runToLine = -1;
 
-  HxcppBreakpointManager(HxcppDebugProcess process) {
+  DapBreakpointManager(DapDebugProcess process) {
     this.process = process;
   }
 
@@ -126,7 +126,14 @@ final class HxcppBreakpointManager {
     for (XLineBreakpoint<XBreakpointProperties> breakpoint : ordered) {
       SourceBreakpoint sb = new SourceBreakpoint();
       sb.setLine(breakpoint.getLine() + 1); // DAP lines are 1-based
-      sb.setCondition(conditionOf(breakpoint));
+      // the IDE's "Condition" field, evaluated by the server at each hit -
+      // qualified like watch expressions (against the breakpoint's file)
+      String condition = conditionOf(breakpoint);
+      if (condition != null) {
+        condition = process.backend().qualifyExpression(
+          process.getSession().getProject(), breakpoint.getSourcePosition(), condition);
+      }
+      sb.setCondition(condition);
       requested.add(sb);
     }
     if (appendRunTo) {

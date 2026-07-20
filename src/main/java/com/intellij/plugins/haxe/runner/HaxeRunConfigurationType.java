@@ -24,7 +24,7 @@ import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationFactory;
-import com.intellij.plugins.haxe.runner.debugger.hxcpp.HxcppConfigurationFactory;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.HxcppVshaxeConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpConfigurationFactory;
 import com.intellij.util.containers.ContainerUtil;
@@ -59,7 +59,7 @@ public class HaxeRunConfigurationType implements ConfigurationType {
     factories = new ConfigurationFactory[]{
       legacyFactory, // first: pre-group configurations saved without a factory name resolve to it
       new HashLinkConfigurationFactory(this),
-      new HxcppConfigurationFactory(this),
+      new HxcppVshaxeConfigurationFactory(this),
       new HxcppIntellijConfigurationFactory(this),
       new InterpConfigurationFactory(this),
     };

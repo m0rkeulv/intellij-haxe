@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger.hxcpp;
+package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ReadAction;
@@ -27,7 +27,8 @@ import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
 
 /**
- * Smart step into for HXCPP: on a line with several calls (chained
+ * Smart step into for DAP backends with IDE-resolved targets: on a line
+ * with several calls (chained
  * {@code a().b()} or nested {@code a(b())}), lists them so the user picks
  * which one to enter. Both the dedicated action (Shift+F7) and the plain Step
  * Into (F7, via {@link #computeStepIntoVariants}) show the chooser; F7 steps
@@ -48,10 +49,10 @@ import org.jetbrains.concurrency.Promise;
  * the DECLARED class, so entering an override called through a base-typed
  * reference lands as a step over instead.
  */
-class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepIntoHandler.Variant> {
-  private final HxcppDebugProcess process;
+class DapSmartStepIntoHandler extends XSmartStepIntoHandler<DapSmartStepIntoHandler.Variant> {
+  private final DapDebugProcess process;
 
-  HxcppSmartStepIntoHandler(HxcppDebugProcess process) {
+  DapSmartStepIntoHandler(DapDebugProcess process) {
     this.process = process;
   }
 
@@ -72,7 +73,7 @@ class HxcppSmartStepIntoHandler extends XSmartStepIntoHandler<HxcppSmartStepInto
 
   @Override
   public @NotNull List<Variant> computeSmartStepVariants(@NotNull XSourcePosition position) {
-    return ReadAction.compute(() -> resolveVariants(position));
+    return ReadAction.nonBlocking(() -> resolveVariants(position)).executeSynchronously();
   }
 
   // The PLAIN Step Into action (F7) consults this — the base implementation

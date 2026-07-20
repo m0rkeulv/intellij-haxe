@@ -3,26 +3,24 @@ package com.intellij.plugins.haxe.runner.debugger.hashlink;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.ConfigurationFactory;
-import com.intellij.execution.configurations.ModuleBasedConfiguration;
+import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
-import com.intellij.execution.configurations.RunConfigurationModule;
 import com.intellij.execution.configurations.RunProfileState;
 import com.intellij.execution.configurations.RuntimeConfigurationError;
 import com.intellij.execution.configurations.RuntimeConfigurationException;
 import com.intellij.execution.configurations.RuntimeConfigurationWarning;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collection;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -33,7 +31,7 @@ import org.jetbrains.annotations.Nullable;
  * .hl path is left empty it is auto-detected from the module's build
  * ({@code -hl <out>.hl} in the hxml or compiler arguments).
  */
-public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfigurationModule, Element> {
+public class HashLinkRunConfiguration extends DapRunConfigurationBase {
   private static final String HL_FILE = "hlFile";
   private static final String WORKING_DIRECTORY = "workingDirectory";
   private static final String USE_CUSTOM_HL_BINARY = "useCustomHlBinary";
@@ -47,7 +45,7 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
   private String customHlBinaryPath = "";
 
   public HashLinkRunConfiguration(String name, Project project, ConfigurationFactory factory) {
-    super(name, new RunConfigurationModule(project), factory);
+    super(name, project, factory);
   }
 
   // --- settings ---
@@ -87,11 +85,6 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
   // --- ModuleBasedConfiguration ---
 
   @Override
-  public Collection<Module> getValidModules() {
-    return Arrays.asList(ModuleManager.getInstance(getProject()).getModules());
-  }
-
-  @Override
   public @NotNull SettingsEditor<? extends RunConfiguration> getConfigurationEditor() {
     return new HashLinkRunConfigurationEditor(getProject());
   }
@@ -99,12 +92,6 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
   @Override
   public void onNewConfigurationCreated() {
     super.onNewConfigurationCreated();
-    if (getConfigurationModule().getModule() == null) {
-      Module[] modules = ModuleManager.getInstance(getProject()).getModules();
-      if (modules.length > 0) {
-        setModule(modules[0]);
-      }
-    }
     // convenience: prefill the .hl from the module's build when detectable
     Module module = getConfigurationModule().getModule();
     if (module != null && hlFilePath.isBlank()) {
@@ -138,13 +125,21 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
     }
   }
 
+  // Plain Run: hl <program.hl>, output in the console. Default working
+  // directory is the program's directory so relative resource loading behaves
+  // like a manual launch.
   @Override
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
     Module module = requireModule();
-    return new HashLinkRunningState(env, module,
-                                    resolveHlExecutable(module),
-                                    resolveProgram(module),
-                                    resolveWorkingDirectory(module));
+    Path hlExecutable = resolveHlExecutable(module);
+    Path hlProgram = resolveProgram(module);
+    Path workingDir = resolveWorkingDirectory(module);
+    Path workDir = workingDir != null ? workingDir : hlProgram.getParent();
+    GeneralCommandLine commandLine = new GeneralCommandLine()
+      .withExePath(hlExecutable.toString())
+      .withParameters(hlProgram.toString())
+      .withWorkDirectory(workDir != null ? workDir.toString() : null);
+    return new DapCommandLineRunningState(env, getProject(), commandLine);
   }
 
   /**
@@ -165,14 +160,6 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
   }
 
   // --- program resolution ---
-
-  Module requireModule() throws ExecutionException {
-    Module module = getConfigurationModule().getModule();
-    if (module == null) {
-      throw new ExecutionException(HaxeBundle.message("no.module.for.run.configuration", getName()));
-    }
-    return module;
-  }
 
   /** The .hl to execute: the explicit setting, else the build-detected output. */
   Path resolveProgram(Module module) throws ExecutionException {
@@ -214,15 +201,10 @@ public class HashLinkRunConfiguration extends ModuleBasedConfiguration<RunConfig
 
   @Override
   public void writeExternal(@NotNull Element element) throws WriteExternalException {
-    super.writeExternal(element);
-    writeModule(element);
+    super.writeExternal(element); // also serializes the module
     JDOMExternalizerUtil.writeField(element, HL_FILE, hlFilePath);
     JDOMExternalizerUtil.writeField(element, WORKING_DIRECTORY, workingDirectory);
     JDOMExternalizerUtil.writeField(element, USE_CUSTOM_HL_BINARY, String.valueOf(useCustomHlBinary));
     JDOMExternalizerUtil.writeField(element, CUSTOM_HL_BINARY, customHlBinaryPath);
-  }
-
-  private static String orEmpty(@Nullable String value) {
-    return value == null ? "" : value;
   }
 }
