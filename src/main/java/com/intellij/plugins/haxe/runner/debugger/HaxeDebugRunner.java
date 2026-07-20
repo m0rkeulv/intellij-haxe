@@ -32,7 +32,6 @@ import com.intellij.execution.runners.GenericProgramRunner;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.icons.AllIcons;
-import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.extensions.PluginId;
@@ -188,7 +187,7 @@ public class HaxeDebugRunner extends GenericProgramRunner<RunnerSettings> {
         if (!settings.isUseOpenFLToBuild()) {
           flashFileToDebug = HaxeCompilerUtil.calculateCompilerOutput(module);
         } else {
-          HXMLProjectModel lime = LimeUtil.getLimeProjectModel(module, true);
+          HXMLProjectModel lime = LimeUtil.getLimeProjectModelWithProgress(module, true);
           flashFileToDebug = HaxeFileUtil.joinPath(module.getProject().getBasePath(), lime.getSwfOutputFileName());
         }
       }
@@ -212,14 +211,14 @@ public class HaxeDebugRunner extends GenericProgramRunner<RunnerSettings> {
                                         final Executor executor,
                                         final String launchPath)
     throws ExecutionException {
-    final IdeaPluginDescriptor plugin = PluginManagerCore.getPlugin(PluginId.getId("com.intellij.flex"));
-    if (plugin == null) {
+    final PluginId flexPluginId = PluginId.getId("com.intellij.flex");
+    if (!PluginManagerCore.isLoaded(flexPluginId)) {
+      if (PluginManagerCore.isDisabled(flexPluginId)) {
+        throw new ExecutionException
+          (HaxeBundle.message("enable.flex.plugin"));
+      }
       throw new ExecutionException
         (HaxeBundle.message("install.flex.plugin"));
-    }
-    if (!plugin.isEnabled()) {
-      throw new ExecutionException
-        (HaxeBundle.message("enable.flex.plugin"));
     }
 
     String flexSdkName = settings.getFlexSdkName();

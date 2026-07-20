@@ -19,12 +19,16 @@
 package org.jetbrains.jps.haxe.build;
 
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeCommonBundle;
+import com.intellij.plugins.haxe.HaxeCompilerBundle;
+import com.intellij.plugins.haxe.compilation.HaxeCompilerMessage;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkAdditionalDataBase;
 import com.intellij.plugins.haxe.module.HaxeModuleSettingsBase;
+import com.intellij.plugins.haxe.util.CompilationContext;
 import com.intellij.plugins.haxe.util.HaxeCommonCompilerUtil;
+import com.intellij.plugins.haxe.util.HaxeProcessTreeUtil;
 import com.intellij.util.Function;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NonNls;
@@ -34,6 +38,7 @@ import org.jetbrains.jps.ModuleChunk;
 import org.jetbrains.jps.builders.DirtyFilesHolder;
 import org.jetbrains.jps.builders.java.JavaSourceRootDescriptor;
 import org.jetbrains.jps.haxe.model.module.JpsHaxeModuleSettings;
+import org.jetbrains.jps.haxe.model.module.JpsHaxeModuleType;
 import org.jetbrains.jps.haxe.model.sdk.JpsHaxeSdkAdditionalData;
 import org.jetbrains.jps.haxe.model.sdk.JpsHaxeSdkType;
 import org.jetbrains.jps.haxe.util.JpsHaxeUtil;
@@ -81,13 +86,14 @@ public class HaxeModuleLevelBuilder extends ModuleLevelBuilder {
     throws ProjectBuildException, IOException {
     boolean doneSomething = false;
 
-    // Don't do this.  HaxeCompiler already does it, and doing it here just
-    // does it again.
-//    for (final JpsModule module : chunk.getModules()) {
-//      if (module.getModuleType() == JpsHaxeModuleType.INSTANCE) {
-//        doneSomething |= processModule(context, dirtyFilesHolder, module);
-//      }
-//    }
+    for (final JpsModule module : chunk.getModules()) {
+      if (module.getModuleType() == JpsHaxeModuleType.INSTANCE) {
+        doneSomething |= processModule(context, dirtyFilesHolder, module);
+        if (context.getCancelStatus().isCanceled()) {
+          return ExitCode.ABORT;
+        }
+      }
+    }
 
     return doneSomething ? ExitCode.OK : ExitCode.NOTHING_DONE;
   }
@@ -121,7 +127,7 @@ public class HaxeModuleLevelBuilder extends ModuleLevelBuilder {
 
     context.processMessage(new ProgressMessage(HaxeCommonBundle.message("haxe.module.compilation.progress.message", module.getName())));
 
-    boolean compiled = HaxeCommonCompilerUtil.compile(new HaxeCommonCompilerUtil.CompilationContext() {
+    boolean compiled = HaxeCommonCompilerUtil.compile(new CompilationContext() {
       private String myErrorRoot;
 
       @Override
@@ -225,7 +231,7 @@ public class HaxeModuleLevelBuilder extends ModuleLevelBuilder {
         if (projectExtension != null) {
           final String url = projectExtension.getOutputUrl();
           if (url != null) {
-            return VfsUtilCore.urlToPath(url);
+            return JpsPathUtil.urlToPath(url);
           }
         }
         return "";
@@ -243,18 +249,22 @@ public class HaxeModuleLevelBuilder extends ModuleLevelBuilder {
 
       @Override
       public void handleOutput(String[] lines) {
-        /*for (String error : lines) {
-          final HaxeCompilerError compilerError = HaxeCompilerError.create(StringUtil.notNullize(getErrorRoot()), error);
+        for (String line : lines) {
+          final HaxeCompilerMessage compilerMessage =
+            HaxeCompilerMessage.create(StringUtil.notNullize(getErrorRoot()), line);
+          if (compilerMessage == null) {
+            continue;
+          }
           context.processMessage(new CompilerMessage(
             BUILDER_NAME,
-            BuildMessage.Kind.WARNING,
-            compilerError != null ? compilerError.getErrorMessage() : error,
-            compilerError != null ? compilerError.getPath() : null,
+            toBuildMessageKind(compilerMessage.getCategory()),
+            compilerMessage.getMessage(),
+            compilerMessage.getPath(),
             -1L, -1L, -1L,
-            compilerError != null ? (long)compilerError.getLine() : -1L,
-            compilerError != null ? (long)compilerError.getColumn() : -1L
+            compilerMessage.getLine(),
+            compilerMessage.getColumn()
           ));
-        }*/
+        }
       }
 
       @Override
@@ -272,12 +282,33 @@ public class HaxeModuleLevelBuilder extends ModuleLevelBuilder {
         final File baseDirectory = JpsModelSerializationDataService.getBaseDirectory(module);
         return baseDirectory != null ? baseDirectory.getPath() : null;
       }
+
+      @Override
+      public boolean isCancelled() {
+        return context.getCancelStatus().isCanceled();
+      }
+
+      @Override
+      public void handleUnresponsiveProcess(@NotNull Process process) {
+        // no UI to ask the user from the external build process; kill the process tree outright
+        infoHandler(HaxeCompilerBundle.message("compiler.cancellation.killing.process"));
+        HaxeProcessTreeUtil.killProcessTree(process);
+      }
+
     });
 
-    if (!compiled) {
+    if (!compiled && !context.getCancelStatus().isCanceled()) {
       context.processMessage(new CompilerMessage(BUILDER_NAME, BuildMessage.Kind.ERROR, "compilation failed"));
     }
 
     return compiled;
+  }
+
+  private static BuildMessage.Kind toBuildMessageKind(HaxeCompilerMessage.Category category) {
+    return switch (category) {
+      case ERROR -> BuildMessage.Kind.ERROR;
+      case WARNING -> BuildMessage.Kind.WARNING;
+      default -> BuildMessage.Kind.INFO;
+    };
   }
 }

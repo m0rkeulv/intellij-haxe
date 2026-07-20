@@ -25,12 +25,12 @@ group = providers.gradleProperty("pluginGroup").get()
 version = providers.gradleProperty("pluginVersion").get()
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 sourceSets {
@@ -104,6 +104,7 @@ dependencies {
         plugins(providers.gradleProperty("platformPlugins").map { it.split(',') })
         bundledPlugins(providers.gradleProperty("platformBundledPlugins").map { it.split(',') })
         bundledModules(providers.gradleProperty("platformBundledModules").map { it.split(',') })
+
 
         // TODO upgrade to JUnit5
         testFramework(TestFrameworkType.Platform)
@@ -308,11 +309,17 @@ tasks.register<GenerateParserTask>("generateHaxeParser") {
     sourceFile.set(File("src/main/java/com/intellij/plugins/haxe/lang/parser/haxe.bnf"))
     targetRootOutputDir.set(File("src/main/gen"))
     purgeOldFiles = false
+
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/lang/parser/HaxeParser.java")
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/lang/lexer/HaxeTokenTypes.java")
+    outputs.dir("src/main/gen/com/intellij/plugins/haxe/lang/psi")
+
 }
 tasks.register<GenerateLexerTask>("generateHaxeLexer") {
     group = "lexers"
     sourceFile.set(File("src/main/java/com/intellij/plugins/haxe/lang/lexer/haxe.flex"))
-    targetRootOutputDir.set(File("src/main/gen/com/intellij/plugins/haxe/lang/lexer"))
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/lang/lexer/_HaxeLexer.java")
+    targetRootOutputDir.set(File("src/main/gen"))
     purgeOldFiles = false
 }
 
@@ -322,12 +329,17 @@ tasks.register<GenerateParserTask>("generateMetadataParser") {
     targetRootOutputDir.set(File("src/main/gen"))
     purgeOldFiles = false
 
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/metadata/parser/HaxeMetadataParser.java")
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/metadata/lexer/HaxeMetadataTokenTypes.java")
+    outputs.dir("src/main/gen/com/intellij/plugins/haxe/metadata/psi")
+
 }
 
 tasks.register<GenerateLexerTask>("generateMetadataLexer") {
     group = "lexers"
     sourceFile.set(File("src/main/java/com/intellij/plugins/haxe/metadata/lexer/metadata.flex"))
-    targetRootOutputDir.set(File("src/main/gen/com/intellij/plugins/haxe/metadata/lexer/"))
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/metadata/lexer/MetadataLexer.java")
+    targetRootOutputDir.set(File("src/main/gen"))
     purgeOldFiles = false
 }
 
@@ -337,12 +349,15 @@ tasks.register<GenerateParserTask>("generateHxmlParser") {
     sourceFile.set(File("src/main/java/com/intellij/plugins/haxe/buildsystem/hxml/parser/hxml.bnf"))
     targetRootOutputDir.set(File("src/main/gen"))
     purgeOldFiles = false
+
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/hxml/HXMLParser.java")
+    outputs.dir("src/main/gen/com/intellij/plugins/haxe/hxml/psi")
 }
 
 tasks.register<GenerateLexerTask>("generateHxmlLexer") {
     group = "lexers"
     sourceFile.set(File("src/main/java/com/intellij/plugins/haxe/buildsystem/hxml/lexer/hxml.flex"))
-    targetRootOutputDir.set(File("src/main/gen/com/intellij/plugins/haxe/hxml/lexer"))
+    outputs.file("src/main/gen/com/intellij/plugins/haxe/hxml/lexer/HXMLLexer.java")
+    targetRootOutputDir.set(File("src/main/gen"))
     purgeOldFiles = false
 }
-
