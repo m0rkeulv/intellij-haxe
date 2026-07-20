@@ -7,13 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -35,8 +29,9 @@ public final class MatrixMain {
   private final List<String> hlFilter;
   private final boolean full;
   private final boolean parallelLanes;
-  // >1 = pass -PdapTestForks to the HL lane's child builds (test classes in
-  // parallel fork JVMs). 1 = sequential, the certified default.
+  // -PdapTestForks the HL lane passes to its child builds (test classes in
+  // parallel fork JVMs); default 4, always forwarded so it is authoritative.
+  // 1 = sequential.
   private final int hlForks;
   // run start, baked into the report filename so successive runs never
   // overwrite each other's results
@@ -496,11 +491,11 @@ public final class MatrixMain {
         long cellStart = System.nanoTime();
         List<String> extra = new ArrayList<>(List.of(
           PROP_HASHLINK_BIN + hlBinary, GRADLE_NO_BUILD_CACHE, GRADLE_EXCLUDE, TASK_BUILD_ADAPTER));
-        if (hlForks > 1) {
-          // parallel test-class forks WITHIN the cell; fixture builds are
-          // excluded tasks here, so they can never overlap a running test
-          extra.add(PROP_DAP_TEST_FORKS + hlForks);
-        }
+        // the matrix's fork count is authoritative for the cell - always passed,
+        // so -PmatrixHlForks=1 runs sequentially even though the module task's
+        // own default is higher. (Fixture builds are excluded tasks here, so a
+        // parallel fork can never overlap a running test.)
+        extra.add(PROP_DAP_TEST_FORKS + hlForks);
         HL_FIXTURE_TASKS.forEach(t -> extra.addAll(List.of(GRADLE_EXCLUDE, t)));
         extra.addAll(EXCLUDE_HAXELIB);
         extra.add(GRADLE_CONTINUE);
@@ -572,7 +567,7 @@ public final class MatrixMain {
     List<String> haxeNames = !haxeDirs.isEmpty() ? names(haxeDirs)
       : cells.stream().map(Results.Cell::haxe).distinct().sorted().toList();
     List<String> hlNames = !hlDirs.isEmpty() ? names(hlDirs)
-      : cells.stream().map(Results.Cell::runtime).filter(r -> r != null).distinct().sorted().toList();
+      : cells.stream().map(Results.Cell::runtime).filter(Objects::nonNull).distinct().sorted().toList();
     // one timestamped report per run (so results stay traceable to WHEN they
     // ran) plus index.html always mirroring the newest run
     Path stamped = out.resolve("matrix-" + startedAt + ".html");
