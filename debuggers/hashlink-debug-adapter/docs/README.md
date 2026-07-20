@@ -427,6 +427,12 @@ every thread on any debug event — "suspend all" for free), so ALL threads are
 inspectable. The IDE shows every thread; selecting one walks its own stack
 and reads its own locals.
 
+> **Offset notation, used from here on**: `field @ +N` means the field lives
+> N BYTES past the start of the structure being described (so `count i32
+> @ +0` = a 32-bit int at the very start). `ptr` in an offset is the
+> DEBUGGEE's pointer size — 8 on 64-bit, 4 on 32-bit — so `@ ptr*6+8` is a
+> pointer-size-dependent offset, and `@ +ptr` means "one pointer in".
+
 - **Enumeration** (`ThreadRegistry`, port of hld `readThreads`): HL's runtime
   thread registry is at the handshake `threadsPtr` — `count` i32 @ +0, then
   an array of `hl_thread_info*` @ +ptr; per info: OS tid @ +0, a flags word @
