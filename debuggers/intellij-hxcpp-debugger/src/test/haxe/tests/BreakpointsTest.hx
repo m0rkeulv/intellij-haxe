@@ -2,6 +2,7 @@ package tests;
 
 import dap.protocol.SourceBreakpoint;
 import intellij.hxcpp.debug.breakpoints.Breakpoints;
+import intellij.hxcpp.debug.breakpoints.LineTable;
 
 class BreakpointsTest {
 	public static function run(assert:Assert):Void {
@@ -9,13 +10,15 @@ class BreakpointsTest {
 		anUnmatchedSourceIsUnverifiedNotAnError(assert);
 		reinstallReplacesTheWholeSource(assert);
 		runtimeNumberMapsBackToDapId(assert);
+		aLineWithoutCodeIsRejectedNotSnapped(assert);
+		aFileUnknownToTheTableDegradesToFileLevel(assert);
 	}
 
-	static function withFiles():{bp:Breakpoints, api:FakeDebuggerApi} {
+	static function withFiles(?lineTable:LineTable):{bp:Breakpoints, api:FakeDebuggerApi} {
 		var api = new FakeDebuggerApi();
 		api.cannedFilesFullPath = ["C:/build/src/Main.hx"];
 		api.cannedFiles = ["Main.hx"];
-		return {bp: new Breakpoints(api), api: api};
+		return {bp: new Breakpoints(api, lineTable), api: api};
 	}
 
 	static function bp(line:Int):SourceBreakpoint {
@@ -55,5 +58,25 @@ class BreakpointsTest {
 		var runtimeNumber = t.api.installedBreakpoints[0].number;
 		assert.equals(42, t.bp.idForRuntimeNumber(runtimeNumber), "runtime number resolves to the DAP id");
 		assert.equals(-1, t.bp.idForRuntimeNumber(9999), "unknown runtime number -> -1");
+	}
+
+	static function aLineWithoutCodeIsRejectedNotSnapped(assert:Assert):Void {
+		var t = withFiles(LineTable.parse("C:/build/src/Main.hx|10,20\n"));
+		var results = t.bp.setForSource("C:/build/src/Main.hx", [bp(10), bp(15)], [1, 2]);
+		assert.isTrue(results[0].verified, "code line verified");
+		assert.isTrue(results[1].verified == false, "non-code line rejected, not snapped to 20");
+		assert.equals(15, results[1].line, "the rejected result keeps the requested line");
+		assert.isTrue(results[1].message.indexOf("no executable code") >= 0, "rejection names the reason");
+		assert.equals(1, t.api.installedBreakpoints.length, "nothing installed for the rejected line");
+		assert.equals(10, t.api.installedBreakpoints[0].line, "only the code line installed");
+	}
+
+	static function aFileUnknownToTheTableDegradesToFileLevel(assert:Assert):Void {
+		// the runtime knows the file but the table does not: never reject on
+		// missing knowledge, keep the old file-level behaviour
+		var t = withFiles(LineTable.parse("C:/build/src/Other.hx|1\n"));
+		var results = t.bp.setForSource("C:/build/src/Main.hx", [bp(15)], [1]);
+		assert.isTrue(results[0].verified, "unknown-to-table file stays file-level verified");
+		assert.equals(1, t.api.installedBreakpoints.length, "and the breakpoint is installed");
 	}
 }

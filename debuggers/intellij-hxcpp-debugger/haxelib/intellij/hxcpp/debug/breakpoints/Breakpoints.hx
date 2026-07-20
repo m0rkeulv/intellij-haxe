@@ -20,18 +20,23 @@ private typedef Installed = {
 	file yields unverified results rather than an error, so the IDE shows a
 	hollow marker instead of failing.
 
-	M2 verifies at FILE level (the runtime has no line table); the macro-baked
-	line table upgrades this to line-level snapping in a follow-up. Conditions
-	are carried but not evaluated until M5.
+	Line verification is STRICT against the macro-baked LineTable: a line
+	without executable code is rejected (unverified, with a message), never
+	snapped to a nearby line — snapping would mask a stale binary (code edited
+	or commented back in without a recompile). Without a table (older lib
+	build) verification degrades to file level. Conditions are carried but not
+	evaluated until M5.
 **/
 class Breakpoints {
 	final debugger:DebuggerApi;
+	final lineTable:Null<LineTable>;
 	// sourceKey (lower-cased path) -> its installed breakpoints
 	final bySource:Map<String, Array<Installed>> = new Map();
 	var matcher:Null<FileMatcher> = null;
 
-	public function new(debugger:DebuggerApi) {
+	public function new(debugger:DebuggerApi, ?lineTable:LineTable) {
 		this.debugger = debugger;
+		this.lineTable = lineTable;
 	}
 
 	/**
@@ -42,12 +47,17 @@ class Breakpoints {
 	public function setForSource(sourcePath:String, requested:Array<SourceBreakpoint>, ids:Array<Int>):Array<Breakpoint> {
 		clearSource(sourcePath);
 		var fileKey = fileMatcher().resolve(sourcePath);
+		var knownLines = lineTable != null ? lineTable.linesFor(sourcePath) : null;
 		var installed:Array<Installed> = [];
 		var results:Array<Breakpoint> = [];
 		for (i in 0...requested.length) {
 			var line = requested[i].line;
 			if (fileKey == null) {
 				results.push({id: ids[i], verified: false, line: line, message: "no matching source file in the debuggee"});
+			} else if (knownLines != null && !LineTable.hasLine(knownLines, line)) {
+				// STRICT: reject, don't snap — a snapped breakpoint would hide
+				// that the binary no longer matches the source on this line
+				results.push({id: ids[i], verified: false, line: line, message: "no executable code at this line (stale build?)"});
 			} else {
 				var runtimeNumber = debugger.addFileLineBreakpoint(fileKey, line);
 				installed.push({id: ids[i], runtimeNumber: runtimeNumber, line: line, condition: requested[i].condition});

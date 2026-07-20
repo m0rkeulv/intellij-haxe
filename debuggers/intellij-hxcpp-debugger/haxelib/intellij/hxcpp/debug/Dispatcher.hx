@@ -5,6 +5,7 @@ import dap.protocol.requests.SetBreakpointsArguments;
 import haxe.Json;
 import intellij.hxcpp.debug.DebuggerApi;
 import intellij.hxcpp.debug.breakpoints.Breakpoints;
+import intellij.hxcpp.debug.breakpoints.LineTable;
 import intellij.hxcpp.debug.eval.Evaluator;
 import intellij.hxcpp.debug.values.Values;
 import intellij.hxcpp.debug.values.VariablesView;
@@ -119,7 +120,8 @@ class Dispatcher {
 	public function new(debugger:DebuggerApi, send:String->Void) {
 		this.debugger = debugger;
 		this.send = send;
-		this.breakpoints = new Breakpoints(debugger);
+		// the baked executable-line table, when this binary carries one
+		this.breakpoints = new Breakpoints(debugger, LineTable.fromResource());
 		this.variablesView = new VariablesView(debugger);
 		this.evaluator = new Evaluator(debugger);
 	}

@@ -149,8 +149,9 @@ final class HxcppBreakpointManager {
       if (result.isVerified()) {
         process.getSession().updateBreakpointPresentation(breakpoint, AllIcons.Debugger.Db_verified_breakpoint, null);
       } else {
-        process.getSession().updateBreakpointPresentation(breakpoint, AllIcons.Debugger.Db_invalid_breakpoint,
-                                                          "No executable code at this line");
+        // prefer the server's reason (line-table reject vs unknown file) over the generic text
+        String message = result.getMessage() != null ? result.getMessage() : "No executable code at this line";
+        process.getSession().updateBreakpointPresentation(breakpoint, AllIcons.Debugger.Db_invalid_breakpoint, message);
       }
     }
     if (appendRunTo && ordered.size() < results.size()) {

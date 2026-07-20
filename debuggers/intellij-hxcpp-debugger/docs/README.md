@@ -295,6 +295,27 @@ STEP_OVER's first same-depth event is inside the next callee (a sibling call
 frame has the same depth as the one just left). Not fixable without runtime
 changes; smart step into is the tool for navigating within such lines.
 
+## 19. Breakpoint lines are verified against a compile-time table — strictly, no snapping
+
+hxcpp keeps no queryable line table at runtime: the generated `HXLINE(n)`
+markers are executed assignments, never registered anywhere. So the runtime
+happily installs a breakpoint on a comment line and it silently never fires.
+The fix is baked at COMPILE time: `Macro.bakeLineTable` (a `Context.onGenerate`
+walk over the typed AST, after DCE — the same positions gencpp turns into
+HXLINE) collects each file's executable lines into a `haxe.Resource`;
+`LineTable` reads it back and `Breakpoints` verifies each requested line.
+
+Deliberate policy: a line without code is REJECTED (unverified, "no executable
+code at this line (stale build?)"), never snapped to the next code line.
+Snapping would mask a stale binary — code edited or commented back in without
+a recompile appears to work while stopping somewhere unexpected; the hollow
+marker surfaces the desync immediately. File resolution reuses the FileMatcher
+suffix matching (same as runtime keys), and a binary WITHOUT the resource
+(older lib build) degrades to the old file-level verification. Pinned by
+BreakpointsAndEvaluateIT.aLineWithoutCodeIsRejectedNotSnapped against a real
+compiled fixture, which also pins that the table agrees with what hxcpp
+actually instruments.
+
 ## Diagnostics
 
 Set the `HXCPP_DEBUG_LOG` env var to a file path to get a low-tech append log

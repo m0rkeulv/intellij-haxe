@@ -44,6 +44,9 @@ final class FixtureSession implements AutoCloseable {
   // fixture sources; the files say "extend at the END, never reflow").
   static final String MAIN_SOURCE = "Main.hx";
   static final int MAIN_ADD_LINE = 17;
+  // lines WITHOUT executable code, for the strict line-table verification tests
+  static final int MAIN_COMMENT_LINE = 15;
+  static final int MAIN_BLANK_LINE = 20;
   static final String EX_SOURCE = "MainEx.hx";
   static final int EX_THROW_LINE = 21;
   static final int EX_CAUGHT_NULL_LINE = 35;
@@ -164,6 +167,12 @@ final class FixtureSession implements AutoCloseable {
 
   /** Replaces the source's breakpoints; a null condition is an unconditional breakpoint. */
   void setBreakpoints(String sourceFile, int[] lines, String condition) throws IOException, InterruptedException {
+    setBreakpointsRaw(sourceFile, lines, condition);
+  }
+
+  /** Like {@link #setBreakpoints} but hands back the response, for per-breakpoint verification asserts. */
+  SetBreakpointsResponse setBreakpointsRaw(String sourceFile, int[] lines, String condition)
+    throws IOException, InterruptedException {
     SetBreakpointsRequest request = new SetBreakpointsRequest();
     SetBreakpointsArguments arguments = new SetBreakpointsArguments();
     Source source = new Source();
@@ -180,7 +189,9 @@ final class FixtureSession implements AutoCloseable {
     }
     arguments.setBreakpoints(breakpoints);
     request.setArguments(arguments);
-    assertTrue("setBreakpoints", request(request).isSuccess());
+    Response response = request(request);
+    assertTrue("setBreakpoints", response.isSuccess());
+    return (SetBreakpointsResponse)response;
   }
 
   void clearBreakpoints(String sourceFile) throws IOException, InterruptedException {

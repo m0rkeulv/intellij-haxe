@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.debugger.hxcppserver;
 
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Breakpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
@@ -37,6 +38,38 @@ public class BreakpointsAndEvaluateIT {
       List<Variable> locals = session.variables(session.localsReference(top.getId()));
       assertEquals("0", session.variable(locals, "amount").getValue());
       assertEquals("0", session.variable(locals, "current").getValue());
+      session.resume(threadId);
+    }
+  }
+
+  @Test
+  public void aLineWithoutCodeIsRejectedNotSnapped() throws Exception {
+    // Strict verification against the macro-baked line table: a comment or
+    // blank line is REJECTED (unverified + message), never snapped to the
+    // next code line — snapping would mask a stale binary. The code line in
+    // the same request must still verify AND actually fire, which pins that
+    // the baked table agrees with what hxcpp instruments (HXLINE).
+    try (FixtureSession session = FixtureSession.launchMain()) {
+      session.initialize("uncaught", "critical");
+      List<Breakpoint> results = session.setBreakpointsRaw(FixtureSession.MAIN_SOURCE,
+                                                           new int[]{FixtureSession.MAIN_COMMENT_LINE,
+                                                             FixtureSession.MAIN_ADD_LINE,
+                                                             FixtureSession.MAIN_BLANK_LINE}, null)
+        .getBody().getBreakpoints();
+      assertEquals(3, results.size());
+      assertFalse("comment line rejected", results.get(0).isVerified());
+      assertEquals("rejected result keeps the requested line",
+                   Integer.valueOf(FixtureSession.MAIN_COMMENT_LINE), results.get(0).getLine());
+      assertTrue("rejection names the reason (was: " + results.get(0).getMessage() + ")",
+                 results.get(0).getMessage() != null && results.get(0).getMessage().contains("no executable code"));
+      assertTrue("code line verified", results.get(1).isVerified());
+      assertFalse("blank line rejected", results.get(2).isVerified());
+      session.configurationDone();
+
+      StoppedEvent hit = session.awaitStopped();
+      int threadId = session.stoppedThread(hit);
+      assertEquals("the verified line really fires",
+                   FixtureSession.MAIN_ADD_LINE, session.topFrame(threadId).getLine());
       session.resume(threadId);
     }
   }
