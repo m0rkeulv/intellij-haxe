@@ -368,7 +368,6 @@ public abstract class DapIntegrationTestBase {
     assertNotNull("initialized event", client.pollEvent(TIMEOUT));
   }
 
-  /** Launches the shared fixture debuggee. */
   protected Response launch() throws Exception {
     return launch(fixtureHl.toString());
   }

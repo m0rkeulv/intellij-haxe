@@ -16,9 +16,6 @@ import haxe.io.Bytes;
 	bytes and the Eip/Esp/Rax registers.
 **/
 interface CallTrampoline {
-	/**
-		The number of arguments the trampoline supports.
-	**/
 	function maxArgs():Int;
 
 	/**

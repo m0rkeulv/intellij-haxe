@@ -417,7 +417,7 @@ class ExpressionEvaluator {
 	}
 
 	/**
-		Renders an evaluated value as a displayed VariableInfo.
+		Renders an evaluated value (displayed VariableInfo).
 	**/
 	public function renderValue(name:String, v:EvalValue):VariableInfo {
 		return switch (v) {

@@ -2,9 +2,6 @@ package com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests;
 
 import lombok.Data;
 
-/**
- * Arguments for the "stackTrace" request.
- */
 @Data
 public class StackTraceArguments {
   private int threadId;

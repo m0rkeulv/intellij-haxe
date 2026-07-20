@@ -27,12 +27,10 @@ public enum DebugErrorCode {
     this.id = id;
   }
 
-  /** The wire value ({@code Message.id}). */
   public int id() {
     return id;
   }
 
-  /** True when {@code error} carries this code. */
   public boolean matches(ErrorMessage error) {
     return error != null && error.getId() == id;
   }

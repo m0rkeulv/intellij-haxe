@@ -21,7 +21,6 @@ public final class DapFraming {
   private DapFraming() {
   }
 
-  /** Wraps a JSON payload in a DAP frame. */
   public static byte[] encode(String json) {
     byte[] body = json.getBytes(StandardCharsets.UTF_8);
     byte[] header = ("Content-Length: " + body.length).getBytes(StandardCharsets.US_ASCII);

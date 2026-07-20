@@ -14,16 +14,10 @@ import haxe.Int64;
 **/
 @:forward(high, low)
 abstract Pointer(Int64) from Int64 to Int64 {
-	/**
-		The address `delta` bytes past this one.
-	**/
 	public inline function offset(delta:Int):Pointer {
 		return Int64.add(this, Int64.ofInt(delta));
 	}
 
-	/**
-		True for the null address (0).
-	**/
 	public inline function isNull():Bool {
 		return Int64.eq(this, Int64.ofInt(0));
 	}

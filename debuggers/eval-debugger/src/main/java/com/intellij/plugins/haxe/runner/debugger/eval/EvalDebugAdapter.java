@@ -603,7 +603,6 @@ public class EvalDebugAdapter implements Closeable {
     return StepOutcome.PROGRAM_ENDED;
   }
 
-  /** How a step emulation ended: where the debuggee is and why. */
   private enum StepOutcome { STEPPED, HIT_BREAKPOINT, PROGRAM_ENDED }
 
   /** The stopped thread id, or null after sending the "not stopped" error. */

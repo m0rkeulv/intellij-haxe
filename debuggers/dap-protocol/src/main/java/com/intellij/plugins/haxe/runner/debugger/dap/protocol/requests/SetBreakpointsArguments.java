@@ -6,9 +6,6 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.SourceBreakpoint;
 import java.util.List;
 import lombok.Data;
 
-/**
- * Arguments for the "setBreakpoints" request.
- */
 @Data
 public class SetBreakpointsArguments {
   private Source source;

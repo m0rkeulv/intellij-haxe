@@ -80,9 +80,6 @@ class Breakpoints {
 		return byAddress.exists(addressKey(address));
 	}
 
-	/**
-		All installed breakpoints across every source.
-	**/
 	public function all():Array<PatchedBreakpoint> {
 		return [for (bp in byAddress) bp];
 	}

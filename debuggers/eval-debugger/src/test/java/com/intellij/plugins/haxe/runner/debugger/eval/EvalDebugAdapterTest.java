@@ -5,9 +5,6 @@ import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 
-/**
- * Unit tests for the pure translation helpers of {@link EvalDebugAdapter}.
- */
 public class EvalDebugAdapterTest {
 
   @Test

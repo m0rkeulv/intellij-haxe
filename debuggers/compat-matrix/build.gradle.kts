@@ -38,8 +38,8 @@ tasks.register<JavaExec>("debuggerCompatibilityReport") {
     (findProperty("matrixHaxe") as String?)?.let { args("--haxe=$it") }
     (findProperty("matrixHl") as String?)?.let { args("--hl=$it") }
     (findProperty("matrixResources") as String?)?.let { args("--resources=$it") }
+    (findProperty("matrixHlForks") as String?)?.let { args("--hl-forks=$it") }
     if ((findProperty("matrixFull") as String?)?.toBoolean() == true) args("--full")
     if ((findProperty("matrixParallel") as String?)?.toBoolean() == true) args("--parallel-lanes")
-    (findProperty("matrixHlForks") as String?)?.let { args("--hl-forks=$it") }
     if ((findProperty("matrixReportOnly") as String?)?.toBoolean() == true) args("--report-only")
 }

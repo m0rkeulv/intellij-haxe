@@ -110,7 +110,6 @@ public class EvalObjectThrowLiveTest {
     return dapClient.sendRequest(request, TIMEOUT);
   }
 
-  /** Initialize/launch, arm the given filters, configurationDone. */
   private void startSession(List<String> filters) throws Exception {
     InitializeRequest initialize = new InitializeRequest();
     initialize.setArguments(new InitializeRequestArguments());

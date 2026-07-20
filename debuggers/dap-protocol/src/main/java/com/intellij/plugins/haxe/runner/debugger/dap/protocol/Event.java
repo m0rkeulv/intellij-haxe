@@ -3,9 +3,6 @@ package com.intellij.plugins.haxe.runner.debugger.dap.protocol;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/**
- * An adapter-initiated event (type = "event").
- */
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class Event extends ProtocolMessage {

@@ -87,9 +87,6 @@ class RequestDispatcher {
 		handleRequest(parsed);
 	}
 
-	/**
-		Dispatches an already-parsed message.
-	**/
 	public function handleRequest(message:Dynamic):Void {
 		var seq = readInt(message, "seq");
 		var type = readString(message, "type");
