@@ -127,7 +127,7 @@ class VariablesView {
 		if (trimmed == "true") return true;
 		if (trimmed == "false") return false;
 		if (trimmed == "null") return null;
-		if (trimmed.length >= 2 && StringTools.startsWith(trimmed, "\"") && StringTools.endsWith(trimmed, "\"")) {
+		if (trimmed.length >= 2 && StringTools.startsWith(trimmed, '"') && StringTools.endsWith(trimmed, '"')) {
 			return trimmed.substr(1, trimmed.length - 2);
 		}
 		var asInt = Std.parseInt(trimmed);

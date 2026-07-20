@@ -296,7 +296,7 @@ class ExprParser {
 			expect(")");
 			return e;
 		}
-		if (c == "\"".code) {
+		if (c == '"'.code) {
 			return EString(readStringLiteral());
 		}
 		if (c >= "0".code && c <= "9".code) {
@@ -393,7 +393,7 @@ class ExprParser {
 		var buf = new StringBuf();
 		while (pos < text.length) {
 			var c = StringTools.fastCodeAt(text, pos);
-			if (c == "\"".code) {
+			if (c == '"'.code) {
 				pos++;
 				return buf.toString();
 			}
@@ -409,7 +409,7 @@ class ExprParser {
 					case "r".code: buf.addChar(13);
 					case "0".code: buf.addChar(0);
 					case "\\".code: buf.addChar("\\".code);
-					case "\"".code: buf.addChar("\"".code);
+					case '"'.code: buf.addChar('"'.code);
 					default: throw new DebugError('Unknown string escape "\\' + String.fromCharCode(esc) + '"');
 				}
 				pos++;

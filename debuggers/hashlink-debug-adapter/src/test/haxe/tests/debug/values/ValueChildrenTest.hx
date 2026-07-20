@@ -106,7 +106,7 @@ class ValueChildrenTest {
 		var arrayObjType = HObj({name: "hl.types.ArrayObj", tsuper: null, fields: [], proto: [], globalValue: null, bindings: []});
 		var vars = children(api, name -> name == "String" ? stringType : null).of(addr(0x1000), arrayObjType);
 		assert.equals(1, vars.length, "one live element (varray size is larger)");
-		assert.equals("\"ok\"", vars[0].value, "string element decoded via runtime element type");
+		assert.equals('"ok"', vars[0].value, "string element decoded via runtime element type");
 	}
 
 	static function capsHugeArrays(assert:Assert):Void {

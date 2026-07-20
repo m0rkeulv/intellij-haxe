@@ -117,7 +117,7 @@ class LineBreakpointController {
 	}
 
 	function emitConditionNote(bp:PatchedBreakpoint, reason:String):Void {
-		session.emit(EvOutput("console", "[debugger] breakpoint condition \"" + bp.condition + "\" could not be evaluated ("
-			+ reason + "); stopping." + String.fromCharCode(10)));
+		session.emit(EvOutput("console", '[debugger] breakpoint condition "${bp.condition}" could not be evaluated ($reason); stopping.'
+			+ String.fromCharCode(10)));
 	}
 }

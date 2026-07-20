@@ -24,14 +24,14 @@ class FrameCodecTest {
 	}
 
 	static function roundTripAscii(assert:Assert):Void {
-		var payload = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\"}";
+		var payload = '{"seq":1,"type":"request","command":"initialize"}';
 		var reader = new MessageReader(new BytesInput(FrameCodec.encode(payload)));
 		assert.equals(payload, reader.read(), "ascii round trip");
 	}
 
 	static function roundTripMultiByteUtf8(assert:Assert):Void {
 		// content length must count UTF-8 bytes, not characters
-		var payload = "{\"name\":\"æøå\"}";
+		var payload = '{"name":"æøå"}';
 		var frame = FrameCodec.encode(payload);
 		var headerText = frame.getString(0, frame.length);
 		var expectedByteLength = Bytes.ofString(payload).length;
@@ -42,8 +42,8 @@ class FrameCodecTest {
 	}
 
 	static function multipleFramesInOneStream(assert:Assert):Void {
-		var first = "{\"seq\":1}";
-		var second = "{\"seq\":2}";
+		var first = '{"seq":1}';
+		var second = '{"seq":2}';
 		var buf = new BytesBuffer();
 		var firstFrame = FrameCodec.encode(first);
 		var secondFrame = FrameCodec.encode(second);

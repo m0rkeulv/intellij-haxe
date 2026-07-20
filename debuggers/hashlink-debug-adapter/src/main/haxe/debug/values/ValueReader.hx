@@ -344,7 +344,7 @@ class ValueReader {
 	}
 
 	function readString(strPtr:Pointer):String {
-		return "\"" + stringContentAt(strPtr) + "\"";
+		return '"${stringContentAt(strPtr)}"';
 	}
 
 	/**

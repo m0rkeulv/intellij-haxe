@@ -111,7 +111,7 @@ class MapReader {
 				var valueAddress = values.offset(c * valueStride + valuePos);
 				var keyAddress = keyInValue ? values.offset(c * valueStride) : entries.offset(c * keyStride);
 				var key = switch (kind) {
-					case StringKey: "\"" + readUcs2(mem.readPointer(keyAddress)) + "\"";
+					case StringKey: '"${readUcs2(mem.readPointer(keyAddress))}"';
 					case IntKey: Std.string(mem.readI32(keyAddress));
 					case Int64Key: haxe.Int64.toStr(mem.readI64(keyAddress));
 					case ObjectKey: dynPreview(keyAddress);

@@ -183,9 +183,9 @@ class VariableMutator {
 			return;
 		}
 		if (registerPassed(argIndex, offsets, argCount) && warnSink != null) {
-			warnSink("[debugger] note: \"" + target.name + "\" is a register-passed argument; code on the "
-				+ "current line may still use the value it arrived with. The new value applies to later uses; "
-				+ "to steer this line, set the value in the caller before the call." + String.fromCharCode(10));
+			warnSink('[debugger] note: "${target.name}" is a register-passed argument; code on the '
+				+ 'current line may still use the value it arrived with. The new value applies to later uses; '
+				+ 'to steer this line, set the value in the caller before the call.' + String.fromCharCode(10));
 		}
 	}
 

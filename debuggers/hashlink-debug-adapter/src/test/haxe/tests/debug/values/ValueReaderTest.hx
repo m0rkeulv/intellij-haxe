@@ -82,7 +82,7 @@ class ValueReaderTest {
 		pokePtr(api, 0x900, 0x1000);
 
 		var decoded = reader(api).read(addr(0x900), stringType());
-		assert.equals("\"Hi\"", decoded.value, "string decoded from UTF-16");
+		assert.equals('"Hi"', decoded.value, "string decoded from UTF-16");
 		assert.equals("String", decoded.type, "string type");
 		assert.equals(0, decoded.reference, "string is a leaf");
 	}
