@@ -1,8 +1,8 @@
 // Debugger for haxe's EVAL target (--interp scripts and macros): a Java
 // translator that will present DAP to the IDE stack while speaking the
-// compiler's built-in eval-debugger JSON-RPC protocol (see
-// docs/implementation-plan.md). No shipped artifact and no extra runtime:
-// the debug server lives inside haxe itself (-D eval-debugger).
+// compiler's built-in eval-debugger JSON-RPC protocol (framing and message
+// shapes documented in EvalFraming/EvalProtocol). No shipped artifact and no
+// extra runtime: the debug server lives inside haxe itself (-D eval-debugger).
 
 plugins {
     id("org.jetbrains.intellij.platform.module")

@@ -51,7 +51,7 @@ import tools.jackson.databind.JsonNode;
  * hxcpp-debug-server jsonrpc protocol (and its notifications back into DAP
  * events). The reference for each translation is Adapter.hx in
  * vshaxe/hxcpp-debugger; the protocol mismatches this layer absorbs are
- * documented in docs/implementation-plan.md.
+ * documented in docs/README.md.
  *
  * Lifecycle: construct (binds the debuggee listener socket), let the caller
  * spawn the debuggee (compiled with -lib hxcpp-debug-server -debug and defines

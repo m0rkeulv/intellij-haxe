@@ -1,9 +1,9 @@
 # intellij-hxcpp-debugger — server internals & gotchas
 
 The in-debuggee DAP debug server (`intellij-hxcpp-debug-server` haxelib). See
-`implementation-plan.md` for the milestones and `hxcpp-api-research.md` for what
-the runtime provides. This file records the non-obvious behaviours learned
-while building it — the things that will bite again.
+`hxcpp-api-research.md` for what the runtime provides. This file records the
+non-obvious behaviours learned while building it — the things that will bite
+again.
 
 ## 1. The debug-thread registration (breakpoints silently never fire)
 

@@ -1,7 +1,7 @@
 // Our own in-debuggee HXCPP debug server (haxelib: intellij-hxcpp-debug-server):
 // interpreter-run unit tests for the Haxe server, gradle-built native fixtures,
 // and the Java-client integration suite driving the REAL DapClient stack
-// against those fixtures. See docs/implementation-plan.md (M8).
+// against those fixtures. See docs/README.md for the server gotchas.
 
 import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.process.ExecOperations
