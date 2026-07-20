@@ -6,8 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Assume;

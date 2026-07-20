@@ -3,7 +3,7 @@ package com.intellij.plugins.haxe.runner.debugger.dap.integration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import java.util.Map;
 import org.junit.Test;

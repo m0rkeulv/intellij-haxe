@@ -5,10 +5,8 @@ import static org.junit.Assert.assertNotNull;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import java.util.List;
 import org.junit.Test;

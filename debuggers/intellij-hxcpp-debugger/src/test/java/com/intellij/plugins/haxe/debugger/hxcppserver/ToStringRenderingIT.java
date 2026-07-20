@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetToStringRenderingRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import java.util.List;
 import org.junit.Test;
 

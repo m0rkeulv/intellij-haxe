@@ -6,13 +6,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetToStringRenderingRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.DebugErrorCode;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ErrorResponse;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Scope;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;

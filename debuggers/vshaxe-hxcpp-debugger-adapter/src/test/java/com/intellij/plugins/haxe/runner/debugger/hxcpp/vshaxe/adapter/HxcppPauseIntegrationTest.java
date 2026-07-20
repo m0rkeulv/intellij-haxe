@@ -5,13 +5,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StackTraceRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StackTraceResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import org.junit.Before;
 import org.junit.Test;
 

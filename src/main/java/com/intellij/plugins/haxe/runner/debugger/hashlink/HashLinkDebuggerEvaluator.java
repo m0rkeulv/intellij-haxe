@@ -2,9 +2,8 @@ package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Variable;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.evaluation.XDebuggerEvaluator;
 import org.jetbrains.annotations.NotNull;

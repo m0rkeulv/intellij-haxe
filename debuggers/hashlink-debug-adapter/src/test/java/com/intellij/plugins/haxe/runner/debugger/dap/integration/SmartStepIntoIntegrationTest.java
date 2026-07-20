@@ -6,14 +6,8 @@ import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepOutRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInTargetsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import java.util.List;
 import org.junit.Test;
 

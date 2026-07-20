@@ -5,8 +5,7 @@ import static org.junit.Assume.assumeTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;

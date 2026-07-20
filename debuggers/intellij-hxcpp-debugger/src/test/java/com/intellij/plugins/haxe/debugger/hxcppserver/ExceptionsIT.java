@@ -1,9 +1,8 @@
 package com.intellij.plugins.haxe.debugger.hxcppserver;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ExceptionInfoArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ExceptionInfoRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ExceptionInfoResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

@@ -6,10 +6,8 @@ import static org.junit.Assert.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ContinuedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import java.util.List;

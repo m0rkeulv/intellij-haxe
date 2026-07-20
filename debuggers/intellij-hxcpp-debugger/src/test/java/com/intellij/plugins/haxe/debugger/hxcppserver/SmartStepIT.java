@@ -2,8 +2,7 @@ package com.intellij.plugins.haxe.debugger.hxcppserver;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionArguments;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepIntoFunctionRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
