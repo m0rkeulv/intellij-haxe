@@ -194,13 +194,15 @@ public final class MatrixMain {
 
   /** Logs the effective flag values before provisioning, so a run self-documents its config. */
   private void logConfig() {
-    log.line("matrix config: lanes=" + String.join("+", lanes)
-             + " haxe=" + (haxeFilter.isEmpty() ? "all" : String.join(",", haxeFilter))
-             + " hl=" + (hlFilter.isEmpty() ? "all" : String.join(",", hlFilter))
-             + " full=" + full
-             + " parallelLanes=" + parallelLanes
-             + " hlForks=" + hlForks);
-    log.line("matrix paths: resources=" + resources + " out=" + out);
+    log.line("matrix config:");
+    log.line("  lanes         = " + String.join("+", lanes));
+    log.line("  haxe          = " + (haxeFilter.isEmpty() ? "all" : String.join(",", haxeFilter)));
+    log.line("  hl            = " + (hlFilter.isEmpty() ? "all" : String.join(",", hlFilter)));
+    log.line("  full          = " + full);
+    log.line("  parallelLanes = " + parallelLanes);
+    log.line("  hlForks       = " + hlForks);
+    log.line("  resources     = " + resources);
+    log.line("  out           = " + out);
   }
 
   /** The dirs whose file name is listed in {@code names}, or all of them when {@code names} is empty. */

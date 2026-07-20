@@ -5,28 +5,39 @@ import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Tails a child gradle build's console log for the per-test events enabled
  * by test-events.init.gradle ("com.x.FooTest > barTest PASSED") and turns
- * them into live progress: one line per finished SUITE with its counts, and
- * an immediate line for every failing test. Byte-offset based so each poll
- * only reads what is new; a trailing partial line waits for the next poll.
+ * them into live progress: a throttled running total while the suite runs, an
+ * immediate line for every failing test, and a per-CLASS breakdown at the end.
+ * Byte-offset based so each poll only reads what is new; a trailing partial
+ * line waits for the next poll.
+ *
+ * Counts are AGGREGATED per class in a map, not tracked as a single "current"
+ * class: with -PdapTestForks the test classes run in parallel fork JVMs, so
+ * their events interleave — the old single-class tracker flushed "X: 1 tests"
+ * on every switch between them.
  */
 final class TestEventTail {
   private static final Pattern EVENT =
     Pattern.compile("^(\\S+) > (\\S+).* (PASSED|FAILED|SKIPPED)\\s*$");
+  // tests between running-total progress lines (keeps long runs alive without
+  // a line per test / per fork-interleave)
+  private static final int PROGRESS_EVERY = 20;
 
   private final Path logFile;
   private final Log log;
   private long offset;
   private String carry = "";
-  private String currentSuite;
-  private int tests;
-  private int failed;
-  private int skipped;
+  // class short-name -> {tests, failed, skipped}, accumulated for the whole run
+  private final Map<String, int[]> classes = new LinkedHashMap<>();
+  private int total;
+  private int reportedTotal;
 
   TestEventTail(Path logFile, Log log) {
     this.logFile = logFile;
@@ -56,6 +67,9 @@ final class TestEventTail {
       for (String line : text.substring(0, lastNewline).split("\r?\n")) {
         handle(line);
       }
+      if (total - reportedTotal >= PROGRESS_EVERY) {
+        logRunningTotal();
+      }
     } catch (IOException ignored) {
       // the log file being briefly unavailable only delays progress lines
     }
@@ -67,33 +81,49 @@ final class TestEventTail {
       return;
     }
     String suite = matcher.group(1);
-    String shortSuite = suite.substring(suite.lastIndexOf('.') + 1);
-    if (!shortSuite.equals(currentSuite)) {
-      flush();
-      currentSuite = shortSuite;
-    }
-    tests++;
+    String shortName = suite.substring(suite.lastIndexOf('.') + 1);
+    int[] counts = classes.computeIfAbsent(shortName, k -> new int[3]);
+    counts[0]++;
+    total++;
     switch (matcher.group(3)) {
       case "FAILED" -> {
-        failed++;
-        log.line("      FAILED " + shortSuite + "::" + matcher.group(2));
+        counts[1]++;
+        log.line("      FAILED " + shortName + "::" + matcher.group(2));
       }
-      case "SKIPPED" -> skipped++;
+      case "SKIPPED" -> counts[2]++;
       default -> { }
     }
   }
 
-  /** Logs the summary line for the suite currently being counted. */
+  private int totalFailed() {
+    int failed = 0;
+    for (int[] counts : classes.values()) {
+      failed += counts[1];
+    }
+    return failed;
+  }
+
+  /** A single aggregate line so a long run shows it is alive without spam. */
+  private void logRunningTotal() {
+    int failed = totalFailed();
+    log.line("      progress: " + total + " tests in " + classes.size() + " classes"
+             + (failed > 0 ? ", " + failed + " FAILED" : ""));
+    reportedTotal = total;
+  }
+
+  /** The per-class breakdown, logged once the build ends. */
   void flush() {
-    if (currentSuite == null) {
+    if (classes.isEmpty()) {
       return;
     }
-    log.line("      " + currentSuite + ": " + tests + " tests"
-             + (failed > 0 ? ", " + failed + " FAILED" : "")
-             + (skipped > 0 ? ", " + skipped + " skipped" : ""));
-    currentSuite = null;
-    tests = 0;
-    failed = 0;
-    skipped = 0;
+    classes.keySet().stream().sorted().forEach(name -> {
+      int[] counts = classes.get(name);
+      log.line("      " + name + ": " + counts[0] + " tests"
+               + (counts[1] > 0 ? ", " + counts[1] + " FAILED" : "")
+               + (counts[2] > 0 ? ", " + counts[2] + " skipped" : ""));
+    });
+    classes.clear();
+    total = 0;
+    reportedTotal = 0;
   }
 }
