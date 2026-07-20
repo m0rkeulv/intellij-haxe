@@ -7,7 +7,9 @@ import static org.junit.Assert.assertThrows;
 
 import java.io.ByteArrayInputStream;
 import java.io.EOFException;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import org.junit.Test;
 
 /**
@@ -26,7 +28,7 @@ public class EvalFramingTest {
     assertEquals("high length byte", 0, frame[1]);
     assertArrayEquals("body is the UTF-8 JSON",
                       "{\"a\":1}".getBytes(StandardCharsets.UTF_8),
-                      java.util.Arrays.copyOfRange(frame, 2, frame.length));
+                      Arrays.copyOfRange(frame, 2, frame.length));
   }
 
   @Test
@@ -68,7 +70,7 @@ public class EvalFramingTest {
   @Test
   public void implausibleResponseLengthIsRefused() {
     byte[] corrupt = {(byte)0xFF, (byte)0xFF, (byte)0xFF, 0x7F};
-    assertThrows("2GB frame refused", java.io.IOException.class,
+    assertThrows("2GB frame refused", IOException.class,
                  () -> EvalFraming.readResponse(new ByteArrayInputStream(corrupt)));
   }
 }

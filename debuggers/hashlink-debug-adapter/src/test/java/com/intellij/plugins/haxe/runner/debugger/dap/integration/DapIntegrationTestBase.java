@@ -39,6 +39,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.Variable
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,6 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -132,7 +135,7 @@ public abstract class DapIntegrationTestBase {
    * 32-bit VM; their tests skip there instead of failing.
    */
   protected boolean isX86Hl() throws IOException {
-    try (var exe = new java.io.RandomAccessFile(hlExecutable, "r")) {
+    try (var exe = new RandomAccessFile(hlExecutable, "r")) {
       exe.seek(0x3C);
       int peOffset = Integer.reverseBytes(exe.readInt()); // e_lfanew, little-endian
       exe.seek(peOffset + 4);
@@ -273,8 +276,8 @@ public abstract class DapIntegrationTestBase {
     if (fixtureHaxeVersion == null) {
       return true;
     }
-    java.util.regex.Matcher version =
-      java.util.regex.Pattern.compile("(\\d+)\\.(\\d+)").matcher(fixtureHaxeVersion.trim());
+    Matcher version =
+      Pattern.compile("(\\d+)\\.(\\d+)").matcher(fixtureHaxeVersion.trim());
     if (!version.find()) {
       return true;
     }

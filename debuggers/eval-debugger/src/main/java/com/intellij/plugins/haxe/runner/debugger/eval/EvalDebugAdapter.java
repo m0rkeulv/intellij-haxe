@@ -87,6 +87,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import tools.jackson.databind.JsonNode;
 
@@ -170,8 +171,8 @@ public class EvalDebugAdapter implements Closeable {
    */
   private volatile boolean unwindingException;
   /** Ensures exactly one terminated event however the session ends. */
-  private final java.util.concurrent.atomic.AtomicBoolean terminatedSent =
-    new java.util.concurrent.atomic.AtomicBoolean();
+  private final AtomicBoolean terminatedSent =
+    new AtomicBoolean();
   /**
    * True while the "all"-throws exception option is armed on the VM. Without
    * it, every exceptionStop is by construction an UNCAUGHT exception — the

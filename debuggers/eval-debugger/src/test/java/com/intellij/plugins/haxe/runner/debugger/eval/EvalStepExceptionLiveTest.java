@@ -45,6 +45,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.IntFunction;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Assume;
@@ -197,7 +198,7 @@ public class EvalStepExceptionLiveTest {
    * budget. Before the fix this wedged (the adapter looped on / blocked
    * against the vanished stack), which is what forced the user to kill the IDE.
    */
-  private void stepUntilTerminated(java.util.function.IntFunction<Request> stepFor) throws Exception {
+  private void stepUntilTerminated(IntFunction<Request> stepFor) throws Exception {
     int threadId = stopOnThrowLine();
     for (int i = 0; i < 10; i++) {
       long before = System.currentTimeMillis();
