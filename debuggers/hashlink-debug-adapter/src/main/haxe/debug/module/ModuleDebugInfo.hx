@@ -297,35 +297,17 @@ class ModuleDebugInfo {
 
 	/**
 		Resolves a source breakpoint to bytecode locations, one per function that
-		has code on that line. When the exact line has no code, moves to the next
-		line with code in the same file (DAP allows this). Empty result = no code.
+		has code on EXACTLY that line. Empty result = no code on the line. No
+		snapping to a nearby line (this used to snap forward): a snapped
+		breakpoint masks a stale binary — code edited or commented back in
+		without a rebuild "works" somewhere unexpected instead of surfacing the
+		desync as a rejected breakpoint.
 	**/
 	public function resolveLine(file:String, line:Int):Array<{fidx:Int, op:Int, line:Int}> {
 		var fileMatches = matchingFileIndexes(file);
 		if (!fileMatches.keys().hasNext()) {
 			return [];
 		}
-
-		// collect the smallest line >= requested that has code, per the whole file
-		var effectiveLine = -1;
-		for (fidx in 0...data.functions.length) {
-			var debug = data.functions[fidx].debug;
-			var op = 0;
-			while (op < data.functions[fidx].ops.length) {
-				var f = debug[op << 1];
-				var l = debug[(op << 1) + 1];
-				if (fileMatches.exists(f) && l >= line) {
-					if (effectiveLine < 0 || l < effectiveLine) {
-						effectiveLine = l;
-					}
-				}
-				op++;
-			}
-		}
-		if (effectiveLine < 0) {
-			return [];
-		}
-
 		var result:Array<{fidx:Int, op:Int, line:Int}> = [];
 		for (fidx in 0...data.functions.length) {
 			var debug = data.functions[fidx].debug;
@@ -334,8 +316,8 @@ class ModuleDebugInfo {
 			while (op < ops) {
 				var f = debug[op << 1];
 				var l = debug[(op << 1) + 1];
-				if (fileMatches.exists(f) && l == effectiveLine) {
-					result.push({fidx: fidx, op: op, line: effectiveLine});
+				if (fileMatches.exists(f) && l == line) {
+					result.push({fidx: fidx, op: op, line: line});
 					break; // first op of this line in this function is enough
 				}
 				op++;

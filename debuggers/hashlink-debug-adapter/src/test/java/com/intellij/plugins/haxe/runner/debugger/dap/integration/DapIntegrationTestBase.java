@@ -58,7 +58,7 @@ public abstract class DapIntegrationTestBase {
 
   protected static final String FIXTURE_MAIN = "Main.hx";
   protected static final int FIXTURE_LOOP_LINE = 18; // total = add(total, i)
-  protected static final int FIXTURE_ADD_LINE = 28; // return current + amount
+  protected static final int FIXTURE_ADD_LINE = 29; // return current + amount (28 is the declaration line)
   protected static final int FIXTURE_INSPECT_LINE = 35; // var v = Config.version (p in scope)
   protected static final String FIXTURE_CONFIG = "Config.hx";
   protected static final int FIXTURE_STATICS_LINE = 14; // Config.bump(): version=7, title="cfg"

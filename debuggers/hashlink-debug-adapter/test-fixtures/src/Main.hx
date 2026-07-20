@@ -26,7 +26,7 @@ class Main {
 	}
 
 	static function add(current:Int, amount:Int):Int {
-		return current + amount; // FIXTURE_ADD_LINE = 28
+		return current + amount; // FIXTURE_ADD_LINE = 29
 	}
 
 	static function inspectDemo():Void {

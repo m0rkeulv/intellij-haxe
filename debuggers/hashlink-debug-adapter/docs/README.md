@@ -1075,6 +1075,19 @@ The 32-bit lessons (each was a live bug):
   the *register-passed-argument caveat* — genuinely an x64 ABI behavior (x86
   passes args on the stack), skipped via `DapIntegrationTestBase.isX86Hl()`.
 
+## 11. Breakpoint lines verify strictly — no snapping to the next code line
+
+`ModuleDebugInfo.resolveLine` matches the requested line EXACTLY against the
+bytecode debug tables; a line without code resolves empty and the planner
+rejects it (unverified, "no executable code at this line (stale build?)").
+It used to snap forward to the next line with code (DAP allows it), which was
+removed deliberately: snapping masks a stale binary — code edited or commented
+back in without a rebuild "works" somewhere unexpected instead of surfacing
+the desync as a hollow breakpoint marker. The removal immediately exposed a
+real instance: `FIXTURE_ADD_LINE` had pointed at add()'s DECLARATION line for
+the entire life of the test suite and only worked through the snap. Same
+policy as the intellij-hxcpp server (its gotcha 19).
+
 ## Quick reference
 
 | Concern | Rule |

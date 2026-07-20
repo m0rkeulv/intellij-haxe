@@ -12,7 +12,7 @@ import debug.module.ModuleDebugInfo;
 **/
 class LocalsResolverTest {
 	static inline var FIXTURE_LOOP_LINE = 18;
-	static inline var FIXTURE_ADD_LINE = 28;
+	static inline var FIXTURE_ADD_LINE = 29; // the return line (28 is the declaration)
 	static inline var FIXTURE_POINT_METHOD_LINE = 22; // Point.move (Point.hx)
 
 	public static function run(assert:Assert):Void {
