@@ -62,7 +62,7 @@ public class DebugLifecycleIntegrationTest extends DapIntegrationTestBase {
           StackTraceResponse frames = stackTrace(threadId);
           assertEquals("top frame at breakpoint line", FIXTURE_LOOP_LINE,
                        frames.getBody().getStackFrames().get(0).getLine());
-          String topPath = DapPaths.toSlashes(frames.getBody().getStackFrames().get(0).getSource().getPath());
+          String topPath = DapPaths.toForwardSlashes(frames.getBody().getStackFrames().get(0).getSource().getPath());
           assertTrue("top frame in Main.hx (" + topPath + ")", topPath.endsWith("Main.hx"));
         }
 

@@ -11,17 +11,18 @@ public final class DapPaths {
   private DapPaths() {
   }
 
-  /** {@code path} with backslashes normalized to forward slashes. */
-  public static String toSlashes(String path) {
+  /** {@code path} with backslashes replaced by forward slashes. */
+  public static String toForwardSlashes(String path) {
     return path.replace('\\', '/');
   }
 
   /**
-   * A case-insensitive, slash-normalized key for matching source paths (e.g.
-   * an IDE-sent breakpoint path against a VM-reported frame source). Case is
-   * folded because haxe source trees do not distinguish files by case.
+   * A key for matching two spellings of the same source path — e.g. an IDE-sent
+   * breakpoint path against a VM-reported frame source. Separators are unified
+   * (forward slashes) and case is folded (haxe source trees do not distinguish
+   * files by case), so the result is a lookup key, NOT a usable path.
    */
-  public static String normalizeKey(String path) {
-    return toSlashes(path).toLowerCase(Locale.ROOT);
+  public static String toMatchKey(String path) {
+    return toForwardSlashes(path).toLowerCase(Locale.ROOT);
   }
 }

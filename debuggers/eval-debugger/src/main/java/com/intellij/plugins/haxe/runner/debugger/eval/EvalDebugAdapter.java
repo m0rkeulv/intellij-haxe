@@ -337,7 +337,7 @@ public class EvalDebugAdapter implements Closeable {
     }
     List<EvalProtocol.EvalBreakpoint> registered = vm().setBreakpoints(file, lines);
     // mirror for the step loops; setBreakpoints REPLACES the file's set
-    breakpointLines.put(DapPaths.normalizeKey(file), lineSet);
+    breakpointLines.put(DapPaths.toMatchKey(file), lineSet);
 
     List<Breakpoint> verified = new ArrayList<>();
     for (int i = 0; i < requested.size(); i++) {
@@ -1024,7 +1024,7 @@ public class EvalDebugAdapter implements Closeable {
     if (source == null) {
       return false;
     }
-    Set<Integer> lines = breakpointLines.get(DapPaths.normalizeKey(source));
+    Set<Integer> lines = breakpointLines.get(DapPaths.toMatchKey(source));
     return lines != null && lines.contains(line);
   }
 

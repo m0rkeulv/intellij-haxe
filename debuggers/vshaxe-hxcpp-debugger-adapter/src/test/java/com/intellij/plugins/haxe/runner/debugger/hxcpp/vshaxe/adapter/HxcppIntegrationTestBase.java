@@ -212,7 +212,7 @@ abstract class HxcppIntegrationTestBase {
     // deliberately IDE-shaped (forward slashes, as VirtualFile.getPath()
     // reports on Windows): the adapter must convert before the server's
     // exact-string path matching
-    source.setPath(DapPaths.toSlashes(fixtureSource.toString()));
+    source.setPath(DapPaths.toForwardSlashes(fixtureSource.toString()));
     SetBreakpointsArguments arguments = new SetBreakpointsArguments();
     arguments.setSource(source);
     arguments.setBreakpoints(List.of(breakpoints));

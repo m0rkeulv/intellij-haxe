@@ -211,7 +211,7 @@ public class EvalDebugAdapterLiveTest {
     assertEquals("stopped on the break line", BREAK_LINE, top.getLine());
     assertNotNull("top frame has a source", top.getSource());
     assertTrue("top frame is the fixture",
-               DapPaths.toSlashes(top.getSource().getPath()).endsWith("EvalMain.hx"));
+               DapPaths.toForwardSlashes(top.getSource().getPath()).endsWith("EvalMain.hx"));
 
     ScopesRequest scopes = new ScopesRequest();
     ScopesArguments scArgs = new ScopesArguments();

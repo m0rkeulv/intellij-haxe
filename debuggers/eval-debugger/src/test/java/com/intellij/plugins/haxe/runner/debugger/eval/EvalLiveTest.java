@@ -135,7 +135,7 @@ public class EvalLiveTest {
     EvalProtocol.EvalStackFrame top = frames.get(0);
     assertEquals("stopped on the breakpoint line", BREAK_LINE, top.line());
     assertTrue("top frame is in the fixture (was " + top.source() + ")",
-               top.source() != null && DapPaths.toSlashes(top.source()).endsWith("EvalMain.hx"));
+               top.source() != null && DapPaths.toForwardSlashes(top.source()).endsWith("EvalMain.hx"));
 
     // scopes/variables at the stop: the local declared BEFORE the break line
     // must be visible with its value
