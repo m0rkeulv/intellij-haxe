@@ -68,7 +68,11 @@ class DebugSession {
 	static inline var ATTACH_DRAIN_MS = 50;
 	static inline var CONNECT_RETRIES = 60;
 	static inline var CONNECT_DELAY_MS = 50;
-	static inline var HANDSHAKE_READ_TIMEOUT_S = 0.5;
+	// Truncation GUARD on the handshake socket, not a delimiter: the handshake
+	// is parsed to its self-described end, so on a healthy launch no read ever
+	// waits this long. It only fires when the VM dies/stalls mid-handshake,
+	// turning a would-be forever-hang into a clean launch failure.
+	static inline var HANDSHAKE_READ_TIMEOUT_S = 3.0;
 
 	final api:DebugApi;
 	final commands = new Deque<SessionCommand>();
@@ -300,11 +304,24 @@ class DebugSession {
 				debuggeePid = process.pid;
 				handshakeSocket = connectWithRetries(port);
 			}
-			// The VM sends the whole handshake then blocks on the socket; drain it
-			// fully into memory (a read timeout marks the end) and parse from there.
-			// Parsing straight off the socket deadlocks against the two HL processes'
-			// send/recv buffering, and byte-at-a-time socket reads are far too slow.
-			jit = JitInfoReader.read(new BytesInput(readHandshake()));
+			// The VM sends the whole handshake then blocks on the socket. The format
+			// is self-delimiting (JitInfoReader derives every size as it parses and
+			// never over-reads), so parse straight off a buffered view: it recvs in
+			// large chunks but only refills when the parser still NEEDS bytes, so it
+			// cannot block after the final handshake byte. The socket timeout is a
+			// truncation guard only - on a healthy handshake it never fires. (The
+			// previous approach slurped until a 0.5s read timeout marked the end,
+			// a dead half-second on EVERY launch.)
+			handshakeSocket.setTimeout(HANDSHAKE_READ_TIMEOUT_S);
+			try {
+				jit = JitInfoReader.read(new HandshakeInput(handshakeSocket.input));
+			} catch (e:DebugError) {
+				throw e;
+			} catch (e:haxe.io.Eof) {
+				throw new DebugError("The debuggee closed the connection mid-handshake");
+			} catch (e:Dynamic) {
+				throw new DebugError("Debug handshake stalled or unreadable: " + Std.string(e));
+			}
 			// register reads/writes must use the DEBUGGEE's context layout: with the
 			// wrong bitness a 32-bit debuggee's registers read as garbage and EIP
 			// writes corrupt the thread (crash on the first continue past an INT3)
@@ -374,31 +391,6 @@ class DebugSession {
 		});
 		inspector.functionCaller = (funcAddr, args, floatBits) ->
 			evalCalls.call(stoppedThreadId, funcAddr, args, floatBits);
-	}
-
-	// Reads the entire handshake the VM sends before it blocks. Uses a read
-	// timeout: once the VM has sent everything and is waiting on us, the next
-	// read blocks and throws, which is our end-of-message signal.
-	function readHandshake():Bytes {
-		handshakeSocket.setTimeout(HANDSHAKE_READ_TIMEOUT_S);
-		var accumulated = new BytesBuffer();
-		var buffer = Bytes.alloc(8192);
-		try {
-			while (true) {
-				var read = handshakeSocket.input.readBytes(buffer, 0, buffer.length);
-				if (read <= 0) {
-					break;
-				}
-				accumulated.addBytes(buffer, 0, read);
-			}
-		} catch (e:Dynamic) {
-			// timeout (Blocked) or Eof: the VM has sent the whole handshake
-		}
-		var bytes = accumulated.getBytes();
-		if (bytes.length == 0) {
-			throw new DebugError("The debuggee sent no debug handshake");
-		}
-		return bytes;
 	}
 
 	function connectWithRetries(port:Int):Socket {
@@ -987,6 +979,59 @@ class DebugSession {
 				handshakeSocket.close();
 			} catch (e:Dynamic) {}
 			handshakeSocket = null;
+		}
+	}
+}
+
+/**
+	Buffered view over the handshake socket for JitInfoReader: recvs in large
+	chunks (a byte-at-a-time socket parse would be tens of thousands of
+	syscalls) but only refills when the parser still NEEDS bytes — so it can
+	never block waiting for data past the final handshake byte. Safe because
+	the handshake format is self-delimiting and JitInfoReader never over-reads;
+	a refill therefore only happens for bytes the VM has sent or is sending.
+**/
+private class HandshakeInput extends haxe.io.Input {
+	static inline var CHUNK = 65536;
+
+	final source:haxe.io.Input;
+	final buffer:Bytes;
+	var position = 0;
+	var available = 0;
+
+	public function new(source:haxe.io.Input) {
+		this.source = source;
+		this.buffer = Bytes.alloc(CHUNK);
+	}
+
+	override public function readByte():Int {
+		if (available == 0) {
+			refill();
+		}
+		var value = buffer.get(position);
+		position++;
+		available--;
+		return value;
+	}
+
+	override public function readBytes(target:Bytes, offset:Int, length:Int):Int {
+		if (available == 0) {
+			refill();
+		}
+		var count = length < available ? length : available;
+		target.blit(offset, buffer, position, count);
+		position += count;
+		available -= count;
+		return count;
+	}
+
+	function refill():Void {
+		// blocks until SOME data arrives (bounded by the socket's guard
+		// timeout); returns a partial chunk rather than waiting for CHUNK bytes
+		available = source.readBytes(buffer, 0, CHUNK);
+		position = 0;
+		if (available <= 0) {
+			throw new haxe.io.Eof();
 		}
 	}
 }
