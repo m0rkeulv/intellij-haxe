@@ -82,6 +82,7 @@ public class EvalConnectionTest {
   public void correlatesResponsesByIdAndUnwrapsResult() throws Exception {
     startFake(request -> {
       assertEquals("strict envelope", "2.0", request.path("jsonrpc").asString());
+      int id = request.path("id").asInt();
       return List.of("""
           {
             "jsonrpc": "2.0",
@@ -89,7 +90,7 @@ public class EvalConnectionTest {
             "result": [
               { "id": 0, "name": "Thread 0" }
             ]
-          }""".formatted(request.path("id").asInt()));
+          }""".formatted(id));
     });
     connection.start();
     JsonNode result = connection.request("getThreads", null, 5000);
@@ -98,12 +99,15 @@ public class EvalConnectionTest {
 
   @Test
   public void errorResponsesSurfaceAsProtocolExceptions() throws Exception {
-    startFake(request -> List.of("""
-        {
-          "jsonrpc": "2.0",
-          "id": %d,
-          "error": { "code": -32601, "message": "Method not found" }
-        }""".formatted(request.path("id").asInt())));
+    startFake(request -> {
+      int id = request.path("id").asInt();
+      return List.of("""
+          {
+            "jsonrpc": "2.0",
+            "id": %d,
+            "error": { "code": -32601, "message": "Method not found" }
+          }""".formatted(id));
+    });
     connection.start();
     EvalProtocolException error = assertThrows(EvalProtocolException.class,
                                                () -> connection.request("bogus", null, 5000));
@@ -113,20 +117,23 @@ public class EvalConnectionTest {
 
   @Test
   public void idLessMessagesRouteToTheEventListener() throws Exception {
-    // reply to the request, then push an unrelated notification
-    startFake(request -> List.of(
-        """
-        {
-          "jsonrpc": "2.0",
-          "id": %d,
-          "result": null
-        }""".formatted(request.path("id").asInt()),
-        """
-        {
-          "jsonrpc": "2.0",
-          "method": "breakpointStop",
-          "params": { "threadId": 0 }
-        }"""));
+    startFake(request -> {
+      // reply to the request, then push an unrelated notification
+      int id = request.path("id").asInt();
+      return List.of(
+          """
+          {
+            "jsonrpc": "2.0",
+            "id": %d,
+            "result": null
+          }""".formatted(id),
+          """
+          {
+            "jsonrpc": "2.0",
+            "method": "breakpointStop",
+            "params": { "threadId": 0 }
+          }""");
+    });
     BlockingQueue<String> events = new LinkedBlockingQueue<>();
     connection.setEventListener((method, params) -> events.add(method + ":" + params.path("threadId").asInt(-1)));
     connection.start();
