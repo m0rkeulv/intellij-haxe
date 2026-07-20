@@ -117,15 +117,24 @@ const cards = document.getElementById("cards");
 for (const lane of Object.keys(LANE_TITLES)) {
   const cells = byLane[lane];
   if (!cells) continue;
-  let tests = 0, fails = 0, problems = 0;
+  let tests = 0, fails = 0, problems = 0, seconds = 0;
   for (const cell of cells) {
     if (cell.status !== "ok" && cell.status !== "fail") problems++;
     const t = cellTotals(cell); tests += t.tests; fails += t.fails;
+    seconds += cell.seconds || 0;
   }
   const good = fails === 0 && problems === 0;
   cards.insertAdjacentHTML("beforeend",
     '<div class="card"><p class="label">' + LANE_TITLES[lane] + '</p><p class="value ' + (good ? "ok" : "bad") + '">'
-    + (good ? tests + "/" + tests : fails + " failing") + '</p></div>');
+    + (good ? tests + "/" + tests : fails + " failing") + '</p>'
+    + '<p class="label" style="margin-top:4px">runtime ' + fmtDuration(seconds) + '</p></div>');
+}
+
+// "runtime" = summed cell durations (compute time; with -PmatrixParallel the
+// lanes overlap, so lane runtimes can add up to more than the wall clock)
+function fmtDuration(seconds) {
+  const m = Math.floor(seconds / 60), s = Math.round(seconds % 60);
+  return m > 0 ? m + "m " + (s < 10 ? "0" : "") + s + "s" : s + "s";
 }
 
 const lanes = document.getElementById("lanes");
