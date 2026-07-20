@@ -48,10 +48,7 @@ public final class EvaluationPath {
     if (name == null || name.isEmpty()) {
       return null;
     }
-    String inner = name;
-    if (name.length() >= 2 && name.charAt(0) == '[' && name.charAt(name.length() - 1) == ']') {
-      inner = name.substring(1, name.length() - 1);
-    }
+    String inner = isBracketed(name) ? name.substring(1, name.length() - 1) : name;
     if (inner.isEmpty()) {
       return null;
     }
@@ -61,6 +58,11 @@ public final class EvaluationPath {
       }
     }
     return inner;
+  }
+
+  // True when `name` is wrapped in brackets — hxcpp's "[0]" array-element name.
+  private static boolean isBracketed(String name) {
+    return name.length() >= 2 && name.charAt(0) == '[' && name.charAt(name.length() - 1) == ']';
   }
 
   /** Whether the name is a plain Haxe identifier (usable as a field-access segment). */
