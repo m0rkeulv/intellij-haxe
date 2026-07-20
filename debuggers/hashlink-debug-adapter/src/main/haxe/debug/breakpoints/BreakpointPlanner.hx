@@ -34,7 +34,6 @@ class BreakpointPlanner {
 	}
 
 	public static function unresolved(request:RequestedBreakpoint, sourcePath:String):BreakpointResult {
-		// same wording as the hxcpp server: the common cause is a stale binary
 		return {id: request.id, verified: false, line: request.line, message: "no executable code at this line (stale build?)", sourcePath: sourcePath};
 	}
 }

@@ -10,7 +10,7 @@ class BreakpointsTest {
 		anUnmatchedSourceIsUnverifiedNotAnError(assert);
 		reinstallReplacesTheWholeSource(assert);
 		runtimeNumberMapsBackToDapId(assert);
-		aLineWithoutCodeIsRejectedNotSnapped(assert);
+		aLineWithoutCodeIsRejected(assert);
 		aFileUnknownToTheTableDegradesToFileLevel(assert);
 	}
 
@@ -60,11 +60,11 @@ class BreakpointsTest {
 		assert.equals(-1, t.bp.idForRuntimeNumber(9999), "unknown runtime number -> -1");
 	}
 
-	static function aLineWithoutCodeIsRejectedNotSnapped(assert:Assert):Void {
+	static function aLineWithoutCodeIsRejected(assert:Assert):Void {
 		var t = withFiles(LineTable.parse("C:/build/src/Main.hx|10,20\n"));
 		var results = t.bp.setForSource("C:/build/src/Main.hx", [bp(10), bp(15)], [1, 2]);
 		assert.isTrue(results[0].verified, "code line verified");
-		assert.isTrue(results[1].verified == false, "non-code line rejected, not snapped to 20");
+		assert.isTrue(results[1].verified == false, "non-code line rejected");
 		assert.equals(15, results[1].line, "the rejected result keeps the requested line");
 		assert.isTrue(results[1].message.indexOf("no executable code") >= 0, "rejection names the reason");
 		assert.equals(1, t.api.installedBreakpoints.length, "nothing installed for the rejected line");

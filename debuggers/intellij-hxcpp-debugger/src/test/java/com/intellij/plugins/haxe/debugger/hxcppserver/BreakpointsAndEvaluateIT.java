@@ -43,12 +43,12 @@ public class BreakpointsAndEvaluateIT {
   }
 
   @Test
-  public void aLineWithoutCodeIsRejectedNotSnapped() throws Exception {
-    // Strict verification against the macro-baked line table: a comment or
-    // blank line is REJECTED (unverified + message), never snapped to the
-    // next code line — snapping would mask a stale binary. The code line in
-    // the same request must still verify AND actually fire, which pins that
-    // the baked table agrees with what hxcpp instruments (HXLINE).
+  public void aLineWithoutCodeIsRejected() throws Exception {
+    // Verification against the macro-baked line table: a comment or blank
+    // line is rejected (unverified + message, the usual cause being a stale
+    // binary). The code line in the same request must still verify AND
+    // actually fire, which pins that the baked table agrees with what hxcpp
+    // instruments (HXLINE).
     try (FixtureSession session = FixtureSession.launchMain()) {
       session.initialize("uncaught", "critical");
       List<Breakpoint> results = session.setBreakpointsRaw(FixtureSession.MAIN_SOURCE,

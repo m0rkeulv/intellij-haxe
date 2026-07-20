@@ -13,10 +13,7 @@ import debug.module.ModuleDebugInfo;
 **/
 class ModuleDebugInfoTest {
 	static inline var FIXTURE_LOOP_LINE = 18;
-	// 29, not 28: the constant used to point at add()'s DECLARATION line and
-	// only worked because resolveLine snapped forward — exactly the masking
-	// the strict (no-snap) policy exists to prevent
-	static inline var FIXTURE_ADD_LINE = 29;
+	static inline var FIXTURE_ADD_LINE = 29; // the return line (28 is the declaration)
 
 	public static function run(assert:Assert):Void {
 		rejectsUnsupportedBytecodeFormatVersion(assert);
@@ -61,11 +58,9 @@ class ModuleDebugInfoTest {
 		// an unknown file -> unresolved
 		assert.equals(0, module.resolveLine("NoSuchFile.hx", 5).length, "unknown file unresolved");
 
-		// STRICT: a blank/comment line resolves EMPTY — never snapped to the
-		// next code line (it used to). A snapped breakpoint masks a stale
-		// binary; the planner must get to reject it instead.
-		assert.equals(0, module.resolveLine("Main.hx", 23).length, "blank line between functions rejected, not snapped");
-		assert.equals(0, module.resolveLine("Main.hx", 11).length, "doc-comment line rejected, not snapped");
+		// a line without code resolves empty so the planner rejects it
+		assert.equals(0, module.resolveLine("Main.hx", 23).length, "blank line between functions unresolved");
+		assert.equals(0, module.resolveLine("Main.hx", 11).length, "doc-comment line unresolved");
 
 		opcodeAndCallAccessors(assert, module, loopHits[0].fidx);
 	}

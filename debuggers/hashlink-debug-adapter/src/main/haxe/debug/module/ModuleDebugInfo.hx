@@ -296,12 +296,10 @@ class ModuleDebugInfo {
 	}
 
 	/**
-		Resolves a source breakpoint to bytecode locations, one per function that
-		has code on EXACTLY that line. Empty result = no code on the line. No
-		snapping to a nearby line (this used to snap forward): a snapped
-		breakpoint masks a stale binary — code edited or commented back in
-		without a rebuild "works" somewhere unexpected instead of surfacing the
-		desync as a rejected breakpoint.
+		Resolves a source breakpoint to bytecode locations, one per function
+		that has code on exactly that line. Empty result = no code on the line
+		(the usual cause is a stale binary — the planner rejects it so the
+		desync shows as a hollow marker).
 	**/
 	public function resolveLine(file:String, line:Int):Array<{fidx:Int, op:Int, line:Int}> {
 		var fileMatches = matchingFileIndexes(file);

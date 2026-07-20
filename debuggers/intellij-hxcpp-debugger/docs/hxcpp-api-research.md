@@ -47,10 +47,10 @@ answer.
   values come from typed-AST positions, and our boot macro runs inside that
   same compilation. A `Context.onGenerate` walk collects executable lines per
   file and bakes a `file -> sorted lines` resource into the binary; the
-  server then verifies breakpoints line-level AND snaps a non-executable line
-  to the next executable one (the HL adapter's resolveLine behaviour, which
-  DAP allows). Strictly better than vshaxe and the raw runtime. M2 fixture
-  tests must pin the walk's "line with code" notion against what gencpp
+  server then verifies breakpoints line-level, rejecting a non-executable
+  line as unverified (IMPLEMENTED — Macro.bakeLineTable + LineTable, see
+  README gotcha 19). Strictly better than vshaxe and the raw runtime. Fixture
+  tests pin the walk's "line with code" notion against what gencpp
   actually emits.
 
 ## M3 — run control (shrinks a lot)

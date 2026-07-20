@@ -7,10 +7,10 @@ package intellij.hxcpp.debug.breakpoints;
 	a `haxe.Resource`, because hxcpp keeps no queryable line table at runtime —
 	the generated `HXLINE(n)` markers are executed assignments, not data.
 
-	Breakpoints uses it to verify requested lines STRICTLY: a line with no code
-	is rejected (unverified), never snapped to a nearby line. Snapping would
-	mask a stale binary — code edited or commented back in without a recompile
-	"works" somewhere unexpected instead of surfacing the desync.
+	Breakpoints uses it to verify requested lines: a line with no code is
+	rejected (unverified) so a stale binary — code edited or commented back in
+	without a recompile — surfaces as a hollow marker instead of a breakpoint
+	that never fires.
 
 	Format, one file per row: `<path as the compiler recorded it>|l1,l2,...`
 	with lines sorted ascending. A missing resource (older lib build) yields no
