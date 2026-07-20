@@ -71,7 +71,9 @@ public class HxcppDebugAdapterTest {
   }
 
   private void stopAtBreakpoint(int threadId) throws Exception {
-    server.notify("breakpointStop", "{\"threadId\":" + threadId + "}");
+    server.notify("breakpointStop", """
+        {"threadId": %d}
+        """.formatted(threadId));
     awaitEvent(StoppedEvent.class);
   }
 
@@ -114,7 +116,12 @@ public class HxcppDebugAdapterTest {
       assertEquals("C:\\project\\src\\Main.hx", params.path("file").asString());
       assertEquals(14, params.path("breakpoints").get(0).path("line").asInt());
       assertEquals("n > 2", params.path("breakpoints").get(1).path("condition").asString());
-      return "[{\"id\":11},{\"id\":12}]";
+      return """
+          [
+            {"id": 11},
+            {"id": 12}
+          ]
+          """;
     });
 
     Source source = new Source();
@@ -146,7 +153,9 @@ public class HxcppDebugAdapterTest {
     String expected = "C:/project/src/Main.hx".replace('/', File.separatorChar);
     server.handle("setBreakpoints", params -> {
       assertEquals(expected, params.path("file").asString());
-      return "[{\"id\":1}]";
+      return """
+          [{"id": 1}]
+          """;
     });
 
     Source source = new Source();
@@ -173,7 +182,9 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void breakpointStopBecomesStoppedEvent() throws Exception {
-    server.notify("breakpointStop", "{\"threadId\":2}");
+    server.notify("breakpointStop", """
+        {"threadId": 2}
+        """);
     StoppedEvent stopped = (StoppedEvent)awaitEvent(StoppedEvent.class);
     assertEquals("breakpoint", stopped.getBody().getReason());
     assertEquals(Integer.valueOf(2), stopped.getBody().getThreadId());
@@ -182,7 +193,9 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void exceptionStopMapsToThreadZeroWithDescription() throws Exception {
-    server.notify("exceptionStop", "{\"text\":\"Null Object Reference\"}");
+    server.notify("exceptionStop", """
+        {"text": "Null Object Reference"}
+        """);
     StoppedEvent stopped = (StoppedEvent)awaitEvent(StoppedEvent.class);
     assertEquals("exception", stopped.getBody().getReason());
     assertEquals(Integer.valueOf(0), stopped.getBody().getThreadId());
@@ -191,19 +204,28 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void threadLifecycleNotificationsBecomeThreadEvents() throws Exception {
-    server.notify("threadStart", "{\"threadId\":3}");
+    server.notify("threadStart", """
+        {"threadId": 3}
+        """);
     ThreadEvent started = (ThreadEvent)awaitEvent(ThreadEvent.class);
     assertEquals(ThreadEvent.REASON_STARTED, started.getBody().getReason());
     assertEquals(3, started.getBody().getThreadId());
 
-    server.notify("ThreadExit", "{\"threadId\":3}");
+    server.notify("ThreadExit", """
+        {"threadId": 3}
+        """);
     ThreadEvent exited = (ThreadEvent)awaitEvent(ThreadEvent.class);
     assertEquals(ThreadEvent.REASON_EXITED, exited.getBody().getReason());
   }
 
   @Test
   public void threadsTranslate() throws Exception {
-    server.handle("threads", params -> "[{\"id\":0,\"name\":\"main\"},{\"id\":5,\"name\":\"worker\"}]");
+    server.handle("threads", params -> """
+        [
+          {"id": 0, "name": "main"},
+          {"id": 5, "name": "worker"}
+        ]
+        """);
     ThreadsResponse response = (ThreadsResponse)dapClient.sendRequest(new ThreadsRequest(), TIMEOUT);
     assertEquals(2, response.getBody().getThreads().size());
     assertEquals("worker", response.getBody().getThreads().get(1).getName());
@@ -214,10 +236,12 @@ public class HxcppDebugAdapterTest {
   public void stackTraceMapsSourceAndDropsArtificialFrames() throws Exception {
     server.handle("stackTrace", params -> {
       assertEquals(2, params.path("threadId").asInt());
-      return "[" +
-             "{\"id\":0,\"name\":\"debugger::internal\",\"source\":null,\"line\":0,\"column\":0,\"artificial\":true}," +
-             "{\"id\":1,\"name\":\"Main.loop\",\"source\":\"C:\\\\project\\\\src\\\\Main.hx\",\"line\":14,\"column\":3}" +
-             "]";
+      return """
+          [
+            {"id": 0, "name": "debugger::internal", "source": null, "line": 0, "column": 0, "artificial": true},
+            {"id": 1, "name": "Main.loop", "source": "C:\\\\project\\\\src\\\\Main.hx", "line": 14, "column": 3}
+          ]
+          """;
     });
     StackTraceArguments arguments = new StackTraceArguments();
     arguments.setThreadId(2);
@@ -234,20 +258,32 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void variablesPathsSurviveIntoSetVariable() throws Exception {
-    server.handle("getScopes", params -> "[{\"id\":100,\"name\":\"Locals\"}]");
+    server.handle("getScopes", params -> """
+        [{"id": 100, "name": "Locals"}]
+        """);
     server.handle("getVariables", params -> switch (params.path("variablesReference").asInt()) {
-      case 100 -> "[{\"name\":\"obj\",\"type\":\"MyObj\",\"value\":\"MyObj\",\"variablesReference\":101}]";
-      case 101 -> "[{\"name\":\"items\",\"type\":\"Array<Int>\",\"value\":\"Array(2)\",\"variablesReference\":102},"
-                  + "{\"name\":\"x\",\"type\":\"Int\",\"value\":\"7\",\"variablesReference\":0}]";
+      case 100 -> """
+          [{"name": "obj", "type": "MyObj", "value": "MyObj", "variablesReference": 101}]
+          """;
+      case 101 -> """
+          [
+            {"name": "items", "type": "Array<Int>", "value": "Array(2)", "variablesReference": 102},
+            {"name": "x", "type": "Int", "value": "7", "variablesReference": 0}
+          ]
+          """;
       default -> "[]";
     });
     server.handle("setVariable", params -> {
       assertEquals("obj.x", params.path("expr").asString());
       assertEquals("9", params.path("value").asString());
-      return "{\"name\":\"x\",\"type\":\"Int\",\"value\":\"9\",\"variablesReference\":0}";
+      return """
+          {"name": "x", "type": "Int", "value": "9", "variablesReference": 0}
+          """;
     });
     server.handle("evaluate", params -> // write verification read-back
-      "{\"name\":\"obj.x\",\"type\":\"Int\",\"value\":\"9\",\"variablesReference\":0}");
+      """
+      {"name": "obj.x", "type": "Int", "value": "9", "variablesReference": 0}
+      """);
 
     ScopesArguments scopesArguments = new ScopesArguments();
     scopesArguments.setFrameId(1);
@@ -286,11 +322,14 @@ public class HxcppDebugAdapterTest {
     // Std.string without a custom toString is the class name AGAIN — raw
     // values read "ClassB, ClassB". The IDE shows the type separately, so
     // the adapter keeps only the informative part.
-    server.handle("getVariables", params -> "["
-      + "{\"name\":\"b\",\"type\":\"ClassB\",\"value\":\"ClassB, ClassB\",\"variablesReference\":7},"
-      + "{\"name\":\"w\",\"type\":\"pkg.Widget\",\"value\":\"Widget, Widget#3\",\"variablesReference\":8},"
-      + "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"7\",\"variablesReference\":0},"
-      + "{\"name\":\"m\",\"type\":\"haxe.ds.StringMap\",\"value\":\"{a => 1}\",\"variablesReference\":9}]");
+    server.handle("getVariables", params -> """
+        [
+          {"name": "b", "type": "ClassB", "value": "ClassB, ClassB", "variablesReference": 7},
+          {"name": "w", "type": "pkg.Widget", "value": "Widget, Widget#3", "variablesReference": 8},
+          {"name": "n", "type": "Int", "value": "7", "variablesReference": 0},
+          {"name": "m", "type": "haxe.ds.StringMap", "value": "{a => 1}", "variablesReference": 9}
+        ]
+        """);
 
     VariablesArguments arguments = new VariablesArguments();
     arguments.setVariablesReference(100);
@@ -310,8 +349,9 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void evaluateResultDropsTheDoubledClassNamePrefix() throws Exception {
-    server.handle("evaluate", params ->
-      "{\"name\":\"b\",\"type\":\"ClassB\",\"value\":\"ClassB, ClassB\",\"variablesReference\":7}");
+    server.handle("evaluate", params -> """
+        {"name": "b", "type": "ClassB", "value": "ClassB, ClassB", "variablesReference": 7}
+        """);
 
     EvaluateArguments arguments = new EvaluateArguments();
     arguments.setExpression("b");
@@ -325,17 +365,25 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void numericChildNamesBecomeIndexExpressions() throws Exception {
-    server.handle("getScopes", params -> "[{\"id\":100,\"name\":\"Locals\"}]");
+    server.handle("getScopes", params -> """
+        [{"id": 100, "name": "Locals"}]
+        """);
     server.handle("getVariables", params -> switch (params.path("variablesReference").asInt()) {
-      case 100 -> "[{\"name\":\"items\",\"type\":\"Array<Int>\",\"value\":\"Array(4)\",\"variablesReference\":110}]";
+      case 100 -> """
+          [{"name": "items", "type": "Array<Int>", "value": "Array(4)", "variablesReference": 110}]
+          """;
       default -> "[]";
     });
     server.handle("setVariable", params -> {
       assertEquals("items[3]", params.path("expr").asString());
-      return "{\"name\":\"3\",\"type\":\"Int\",\"value\":\"42\",\"variablesReference\":0}";
+      return """
+          {"name": "3", "type": "Int", "value": "42", "variablesReference": 0}
+          """;
     });
     server.handle("evaluate", params -> // write verification read-back
-      "{\"name\":\"items[3]\",\"type\":\"Int\",\"value\":\"42\",\"variablesReference\":0}");
+      """
+      {"name": "items[3]", "type": "Int", "value": "42", "variablesReference": 0}
+      """);
 
     ScopesArguments scopesArguments = new ScopesArguments();
     scopesArguments.setFrameId(1);
@@ -359,7 +407,9 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void staleReferenceIsRefusedAfterResume() throws Exception {
-    server.handle("getScopes", params -> "[{\"id\":100,\"name\":\"Locals\"}]");
+    server.handle("getScopes", params -> """
+        [{"id": 100, "name": "Locals"}]
+        """);
     ScopesArguments scopesArguments = new ScopesArguments();
     scopesArguments.setFrameId(1);
     ScopesRequest scopesRequest = new ScopesRequest();
@@ -388,15 +438,21 @@ public class HxcppDebugAdapterTest {
     server.handle("evaluate", params -> switch (params.path("expr").asString()) {
       case "cfg" -> {
         assertEquals(1, params.path("frameId").asInt());
-        yield "{\"name\":\"cfg\",\"type\":\"Config\",\"value\":\"Config\",\"variablesReference\":200}";
+        yield """
+            {"name": "cfg", "type": "Config", "value": "Config", "variablesReference": 200}
+            """;
       }
       // write verification read-back
-      case "cfg.count" -> "{\"name\":\"cfg.count\",\"type\":\"Int\",\"value\":\"9\",\"variablesReference\":0}";
+      case "cfg.count" -> """
+          {"name": "cfg.count", "type": "Int", "value": "9", "variablesReference": 0}
+          """;
       default -> throw new RuntimeException("unexpected evaluate " + params.path("expr").asString());
     });
     server.handle("setVariable", params -> {
       assertEquals("cfg.count", params.path("expr").asString());
-      return "{\"name\":\"count\",\"type\":\"Int\",\"value\":\"9\",\"variablesReference\":0}";
+      return """
+          {"name": "count", "type": "Int", "value": "9", "variablesReference": 0}
+          """;
     });
 
     EvaluateArguments evaluateArguments = new EvaluateArguments();
@@ -422,12 +478,16 @@ public class HxcppDebugAdapterTest {
     server.handle("setVariable", params -> {
       assertEquals("n", params.path("expr").asString());
       assertEquals("100", params.path("value").asString());
-      return "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"100\",\"variablesReference\":0}";
+      return """
+          {"name": "n", "type": "Int", "value": "100", "variablesReference": 0}
+          """;
     });
     // the write is verified by re-reading the target
     server.handle("evaluate", params -> {
       assertEquals("n", params.path("expr").asString());
-      return "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"100\",\"variablesReference\":0}";
+      return """
+          {"name": "n", "type": "Int", "value": "100", "variablesReference": 0}
+          """;
     });
 
     EvaluateArguments arguments = new EvaluateArguments();
@@ -446,14 +506,21 @@ public class HxcppDebugAdapterTest {
   @Test
   public void evaluateAssignmentWithExpressionValueEvaluatesTheRightSideFirst() throws Exception {
     server.handle("evaluate", params -> switch (params.path("expr").asString()) {
-      case "m * 2" -> "{\"name\":\"m * 2\",\"type\":\"Int\",\"value\":\"84\",\"variablesReference\":0}";
-      case "n" -> "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"84\",\"variablesReference\":0}"; // read-back
+      case "m * 2" -> """
+          {"name": "m * 2", "type": "Int", "value": "84", "variablesReference": 0}
+          """;
+      // read-back
+      case "n" -> """
+          {"name": "n", "type": "Int", "value": "84", "variablesReference": 0}
+          """;
       default -> throw new RuntimeException("unexpected evaluate " + params.path("expr").asString());
     });
     server.handle("setVariable", params -> {
       assertEquals("n", params.path("expr").asString());
       assertEquals("84", params.path("value").asString());
-      return "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"84\",\"variablesReference\":0}";
+      return """
+          {"name": "n", "type": "Int", "value": "84", "variablesReference": 0}
+          """;
     });
 
     EvaluateArguments arguments = new EvaluateArguments();
@@ -470,10 +537,13 @@ public class HxcppDebugAdapterTest {
   public void silentlyIgnoredWriteBecomesAnHonestError() throws Exception {
     // the real server reports success even when the variable was not found
     // in the top frame; the read-back must expose the unchanged value
-    server.handle("setVariable", params ->
-      "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"100\",\"variablesReference\":0}");
-    server.handle("evaluate", params ->
-      "{\"name\":\"n\",\"type\":\"Int\",\"value\":\"3\",\"variablesReference\":0}"); // unchanged!
+    server.handle("setVariable", params -> """
+        {"name": "n", "type": "Int", "value": "100", "variablesReference": 0}
+        """);
+    // unchanged!
+    server.handle("evaluate", params -> """
+        {"name": "n", "type": "Int", "value": "3", "variablesReference": 0}
+        """);
 
     EvaluateArguments arguments = new EvaluateArguments();
     arguments.setExpression("n = 100");
@@ -489,7 +559,9 @@ public class HxcppDebugAdapterTest {
   public void comparisonsAreNotAssignments() throws Exception {
     server.handle("evaluate", params -> {
       assertEquals("n == 100", params.path("expr").asString());
-      return "{\"name\":\"n == 100\",\"type\":\"Bool\",\"value\":\"false\",\"variablesReference\":0}";
+      return """
+          {"name": "n == 100", "type": "Bool", "value": "false", "variablesReference": 0}
+          """;
     });
     EvaluateArguments arguments = new EvaluateArguments();
     arguments.setExpression("n == 100");
@@ -515,14 +587,19 @@ public class HxcppDebugAdapterTest {
 
   @Test
   public void setVariableVerifiesAgainstTheReferencesFrame() throws Exception {
-    server.handle("getScopes", params -> "[{\"id\":100,\"name\":\"Locals\"}]");
-    server.handle("setVariable", params ->
-      "{\"name\":\"x\",\"type\":\"Int\",\"value\":\"5\",\"variablesReference\":0}");
+    server.handle("getScopes", params -> """
+        [{"id": 100, "name": "Locals"}]
+        """);
+    server.handle("setVariable", params -> """
+        {"name": "x", "type": "Int", "value": "5", "variablesReference": 0}
+        """);
     server.handle("evaluate", params -> {
       // the read-back must target the frame the reference was handed out for
       assertEquals("x", params.path("expr").asString());
       assertEquals(7, params.path("frameId").asInt());
-      return "{\"name\":\"x\",\"type\":\"Int\",\"value\":\"5\",\"variablesReference\":0}";
+      return """
+          {"name": "x", "type": "Int", "value": "5", "variablesReference": 0}
+          """;
     });
 
     ScopesArguments scopesArguments = new ScopesArguments();
@@ -596,7 +673,9 @@ public class HxcppDebugAdapterTest {
     });
     assertFalse(dapClient.sendRequest(new ThreadsRequest(), TIMEOUT).isSuccess());
 
-    server.handle("threads", params -> "[{\"id\":0,\"name\":\"main\"}]");
+    server.handle("threads", params -> """
+        [{"id": 0, "name": "main"}]
+        """);
     assertTrue(dapClient.sendRequest(new ThreadsRequest(), TIMEOUT).isSuccess());
   }
 
@@ -617,7 +696,9 @@ public class HxcppDebugAdapterTest {
   @Test
   public void unknownEventNamesAreIgnoredWithoutKillingThePump() throws Exception {
     server.notify("someFutureThing", "{}");
-    server.notify("breakpointStop", "{\"threadId\":1}");
+    server.notify("breakpointStop", """
+        {"threadId": 1}
+        """);
     StoppedEvent stopped = (StoppedEvent)awaitEvent(StoppedEvent.class);
     assertNotNull(stopped);
     assertNull(stopped.getBody().getDescription());
