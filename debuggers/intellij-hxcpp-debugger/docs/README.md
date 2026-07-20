@@ -1,9 +1,41 @@
 # intellij-hxcpp-debugger — server internals & gotchas
 
-The in-debuggee DAP debug server (`intellij-hxcpp-debug-server` haxelib). See
-`hxcpp-api-research.md` for what the runtime provides. This file records the
-non-obvious behaviours learned while building it — the things that will bite
-again.
+The in-debuggee DAP debug server (`intellij-hxcpp-debug-server` haxelib).
+This file records what the hxcpp runtime provides and the non-obvious
+behaviours learned while building on it — the things that will bite again.
+
+## What the runtime provides (hxcpp 4.3.2, `cpp.vm.Debugger` + `src/hx/Debugger.cpp`)
+
+The server is a protocol layer over a debug engine hxcpp already ships:
+
+- **Boot**: `extraParams.hxml` runs `--macro Macro.injectServer()`; on a
+  `cpp && debug` build it defines `HXCPP_DEBUGGER` (checked throws,
+  instrumentation hooks) and forces the self-starting Server class into the
+  build. Config chain: env var → compile-time define → default (Macro.hx).
+- **Breakpoints**: `addFileLineBreakpoint` / `addClassFunctionBreakpoint` /
+  `deleteBreakpoint` — a complete, thread-safe engine (copy-on-write lists,
+  quick-reject hash, so idle breakpoints are nearly free). Class-function
+  breakpoints fire at function ENTRY (`frame->lineNumber == firstLineNumber`),
+  which is what smart step into is built on. `getFilesFullPath()` and
+  `getFiles()` are index-aligned parallel arrays — the basis of the suffix
+  file matching (gotcha 19 covers line-level verification).
+- **Run control**: `stepThread(thread, INTO/OVER/OUT, count)`,
+  `continueThreads`, `breakNow(wait)`. Steps compare stack depth against the
+  break-time level; step and breakpoint checks are evaluated TOGETHER at
+  every instrumentation point, so a temporary breakpoint is live during a
+  step ("whichever lands first" needs no runtime support).
+- **Stacks and stop reasons are field reads**: `ThreadInfo` carries the full
+  frame list (fileName/lineNumber/className/functionName/parameters) and a
+  status that distinguishes BREAK_IMMEDIATE / BREAKPOINT (+ number) /
+  CRITICAL_ERROR (+ description) — no stack walker, no trap classification.
+- **Variables are live `Dynamic`s**: `getStackVariables` /
+  `getStackVariableValue`, expansion by ordinary reflection.
+  `setStackVariableValue(thread, frame, name, value, unsafe)` writes to ANY
+  frame and returns the value actually set — compare to detect silent misses.
+  Statics need no debugger API at all (`Type.resolveClass` + `Reflect`).
+- **Exceptions**: every throw funnels through `__hxcpp_dbg_checkedThrow`,
+  which walks the enclosing frames' declared catch types — real typed
+  uncaught-detection. Details and limits in gotcha 15.
 
 ## 1. The debug-thread registration (breakpoints silently never fire)
 

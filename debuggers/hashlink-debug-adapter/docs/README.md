@@ -1086,6 +1086,27 @@ that never stops. Same behaviour and wording as the intellij-hxcpp server
 (its gotcha 19). Note the function DECLARATION line carries no code — the
 body's first statement line does (see FIXTURE_ADD_LINE in the tests).
 
+## Backlog: hscript as the expression evaluator (assessed 2026-07-16, parked)
+
+If an expression the current evaluator cannot parse ever bites, reuse
+hscript's **Parser only, never its Interp**. The hxcpp server can run
+hscript's `Interp` because it lives in-process: frame locals are real Haxe
+objects and `Interp.call` is literally `Reflect.callMethod`. This adapter is
+out-of-process — values are PROXIES (address + hlType) decoded from debuggee
+memory, so reflection on them is meaningless, and even with
+`get`/`set`/`call`/`cnew` overridden the binary operators still run
+adapter-side: object identity (`==` on two proxies), string building and
+anything that should allocate in the debuggee silently computes the wrong
+thing. The workable shape is the Parser (a complete, battle-tested Haxe
+expression grammar) plus a small AST walker mapping each node onto machinery
+that already exists here: field access → memory resolvers, calls → the
+eval-call trampoline, assignment → the mutation path, `new` → debuggee-side
+allocation (GC caution: same care as the existing eval-call path — another
+reason not to force `Interp`). Reference for the walker's shape:
+`intellij-hxcpp-debugger`'s `ResolvingInterp` (resolve/execute overrides and
+the dotted-package-path pre-binding). Payoff is grammar completeness, not new
+capability — hence parked until a real expression fails.
+
 ## Quick reference
 
 | Concern | Rule |
