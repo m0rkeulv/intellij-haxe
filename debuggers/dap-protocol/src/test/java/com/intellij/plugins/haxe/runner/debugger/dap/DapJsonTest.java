@@ -62,8 +62,17 @@ public class DapJsonTest {
   @Test
   public void decodeDiscriminatesInitializeResponse() {
     String json = """
-      {"seq":1,"type":"response","request_seq":1,"success":true,"command":"initialize",
-       "body":{"supportsConfigurationDoneRequest":true}}""";
+        {
+          "seq": 1,
+          "type": "response",
+          "request_seq": 1,
+          "success": true,
+          "command": "initialize",
+          "body": {
+            "supportsConfigurationDoneRequest": true
+          }
+        }
+        """;
     ProtocolMessage message = DapJson.decode(json);
     assertTrue(message instanceof InitializeResponse);
     InitializeResponse response = (InitializeResponse)message;
@@ -75,8 +84,23 @@ public class DapJsonTest {
   @Test
   public void decodeDiscriminatesSetBreakpointsResponse() {
     String json = """
-      {"seq":2,"type":"response","request_seq":2,"success":true,"command":"setBreakpoints",
-       "body":{"breakpoints":[{"id":1,"verified":true,"line":10}]}}""";
+        {
+          "seq": 2,
+          "type": "response",
+          "request_seq": 2,
+          "success": true,
+          "command": "setBreakpoints",
+          "body": {
+            "breakpoints": [
+              {
+                "id": 1,
+                "verified": true,
+                "line": 10
+              }
+            ]
+          }
+        }
+        """;
     ProtocolMessage message = DapJson.decode(json);
     assertTrue(message instanceof SetBreakpointsResponse);
     SetBreakpointsResponse response = (SetBreakpointsResponse)message;
@@ -88,8 +112,21 @@ public class DapJsonTest {
   @Test
   public void failedResponseDecodesAsErrorResponseRegardlessOfCommand() {
     String json = """
-      {"seq":3,"type":"response","request_seq":3,"success":false,"command":"fooBar",
-       "message":"Unrecognized command: fooBar","body":{"error":{"id":1000,"format":"Unrecognized command: fooBar"}}}""";
+        {
+          "seq": 3,
+          "type": "response",
+          "request_seq": 3,
+          "success": false,
+          "command": "fooBar",
+          "message": "Unrecognized command: fooBar",
+          "body": {
+            "error": {
+              "id": 1000,
+              "format": "Unrecognized command: fooBar"
+            }
+          }
+        }
+        """;
     ProtocolMessage message = DapJson.decode(json);
     assertTrue(message instanceof ErrorResponse);
     ErrorResponse response = (ErrorResponse)message;
@@ -102,10 +139,24 @@ public class DapJsonTest {
     // A stable machine-readable code (Message.id) plus structured details
     // (Message.variables) the client branches on instead of the human text.
     String json = """
-      {"seq":5,"type":"response","request_seq":5,"success":false,"command":"evaluate",
-       "message":"Unknown variable \\"Deep\\"",
-       "body":{"error":{"id":2001,"format":"Unknown variable {name}",
-       "variables":{"name":"Deep"}}}}""";
+        {
+          "seq": 5,
+          "type": "response",
+          "request_seq": 5,
+          "success": false,
+          "command": "evaluate",
+          "message": "Unknown variable \\"Deep\\"",
+          "body": {
+            "error": {
+              "id": 2001,
+              "format": "Unknown variable {name}",
+              "variables": {
+                "name": "Deep"
+              }
+            }
+          }
+        }
+        """;
     ErrorResponse response = (ErrorResponse)DapJson.decode(json);
     assertEquals(DebugErrorCode.UNRESOLVED_NAME.id(), response.getBody().getError().getId());
     assertEquals("Deep", response.getBody().getError().getVariables().get("name"));
@@ -114,14 +165,24 @@ public class DapJsonTest {
   @Test
   public void decodeDiscriminatesInitializedEvent() {
     ProtocolMessage message = DapJson.decode("""
-      {"seq":2,"type":"event","event":"initialized"}""");
+        {
+          "seq": 2,
+          "type": "event",
+          "event": "initialized"
+        }
+        """);
     assertTrue(message instanceof InitializedEvent);
   }
 
   @Test
   public void unknownEventDecodesAsGenericEvent() {
     ProtocolMessage message = DapJson.decode("""
-      {"seq":9,"type":"event","event":"custom"}""");
+        {
+          "seq": 9,
+          "type": "event",
+          "event": "custom"
+        }
+        """);
     assertTrue(message instanceof Event);
     assertEquals("custom", ((Event)message).getEvent());
   }
@@ -129,14 +190,24 @@ public class DapJsonTest {
   @Test
   public void unknownFieldsAreIgnored() {
     ProtocolMessage message = DapJson.decode("""
-      {"seq":1,"type":"request","command":"x","futureField":123}""");
+        {
+          "seq": 1,
+          "type": "request",
+          "command": "x",
+          "futureField": 123
+        }
+        """);
     assertTrue(message instanceof Request);
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void unknownMessageTypeIsRejected() {
     DapJson.decode("""
-      {"seq":1,"type":"telegram"}""");
+        {
+          "seq": 1,
+          "type": "telegram"
+        }
+        """);
   }
 
   @Test
@@ -172,33 +243,84 @@ public class DapJsonTest {
   public void decodeDiscriminatesStepResponses() {
     ProtocolMessage next = DapJson.decode(
       """
-      {"seq":1,"type":"response","request_seq":1,"success":true,"command":"next"}""");
+          {
+            "seq": 1,
+            "type": "response",
+            "request_seq": 1,
+            "success": true,
+            "command": "next"
+          }
+          """);
     assertTrue(next instanceof NextResponse);
 
     ProtocolMessage stepIn = DapJson.decode(
       """
-      {"seq":2,"type":"response","request_seq":2,"success":true,"command":"stepIn"}""");
+          {
+            "seq": 2,
+            "type": "response",
+            "request_seq": 2,
+            "success": true,
+            "command": "stepIn"
+          }
+          """);
     assertTrue(stepIn instanceof StepInResponse);
 
     ProtocolMessage stepOut = DapJson.decode(
       """
-      {"seq":3,"type":"response","request_seq":3,"success":true,"command":"stepOut"}""");
+          {
+            "seq": 3,
+            "type": "response",
+            "request_seq": 3,
+            "success": true,
+            "command": "stepOut"
+          }
+          """);
     assertTrue(stepOut instanceof StepOutResponse);
   }
 
   @Test
   public void decodeDiscriminatesScopesAndVariablesResponses() {
     String scopes = """
-      {"seq":1,"type":"response","request_seq":1,"success":true,"command":"scopes",
-       "body":{"scopes":[{"name":"Locals","variablesReference":1000}]}}""";
+        {
+          "seq": 1,
+          "type": "response",
+          "request_seq": 1,
+          "success": true,
+          "command": "scopes",
+          "body": {
+            "scopes": [
+              {
+                "name": "Locals",
+                "variablesReference": 1000
+              }
+            ]
+          }
+        }
+        """;
     ProtocolMessage sm = DapJson.decode(scopes);
     assertTrue(sm instanceof ScopesResponse);
     assertEquals("Locals", ((ScopesResponse)sm).getBody().getScopes().get(0).getName());
     assertEquals(1000, ((ScopesResponse)sm).getBody().getScopes().get(0).getVariablesReference());
 
     String vars = """
-      {"seq":2,"type":"response","request_seq":2,"success":true,"command":"variables",
-       "body":{"variables":[{"name":"total","value":"3","type":"Int","variablesReference":0}]}}""";
+        {
+          "seq": 2,
+          "type": "response",
+          "request_seq": 2,
+          "success": true,
+          "command": "variables",
+          "body": {
+            "variables": [
+              {
+                "name": "total",
+                "value": "3",
+                "type": "Int",
+                "variablesReference": 0
+              }
+            ]
+          }
+        }
+        """;
     ProtocolMessage vm = DapJson.decode(vars);
     assertTrue(vm instanceof VariablesResponse);
     assertEquals("total", ((VariablesResponse)vm).getBody().getVariables().get(0).getName());
@@ -209,11 +331,38 @@ public class DapJsonTest {
   @Test
   public void variableDecodesIconKind() {
     String vars = """
-      {"seq":2,"type":"response","request_seq":2,"success":true,"command":"variables",
-       "body":{"variables":[
-       {"name":"amount","value":"5","type":"Int","variablesReference":0,"kind":"argument"},
-       {"name":"count","value":"3","type":"Int","variablesReference":0},
-       {"name":"future","value":"0","type":"Int","variablesReference":0,"kind":"bogus"}]}}""";
+        {
+          "seq": 2,
+          "type": "response",
+          "request_seq": 2,
+          "success": true,
+          "command": "variables",
+          "body": {
+            "variables": [
+              {
+                "name": "amount",
+                "value": "5",
+                "type": "Int",
+                "variablesReference": 0,
+                "kind": "argument"
+              },
+              {
+                "name": "count",
+                "value": "3",
+                "type": "Int",
+                "variablesReference": 0
+              },
+              {
+                "name": "future",
+                "value": "0",
+                "type": "Int",
+                "variablesReference": 0,
+                "kind": "bogus"
+              }
+            ]
+          }
+        }
+        """;
     VariablesResponse vm = (VariablesResponse)DapJson.decode(vars);
     assertEquals(VariableKind.ARGUMENT, vm.getBody().getVariables().get(0).getKind());
     assertEquals("absent kind decodes to UNSPECIFIED", VariableKind.UNSPECIFIED, vm.getBody().getVariables().get(1).getKind());
@@ -223,9 +372,29 @@ public class DapJsonTest {
   @Test
   public void decodeDiscriminatesStackTraceResponse() {
     String json = """
-      {"seq":9,"type":"response","request_seq":5,"success":true,"command":"stackTrace",
-       "body":{"stackFrames":[{"id":0,"name":"Main.main","line":12,"column":1,
-       "source":{"name":"Main.hx","path":"/p/Main.hx"}}],"totalFrames":1}}""";
+        {
+          "seq": 9,
+          "type": "response",
+          "request_seq": 5,
+          "success": true,
+          "command": "stackTrace",
+          "body": {
+            "stackFrames": [
+              {
+                "id": 0,
+                "name": "Main.main",
+                "line": 12,
+                "column": 1,
+                "source": {
+                  "name": "Main.hx",
+                  "path": "/p/Main.hx"
+                }
+              }
+            ],
+            "totalFrames": 1
+          }
+        }
+        """;
     ProtocolMessage message = DapJson.decode(json);
     assertTrue(message instanceof StackTraceResponse);
     StackTraceResponse response = (StackTraceResponse)message;
@@ -237,8 +406,20 @@ public class DapJsonTest {
   @Test
   public void decodeDiscriminatesStoppedEvent() {
     String json = """
-      {"seq":11,"type":"event","event":"stopped",
-       "body":{"reason":"breakpoint","threadId":42,"allThreadsStopped":true,"hitBreakpointIds":[1]}}""";
+        {
+          "seq": 11,
+          "type": "event",
+          "event": "stopped",
+          "body": {
+            "reason": "breakpoint",
+            "threadId": 42,
+            "allThreadsStopped": true,
+            "hitBreakpointIds": [
+              1
+            ]
+          }
+        }
+        """;
     ProtocolMessage message = DapJson.decode(json);
     assertTrue(message instanceof StoppedEvent);
     StoppedEvent event = (StoppedEvent)message;
@@ -250,23 +431,57 @@ public class DapJsonTest {
   @Test
   public void decodeDiscriminatesLifecycleEvents() {
     assertTrue(DapJson.decode("""
-      {"seq":1,"type":"event","event":"terminated"}""") instanceof TerminatedEvent);
+        {
+          "seq": 1,
+          "type": "event",
+          "event": "terminated"
+        }
+        """) instanceof TerminatedEvent);
 
     ProtocolMessage exited = DapJson.decode("""
-      {"seq":2,"type":"event","event":"exited","body":{"exitCode":3}}""");
+        {
+          "seq": 2,
+          "type": "event",
+          "event": "exited",
+          "body": {
+            "exitCode": 3
+          }
+        }
+        """);
     assertTrue(exited instanceof ExitedEvent);
     assertEquals(3, ((ExitedEvent)exited).getBody().getExitCode());
 
     ProtocolMessage output = DapJson.decode(
       """
-      {"seq":3,"type":"event","event":"output","body":{"category":"stdout","output":"hi"}}""");
+          {
+            "seq": 3,
+            "type": "event",
+            "event": "output",
+            "body": {
+              "category": "stdout",
+              "output": "hi"
+            }
+          }
+          """);
     assertTrue(output instanceof OutputEvent);
     assertEquals("hi", ((OutputEvent)output).getBody().getOutput());
 
     ProtocolMessage breakpoint = DapJson.decode(
       """
-      {"seq":4,"type":"event","event":"breakpoint",
-       "body":{"reason":"changed","breakpoint":{"id":7,"verified":true,"line":10}}}""");
+          {
+            "seq": 4,
+            "type": "event",
+            "event": "breakpoint",
+            "body": {
+              "reason": "changed",
+              "breakpoint": {
+                "id": 7,
+                "verified": true,
+                "line": 10
+              }
+            }
+          }
+          """);
     assertTrue(breakpoint instanceof BreakpointEvent);
     assertTrue(((BreakpointEvent)breakpoint).getBody().getBreakpoint().isVerified());
   }
