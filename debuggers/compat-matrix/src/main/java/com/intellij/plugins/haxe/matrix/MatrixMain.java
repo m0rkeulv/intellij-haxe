@@ -161,26 +161,10 @@ public final class MatrixMain {
   }
 
   private void run() throws IOException {
-    // the effective flag values, before provisioning resolves anything - so a
-    // surprising run self-documents which knobs it was started with
-    log.line("matrix config: lanes=" + String.join("+", lanes)
-             + " haxe=" + (haxeFilter.isEmpty() ? "all" : String.join(",", haxeFilter))
-             + " hl=" + (hlFilter.isEmpty() ? "all" : String.join(",", hlFilter))
-             + " full=" + full
-             + " parallelLanes=" + parallelLanes
-             + " hlForks=" + hlForks);
-    log.line("matrix paths: resources=" + resources + " out=" + out);
+    logConfig();
     Provisioner provisioner = new Provisioner(resources, log);
-    haxeDirs = provisioner.haxeDirs();
-    if (!haxeFilter.isEmpty()) {
-      haxeDirs = haxeDirs.stream()
-        .filter(d -> haxeFilter.contains(d.getFileName().toString())).toList();
-    }
-    hlDirs = lanes.contains("hashlink") ? provisioner.hashlinkDirs() : List.of();
-    if (!hlFilter.isEmpty()) {
-      hlDirs = hlDirs.stream()
-        .filter(d -> hlFilter.contains(d.getFileName().toString())).toList();
-    }
+    haxeDirs = applyNameFilter(provisioner.haxeDirs(), haxeFilter);
+    hlDirs = lanes.contains("hashlink") ? applyNameFilter(provisioner.hashlinkDirs(), hlFilter) : List.of();
     log.line("matrix start: lanes=" + String.join("+", lanes)
              + " haxe=" + names(haxeDirs) + " hl=" + names(hlDirs));
     if (haxeDirs.isEmpty()) {
@@ -188,13 +172,7 @@ public final class MatrixMain {
       System.exit(1);
     }
 
-    if (lanes.contains("hashlink") || lanes.contains("hxcpp")) {
-      // haxelib dev registrations ONCE, with the dev haxe; the lanes exclude
-      // these tasks so nothing races the shared haxelib repository
-      gradle.run(List.of(":debuggers:hashlink-debug-adapter:registerDapProtocolHaxelib",
-                         ":debuggers:intellij-hxcpp-debugger:registerServerHaxelib"),
-                 Map.of(), out.resolve("logs/preflight.log"), 300);
-    }
+    registerHaxelibsOnce();
 
     if (parallelLanes && lanes.size() > 1) {
       runLanesInParallel();
@@ -212,6 +190,35 @@ public final class MatrixMain {
     restore();
     report();
     log.line("matrix done");
+  }
+
+  /** Logs the effective flag values before provisioning, so a run self-documents its config. */
+  private void logConfig() {
+    log.line("matrix config: lanes=" + String.join("+", lanes)
+             + " haxe=" + (haxeFilter.isEmpty() ? "all" : String.join(",", haxeFilter))
+             + " hl=" + (hlFilter.isEmpty() ? "all" : String.join(",", hlFilter))
+             + " full=" + full
+             + " parallelLanes=" + parallelLanes
+             + " hlForks=" + hlForks);
+    log.line("matrix paths: resources=" + resources + " out=" + out);
+  }
+
+  /** The dirs whose file name is listed in {@code names}, or all of them when {@code names} is empty. */
+  private static List<Path> applyNameFilter(List<Path> dirs, List<String> names) {
+    return names.isEmpty() ? dirs
+      : dirs.stream().filter(d -> names.contains(d.getFileName().toString())).toList();
+  }
+
+  /**
+   * haxelib dev registrations ONCE, with the dev haxe, before any lane runs;
+   * the lanes exclude these tasks so nothing races the shared haxelib repo.
+   */
+  private void registerHaxelibsOnce() {
+    if (lanes.contains("hashlink") || lanes.contains("hxcpp")) {
+      gradle.run(List.of(":debuggers:hashlink-debug-adapter:registerDapProtocolHaxelib",
+                         ":debuggers:intellij-hxcpp-debugger:registerServerHaxelib"),
+                 Map.of(), out.resolve("logs/preflight.log"), 300);
+    }
   }
 
   /**
@@ -296,18 +303,7 @@ public final class MatrixMain {
     log.line("      " + failing.size() + " suite(s) failed - retrying them once to tell machine flakes from real failures");
     List<String> before = failing.stream()
       .flatMap(c -> c.failed().stream().map(f -> c.name() + "::" + f.test())).toList();
-    // keep the FIRST attempt's failure XMLs (stack traces, adapter output):
-    // the retry overwrites the suite's evidence, and a flake that "passed on
-    // retry" is undiagnosable without what actually failed the first time
-    Path firstAttempt = evidence.resolve("first-attempt");
-    Files.createDirectories(firstAttempt);
-    for (Results.ClassResult failed : failing) {
-      Path xml = evidence.resolve("TEST-" + failed.fqName() + ".xml");
-      if (Files.isRegularFile(xml)) {
-        Files.copy(xml, firstAttempt.resolve(xml.getFileName()),
-                   StandardCopyOption.REPLACE_EXISTING);
-      }
-    }
+    preserveFirstAttempt(failing, evidence);
     List<String> retry = new ArrayList<>(List.of(modulePath + TASK_CLEAN_TEST, modulePath + TASK_TEST));
     for (Results.ClassResult failed : failing) {
       retry.add(GRADLE_TESTS);
@@ -316,16 +312,7 @@ public final class MatrixMain {
     retry.addAll(extraArgs);
     gradle.run(retry, env, Path.of(logFile + ".retry"), timeoutSec, true);
     Gradle.killStrays();
-    // the retry results REPLACE the retried suites' evidence; untouched
-    // suites keep their first-run XMLs
-    if (Files.isDirectory(moduleResults)) {
-      try (var files = Files.list(moduleResults)) {
-        for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".xml")).toList()) {
-          Files.copy(file, evidence.resolve(file.getFileName()),
-                     StandardCopyOption.REPLACE_EXISTING);
-        }
-      }
-    }
+    overlayResults(moduleResults, evidence);
     List<Results.ClassResult> merged = Results.parse(evidence);
     List<String> after = merged.stream()
       .flatMap(c -> c.failed().stream().map(f -> c.name() + "::" + f.test())).toList();
@@ -334,6 +321,39 @@ public final class MatrixMain {
       log.line("      flaky (passed on retry): " + String.join(", ", flaky));
     }
     return new SuiteRun(status, merged, flaky);
+  }
+
+  /**
+   * Copies the first attempt's failure XMLs into {@code evidence/first-attempt}
+   * before the retry overwrites them — a flake that "passed on retry" is
+   * undiagnosable without the stack traces (and adapter output) that first
+   * failed it.
+   */
+  private void preserveFirstAttempt(List<Results.ClassResult> failing, Path evidence) throws IOException {
+    Path firstAttempt = evidence.resolve("first-attempt");
+    Files.createDirectories(firstAttempt);
+    for (Results.ClassResult failed : failing) {
+      Path xml = evidence.resolve("TEST-" + failed.fqName() + ".xml");
+      if (Files.isRegularFile(xml)) {
+        Files.copy(xml, firstAttempt.resolve(xml.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+      }
+    }
+  }
+
+  /**
+   * Overlays the retry's XMLs onto the evidence dir: the retried suites' results
+   * REPLACE the first run's, while suites the retry did not touch keep their
+   * first-run XMLs.
+   */
+  private void overlayResults(Path moduleResults, Path evidence) throws IOException {
+    if (!Files.isDirectory(moduleResults)) {
+      return;
+    }
+    try (var files = Files.list(moduleResults)) {
+      for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".xml")).toList()) {
+        Files.copy(file, evidence.resolve(file.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+      }
+    }
   }
 
   private Map<String, String> haxeEnv(Path haxeDir) {

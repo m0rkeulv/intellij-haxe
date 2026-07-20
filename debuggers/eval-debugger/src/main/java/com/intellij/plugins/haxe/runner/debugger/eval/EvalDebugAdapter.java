@@ -606,10 +606,45 @@ public class EvalDebugAdapter implements Closeable {
   /** How a step emulation ended: where the debuggee is and why. */
   private enum StepOutcome { STEPPED, HIT_BREAKPOINT, PROGRAM_ENDED }
 
-  private void handleStep(Request request) throws IOException {
+  /** The stopped thread id, or null after sending the "not stopped" error. */
+  private Integer requireStoppedThread(Request request) throws IOException {
     Integer thread = stoppedThreadId;
     if (thread == null) {
       sendErrorResponse(request, "Cannot step: the debuggee is not stopped");
+    }
+    return thread;
+  }
+
+  /** The typed DAP response matching the step verb of {@code request}. */
+  private static Response stepResponseFor(Request request) {
+    return switch (request) {
+      case NextRequest r -> new NextResponse();
+      case StepInRequest r -> new StepInResponse();
+      default -> new StepOutResponse();
+    };
+  }
+
+  /**
+   * Emits the DAP stopped event for a completed step: an exception landing when
+   * the verb ran into one, otherwise step / breakpoint per the outcome. A
+   * program that ran to completion emits nothing — the terminated event follows
+   * from the process disconnect.
+   */
+  private void sendStepStopped(int thread, StepOutcome outcome, String vmException) throws IOException {
+    if (vmException != null) {
+      sendStopped("exception", thread, vmException);
+    } else {
+      switch (outcome) {
+        case STEPPED -> sendStopped("step", thread, null);
+        case HIT_BREAKPOINT -> sendStopped("breakpoint", thread, null);
+        case PROGRAM_ENDED -> { } // terminated event follows from the disconnect
+      }
+    }
+  }
+
+  private void handleStep(Request request) throws IOException {
+    Integer thread = requireStoppedThread(request);
+    if (thread == null) {
       return;
     }
     if (unwindingException && !caughtExceptionFilterActive) {
@@ -617,12 +652,7 @@ public class EvalDebugAdapter implements Closeable {
       // expression forever (the user reported stepping in circles through the
       // exception constructor); the sole way forward is the program's death
       letUncaughtExceptionKillTheProgram();
-      Response deathResponse = switch (request) {
-        case NextRequest r -> new NextResponse();
-        case StepInRequest r -> new StepInResponse();
-        default -> new StepOutResponse();
-      };
-      sendResponse(request, deathResponse);
+      sendResponse(request, stepResponseFor(request));
       return; // the terminated event follows from the process's disconnect
     }
     // the VM's step request is SYNCHRONOUS: its response arrives when the
@@ -659,22 +689,8 @@ public class EvalDebugAdapter implements Closeable {
       exceptionDuringStepText = null;
       breakpointHitDuringStep = null;
     }
-    Response response = switch (request) {
-      case NextRequest r -> new NextResponse();
-      case StepInRequest r -> new StepInResponse();
-      default -> new StepOutResponse();
-    };
-    sendResponse(request, response);
-    if (vmException != null) {
-      // the verb ran into a (new) exception stop: that is the real landing
-      sendStopped("exception", thread, vmException);
-    } else {
-      switch (outcome) {
-        case STEPPED -> sendStopped("step", thread, null);
-        case HIT_BREAKPOINT -> sendStopped("breakpoint", thread, null);
-        case PROGRAM_ENDED -> { } // terminated event follows from the disconnect
-      }
-    }
+    sendResponse(request, stepResponseFor(request));
+    sendStepStopped(thread, outcome, vmException);
   }
 
   /**
@@ -727,9 +743,8 @@ public class EvalDebugAdapter implements Closeable {
    * step stop rather than an error.
    */
   private void handleStepIntoFunction(StepIntoFunctionRequest request) throws IOException {
-    Integer thread = stoppedThreadId;
+    Integer thread = requireStoppedThread(request);
     if (thread == null) {
-      sendErrorResponse(request, "Cannot step: the debuggee is not stopped");
       return;
     }
     StepIntoFunctionArguments arguments = request.getArguments();
@@ -810,15 +825,7 @@ public class EvalDebugAdapter implements Closeable {
       breakpointHitDuringStep = null;
     }
     sendResponse(request, new Response());
-    if (vmException != null) {
-      sendStopped("exception", thread, vmException);
-    } else {
-      switch (outcome) {
-        case STEPPED -> sendStopped("step", thread, null);
-        case HIT_BREAKPOINT -> sendStopped("breakpoint", thread, null);
-        case PROGRAM_ENDED -> { }
-      }
-    }
+    sendStepStopped(thread, outcome, vmException);
   }
 
   // Eval frame names are "pack.Class.method"; the IDE sends the class path
