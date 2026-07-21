@@ -84,8 +84,13 @@ public class HaxeExpressionCodeFragmentImpl extends HaxeFile implements HaxeExpr
     });
 
     ((SingleRootFileViewProvider)getViewProvider()).forceCachedPsi(this);
-    final MyHaxeFileElementType type = new MyHaxeFileElementType();
-    init(type, type);
+    // the element type MUST be the shared singleton: every IElementType
+    // construction registers permanently into a global short-indexed
+    // registry, and the debugger creates fragments constantly (variable
+    // hover, watches, evaluate) - a per-fragment instance exhausted the
+    // registry (~9900 leaked types) and broke ALL Haxe PSI (live-observed
+    // TooManyElementTypesException)
+    init(HaxeCodeFragmentElementType.INSTANCE, HaxeCodeFragmentElementType.INSTANCE);
   }
 
 
@@ -152,9 +157,11 @@ public class HaxeExpressionCodeFragmentImpl extends HaxeFile implements HaxeExpr
     return myScope;
   }
 
-  private class MyHaxeFileElementType extends IFileElementType {
-    public MyHaxeFileElementType() {
-      super(HaxeLanguage.INSTANCE);
+  private static final class HaxeCodeFragmentElementType extends IFileElementType {
+    static final HaxeCodeFragmentElementType INSTANCE = new HaxeCodeFragmentElementType();
+
+    private HaxeCodeFragmentElementType() {
+      super("HAXE_CODE_FRAGMENT", HaxeLanguage.INSTANCE);
     }
 
     @Nullable
@@ -167,7 +174,10 @@ public class HaxeExpressionCodeFragmentImpl extends HaxeFile implements HaxeExpr
     @Override
     protected ASTNode doParseContents(@NotNull ASTNode chameleon, @NotNull PsiElement psi) {
       final PsiBuilderFactory factory = PsiBuilderFactory.getInstance();
-      final PsiBuilder psiBuilder = factory.createBuilder(getProject(), chameleon);
+      // the project comes from the chameleon's own PSI (the fragment file,
+      // resolved through its manager) - NOT from the freshly wrapped `psi`
+      // argument, which has no tree parent yet and cannot answer getProject()
+      final PsiBuilder psiBuilder = factory.createBuilder(chameleon.getPsi().getProject(), chameleon);
       final PsiBuilder builder = adapt_builder_(HaxeTokenTypes.EXPRESSION, psiBuilder, new HaxeParser(), HaxeParser.EXTENDS_SETS_);
 
       final PsiBuilder.Marker marker = enter_section_(builder, 0, _NONE_, "<code fragment>");
