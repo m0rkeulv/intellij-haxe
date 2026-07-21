@@ -109,6 +109,16 @@ public interface DapBackend extends Closeable {
   }
 
   /**
+   * Whether the launch response arrives promptly enough to await. js-debug
+   * answers launch only AFTER configurationDone (live-verified), so awaiting
+   * it synchronously would deadlock the setup sequence — such a backend
+   * returns false and the launch is sent fire-and-forget.
+   */
+  default boolean awaitsLaunchResponse() {
+    return true;
+  }
+
+  /**
    * Whether the server understands the {@code setExceptionBreakpoints}
    * filters (and thus whether the exception breakpoint types should drive
    * this session). The filter vocabulary comes from {@link #anyThrowFilterId}

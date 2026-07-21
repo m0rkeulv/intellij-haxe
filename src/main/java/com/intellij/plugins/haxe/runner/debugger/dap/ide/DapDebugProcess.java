@@ -183,10 +183,16 @@ public class DapDebugProcess extends XDebugProcess {
         // launch = "the debuggee's server connected" (haxe-side servers hold
         // the program before main) or "the adapter started the debuggee"
         // (web adapters launch the browser here)
-        Response launchResponse = client.sendRequest(backend.launchRequest(), REQUEST_TIMEOUT_MILLIS);
-        if (!launchResponse.isSuccess()) {
-          fail("Cannot start the debug session: " + launchResponse.getMessage());
-          return;
+        if (backend.awaitsLaunchResponse()) {
+          Response launchResponse = client.sendRequest(backend.launchRequest(), REQUEST_TIMEOUT_MILLIS);
+          if (!launchResponse.isSuccess()) {
+            fail("Cannot start the debug session: " + launchResponse.getMessage());
+            return;
+          }
+        } else {
+          // js-debug answers launch only after configurationDone; a launch
+          // failure surfaces as an error output/terminated event instead
+          client.sendRequestNoWait(backend.launchRequest());
         }
       }
       launched = true;
