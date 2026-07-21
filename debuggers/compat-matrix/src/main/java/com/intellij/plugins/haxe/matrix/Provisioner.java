@@ -53,6 +53,11 @@ final class Provisioner {
     return ensureAll("hashlink", VersionManifest.hashlinkVersions(), "hl");
   }
 
+  /** Provisioned node runtimes for the web-debugger lanes (each contains node). */
+  List<Path> nodeDirs() throws IOException {
+    return ensureAll("node", VersionManifest.nodeVersions(), "node");
+  }
+
   private List<Path> ensureAll(String kind, List<VersionManifest.Tool> tools, String binary) throws IOException {
     Path base = resources.resolve(kind);
     Files.createDirectories(base);
@@ -74,7 +79,7 @@ final class Provisioner {
       }
       log.line(kind + " " + tool.name() + " : downloading " + tool.url());
       try {
-        downloadAndExtract(tool.url(), dir);
+        downloadAndExtract(tool.url(), dir, tool.sha256());
         if (Platform.findBinary(dir, binary) == null) {
           log.line(kind + " " + tool.name() + " : extracted but no " + binary + " binary found - skipped");
           continue;
@@ -101,27 +106,69 @@ final class Provisioner {
     return dirs;
   }
 
-  private void downloadAndExtract(String url, Path dir) throws IOException, InterruptedException {
+  private void downloadAndExtract(String url, Path dir, String sha256) throws IOException, InterruptedException {
     if (Files.exists(dir)) {
       deleteRecursively(dir);
     }
     Files.createDirectories(dir);
     HttpRequest request = HttpRequest.newBuilder(URI.create(url))
       .timeout(Duration.ofMinutes(10)).GET().build();
-    HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
-    if (response.statusCode() != 200) {
-      throw new IOException("HTTP " + response.statusCode() + " for " + url);
-    }
-    try (InputStream body = response.body()) {
-      if (url.endsWith(".zip")) {
-        extractZip(body, dir);
-      } else if (url.endsWith(".tar.gz") || url.endsWith(".tgz")) {
-        extractTarGz(body, dir);
-      } else {
-        throw new IOException("unsupported archive type: " + url);
+    if (sha256 != null) {
+      // pinned artifact: download fully, verify the hash, and only then
+      // extract - nothing from an unverified archive touches the disk tree
+      Path download = Files.createTempFile(dir, "download-", ".tmp");
+      try {
+        HttpResponse<Path> response = http.send(request, HttpResponse.BodyHandlers.ofFile(download));
+        if (response.statusCode() != 200) {
+          throw new IOException("HTTP " + response.statusCode() + " for " + url);
+        }
+        String actual = sha256Of(download);
+        if (!actual.equalsIgnoreCase(sha256)) {
+          throw new IOException("SHA-256 mismatch for " + url
+                                + "\n  expected " + sha256 + "\n  actual   " + actual);
+        }
+        try (InputStream in = Files.newInputStream(download)) {
+          extract(url, in, dir);
+        }
+      } finally {
+        Files.deleteIfExists(download);
+      }
+    } else {
+      HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+      if (response.statusCode() != 200) {
+        throw new IOException("HTTP " + response.statusCode() + " for " + url);
+      }
+      try (InputStream body = response.body()) {
+        extract(url, body, dir);
       }
     }
     unwrapNestedArchives(dir, 2);
+  }
+
+  private void extract(String url, InputStream body, Path dir) throws IOException {
+    if (url.endsWith(".zip")) {
+      extractZip(body, dir);
+    } else if (url.endsWith(".tar.gz") || url.endsWith(".tgz")) {
+      extractTarGz(body, dir);
+    } else {
+      throw new IOException("unsupported archive type: " + url);
+    }
+  }
+
+  private static String sha256Of(Path file) throws IOException {
+    try {
+      java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+      try (InputStream in = Files.newInputStream(file)) {
+        byte[] buffer = new byte[64 * 1024];
+        int read;
+        while ((read = in.read(buffer)) >= 0) {
+          digest.update(buffer, 0, read);
+        }
+      }
+      return java.util.HexFormat.of().formatHex(digest.digest());
+    } catch (java.security.NoSuchAlgorithmException e) {
+      throw new IOException("SHA-256 unavailable", e);
+    }
   }
 
   /**

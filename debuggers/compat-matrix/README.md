@@ -53,8 +53,12 @@ Progress streams to the console and `progress.log`.
 ## Toolchain provisioning
 
 The versions to certify live in `VersionManifest.java` (compile-checked; one
-line per version). On first run each is downloaded from the official GitHub
-releases and extracted into:
+line per version). Every versioned artifact is pinned **per platform** with
+its SHA-256 (node from the official signed `SHASUMS256.txt`, haxe/HashLink
+from the GitHub release assets), and the download is verified against the pin
+before anything is extracted — the one deliberate exception is the HashLink
+nightly, which moves by design and cannot carry a pin. On first run each is
+downloaded and extracted into:
 
 ```
 debuggerResources/            (gitignored)
@@ -87,12 +91,15 @@ manifest simply not listing older versions.
 
 - eval lane: ~1 minute per haxe version (live suite against the real VM).
 - firefox / chromium lanes: the browser-debugger module's live probe for
-  that family per haxe version (~2 minutes each; the probes compile their
-  `haxe -js` fixtures with the lane's toolchain). They need the
-  user-provisioned `<repo>/node` directory — portable node, the pinned
-  adapters, and the browsers (see the browser-debugger README); without it
-  the probes self-skip and the cells report skipped suites instead of
-  failing the run.
+  that family, per haxe version x per provisioned NODE runtime (~2 minutes
+  per cell; the probes compile their `haxe -js` fixtures with the lane's
+  haxe, and the vscode DAP adapters run on the cell's node). Node is
+  auto-provisioned — the manifest pins the active LTS and the current
+  release with the official SHASUMS256.txt hashes. The BROWSERS are not:
+  firefox/chromium must be installed on the machine, and the pinned
+  adapters must be present under `<repo>/node` (see the browser-debugger
+  README); without them the probes self-skip and the cells report skipped
+  suites instead of failing the run.
 - hashlink lane: fixture build per haxe version + a test run per runtime;
   the default "smart-reduced" grid runs known-degraded old haxe versions
   (4.1.5/4.2.5) against the reference runtimes only — latest release and

@@ -43,4 +43,8 @@ tasks.named<Test>("test") {
     }
     // the user-provisioned node runtime + pinned adapters (git-ignored /node/)
     systemProperty("web.debug.node.root", File(rootDir, "node").absolutePath)
+    // the compat-matrix web lanes point each cell at a PROVISIONED node
+    providers.gradleProperty("webDebugNodeExe").orNull?.let {
+        systemProperty("web.debug.node.exe", it)
+    }
 }

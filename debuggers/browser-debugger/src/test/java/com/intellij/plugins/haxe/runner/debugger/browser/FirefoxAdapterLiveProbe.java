@@ -79,7 +79,10 @@ public class FirefoxAdapterLiveProbe {
   }
 
   private static Path nodeExe() {
-    return nodeRoot().resolve("node-v24.18.0-win-x64/node.exe");
+    // the compat-matrix web lanes point each cell at a provisioned node
+    String override = System.getProperty("web.debug.node.exe");
+    return override != null ? Path.of(override)
+                            : nodeRoot().resolve("node-v24.18.0-win-x64/node.exe");
   }
 
   private static Path adapterBundle() {

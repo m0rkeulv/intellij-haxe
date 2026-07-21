@@ -43,6 +43,7 @@ public final class MatrixMain {
 
   private List<Path> haxeDirs = List.of();
   private List<Path> hlDirs = List.of();
+  private List<Path> nodeDirs = List.of();
 
   private static final List<String> HL_FIXTURE_TASKS = List.of(
     "buildTestFixture", "buildThreadsFixture", "buildSpinFixture", "buildUncaughtFixture",
@@ -162,8 +163,10 @@ public final class MatrixMain {
     Provisioner provisioner = new Provisioner(resources, log);
     haxeDirs = applyNameFilter(provisioner.haxeDirs(), haxeFilter);
     hlDirs = lanes.contains("hashlink") ? applyNameFilter(provisioner.hashlinkDirs(), hlFilter) : List.of();
+    nodeDirs = lanes.contains("firefox") || lanes.contains("chromium") ? provisioner.nodeDirs() : List.of();
     log.line("matrix start: lanes=" + String.join("+", lanes)
-             + " haxe=" + names(haxeDirs) + " hl=" + names(hlDirs));
+             + " haxe=" + names(haxeDirs) + " hl=" + names(hlDirs)
+             + (nodeDirs.isEmpty() ? "" : " node=" + names(nodeDirs)));
     if (haxeDirs.isEmpty()) {
       log.line("no haxe toolchains available - aborting");
       System.exit(1);
@@ -432,27 +435,39 @@ public final class MatrixMain {
   /**
    * One web-family lane: the browser-debugger module's live probe for that
    * family, per haxe toolchain (the probes compile their fixtures with the
-   * lane's haxe). Needs the user-provisioned {@code <repo>/node} directory
-   * (portable node, the pinned adapters, the browsers) — without it the
-   * probes self-skip and the cells report zero-failure skipped suites, so
-   * an unprovisioned machine degrades cleanly instead of failing the run.
+   * lane's haxe) x per PROVISIONED node runtime (the adapters run on node;
+   * the manifest pins the active LTS and the current release, hash-verified
+   * before unpack). The browsers are NOT provisioned — firefox/chromium must
+   * be installed on the machine; without them (or the adapters under
+   * {@code <repo>/node}) the probes self-skip and the cells degrade to
+   * skipped suites instead of failing the run.
    */
   private void webLane(String lane, String probeClass) throws IOException {
     log.line(lane.toUpperCase(Locale.ROOT) + " LANE (browser live probe)");
     Path moduleResults = root.resolve("debuggers/browser-debugger/build/test-results/test");
+    // no provisioned node (downloads failed?): one cell per haxe on the
+    // probes' default node discovery rather than no coverage at all
+    List<Path> nodes = nodeDirs.isEmpty() ? new ArrayList<>(Collections.singletonList((Path)null)) : nodeDirs;
     for (Path haxeDir : haxeDirs) {
       String haxe = haxeDir.getFileName().toString();
       Map<String, String> env = haxeEnv(haxeDir);
       verifyLaneHaxe(haxe, env);
-      log.line("    " + haxe + " : running the " + lane + " probe suite");
-      long start = System.nanoTime();
-      SuiteRun run = runSuite(":debuggers:browser-debugger",
-                              List.of(GRADLE_TESTS, "*" + probeClass,
-                                      GRADLE_NO_BUILD_CACHE, GRADLE_CONTINUE),
-                              env, out.resolve("logs/" + lane + "-" + haxe + ".log"), 1200,
-                              moduleResults, out.resolve("results/" + lane + "_" + haxe));
-      addCell(lane, haxe, null, run.status().name().toLowerCase(Locale.ROOT),
-              run.classes(), run.flaky(), start);
+      for (Path nodeDir : nodes) {
+        String node = nodeDir != null ? nodeDir.getFileName().toString() : null;
+        String cellName = haxe + (node != null ? "__" + node : "");
+        log.line("    " + haxe + (node != null ? " x " + node : "") + " : running the " + lane + " probe suite");
+        long start = System.nanoTime();
+        List<String> extra = new ArrayList<>(List.of(GRADLE_TESTS, "*" + probeClass,
+                                                     GRADLE_NO_BUILD_CACHE, GRADLE_CONTINUE));
+        if (nodeDir != null) {
+          extra.add("-PwebDebugNodeExe=" + Platform.findBinary(nodeDir, "node"));
+        }
+        SuiteRun run = runSuite(":debuggers:browser-debugger", extra,
+                                env, out.resolve("logs/" + lane + "-" + cellName + ".log"), 1200,
+                                moduleResults, out.resolve("results/" + lane + "_" + cellName));
+        addCell(lane, haxe, node, run.status().name().toLowerCase(Locale.ROOT),
+                run.classes(), run.flaky(), start);
+      }
     }
   }
 
@@ -619,6 +634,12 @@ public final class MatrixMain {
             int split = name.indexOf('_');
             lane = name.substring(0, split);
             haxe = name.substring(split + 1);
+            // web lanes: <lane>_<haxe>__<node runtime>
+            int runtimeSplit = haxe.indexOf("__");
+            if (runtimeSplit >= 0) {
+              runtime = haxe.substring(runtimeSplit + 2);
+              haxe = haxe.substring(0, runtimeSplit);
+            }
           }
           cells.add(new Results.Cell(lane, haxe, runtime, "ok", Results.parse(dir), List.of(), 0));
         }

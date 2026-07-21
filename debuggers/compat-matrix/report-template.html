@@ -144,9 +144,14 @@ for (const lane of Object.keys(LANE_TITLES)) {
   const cells = byLane[lane];
   if (!cells) continue;
   let html = "<h2>" + LANE_TITLES[lane] + "</h2><div class='gridwrap'><table>";
-  if (lane === "hashlink") {
-    const runtimes = DATA.meta.hlRuntimes;
-    html += "<tr><th class='rowhead'>haxe \\ runtime</th>" + runtimes.map(r => "<th>" + shortHl(r) + "</th>").join("") + "</tr>";
+  // a lane whose cells carry a runtime dimension (hashlink: HL runtimes;
+  // web lanes: node runtimes) renders the haxe x runtime grid
+  const laneRuntimes = lane === "hashlink" ? DATA.meta.hlRuntimes
+    : [...new Set(cells.map(c => c.runtime).filter(r => r))].sort();
+  if (laneRuntimes.length > 0) {
+    const runtimes = laneRuntimes;
+    const shortRuntime = r => r.startsWith("hashlink-") ? shortHl(r) : r.replace(/^node-/, "node ");
+    html += "<tr><th class='rowhead'>haxe \\ runtime</th>" + runtimes.map(r => "<th>" + shortRuntime(r) + "</th>").join("") + "</tr>";
     for (const haxe of DATA.meta.haxeVersions) {
       const row = cells.filter(c => c.haxe === haxe);
       if (row.length === 0) continue;
