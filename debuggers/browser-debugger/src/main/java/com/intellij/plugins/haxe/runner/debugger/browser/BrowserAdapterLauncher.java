@@ -1,0 +1,103 @@
+package com.intellij.plugins.haxe.runner.debugger.browser;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * Spawns a vscode debug adapter bundle on the user's node in DAP-over-TCP
+ * server mode and hands back the process + port. Wire behaviour pinned by
+ * FirefoxAdapterLiveProbe:
+ *
+ * <ul>
+ *   <li>{@code --server=<port>} needs a 4-5 digit port (the adapter's own
+ *       argv regex), so the port is chosen HERE, not by the OS;</li>
+ *   <li>the adapter prints {@code waiting for debug protocol on port N}
+ *       slightly BEFORE its listener accepts — callers must connect with a
+ *       short retry, which {@code DapClient.connect} alone does not do;</li>
+ *   <li>the returned stdout reader may hold buffered output beyond the
+ *       announcement; keep reading THAT reader (gobble into the console) or
+ *       the adapter can block on a full pipe.</li>
+ * </ul>
+ */
+public final class BrowserAdapterLauncher {
+  private static final String LISTENING_MARKER = "waiting for debug protocol";
+  private static final long ANNOUNCE_TIMEOUT_MILLIS = 15_000;
+  private static final long POLL_INTERVAL_MILLIS = 20;
+
+  /** A started adapter: the node process, the TCP port, and its live stdout. */
+  public record LaunchedAdapter(Process process, int port, BufferedReader stdout) {
+  }
+
+  private BrowserAdapterLauncher() {
+  }
+
+  /**
+   * Starts {@code node <bundle> --server=<port>} (cwd = the bundle's directory,
+   * where its wasm/asset siblings live) and waits for the port announcement.
+   * The caller owns the process.
+   */
+  public static LaunchedAdapter launch(Path nodeExecutable, Path adapterBundle) throws IOException {
+    int port = ThreadLocalRandom.current().nextInt(20_000, 60_000);
+    Process process = new ProcessBuilder(
+      nodeExecutable.toString(), adapterBundle.toString(), "--server=" + port)
+      .directory(adapterBundle.getParent().toFile())
+      .redirectErrorStream(true)
+      .start();
+    BufferedReader stdout = new BufferedReader(
+      new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+    try {
+      awaitAnnouncement(process, stdout);
+      return new LaunchedAdapter(process, port, stdout);
+    } catch (IOException e) {
+      process.destroyForcibly();
+      throw e;
+    }
+  }
+
+  // Polls stdout for the announcement line with a deadline (a blocking
+  // readLine could hang the launch on a wedged adapter forever). Everything
+  // read before the marker is kept for the failure message.
+  private static void awaitAnnouncement(Process process, BufferedReader stdout) throws IOException {
+    long deadline = System.currentTimeMillis() + ANNOUNCE_TIMEOUT_MILLIS;
+    StringBuilder seen = new StringBuilder();
+    StringBuilder line = new StringBuilder();
+    while (System.currentTimeMillis() < deadline) {
+      while (stdout.ready()) {
+        int c = stdout.read();
+        if (c < 0) {
+          break;
+        }
+        if (c == '\n') {
+          String text = line.toString().trim();
+          line.setLength(0);
+          if (text.contains(LISTENING_MARKER)) {
+            return;
+          }
+          seen.append(text).append('\n');
+        } else if (c != '\r') {
+          line.append((char)c);
+        }
+      }
+      if (!process.isAlive() && !stdout.ready()) {
+        throw new IOException("The debug adapter exited (code " + process.exitValue()
+                              + ") before announcing its port." + outputSuffix(seen));
+      }
+      try {
+        Thread.sleep(POLL_INTERVAL_MILLIS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IOException("Interrupted while starting the debug adapter", e);
+      }
+    }
+    throw new IOException("The debug adapter did not announce its port within "
+                          + (ANNOUNCE_TIMEOUT_MILLIS / 1000) + "s." + outputSuffix(seen));
+  }
+
+  private static String outputSuffix(StringBuilder seen) {
+    return seen.isEmpty() ? "" : " Adapter output:\n" + seen;
+  }
+}

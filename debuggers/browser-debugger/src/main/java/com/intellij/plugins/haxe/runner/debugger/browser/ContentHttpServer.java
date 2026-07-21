@@ -1,0 +1,211 @@
+package com.intellij.plugins.haxe.runner.debugger.browser;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * The debug session's content server: serves ONE local directory (the compiled
+ * haxe -js output: index.html, app.js, app.js.map, assets) to the browser being
+ * debugged, so pages load over {@code http://127.0.0.1:<port>/} instead of
+ * {@code file://} (relative XHR and source-map fetching behave like production
+ * there). Implemented on the JDK's built-in {@code com.sun.net.httpserver} —
+ * deliberately dependency-free; the web debugger's supply-chain rules allow no
+ * third-party server code.
+ *
+ * Scope and safety, in line with those rules:
+ * <ul>
+ *   <li>binds 127.0.0.1 ONLY, on an ephemeral port;</li>
+ *   <li>GET/HEAD only; no directory listings (a directory serves its
+ *       {@code index.html} or 404s);</li>
+ *   <li>requests resolving outside the root (traversal) are 404, never served;</li>
+ *   <li>every response is {@code no-store}: the user recompiles between
+ *       stops, and a cached stale app.js would desync every breakpoint.</li>
+ * </ul>
+ *
+ * Owned by the debug backend; {@link #close()} runs on session teardown
+ * (backend.close() is invoked on every teardown path, including failed starts).
+ */
+public final class ContentHttpServer implements Closeable {
+  private static final Map<String, String> MIME = Map.ofEntries(
+    Map.entry("html", "text/html; charset=utf-8"),
+    Map.entry("htm", "text/html; charset=utf-8"),
+    Map.entry("js", "text/javascript; charset=utf-8"),
+    Map.entry("mjs", "text/javascript; charset=utf-8"),
+    Map.entry("map", "application/json; charset=utf-8"),
+    Map.entry("json", "application/json; charset=utf-8"),
+    Map.entry("css", "text/css; charset=utf-8"),
+    Map.entry("wasm", "application/wasm"),
+    Map.entry("svg", "image/svg+xml"),
+    Map.entry("png", "image/png"),
+    Map.entry("jpg", "image/jpeg"),
+    Map.entry("jpeg", "image/jpeg"),
+    Map.entry("gif", "image/gif"),
+    Map.entry("ico", "image/x-icon"),
+    Map.entry("txt", "text/plain; charset=utf-8"));
+  private static final String FALLBACK_MIME = "application/octet-stream";
+
+  private final Path root;
+  private final HttpServer server;
+  private final ExecutorService executor;
+  /** Optional observer of served requests ("GET /app.js -> 200"); for tests/diagnostics. */
+  private volatile java.util.function.Consumer<String> requestListener;
+
+  public void setRequestListener(java.util.function.Consumer<String> listener) {
+    requestListener = listener;
+  }
+
+  private void notifyRequest(String line) {
+    java.util.function.Consumer<String> listener = requestListener;
+    if (listener != null) {
+      listener.accept(line);
+    }
+  }
+
+  /**
+   * Starts serving {@code root} on an ephemeral loopback port immediately.
+   * The root must be an existing directory.
+   */
+  public ContentHttpServer(Path root) throws IOException {
+    if (!Files.isDirectory(root)) {
+      throw new IOException("Content root is not a directory: " + root);
+    }
+    // toRealPath anchors the traversal check to the true location (symlinks,
+    // 8.3 names, case) - everything served must stay under THIS path
+    this.root = root.toRealPath();
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    // a page load fetches html+js+map+assets concurrently; a small pool keeps
+    // the browser from serializing on the server
+    executor = Executors.newFixedThreadPool(4, runnable -> {
+      Thread thread = new Thread(runnable, "haxe-web-content-server");
+      thread.setDaemon(true);
+      return thread;
+    });
+    server.setExecutor(executor);
+    server.createContext("/", this::handle);
+    server.start();
+  }
+
+  /** The bound port on 127.0.0.1. */
+  public int getPort() {
+    return server.getAddress().getPort();
+  }
+
+  /** The base URL to point the browser at (trailing slash included). */
+  public String getBaseUrl() {
+    return "http://127.0.0.1:" + getPort() + "/";
+  }
+
+  /**
+   * Debug-launch support: the NEXT html response gets a one-shot
+   * {@code <meta http-equiv=refresh>} injected. A browser tab's very first
+   * load always races the debugger attach (the JS thread actor is only born
+   * when scripts first execute, so nothing can pause that first run); the
+   * injected refresh makes the page reload itself once, and the SECOND load
+   * happens on the already-attached thread where entry pauses and armed
+   * breakpoints work. Live-verified against vscode-firefox-debug.
+   */
+  public void refreshFirstPage(int seconds) {
+    refreshOnceSeconds = seconds;
+  }
+
+  private volatile int refreshOnceSeconds = -1;
+
+  private byte[] maybeInjectRefresh(byte[] body) {
+    int seconds = refreshOnceSeconds;
+    if (seconds < 0) {
+      return body;
+    }
+    refreshOnceSeconds = -1; // one-shot: the reloaded page is served clean
+    String html = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+    String tag = "<meta http-equiv=\"refresh\" content=\"" + seconds + "\">";
+    String injected = html.replaceFirst("(?i)<head[^>]*>", "$0" + java.util.regex.Matcher.quoteReplacement(tag));
+    if (injected.equals(html)) {
+      injected = tag + html; // headless html: prepend (browsers tolerate it)
+    }
+    return injected.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+  }
+
+  private void handle(HttpExchange exchange) throws IOException {
+    try (exchange) {
+      String method = exchange.getRequestMethod();
+      if (!"GET".equals(method) && !"HEAD".equals(method)) {
+        exchange.getResponseHeaders().set("Allow", "GET, HEAD");
+        exchange.sendResponseHeaders(405, -1);
+        notifyRequest(method + " " + exchange.getRequestURI().getPath() + " -> 405");
+        return;
+      }
+      Path file = resolveRequest(exchange.getRequestURI().getPath());
+      if (file == null) {
+        exchange.sendResponseHeaders(404, -1);
+        notifyRequest(method + " " + exchange.getRequestURI().getPath() + " -> 404");
+        return;
+      }
+      notifyRequest(method + " " + exchange.getRequestURI().getPath() + " -> 200 (" + file.getFileName() + ")");
+      byte[] body = Files.readAllBytes(file);
+      if (isHtml(file)) {
+        body = maybeInjectRefresh(body);
+      }
+      exchange.getResponseHeaders().set("Content-Type", mimeOf(file));
+      // never cache: the user recompiles between runs and stale generated JS
+      // would silently desync the source map and every breakpoint with it
+      exchange.getResponseHeaders().set("Cache-Control", "no-store");
+      if ("HEAD".equals(method)) {
+        exchange.sendResponseHeaders(200, -1);
+        return;
+      }
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream out = exchange.getResponseBody()) {
+        out.write(body);
+      }
+    }
+  }
+
+  /**
+   * The regular file for a request path, or null for anything that must 404:
+   * escapes from the root, missing files, and directories without index.html.
+   */
+  private Path resolveRequest(String rawPath) {
+    // URI.getPath is already percent-decoded; a path with an embedded NUL or
+    // backslash is never a legitimate request for served content
+    if (rawPath.indexOf('\0') >= 0 || rawPath.indexOf('\\') >= 0) {
+      return null;
+    }
+    String relative = rawPath.startsWith("/") ? rawPath.substring(1) : rawPath;
+    Path candidate = root.resolve(relative).normalize();
+    if (!candidate.startsWith(root)) {
+      return null; // traversal attempt
+    }
+    if (Files.isDirectory(candidate)) {
+      candidate = candidate.resolve("index.html");
+    }
+    return Files.isRegularFile(candidate) ? candidate : null;
+  }
+
+  private static boolean isHtml(Path file) {
+    String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+    return name.endsWith(".html") || name.endsWith(".htm");
+  }
+
+  private static String mimeOf(Path file) {
+    String name = file.getFileName().toString();
+    int dot = name.lastIndexOf('.');
+    String extension = dot >= 0 ? name.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
+    return MIME.getOrDefault(extension, FALLBACK_MIME);
+  }
+
+  @Override
+  public void close() {
+    server.stop(0);
+    executor.shutdownNow();
+  }
+}
