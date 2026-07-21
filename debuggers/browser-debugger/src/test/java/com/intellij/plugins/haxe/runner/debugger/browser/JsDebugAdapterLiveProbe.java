@@ -120,8 +120,27 @@ public class JsDebugAdapterLiveProbe {
     return nodeRoot().resolve("adapters/js-debug-1.117.0/js-debug/src/dapDebugServer.js");
   }
 
+  /**
+   * The provisioned ungoogled-chromium when present (reproducible probe
+   * runs), else an installed Chrome/Edge — mirroring the IDE behaviour,
+   * where a blank executable lets js-debug find the default installation.
+   */
   private static Path chromiumExe() {
-    return nodeRoot().resolve("ungoogled-chromium_150.0.7871.128-1.1_windows_x64/chrome.exe");
+    Path provisioned = nodeRoot().resolve("ungoogled-chromium_150.0.7871.128-1.1_windows_x64/chrome.exe");
+    if (Files.isRegularFile(provisioned)) {
+      return provisioned;
+    }
+    for (String candidate : new String[]{
+      "C:/Program Files/Google/Chrome/Application/chrome.exe",
+      "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+      "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+      "C:/Program Files/Microsoft/Edge/Application/msedge.exe"}) {
+      Path path = Path.of(candidate);
+      if (Files.isRegularFile(path)) {
+        return path;
+      }
+    }
+    return null;
   }
 
   private static boolean haxeOnPath() {
@@ -132,7 +151,8 @@ public class JsDebugAdapterLiveProbe {
   public void spawnAdapter() throws IOException {
     Assume.assumeTrue("portable node not provisioned - skipping", Files.isRegularFile(nodeExe()));
     Assume.assumeTrue("js-debug adapter not provisioned - skipping", Files.isRegularFile(dapServerJs()));
-    Assume.assumeTrue("ungoogled-chromium not provisioned - skipping", Files.isRegularFile(chromiumExe()));
+    Assume.assumeTrue("no chromium-family browser found (provisioned or installed) - skipping",
+                      chromiumExe() != null);
 
     adapterPort = ThreadLocalRandom.current().nextInt(20000, 60000);
     adapter = new ProcessBuilder(nodeExe().toString(), dapServerJs().toString(),
