@@ -25,15 +25,30 @@ public final class HaxeRunConfigurationEditorUtil {
   /**
    * Wires the field's browse button: a file chooser (opening at the field's
    * current path) whose choice replaces the field text, with
-   * system-dependent separators.
+   * system-dependent separators. Also caps the field's PREFERRED width — a
+   * long path must not size the whole dialog (the form still stretches the
+   * field to the dialog's actual width).
    */
   public static void browseInto(Project project, TextFieldWithBrowseButton field, FileChooserDescriptor descriptor) {
+    field.getTextField().setColumns(25);
     field.addActionListener(e -> {
       VirtualFile file = FileChooser.chooseFile(descriptor, project, currentSelection(field));
       if (file != null) {
         field.setText(FileUtil.toSystemDependentName(file.getPath()));
       }
     });
+  }
+
+  /**
+   * A small gray helper line for the run-configuration editors. WRAPS at the
+   * platform's comment width instead of demanding its full text as the
+   * dialog's minimum width (a long single-line JLabel forced the browser and
+   * hxcpp dialogs far wider than normal).
+   */
+  public static javax.swing.JComponent hint(@org.jetbrains.annotations.Nls String text) {
+    // the platform default wraps at ~70 chars, which folds these hints into
+    // a tall narrow block; half again as wide reads better in these forms
+    return com.intellij.openapi.ui.panel.ComponentPanelBuilder.createCommentComponent(text, true, 105, true);
   }
 
   // The chooser opens at the field's current path (or its nearest existing

@@ -49,6 +49,17 @@ public final class AdapterStore {
   }
 
   /**
+   * Whether the pinned artifact is already fully acquired in this store —
+   * a read-only check (the run configuration UI shows the download state);
+   * {@link #resolveEntry} remains the only acquisition path.
+   */
+  public boolean isInstalled(AdapterPin pin) {
+    Path versionDir = storeRoot.resolve(pin.id()).resolve(pin.version());
+    Path marker = storeRoot.resolve(pin.id()).resolve(pin.version() + ".ok");
+    return Files.isRegularFile(marker) && Files.isRegularFile(versionDir.resolve(pin.entryRelativePath()));
+  }
+
+  /**
    * The adapter's entry-point file, downloading and unpacking the pinned
    * artifact on first use. {@code overrideDir} (a settings field: an already
    * unpacked artifact, the offline story) wins when it contains the entry.

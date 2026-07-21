@@ -35,14 +35,14 @@ public abstract class DapExecutableRunConfigurationEditorBase<C extends DapExecu
                                               FileChooserDescriptorFactory.createSingleFileDescriptor());
     HaxeRunConfigurationEditorUtil.browseInto(project, workingDirectoryField,
                                               FileChooserDescriptorFactory.createSingleFolderDescriptor());
+    // preferred width from columns, not content - long arguments must not
+    // size the dialog
+    programArgumentsField.setColumns(25);
   }
 
-  /** A small gray helper line, styled the way every debugger editor hints. */
-  protected static JBLabel hint(String text) {
-    JBLabel label = new JBLabel(text);
-    label.setComponentStyle(UIUtil.ComponentStyle.SMALL);
-    label.setForeground(UIUtil.getContextHelpForeground());
-    return label;
+  /** A small gray, WRAPPING helper line (long text must not widen the dialog). */
+  protected static javax.swing.JComponent hint(String text) {
+    return HaxeRunConfigurationEditorUtil.hint(text);
   }
 
   protected void resetCommon(@NotNull C configuration) {

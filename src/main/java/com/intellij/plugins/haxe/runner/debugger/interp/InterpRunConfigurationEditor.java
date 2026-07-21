@@ -26,7 +26,7 @@ import org.jetbrains.annotations.NotNull;
 public class InterpRunConfigurationEditor extends SettingsEditor<InterpRunConfiguration> {
   private final Project project;
   private final ModulesComboBox moduleCombo = new ModulesComboBox();
-  private final JBTextField compilerArgumentsField = new JBTextField();
+  private final JBTextField compilerArgumentsField = new JBTextField(25); // columns cap the preferred width
   private final TextFieldWithBrowseButton workingDirectoryField = new TextFieldWithBrowseButton();
   private final JBCheckBox interpretCheckBox = new JBCheckBox(HaxeDebuggerBundle.message("interp.runner.editor.interpret"));
   private final JPanel panel;
