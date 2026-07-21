@@ -78,6 +78,8 @@ public final class DapJson {
       // smart step into); the haxe-side servers decode it themselves
       case StepIntoFunctionRequest.COMMAND        -> StepIntoFunctionRequest.class;
       case SetExpressionSteppingRequest.COMMAND   -> SetExpressionSteppingRequest.class;
+      // reverse request (adapter -> client): js-debug child sessions
+      case StartDebuggingRequest.COMMAND          -> StartDebuggingRequest.class;
       default                                     -> Request.class;
     };
     // @formatter:on

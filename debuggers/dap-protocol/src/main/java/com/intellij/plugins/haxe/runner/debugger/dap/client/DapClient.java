@@ -31,6 +31,9 @@ public class DapClient implements Closeable {
   private final AtomicInteger nextSeq = new AtomicInteger(1);
   private final ConcurrentMap<Integer, BlockingQueue<Response>> pendingResponses = new ConcurrentHashMap<>();
   private final BlockingQueue<Event> events = new LinkedBlockingQueue<>();
+  // REVERSE requests (adapter -> client, e.g. js-debug's startDebugging);
+  // drained like events - a client that never polls simply leaves them here
+  private final BlockingQueue<Request> incomingRequests = new LinkedBlockingQueue<>();
   private volatile boolean closed = false;
   private volatile boolean readerFinished = false;
   private volatile Throwable readerDeathCause;
@@ -100,6 +103,36 @@ public class DapClient implements Closeable {
     return events.poll(timeoutMillis, TimeUnit.MILLISECONDS);
   }
 
+  /**
+   * Returns the next REVERSE request the adapter sent to us (js-debug's
+   * {@code startDebugging}), waiting up to the timeout; null when none.
+   */
+  public Request pollIncomingRequest(long timeoutMillis) throws InterruptedException {
+    return incomingRequests.poll(timeoutMillis, TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Sends a request WITHOUT waiting for its response (assigns the next seq).
+   * For adapters that defer a response past further client requests —
+   * js-debug only answers {@code launch} after {@code configurationDone}, so
+   * awaiting it synchronously would deadlock the session setup. The eventual
+   * response is discarded by the reader (no pending entry).
+   */
+  public void sendRequestNoWait(Request request) throws IOException {
+    request.setSeq(nextSeq.getAndIncrement());
+    connection.send(request);
+  }
+
+  /** Answers a reverse request (assigns our next seq and sends the response). */
+  public void respond(Request incoming, boolean success) throws IOException {
+    Response response = new Response();
+    response.setSeq(nextSeq.getAndIncrement());
+    response.setRequest_seq(incoming.getSeq());
+    response.setCommand(incoming.getCommand());
+    response.setSuccess(success);
+    connection.send(response);
+  }
+
   private void readLoop() {
     try {
       while (true) {
@@ -115,6 +148,9 @@ public class DapClient implements Closeable {
         }
         else if (message instanceof Event event) {
           events.offer(event);
+        }
+        else if (message instanceof Request incoming) {
+          incomingRequests.offer(incoming);
         }
       }
     } catch (IOException | RuntimeException e) {

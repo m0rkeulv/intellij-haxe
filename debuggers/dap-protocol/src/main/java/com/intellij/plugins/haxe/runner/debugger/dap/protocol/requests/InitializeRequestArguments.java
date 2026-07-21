@@ -17,4 +17,6 @@ public class InitializeRequestArguments {
   private String pathFormat;
   private Boolean supportsVariableType;
   private Boolean supportsRunInTerminalRequest;
+  /** Declares we handle the startDebugging reverse request (js-debug child sessions). */
+  private Boolean supportsStartDebuggingRequest;
 }
