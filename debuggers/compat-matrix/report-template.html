@@ -69,7 +69,9 @@ if (!DATA) {
     "This is the raw template - run run-matrix.ps1 (or `gradlew debuggerCompatibilityReport`) to generate a filled report.";
   throw new Error("template without data");
 }
-const LANE_TITLES = { eval: "Eval / interpreter debugger", hashlink: "HashLink debugger", hxcpp: "HXCPP debugger" };
+const LANE_TITLES = { eval: "Eval / interpreter debugger", hashlink: "HashLink debugger", hxcpp: "HXCPP debugger",
+                      firefox: "Web / Firefox debugger (vscode-firefox-debug)",
+                      chromium: "Web / Chromium debugger (vscode-js-debug)" };
 
 function shortHaxe(v) { return v.replace(/^haxe_/, "").replace(/_/g, "."); }
 function shortHl(v) { return v.replace(/^hashlink-/, "").replace(/-win(32|64)?$/, m => m.replace("-win", " ")); }

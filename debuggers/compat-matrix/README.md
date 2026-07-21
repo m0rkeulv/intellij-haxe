@@ -14,7 +14,8 @@ linux — with no PowerShell or python requirement.
 
 ```
 gradlew debuggerCompatibilityReport                       # all lanes
-gradlew debuggerCompatibilityReport -PmatrixLanes=eval    # one lane
+gradlew debuggerCompatibilityReport -PmatrixLanes=eval    # one lane (eval,
+                                     # hashlink, hxcpp, firefox, chromium)
 gradlew debuggerCompatibilityReport -PmatrixHaxe=haxe_4_1_5  # one haxe
                                      # version (handy for rerunning one cell)
 gradlew debuggerCompatibilityReport -PmatrixHl=hashlink-1.15.0  # one HL
@@ -85,6 +86,13 @@ manifest simply not listing older versions.
 ## Duration
 
 - eval lane: ~1 minute per haxe version (live suite against the real VM).
+- firefox / chromium lanes: the browser-debugger module's live probe for
+  that family per haxe version (~2 minutes each; the probes compile their
+  `haxe -js` fixtures with the lane's toolchain). They need the
+  user-provisioned `<repo>/node` directory — portable node, the pinned
+  adapters, and the browsers (see the browser-debugger README); without it
+  the probes self-skip and the cells report skipped suites instead of
+  failing the run.
 - hashlink lane: fixture build per haxe version + a test run per runtime;
   the default "smart-reduced" grid runs known-degraded old haxe versions
   (4.1.5/4.2.5) against the reference runtimes only — latest release and

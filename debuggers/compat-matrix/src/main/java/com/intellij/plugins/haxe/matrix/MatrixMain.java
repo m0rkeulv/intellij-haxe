@@ -99,7 +99,7 @@ public final class MatrixMain {
     Path root = Path.of(System.getProperty("matrix.root", ".")).toAbsolutePath().normalize();
     Path resources = root.resolve("debuggerResources");
     Path out = root.resolve("build/reports/debugger-matrix");
-    List<String> lanes = List.of("eval", "hashlink", "hxcpp");
+    List<String> lanes = List.of("eval", "hashlink", "hxcpp", "firefox", "chromium");
     List<String> haxeFilter = List.of();
     List<String> hlFilter = List.of();
     boolean full = false;
@@ -183,6 +183,12 @@ public final class MatrixMain {
       if (lanes.contains("hxcpp")) {
         hxcppLane();
       }
+      if (lanes.contains("firefox")) {
+        firefoxLane();
+      }
+      if (lanes.contains("chromium")) {
+        chromiumLane();
+      }
     }
     restore();
     report();
@@ -243,6 +249,12 @@ public final class MatrixMain {
       }
       if (lanes.contains("hxcpp")) {
         threads.add(laneThread("hxcpp", this::hxcppLane));
+      }
+      if (lanes.contains("firefox")) {
+        threads.add(laneThread("firefox", this::firefoxLane));
+      }
+      if (lanes.contains("chromium")) {
+        threads.add(laneThread("chromium", this::chromiumLane));
       }
       threads.forEach(Thread::start);
       for (Thread thread : threads) {
@@ -405,6 +417,41 @@ public final class MatrixMain {
                               env, out.resolve("logs/eval-" + haxe + ".log"), 900,
                               moduleResults, out.resolve("results/eval_" + haxe));
       addCell("eval", haxe, null, run.status().name().toLowerCase(Locale.ROOT),
+              run.classes(), run.flaky(), start);
+    }
+  }
+
+  private void firefoxLane() throws IOException {
+    webLane("firefox", "FirefoxAdapterLiveProbe");
+  }
+
+  private void chromiumLane() throws IOException {
+    webLane("chromium", "JsDebugAdapterLiveProbe");
+  }
+
+  /**
+   * One web-family lane: the browser-debugger module's live probe for that
+   * family, per haxe toolchain (the probes compile their fixtures with the
+   * lane's haxe). Needs the user-provisioned {@code <repo>/node} directory
+   * (portable node, the pinned adapters, the browsers) — without it the
+   * probes self-skip and the cells report zero-failure skipped suites, so
+   * an unprovisioned machine degrades cleanly instead of failing the run.
+   */
+  private void webLane(String lane, String probeClass) throws IOException {
+    log.line(lane.toUpperCase(Locale.ROOT) + " LANE (browser live probe)");
+    Path moduleResults = root.resolve("debuggers/browser-debugger/build/test-results/test");
+    for (Path haxeDir : haxeDirs) {
+      String haxe = haxeDir.getFileName().toString();
+      Map<String, String> env = haxeEnv(haxeDir);
+      verifyLaneHaxe(haxe, env);
+      log.line("    " + haxe + " : running the " + lane + " probe suite");
+      long start = System.nanoTime();
+      SuiteRun run = runSuite(":debuggers:browser-debugger",
+                              List.of(GRADLE_TESTS, "*" + probeClass,
+                                      GRADLE_NO_BUILD_CACHE, GRADLE_CONTINUE),
+                              env, out.resolve("logs/" + lane + "-" + haxe + ".log"), 1200,
+                              moduleResults, out.resolve("results/" + lane + "_" + haxe));
+      addCell(lane, haxe, null, run.status().name().toLowerCase(Locale.ROOT),
               run.classes(), run.flaky(), start);
     }
   }
