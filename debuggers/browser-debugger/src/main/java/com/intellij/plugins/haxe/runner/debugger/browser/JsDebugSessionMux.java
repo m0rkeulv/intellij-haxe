@@ -19,7 +19,6 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ThreadEvent
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.CompletionsRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfiguredLaunchRequest;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.DisconnectRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.EvaluateRequest;
@@ -97,10 +96,6 @@ public final class JsDebugSessionMux implements DapEndpoint {
     final DapClient client;
     final String label;
     volatile boolean gone;
-    // pause bookkeeping (targets pause INDEPENDENTLY in CDP): lets a Resume
-    // release every paused session, not only the one the id routed to
-    volatile boolean paused;
-    volatile int lastStoppedThreadId;
 
     ChildSession(int index, DapClient client, String label) {
       this.index = index;
@@ -218,29 +213,11 @@ public final class JsDebugSessionMux implements DapEndpoint {
         return rewriteResponse(session, session.client.sendRequest(request, timeoutMillis));
       }
       case ContinueRequest resume -> {
-        // Resume means "let everything run": targets pause INDEPENDENTLY in
-        // CDP, so first release every OTHER paused session (a worker at its
-        // own breakpoint), else it stays frozen while the IDE shows running.
-        // Steps (next/stepIn/stepOut) stay single-session by design.
-        Integer id = resume.getArguments() != null ? resume.getArguments().getThreadId() : null;
-        ChildSession owner = id != null ? route(id) : sessions.get(0);
-        for (ChildSession session : List.copyOf(sessions.values())) {
-          if (session.gone || session == owner || !session.paused) {
-            continue;
-          }
-          try {
-            ContinueRequest release = new ContinueRequest();
-            ContinueArguments releaseArguments = new ContinueArguments();
-            releaseArguments.setThreadId(session.lastStoppedThreadId);
-            release.setArguments(releaseArguments);
-            session.client.sendRequest(release, Math.min(timeoutMillis, CHILD_TIMEOUT_MILLIS));
-            session.paused = false;
-          } catch (IOException e) {
-            // a wedged session must not block resuming the rest
-          }
-        }
-        owner.paused = false;
-        return routeByThread(resume, id, raw -> resume.getArguments().setThreadId(raw), timeoutMillis);
+        // routed to the owning session ONLY: another session paused at its own
+        // breakpoint stays paused - the IDE holds its stop back and presents
+        // it after this resume (DapDebugProcess.pendingStops)
+        return routeByThread(resume, resume.getArguments() != null ? resume.getArguments().getThreadId() : null,
+                             raw -> resume.getArguments().setThreadId(raw), timeoutMillis);
       }
       case NextRequest next -> {
         return routeByThread(next, next.getArguments() != null ? next.getArguments().getThreadId() : null,
@@ -326,6 +303,16 @@ public final class JsDebugSessionMux implements DapEndpoint {
 
   @Override
   public void sendRequestNoWait(Request request) throws IOException {
+    // fire-and-forget continues (Resume releases every thread) route by
+    // their composite thread id like their awaited counterpart
+    if (request instanceof ContinueRequest resume
+        && resume.getArguments() != null) {
+      int id = resume.getArguments().getThreadId();
+      ChildSession session = route(id);
+      resume.getArguments().setThreadId(rawOf(id));
+      session.client.sendRequestNoWait(request);
+      return;
+    }
     sessions.get(0).client.sendRequestNoWait(request); // the page launch
   }
 
@@ -599,20 +586,17 @@ public final class JsDebugSessionMux implements DapEndpoint {
     int k = session.index;
     switch (event) {
       case StoppedEvent stopped -> {
-        session.paused = true;
         if (stopped.getBody() != null && stopped.getBody().getThreadId() != null) {
-          session.lastStoppedThreadId = stopped.getBody().getThreadId();
           stopped.getBody().setThreadId(composite(k, stopped.getBody().getThreadId()));
         }
         mergedEvents.offer(stopped);
       }
       case ContinuedEvent continued -> {
-        session.paused = false;
         if (continued.getBody() != null) {
           continued.getBody().setThreadId(composite(k, continued.getBody().getThreadId()));
-          if (k != 0) {
-            // "all threads" was true only WITHIN the worker's own session -
-            // the merged session's other threads (the page) are untouched
+          if (k != 0 || sessions.size() > 1) {
+            // "all threads" was true only WITHIN that one session - the
+            // merged session's other targets are untouched by it
             continued.getBody().setAllThreadsContinued(false);
           }
         }

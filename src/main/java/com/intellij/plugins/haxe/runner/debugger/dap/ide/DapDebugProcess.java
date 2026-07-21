@@ -101,6 +101,17 @@ public class DapDebugProcess extends XDebugProcess {
   private volatile int currentThreadId = 0;
   private volatile boolean shuttingDown = false;
   private volatile boolean launched = false;
+  /**
+   * Whether a pause is currently presented to the user. Tracked here and NOT
+   * via XDebugSession.isSuspended(): the platform reflects the suspended
+   * state asynchronously, so two near-simultaneous stops (both workers'
+   * ticking breakpoints) could each see "not suspended" and fight over the
+   * views (duplicated thread combo entries, a frames list stuck on
+   * "Loading..." — live-observed). While a pause is on screen, another
+   * thread's stop leaves that thread paused but does not touch the views —
+   * it is inspectable through the thread list, and Resume releases it.
+   */
+  private volatile boolean pauseOnScreen = false;
 
   public DapDebugProcess(@NotNull XDebugSession session,
                            DapBackend backend, @Nullable ProcessHandler debuggeeHandler) {
@@ -262,6 +273,9 @@ public class DapDebugProcess extends XDebugProcess {
     try {
       while (!shuttingDown) {
         Event event = client.pollEvent(EVENT_POLL_MILLIS);
+        if (event != null && TRACE_DAP_TO_CONSOLE && !(event instanceof OutputEvent)) {
+          trace("ev " + describeEvent(event));
+        }
         switch (event) {
           case null -> { /* poll again */ }
           case StoppedEvent stopped -> handleStopped(stopped);
@@ -290,19 +304,20 @@ public class DapDebugProcess extends XDebugProcess {
   }
 
   // A continue for some OTHER thread (a worker resuming in a multi-target
-  // session) must not clear the pause the user is inspecting.
+  // session) must not clear the pause the user is inspecting; without a
+  // pause on screen it just confirms the running state.
   private void handleContinued(ContinuedEvent continued) {
     if (continued.getBody() != null
-        && !Boolean.TRUE.equals(continued.getBody().getAllThreadsContinued())
-        && continued.getBody().getThreadId() != currentThreadId) {
+        && continued.getBody().getThreadId() != currentThreadId
+        && pauseOnScreen) {
       return;
     }
+    pauseOnScreen = false;
     getSession().sessionResumed();
   }
 
   private void handleStopped(StoppedEvent stopped) {
     Integer threadId = stopped.getBody().getThreadId();
-    currentThreadId = threadId != null ? threadId : 0;
     String exceptionText = null;
     if ("exception".equals(stopped.getBody().getReason())) {
       // prefer the runtime's own message (text) over the category (description)
@@ -313,7 +328,28 @@ public class DapDebugProcess extends XDebugProcess {
       // user is already looking
       print(exceptionText + "\n", true);
     }
-    reportStopped(currentThreadId, exceptionText);
+    if (pauseOnScreen && (threadId == null || threadId != currentThreadId)) {
+      // another thread stopped while a pause is on screen: it stays paused
+      // (inspectable through the thread list) but must not yank the views
+      // mid-inspection; Resume releases it together with everything else
+      return;
+    }
+    currentThreadId = threadId != null ? threadId : 0;
+    presentStop(currentThreadId, exceptionText);
+    // NO "freeze the world" here for the per-thread-pausing backends, however
+    // tempting: the firefox adapter's actor proxies answer requests through a
+    // per-thread FIFO queue, and firefox never answers an interrupt that
+    // RACES a breakpoint pause - the unanswered request wedges that thread's
+    // queue FOREVER (every later stackTrace/evaluate for it times out;
+    // live-observed, verified in the adapter's base actor proxy source).
+    // Threads that pause independently therefore also keep RUNNING
+    // independently while one of them is on screen.
+  }
+
+  private void presentStop(int threadId, @Nullable String exceptionText) {
+    pauseOnScreen = true;
+    unresponsiveVariableRefs.clear(); // variablesReferences are pause-lifetime
+    reportStopped(threadId, exceptionText);
     // run-to-cursor is one-shot: any stop (including a breakpoint reached before
     // the cursor) cancels a pending run-to breakpoint
     breakpoints.clearRunToBreakpoint();
@@ -323,6 +359,11 @@ public class DapDebugProcess extends XDebugProcess {
   private void reportStopped(int threadId, String exceptionText) {
     List<DapThread> threads = requestThreads();
     List<StackFrame> activeFrames = requestStackTrace(threadId);
+    if (activeFrames.isEmpty()) {
+      // an empty pause is a bug's symptom, not a state worth silently showing
+      LOG.warn("stop for thread " + threadId + " presented WITHOUT frames"
+               + " (threads=" + threads.size() + ") - the adapter did not consider it paused?");
+    }
     topFrameId = activeFrames.isEmpty() ? -1 : activeFrames.get(0).getId();
     DapSuspendContext context =
       new DapSuspendContext(this, threads, threadId, activeFrames, exceptionText);
@@ -425,6 +466,7 @@ public class DapDebugProcess extends XDebugProcess {
   }
 
   private void terminateSession() {
+    pauseOnScreen = false;
     teardown();
     getSession().stop();
   }
@@ -433,11 +475,37 @@ public class DapDebugProcess extends XDebugProcess {
 
   @Override
   public void resume(@Nullable XSuspendContext context) {
+    onRequestThread(() -> {
+      pauseOnScreen = false;
+      if (backend.threadsPauseIndependently()) {
+        // Resume means "let the PROGRAM run": browser threads pause
+        // independently, so every listed thread gets its continue - the one
+        // on screen, workers paused at their own breakpoints in the
+        // background, and any zombie a page reload left behind. This also
+        // self-heals a paused-in-browser/running-in-IDE desync. The
+        // continues are FIRE-AND-FORGET: a running thread answers with a
+        // harmless error, but a zombie's actor never answers at all, and
+        // awaiting it would block Resume for a full timeout per zombie.
+        List<DapThread> threads = requestThreads();
+        if (threads.isEmpty()) {
+          sendRequest(continueRequest(currentThreadId));
+        }
+        for (DapThread thread : threads) {
+          sendRequestNoWait(continueRequest(thread.getId()));
+        }
+      } else {
+        // suspend-all servers resume everything on the one continue
+        sendRequest(continueRequest(currentThreadId));
+      }
+    });
+  }
+
+  private static ContinueRequest continueRequest(int threadId) {
     ContinueRequest request = new ContinueRequest();
     ContinueArguments arguments = new ContinueArguments();
-    arguments.setThreadId(currentThreadId);
+    arguments.setThreadId(threadId);
     request.setArguments(arguments);
-    onRequestThread(() -> sendRequest(request));
+    return request;
   }
 
   // Run to cursor: plant a transient breakpoint at the target line and resume.
@@ -454,6 +522,7 @@ public class DapDebugProcess extends XDebugProcess {
         ContinueArguments arguments = new ContinueArguments();
         arguments.setThreadId(threadId);
         request.setArguments(arguments);
+        pauseOnScreen = false;
         sendRequest(request);
       } else {
         breakpoints.clearRunToBreakpoint();
@@ -479,7 +548,10 @@ public class DapDebugProcess extends XDebugProcess {
     NextArguments arguments = new NextArguments();
     arguments.setThreadId(currentThreadId);
     request.setArguments(arguments);
-    onRequestThread(() -> sendRequest(request));
+    onRequestThread(() -> {
+      pauseOnScreen = false; // the step's landing must present, not queue
+      sendRequest(request);
+    });
   }
 
   @Override
@@ -488,7 +560,10 @@ public class DapDebugProcess extends XDebugProcess {
     StepInArguments arguments = new StepInArguments();
     arguments.setThreadId(currentThreadId);
     request.setArguments(arguments);
-    onRequestThread(() -> sendRequest(request));
+    onRequestThread(() -> {
+      pauseOnScreen = false;
+      sendRequest(request);
+    });
   }
 
   @Override
@@ -497,7 +572,10 @@ public class DapDebugProcess extends XDebugProcess {
     StepOutArguments arguments = new StepOutArguments();
     arguments.setThreadId(currentThreadId);
     request.setArguments(arguments);
-    onRequestThread(() -> sendRequest(request));
+    onRequestThread(() -> {
+      pauseOnScreen = false;
+      sendRequest(request);
+    });
   }
 
   @Override
@@ -576,7 +654,10 @@ public class DapDebugProcess extends XDebugProcess {
     arguments.setFunctionName(functionName);
     arguments.setOccurrence(occurrence);
     request.setArguments(arguments);
-    onRequestThread(() -> sendRequest(request));
+    onRequestThread(() -> {
+      pauseOnScreen = false;
+      sendRequest(request);
+    });
   }
 
   @Override
@@ -649,15 +730,39 @@ public class DapDebugProcess extends XDebugProcess {
     onRejected.run();
   }
 
+  /** Fire-and-forget request: the response (or its absence) is ignored. */
+  private void sendRequestNoWait(Request request) {
+    DapEndpoint dapClient = client;
+    if (dapClient == null) {
+      return;
+    }
+    trace(">> " + describeRequest(request) + " (no-wait)");
+    try {
+      dapClient.sendRequestNoWait(request);
+    } catch (IOException e) {
+      if (!shuttingDown) {
+        LOG.warn("DAP request '" + request.getCommand() + "' could not be sent", e);
+      }
+    }
+  }
+
   /** Blocking request; only call on the request executor or the event pump. */
   @Nullable Response sendRequest(Request request) {
     DapEndpoint dapClient = client;
     if (dapClient == null) {
       return null;
     }
+    trace(">> " + describeRequest(request));
+    long start = System.currentTimeMillis();
     try {
-      return dapClient.sendRequest(request, REQUEST_TIMEOUT_MILLIS);
+      Response response = dapClient.sendRequest(request, backend.requestTimeoutMillis());
+      trace("<< " + request.getCommand() + " seq=" + response.getRequest_seq()
+            + (response.isSuccess() ? " ok" : " ERROR: " + response.getMessage())
+            + " (" + (System.currentTimeMillis() - start) + "ms)");
+      return response;
     } catch (IOException e) {
+      trace("!! " + request.getCommand() + " FAILED after " + (System.currentTimeMillis() - start)
+            + "ms: " + e.getMessage());
       if (!shuttingDown) {
         LOG.warn("DAP request '" + request.getCommand() + "' failed", e);
       }
@@ -666,6 +771,69 @@ public class DapDebugProcess extends XDebugProcess {
       Thread.currentThread().interrupt();
       return null;
     }
+  }
+
+  // --- DAP console tracing (developer diagnostics, off in production) ---
+
+  /**
+   * Flip to true (in code, rebuild) to mirror every DAP request/response/
+   * timeout and incoming event into the session console as grey [dap] lines —
+   * command, thread/frame/reference ids, seq numbers, durations. This is how
+   * the firefox worker-actor wedges were pinned; deliberately NOT exposed as
+   * UI, it is a developer tool.
+   */
+  private static final boolean TRACE_DAP_TO_CONSOLE = false;
+
+  private void trace(String line) {
+    if (TRACE_DAP_TO_CONSOLE) {
+      printSystem("[dap] " + line + "\n");
+    }
+  }
+
+  private static String describeEvent(Event event) {
+    return switch (event) {
+      case StoppedEvent e when e.getBody() != null ->
+        "stopped thread=" + e.getBody().getThreadId() + " reason=" + e.getBody().getReason();
+      case ContinuedEvent e when e.getBody() != null ->
+        "continued thread=" + e.getBody().getThreadId()
+        + " allThreads=" + e.getBody().getAllThreadsContinued();
+      case BreakpointEvent e when e.getBody() != null && e.getBody().getBreakpoint() != null ->
+        "breakpoint id=" + e.getBody().getBreakpoint().getId()
+        + " verified=" + e.getBody().getBreakpoint().isVerified();
+      default -> event.getEvent();
+    };
+  }
+
+  /** The request's command plus whichever routing id it carries. */
+  private static String describeRequest(Request request) {
+    StringBuilder text = new StringBuilder(request.getCommand());
+    switch (request) {
+      case StackTraceRequest r when r.getArguments() != null ->
+        text.append(" thread=").append(r.getArguments().getThreadId());
+      case ContinueRequest r when r.getArguments() != null ->
+        text.append(" thread=").append(r.getArguments().getThreadId());
+      case NextRequest r when r.getArguments() != null ->
+        text.append(" thread=").append(r.getArguments().getThreadId());
+      case StepInRequest r when r.getArguments() != null ->
+        text.append(" thread=").append(r.getArguments().getThreadId());
+      case StepOutRequest r when r.getArguments() != null ->
+        text.append(" thread=").append(r.getArguments().getThreadId());
+      case PauseRequest r when r.getArguments() != null ->
+        text.append(" thread=").append(r.getArguments().getThreadId());
+      case ScopesRequest r when r.getArguments() != null ->
+        text.append(" frame=").append(r.getArguments().getFrameId());
+      case EvaluateRequest r when r.getArguments() != null ->
+        text.append(" frame=").append(r.getArguments().getFrameId())
+            .append(" expr=").append(r.getArguments().getExpression());
+      case VariablesRequest r when r.getArguments() != null ->
+        text.append(" ref=").append(r.getArguments().getVariablesReference());
+      case SetVariableRequest r when r.getArguments() != null ->
+        text.append(" ref=").append(r.getArguments().getVariablesReference());
+      case SetBreakpointsRequest r when r.getArguments() != null && r.getArguments().getSource() != null ->
+        text.append(" source=").append(r.getArguments().getSource().getName());
+      default -> { }
+    }
+    return text.toString();
   }
 
   public List<Scope> requestScopes(int frameId) {
@@ -677,13 +845,33 @@ public class DapDebugProcess extends XDebugProcess {
            ? response.getBody().getScopes() : List.of();
   }
 
+  /**
+   * References whose variables request TIMED OUT at this stop. Firefox's
+   * worker devtools can crash while enumerating a specific object's
+   * properties (broken getter/previewer handling, live-observed) - that
+   * object's actor then never answers, at all, ever. The platform re-requests
+   * on every tree rebuild; without this cache each rebuild would stall the
+   * request thread for a full timeout PER poisoned object. Pause-scoped:
+   * cleared when a new stop is presented (references are pause-lifetime).
+   */
+  private final java.util.Set<Integer> unresponsiveVariableRefs = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
   public List<Variable> requestVariables(int variablesReference) {
+    if (unresponsiveVariableRefs.contains(variablesReference)) {
+      trace("~~ variables ref=" + variablesReference + " skipped (timed out at this stop before)");
+      return List.of();
+    }
     VariablesRequest request = new VariablesRequest();
     VariablesArguments arguments = new VariablesArguments();
     arguments.setVariablesReference(variablesReference);
     request.setArguments(arguments);
-    return sendRequest(request) instanceof VariablesResponse response && response.isSuccess()
-           ? response.getBody().getVariables() : List.of();
+    Response response = sendRequest(request);
+    if (response == null) {
+      unresponsiveVariableRefs.add(variablesReference);
+      return List.of();
+    }
+    return response instanceof VariablesResponse ok && ok.isSuccess()
+           ? ok.getBody().getVariables() : List.of();
   }
 
   /**
@@ -722,7 +910,10 @@ public class DapDebugProcess extends XDebugProcess {
     arguments.setThreadId(currentThreadId);
     arguments.setTargetId(targetId);
     request.setArguments(arguments);
-    onRequestThread(() -> sendRequest(request));
+    onRequestThread(() -> {
+      pauseOnScreen = false;
+      sendRequest(request);
+    });
   }
 
   /** The backend driving this session (for same-package collaborators). */

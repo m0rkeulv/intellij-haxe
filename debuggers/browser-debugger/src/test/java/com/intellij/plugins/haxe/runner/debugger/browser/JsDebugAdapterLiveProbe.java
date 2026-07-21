@@ -966,15 +966,35 @@ public class JsDebugAdapterLiveProbe {
         assertTrue("the step must land in the PAGE thread, got " + stepStop.getBody().getThreadId(),
                    stepStop.getBody().getThreadId() != null && stepStop.getBody().getThreadId() < COMPOSITE_FLOOR);
 
-        // resume routed to the page must ALSO release the paused worker:
-        // its ticking breakpoint re-hits only if it actually resumed
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest resumeAll =
+        // continue routed to the PAGE must leave the paused worker untouched
+        // (the IDE holds the worker's stop back and presents it after this
+        // resume - releasing it here would run it away before the user sees
+        // its breakpoint). The ticking worker would re-hit within ~250ms if
+        // it were resumed; observing silence pins that it stayed paused.
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest pageResume =
           new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
         com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments caArgs =
           new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
         caArgs.setThreadId(pageThreadId);
-        resumeAll.setArguments(caArgs);
-        assertTrue("resume via the page thread", mux.sendRequest(resumeAll, TIMEOUT).isSuccess());
+        pageResume.setArguments(caArgs);
+        assertTrue("resume via the page thread", mux.sendRequest(pageResume, TIMEOUT).isSuccess());
+        deadline = System.currentTimeMillis() + 4_000;
+        while (System.currentTimeMillis() < deadline) {
+          if (mux.pollEvent(250) instanceof StoppedEvent s && s.getBody().getThreadId() != null
+              && s.getBody().getThreadId() >= COMPOSITE_FLOOR) {
+            throw new AssertionError("the page-routed continue must NOT release the paused worker,"
+                                     + " but its ticking breakpoint re-hit");
+          }
+        }
+
+        // a continue routed to the WORKER releases it - the bp re-hits
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest workerResume =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments wcArgs =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
+        wcArgs.setThreadId(second.getBody().getThreadId());
+        workerResume.setArguments(wcArgs);
+        assertTrue("resume via the worker thread", mux.sendRequest(workerResume, TIMEOUT).isSuccess());
         StoppedEvent workerAgain = null;
         deadline = System.currentTimeMillis() + 30_000;
         while (System.currentTimeMillis() < deadline && workerAgain == null) {
@@ -983,8 +1003,7 @@ public class JsDebugAdapterLiveProbe {
             workerAgain = s;
           }
         }
-        assertNotNull("the page-routed resume must have released the paused worker"
-                      + " (its ticking breakpoint never re-hit)", workerAgain);
+        assertNotNull("the worker-routed continue must release the worker (bp re-hit)", workerAgain);
 
         mux.sendRequest(new DisconnectRequest(), TIMEOUT);
       }

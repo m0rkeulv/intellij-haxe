@@ -145,6 +145,38 @@ public interface DapBackend extends Closeable {
   boolean supportsSmartStepInto();
 
   /**
+   * How long one DAP request may wait for its response. The browser backends
+   * use a SHORTER budget: firefox's per-actor FIFO queue can wedge on a
+   * request the browser never answers (a devtools-internal crash while
+   * previewing a worker object, live-observed), and every request the IDE
+   * sends is serialized on one thread — a long timeout turns one wedged
+   * request into a long total freeze of the debugger views.
+   */
+  default long requestTimeoutMillis() {
+    return 15_000;
+  }
+
+  /**
+   * Whether the debuggee's threads pause and resume INDEPENDENTLY (the
+   * browser targets: each worker is its own JS VM; the adapters' stopped
+   * events are always allThreadsStopped=false and there is NO whole-program
+   * pause/resume on the wire). For such a backend: a stop arriving while a
+   * pause is already on screen leaves that thread paused but untouched
+   * UI-wise (inspectable via the thread list), and the IDE's Resume sends a
+   * continue to EVERY listed thread — background threads paused at their own
+   * breakpoints and any zombie a page reload left behind are released too,
+   * so the IDE and runtime states cannot drift apart (a running thread
+   * answers the continue with an error, harmless). Emulating suspend-all by
+   * pausing the other threads is deliberately NOT done: the firefox
+   * adapter's per-thread FIFO request queue wedges forever on an interrupt
+   * that races a breakpoint pause. The haxe-side servers are suspend-all
+   * natively and keep the plain single continue.
+   */
+  default boolean threadsPauseIndependently() {
+    return false;
+  }
+
+  /**
    * Whether the adapter evaluates expressions against a FOREIGN runtime that
    * legitimately knows more than the Haxe PSI — the browser JS runtime, reached
    * through externs that may not map every field. In such a session the
