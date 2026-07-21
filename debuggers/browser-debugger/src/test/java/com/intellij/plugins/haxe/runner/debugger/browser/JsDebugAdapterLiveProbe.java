@@ -121,14 +121,18 @@ public class JsDebugAdapterLiveProbe {
   }
 
   /**
-   * The provisioned ungoogled-chromium when present (reproducible probe
-   * runs), else an installed Chrome/Edge — mirroring the IDE behaviour,
-   * where a blank executable lets js-debug find the default installation.
+   * The browser under test: the {@code WEB_DEBUG_CHROMIUM_EXE} environment
+   * variable when set (any chromium-family build — e.g. a provisioned
+   * ungoogled-chromium), else an installed Chrome/Edge — mirroring the IDE
+   * behaviour, where a blank executable lets js-debug find the default
+   * installation. A set-but-invalid path SKIPS rather than silently testing
+   * a different browser than the one asked for.
    */
   private static Path chromiumExe() {
-    Path provisioned = nodeRoot().resolve("ungoogled-chromium_150.0.7871.128-1.1_windows_x64/chrome.exe");
-    if (Files.isRegularFile(provisioned)) {
-      return provisioned;
+    String env = System.getenv("WEB_DEBUG_CHROMIUM_EXE");
+    if (env != null && !env.isBlank()) {
+      Path fromEnv = Path.of(env);
+      return Files.isRegularFile(fromEnv) ? fromEnv : null;
     }
     for (String candidate : new String[]{
       "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -151,7 +155,7 @@ public class JsDebugAdapterLiveProbe {
   public void spawnAdapter() throws IOException {
     Assume.assumeTrue("portable node not provisioned - skipping", Files.isRegularFile(nodeExe()));
     Assume.assumeTrue("js-debug adapter not provisioned - skipping", Files.isRegularFile(dapServerJs()));
-    Assume.assumeTrue("no chromium-family browser found (provisioned or installed) - skipping",
+    Assume.assumeTrue("no chromium-family browser found (set WEB_DEBUG_CHROMIUM_EXE or install Chrome/Edge) - skipping",
                       chromiumExe() != null);
 
     adapterPort = ThreadLocalRandom.current().nextInt(20000, 60000);

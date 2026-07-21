@@ -96,10 +96,12 @@ manifest simply not listing older versions.
   haxe, and the vscode DAP adapters run on the cell's node). Node is
   auto-provisioned — the manifest pins the active LTS and the current
   release with the official SHASUMS256.txt hashes. The BROWSERS are not:
-  firefox/chromium must be installed on the machine, and the pinned
-  adapters must be present under `<repo>/node` (see the browser-debugger
-  README); without them the probes self-skip and the cells report skipped
-  suites instead of failing the run.
+  firefox/chromium must be installed on the machine (or pointed at with
+  the `WEB_DEBUG_FIREFOX_EXE` / `WEB_DEBUG_CHROMIUM_EXE` environment
+  variables — e.g. an ungoogled-chromium build), and the pinned adapters
+  must be present under `<repo>/node` (see the browser-debugger README);
+  without them the probes self-skip and the cells report skipped suites
+  instead of failing the run.
 - hashlink lane: fixture build per haxe version + a test run per runtime;
   the default "smart-reduced" grid runs known-degraded old haxe versions
   (4.1.5/4.2.5) against the reference runtimes only — latest release and

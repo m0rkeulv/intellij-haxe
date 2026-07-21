@@ -207,7 +207,18 @@ public class FirefoxAdapterLiveProbe {
     }
   }
 
+  /**
+   * The browser under test: the {@code WEB_DEBUG_FIREFOX_EXE} environment
+   * variable when set (e.g. an ESR install), else the standard installation
+   * paths. A set-but-invalid path SKIPS rather than silently testing a
+   * different browser than the one asked for.
+   */
   private static Path firefoxExe() {
+    String env = System.getenv("WEB_DEBUG_FIREFOX_EXE");
+    if (env != null && !env.isBlank()) {
+      Path fromEnv = Path.of(env);
+      return Files.isRegularFile(fromEnv) ? fromEnv : null;
+    }
     for (String candidate : new String[]{
       "C:/Program Files/Mozilla Firefox/firefox.exe",
       "C:/Program Files (x86)/Mozilla Firefox/firefox.exe"}) {
@@ -256,7 +267,7 @@ public class FirefoxAdapterLiveProbe {
   public void fullSessionBreakpointInHxSourceViaFileUrl() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
-    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Assume.assumeTrue("firefox not found (set WEB_DEBUG_FIREFOX_EXE or install Firefox) - skipping", firefox != null);
     Path fixture = buildFixture();
     System.out.println("[probe] fixture at " + fixture);
 
@@ -384,7 +395,7 @@ public class FirefoxAdapterLiveProbe {
   public void fullSessionBreakpointInHxSourceViaContentServer() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
-    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Assume.assumeTrue("firefox not found (set WEB_DEBUG_FIREFOX_EXE or install Firefox) - skipping", firefox != null);
     Path fixture = buildFixture();
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
@@ -471,7 +482,7 @@ public class FirefoxAdapterLiveProbe {
   public void breakpointPathSeparatorSensitivity() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
-    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Assume.assumeTrue("firefox not found (set WEB_DEBUG_FIREFOX_EXE or install Firefox) - skipping", firefox != null);
     Path fixture = buildFixture(); // the ticking fixture: no load race involved
 
     boolean forwardBound;
@@ -619,7 +630,7 @@ public class FirefoxAdapterLiveProbe {
   public void workerFrameEvaluateBehaviour() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
-    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Assume.assumeTrue("firefox not found (set WEB_DEBUG_FIREFOX_EXE or install Firefox) - skipping", firefox != null);
     Path fixture = Files.createTempDirectory("haxe-ff-worker-probe");
     System.out.println("[probe] fixture dir: " + fixture);
     Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX);
@@ -712,7 +723,7 @@ public class FirefoxAdapterLiveProbe {
   public void workerThreadsAcrossRefresh() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
-    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Assume.assumeTrue("firefox not found (set WEB_DEBUG_FIREFOX_EXE or install Firefox) - skipping", firefox != null);
     Path fixture = Files.createTempDirectory("haxe-ff-refresh-probe");
     Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX);
     Files.writeString(fixture.resolve("WorkerMain.hx"), FF_WORKER_HX);
@@ -902,7 +913,7 @@ public class FirefoxAdapterLiveProbe {
   public void loadTimeBreakpointStrategies() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
-    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Assume.assumeTrue("firefox not found (set WEB_DEBUG_FIREFOX_EXE or install Firefox) - skipping", firefox != null);
     Path fixture = buildLoadFixture();
 
     // J: plain standard flow (baseline: does the adapter attach/emit at all?)

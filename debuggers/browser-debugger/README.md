@@ -134,7 +134,13 @@ The IDE-side wiring (run configuration, editor, runners, `BrowserDebugBackend`)
 lives in the main plugin under
 `src/main/java/com/intellij/plugins/haxe/runner/debugger/browser/`.
 
-Tests are opt-in (`-PdebuggerTests=true`) and self-skip unless node, the
-adapters and the browsers are provisioned under `<project>/node/`
-(git-ignored via `.git/info/exclude`; see the gradle test task's
-`web.debug.node.root` system property).
+Tests are opt-in (`-PdebuggerTests=true`) and self-skip unless node and the
+adapters are provisioned under `<project>/node/` (git-ignored via
+`.git/info/exclude`; see the gradle test task's `web.debug.node.root`
+system property). The browsers under test come from the
+`WEB_DEBUG_FIREFOX_EXE` / `WEB_DEBUG_CHROMIUM_EXE` environment variables
+when set (e.g. an ESR firefox or an ungoogled-chromium build), else from
+the standard installation paths — a set-but-invalid path skips rather than
+silently testing a different browser. Beware the gradle daemon: it keeps
+the environment it was STARTED with, so export the variable before the
+daemon starts (or run with `--no-daemon`, as the compat-matrix does).
