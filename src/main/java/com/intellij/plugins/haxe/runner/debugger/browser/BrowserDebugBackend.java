@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -108,6 +109,10 @@ public class BrowserDebugBackend implements DapBackend {
         // is only born when scripts first execute): the first load binds the
         // map + breakpoints and this one-shot refresh re-runs it armed.
         // js-debug pre-registers breakpoints through CDP and needs none.
+        // Known cost (see the module README): a WORKER breakpoint hitting
+        // before the refresh leaves that paused worker behind as an inert
+        // zombie thread - firefox worker debugging has deeper quirks anyway
+        // and Chromium is the recommended family for worker-heavy sessions.
         contentServer.refreshFirstPage(FIRST_PAGE_REFRESH_SECONDS);
       }
     }
@@ -133,6 +138,14 @@ public class BrowserDebugBackend implements DapBackend {
     Map<String, Object> config = new LinkedHashMap<>();
     config.put("request", "launch");
     config.put("url", targetUrl);
+    // UNIQUE RDP port per session. The adapter's default is a FIXED 6000:
+    // firefox launched for an earlier session survives teardown on Windows
+    // (the launcher process re-parents the real firefox out of the adapter's
+    // process tree, escaping the tree-kill), keeps owning 6000, and the next
+    // session's adapter then debugs the STALE instance - foreign workers it
+    // refuses to attach, dead actors that answer nothing (live-observed as
+    // ghost threads and endless evaluate timeouts).
+    config.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
     if (serveContent) {
       config.put("webRoot", contentRoot.toString());
     }
@@ -304,7 +317,7 @@ public class BrowserDebugBackend implements DapBackend {
   }
 
   /** The pinned-adapter cache: {@code <ide-system>/haxe/debug-adapters}. */
-  private static Path adapterStoreRoot() {
+  public static Path adapterStoreRoot() {
     return Path.of(PathManager.getSystemPath(), "haxe", "debug-adapters");
   }
 
@@ -403,6 +416,22 @@ public class BrowserDebugBackend implements DapBackend {
     return supportsSmartStepInto()
            ? new com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler(process)
            : null;
+  }
+
+  // Both families pause per-thread (firefox thread actors, js-debug child
+  // sessions): Resume releases every listed thread; see the hook's javadoc
+  // for why the world is NOT frozen while one thread is paused.
+  @Override
+  public boolean threadsPauseIndependently() {
+    return true;
+  }
+
+  // Short budget: firefox can wedge an actor queue on a request it never
+  // answers (worker-devtools previewer crashes); recover the request thread
+  // quickly instead of freezing every view for the full default.
+  @Override
+  public long requestTimeoutMillis() {
+    return 8_000;
   }
 
   // The JS runtime knows identifiers our externs may not map; evaluation is

@@ -300,6 +300,7 @@ public class FirefoxAdapterLiveProbe {
     launchConfig.put("file", fixture.resolve("index.html").toString());
     launchConfig.put("firefoxExecutable", firefox.toString());
     launchConfig.put("firefoxArgs", List.of("-headless"));
+    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
     Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
     System.out.println("[probe] launch success=" + launch.isSuccess()
                        + (launch.isSuccess() ? "" : " message=" + launch.getMessage()));
@@ -430,6 +431,7 @@ public class FirefoxAdapterLiveProbe {
       launchConfig.put("webRoot", fixture.toString());
       launchConfig.put("firefoxExecutable", firefox.toString());
       launchConfig.put("firefoxArgs", List.of("-headless"));
+    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
       Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
       assertTrue("launch failed: " + launch.getMessage(), launch.isSuccess());
 
@@ -540,6 +542,7 @@ public class FirefoxAdapterLiveProbe {
         launchConfig.put("webRoot", fixture.toString());
         launchConfig.put("firefoxExecutable", firefox.toString());
         launchConfig.put("firefoxArgs", List.of("-headless"));
+    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
         if (!session.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess()) {
           return false;
         }
@@ -600,6 +603,314 @@ public class FirefoxAdapterLiveProbe {
     }
     """;
 
+  // --- worker-frame request behaviour (evaluate vs variables) ---
+
+  private static final int FF_WORKER_TICK_LINE = 4;
+  private static final String FF_WORKER_HX = """
+    class WorkerMain {
+    	static var ticks = 0;
+    	static function tick() {
+    		ticks++; // FF_WORKER_TICK_LINE = 4
+    		js.Syntax.code("console.log({0})", "w" + ticks);
+    	}
+    	static function main() {
+    		js.Syntax.code("setInterval({0}, {1})", tick, 250);
+    	}
+    }
+    """;
+  private static final int FF_PAGE_BEAT_LINE = 4;
+  private static final String FF_PAGE_HX = """
+    class WebPage {
+    	static var beats = 0;
+    	static function heartbeat() {
+    		beats++; // FF_PAGE_BEAT_LINE = 4
+    	}
+    	static function main() {
+    		var worker = new js.html.Worker("worker.js");
+    		js.Browser.console.log("worker: " + (worker != null));
+    		js.Browser.window.setInterval(heartbeat, 300);
+    	}
+    }
+    """;
+
+  /**
+   * Pins whether the firefox adapter ANSWERS evaluate for a WORKER thread's
+   * frame. Suspicion (IDE-observed): variables/scopes answer, evaluate never
+   * does — and per the adapter's per-actor FIFO queue, one unanswered request
+   * wedges that thread forever. The TAB thread's evaluate is the control.
+   * Runs variables BEFORE evaluate (evaluate may poison the queue).
+   */
+  @Test(timeout = 240_000)
+  public void workerFrameEvaluateBehaviour() throws Exception {
+    Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
+    Path firefox = firefoxExe();
+    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Path fixture = Files.createTempDirectory("haxe-ff-worker-probe");
+    System.out.println("[probe] fixture dir: " + fixture);
+    Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX);
+    Files.writeString(fixture.resolve("WorkerMain.hx"), FF_WORKER_HX);
+    Files.writeString(fixture.resolve("index.html"),
+                      "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
+                      + "<body><script src='app.js'></script></body></html>");
+    for (String[] unit : new String[][]{{"WebPage", "app.js"}, {"WorkerMain", "worker.js"}}) {
+      Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", unit[0],
+                                        "-js", fixture.resolve(unit[1]).toString(), "-debug")
+        .redirectErrorStream(true).start();
+      assertTrue("fixture compile " + unit[0], haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    }
+
+    try (ContentHttpServer content = new ContentHttpServer(fixture)) {
+      content.setRequestListener(line -> System.out.println("[server] " + line));
+      InitializeRequest initialize = new InitializeRequest();
+      InitializeRequestArguments initArgs = new InitializeRequestArguments();
+      initArgs.setClientID("intellij");
+      initArgs.setAdapterID("firefox");
+      initArgs.setPathFormat("path");
+      initArgs.setLinesStartAt1(true);
+      initArgs.setColumnsStartAt1(true);
+      initialize.setArguments(initArgs);
+      assertTrue("initialize", client.sendRequest(initialize, TIMEOUT).isSuccess());
+
+      Map<String, Object> launchConfig = new LinkedHashMap<>();
+      launchConfig.put("request", "launch");
+      launchConfig.put("url", content.getBaseUrl());
+      launchConfig.put("webRoot", fixture.toString());
+      launchConfig.put("firefoxExecutable", firefox.toString());
+      launchConfig.put("firefoxArgs", List.of("-headless"));
+    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
+      // UNIQUE RDP port: the adapter's default 6000 makes it CONNECT TO A
+      // LEFTOVER firefox from an earlier session/probe instead of the one it
+      // just launched (live-observed: "Not attaching to this thread" for
+      // every worker, foreign processes' workers in the target list)
+      launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
+      Path adapterLog = fixture.resolve("adapter.log");
+      launchConfig.put("log", Map.of(
+        "fileName", adapterLog.toString(),
+        "fileLevel", Map.of("default", "Debug")));
+      assertTrue("launch", client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess());
+      long deadline = System.currentTimeMillis() + 30_000;
+      boolean initialized = false;
+      while (System.currentTimeMillis() < deadline && !initialized) {
+        initialized = client.pollEvent(250) instanceof InitializedEvent;
+      }
+      assertTrue("initialized", initialized);
+
+      // breakpoint in the worker only; the ticking line hits ~immediately
+      sendBreakpoint(fixture.resolve("WorkerMain.hx"), FF_WORKER_TICK_LINE);
+      StoppedEvent workerStop = awaitStop(60_000);
+      assertNotNull("worker breakpoint never hit", workerStop);
+      int workerThread = workerStop.getBody().getThreadId() != null ? workerStop.getBody().getThreadId() : 1;
+      StackFrame workerFrame = topFrame(workerThread);
+      assertNotNull("no worker top frame", workerFrame);
+      System.out.println("[probe] worker stop: thread=" + workerThread + " frame=" + workerFrame.getId()
+                         + " @ " + (workerFrame.getSource() != null ? workerFrame.getSource().getPath() : "?")
+                         + ":" + workerFrame.getLine());
+
+      // 1) scopes+variables on the worker frame (expected to answer)
+      System.out.println("[probe] worker scopes/variables: " + timedScopesAndVariables(workerFrame.getId()));
+      // 2) evaluate on the worker frame - the suspected never-answered request
+      System.out.println("[probe] worker evaluate(watch): " + timedEvaluate("ticks", workerFrame.getId(), "watch"));
+      System.out.println("[probe] worker evaluate(repl):  " + timedEvaluate("ticks", workerFrame.getId(), "repl"));
+
+      // 3) CONTROL: the TAB thread - move the breakpoint to the page heartbeat
+      sendBreakpoints(fixture.resolve("WorkerMain.hx"), List.of()); // clear worker bp
+      sendBreakpoint(fixture.resolve("WebPage.hx"), FF_PAGE_BEAT_LINE);
+      resumeThread(workerThread);
+      StoppedEvent tabStop = awaitStop(60_000);
+      assertNotNull("page heartbeat breakpoint never hit", tabStop);
+      int tabThread = tabStop.getBody().getThreadId() != null ? tabStop.getBody().getThreadId() : 1;
+      StackFrame tabFrame = topFrame(tabThread);
+      assertNotNull("no tab top frame", tabFrame);
+      System.out.println("[probe] tab stop: thread=" + tabThread + " frame=" + tabFrame.getId());
+      System.out.println("[probe] tab scopes/variables: " + timedScopesAndVariables(tabFrame.getId()));
+      System.out.println("[probe] tab evaluate(watch): " + timedEvaluate("beats", tabFrame.getId(), "watch"));
+
+      client.sendRequest(new DisconnectRequest(), TIMEOUT);
+    }
+  }
+
+  /**
+   * The ZOMBIE question, on a CLEAN instance (unique RDP port): with the
+   * serve-mode refresh armed and a worker breakpoint hitting BEFORE the
+   * reload, what does the thread list look like after the reload settles?
+   * (The contaminated-era sessions showed doubled worker threads whose
+   * actors answered nothing; this pins whether that happens without the
+   * stale-instance pollution.)
+   */
+  @Test(timeout = 240_000)
+  public void workerThreadsAcrossRefresh() throws Exception {
+    Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
+    Path firefox = firefoxExe();
+    Assume.assumeTrue("firefox not installed - skipping", firefox != null);
+    Path fixture = Files.createTempDirectory("haxe-ff-refresh-probe");
+    Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX);
+    Files.writeString(fixture.resolve("WorkerMain.hx"), FF_WORKER_HX);
+    Files.writeString(fixture.resolve("index.html"),
+                      "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
+                      + "<body><script src='app.js'></script></body></html>");
+    for (String[] unit : new String[][]{{"WebPage", "app.js"}, {"WorkerMain", "worker.js"}}) {
+      Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", unit[0],
+                                        "-js", fixture.resolve(unit[1]).toString(), "-debug")
+        .redirectErrorStream(true).start();
+      assertTrue("fixture compile " + unit[0], haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    }
+
+    try (ContentHttpServer content = new ContentHttpServer(fixture)) {
+      content.setRequestListener(line -> System.out.println("[server] " + line));
+      content.refreshFirstPage(2);
+      InitializeRequest initialize = new InitializeRequest();
+      InitializeRequestArguments initArgs = new InitializeRequestArguments();
+      initArgs.setClientID("intellij");
+      initArgs.setAdapterID("firefox");
+      initArgs.setPathFormat("path");
+      initArgs.setLinesStartAt1(true);
+      initArgs.setColumnsStartAt1(true);
+      initialize.setArguments(initArgs);
+      assertTrue("initialize", client.sendRequest(initialize, TIMEOUT).isSuccess());
+
+      Map<String, Object> launchConfig = new LinkedHashMap<>();
+      launchConfig.put("request", "launch");
+      launchConfig.put("url", content.getBaseUrl());
+      launchConfig.put("webRoot", fixture.toString());
+      launchConfig.put("firefoxExecutable", firefox.toString());
+      launchConfig.put("firefoxArgs", List.of("-headless"));
+      launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
+      assertTrue("launch", client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess());
+      long deadline = System.currentTimeMillis() + 30_000;
+      boolean initialized = false;
+      while (System.currentTimeMillis() < deadline && !initialized) {
+        initialized = client.pollEvent(250) instanceof InitializedEvent;
+      }
+      assertTrue("initialized", initialized);
+      sendBreakpoint(fixture.resolve("WorkerMain.hx"), FF_WORKER_TICK_LINE);
+
+      // first stop: the first load's worker hits its ticking bp BEFORE the 2s
+      // reload; then the reload fires while that worker is paused
+      StoppedEvent first = awaitStop(60_000);
+      assertNotNull("worker breakpoint never hit on the first load", first);
+      System.out.println("[probe] first stop: thread=" + first.getBody().getThreadId());
+
+      // let the reload happen and the second load settle (its worker re-hits)
+      StoppedEvent second = awaitStop(30_000);
+      System.out.println("[probe] second stop: "
+                         + (second == null ? "none" : "thread=" + second.getBody().getThreadId()));
+
+      Response threadsResponse = client.sendRequest(new ThreadsRequest(), TIMEOUT);
+      var threads = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse)
+                       threadsResponse).getBody().getThreads();
+      for (var thread : threads) {
+        System.out.println("[probe] thread id=" + thread.getId() + " name=" + thread.getName());
+      }
+      System.out.println("[probe] thread count after refresh cycle: " + threads.size());
+      client.sendRequest(new DisconnectRequest(), TIMEOUT);
+    }
+  }
+
+  private void sendBreakpoint(Path hxFile, int line) throws Exception {
+    SourceBreakpoint bp = new SourceBreakpoint();
+    bp.setLine(line);
+    sendBreakpoints(hxFile, List.of(bp));
+  }
+
+  private void sendBreakpoints(Path hxFile, List<SourceBreakpoint> bps) throws Exception {
+    SetBreakpointsRequest request = new SetBreakpointsRequest();
+    SetBreakpointsArguments arguments = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(hxFile.toString());
+    source.setName(hxFile.getFileName().toString());
+    arguments.setSource(source);
+    arguments.setBreakpoints(bps);
+    request.setArguments(arguments);
+    Response response = client.sendRequest(request, TIMEOUT);
+    assertTrue("setBreakpoints " + hxFile.getFileName(), response.isSuccess());
+    if (response instanceof SetBreakpointsResponse ok && ok.getBody() != null && ok.getBody().getBreakpoints() != null) {
+      ok.getBody().getBreakpoints().forEach(b -> System.out.println(
+        "[probe] bp " + hxFile.getFileName() + " id=" + b.getId() + " verified=" + b.isVerified()));
+    }
+  }
+
+  private StoppedEvent awaitStop(long timeoutMillis) throws InterruptedException {
+    long deadline = System.currentTimeMillis() + timeoutMillis;
+    while (System.currentTimeMillis() < deadline) {
+      Event event = client.pollEvent(250);
+      if (event instanceof StoppedEvent stopped) {
+        return stopped;
+      }
+      if (event != null) {
+        String detail = event instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent be
+                        && be.getBody() != null && be.getBody().getBreakpoint() != null
+                        ? " id=" + be.getBody().getBreakpoint().getId()
+                          + " verified=" + be.getBody().getBreakpoint().isVerified()
+                        : event instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ThreadEvent te
+                          && te.getBody() != null
+                          ? " reason=" + te.getBody().getReason() + " threadId=" + te.getBody().getThreadId()
+                          : "";
+        System.out.println("[probe] event '" + event.getEvent() + "'" + detail);
+      }
+    }
+    return null;
+  }
+
+  private StackFrame topFrame(int threadId) throws Exception {
+    StackTraceRequest request = new StackTraceRequest();
+    StackTraceArguments arguments = new StackTraceArguments();
+    arguments.setThreadId(threadId);
+    request.setArguments(arguments);
+    Response response = client.sendRequest(request, TIMEOUT);
+    return response instanceof StackTraceResponse st && st.isSuccess() && !st.getBody().getStackFrames().isEmpty()
+           ? st.getBody().getStackFrames().get(0) : null;
+  }
+
+  private void resumeThread(int threadId) throws Exception {
+    ContinueRequest resume = new ContinueRequest();
+    ContinueArguments arguments = new ContinueArguments();
+    arguments.setThreadId(threadId);
+    resume.setArguments(arguments);
+    client.sendRequest(resume, TIMEOUT);
+  }
+
+  private String timedScopesAndVariables(int frameId) {
+    long start = System.currentTimeMillis();
+    try {
+      ScopesRequest scopes = new ScopesRequest();
+      ScopesArguments scArgs = new ScopesArguments();
+      scArgs.setFrameId(frameId);
+      scopes.setArguments(scArgs);
+      Response scResponse = client.sendRequest(scopes, 10_000);
+      if (!(scResponse instanceof ScopesResponse ok) || !ok.isSuccess() || ok.getBody().getScopes().isEmpty()) {
+        return "scopes FAILED after " + (System.currentTimeMillis() - start) + "ms";
+      }
+      VariablesRequest variables = new VariablesRequest();
+      VariablesArguments vArgs = new VariablesArguments();
+      vArgs.setVariablesReference(ok.getBody().getScopes().get(0).getVariablesReference());
+      variables.setArguments(vArgs);
+      Response vResponse = client.sendRequest(variables, 10_000);
+      int count = vResponse instanceof VariablesResponse vr && vr.isSuccess() && vr.getBody().getVariables() != null
+                  ? vr.getBody().getVariables().size() : -1;
+      return "OK (" + count + " vars, " + (System.currentTimeMillis() - start) + "ms)";
+    } catch (Exception e) {
+      return "HUNG/FAILED after " + (System.currentTimeMillis() - start) + "ms: " + e.getMessage();
+    }
+  }
+
+  private String timedEvaluate(String expression, int frameId, String context) {
+    long start = System.currentTimeMillis();
+    try {
+      EvaluateRequest request = new EvaluateRequest();
+      EvaluateArguments arguments = new EvaluateArguments();
+      arguments.setExpression(expression);
+      arguments.setFrameId(frameId);
+      arguments.setContext(context);
+      request.setArguments(arguments);
+      Response response = client.sendRequest(request, 10_000);
+      String result = response instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse ok
+                      && ok.isSuccess() ? ok.getBody().getResult() : "error: " + response.getMessage();
+      return "answered in " + (System.currentTimeMillis() - start) + "ms -> " + result;
+    } catch (Exception e) {
+      return "NO ANSWER after " + (System.currentTimeMillis() - start) + "ms (" + e.getMessage() + ")";
+    }
+  }
+
   private static Path buildLoadFixture() throws Exception {
     Path dir = Files.createTempDirectory("haxe-web-load-probe");
     Files.writeString(dir.resolve("WebLoad.hx"), WEB_LOAD_HX);
@@ -639,6 +950,27 @@ public class FirefoxAdapterLiveProbe {
     Path appJs = fixture.resolve("app.js");
     String pristineAppJs = Files.readString(appJs);
 
+    // Variants L/M/N (probed 2026-07-21, ALL MISSED, removed): L/M served a
+    // synthetic BOOTSTRAP page first (empty page + meta refresh to the app;
+    // M with an inert <script>); N registered the breakpoints only when the
+    // RELOADED page requested its script (server-held response, so the first
+    // load ran unpaused and its workers died cleanly). None armed: the
+    // adapter applies breakpoints to a load only when they were registered
+    // BEFORE the load that taught it the sources. Register -> load once ->
+    // reload (K) is the single working sequence; its cost (early-hitting
+    // breakpoints pause workers the reload cannot terminate -> zombie
+    // threads) is why the refresh is optional in the run config.
+    // Variants L/M/N (probed 2026-07-21, N re-verified on a CLEAN instance
+    // with a unique RDP port - ALL MISSED, removed): L/M served a synthetic
+    // BOOTSTRAP page first (empty page + meta refresh to the app; M with an
+    // inert <script>); N registered the breakpoints only when the RELOADED
+    // page requested its script (server-held response, first load unpaused).
+    // None armed: the adapter applies breakpoints to a load only when they
+    // were registered BEFORE the load that taught it the sources. Register ->
+    // load once -> reload (K) is the single working sequence; its cost (a
+    // worker PAUSED at a breakpoint when the reload fires lingers as a
+    // zombie thread, clean-verified by workerThreadsAcrossRefresh) is
+    // accepted and documented in the module README.
     String worked = null;
     for (String variant : new String[]{"J", "K"}) {
       Files.writeString(appJs, variant.equals("I")
@@ -707,6 +1039,9 @@ public class FirefoxAdapterLiveProbe {
         launchConfig.put("webRoot", fixture.toString());
         launchConfig.put("firefoxExecutable", firefox.toString());
         launchConfig.put("firefoxArgs", List.of("-headless"));
+        // unique RDP port: default 6000 would CONNECT TO A LEFTOVER firefox
+        // from an earlier variant/session instead of the launched one
+        launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
         Response launch = session.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
         if (!launch.isSuccess()) {
           System.out.println("[probe]   variant " + variant + " launch failed: " + launch.getMessage());

@@ -120,6 +120,18 @@ public final class ContentHttpServer implements Closeable {
 
   private volatile int refreshOnceSeconds = -1;
 
+  // NOTE (probed, variants L/M/N in FirefoxAdapterLiveProbe - N re-verified
+  // on a CLEAN firefox instance): neither a synthetic BOOTSTRAP page (empty
+  // page + meta refresh to the app, with or without an inert script; L/M)
+  // nor DEFERRING the breakpoints until the reloaded page requests its first
+  // script (server-held response; N) arms load-time breakpoints. The adapter
+  // only applies breakpoints to a load when they were registered BEFORE the
+  // load that taught it the sources: register -> load once -> reload is the
+  // single working sequence. Its cost is real (clean-verified): a worker
+  // PAUSED at a breakpoint when the reload fires is never terminated and
+  // lingers as an inert zombie thread - accepted, and documented in the
+  // module README (Chromium is the recommended family for worker debugging).
+
   private byte[] maybeInjectRefresh(byte[] body) {
     int seconds = refreshOnceSeconds;
     if (seconds < 0) {
