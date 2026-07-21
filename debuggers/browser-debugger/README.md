@@ -29,7 +29,9 @@ degrades around workers for reasons outside this plugin (documented below).
 
 ## Supply chain
 
-- Adapters are downloaded **on demand** into
+- Adapters are downloaded **only on the user's explicit request** (the run
+  configuration's Download link — sessions never download, and a missing
+  adapter fails configuration validation) into
   `PathManager.getSystemPath()/haxe/debug-adapters/<name>/<version>/`,
   verified against **hard-coded SHA-256 pins** before unpacking
   (zip-slip/tar-slip guarded). Never from the VS Marketplace (its ToS forbids

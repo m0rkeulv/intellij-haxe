@@ -20,14 +20,21 @@ import com.intellij.util.ui.UIUtil;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import org.jetbrains.annotations.NotNull;
+import com.intellij.icons.AllIcons;
+import com.intellij.ide.actions.RevealFileAction;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.ui.components.ActionLink;
+import java.awt.FlowLayout;
+import java.awt.event.ActionListener;
 
 /**
  * Settings UI for the browser debug configuration: module, browser family
  * (Firefox / Chromium), the serve-vs-url content mode (checkbox toggles which
  * field is live), optional browser/node executable overrides (unchecked =
  * the default installation / PATH), and the selected family's DAP adapter
- * status with an on-demand download button (the session would download it on
- * first use anyway; the button just does it ahead of time).
+ * status with a Download link. The link is the ONLY acquisition path:
+ * sessions never download, and a missing adapter fails configuration
+ * validation — downloading third-party code is the user's explicit decision.
  */
 public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConfiguration> {
   private final Project project;
@@ -45,12 +52,12 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
   private final TextFieldWithBrowseButton nodePathField = new TextFieldWithBrowseButton();
   private final JBLabel adapterStatusLabel = new JBLabel();
   /** Icon-only link revealing the adapter store directory in the system file manager. */
-  private final com.intellij.ui.components.ActionLink openStoreLink =
-    new com.intellij.ui.components.ActionLink("", (java.awt.event.ActionListener)e -> revealAdapterDirectory());
+  private final ActionLink openStoreLink =
+    new ActionLink("", (ActionListener)e -> revealAdapterDirectory());
   /** Text link fetching the pinned adapter ahead of the first session's on-demand download. */
-  private final com.intellij.ui.components.ActionLink downloadLink =
-    new com.intellij.ui.components.ActionLink(HaxeDebuggerBundle.message("browser.runner.adapter.download"),
-                                              (java.awt.event.ActionListener)e -> downloadAdapter());
+  private final ActionLink downloadLink =
+    new ActionLink(HaxeDebuggerBundle.message("browser.runner.adapter.download"),
+                                              (ActionListener)e -> downloadAdapter());
   private final JPanel panel;
 
   public BrowserRunConfigurationEditor(Project project) {
@@ -70,10 +77,10 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
     familyCombo.addActionListener(e -> updateAdapterStatus());
     // secondary information, styled like the platform's context help text
     adapterStatusLabel.setForeground(UIUtil.getContextHelpForeground());
-    openStoreLink.setIcon(com.intellij.icons.AllIcons.General.OpenDisk);
-    openStoreLink.setToolTipText(com.intellij.ide.actions.RevealFileAction.getActionName());
+    openStoreLink.setIcon(AllIcons.General.OpenDisk);
+    openStoreLink.setToolTipText(RevealFileAction.getActionName());
 
-    JPanel adapterRow = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
+    JPanel adapterRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
     adapterRow.add(adapterStatusLabel);
     adapterRow.add(downloadLink);
     adapterRow.add(openStoreLink);
@@ -107,14 +114,17 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
 
   // --- the selected family's DAP adapter: downloaded state + version ---
 
+  private BrowserFamily selectedFamily() {
+    Object selected = familyCombo.getSelectedItem();
+    return selected instanceof BrowserFamily family ? family : BrowserFamily.FIREFOX;
+  }
+
   private AdapterPin selectedPin() {
-    return familyCombo.getSelectedItem() == BrowserFamily.CHROMIUM ? AdapterPin.JS_DEBUG : AdapterPin.FIREFOX;
+    return BrowserRunConfiguration.adapterPinFor(selectedFamily());
   }
 
   private String selectedAdapterName() {
-    return HaxeDebuggerBundle.message(familyCombo.getSelectedItem() == BrowserFamily.CHROMIUM
-                                      ? "browser.runner.adapter.name.chromium"
-                                      : "browser.runner.adapter.name.firefox");
+    return BrowserRunConfiguration.adapterDisplayName(selectedFamily());
   }
 
   private void updateAdapterStatus() {
@@ -131,7 +141,7 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
 
   private void revealAdapterDirectory() {
     AdapterPin pin = selectedPin();
-    com.intellij.ide.actions.RevealFileAction.openDirectory(
+    RevealFileAction.openDirectory(
       BrowserDebugBackend.adapterStoreRoot().resolve(pin.id()).resolve(pin.version()).toFile());
   }
 
@@ -158,8 +168,11 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
           downloadLink.setVisible(true);
         } else {
           updateAdapterStatus();
+          // the dialog's "adapter is not downloaded" validation error must
+          // clear now, not on the next manual edit - nudge a re-validation
+          fireEditorStateChanged();
         }
-      }, com.intellij.openapi.application.ModalityState.stateForComponent(adapterStatusLabel));
+      }, ModalityState.stateForComponent(adapterStatusLabel));
     });
   }
 

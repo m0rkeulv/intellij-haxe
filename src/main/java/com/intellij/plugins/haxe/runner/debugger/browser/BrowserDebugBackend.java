@@ -25,6 +25,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler;
+import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 
 /**
  * The browser backend: resolves the family's pinned vscode debug adapter
@@ -95,7 +98,7 @@ public class BrowserDebugBackend implements DapBackend {
   }
 
   @Override
-  public com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint connect() throws IOException {
+  public DapEndpoint connect() throws IOException {
     Path node = locateNode();
     requireModernNode(node);
     AdapterStore store = new AdapterStore(adapterStoreRoot());
@@ -125,8 +128,23 @@ public class BrowserDebugBackend implements DapBackend {
 
   // ------------------------------------------------------------- firefox
 
+  /**
+   * The adapter's entry point, WITHOUT downloading: acquisition is the user's
+   * explicit decision (the run configuration's Download link), and a missing
+   * adapter is already a validation error — this guard only covers a session
+   * forced past the configuration warning.
+   */
+  private Path installedAdapterEntry(AdapterStore store, AdapterPin pin) throws IOException {
+    if (!store.isInstalled(pin)) {
+      throw new IOException(HaxeDebuggerBundle.message(
+        "browser.runner.adapter.missing",
+        BrowserRunConfiguration.adapterDisplayName(family) + " " + pin.version()));
+    }
+    return store.resolveEntry(pin, null); // already installed: no network
+  }
+
   private DapClient connectFirefox(Path node, AdapterStore store, String targetUrl) throws IOException {
-    Path adapterEntry = store.resolveEntry(AdapterPin.FIREFOX, null);
+    Path adapterEntry = installedAdapterEntry(store, AdapterPin.FIREFOX);
     launchConfig = firefoxLaunchConfig(targetUrl);
     BrowserAdapterLauncher.LaunchedAdapter launched = BrowserAdapterLauncher.launch(node, adapterEntry);
     adapterProcess = launched.process();
@@ -157,9 +175,9 @@ public class BrowserDebugBackend implements DapBackend {
 
   // ------------------------------------------------------------ chromium
 
-  private com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint connectChromium(
+  private DapEndpoint connectChromium(
     Path node, AdapterStore store, String targetUrl) throws IOException {
-    Path dapServerJs = store.resolveEntry(AdapterPin.JS_DEBUG, null);
+    Path dapServerJs = installedAdapterEntry(store, AdapterPin.JS_DEBUG);
     BrowserAdapterLauncher.LaunchedAdapter launched = BrowserAdapterLauncher.launchJsDebug(node, dapServerJs);
     adapterProcess = launched.process();
     adapterStdout = launched.stdout();
@@ -412,9 +430,9 @@ public class BrowserDebugBackend implements DapBackend {
   }
 
   @Override
-  public com.intellij.xdebugger.stepping.XSmartStepIntoHandler<?> createSmartStepIntoHandler(DapDebugProcess process) {
+  public XSmartStepIntoHandler<?> createSmartStepIntoHandler(DapDebugProcess process) {
     return supportsSmartStepInto()
-           ? new com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler(process)
+           ? new DapStepInTargetsSmartStepHandler(process)
            : null;
   }
 

@@ -86,6 +86,18 @@ public class BrowserRunConfiguration extends DapRunConfigurationBase {
     nodePath = value == null ? "" : value;
   }
 
+  /** The pinned DAP adapter driving the given family. */
+  public static AdapterPin adapterPinFor(BrowserFamily family) {
+    return family == BrowserFamily.CHROMIUM ? AdapterPin.JS_DEBUG : AdapterPin.FIREFOX;
+  }
+
+  /** The user-facing adapter name ("Firefox DAP debugger" / "Chromium DAP debugger"). */
+  public static String adapterDisplayName(BrowserFamily family) {
+    return HaxeDebuggerBundle.message(family == BrowserFamily.CHROMIUM
+                                      ? "browser.runner.adapter.name.chromium"
+                                      : "browser.runner.adapter.name.firefox");
+  }
+
   // --- validation ---
 
   @Override
@@ -104,6 +116,14 @@ public class BrowserRunConfiguration extends DapRunConfigurationBase {
       }
     } else if (url.isBlank()) {
       throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("browser.runner.no.url"));
+    }
+    // downloading the adapter is the USER's explicit decision (the editor's
+    // Download link) - a session never downloads, so a missing adapter is an
+    // incorrect configuration, not a launch-time surprise
+    AdapterPin pin = adapterPinFor(browserFamily);
+    if (!new AdapterStore(BrowserDebugBackend.adapterStoreRoot()).isInstalled(pin)) {
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message(
+        "browser.runner.adapter.missing", adapterDisplayName(browserFamily) + " " + pin.version()));
     }
   }
 
