@@ -113,6 +113,7 @@ public final class DapJson {
       case VariablesRequest.COMMAND               -> VariablesResponse.class;
       case SetVariableRequest.COMMAND             -> SetVariableResponse.class;
       case EvaluateRequest.COMMAND                -> EvaluateResponse.class;
+      case CompletionsRequest.COMMAND             -> CompletionsResponse.class;
       case DisconnectRequest.COMMAND              -> DisconnectResponse.class;
       default                                     -> Response.class;
     };
