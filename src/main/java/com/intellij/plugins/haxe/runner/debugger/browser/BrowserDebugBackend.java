@@ -75,6 +75,8 @@ public class BrowserDebugBackend implements DapBackend {
   private volatile Map<String, Object> launchConfig;
   /** Chromium only: the parent session, kept alive beside the child. */
   private volatile DapClient parentClient;
+  /** Chromium only: the page+workers multiplexer (owns parent + all children). */
+  private volatile JsDebugSessionMux sessionMux;
   private volatile boolean closed;
 
   public BrowserDebugBackend(BrowserFamily family,
@@ -92,7 +94,7 @@ public class BrowserDebugBackend implements DapBackend {
   }
 
   @Override
-  public DapClient connect() throws IOException {
+  public com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint connect() throws IOException {
     Path node = locateNode();
     requireModernNode(node);
     AdapterStore store = new AdapterStore(adapterStoreRoot());
@@ -142,7 +144,8 @@ public class BrowserDebugBackend implements DapBackend {
 
   // ------------------------------------------------------------ chromium
 
-  private DapClient connectChromium(Path node, AdapterStore store, String targetUrl) throws IOException {
+  private com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint connectChromium(
+    Path node, AdapterStore store, String targetUrl) throws IOException {
     Path dapServerJs = store.resolveEntry(AdapterPin.JS_DEBUG, null);
     BrowserAdapterLauncher.LaunchedAdapter launched = BrowserAdapterLauncher.launchJsDebug(node, dapServerJs);
     adapterProcess = launched.process();
@@ -160,7 +163,12 @@ public class BrowserDebugBackend implements DapBackend {
       throw new IOException("Interrupted while starting the js-debug session", e);
     }
     launchConfig = childConfig;
-    return connectWithRetry(launched.port()); // the child session's own connection
+    DapClient page = connectWithRetry(launched.port()); // the PAGE session's connection
+    // the mux takes over the parent (further startDebugging = new targets)
+    // and presents page+workers as ONE session with workers as extra threads
+    JsDebugSessionMux mux = new JsDebugSessionMux(parent, page, launched.port());
+    sessionMux = mux;
+    return mux;
   }
 
   /**
@@ -320,32 +328,11 @@ public class BrowserDebugBackend implements DapBackend {
       gobbler.setDaemon(true);
       gobbler.start();
     }
-    DapClient parent = parentClient;
-    if (parent != null) {
-      // babysit the parent session for the whole run: drain its events and
-      // acknowledge further reverse requests (extra targets - workers,
-      // iframes - are acknowledged but not debugged yet)
-      Thread babysitter = new Thread(() -> {
-        try {
-          while (!closed && !parent.isConnectionFinished()) {
-            parent.pollEvent(250);
-            Request incoming = parent.pollIncomingRequest(50);
-            if (incoming != null) {
-              parent.respond(incoming, true);
-              if (incoming instanceof StartDebuggingRequest) {
-                process.printSystem("[js-debug] additional debug target ignored"
-                                    + " (multi-target sessions are not supported yet)\n");
-              }
-            }
-          }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        } catch (IOException e) {
-          LOG.warn("js-debug parent babysitter failed", e);
-        }
-      }, "js-debug parent session");
-      babysitter.setDaemon(true);
-      babysitter.start();
+    JsDebugSessionMux mux = sessionMux;
+    if (mux != null) {
+      // the mux owns the parent pumping and worker attachment; its
+      // attach/exit notes land in the console as grey system output
+      mux.setLogSink(line -> process.printSystem("[js-debug] " + line + "\n"));
     }
   }
 
@@ -445,11 +432,19 @@ public class BrowserDebugBackend implements DapBackend {
     if (server != null) {
       server.close();
     }
+    JsDebugSessionMux mux = sessionMux;
+    sessionMux = null;
+    if (mux != null) {
+      try {
+        mux.close(); // closes page, workers AND the parent connection
+      } catch (IOException ignored) {
+      }
+    }
     DapClient parent = parentClient;
     parentClient = null;
-    if (parent != null) {
+    if (mux == null && parent != null) {
       try {
-        parent.close();
+        parent.close(); // startup failed before the mux existed
       } catch (IOException ignored) {
       }
     }
