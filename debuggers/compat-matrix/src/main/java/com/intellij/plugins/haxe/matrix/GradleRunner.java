@@ -60,6 +60,10 @@ final class GradleRunner {
       .redirectError(new File(logFile + ".err"));
     applyEnv(builder.environment(), extraEnv);
     try {
+      // the redirect targets must exist or CreateProcess fails with a
+      // misleading "cannot find the path specified" (fresh checkouts have
+      // no logs/ directory yet; older runs left one behind, masking this)
+      java.nio.file.Files.createDirectories(logFile.toAbsolutePath().getParent());
       Process process = builder.start();
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec);
       TestEventTail tail = liveTestProgress ? new TestEventTail(logFile, log) : null;
