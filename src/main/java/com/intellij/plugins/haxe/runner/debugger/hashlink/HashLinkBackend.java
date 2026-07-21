@@ -162,7 +162,7 @@ public class HashLinkBackend implements DapBackend {
   // not from the PSI-based default handler.
   @Override
   public XSmartStepIntoHandler<?> createSmartStepIntoHandler(DapDebugProcess process) {
-    return new HashLinkSmartStepIntoHandler(process);
+    return new com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler(process);
   }
 
   @Override
