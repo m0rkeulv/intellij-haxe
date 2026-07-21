@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * matched to their request by {@code request_seq}, events go to a queue that
  * callers drain with {@link #pollEvent}. Owns the client-side seq counter.
  */
-public class DapClient implements Closeable {
+public class DapClient implements DapEndpoint {
   /** Poison pill offered to every pending request when the reader exits. */
   private static final Response CONNECTION_CLOSED = new Response();
 
