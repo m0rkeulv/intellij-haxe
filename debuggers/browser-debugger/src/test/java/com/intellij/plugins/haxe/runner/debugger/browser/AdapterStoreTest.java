@@ -16,6 +16,7 @@ import java.util.zip.ZipOutputStream;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * Exercises the store against a LOCAL http server (the module's own
@@ -173,7 +174,7 @@ public class AdapterStoreTest {
     tar.write(new byte[512 - (data.length % 512 == 0 ? 512 : data.length % 512)]);
     tar.write(new byte[1024]); // end-of-archive zero blocks
     ByteArrayOutputStream gz = new ByteArrayOutputStream();
-    try (var out = new java.util.zip.GZIPOutputStream(gz)) {
+    try (var out = new GZIPOutputStream(gz)) {
       out.write(tar.toByteArray());
     }
     return gz.toByteArray();

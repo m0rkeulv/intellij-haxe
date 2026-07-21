@@ -15,6 +15,10 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.io.DataInputStream;
+import java.io.EOFException;
+import java.nio.charset.StandardCharsets;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Acquires the pinned debug-adapter artifacts on demand and caches them under
@@ -178,8 +182,8 @@ public final class AdapterStore {
   private static void untarGz(Path archive, Path targetDir) throws IOException {
     Files.createDirectories(targetDir);
     Path target = targetDir.toRealPath();
-    try (java.io.DataInputStream tar = new java.io.DataInputStream(
-      new java.util.zip.GZIPInputStream(Files.newInputStream(archive)))) {
+    try (DataInputStream tar = new DataInputStream(
+      new GZIPInputStream(Files.newInputStream(archive)))) {
       byte[] header = new byte[512];
       String pendingLongName = null;
       while (true) {
@@ -197,7 +201,7 @@ public final class AdapterStore {
             byte[] longName = new byte[(int)size];
             tar.readFully(longName);
             tar.skipNBytes(padded - size);
-            pendingLongName = new String(longName, java.nio.charset.StandardCharsets.UTF_8).trim().replace("\0", "");
+            pendingLongName = new String(longName, StandardCharsets.UTF_8).trim().replace("\0", "");
           }
           case '5' -> { // directory
             resolveTarEntry(target, name, true);
@@ -223,7 +227,7 @@ public final class AdapterStore {
             "Unsupported tar entry type '" + typeFlag + "' for " + name + " - refusing the artifact");
         }
       }
-    } catch (java.io.EOFException e) {
+    } catch (EOFException e) {
       // archives commonly end right after the entries without both zero blocks
     }
   }
@@ -255,7 +259,7 @@ public final class AdapterStore {
     while (end < offset + length && header[end] != 0) {
       end++;
     }
-    return new String(header, offset, end - offset, java.nio.charset.StandardCharsets.UTF_8);
+    return new String(header, offset, end - offset, StandardCharsets.UTF_8);
   }
 
   private static void deleteRecursively(Path dir) throws IOException {

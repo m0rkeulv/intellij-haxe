@@ -7,10 +7,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
-import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
+import javax.swing.JComponent;
 
 /**
  * Base editor for {@link DapExecutableRunConfigurationBase} configurations:
@@ -41,7 +40,7 @@ public abstract class DapExecutableRunConfigurationEditorBase<C extends DapExecu
   }
 
   /** A small gray, WRAPPING helper line (long text must not widen the dialog). */
-  protected static javax.swing.JComponent hint(String text) {
+  protected static JComponent hint(String text) {
     return HaxeRunConfigurationEditorUtil.hint(text);
   }
 

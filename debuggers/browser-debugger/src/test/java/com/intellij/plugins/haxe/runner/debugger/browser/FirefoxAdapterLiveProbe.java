@@ -45,11 +45,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ThreadEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
 
 /**
  * M0 wire probe for the vscode-firefox-debug adapter (web-debugger project):
@@ -124,22 +127,7 @@ public class FirefoxAdapterLiveProbe {
   // slightly BEFORE the TCP listener accepts, so an immediate connect can be
   // refused - retry briefly (the production launcher must do the same).
   private static DapClient connectWithRetry(int port) throws IOException {
-    long deadline = System.currentTimeMillis() + 10_000;
-    IOException last = null;
-    while (System.currentTimeMillis() < deadline) {
-      try {
-        return DapClient.connect("127.0.0.1", port, (int)TIMEOUT);
-      } catch (IOException e) {
-        last = e;
-        try {
-          Thread.sleep(100);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          throw new IOException("interrupted while connecting to the adapter", ie);
-        }
-      }
-    }
-    throw last != null ? last : new IOException("could not connect to the adapter");
+    return LiveProbeUtil.connectWithRetry(port, (int)TIMEOUT);
   }
 
   @After
@@ -158,12 +146,7 @@ public class FirefoxAdapterLiveProbe {
   // Killing node does NOT kill the Firefox it spawned - reap the whole tree,
   // or every probe run leaks a headless browser (live-observed: 122 zombies).
   private static void killTree(Process process) throws InterruptedException {
-    process.descendants().forEach(ProcessHandle::destroyForcibly);
-    process.destroy();
-    if (!process.waitFor(3, TimeUnit.SECONDS)) {
-      process.destroyForcibly();
-      process.waitFor(3, TimeUnit.SECONDS);
-    }
+    LiveProbeUtil.killTree(process);
   }
 
   @Test(timeout = 30_000)
@@ -234,12 +217,7 @@ public class FirefoxAdapterLiveProbe {
   }
 
   private static boolean haxeOnPath() {
-    try {
-      Process probe = new ProcessBuilder("haxe", "--version").redirectErrorStream(true).start();
-      return probe.waitFor(10, TimeUnit.SECONDS) && probe.exitValue() == 0;
-    } catch (Exception e) {
-      return false;
-    }
+    return LiveProbeUtil.haxeOnPath();
   }
 
   // WebMain.hx line numbers are load-bearing: BP_LINE is `counter++;`
@@ -267,13 +245,7 @@ public class FirefoxAdapterLiveProbe {
     Files.writeString(dir.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", dir.toString(), "-main", "WebMain",
-                                      "-js", dir.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    if (!haxe.waitFor(30, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
-      throw new AssertionError("fixture compile failed:\n" + output);
-    }
+    LiveProbeUtil.compileHaxeJs(dir, "WebMain", "app.js");
     return dir;
   }
 
@@ -572,7 +544,7 @@ public class FirefoxAdapterLiveProbe {
           Event event = session.pollEvent(250);
           if (event instanceof StoppedEvent s) {
             stopped = s;
-          } else if (event instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent be
+          } else if (event instanceof BreakpointEvent be
                      && be.getBody() != null && be.getBody().getBreakpoint() != null) {
             System.out.println("[probe]   " + label + " breakpointEvent verified="
                                + be.getBody().getBreakpoint().isVerified());
@@ -652,12 +624,8 @@ public class FirefoxAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    for (String[] unit : new String[][]{{"WebPage", "app.js"}, {"WorkerMain", "worker.js"}}) {
-      Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", unit[0],
-                                        "-js", fixture.resolve(unit[1]).toString(), "-debug")
-        .redirectErrorStream(true).start();
-      assertTrue("fixture compile " + unit[0], haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
-    }
+    LiveProbeUtil.compileHaxeJs(fixture, "WebPage", "app.js");
+    LiveProbeUtil.compileHaxeJs(fixture, "WorkerMain", "worker.js");
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       content.setRequestListener(line -> System.out.println("[server] " + line));
@@ -748,12 +716,8 @@ public class FirefoxAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    for (String[] unit : new String[][]{{"WebPage", "app.js"}, {"WorkerMain", "worker.js"}}) {
-      Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", unit[0],
-                                        "-js", fixture.resolve(unit[1]).toString(), "-debug")
-        .redirectErrorStream(true).start();
-      assertTrue("fixture compile " + unit[0], haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
-    }
+    LiveProbeUtil.compileHaxeJs(fixture, "WebPage", "app.js");
+    LiveProbeUtil.compileHaxeJs(fixture, "WorkerMain", "worker.js");
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       content.setRequestListener(line -> System.out.println("[server] " + line));
@@ -796,7 +760,7 @@ public class FirefoxAdapterLiveProbe {
                          + (second == null ? "none" : "thread=" + second.getBody().getThreadId()));
 
       Response threadsResponse = client.sendRequest(new ThreadsRequest(), TIMEOUT);
-      var threads = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse)
+      var threads = ((ThreadsResponse)
                        threadsResponse).getBody().getThreads();
       for (var thread : threads) {
         System.out.println("[probe] thread id=" + thread.getId() + " name=" + thread.getName());
@@ -837,11 +801,11 @@ public class FirefoxAdapterLiveProbe {
         return stopped;
       }
       if (event != null) {
-        String detail = event instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent be
+        String detail = event instanceof BreakpointEvent be
                         && be.getBody() != null && be.getBody().getBreakpoint() != null
                         ? " id=" + be.getBody().getBreakpoint().getId()
                           + " verified=" + be.getBody().getBreakpoint().isVerified()
-                        : event instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.ThreadEvent te
+                        : event instanceof ThreadEvent te
                           && te.getBody() != null
                           ? " reason=" + te.getBody().getReason() + " threadId=" + te.getBody().getThreadId()
                           : "";
@@ -903,7 +867,7 @@ public class FirefoxAdapterLiveProbe {
       arguments.setContext(context);
       request.setArguments(arguments);
       Response response = client.sendRequest(request, 10_000);
-      String result = response instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.EvaluateResponse ok
+      String result = response instanceof EvaluateResponse ok
                       && ok.isSuccess() ? ok.getBody().getResult() : "error: " + response.getMessage();
       return "answered in " + (System.currentTimeMillis() - start) + "ms -> " + result;
     } catch (Exception e) {
@@ -917,13 +881,7 @@ public class FirefoxAdapterLiveProbe {
     Files.writeString(dir.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", dir.toString(), "-main", "WebLoad",
-                                      "-js", dir.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    if (!haxe.waitFor(30, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
-      throw new AssertionError("fixture compile failed:\n" + output);
-    }
+    LiveProbeUtil.compileHaxeJs(dir, "WebLoad", "app.js");
     return dir;
   }
 
@@ -973,8 +931,7 @@ public class FirefoxAdapterLiveProbe {
     // accepted and documented in the module README.
     String worked = null;
     for (String variant : new String[]{"J", "K"}) {
-      Files.writeString(appJs, variant.equals("I")
-                               ? "debugger;" + pristineAppJs : pristineAppJs);
+      Files.writeString(appJs, pristineAppJs);
       try (ContentHttpServer content = new ContentHttpServer(fixture)) {
         content.setRequestListener(line -> System.out.println("[server] " + line));
         boolean stopped = runLoadVariant(variant, fixture, firefox, content);
@@ -986,10 +943,6 @@ public class FirefoxAdapterLiveProbe {
     }
     assertNotNull("no strategy hit the load-time breakpoint", worked);
     System.out.println("[probe] first working load strategy: " + worked);
-  }
-
-  private static String jsString(String value) {
-    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'";
   }
 
   private boolean runLoadVariant(String variant, Path fixture, Path firefox, ContentHttpServer content)

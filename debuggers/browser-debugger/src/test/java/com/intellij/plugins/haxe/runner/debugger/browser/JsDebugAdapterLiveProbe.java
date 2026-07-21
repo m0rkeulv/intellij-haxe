@@ -35,11 +35,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.CompletionsArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.CompletionsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.CompletionsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.InitializeResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInTargetsResponse;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse;
 
 /**
  * M2 wire probe for vscode-js-debug's standalone DAP server (pinned
@@ -97,12 +122,7 @@ public class JsDebugAdapterLiveProbe {
   }
 
   private static boolean haxeOnPath() {
-    try {
-      Process probe = new ProcessBuilder("haxe", "--version").redirectErrorStream(true).start();
-      return probe.waitFor(10, TimeUnit.SECONDS) && probe.exitValue() == 0;
-    } catch (Exception e) {
-      return false;
-    }
+    return LiveProbeUtil.haxeOnPath();
   }
 
   @Before
@@ -139,22 +159,7 @@ public class JsDebugAdapterLiveProbe {
   }
 
   private static DapClient connectWithRetry(int port) throws IOException {
-    long deadline = System.currentTimeMillis() + 10_000;
-    IOException last = null;
-    while (System.currentTimeMillis() < deadline) {
-      try {
-        return DapClient.connect("127.0.0.1", port, (int)TIMEOUT);
-      } catch (IOException e) {
-        last = e;
-        try {
-          Thread.sleep(100);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          throw new IOException("interrupted while connecting", ie);
-        }
-      }
-    }
-    throw last != null ? last : new IOException("could not connect to the adapter");
+    return LiveProbeUtil.connectWithRetry(port, (int)TIMEOUT);
   }
 
   @After
@@ -166,12 +171,7 @@ public class JsDebugAdapterLiveProbe {
       }
     }
     if (adapter != null) {
-      adapter.descendants().forEach(ProcessHandle::destroyForcibly);
-      adapter.destroy();
-      if (!adapter.waitFor(3, TimeUnit.SECONDS)) {
-        adapter.destroyForcibly();
-        adapter.waitFor(3, TimeUnit.SECONDS);
-      }
+      LiveProbeUtil.killTree(adapter);
     }
   }
 
@@ -181,13 +181,7 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(dir.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", dir.toString(), "-main", "WebMain",
-                                      "-js", dir.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    if (!haxe.waitFor(30, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
-      throw new AssertionError("fixture compile failed:\n" + output);
-    }
+    LiveProbeUtil.compileHaxeJs(dir, "WebMain", "app.js");
     return dir;
   }
 
@@ -244,10 +238,7 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", "WebLoad",
-                                      "-js", fixture.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    assertTrue("fixture compile", haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    LiveProbeUtil.compileHaxeJs(fixture, "WebLoad", "app.js");
 
     StackFrame top = driveSessionToStop(fixture, "WebLoad.hx", LOAD_BP_LINE);
     assertTrue("stopped in the load-time .hx line: " + top.getSource().getPath() + ":" + top.getLine(),
@@ -289,22 +280,19 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", "WebSmart",
-                                      "-js", fixture.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    assertTrue("fixture compile", haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    LiveProbeUtil.compileHaxeJs(fixture, "WebSmart", "app.js");
 
     atStop = (child, top) -> {
       // --- stepInTargets on the two-call line ---
-      com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest targetsRequest =
-        new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest();
-      com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments targetsArgs =
-        new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments();
+      StepInTargetsRequest targetsRequest =
+        new StepInTargetsRequest();
+      StepInTargetsArguments targetsArgs =
+        new StepInTargetsArguments();
       targetsArgs.setFrameId(top.getId());
       targetsRequest.setArguments(targetsArgs);
       Response targetsResponse = child.sendRequest(targetsRequest, TIMEOUT);
       assertTrue("stepInTargets", targetsResponse.isSuccess());
-      var targets = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInTargetsResponse)
+      var targets = ((StepInTargetsResponse)
                        targetsResponse).getBody().getTargets();
       for (var target : targets) {
         System.out.println("[probe] stepInTarget id=" + target.getId() + " label=" + target.getLabel());
@@ -314,17 +302,17 @@ public class JsDebugAdapterLiveProbe {
         .findFirst().orElseThrow(() -> new AssertionError("no f2 target among the labels"));
 
       // --- runtime completions: 'docum' must complete to the browser global ---
-      com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.CompletionsRequest completions =
-        new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.CompletionsRequest();
-      com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.CompletionsArguments completionsArgs =
-        new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.CompletionsArguments();
+      CompletionsRequest completions =
+        new CompletionsRequest();
+      CompletionsArguments completionsArgs =
+        new CompletionsArguments();
       completionsArgs.setFrameId(top.getId());
       completionsArgs.setText("docum");
       completionsArgs.setColumn(6); // 1-based caret after the text
       completions.setArguments(completionsArgs);
       Response completionsResponse = child.sendRequest(completions, TIMEOUT);
       assertTrue("completions", completionsResponse.isSuccess());
-      var items = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.CompletionsResponse)
+      var items = ((CompletionsResponse)
                      completionsResponse).getBody().getTargets();
       System.out.println("[probe] completions for 'docum': "
                          + items.stream().limit(8).map(i -> i.getLabel()).toList());
@@ -332,10 +320,10 @@ public class JsDebugAdapterLiveProbe {
                  items.stream().anyMatch(i -> "document".equals(i.getLabel())));
 
       // --- smart step INTO f2 (the outer call) ---
-      com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest stepIn =
-        new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInRequest();
-      com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments stepInArgs =
-        new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInArguments();
+      StepInRequest stepIn =
+        new StepInRequest();
+      StepInArguments stepInArgs =
+        new StepInArguments();
       stepInArgs.setThreadId(currentThreadId);
       stepInArgs.setTargetId(f2Target.getId());
       stepIn.setArguments(stepInArgs);
@@ -385,10 +373,7 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", "WebSmart",
-                                      "-js", fixture.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    assertTrue("fixture compile", haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    LiveProbeUtil.compileHaxeJs(fixture, "WebSmart", "app.js");
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       // --- parent exactly as BrowserDebugBackend.runParentHandshake ---
@@ -451,10 +436,10 @@ public class JsDebugAdapterLiveProbe {
         setBreakpoints.setArguments(bpArgs);
         assertTrue("child setBreakpoints", child.sendRequest(setBreakpoints, TIMEOUT).isSuccess());
         // exception filters as the IDE's exceptionFiltersRequest would send
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest filters =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsArguments filterArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.SetExceptionBreakpointsArguments();
+        SetExceptionBreakpointsRequest filters =
+          new SetExceptionBreakpointsRequest();
+        SetExceptionBreakpointsArguments filterArgs =
+          new SetExceptionBreakpointsArguments();
         filterArgs.setFilters(List.of("uncaught"));
         filters.setArguments(filterArgs);
         System.out.println("[probe] ide-seq setExceptionBreakpoints success="
@@ -472,7 +457,7 @@ public class JsDebugAdapterLiveProbe {
         int threadId = stopped.getBody().getThreadId() != null ? stopped.getBody().getThreadId() : 1;
 
         // reportStopped order: threads THEN stackTrace
-        assertTrue("threads", child.sendRequest(new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest(), TIMEOUT).isSuccess());
+        assertTrue("threads", child.sendRequest(new ThreadsRequest(), TIMEOUT).isSuccess());
         StackTraceRequest stackTrace = new StackTraceRequest();
         StackTraceArguments stArgs = new StackTraceArguments();
         stArgs.setThreadId(threadId);
@@ -485,19 +470,19 @@ public class JsDebugAdapterLiveProbe {
         int n1 = stepInTargetsCount(child, top.getId(), "1:immediately");
 
         // stage 2: hydrate the views like the IDE (scopes + variables)
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest scopes =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments scArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments();
+        ScopesRequest scopes =
+          new ScopesRequest();
+        ScopesArguments scArgs =
+          new ScopesArguments();
         scArgs.setFrameId(top.getId());
         scopes.setArguments(scArgs);
         Response scResponse = child.sendRequest(scopes, TIMEOUT);
-        if (scResponse instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse okScopes
+        if (scResponse instanceof ScopesResponse okScopes
             && okScopes.getBody() != null && !okScopes.getBody().getScopes().isEmpty()) {
-          com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest variables =
-            new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest();
-          com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments vArgs =
-            new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments();
+          VariablesRequest variables =
+            new VariablesRequest();
+          VariablesArguments vArgs =
+            new VariablesArguments();
           vArgs.setVariablesReference(okScopes.getBody().getScopes().get(0).getVariablesReference());
           variables.setArguments(vArgs);
           child.sendRequest(variables, TIMEOUT);
@@ -523,10 +508,10 @@ public class JsDebugAdapterLiveProbe {
         // stage 5: SECOND pause (the user's failing case had frameId=3 - ids
         // increment across pauses, so their stop was not the first). continue,
         // let the ticking fixture re-hit the same line, ask again.
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest resume =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments cArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
+        ContinueRequest resume =
+          new ContinueRequest();
+        ContinueArguments cArgs =
+          new ContinueArguments();
         cArgs.setThreadId(threadId);
         resume.setArguments(cArgs);
         assertTrue("continue", child.sendRequest(resume, TIMEOUT).isSuccess());
@@ -611,10 +596,7 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", "WebExpr",
-                                      "-js", fixture.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    assertTrue("fixture compile", haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    LiveProbeUtil.compileHaxeJs(fixture, "WebExpr", "app.js");
 
     final int[] targetsAtStop = {-2};
     atStop = (child, top) -> targetsAtStop[0] = stepInTargetsCount(child, top.getId(), "bare-expression stop");
@@ -650,10 +632,7 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", "WebClick",
-                                      "-js", fixture.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    assertTrue("fixture compile", haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    LiveProbeUtil.compileHaxeJs(fixture, "WebClick", "app.js");
 
     final int[] targetsAtStop = {-2};
     atStop = (child, top) -> targetsAtStop[0] = stepInTargetsCount(child, top.getId(), "last-statement stop");
@@ -680,10 +659,7 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", "WebClick",
-                                      "-js", fixture.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true).start();
-    assertTrue("fixture compile", haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    LiveProbeUtil.compileHaxeJs(fixture, "WebClick", "app.js");
 
     final int[] targetsAtStop = {-2};
     atStop = (child, top) -> targetsAtStop[0] = stepInTargetsCount(child, top.getId(), "event-handler stop");
@@ -749,14 +725,8 @@ public class JsDebugAdapterLiveProbe {
     Files.writeString(fixture.resolve("index.html"),
                       "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
                       + "<body><script src='app.js'></script></body></html>");
-    for (String[] unit : new String[][]{{"WebPage", "app.js"}, {"WorkerMain", "worker.js"}}) {
-      Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", unit[0],
-                                        "-js", fixture.resolve(unit[1]).toString(), "-debug")
-        .redirectErrorStream(true).start();
-      String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-      assertTrue("fixture compile " + unit[0] + ":\n" + output,
-                 haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
-    }
+    LiveProbeUtil.compileHaxeJs(fixture, "WebPage", "app.js");
+    LiveProbeUtil.compileHaxeJs(fixture, "WorkerMain", "worker.js");
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       // --- parent handshake exactly as BrowserDebugBackend.runParentHandshake ---
@@ -815,7 +785,7 @@ public class JsDebugAdapterLiveProbe {
         setBreakpoints.setArguments(bpArgs);
         Response bpResponse = mux.sendRequest(setBreakpoints, TIMEOUT);
         assertTrue("setBreakpoints via mux", bpResponse.isSuccess());
-        var bpResult = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponse)
+        var bpResult = ((SetBreakpointsResponse)
                           bpResponse).getBody().getBreakpoints().get(0);
         Integer pageBreakpointId = bpResult.getId();
         System.out.println("[probe] worker-source bp before worker exists: id=" + pageBreakpointId
@@ -832,7 +802,7 @@ public class JsDebugAdapterLiveProbe {
         deadline = System.currentTimeMillis() + 90_000;
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = mux.pollEvent(250);
-          if (event instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent be
+          if (event instanceof BreakpointEvent be
               && be.getBody() != null && be.getBody().getBreakpoint() != null) {
             var state = be.getBody().getBreakpoint();
             System.out.println("[probe] breakpoint event: id=" + state.getId() + " verified=" + state.isVerified());
@@ -868,32 +838,32 @@ public class JsDebugAdapterLiveProbe {
         assertTrue("frame id must be composited, got " + top.getId(), top.getId() >= COMPOSITE_FLOOR);
 
         // scopes by composite frame id -> composited variablesReference -> variables
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest scopes =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments scArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments();
+        ScopesRequest scopes =
+          new ScopesRequest();
+        ScopesArguments scArgs =
+          new ScopesArguments();
         scArgs.setFrameId(top.getId());
         scopes.setArguments(scArgs);
         Response scResponse = mux.sendRequest(scopes, TIMEOUT);
         assertTrue("scopes via composite frame id", scResponse.isSuccess());
-        var scopeList = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse)
+        var scopeList = ((ScopesResponse)
                            scResponse).getBody().getScopes();
         assertTrue("no scopes", !scopeList.isEmpty());
         int varRef = scopeList.get(0).getVariablesReference();
         assertTrue("scope variablesReference must be composited, got " + varRef, varRef >= COMPOSITE_FLOOR);
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest variables =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments vArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments();
+        VariablesRequest variables =
+          new VariablesRequest();
+        VariablesArguments vArgs =
+          new VariablesArguments();
         vArgs.setVariablesReference(varRef);
         variables.setArguments(vArgs);
         assertTrue("variables via composite reference", mux.sendRequest(variables, TIMEOUT).isSuccess());
 
         // the merged thread list carries the page AND the labelled worker
         Response threadsResponse = mux.sendRequest(
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest(), TIMEOUT);
+          new ThreadsRequest(), TIMEOUT);
         assertTrue("merged threads", threadsResponse.isSuccess());
-        var threads = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse)
+        var threads = ((ThreadsResponse)
                          threadsResponse).getBody().getThreads();
         for (var thread : threads) {
           System.out.println("[probe] merged thread id=" + thread.getId() + " name=" + thread.getName());
@@ -905,10 +875,10 @@ public class JsDebugAdapterLiveProbe {
                                                   && t.getName() != null && t.getName().contains("worker.js")));
 
         // continue routes back to the worker's session
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest resume =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments cArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
+        ContinueRequest resume =
+          new ContinueRequest();
+        ContinueArguments cArgs =
+          new ContinueArguments();
         cArgs.setThreadId(threadId);
         resume.setArguments(cArgs);
         assertTrue("continue via composite thread id", mux.sendRequest(resume, TIMEOUT).isSuccess());
@@ -928,10 +898,10 @@ public class JsDebugAdapterLiveProbe {
         // --- multi-pause routing: pause the PAGE while the worker stays paused ---
         int pageThreadId = threads.stream().filter(t -> t.getId() < COMPOSITE_FLOOR)
           .findFirst().orElseThrow().getId();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest pause =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseArguments pArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseArguments();
+        PauseRequest pause =
+          new PauseRequest();
+        PauseArguments pArgs =
+          new PauseArguments();
         pArgs.setThreadId(pageThreadId);
         pause.setArguments(pArgs);
         assertTrue("pause the page thread", mux.sendRequest(pause, TIMEOUT).isSuccess());
@@ -948,10 +918,10 @@ public class JsDebugAdapterLiveProbe {
 
         // a step routed to the PAGE must stop in the PAGE, never the worker
         // (the IDE bug this pins: stepping after switching threads)
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest next =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArguments nArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArguments();
+        NextRequest next =
+          new NextRequest();
+        NextArguments nArgs =
+          new NextArguments();
         nArgs.setThreadId(pageThreadId);
         next.setArguments(nArgs);
         assertTrue("step the page thread", mux.sendRequest(next, TIMEOUT).isSuccess());
@@ -971,10 +941,10 @@ public class JsDebugAdapterLiveProbe {
         // resume - releasing it here would run it away before the user sees
         // its breakpoint). The ticking worker would re-hit within ~250ms if
         // it were resumed; observing silence pins that it stayed paused.
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest pageResume =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments caArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
+        ContinueRequest pageResume =
+          new ContinueRequest();
+        ContinueArguments caArgs =
+          new ContinueArguments();
         caArgs.setThreadId(pageThreadId);
         pageResume.setArguments(caArgs);
         assertTrue("resume via the page thread", mux.sendRequest(pageResume, TIMEOUT).isSuccess());
@@ -988,10 +958,10 @@ public class JsDebugAdapterLiveProbe {
         }
 
         // a continue routed to the WORKER releases it - the bp re-hits
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest workerResume =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
-        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments wcArgs =
-          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
+        ContinueRequest workerResume =
+          new ContinueRequest();
+        ContinueArguments wcArgs =
+          new ContinueArguments();
         wcArgs.setThreadId(second.getBody().getThreadId());
         workerResume.setArguments(wcArgs);
         assertTrue("resume via the worker thread", mux.sendRequest(workerResume, TIMEOUT).isSuccess());
@@ -1011,14 +981,14 @@ public class JsDebugAdapterLiveProbe {
   }
 
   private int stepInTargetsCount(DapClient child, int frameId, String stage) throws Exception {
-    com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest request =
-      new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest();
-    com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments arguments =
-      new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsArguments();
+    StepInTargetsRequest request =
+      new StepInTargetsRequest();
+    StepInTargetsArguments arguments =
+      new StepInTargetsArguments();
     arguments.setFrameId(frameId);
     request.setArguments(arguments);
     Response response = child.sendRequest(request, TIMEOUT);
-    int count = response instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.StepInTargetsResponse ok
+    int count = response instanceof StepInTargetsResponse ok
                 && ok.isSuccess() && ok.getBody() != null && ok.getBody().getTargets() != null
                 ? ok.getBody().getTargets().size() : -1;
     System.out.println("[probe] ide-seq stage " + stage + " frameId=" + frameId + " -> targets=" + count
@@ -1077,7 +1047,7 @@ public class JsDebugAdapterLiveProbe {
       try (DapClient child = connectWithRetry(adapterPort)) {
         Response childInit = child.sendRequest(initializeRequest(), TIMEOUT);
         assertTrue("child initialize", childInit.isSuccess());
-        if (childInit instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.InitializeResponse ir
+        if (childInit instanceof InitializeResponse ir
             && ir.getBody() != null) {
           System.out.println("[probe] CHILD caps: completions=" + ir.getBody().getSupportsCompletionsRequest()
                              + " stepInTargets=" + ir.getBody().getSupportsStepInTargetsRequest());

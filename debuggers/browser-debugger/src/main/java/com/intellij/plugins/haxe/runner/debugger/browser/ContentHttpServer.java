@@ -12,6 +12,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.nio.charset.StandardCharsets;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
 
 /**
  * The debug session's content server: serves ONE local directory (the compiled
@@ -58,14 +61,14 @@ public final class ContentHttpServer implements Closeable {
   private final HttpServer server;
   private final ExecutorService executor;
   /** Optional observer of served requests ("GET /app.js -> 200"); for tests/diagnostics. */
-  private volatile java.util.function.Consumer<String> requestListener;
+  private volatile Consumer<String> requestListener;
 
-  public void setRequestListener(java.util.function.Consumer<String> listener) {
+  public void setRequestListener(Consumer<String> listener) {
     requestListener = listener;
   }
 
   private void notifyRequest(String line) {
-    java.util.function.Consumer<String> listener = requestListener;
+    Consumer<String> listener = requestListener;
     if (listener != null) {
       listener.accept(line);
     }
@@ -138,13 +141,13 @@ public final class ContentHttpServer implements Closeable {
       return body;
     }
     refreshOnceSeconds = -1; // one-shot: the reloaded page is served clean
-    String html = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+    String html = new String(body, StandardCharsets.UTF_8);
     String tag = "<meta http-equiv=\"refresh\" content=\"" + seconds + "\">";
-    String injected = html.replaceFirst("(?i)<head[^>]*>", "$0" + java.util.regex.Matcher.quoteReplacement(tag));
+    String injected = html.replaceFirst("(?i)<head[^>]*>", "$0" + Matcher.quoteReplacement(tag));
     if (injected.equals(html)) {
       injected = tag + html; // headless html: prepend (browsers tolerate it)
     }
-    return injected.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    return injected.getBytes(StandardCharsets.UTF_8);
   }
 
   private void handle(HttpExchange exchange) throws IOException {

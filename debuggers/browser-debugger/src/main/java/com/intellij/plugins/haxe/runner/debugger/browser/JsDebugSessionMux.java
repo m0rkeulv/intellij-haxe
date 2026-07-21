@@ -56,6 +56,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEventBody;
 
 /**
  * Presents js-debug's MULTI-SESSION model (one DAP child session per target:
@@ -414,8 +415,8 @@ public final class JsDebugSessionMux implements DapEndpoint {
       return; // the IDE has no id to find this breakpoint by
     }
     BreakpointEvent event = new BreakpointEvent();
-    com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEventBody body =
-      new com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEventBody();
+    BreakpointEventBody body =
+      new BreakpointEventBody();
     body.setReason("changed");
     Breakpoint state = new Breakpoint();
     state.setId(pageId);

@@ -77,8 +77,6 @@ public class DapStepInTargetsSmartStepHandler extends XSmartStepIntoHandler<DapS
   // above (on the request thread, where the blocking DAP round-trip belongs).
   @Override
   public @NotNull List<Variant> computeSmartStepVariants(@NotNull XSourcePosition position) {
-    com.intellij.openapi.diagnostic.Logger.getInstance(DapStepInTargetsSmartStepHandler.class)
-      .info("smart-step: computing variants at " + position.getFile().getName() + ":" + position.getLine());
     List<StepInTarget> targets = process.requestStepInTargets();
     if (targets.isEmpty()) {
       return List.of();

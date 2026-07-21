@@ -10,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import com.intellij.plugins.haxe.HaxeLanguage;
 
 
 class HaxeResolverScopeProcessor implements PsiScopeProcessor {
@@ -32,7 +33,7 @@ class HaxeResolverScopeProcessor implements PsiScopeProcessor {
         // functions feed their implicit `arguments` light element, whose
         // getText() is null and NPEs textMatches); only Haxe elements can be
         // declarations we care about, so skip everything else
-        if (!element.getLanguage().isKindOf(com.intellij.plugins.haxe.HaxeLanguage.INSTANCE)) {
+        if (!element.getLanguage().isKindOf(HaxeLanguage.INSTANCE)) {
             return true;
         }
 

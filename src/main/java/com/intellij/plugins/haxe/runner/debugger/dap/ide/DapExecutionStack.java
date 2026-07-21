@@ -9,6 +9,9 @@ import java.util.List;
 import javax.swing.Icon;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
+import com.intellij.ui.ColoredTextContainer;
+import com.intellij.ui.SimpleTextAttributes;
 
 /**
  * One thread's call stack. The active (stopped) thread is built eagerly from the
@@ -102,9 +105,9 @@ final class DapExecutionStack extends XExecutionStack {
   /** The one row shown for a thread that is not paused; has no variables. */
   private static final class RunningThreadFrame extends XStackFrame {
     @Override
-    public void customizePresentation(@NotNull com.intellij.ui.ColoredTextContainer component) {
-      component.append(com.intellij.plugins.haxe.HaxeDebuggerBundle.message("dap.debugger.thread.running"),
-                       com.intellij.ui.SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES);
+    public void customizePresentation(@NotNull ColoredTextContainer component) {
+      component.append(HaxeDebuggerBundle.message("dap.debugger.thread.running"),
+                       SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES);
       component.setIcon(AllIcons.Debugger.ThreadRunning);
     }
   }

@@ -8,7 +8,6 @@ import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.ExecutionConsole;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.plugins.haxe.runner.debugger.exceptions.HaxeExceptionBreakpointProperties;
@@ -32,7 +31,6 @@ import com.intellij.plugins.haxe.runner.debugger.HaxeExpressionPointHighlighter;
 import com.intellij.plugins.haxe.runner.debugger.HaxeExpressionSteppingToggleAction;
 import com.intellij.xdebugger.XDebugSessionListener;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
-import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XSourcePosition;
@@ -48,13 +46,18 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import com.intellij.xdebugger.ui.XDebugTabLayouter;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.CompletionItem;
+import com.intellij.xdebugger.DefaultDebugProcessHandler;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The shared XDebugger process for every DAP-based debugger: a DAP client
@@ -122,7 +125,7 @@ public class DapDebugProcess extends XDebugProcess {
     // the session/console plumbing uniform (Stop still goes through stop()).
     this.processHandler = debuggeeHandler != null
                           ? debuggeeHandler
-                          : new com.intellij.xdebugger.DefaultDebugProcessHandler();
+                          : new DefaultDebugProcessHandler();
     if (debuggeeHandler == null) {
       return;
     }
@@ -580,10 +583,7 @@ public class DapDebugProcess extends XDebugProcess {
 
   @Override
   public @Nullable XSmartStepIntoHandler<?> getSmartStepIntoHandler() {
-    XSmartStepIntoHandler<?> handler = backend.createSmartStepIntoHandler(this);
-    LOG.info("smart-step: handler requested by the platform -> "
-             + (handler == null ? "none" : handler.getClass().getSimpleName()));
-    return handler;
+    return backend.createSmartStepIntoHandler(this);
   }
 
   @Override
@@ -854,7 +854,7 @@ public class DapDebugProcess extends XDebugProcess {
    * request thread for a full timeout PER poisoned object. Pause-scoped:
    * cleared when a new stop is presented (references are pause-lifetime).
    */
-  private final java.util.Set<Integer> unresponsiveVariableRefs = java.util.concurrent.ConcurrentHashMap.newKeySet();
+  private final Set<Integer> unresponsiveVariableRefs = ConcurrentHashMap.newKeySet();
 
   public List<Variable> requestVariables(int variablesReference) {
     if (unresponsiveVariableRefs.contains(variablesReference)) {
@@ -882,7 +882,6 @@ public class DapDebugProcess extends XDebugProcess {
   public List<StepInTarget> requestStepInTargets() {
     int frameId = topFrameId;
     if (frameId < 0) {
-      LOG.info("smart-step: no top frame id yet, no targets");
       return List.of();
     }
     StepInTargetsRequest request = new StepInTargetsRequest();
@@ -892,8 +891,6 @@ public class DapDebugProcess extends XDebugProcess {
     Response response = sendRequest(request);
     if (response instanceof StepInTargetsResponse ok && ok.isSuccess()
         && ok.getBody() != null && ok.getBody().getTargets() != null) {
-      LOG.info("smart-step: adapter returned " + ok.getBody().getTargets().size()
-               + " step-in targets for frame " + frameId);
       return ok.getBody().getTargets();
     }
     LOG.warn("smart-step: stepInTargets yielded no usable response for frame " + frameId
@@ -952,14 +949,14 @@ public class DapDebugProcess extends XDebugProcess {
    * @param text   the full expression text being edited
    * @param column 1-based caret position within {@code text}
    */
-  public List<com.intellij.plugins.haxe.runner.debugger.dap.protocol.CompletionItem>
+  public List<CompletionItem>
   requestRuntimeCompletions(String text, int column) {
     if (!supportsRuntimeCompletions() || !getSession().isSuspended()) {
       return List.of();
     }
     int frameId = topFrameId;
-    java.util.concurrent.CompletableFuture<List<com.intellij.plugins.haxe.runner.debugger.dap.protocol.CompletionItem>>
-      future = new java.util.concurrent.CompletableFuture<>();
+    CompletableFuture<List<CompletionItem>>
+      future = new CompletableFuture<>();
     onRequestThread(() -> {
       CompletionsRequest request = new CompletionsRequest();
       CompletionsArguments arguments = new CompletionsArguments();
@@ -974,7 +971,7 @@ public class DapDebugProcess extends XDebugProcess {
                       ? response.getBody().getTargets() : List.of());
     }, () -> future.complete(List.of()));
     try {
-      return future.get(2, java.util.concurrent.TimeUnit.SECONDS);
+      return future.get(2, TimeUnit.SECONDS);
     } catch (Exception e) {
       if (e instanceof InterruptedException) {
         Thread.currentThread().interrupt();

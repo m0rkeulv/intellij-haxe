@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent;
 
 /**
  * Bookkeeping for line breakpoints. DAP's {@code setBreakpoints} replaces the
@@ -177,7 +178,7 @@ final class DapBreakpointManager {
    * upgrades the breakpoint once the source map resolves it (or downgrades it
    * when a reload invalidates it). Runs on the event pump.
    */
-  void onBreakpointEvent(com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent event) {
+  void onBreakpointEvent(BreakpointEvent event) {
     if (event.getBody() == null || event.getBody().getBreakpoint() == null) {
       return;
     }
