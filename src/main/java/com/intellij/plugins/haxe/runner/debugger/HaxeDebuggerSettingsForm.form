@@ -28,7 +28,7 @@
         <properties>
           <editable value="false"/>
           <opaque value="false"/>
-          <text resource-bundle="messages/HaxeBundle" key="haxe.debugger.render.tostring.warning"/>
+          <text resource-bundle="messages/HaxeDebuggerBundle" key="haxe.debugger.render.tostring.warning"/>
         </properties>
       </component>
       <component id="b3c4d" class="javax.swing.JCheckBox" binding="myRenderWithToString">
@@ -36,8 +36,8 @@
           <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="3" hsize-policy="3" anchor="9" fill="0" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties>
-          <text resource-bundle="messages/HaxeBundle" key="haxe.debugger.render.tostring"/>
-          <toolTipText resource-bundle="messages/HaxeBundle" key="haxe.debugger.render.tostring.description"/>
+          <text resource-bundle="messages/HaxeDebuggerBundle" key="haxe.debugger.render.tostring"/>
+          <toolTipText resource-bundle="messages/HaxeDebuggerBundle" key="haxe.debugger.render.tostring.description"/>
         </properties>
       </component>
     </children>
