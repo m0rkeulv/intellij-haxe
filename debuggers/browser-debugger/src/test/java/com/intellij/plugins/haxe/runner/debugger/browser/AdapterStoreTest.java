@@ -132,6 +132,53 @@ public class AdapterStoreTest {
                !Files.exists(storeRoot.resolve("test-adapter").resolve("escaped.txt")));
   }
 
+  @Test
+  public void tarGzArtifactsUnpack() throws Exception {
+    byte[] tarGz = tarGzWith("js-debug/src/dapDebugServer.js", "// fake dap server");
+    Files.write(www.resolve("adapter.tar.gz"), tarGz);
+    AdapterPin pin = new AdapterPin("test-tgz", "1.0.0", server.getBaseUrl() + "adapter.tar.gz",
+                                    sha256(tarGz), "js-debug/src/dapDebugServer.js");
+    Path entry = new AdapterStore(storeRoot).resolveEntry(pin, null);
+    assertEquals("// fake dap server", Files.readString(entry));
+  }
+
+  @Test
+  public void tarSlipEntriesAreRejected() throws Exception {
+    byte[] evil = tarGzWith("../escaped.txt", "evil");
+    Files.write(www.resolve("adapter.tar.gz"), evil);
+    AdapterPin pin = new AdapterPin("test-tgz", "1.0.0", server.getBaseUrl() + "adapter.tar.gz",
+                                    sha256(evil), "whatever.js");
+    try {
+      new AdapterStore(storeRoot).resolveEntry(pin, null);
+      fail("expected the tar-slip entry to be rejected");
+    } catch (IOException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains("tar-slip"));
+    }
+    assertTrue("nothing escaped the store",
+               !Files.exists(storeRoot.resolve("test-tgz").resolve("escaped.txt")));
+  }
+
+  /** A minimal ustar-enough archive: our reader needs name/size/typeflag only. */
+  private static byte[] tarGzWith(String entryName, String content) throws IOException {
+    byte[] data = content.getBytes(StandardCharsets.UTF_8);
+    byte[] header = new byte[512];
+    byte[] name = entryName.getBytes(StandardCharsets.UTF_8);
+    System.arraycopy(name, 0, header, 0, name.length);
+    byte[] size = String.format("%011o ", data.length).getBytes(StandardCharsets.UTF_8);
+    System.arraycopy(size, 0, header, 124, size.length);
+    header[156] = '0';
+    ByteArrayOutputStream tar = new ByteArrayOutputStream();
+    tar.write(header);
+    tar.write(data);
+    tar.write(new byte[512 - (data.length % 512 == 0 ? 512 : data.length % 512)]);
+    tar.write(new byte[1024]); // end-of-archive zero blocks
+    ByteArrayOutputStream gz = new ByteArrayOutputStream();
+    try (var out = new java.util.zip.GZIPOutputStream(gz)) {
+      out.write(tar.toByteArray());
+    }
+    return gz.toByteArray();
+  }
+
   private static byte[] zipWith(String entryName, String content) throws IOException {
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     try (ZipOutputStream zip = new ZipOutputStream(bytes)) {

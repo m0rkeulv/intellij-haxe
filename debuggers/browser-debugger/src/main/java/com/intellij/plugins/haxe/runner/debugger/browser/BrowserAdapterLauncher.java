@@ -25,6 +25,7 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public final class BrowserAdapterLauncher {
   private static final String LISTENING_MARKER = "waiting for debug protocol";
+  private static final String JS_DEBUG_LISTENING_MARKER = "Debug server listening";
   private static final long ANNOUNCE_TIMEOUT_MILLIS = 15_000;
   private static final long POLL_INTERVAL_MILLIS = 20;
 
@@ -38,7 +39,8 @@ public final class BrowserAdapterLauncher {
   /**
    * Starts {@code node <bundle> --server=<port>} (cwd = the bundle's directory,
    * where its wasm/asset siblings live) and waits for the port announcement.
-   * The caller owns the process.
+   * The caller owns the process. The vscode-firefox-debug flavour: the port is
+   * chosen HERE (its argv regex wants 4-5 digits; no ephemeral-port support).
    */
   public static LaunchedAdapter launch(Path nodeExecutable, Path adapterBundle) throws IOException {
     int port = ThreadLocalRandom.current().nextInt(20_000, 60_000);
@@ -50,7 +52,37 @@ public final class BrowserAdapterLauncher {
     BufferedReader stdout = new BufferedReader(
       new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
     try {
-      awaitAnnouncement(process, stdout);
+      awaitAnnouncement(process, stdout, LISTENING_MARKER);
+      return new LaunchedAdapter(process, port, stdout);
+    } catch (IOException e) {
+      process.destroyForcibly();
+      throw e;
+    }
+  }
+
+  /**
+   * The vscode-js-debug flavour: {@code node dapDebugServer.js 0 127.0.0.1}
+   * — port 0 makes the OS pick, the announcement carries the actual port
+   * ("Debug server listening at 127.0.0.1:NNNN"), and the explicit host keeps
+   * the listener loopback-only.
+   */
+  public static LaunchedAdapter launchJsDebug(Path nodeExecutable, Path dapServerJs) throws IOException {
+    Process process = new ProcessBuilder(
+      nodeExecutable.toString(), dapServerJs.toString(), "0", "127.0.0.1")
+      .directory(dapServerJs.getParent().toFile())
+      .redirectErrorStream(true)
+      .start();
+    BufferedReader stdout = new BufferedReader(
+      new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+    try {
+      String announcement = awaitAnnouncement(process, stdout, JS_DEBUG_LISTENING_MARKER);
+      int colon = announcement.lastIndexOf(':');
+      int port;
+      try {
+        port = Integer.parseInt(announcement.substring(colon + 1).trim());
+      } catch (RuntimeException e) {
+        throw new IOException("Malformed js-debug port announcement: " + announcement);
+      }
       return new LaunchedAdapter(process, port, stdout);
     } catch (IOException e) {
       process.destroyForcibly();
@@ -60,8 +92,9 @@ public final class BrowserAdapterLauncher {
 
   // Polls stdout for the announcement line with a deadline (a blocking
   // readLine could hang the launch on a wedged adapter forever). Everything
-  // read before the marker is kept for the failure message.
-  private static void awaitAnnouncement(Process process, BufferedReader stdout) throws IOException {
+  // read before the marker is kept for the failure message. Returns the
+  // matched line (js-debug's carries the actual port).
+  private static String awaitAnnouncement(Process process, BufferedReader stdout, String marker) throws IOException {
     long deadline = System.currentTimeMillis() + ANNOUNCE_TIMEOUT_MILLIS;
     StringBuilder seen = new StringBuilder();
     StringBuilder line = new StringBuilder();
@@ -74,8 +107,8 @@ public final class BrowserAdapterLauncher {
         if (c == '\n') {
           String text = line.toString().trim();
           line.setLength(0);
-          if (text.contains(LISTENING_MARKER)) {
-            return;
+          if (text.contains(marker)) {
+            return text;
           }
           seen.append(text).append('\n');
         } else if (c != '\r') {
