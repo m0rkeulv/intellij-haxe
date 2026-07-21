@@ -89,6 +89,26 @@ public interface DapBackend extends Closeable {
   }
 
   /**
+   * Whether the adapter emits its {@code initialized} event only AFTER the
+   * launch response (the vscode web adapters do — launch actually starts the
+   * browser); the haxe-side servers emit it right after initialize. Decides
+   * where the debug process waits for it.
+   */
+  default boolean initializedEventAfterLaunch() {
+    return false;
+  }
+
+  /**
+   * Whether to send {@code configurationDone} after configuration. The
+   * vscode-firefox-debug adapter reports {@code
+   * supportsConfigurationDoneRequest=false} and needs none — its debuggee
+   * simply runs, with breakpoints applied as they arrive.
+   */
+  default boolean sendsConfigurationDone() {
+    return true;
+  }
+
+  /**
    * Whether the server understands the {@code setExceptionBreakpoints}
    * filters (and thus whether the exception breakpoint types should drive
    * this session). The filter vocabulary comes from {@link #anyThrowFilterId}
@@ -150,6 +170,17 @@ public interface DapBackend extends Closeable {
    */
   default @Nullable XSourcePosition resolveSource(Project project, @Nullable String path, StackFrame frame) {
     return DapSourceResolver.resolve(project, path, frame.getLine());
+  }
+
+  /**
+   * The wire form of a breakpoint's source path. The IDE's VFS paths use
+   * FORWARD slashes even on Windows; the haxe-side servers normalize
+   * separators themselves, but the vscode web adapters match paths literally
+   * and silently never bind a forward-slash path (live-verified) — such a
+   * backend converts to native separators here.
+   */
+  default String breakpointSourcePath(String vfsPath) {
+    return vfsPath;
   }
 
   /**

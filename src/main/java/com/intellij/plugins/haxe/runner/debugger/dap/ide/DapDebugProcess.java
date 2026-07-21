@@ -100,10 +100,18 @@ public class DapDebugProcess extends XDebugProcess {
   private volatile boolean launched = false;
 
   public DapDebugProcess(@NotNull XDebugSession session,
-                           DapBackend backend, ProcessHandler debuggeeHandler) {
+                           DapBackend backend, @Nullable ProcessHandler debuggeeHandler) {
     super(session);
     this.backend = backend;
-    this.processHandler = debuggeeHandler;
+    // A backend whose ADAPTER owns the debuggee (the web adapters launch the
+    // browser themselves) has no runner-spawned process; a no-op handler keeps
+    // the session/console plumbing uniform (Stop still goes through stop()).
+    this.processHandler = debuggeeHandler != null
+                          ? debuggeeHandler
+                          : new com.intellij.xdebugger.DefaultDebugProcessHandler();
+    if (debuggeeHandler == null) {
+      return;
+    }
     // A debuggee dying BEFORE the session is up is always a startup failure
     // (not compiled with the debug server, or its port is poisoned by a
     // leftover instance) — fail immediately with the exit code instead of
@@ -160,21 +168,33 @@ public class DapDebugProcess extends XDebugProcess {
       InitializeRequestArguments initializeArguments = new InitializeRequestArguments();
       initializeArguments.setAdapterID("intellij-haxe");
       initializeArguments.setClientID("intellij");
+      // stated explicitly for foreign adapters: vscode-firefox-debug REJECTS
+      // initialize without pathFormat "path"; ours assume these values anyway
+      initializeArguments.setPathFormat("path");
+      initializeArguments.setLinesStartAt1(true);
+      initializeArguments.setColumnsStartAt1(true);
       initialize.setArguments(initializeArguments);
       client.sendRequest(initialize, REQUEST_TIMEOUT_MILLIS);
-      client.pollEvent(REQUEST_TIMEOUT_MILLIS); // the initialized event
+      if (!backend.initializedEventAfterLaunch()) {
+        awaitInitializedEvent();
+      }
 
       if (backend.requiresLaunchRequest()) {
-        // launch = "the debuggee's server connected"; it is held before main
+        // launch = "the debuggee's server connected" (haxe-side servers hold
+        // the program before main) or "the adapter started the debuggee"
+        // (web adapters launch the browser here)
         Response launchResponse = client.sendRequest(backend.launchRequest(), REQUEST_TIMEOUT_MILLIS);
         if (!launchResponse.isSuccess()) {
           fail("Cannot start the debug session: " + launchResponse.getMessage());
           return;
         }
       }
-      // either way the debuggee is attached now (a connected in-process server
-      // holds the program before main until configurationDone)
       launched = true;
+      if (backend.initializedEventAfterLaunch()) {
+        // the vscode web adapters signal readiness for breakpoints only once
+        // the browser side is up — after the launch response
+        awaitInitializedEvent();
+      }
 
       breakpoints.flushAll();
       // Exception filters go IN-PHASE (before configurationDone), built by
@@ -190,8 +210,10 @@ public class DapDebugProcess extends XDebugProcess {
           && HaxeDebuggerSettings.getInstance(getSession().getProject()).isRenderObjectsWithToString()) {
         sendRequest(SetToStringRenderingRequest.of(true));
       }
-      // releases the debuggee held by the server's startup break
-      client.sendRequest(new ConfigurationDoneRequest(), REQUEST_TIMEOUT_MILLIS);
+      if (backend.sendsConfigurationDone()) {
+        // releases the debuggee held by the server's startup break
+        client.sendRequest(new ConfigurationDoneRequest(), REQUEST_TIMEOUT_MILLIS);
+      }
 
       Thread pump = daemon(this::pumpEvents, "DAP events");
       pump.start();
@@ -200,6 +222,26 @@ public class DapDebugProcess extends XDebugProcess {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  /**
+   * Waits for the adapter's {@code initialized} event, forwarding any output
+   * events that precede it (the web adapters chatter during browser startup)
+   * and ignoring the rest — the pump is not running yet, so events consumed
+   * here would otherwise be lost.
+   */
+  private void awaitInitializedEvent() throws InterruptedException {
+    long deadline = System.currentTimeMillis() + REQUEST_TIMEOUT_MILLIS;
+    while (System.currentTimeMillis() < deadline) {
+      Event event = client.pollEvent(EVENT_POLL_MILLIS);
+      if (event instanceof InitializedEvent) {
+        return;
+      }
+      if (event instanceof OutputEvent output) {
+        handleOutput(output);
+      }
+    }
+    LOG.warn("No DAP initialized event within " + REQUEST_TIMEOUT_MILLIS + "ms; continuing anyway");
   }
 
   // --- event pump (sole pollEvent caller) ---
@@ -213,6 +255,9 @@ public class DapDebugProcess extends XDebugProcess {
           case StoppedEvent stopped -> handleStopped(stopped);
           case ContinuedEvent ignored -> getSession().sessionResumed();
           case OutputEvent output -> handleOutput(output);
+          // adapters with source-map-lazy verification (the web adapters)
+          // upgrade breakpoints asynchronously once the mapping loads
+          case BreakpointEvent breakpointEvent -> breakpoints.onBreakpointEvent(breakpointEvent);
           case ExitedEvent ignored -> {
             // the debuggee's own ProcessHandler reports termination (with the
             // real exit code); an adapter-reported code would be a guess
