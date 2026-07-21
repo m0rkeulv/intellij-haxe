@@ -4,7 +4,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeCallExpression;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
@@ -127,7 +127,7 @@ class DapSmartStepIntoHandler extends XSmartStepIntoHandler<DapSmartStepIntoHand
   // unimplemented title breaks session initialization, not just the popup.
   @Override
   public String getPopupTitle() {
-    return HaxeBundle.message("hxcpp.debugger.smart.step.into.title");
+    return HaxeDebuggerBundle.message("hxcpp.debugger.smart.step.into.title");
   }
 
   @Override

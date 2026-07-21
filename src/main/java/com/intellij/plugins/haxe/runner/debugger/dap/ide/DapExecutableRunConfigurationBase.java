@@ -13,7 +13,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.util.execution.ParametersListUtil;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -66,15 +66,15 @@ public abstract class DapExecutableRunConfigurationBase extends DapRunConfigurat
   @Override
   public void checkConfiguration() throws RuntimeConfigurationException {
     if (getConfigurationModule().getModule() == null) {
-      throw new RuntimeConfigurationError(HaxeBundle.message("hxcpp.runner.no.module"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hxcpp.runner.no.module"));
     }
     if (executablePath.isBlank()) {
-      throw new RuntimeConfigurationError(HaxeBundle.message("hxcpp.runner.no.executable"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hxcpp.runner.no.executable"));
     }
     Path executable = resolveExecutableOrNull();
     if (executable == null || !Files.isRegularFile(executable)) {
       throw new RuntimeConfigurationWarning(
-        HaxeBundle.message("hxcpp.runner.executable.missing", executablePath));
+        HaxeDebuggerBundle.message("hxcpp.runner.executable.missing", executablePath));
     }
   }
 
@@ -90,7 +90,7 @@ public abstract class DapExecutableRunConfigurationBase extends DapRunConfigurat
     Path executable = resolveExecutableOrNull();
     if (executable == null || !Files.isRegularFile(executable)) {
       throw new ExecutionException(
-        HaxeBundle.message("hxcpp.runner.executable.missing", executablePath.isBlank() ? "<not set>" : executablePath));
+        HaxeDebuggerBundle.message("hxcpp.runner.executable.missing", executablePath.isBlank() ? "<not set>" : executablePath));
     }
     return executable;
   }

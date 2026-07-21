@@ -10,7 +10,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationBase;
 import lombok.Getter;
 import org.jdom.Element;
@@ -51,7 +51,7 @@ public class HxcppVshaxeRunConfiguration extends DapExecutableRunConfigurationBa
   int resolveDebugPort() throws ExecutionException {
     int port = parsedDebugPort();
     if (port < 0) {
-      throw new ExecutionException(HaxeBundle.message("hxcpp.runner.bad.port"));
+      throw new ExecutionException(HaxeDebuggerBundle.message("hxcpp.runner.bad.port"));
     }
     return port;
   }
@@ -74,7 +74,7 @@ public class HxcppVshaxeRunConfiguration extends DapExecutableRunConfigurationBa
   public void checkConfiguration() throws RuntimeConfigurationException {
     super.checkConfiguration();
     if (parsedDebugPort() < 0) {
-      throw new RuntimeConfigurationError(HaxeBundle.message("hxcpp.runner.bad.port"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hxcpp.runner.bad.port"));
     }
   }
 

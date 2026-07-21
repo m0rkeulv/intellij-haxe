@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger;
 
 import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerManager;
@@ -36,7 +36,7 @@ public final class HaxeDebuggerSettingsConfigurable implements SearchableConfigu
 
   @Override
   public String getDisplayName() {
-    return HaxeBundle.message("haxe.debugger.settings.display.name");
+    return HaxeDebuggerBundle.message("haxe.debugger.settings.display.name");
   }
 
   @Override

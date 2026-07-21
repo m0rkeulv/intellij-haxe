@@ -4,7 +4,7 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.extensions.PluginId;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -63,7 +63,7 @@ public final class HashLinkAdapterLauncher {
     IdeaPluginDescriptor plugin = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID));
     Path adapter = plugin != null ? plugin.getPluginPath().resolve(ADAPTER_RELATIVE_PATH) : null;
     if (adapter == null || !Files.isRegularFile(adapter)) {
-      throw new ExecutionException(HaxeBundle.message("haxe.hl.adapter.missing", String.valueOf(adapter)));
+      throw new ExecutionException(HaxeDebuggerBundle.message("haxe.hl.adapter.missing", String.valueOf(adapter)));
     }
     return adapter;
   }

@@ -4,7 +4,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.ToggleAction;
 import com.intellij.openapi.project.DumbAware;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.xdebugger.XDebugSession;
 import java.util.function.Consumer;
 import org.jetbrains.annotations.NotNull;
@@ -24,8 +24,8 @@ public final class HaxeToStringRenderToggleAction extends ToggleAction implement
   private final Consumer<Boolean> push;
 
   public HaxeToStringRenderToggleAction(@NotNull XDebugSession session, @NotNull Consumer<Boolean> push) {
-    super(HaxeBundle.message("haxe.debugger.render.tostring"),
-          HaxeBundle.message("haxe.debugger.render.tostring.description"), null);
+    super(HaxeDebuggerBundle.message("haxe.debugger.render.tostring"),
+          HaxeDebuggerBundle.message("haxe.debugger.render.tostring.description"), null);
     this.session = session;
     this.push = push;
   }

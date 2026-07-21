@@ -4,7 +4,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeCallExpression;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSupportUtils;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
@@ -137,7 +137,7 @@ class HashLinkSmartStepIntoHandler extends XSmartStepIntoHandler<HashLinkSmartSt
   // unimplemented title breaks session initialization, not just the popup.
   @Override
   public String getPopupTitle() {
-    return HaxeBundle.message("hashlink.debugger.smart.step.into.title");
+    return HaxeDebuggerBundle.message("hashlink.debugger.smart.step.into.title");
   }
 
   @Override

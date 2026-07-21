@@ -16,7 +16,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import java.nio.file.Files;
@@ -103,25 +103,25 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase {
   public void checkConfiguration() throws RuntimeConfigurationException {
     Module module = getConfigurationModule().getModule();
     if (module == null) {
-      throw new RuntimeConfigurationError(HaxeBundle.message("hashlink.runner.no.module"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hashlink.runner.no.module"));
     }
     Path program = resolveProgramOrNull(module);
     if (program == null) {
-      throw new RuntimeConfigurationError(HaxeBundle.message("hashlink.runner.no.hl.file"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hashlink.runner.no.hl.file"));
     }
     if (!Files.isRegularFile(program)) {
-      throw new RuntimeConfigurationWarning(HaxeBundle.message("haxe.run.hl.output.missing", program.toString()));
+      throw new RuntimeConfigurationWarning(HaxeDebuggerBundle.message("haxe.run.hl.output.missing", program.toString()));
     }
     if (useCustomHlBinary) {
       Path custom = HashLinkRunConfigurations.resolveAgainstModule(module, customHlBinaryPath);
       if (customHlBinaryPath.isBlank() || custom == null) {
-        throw new RuntimeConfigurationError(HaxeBundle.message("hashlink.runner.custom.hl.not.set"));
+        throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hashlink.runner.custom.hl.not.set"));
       }
       if (!Files.isRegularFile(custom)) {
-        throw new RuntimeConfigurationWarning(HaxeBundle.message("haxe.run.custom.hl.missing", custom.toString()));
+        throw new RuntimeConfigurationWarning(HaxeDebuggerBundle.message("haxe.run.custom.hl.missing", custom.toString()));
       }
     } else if (HlExecutableResolver.resolve(module).isEmpty()) {
-      throw new RuntimeConfigurationWarning(HaxeBundle.message("haxe.run.bad.hl.bin.path"));
+      throw new RuntimeConfigurationWarning(HaxeDebuggerBundle.message("haxe.run.bad.hl.bin.path"));
     }
   }
 
@@ -154,7 +154,7 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase {
     Path custom = HashLinkRunConfigurations.resolveAgainstModule(module, customHlBinaryPath);
     if (custom == null || !Files.isRegularFile(custom)) {
       throw new ExecutionException(
-        HaxeBundle.message("haxe.run.custom.hl.missing", custom != null ? custom.toString() : "<not set>"));
+        HaxeDebuggerBundle.message("haxe.run.custom.hl.missing", custom != null ? custom.toString() : "<not set>"));
     }
     return custom;
   }
@@ -166,7 +166,7 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase {
     Path program = resolveProgramOrNull(module);
     if (program == null || !Files.isRegularFile(program)) {
       throw new ExecutionException(
-        HaxeBundle.message("haxe.run.hl.output.missing", program != null ? program.toString() : "<not set>"));
+        HaxeDebuggerBundle.message("haxe.run.hl.output.missing", program != null ? program.toString() : "<not set>"));
     }
     return program;
   }

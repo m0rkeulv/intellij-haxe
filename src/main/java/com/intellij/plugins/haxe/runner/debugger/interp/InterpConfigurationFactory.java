@@ -4,7 +4,7 @@ import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.configurations.ConfigurationType;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import icons.HaxeIcons;
 import javax.swing.Icon;
 import org.jetbrains.annotations.NonNls;
@@ -26,7 +26,7 @@ public class InterpConfigurationFactory extends ConfigurationFactory {
   @Override
   @NotNull
   public String getName() {
-    return HaxeBundle.message("interp.runner.configuration.name");
+    return HaxeDebuggerBundle.message("interp.runner.configuration.name");
   }
 
   @Override
@@ -36,7 +36,7 @@ public class InterpConfigurationFactory extends ConfigurationFactory {
 
   @Override
   public @NotNull RunConfiguration createTemplateConfiguration(@NotNull Project project) {
-    return new InterpRunConfiguration(HaxeBundle.message("interp.runner.configuration.name"), project, this);
+    return new InterpRunConfiguration(HaxeDebuggerBundle.message("interp.runner.configuration.name"), project, this);
   }
 
   @Override

@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.interp;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import java.io.IOException;
 import java.util.List;
@@ -44,7 +44,7 @@ public class InterpDebugRunner extends DapDebugRunnerBase<InterpRunConfiguration
     try {
       return new InterpDapBackend(VM_CONNECT_TIMEOUT_MILLIS);
     } catch (IOException e) {
-      throw new ExecutionException(HaxeBundle.message("interp.runner.listener.failed", e.getMessage()));
+      throw new ExecutionException(HaxeDebuggerBundle.message("interp.runner.listener.failed", e.getMessage()));
     }
   }
 

@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import java.io.IOException;
 import org.jetbrains.annotations.NotNull;
@@ -45,7 +45,7 @@ public class HxcppIntellijDebugRunner extends DapDebugRunnerBase<HxcppIntellijRu
     try {
       return new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS);
     } catch (IOException e) {
-      throw new ExecutionException(HaxeBundle.message("hxcpp.intellij.runner.listen.failed", e.getMessage()));
+      throw new ExecutionException(HaxeDebuggerBundle.message("hxcpp.intellij.runner.listen.failed", e.getMessage()));
     }
   }
 

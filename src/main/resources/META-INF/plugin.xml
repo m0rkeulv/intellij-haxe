@@ -433,7 +433,7 @@
     <projectConfigurable instance="com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettingsConfigurable"
                          parentId="project.propDebugger"
                          id="haxe.debugger.settings"
-                         key="haxe.debugger.settings.display.name" bundle="messages.HaxeBundle"
+                         key="haxe.debugger.settings.display.name" bundle="messages.HaxeDebuggerBundle"
                          nonDefaultProject="true" />
 
     <importFilteringRule implementation="com.intellij.plugins.haxe.ide.HaxeImportFilteringRule"/>

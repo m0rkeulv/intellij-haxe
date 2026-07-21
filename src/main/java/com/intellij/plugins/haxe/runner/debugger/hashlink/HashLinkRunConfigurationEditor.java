@@ -6,7 +6,7 @@ import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.util.ui.FormBuilder;
@@ -27,7 +27,7 @@ public class HashLinkRunConfigurationEditor extends SettingsEditor<HashLinkRunCo
   private final TextFieldWithBrowseButton hlFileField = new TextFieldWithBrowseButton();
   private final TextFieldWithBrowseButton workingDirectoryField = new TextFieldWithBrowseButton();
   private final JBCheckBox useCustomHlBinaryCheckbox =
-    new JBCheckBox(HaxeBundle.message("hashlink.runner.editor.use.custom.hl"));
+    new JBCheckBox(HaxeDebuggerBundle.message("hashlink.runner.editor.use.custom.hl"));
   private final TextFieldWithBrowseButton customHlBinaryField = new TextFieldWithBrowseButton();
   private final JPanel panel;
 
@@ -37,7 +37,7 @@ public class HashLinkRunConfigurationEditor extends SettingsEditor<HashLinkRunCo
     // real "*.hl;*.dat" dropdown entry — a Condition-based filter is invisible to it
     HaxeRunConfigurationEditorUtil.browseInto(project, hlFileField,
       FileChooserDescriptorFactory.createSingleFileDescriptor()
-        .withExtensionFilter(HaxeBundle.message("hashlink.runner.editor.file.filter"), "hl", "dat"));
+        .withExtensionFilter(HaxeDebuggerBundle.message("hashlink.runner.editor.file.filter"), "hl", "dat"));
     HaxeRunConfigurationEditorUtil.browseInto(project, workingDirectoryField,
       FileChooserDescriptorFactory.createSingleFolderDescriptor());
     HaxeRunConfigurationEditorUtil.browseInto(project, customHlBinaryField,
@@ -45,9 +45,9 @@ public class HashLinkRunConfigurationEditor extends SettingsEditor<HashLinkRunCo
     customHlBinaryField.setEnabled(false);
     useCustomHlBinaryCheckbox.addItemListener(e -> customHlBinaryField.setEnabled(useCustomHlBinaryCheckbox.isSelected()));
     panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeBundle.message("hashlink.runner.editor.module"), moduleCombo)
-      .addLabeledComponent(HaxeBundle.message("hashlink.runner.editor.hl.file"), hlFileField)
-      .addLabeledComponent(HaxeBundle.message("hashlink.runner.editor.working.directory"), workingDirectoryField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hashlink.runner.editor.module"), moduleCombo)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hashlink.runner.editor.hl.file"), hlFileField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hashlink.runner.editor.working.directory"), workingDirectoryField)
       .addLabeledComponent(useCustomHlBinaryCheckbox, customHlBinaryField)
       .addComponentFillVertically(new JPanel(), 0)
       .getPanel();

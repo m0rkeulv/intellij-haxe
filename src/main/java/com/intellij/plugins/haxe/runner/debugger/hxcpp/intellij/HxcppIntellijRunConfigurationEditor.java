@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationEditorBase;
 import com.intellij.util.ui.FormBuilder;
 import javax.swing.JComponent;
@@ -21,12 +21,12 @@ public class HxcppIntellijRunConfigurationEditor
   public HxcppIntellijRunConfigurationEditor(Project project) {
     super(project);
     panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeBundle.message("hxcpp.intellij.runner.editor.module"), moduleCombo)
-      .addLabeledComponent(HaxeBundle.message("hxcpp.intellij.runner.editor.executable"), executableField)
-      .addLabeledComponent(HaxeBundle.message("hxcpp.intellij.runner.editor.working.directory"), workingDirectoryField)
-      .addComponentToRightColumn(hint(HaxeBundle.message("hxcpp.intellij.runner.editor.working.directory.hint")))
-      .addLabeledComponent(HaxeBundle.message("hxcpp.intellij.runner.editor.program.arguments"), programArgumentsField)
-      .addComponent(hint(HaxeBundle.message("hxcpp.intellij.runner.debug.hint")))
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.intellij.runner.editor.module"), moduleCombo)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.intellij.runner.editor.executable"), executableField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.intellij.runner.editor.working.directory"), workingDirectoryField)
+      .addComponentToRightColumn(hint(HaxeDebuggerBundle.message("hxcpp.intellij.runner.editor.working.directory.hint")))
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.intellij.runner.editor.program.arguments"), programArgumentsField)
+      .addComponent(hint(HaxeDebuggerBundle.message("hxcpp.intellij.runner.debug.hint")))
       .addComponentFillVertically(new JPanel(), 0)
       .getPanel();
   }

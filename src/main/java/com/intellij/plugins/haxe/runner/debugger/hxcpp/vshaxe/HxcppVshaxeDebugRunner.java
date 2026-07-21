@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import java.io.IOException;
 import org.jetbrains.annotations.NotNull;
@@ -49,7 +49,7 @@ public class HxcppVshaxeDebugRunner extends DapDebugRunnerBase<HxcppVshaxeRunCon
       return new HxcppVshaxeBackend(debugHost, debugPort, DEBUGGEE_CONNECT_TIMEOUT_MILLIS);
     } catch (IOException e) {
       throw new ExecutionException(
-        HaxeBundle.message("hxcpp.runner.port.busy", debugHost, debugPort, e.getMessage()));
+        HaxeDebuggerBundle.message("hxcpp.runner.port.busy", debugHost, debugPort, e.getMessage()));
     }
   }
 

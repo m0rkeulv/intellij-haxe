@@ -6,7 +6,7 @@ import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
@@ -28,20 +28,20 @@ public class InterpRunConfigurationEditor extends SettingsEditor<InterpRunConfig
   private final ModulesComboBox moduleCombo = new ModulesComboBox();
   private final JBTextField compilerArgumentsField = new JBTextField();
   private final TextFieldWithBrowseButton workingDirectoryField = new TextFieldWithBrowseButton();
-  private final JBCheckBox interpretCheckBox = new JBCheckBox(HaxeBundle.message("interp.runner.editor.interpret"));
+  private final JBCheckBox interpretCheckBox = new JBCheckBox(HaxeDebuggerBundle.message("interp.runner.editor.interpret"));
   private final JPanel panel;
 
   public InterpRunConfigurationEditor(Project project) {
     this.project = project;
     HaxeRunConfigurationEditorUtil.browseInto(project, workingDirectoryField,
                                               FileChooserDescriptorFactory.createSingleFolderDescriptor());
-    JBLabel hint = new JBLabel(HaxeBundle.message("interp.runner.editor.hint"));
+    JBLabel hint = new JBLabel(HaxeDebuggerBundle.message("interp.runner.editor.hint"));
     hint.setComponentStyle(UIUtil.ComponentStyle.SMALL);
     hint.setForeground(UIUtil.getContextHelpForeground());
     panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeBundle.message("interp.runner.editor.module"), moduleCombo)
-      .addLabeledComponent(HaxeBundle.message("interp.runner.editor.arguments"), compilerArgumentsField)
-      .addLabeledComponent(HaxeBundle.message("interp.runner.editor.working.directory"), workingDirectoryField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("interp.runner.editor.module"), moduleCombo)
+      .addLabeledComponent(HaxeDebuggerBundle.message("interp.runner.editor.arguments"), compilerArgumentsField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("interp.runner.editor.working.directory"), workingDirectoryField)
       .addComponent(interpretCheckBox)
       .addComponent(hint)
       .addComponentFillVertically(new JPanel(), 0)

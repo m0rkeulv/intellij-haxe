@@ -14,7 +14,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import com.intellij.util.execution.ParametersListUtil;
@@ -72,10 +72,10 @@ public class InterpRunConfiguration extends DapRunConfigurationBase {
   @Override
   public void checkConfiguration() throws RuntimeConfigurationException {
     if (getConfigurationModule().getModule() == null) {
-      throw new RuntimeConfigurationError(HaxeBundle.message("interp.runner.no.module"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("interp.runner.no.module"));
     }
     if (compilerArguments.isBlank()) {
-      throw new RuntimeConfigurationError(HaxeBundle.message("interp.runner.no.arguments"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("interp.runner.no.arguments"));
     }
   }
 
@@ -94,7 +94,7 @@ public class InterpRunConfiguration extends DapRunConfigurationBase {
    */
   GeneralCommandLine createCommandLine(List<String> extraArguments) throws ExecutionException {
     if (compilerArguments.isBlank()) {
-      throw new ExecutionException(HaxeBundle.message("interp.runner.no.arguments"));
+      throw new ExecutionException(HaxeDebuggerBundle.message("interp.runner.no.arguments"));
     }
     List<String> arguments = ParametersListUtil.parse(compilerArguments);
     GeneralCommandLine commandLine = new GeneralCommandLine()

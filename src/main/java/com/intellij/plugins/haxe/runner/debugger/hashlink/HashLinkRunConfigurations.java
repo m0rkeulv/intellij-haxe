@@ -4,7 +4,7 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -28,7 +28,7 @@ final class HashLinkRunConfigurations {
   /** The HashLink executable, or an {@link ExecutionException} pointing at the SDK setting. */
   static Path resolveHlExecutable(@Nullable Module module) throws ExecutionException {
     return HlExecutableResolver.resolve(module)
-      .orElseThrow(() -> new ExecutionException(HaxeBundle.message("haxe.run.bad.hl.bin.path")));
+      .orElseThrow(() -> new ExecutionException(HaxeDebuggerBundle.message("haxe.run.bad.hl.bin.path")));
   }
 
   /**

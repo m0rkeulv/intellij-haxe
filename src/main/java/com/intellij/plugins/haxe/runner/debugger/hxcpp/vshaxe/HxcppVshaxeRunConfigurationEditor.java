@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationEditorBase;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
@@ -23,13 +23,13 @@ public class HxcppVshaxeRunConfigurationEditor extends DapExecutableRunConfigura
   public HxcppVshaxeRunConfigurationEditor(Project project) {
     super(project);
     panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeBundle.message("hxcpp.runner.editor.module"), moduleCombo)
-      .addLabeledComponent(HaxeBundle.message("hxcpp.runner.editor.executable"), executableField)
-      .addLabeledComponent(HaxeBundle.message("hxcpp.runner.editor.working.directory"), workingDirectoryField)
-      .addLabeledComponent(HaxeBundle.message("hxcpp.runner.editor.program.arguments"), programArgumentsField)
-      .addLabeledComponent(HaxeBundle.message("hxcpp.runner.editor.debug.host"), debugHostField)
-      .addLabeledComponent(HaxeBundle.message("hxcpp.runner.editor.debug.port"), debugPortField)
-      .addComponent(hint(HaxeBundle.message("hxcpp.runner.debug.hint")))
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.runner.editor.module"), moduleCombo)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.runner.editor.executable"), executableField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.runner.editor.working.directory"), workingDirectoryField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.runner.editor.program.arguments"), programArgumentsField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.runner.editor.debug.host"), debugHostField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("hxcpp.runner.editor.debug.port"), debugPortField)
+      .addComponent(hint(HaxeDebuggerBundle.message("hxcpp.runner.debug.hint")))
       .addComponentFillVertically(new JPanel(), 0)
       .getPanel();
   }
