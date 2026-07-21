@@ -143,6 +143,8 @@
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.interp.InterpRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.interp.InterpDebugRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.browser.BrowserDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.HaxeRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebugRunner"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType"/>
