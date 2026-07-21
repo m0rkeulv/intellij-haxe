@@ -2,12 +2,20 @@ package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
+import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfigurationDoneRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfiguredLaunchRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequest;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.InitializeRequestArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StartDebuggingRequest;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -18,30 +26,43 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The browser backend (Firefox for now): resolves the pinned
- * vscode-firefox-debug adapter through the {@link AdapterStore} (download on
- * first use, SHA-256-verified), spawns it on the user's node in DAP TCP
- * server mode, optionally serves the content directory over the plugin's own
- * loopback {@link ContentHttpServer}, and connects the shared DAP client.
- * The BROWSER is launched by the adapter (the launch request carries the
- * url/file and optional executable), so the runner spawns no debuggee.
+ * The browser backend: resolves the family's pinned vscode debug adapter
+ * through the {@link AdapterStore} (download on first use, SHA-256-verified),
+ * spawns it on the user's node in DAP TCP server mode, optionally serves the
+ * content directory over the plugin's own loopback {@link ContentHttpServer},
+ * and connects the shared DAP client. The BROWSER is launched by the adapter
+ * (the launch config carries the url and optional executable), so the runner
+ * spawns no debuggee.
  *
- * Wire behaviour pinned by FirefoxAdapterLiveProbe: initialize needs
- * pathFormat=path (the debug process sends it), the initialized event arrives
- * only after launch, there is no configurationDone, and breakpoint
- * verification upgrades lazily via breakpoint events.
+ * FIREFOX (vscode-firefox-debug, single session — wire behaviour pinned by
+ * FirefoxAdapterLiveProbe): initialize needs pathFormat=path, the initialized
+ * event arrives only after launch, no configurationDone, lazy breakpoint
+ * verification, literal native-path matching, and the serve-mode first-page
+ * refresh that makes load-time breakpoints reachable.
  *
- * All heavy work (download, server, spawn) happens in {@link #connect()} on
+ * CHROMIUM (vscode-js-debug's dapDebugServer, parent+child sessions — wire
+ * behaviour pinned by JsDebugAdapterLiveProbe): {@link #connect()} runs the
+ * PARENT session itself (initialize, fire-and-forget launch, configurationDone
+ * on initialized, then the {@code startDebugging} reverse request hands over
+ * the child configuration) and returns the CHILD connection — so the generic
+ * {@link DapDebugProcess} drives a plain single session and never sees the
+ * multi-session dance. The child's launch response is deferred past
+ * configurationDone, hence {@link #awaitsLaunchResponse()} = false.
+ *
+ * All heavy work (download, server, spawns) happens in {@link #connect()} on
  * the debug process's request thread — never the EDT.
  */
 public class BrowserDebugBackend implements DapBackend {
+  private static final Logger LOG = Logger.getInstance(BrowserDebugBackend.class);
   private static final int CONNECT_TIMEOUT_MILLIS = 15_000;
   private static final long CONNECT_RETRY_WINDOW_MILLIS = 10_000;
+  private static final long PARENT_HANDSHAKE_TIMEOUT_MILLIS = 60_000;
   private static final long ADAPTER_KILL_WAIT_SECONDS = 2;
   private static final int MIN_NODE_MAJOR = 18;
-  /** Serve mode: delay of the one-shot first-page refresh (see connect()). */
+  /** Serve mode (firefox only): delay of the one-shot first-page refresh. */
   private static final int FIRST_PAGE_REFRESH_SECONDS = 2;
 
+  private final BrowserFamily family;
   private final String configuredNodePath;
   private final String configuredBrowserExecutable;
   private final boolean serveContent;
@@ -52,12 +73,17 @@ public class BrowserDebugBackend implements DapBackend {
   private volatile Process adapterProcess;
   private volatile BufferedReader adapterStdout;
   private volatile Map<String, Object> launchConfig;
+  /** Chromium only: the parent session, kept alive beside the child. */
+  private volatile DapClient parentClient;
+  private volatile boolean closed;
 
-  public BrowserDebugBackend(String configuredNodePath,
+  public BrowserDebugBackend(BrowserFamily family,
+                             String configuredNodePath,
                              String configuredBrowserExecutable,
                              boolean serveContent,
                              Path contentRoot,
                              String url) {
+    this.family = family;
     this.configuredNodePath = configuredNodePath;
     this.configuredBrowserExecutable = configuredBrowserExecutable;
     this.serveContent = serveContent;
@@ -69,30 +95,131 @@ public class BrowserDebugBackend implements DapBackend {
   public DapClient connect() throws IOException {
     Path node = locateNode();
     requireModernNode(node);
-    Path adapterEntry = new AdapterStore(adapterStoreRoot())
-      .resolveEntry(AdapterPin.FIREFOX, null);
+    AdapterStore store = new AdapterStore(adapterStoreRoot());
 
     String targetUrl = url;
     if (serveContent) {
       contentServer = new ContentHttpServer(contentRoot);
       targetUrl = contentServer.getBaseUrl();
-      // load-time breakpoint support (live-verified, FirefoxAdapterLiveProbe
-      // variant K): a tab's FIRST load always races the debugger attach (the
-      // JS thread only exists once scripts run), so the first page response
-      // gets a one-shot meta-refresh — the first load binds the source map
-      // and breakpoints, and the automatic reload runs the page again with
-      // everything armed, stopping in load-time code like main().
-      contentServer.refreshFirstPage(FIRST_PAGE_REFRESH_SECONDS);
+      if (family == BrowserFamily.FIREFOX) {
+        // firefox cannot pause a tab's very FIRST load (the JS thread actor
+        // is only born when scripts first execute): the first load binds the
+        // map + breakpoints and this one-shot refresh re-runs it armed.
+        // js-debug pre-registers breakpoints through CDP and needs none.
+        contentServer.refreshFirstPage(FIRST_PAGE_REFRESH_SECONDS);
+      }
     }
-    launchConfig = buildLaunchConfig(targetUrl);
 
+    return switch (family) {
+      case FIREFOX -> connectFirefox(node, store, targetUrl);
+      case CHROMIUM -> connectChromium(node, store, targetUrl);
+    };
+  }
+
+  // ------------------------------------------------------------- firefox
+
+  private DapClient connectFirefox(Path node, AdapterStore store, String targetUrl) throws IOException {
+    Path adapterEntry = store.resolveEntry(AdapterPin.FIREFOX, null);
+    launchConfig = firefoxLaunchConfig(targetUrl);
     BrowserAdapterLauncher.LaunchedAdapter launched = BrowserAdapterLauncher.launch(node, adapterEntry);
     adapterProcess = launched.process();
     adapterStdout = launched.stdout();
     return connectWithRetry(launched.port());
   }
 
-  // The adapter announces its port slightly BEFORE the listener accepts
+  private Map<String, Object> firefoxLaunchConfig(String targetUrl) {
+    Map<String, Object> config = new LinkedHashMap<>();
+    config.put("request", "launch");
+    config.put("url", targetUrl);
+    if (serveContent) {
+      config.put("webRoot", contentRoot.toString());
+    }
+    if (!configuredBrowserExecutable.isBlank()) {
+      config.put("firefoxExecutable", configuredBrowserExecutable);
+    }
+    return config;
+  }
+
+  // ------------------------------------------------------------ chromium
+
+  private DapClient connectChromium(Path node, AdapterStore store, String targetUrl) throws IOException {
+    Path dapServerJs = store.resolveEntry(AdapterPin.JS_DEBUG, null);
+    BrowserAdapterLauncher.LaunchedAdapter launched = BrowserAdapterLauncher.launchJsDebug(node, dapServerJs);
+    adapterProcess = launched.process();
+    adapterStdout = launched.stdout();
+
+    DapClient parent = connectWithRetry(launched.port());
+    parentClient = parent;
+    Map<String, Object> childConfig;
+    try {
+      childConfig = runParentHandshake(parent, targetUrl);
+    } catch (IOException e) {
+      throw new IOException("The js-debug parent session failed: " + e.getMessage(), e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while starting the js-debug session", e);
+    }
+    launchConfig = childConfig;
+    return connectWithRetry(launched.port()); // the child session's own connection
+  }
+
+  /**
+   * Drives the parent session to the child hand-over: initialize,
+   * fire-and-forget launch (the response is deferred past configurationDone),
+   * configurationDone on the initialized event, then the startDebugging
+   * reverse request carries the child configuration (__pendingTargetId).
+   */
+  private Map<String, Object> runParentHandshake(DapClient parent, String targetUrl)
+    throws IOException, InterruptedException {
+    InitializeRequest initialize = new InitializeRequest();
+    InitializeRequestArguments initArgs = new InitializeRequestArguments();
+    initArgs.setClientID("intellij");
+    initArgs.setClientName("IntelliJ Haxe");
+    initArgs.setAdapterID("chrome");
+    initArgs.setPathFormat("path");
+    initArgs.setLinesStartAt1(true);
+    initArgs.setColumnsStartAt1(true);
+    initArgs.setSupportsStartDebuggingRequest(true);
+    initialize.setArguments(initArgs);
+    if (!parent.sendRequest(initialize, CONNECT_TIMEOUT_MILLIS).isSuccess()) {
+      throw new IOException("initialize was rejected");
+    }
+
+    Map<String, Object> parentConfig = new LinkedHashMap<>();
+    parentConfig.put("type", "pwa-chrome");
+    parentConfig.put("request", "launch");
+    parentConfig.put("name", "IntelliJ Haxe browser session");
+    parentConfig.put("url", targetUrl);
+    if (serveContent) {
+      parentConfig.put("webRoot", contentRoot.toString());
+    }
+    if (!configuredBrowserExecutable.isBlank()) {
+      parentConfig.put("runtimeExecutable", configuredBrowserExecutable);
+    }
+    parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
+
+    long deadline = System.currentTimeMillis() + PARENT_HANDSHAKE_TIMEOUT_MILLIS;
+    while (System.currentTimeMillis() < deadline) {
+      Event event = parent.pollEvent(100);
+      if (event instanceof InitializedEvent) {
+        parent.sendRequest(new ConfigurationDoneRequest(), CONNECT_TIMEOUT_MILLIS);
+      }
+      Request incoming = parent.pollIncomingRequest(50);
+      if (incoming != null) {
+        parent.respond(incoming, true);
+        if (incoming instanceof StartDebuggingRequest start
+            && start.getArguments() != null && start.getArguments().getConfiguration() != null) {
+          return start.getArguments().getConfiguration();
+        }
+      }
+    }
+    throw new IOException("js-debug never requested the child debug session"
+                          + " (no startDebugging within " + PARENT_HANDSHAKE_TIMEOUT_MILLIS / 1000 + "s)");
+  }
+
+  // ------------------------------------------------------ shared plumbing
+
+  // The adapters announce their port slightly BEFORE the listener accepts
   // (live-observed); retry inside a short window instead of failing the session.
   private static DapClient connectWithRetry(int port) throws IOException {
     long deadline = System.currentTimeMillis() + CONNECT_RETRY_WINDOW_MILLIS;
@@ -112,24 +239,6 @@ public class BrowserDebugBackend implements DapBackend {
     }
     throw last != null ? last : new IOException("Could not connect to the debug adapter");
   }
-
-  private Map<String, Object> buildLaunchConfig(String targetUrl) {
-    Map<String, Object> config = new LinkedHashMap<>();
-    config.put("request", "launch");
-    // native file for file-less setups is possible ("file"), but both config
-    // modes here produce a URL (our server's, or the user's)
-    config.put("url", targetUrl);
-    if (serveContent) {
-      // maps served urls back to the content directory for the source maps
-      config.put("webRoot", contentRoot.toString());
-    }
-    if (!configuredBrowserExecutable.isBlank()) {
-      config.put("firefoxExecutable", configuredBrowserExecutable);
-    }
-    return config;
-  }
-
-  // --- node discovery ---
 
   private Path locateNode() throws IOException {
     if (!configuredNodePath.isBlank()) {
@@ -191,27 +300,53 @@ public class BrowserDebugBackend implements DapBackend {
     return Path.of(PathManager.getSystemPath(), "haxe", "debug-adapters");
   }
 
-  // --- session behaviour (wire facts from the live probe) ---
+  // --- session behaviour (wire facts from the live probes) ---
 
   @Override
   public void onConnected(DapDebugProcess process) {
     BufferedReader reader = adapterStdout;
     adapterStdout = null;
-    if (reader == null) {
-      return;
-    }
-    Thread gobbler = new Thread(() -> {
-      try (BufferedReader stdout = reader) {
-        String line;
-        while ((line = stdout.readLine()) != null) {
-          process.printSystem("[adapter] " + line + "\n");
+    if (reader != null) {
+      Thread gobbler = new Thread(() -> {
+        try (BufferedReader stdout = reader) {
+          String line;
+          while ((line = stdout.readLine()) != null) {
+            process.printSystem("[adapter] " + line + "\n");
+          }
+        } catch (IOException ignored) {
+          // adapter ended
         }
-      } catch (IOException ignored) {
-        // adapter ended
-      }
-    }, "Browser adapter output");
-    gobbler.setDaemon(true);
-    gobbler.start();
+      }, "Browser adapter output");
+      gobbler.setDaemon(true);
+      gobbler.start();
+    }
+    DapClient parent = parentClient;
+    if (parent != null) {
+      // babysit the parent session for the whole run: drain its events and
+      // acknowledge further reverse requests (extra targets - workers,
+      // iframes - are acknowledged but not debugged yet)
+      Thread babysitter = new Thread(() -> {
+        try {
+          while (!closed && !parent.isConnectionFinished()) {
+            parent.pollEvent(250);
+            Request incoming = parent.pollIncomingRequest(50);
+            if (incoming != null) {
+              parent.respond(incoming, true);
+              if (incoming instanceof StartDebuggingRequest) {
+                process.printSystem("[js-debug] additional debug target ignored"
+                                    + " (multi-target sessions are not supported yet)\n");
+              }
+            }
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } catch (IOException e) {
+          LOG.warn("js-debug parent babysitter failed", e);
+        }
+      }, "js-debug parent session");
+      babysitter.setDaemon(true);
+      babysitter.start();
+    }
   }
 
   @Override
@@ -221,17 +356,26 @@ public class BrowserDebugBackend implements DapBackend {
 
   @Override
   public Request launchRequest() {
+    // firefox: the built config; chromium: the CHILD configuration handed
+    // over by the parent's startDebugging (carries __pendingTargetId)
     return ConfiguredLaunchRequest.of(launchConfig);
   }
 
   @Override
   public boolean initializedEventAfterLaunch() {
-    return true; // the adapter signals readiness once the browser side is up
+    return true; // both adapters signal readiness after the launch request
   }
 
   @Override
   public boolean sendsConfigurationDone() {
-    return false; // the adapter reports supportsConfigurationDoneRequest=false
+    return family == BrowserFamily.CHROMIUM; // firefox reports it unsupported
+  }
+
+  @Override
+  public boolean awaitsLaunchResponse() {
+    // js-debug answers launch only AFTER configurationDone (live-verified);
+    // awaiting it would deadlock the setup sequence
+    return family != BrowserFamily.CHROMIUM;
   }
 
   @Override
@@ -239,7 +383,7 @@ public class BrowserDebugBackend implements DapBackend {
     return true;
   }
 
-  // vscode-firefox-debug's filter vocabulary: "all" / "uncaught". There is no
+  // Both adapters speak the "all"/"uncaught" filter vocabulary. There is no
   // separate critical category in a JS runtime; critical maps to uncaught.
   @Override
   public String anyThrowFilterId() {
@@ -251,17 +395,17 @@ public class BrowserDebugBackend implements DapBackend {
     return "uncaught";
   }
 
-  // The adapter matches breakpoint paths LITERALLY against native paths; the
-  // IDE's forward-slash VFS paths silently never bind (live-verified by
-  // FirefoxAdapterLiveProbe.breakpointPathSeparatorSensitivity).
+  // The firefox adapter matches breakpoint paths LITERALLY against native
+  // paths; the IDE's forward-slash VFS paths silently never bind
+  // (live-verified). js-debug is tolerant, but native is correct for both.
   @Override
   public String breakpointSourcePath(String vfsPath) {
-    return vfsPath.replace('/', java.io.File.separatorChar);
+    return vfsPath.replace('/', File.separatorChar);
   }
 
   @Override
   public boolean supportsSmartStepInto() {
-    return false; // no stepInTargets and no intellij/stepIntoFunction in the adapter
+    return false; // js-debug's stepInTargets is an M3 candidate
   }
 
   @Override
@@ -276,15 +420,24 @@ public class BrowserDebugBackend implements DapBackend {
 
   @Override
   public void close() {
+    closed = true;
     ContentHttpServer server = contentServer;
     contentServer = null;
     if (server != null) {
       server.close();
     }
+    DapClient parent = parentClient;
+    parentClient = null;
+    if (parent != null) {
+      try {
+        parent.close();
+      } catch (IOException ignored) {
+      }
+    }
     Process adapter = adapterProcess;
     adapterProcess = null;
     if (adapter != null) {
-      // reap the WHOLE tree: killing node does not kill the Firefox it
+      // reap the WHOLE tree: killing node does not kill the browser it
       // spawned, and when the graceful DAP disconnect did not happen (forced
       // teardown) every session would otherwise leak a headless browser
       // (live-observed: 122 zombies after a probe day)

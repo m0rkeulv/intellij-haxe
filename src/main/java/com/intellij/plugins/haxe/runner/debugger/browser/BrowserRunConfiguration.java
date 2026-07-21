@@ -36,9 +36,9 @@ import org.jetbrains.annotations.Nullable;
  * </ul>
  *
  * Browser family selects the adapter (Firefox: vscode-firefox-debug;
- * Chromium: vscode-js-debug, not wired up yet). The optional browser
- * executable supports any family fork; blank lets the adapter find the
- * default installation.
+ * Chromium: vscode-js-debug). The optional browser executable supports any
+ * family fork (tested against ungoogled-chromium); blank lets the adapter
+ * find the default installation.
  */
 public class BrowserRunConfiguration extends DapRunConfigurationBase {
   /** Which adapter family drives the session. */
@@ -92,9 +92,6 @@ public class BrowserRunConfiguration extends DapRunConfigurationBase {
   public void checkConfiguration() throws RuntimeConfigurationException {
     if (getConfigurationModule().getModule() == null) {
       throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("browser.runner.no.module"));
-    }
-    if (browserFamily == BrowserFamily.CHROMIUM) {
-      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("browser.runner.chromium.not.yet"));
     }
     if (serveContent) {
       Path root = resolveContentRootOrNull();

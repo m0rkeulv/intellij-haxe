@@ -43,6 +43,7 @@ public class BrowserDebugRunner extends DapDebugRunnerBase<BrowserRunConfigurati
   protected BrowserDebugBackend createBackend(BrowserRunConfiguration configuration) {
     Path contentRoot = configuration.resolveContentRootOrNull();
     return new BrowserDebugBackend(
+      configuration.getBrowserFamily(),
       configuration.getNodePath(),
       configuration.getBrowserExecutablePath(),
       configuration.isServeContent(),
