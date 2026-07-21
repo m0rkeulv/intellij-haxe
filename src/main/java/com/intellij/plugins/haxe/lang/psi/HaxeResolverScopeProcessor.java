@@ -27,6 +27,15 @@ class HaxeResolverScopeProcessor implements PsiScopeProcessor {
 
     @Override
     public boolean execute(@NotNull PsiElement element, ResolveState state) {
+        // the tree walk can cross into foreign-language PSI (e.g. a debugger
+        // fragment resolving near a JavaScript context makes the JS plugin's
+        // functions feed their implicit `arguments` light element, whose
+        // getText() is null and NPEs textMatches); only Haxe elements can be
+        // declarations we care about, so skip everything else
+        if (!element.getLanguage().isKindOf(com.intellij.plugins.haxe.HaxeLanguage.INSTANCE)) {
+            return true;
+        }
+
         //TODO: should probably make a better solution for this using a HaxeComponentName
         if (element.getParent() instanceof HaxeEnumObjectLiteralElement || element.getParent() instanceof HaxeEnumExtractArrayLiteral) {
             // avoids adding target to list
