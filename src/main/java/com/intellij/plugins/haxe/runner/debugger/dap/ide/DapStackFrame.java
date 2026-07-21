@@ -27,6 +27,9 @@ public final class DapStackFrame extends XStackFrame {
 
   private final DapDebugProcess process;
   private final StackFrame frame;
+  // the thread this frame belongs to - selecting the frame makes its thread
+  // the stepping target (multi-thread sessions: workers as threads)
+  private final int threadId;
 
   // Resolved once and cached: the resolver's index lookups are prohibited slow
   // operations on the EDT, yet platform/plugin listeners may call
@@ -38,13 +41,18 @@ public final class DapStackFrame extends XStackFrame {
   private volatile @Nullable XSourcePosition position;
   private volatile boolean positionResolved;
 
-  DapStackFrame(DapDebugProcess process, StackFrame frame) {
+  DapStackFrame(DapDebugProcess process, StackFrame frame, int threadId) {
     this.process = process;
     this.frame = frame;
+    this.threadId = threadId;
   }
 
   public int frameId() {
     return frame.getId();
+  }
+
+  public int threadId() {
+    return threadId;
   }
 
   /**

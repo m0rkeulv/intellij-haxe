@@ -17,7 +17,7 @@ import com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings;
 import com.intellij.plugins.haxe.runner.debugger.HaxeToStringRenderToggleAction;
-import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Capabilities;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
@@ -88,7 +88,7 @@ public class DapDebugProcess extends XDebugProcess {
   private final ExecutorService requestExecutor =
     Executors.newSingleThreadExecutor(r -> daemon(r, "DAP requests"));
 
-  private volatile DapClient client;
+  private volatile DapEndpoint client;
   /** The adapter's declared capabilities (from the initialize response). */
   private volatile Capabilities capabilities;
   // the DAP frame id of the newest frame at the current stop (-1 before the
@@ -265,7 +265,7 @@ public class DapDebugProcess extends XDebugProcess {
         switch (event) {
           case null -> { /* poll again */ }
           case StoppedEvent stopped -> handleStopped(stopped);
-          case ContinuedEvent ignored -> getSession().sessionResumed();
+          case ContinuedEvent continued -> handleContinued(continued);
           case OutputEvent output -> handleOutput(output);
           // adapters with source-map-lazy verification (the web adapters)
           // upgrade breakpoints asynchronously once the mapping loads
@@ -287,6 +287,17 @@ public class DapDebugProcess extends XDebugProcess {
       LOG.warn("DAP event pump failed", e);
       terminateSession();
     }
+  }
+
+  // A continue for some OTHER thread (a worker resuming in a multi-target
+  // session) must not clear the pause the user is inspecting.
+  private void handleContinued(ContinuedEvent continued) {
+    if (continued.getBody() != null
+        && !Boolean.TRUE.equals(continued.getBody().getAllThreadsContinued())
+        && continued.getBody().getThreadId() != currentThreadId) {
+      return;
+    }
+    getSession().sessionResumed();
   }
 
   private void handleStopped(StoppedEvent stopped) {
@@ -344,6 +355,16 @@ public class DapDebugProcess extends XDebugProcess {
         @Override
         public void sessionStopped() {
           expressionHighlighter.clear();
+        }
+
+        // The user picked a frame (possibly of ANOTHER thread) in the frames
+        // view: stepping/resume must target the selected frame's thread, not
+        // whichever thread happened to report the latest stop.
+        @Override
+        public void stackFrameChanged() {
+          if (getSession().getCurrentStackFrame() instanceof DapStackFrame selected) {
+            currentThreadId = selected.threadId();
+          }
         }
       });
     }
@@ -562,7 +583,7 @@ public class DapDebugProcess extends XDebugProcess {
   public void stop() {
     shuttingDown = true;
     requestExecutor.execute(() -> {
-      DapClient dapClient = client;
+      DapEndpoint dapClient = client;
       if (dapClient != null) {
         try {
           dapClient.sendRequest(new DisconnectRequest(), DISCONNECT_TIMEOUT_MILLIS);
@@ -579,7 +600,7 @@ public class DapDebugProcess extends XDebugProcess {
 
   private synchronized void teardown() {
     shuttingDown = true;
-    DapClient dapClient = client;
+    DapEndpoint dapClient = client;
     client = null;
     if (dapClient != null) {
       try {
@@ -630,7 +651,7 @@ public class DapDebugProcess extends XDebugProcess {
 
   /** Blocking request; only call on the request executor or the event pump. */
   @Nullable Response sendRequest(Request request) {
-    DapClient dapClient = client;
+    DapEndpoint dapClient = client;
     if (dapClient == null) {
       return null;
     }

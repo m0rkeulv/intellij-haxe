@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.execution.process.ColoredProcessHandler;
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequest;
@@ -47,7 +47,7 @@ public interface DapBackend extends Closeable {
    * Blocks until the DAP peer is ready and returns the client for the session.
    * Called once, on the debug process's request thread.
    */
-  DapClient connect() throws IOException;
+  DapEndpoint connect() throws IOException;
 
   /**
    * Called right after {@link #connect()} succeeded, on the request thread —
