@@ -18,6 +18,7 @@ import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerEditorsProvider;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings;
 import com.intellij.plugins.haxe.runner.debugger.HaxeToStringRenderToggleAction;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Capabilities;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.DapThread;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
@@ -88,6 +89,8 @@ public class DapDebugProcess extends XDebugProcess {
     Executors.newSingleThreadExecutor(r -> daemon(r, "DAP requests"));
 
   private volatile DapClient client;
+  /** The adapter's declared capabilities (from the initialize response). */
+  private volatile Capabilities capabilities;
   // the DAP frame id of the newest frame at the current stop (-1 before the
   // first); smart-step handlers that query the adapter need it
   private volatile int topFrameId = -1;
@@ -174,7 +177,10 @@ public class DapDebugProcess extends XDebugProcess {
       initializeArguments.setLinesStartAt1(true);
       initializeArguments.setColumnsStartAt1(true);
       initialize.setArguments(initializeArguments);
-      client.sendRequest(initialize, REQUEST_TIMEOUT_MILLIS);
+      Response initializeResponse = client.sendRequest(initialize, REQUEST_TIMEOUT_MILLIS);
+      if (initializeResponse instanceof InitializeResponse ok && ok.getBody() != null) {
+        capabilities = ok.getBody();
+      }
       if (!backend.initializedEventAfterLaunch()) {
         awaitInitializedEvent();
       }
@@ -475,7 +481,10 @@ public class DapDebugProcess extends XDebugProcess {
 
   @Override
   public @Nullable XSmartStepIntoHandler<?> getSmartStepIntoHandler() {
-    return backend.createSmartStepIntoHandler(this);
+    XSmartStepIntoHandler<?> handler = backend.createSmartStepIntoHandler(this);
+    LOG.info("smart-step: handler requested by the platform -> "
+             + (handler == null ? "none" : handler.getClass().getSimpleName()));
+    return handler;
   }
 
   @Override
@@ -664,15 +673,25 @@ public class DapDebugProcess extends XDebugProcess {
   public List<StepInTarget> requestStepInTargets() {
     int frameId = topFrameId;
     if (frameId < 0) {
+      LOG.info("smart-step: no top frame id yet, no targets");
       return List.of();
     }
     StepInTargetsRequest request = new StepInTargetsRequest();
     StepInTargetsArguments arguments = new StepInTargetsArguments();
     arguments.setFrameId(frameId);
     request.setArguments(arguments);
-    return sendRequest(request) instanceof StepInTargetsResponse response && response.isSuccess()
-           && response.getBody() != null && response.getBody().getTargets() != null
-           ? response.getBody().getTargets() : List.of();
+    Response response = sendRequest(request);
+    if (response instanceof StepInTargetsResponse ok && ok.isSuccess()
+        && ok.getBody() != null && ok.getBody().getTargets() != null) {
+      LOG.info("smart-step: adapter returned " + ok.getBody().getTargets().size()
+               + " step-in targets for frame " + frameId);
+      return ok.getBody().getTargets();
+    }
+    LOG.warn("smart-step: stepInTargets yielded no usable response for frame " + frameId
+             + " (response=" + (response == null ? "null"
+                                : response.getClass().getSimpleName() + " success=" + response.isSuccess()
+                                  + " message=" + response.getMessage()) + ")");
+    return List.of();
   }
 
   /** Smart step into: enter the specific call chosen from the step-in targets. */
@@ -688,6 +707,68 @@ public class DapDebugProcess extends XDebugProcess {
   /** The backend driving this session (for same-package collaborators). */
   DapBackend backend() {
     return backend;
+  }
+
+  /**
+   * Whether the adapter offers runtime completions (DAP {@code completions};
+   * js-debug does, the firefox adapter and the haxe-side servers do not).
+   */
+  public boolean supportsRuntimeCompletions() {
+    Capabilities caps = capabilities;
+    return caps != null && Boolean.TRUE.equals(caps.getSupportsCompletionsRequest());
+  }
+
+  /**
+   * Whether this session evaluates against a foreign runtime that knows more
+   * than the Haxe PSI (the browser) — so the evaluate/watch views should not
+   * flag "unresolved" identifiers. Independent of runtime-completion support:
+   * evaluation is runtime-truth even where DAP completions are unavailable
+   * (the firefox adapter).
+   */
+  public boolean evaluatesAgainstForeignRuntime() {
+    return backend.evaluatesAgainstForeignRuntime();
+  }
+
+  /**
+   * Runtime completions for the evaluate view: the ADAPTER completes the text
+   * against the live runtime, which knows identifiers the Haxe PSI cannot —
+   * browser globals behind incomplete externs, dynamically attached fields.
+   * Safe to call from a completion thread: the request runs on the DAP
+   * request executor with a short bounded wait, and an unavailable session
+   * (running, busy, torn down) yields an empty list rather than blocking.
+   *
+   * @param text   the full expression text being edited
+   * @param column 1-based caret position within {@code text}
+   */
+  public List<com.intellij.plugins.haxe.runner.debugger.dap.protocol.CompletionItem>
+  requestRuntimeCompletions(String text, int column) {
+    if (!supportsRuntimeCompletions() || !getSession().isSuspended()) {
+      return List.of();
+    }
+    int frameId = topFrameId;
+    java.util.concurrent.CompletableFuture<List<com.intellij.plugins.haxe.runner.debugger.dap.protocol.CompletionItem>>
+      future = new java.util.concurrent.CompletableFuture<>();
+    onRequestThread(() -> {
+      CompletionsRequest request = new CompletionsRequest();
+      CompletionsArguments arguments = new CompletionsArguments();
+      if (frameId >= 0) {
+        arguments.setFrameId(frameId);
+      }
+      arguments.setText(text);
+      arguments.setColumn(column);
+      request.setArguments(arguments);
+      future.complete(sendRequest(request) instanceof CompletionsResponse response && response.isSuccess()
+                      && response.getBody() != null && response.getBody().getTargets() != null
+                      ? response.getBody().getTargets() : List.of());
+    }, () -> future.complete(List.of()));
+    try {
+      return future.get(2, java.util.concurrent.TimeUnit.SECONDS);
+    } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      return List.of(); // busy session or teardown: completion just has no extras
+    }
   }
 
   /**

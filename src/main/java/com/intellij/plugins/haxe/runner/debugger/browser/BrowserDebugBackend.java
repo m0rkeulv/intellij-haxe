@@ -403,9 +403,28 @@ public class BrowserDebugBackend implements DapBackend {
     return vfsPath.replace('/', File.separatorChar);
   }
 
+  // js-debug answers DAP stepInTargets (labels come mapped through the source
+  // map: "f2(...)"), so the shared targets-based chooser works exactly like
+  // HashLink's. The firefox adapter has no stepInTargets.
   @Override
   public boolean supportsSmartStepInto() {
-    return false; // js-debug's stepInTargets is an M3 candidate
+    return family == BrowserFamily.CHROMIUM;
+  }
+
+  @Override
+  public com.intellij.xdebugger.stepping.XSmartStepIntoHandler<?> createSmartStepIntoHandler(DapDebugProcess process) {
+    return supportsSmartStepInto()
+           ? new com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler(process)
+           : null;
+  }
+
+  // The JS runtime knows identifiers our externs may not map; evaluation is
+  // runtime-truth regardless of family, so the evaluate views must not cry
+  // "unresolved". (Runtime COMPLETION additionally needs the completions
+  // capability, which only js-debug has.)
+  @Override
+  public boolean evaluatesAgainstForeignRuntime() {
+    return true;
   }
 
   @Override

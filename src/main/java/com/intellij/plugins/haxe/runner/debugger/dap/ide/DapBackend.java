@@ -145,6 +145,18 @@ public interface DapBackend extends Closeable {
   boolean supportsSmartStepInto();
 
   /**
+   * Whether the adapter evaluates expressions against a FOREIGN runtime that
+   * legitimately knows more than the Haxe PSI — the browser JS runtime, reached
+   * through externs that may not map every field. In such a session the
+   * evaluate/watch views must not flag "unresolved" identifiers as errors: the
+   * expression evaluates fine and the runtime is the source of truth (the haxe
+   * native runtimes match the PSI, so their sessions keep the strict checks).
+   */
+  default boolean evaluatesAgainstForeignRuntime() {
+    return false;
+  }
+
+  /**
    * The smart-step-into handler for this backend. The default resolves the
    * targets from the Haxe PSI and sends the custom {@code
    * intellij/stepIntoFunction} request; a backend whose adapter reports

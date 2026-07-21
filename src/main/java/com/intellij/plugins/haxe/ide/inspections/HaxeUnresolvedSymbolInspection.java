@@ -76,6 +76,21 @@ public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
   @Override
   public ProblemDescriptor[] checkFile(@NotNull PsiFile file, @NotNull final InspectionManager manager, final boolean isOnTheFly) {
     if (!(file instanceof HaxeFile)) return null;
+    // Debugger evaluate/watch fragments: when the running session's adapter
+    // evaluates against the LIVE runtime (js-debug), the runtime legitimately
+    // knows identifiers the PSI cannot — browser globals behind incomplete
+    // externs, dynamically attached fields. "Unresolved" is not an error
+    // there: the expression evaluates fine and the runtime provides the
+    // completion, so the red markers would only cry wolf.
+    if (file instanceof HaxeExpressionCodeFragment) {
+      com.intellij.xdebugger.XDebugSession session =
+        com.intellij.xdebugger.XDebuggerManager.getInstance(file.getProject()).getCurrentSession();
+      if (session != null
+          && session.getDebugProcess() instanceof com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess process
+          && process.evaluatesAgainstForeignRuntime()) {
+        return null;
+      }
+    }
     final List<ProblemDescriptor> result = new ArrayList<>();
     new HaxeAnnotatingVisitor() {
       @Override
