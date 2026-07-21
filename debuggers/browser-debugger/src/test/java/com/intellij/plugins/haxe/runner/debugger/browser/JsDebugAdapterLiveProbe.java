@@ -698,6 +698,299 @@ public class JsDebugAdapterLiveProbe {
                + targetsAtStop[0], targetsAtStop[0] >= 2);
   }
 
+  // WorkerMain.hx line numbers are load-bearing: WORKER_BP_LINE ticks forever,
+  // so a breakpoint replayed slightly after the worker attaches still hits.
+  private static final int WORKER_BP_LINE = 4;
+  private static final String WORKER_MAIN_HX = """
+    class WorkerMain {
+    	static var counter = 0;
+    	static function tick() {
+    		counter++; // WORKER_BP_LINE = 4
+    		js.Syntax.code("console.log({0})", "w" + counter);
+    	}
+    	static function main() {
+    		js.Syntax.code("setInterval({0}, {1})", tick, 250);
+    	}
+    }
+    """;
+  private static final String WEB_PAGE_HX = """
+    class WebPage {
+    	static var beats = 0;
+    	static function heartbeat() {
+    		beats++;
+    	}
+    	static function main() {
+    		var worker = new js.html.Worker("worker.js");
+    		js.Browser.console.log("worker spawned: " + (worker != null));
+    		js.Browser.window.setInterval(heartbeat, 300);
+    	}
+    }
+    """;
+
+  /** Ids from a k>0 session carry the session index above this. */
+  private static final int COMPOSITE_FLOOR = 1 << 24;
+
+  /**
+   * Workers-as-threads: the {@link JsDebugSessionMux} auto-attaches the worker
+   * session js-debug announces via {@code startDebugging} on the PAGE
+   * connection, replays the cached breakpoint (set through the mux BEFORE the
+   * worker existed), and surfaces the worker's stop as a COMPOSITE thread id
+   * in the one merged session. Pins the id round-trip the IDE relies on:
+   * stackTrace by composite threadId, scopes/variables by composite
+   * frameId/variablesReference, merged threads listing both targets, and
+   * continue routed back to the worker.
+   */
+  @Test(timeout = 180_000)
+  public void workerAppearsAsAdditionalThreadThroughTheMux() throws Exception {
+    Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
+    Path fixture = Files.createTempDirectory("haxe-jsdbg-worker");
+    Files.writeString(fixture.resolve("WebPage.hx"), WEB_PAGE_HX);
+    Files.writeString(fixture.resolve("WorkerMain.hx"), WORKER_MAIN_HX);
+    Files.writeString(fixture.resolve("index.html"),
+                      "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
+                      + "<body><script src='app.js'></script></body></html>");
+    for (String[] unit : new String[][]{{"WebPage", "app.js"}, {"WorkerMain", "worker.js"}}) {
+      Process haxe = new ProcessBuilder("haxe", "-cp", fixture.toString(), "-main", unit[0],
+                                        "-js", fixture.resolve(unit[1]).toString(), "-debug")
+        .redirectErrorStream(true).start();
+      String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+      assertTrue("fixture compile " + unit[0] + ":\n" + output,
+                 haxe.waitFor(30, TimeUnit.SECONDS) && haxe.exitValue() == 0);
+    }
+
+    try (ContentHttpServer content = new ContentHttpServer(fixture)) {
+      // --- parent handshake exactly as BrowserDebugBackend.runParentHandshake ---
+      assertTrue("parent initialize", parent.sendRequest(initializeRequest(), TIMEOUT).isSuccess());
+      Map<String, Object> parentConfig = new LinkedHashMap<>();
+      parentConfig.put("type", "pwa-chrome");
+      parentConfig.put("request", "launch");
+      parentConfig.put("name", "probe");
+      parentConfig.put("url", content.getBaseUrl());
+      parentConfig.put("webRoot", fixture.toString());
+      parentConfig.put("runtimeExecutable", chromiumExe().toString());
+      parentConfig.put("runtimeArgs", List.of("--headless=new"));
+      parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
+      StartDebuggingRequest startDebugging = null;
+      long deadline = System.currentTimeMillis() + 60_000;
+      while (System.currentTimeMillis() < deadline && startDebugging == null) {
+        Event event = parent.pollEvent(100);
+        if (event instanceof InitializedEvent) {
+          parent.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
+        }
+        Request incoming = parent.pollIncomingRequest(50);
+        if (incoming != null) {
+          parent.respond(incoming, true);
+          if (incoming instanceof StartDebuggingRequest start) {
+            startDebugging = start;
+          }
+        }
+      }
+      assertNotNull("no startDebugging for the page", startDebugging);
+
+      DapClient page = connectWithRetry(adapterPort);
+      try (JsDebugSessionMux mux = new JsDebugSessionMux(parent, page, adapterPort)) {
+        mux.setLogSink(line -> System.out.println("[mux] " + line));
+
+        // --- page handshake THROUGH the mux, as DapDebugProcess drives it ---
+        assertTrue("page initialize", mux.sendRequest(initializeRequest(), TIMEOUT).isSuccess());
+        mux.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
+        boolean initialized = false;
+        deadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < deadline && !initialized) {
+          initialized = mux.pollEvent(250) instanceof InitializedEvent;
+        }
+        assertTrue("page initialized", initialized);
+
+        // breakpoint in the WORKER's source while no worker session exists yet:
+        // the mux must cache it and replay it into the worker as it attaches
+        SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+        SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+        Source source = new Source();
+        source.setPath(fixture.resolve("WorkerMain.hx").toString());
+        source.setName("WorkerMain.hx");
+        bpArgs.setSource(source);
+        SourceBreakpoint bp = new SourceBreakpoint();
+        bp.setLine(WORKER_BP_LINE);
+        bpArgs.setBreakpoints(List.of(bp));
+        setBreakpoints.setArguments(bpArgs);
+        Response bpResponse = mux.sendRequest(setBreakpoints, TIMEOUT);
+        assertTrue("setBreakpoints via mux", bpResponse.isSuccess());
+        var bpResult = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.SetBreakpointsResponse)
+                          bpResponse).getBody().getBreakpoints().get(0);
+        Integer pageBreakpointId = bpResult.getId();
+        System.out.println("[probe] worker-source bp before worker exists: id=" + pageBreakpointId
+                           + " verified=" + bpResult.isVerified());
+        assertTrue("configurationDone via mux",
+                   mux.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess());
+
+        // page loads -> spawns the worker -> js-debug announces it on the page
+        // connection -> the mux attaches it -> the replayed breakpoint stops it.
+        // On the way, the mux must announce the MERGED verification upgrade
+        // under the page's breakpoint id (the gutter's lazy checkmark).
+        StoppedEvent stopped = null;
+        boolean verifiedUpgradeSeen = false;
+        deadline = System.currentTimeMillis() + 90_000;
+        while (System.currentTimeMillis() < deadline && stopped == null) {
+          Event event = mux.pollEvent(250);
+          if (event instanceof com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.BreakpointEvent be
+              && be.getBody() != null && be.getBody().getBreakpoint() != null) {
+            var state = be.getBody().getBreakpoint();
+            System.out.println("[probe] breakpoint event: id=" + state.getId() + " verified=" + state.isVerified());
+            if (state.isVerified() && state.getId() != null && state.getId().equals(pageBreakpointId)) {
+              verifiedUpgradeSeen = true;
+            }
+          }
+          if (event instanceof StoppedEvent s) {
+            stopped = s;
+          }
+        }
+        assertNotNull("worker breakpoint never hit through the mux", stopped);
+        assertTrue("the worker's verification must surface as a breakpoint event on the PAGE id "
+                   + pageBreakpointId + " (gutter checkmark)", verifiedUpgradeSeen);
+        Integer threadId = stopped.getBody().getThreadId();
+        assertNotNull("stop without a thread id", threadId);
+        assertTrue("the stop must come from a WORKER session (composite thread id), got " + threadId,
+                   threadId >= COMPOSITE_FLOOR);
+
+        // stackTrace routed by the composite thread id
+        StackTraceRequest stackTrace = new StackTraceRequest();
+        StackTraceArguments stArgs = new StackTraceArguments();
+        stArgs.setThreadId(threadId);
+        stackTrace.setArguments(stArgs);
+        Response stResponse = mux.sendRequest(stackTrace, TIMEOUT);
+        assertTrue("stackTrace via composite thread id", stResponse.isSuccess());
+        StackFrame top = ((StackTraceResponse)stResponse).getBody().getStackFrames().get(0);
+        System.out.println("[probe] worker top frame: " + top.getName() + " @ "
+                           + (top.getSource() != null ? top.getSource().getPath() : "?") + ":" + top.getLine());
+        assertNotNull("worker frame has no source", top.getSource());
+        assertTrue("stopped in the worker's .hx line: " + top.getSource().getPath() + ":" + top.getLine(),
+                   top.getSource().getPath().endsWith("WorkerMain.hx") && top.getLine() == WORKER_BP_LINE);
+        assertTrue("frame id must be composited, got " + top.getId(), top.getId() >= COMPOSITE_FLOOR);
+
+        // scopes by composite frame id -> composited variablesReference -> variables
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest scopes =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesRequest();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments scArgs =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ScopesArguments();
+        scArgs.setFrameId(top.getId());
+        scopes.setArguments(scArgs);
+        Response scResponse = mux.sendRequest(scopes, TIMEOUT);
+        assertTrue("scopes via composite frame id", scResponse.isSuccess());
+        var scopeList = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse)
+                           scResponse).getBody().getScopes();
+        assertTrue("no scopes", !scopeList.isEmpty());
+        int varRef = scopeList.get(0).getVariablesReference();
+        assertTrue("scope variablesReference must be composited, got " + varRef, varRef >= COMPOSITE_FLOOR);
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest variables =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesRequest();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments vArgs =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.VariablesArguments();
+        vArgs.setVariablesReference(varRef);
+        variables.setArguments(vArgs);
+        assertTrue("variables via composite reference", mux.sendRequest(variables, TIMEOUT).isSuccess());
+
+        // the merged thread list carries the page AND the labelled worker
+        Response threadsResponse = mux.sendRequest(
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ThreadsRequest(), TIMEOUT);
+        assertTrue("merged threads", threadsResponse.isSuccess());
+        var threads = ((com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ThreadsResponse)
+                         threadsResponse).getBody().getThreads();
+        for (var thread : threads) {
+          System.out.println("[probe] merged thread id=" + thread.getId() + " name=" + thread.getName());
+        }
+        assertTrue("merged threads must include the page (raw id)",
+                   threads.stream().anyMatch(t -> t.getId() < COMPOSITE_FLOOR));
+        assertTrue("merged threads must include the worker (composite id, named after its script)",
+                   threads.stream().anyMatch(t -> t.getId() >= COMPOSITE_FLOOR
+                                                  && t.getName() != null && t.getName().contains("worker.js")));
+
+        // continue routes back to the worker's session
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest resume =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments cArgs =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
+        cArgs.setThreadId(threadId);
+        resume.setArguments(cArgs);
+        assertTrue("continue via composite thread id", mux.sendRequest(resume, TIMEOUT).isSuccess());
+
+        // the ticking worker re-hits: the composite ids are stable across stops
+        StoppedEvent second = null;
+        deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline && second == null) {
+          if (mux.pollEvent(250) instanceof StoppedEvent s) {
+            second = s;
+          }
+        }
+        assertNotNull("no second worker stop after continue", second);
+        assertTrue("second stop must be composite too",
+                   second.getBody().getThreadId() != null && second.getBody().getThreadId() >= COMPOSITE_FLOOR);
+
+        // --- multi-pause routing: pause the PAGE while the worker stays paused ---
+        int pageThreadId = threads.stream().filter(t -> t.getId() < COMPOSITE_FLOOR)
+          .findFirst().orElseThrow().getId();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest pause =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseRequest();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseArguments pArgs =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.PauseArguments();
+        pArgs.setThreadId(pageThreadId);
+        pause.setArguments(pArgs);
+        assertTrue("pause the page thread", mux.sendRequest(pause, TIMEOUT).isSuccess());
+        StoppedEvent pageStop = null;
+        deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline && pageStop == null) {
+          if (mux.pollEvent(250) instanceof StoppedEvent s) {
+            pageStop = s;
+          }
+        }
+        assertNotNull("page never paused", pageStop);
+        assertTrue("the pause stop must be the PAGE's (raw thread id), got " + pageStop.getBody().getThreadId(),
+                   pageStop.getBody().getThreadId() != null && pageStop.getBody().getThreadId() < COMPOSITE_FLOOR);
+
+        // a step routed to the PAGE must stop in the PAGE, never the worker
+        // (the IDE bug this pins: stepping after switching threads)
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest next =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextRequest();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArguments nArgs =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.NextArguments();
+        nArgs.setThreadId(pageThreadId);
+        next.setArguments(nArgs);
+        assertTrue("step the page thread", mux.sendRequest(next, TIMEOUT).isSuccess());
+        StoppedEvent stepStop = null;
+        deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline && stepStop == null) {
+          if (mux.pollEvent(250) instanceof StoppedEvent s) {
+            stepStop = s;
+          }
+        }
+        assertNotNull("no stop after stepping the page", stepStop);
+        assertTrue("the step must land in the PAGE thread, got " + stepStop.getBody().getThreadId(),
+                   stepStop.getBody().getThreadId() != null && stepStop.getBody().getThreadId() < COMPOSITE_FLOOR);
+
+        // resume routed to the page must ALSO release the paused worker:
+        // its ticking breakpoint re-hits only if it actually resumed
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest resumeAll =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest();
+        com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments caArgs =
+          new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueArguments();
+        caArgs.setThreadId(pageThreadId);
+        resumeAll.setArguments(caArgs);
+        assertTrue("resume via the page thread", mux.sendRequest(resumeAll, TIMEOUT).isSuccess());
+        StoppedEvent workerAgain = null;
+        deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline && workerAgain == null) {
+          if (mux.pollEvent(250) instanceof StoppedEvent s && s.getBody().getThreadId() != null
+              && s.getBody().getThreadId() >= COMPOSITE_FLOOR) {
+            workerAgain = s;
+          }
+        }
+        assertNotNull("the page-routed resume must have released the paused worker"
+                      + " (its ticking breakpoint never re-hit)", workerAgain);
+
+        mux.sendRequest(new DisconnectRequest(), TIMEOUT);
+      }
+    }
+  }
+
   private int stepInTargetsCount(DapClient child, int frameId, String stage) throws Exception {
     com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest request =
       new com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.StepInTargetsRequest();
