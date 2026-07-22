@@ -249,7 +249,7 @@ handler and travels with the event; the server thread only formats and sends.
 
 ### Smart step into
 
-Target discovery is IDE-side: `DapSmartStepIntoHandler` walks the Haxe PSI
+Target discovery is IDE-side: `PsiResolvedSmartStepHandler` walks the Haxe PSI
 for the calls on the stopped line and resolves each to its declaring class
 (the server has no line→calls knowledge — there is no bytecode to mine).
 Choosing a variant sends the custom `intellij/stepIntoFunction` request with

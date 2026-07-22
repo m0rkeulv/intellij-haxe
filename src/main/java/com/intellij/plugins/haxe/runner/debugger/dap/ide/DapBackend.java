@@ -195,7 +195,7 @@ public interface DapBackend extends Closeable {
    * targets itself (DAP {@code stepInTargets}) supplies its own handler.
    */
   default @Nullable XSmartStepIntoHandler<?> createSmartStepIntoHandler(DapDebugProcess process) {
-    return supportsSmartStepInto() ? new DapSmartStepIntoHandler(process) : null;
+    return supportsSmartStepInto() ? new PsiResolvedSmartStepHandler(process) : null;
   }
 
   /** An extra Debug tool window tab (e.g. a Registers view), or null for none. */

@@ -23,9 +23,12 @@ import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
 
 /**
- * Smart step into for adapters that answer DAP {@code stepInTargets}
- * (HashLink's bundled adapter reads the bytecode; js-debug reads the AST
- * through the source map): on a line with several calls (chained
+ * One of two smart-step flavours: smart step into for adapters that answer
+ * DAP {@code stepInTargets} (HashLink's bundled adapter reads the bytecode;
+ * js-debug reads the AST through the source map) — the preferred flavour
+ * wherever the capability exists; servers with no line→calls knowledge use
+ * the PSI-computed {@link PsiResolvedSmartStepHandler} instead. On a line
+ * with several calls (chained
  * {@code a().b()} or nested {@code a(b())}), lists them so the user picks
  * which one to enter. Both the dedicated action (Shift+F7) and the plain Step
  * Into (F7, via {@link #computeStepIntoVariants}) show the chooser; F7 steps
@@ -51,10 +54,10 @@ import org.jetbrains.concurrency.Promise;
  * statement on the next line restores the chooser. Pinned by
  * JsDebugAdapterLiveProbe.stepInTargetsKnownLimitationOnLastStatementOfFunction.
  */
-public class DapStepInTargetsSmartStepHandler extends XSmartStepIntoHandler<DapStepInTargetsSmartStepHandler.Variant> {
+public class AdapterTargetsSmartStepHandler extends XSmartStepIntoHandler<AdapterTargetsSmartStepHandler.Variant> {
   private final DapDebugProcess process;
 
-  public DapStepInTargetsSmartStepHandler(DapDebugProcess process) {
+  public AdapterTargetsSmartStepHandler(DapDebugProcess process) {
     this.process = process;
   }
 

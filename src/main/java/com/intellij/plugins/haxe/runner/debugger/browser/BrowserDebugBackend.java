@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
-import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.AdapterTargetsSmartStepHandler;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 
 /**
@@ -351,7 +351,7 @@ public class BrowserDebugBackend implements DapBackend {
   @Override
   public XSmartStepIntoHandler<?> createSmartStepIntoHandler(DapDebugProcess process) {
     return supportsSmartStepInto()
-           ? new DapStepInTargetsSmartStepHandler(process)
+           ? new AdapterTargetsSmartStepHandler(process)
            : null;
   }
 
