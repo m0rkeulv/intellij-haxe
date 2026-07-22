@@ -167,17 +167,23 @@ public class HaxeExpressionCodeFragmentImpl extends HaxeFile implements HaxeExpr
     @Nullable
     @Override
     public ASTNode parseContents(final ASTNode chameleon) {
-      final PsiElement psi = new HaxePsiCompositeElementImpl(chameleon);
+      // Initial parse: the chameleon is the fragment's own FileElement with
+      // its PSI already bound. REPARSE (typing in the evaluate/watches/set-
+      // value editors commits the fragment's document): the platform hands a
+      // FRESH element inside a DummyHolder - it has NO psi bound, and asking
+      // it would route through HaxeParserDefinition.createElement, which has
+      // no case for this type ("AssertionError: Unknown element type:
+      // HAXE_CODE_FRAGMENT", live-hit in Set Value). The holder's psi IS
+      // bound - prefer it, exactly like the Java fragment parser does.
+      ASTNode holder = chameleon.getTreeParent();
+      PsiElement psi = holder != null ? holder.getPsi() : chameleon.getPsi();
       return doParseContents(chameleon, psi);
     }
 
     @Override
     protected ASTNode doParseContents(@NotNull ASTNode chameleon, @NotNull PsiElement psi) {
       final PsiBuilderFactory factory = PsiBuilderFactory.getInstance();
-      // the project comes from the chameleon's own PSI (the fragment file,
-      // resolved through its manager) - NOT from the freshly wrapped `psi`
-      // argument, which has no tree parent yet and cannot answer getProject()
-      final PsiBuilder psiBuilder = factory.createBuilder(chameleon.getPsi().getProject(), chameleon);
+      final PsiBuilder psiBuilder = factory.createBuilder(psi.getProject(), chameleon);
       final PsiBuilder builder = adapt_builder_(HaxeTokenTypes.EXPRESSION, psiBuilder, new HaxeParser(), HaxeParser.EXTENDS_SETS_);
 
       final PsiBuilder.Marker marker = enter_section_(builder, 0, _NONE_, "<code fragment>");
