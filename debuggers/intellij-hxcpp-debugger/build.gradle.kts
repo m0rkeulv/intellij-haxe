@@ -107,7 +107,10 @@ tasks.register<Exec>("registerServerHaxelib") {
     group = "hxcpp"
     description = "Registers haxelib/ as the haxelib dev path for 'intellij-hxcpp-debug-server'"
     onlyIf { haxeAvailable }
-    commandLine = listOf("haxelib", "dev", "intellij-hxcpp-debug-server", File(projectDir, "haxelib").absolutePath)
+    // the directory is named server-haxelib, NOT haxelib: on linux, haxelib's
+    // recursive dependency resolution spawns "haxelib" cwd-relative, and a
+    // sibling directory literally named haxelib shadows the binary (EACCES)
+    commandLine = listOf("haxelib", "dev", "intellij-hxcpp-debug-server", File(projectDir, "server-haxelib").absolutePath)
 }
 
 // hscript powers watch/hover/condition evaluation (M5); it is a released
@@ -192,7 +195,7 @@ hxcppFixtures.forEach { (name, spec) ->
         inputs.dir("test-fixtures/src")
         inputs.file("test-fixtures/${spec.first}")
         // the fixture embeds the server sources: a haxelib change must rebuild
-        inputs.dir("haxelib")
+        inputs.dir("server-haxelib")
         outputs.file(fixtureExe(name))
     }
 }
