@@ -440,7 +440,7 @@ class DebugSession {
 				case Exit:
 					state = Exited;
 					releaseExitedProcess(outcome.threadId);
-					emit(EvExited(safeExitCode()));
+					emitExitedAfterOutputDrain();
 					return;
 				default:
 					if (Sys.systemName() != "Windows") {
@@ -488,7 +488,7 @@ class DebugSession {
 				case Exit:
 					state = Exited;
 					releaseExitedProcess(outcome.threadId);
-					emit(EvExited(safeExitCode()));
+					emitExitedAfterOutputDrain();
 					return null;
 				default:
 					return outcome;
@@ -656,7 +656,7 @@ class DebugSession {
 				case Exit:
 					state = Exited;
 					releaseExitedProcess(outcome.threadId);
-					emit(EvExited(safeExitCode()));
+					emitExitedAfterOutputDrain();
 					return null;
 				case Breakpoint, Error, StackOverflow:
 					return outcome;
@@ -872,7 +872,7 @@ class DebugSession {
 				finishStep();
 				state = Exited;
 				releaseExitedProcess(outcome.threadId);
-				emit(EvExited(safeExitCode()));
+				emitExitedAfterOutputDrain();
 			case Breakpoint:
 				handleBreakpointHit(outcome.threadId);
 			case SingleStep:
@@ -898,7 +898,7 @@ class DebugSession {
 					finishStep();
 					state = Exited;
 					releaseExitedProcess(outcome.threadId);
-					emit(EvExited(safeExitCode()));
+					emitExitedAfterOutputDrain();
 				}
 		}
 	}
@@ -1003,6 +1003,21 @@ class DebugSession {
 		try {
 			api.stop(debuggeePid);
 		} catch (e:Dynamic) {}
+	}
+
+	/**
+		Drains the debuggee's remaining output BEFORE the exited event: a dead
+		process's pipes still hold their buffered tail, and an output event
+		trailing `exited` is lost on clients that stop listening at exit —
+		live-observed under machine load as a run's final stdout lines missing.
+		The pipes EOF promptly once the process is dead; the timeout is a guard.
+		Attach mode has no pumps (`process` is null).
+	**/
+	function emitExitedAfterOutputDrain():Void {
+		if (process != null) {
+			process.awaitOutputDrained(1.0);
+		}
+		emit(EvExited(safeExitCode()));
 	}
 
 	function safeExitCode():Int {

@@ -50,6 +50,16 @@ passes on its once-only retry (reported as *flaky*), the first attempt's
 failure XMLs are kept in `results/<cell>/first-attempt/` for diagnosis.
 Progress streams to the console and `progress.log`.
 
+Known load-flake families (researched 2026-07-22; the retry classifies
+them correctly, do not chase them as regressions): the eval lane's
+anti-stall step tests measure wall clock that INCLUDES the debuggee
+running under `haxe --interp` — on a loaded machine a legitimate step can
+brush the test's 8s threshold and the protocol's 10s cap; and the browser
+probes' full-session tests ride real browser startup. (The HL lane's
+truncated-final-output flake — output events trailing the exited event —
+was a real adapter race, fixed by draining the output pumps before
+reporting exit.)
+
 ## Toolchain provisioning
 
 The versions to certify live in `VersionManifest.java` (compile-checked; one
