@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
@@ -188,6 +189,9 @@ public final class ContentHttpServer implements Closeable {
   /**
    * The regular file for a request path, or null for anything that must 404:
    * escapes from the root, missing files, and directories without index.html.
+   * Nothing outside the content root is ever resolvable — not via {@code ..}
+   * (raw or percent-encoded), backslashes, absolute paths, unparseable names,
+   * or links inside the root pointing elsewhere.
    */
   private Path resolveRequest(String rawPath) {
     // URI.getPath is already percent-decoded; a path with an embedded NUL or
@@ -196,14 +200,27 @@ public final class ContentHttpServer implements Closeable {
       return null;
     }
     String relative = rawPath.startsWith("/") ? rawPath.substring(1) : rawPath;
-    Path candidate = root.resolve(relative).normalize();
-    if (!candidate.startsWith(root)) {
-      return null; // traversal attempt
+    try {
+      Path candidate = root.resolve(relative).normalize();
+      if (!candidate.startsWith(root)) {
+        return null; // traversal attempt (also catches absolute-path requests)
+      }
+      if (Files.isDirectory(candidate)) {
+        candidate = candidate.resolve("index.html");
+      }
+      if (!Files.isRegularFile(candidate)) {
+        return null;
+      }
+      // the TRUE location must be inside the root too: a symlink/junction in
+      // the content dir must not become a portal to the rest of the disk
+      // (root itself is a real path - see the constructor)
+      Path real = candidate.toRealPath();
+      return real.startsWith(root) ? real : null;
+    } catch (InvalidPathException | IOException e) {
+      // unparseable name (e.g. "C:x", "f::$DATA" on Windows) or a filesystem
+      // refusal while realpathing - nothing servable either way
+      return null;
     }
-    if (Files.isDirectory(candidate)) {
-      candidate = candidate.resolve("index.html");
-    }
-    return Files.isRegularFile(candidate) ? candidate : null;
   }
 
   private static boolean isHtml(Path file) {

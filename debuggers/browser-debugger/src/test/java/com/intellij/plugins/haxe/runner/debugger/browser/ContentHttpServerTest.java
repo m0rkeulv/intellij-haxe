@@ -11,6 +11,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -75,6 +76,51 @@ public class ContentHttpServerTest {
     // normalizes plain "..", so also test the encoded form end to end)
     assertEquals(404, get("/../secret.txt").statusCode());
     assertEquals(404, get("/%2e%2e/secret.txt").statusCode());
+    // backslash variants (Windows separators must never traverse)
+    assertEquals(404, get("/%5c..%5csecret.txt").statusCode());
+    assertEquals(404, get("/..%5csecret.txt").statusCode());
+    // nested escape: a valid prefix does not soften the guard
+    assertEquals(404, get("/sub/%2e%2e/%2e%2e/secret.txt").statusCode());
+    // absolute paths resolve to themselves - never served
+    assertEquals(404, get(("/" + outside).replace('\\', '/')).statusCode());
+    assertEquals(404, get("/etc/passwd").statusCode());
+  }
+
+  @Test
+  public void unparseableNamesAreRejectedNotErrors() throws Exception {
+    // on Windows these throw InvalidPathException inside the resolver; they
+    // must surface as a client error (404 from the resolver, or 400 when the
+    // JDK server rejects the request first), never an unhandled exception
+    for (String path : new String[]{"/C:secret.txt", "/app.js::$DATA", "/%00secret"}) {
+      int status = get(path).statusCode();
+      assertTrue(path + " -> " + status, status == 404 || status == 400);
+    }
+  }
+
+  @Test
+  public void symlinkInsideTheRootCannotEscapeIt() throws Exception {
+    try {
+      Files.createSymbolicLink(root.resolve("escape.txt"), outside);
+      Files.createSymbolicLink(root.resolve("escapedir"), outside.getParent());
+    } catch (IOException | UnsupportedOperationException e) {
+      Assume.assumeNoException("cannot create symlinks here (Windows non-admin) - skipping", e);
+    }
+    // both links point OUTSIDE the content root: the textual path is inside,
+    // the real location is not - must 404, never serve
+    assertEquals(404, get("/escape.txt").statusCode());
+    assertEquals(404, get("/escapedir/secret.txt").statusCode());
+  }
+
+  @Test
+  public void symlinkStayingInsideTheRootStillServes() throws Exception {
+    try {
+      Files.createSymbolicLink(root.resolve("alias.js"), root.resolve("app.js"));
+    } catch (IOException | UnsupportedOperationException e) {
+      Assume.assumeNoException("cannot create symlinks here (Windows non-admin) - skipping", e);
+    }
+    HttpResponse<String> response = get("/alias.js");
+    assertEquals(200, response.statusCode());
+    assertEquals("console.log('x');", response.body());
   }
 
   @Test
