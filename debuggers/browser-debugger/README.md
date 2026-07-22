@@ -124,7 +124,7 @@ The adapters have their own verbose logs too: js-debug via the launch config
 | Path | Contents |
 |---|---|
 | `src/main/java/.../browser/AdapterPin.java` | the version + SHA-256 pins for both adapters |
-| `src/main/java/.../browser/AdapterStore.java` | download, verify, unpack (zip + pure-JDK tar.gz), marker files, override dir |
+| `src/main/java/.../browser/AdapterStore.java` | download, verify, unpack (zip + tar.gz via the platform-bundled commons-compress), marker files, override dir |
 | `src/main/java/.../browser/BrowserAdapterLauncher.java` | spawns the adapters on node, parses their port announcements |
 | `src/main/java/.../browser/ContentHttpServer.java` | the serve-mode loopback server + the firefox first-page refresh |
 | `src/main/java/.../browser/JsDebugSessionMux.java` | the Chromium multi-session → one-session multiplexer (workers as threads) |

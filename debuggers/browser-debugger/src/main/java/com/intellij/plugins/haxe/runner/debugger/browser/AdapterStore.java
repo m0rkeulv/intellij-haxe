@@ -15,10 +15,9 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import java.io.DataInputStream;
-import java.io.EOFException;
-import java.nio.charset.StandardCharsets;
-import java.util.zip.GZIPInputStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 
 /**
  * Acquires the pinned debug-adapter artifacts on demand and caches them under
@@ -173,93 +172,32 @@ public final class AdapterStore {
   }
 
   /**
-   * Minimal gzipped-tar extraction (the js-debug-dap artifact), pure JDK —
-   * the supply-chain rules allow no archive libraries. Handles ustar
-   * regular files/directories plus GNU 'L' long-name entries; anything else
-   * (links, devices) is rejected — a debug-adapter artifact has no business
-   * containing them. Same escape guard as the zip path.
+   * Gzipped-tar extraction (the js-debug-dap artifact) via commons-compress,
+   * which the IDE platform bundles. Only regular files and directories are
+   * materialized; anything else (links, devices) is rejected — a debug-adapter
+   * artifact has no business containing them. Same escape guard as the zip path.
    */
   private static void untarGz(Path archive, Path targetDir) throws IOException {
     Files.createDirectories(targetDir);
     Path target = targetDir.toRealPath();
-    try (DataInputStream tar = new DataInputStream(
-      new GZIPInputStream(Files.newInputStream(archive)))) {
-      byte[] header = new byte[512];
-      String pendingLongName = null;
-      while (true) {
-        tar.readFully(header);
-        if (isZeroBlock(header)) {
-          break; // end-of-archive marker
+    try (TarArchiveInputStream tar = new TarArchiveInputStream(
+      new GzipCompressorInputStream(Files.newInputStream(archive)))) {
+      TarArchiveEntry entry;
+      while ((entry = tar.getNextEntry()) != null) {
+        Path resolved = target.resolve(entry.getName()).normalize();
+        if (!resolved.startsWith(target)) {
+          throw new IOException("Archive entry escapes the target directory (tar-slip): " + entry.getName());
         }
-        String name = pendingLongName != null ? pendingLongName : tarString(header, 0, 100);
-        pendingLongName = null;
-        long size = Long.parseLong(tarString(header, 124, 12).trim(), 8);
-        char typeFlag = (char)header[156];
-        long padded = (size + 511) / 512 * 512;
-        switch (typeFlag) {
-          case 'L' -> { // GNU long name: the DATA is the next entry's name
-            byte[] longName = new byte[(int)size];
-            tar.readFully(longName);
-            tar.skipNBytes(padded - size);
-            pendingLongName = new String(longName, StandardCharsets.UTF_8).trim().replace("\0", "");
-          }
-          case '5' -> { // directory
-            resolveTarEntry(target, name, true);
-            tar.skipNBytes(padded);
-          }
-          case '0', '\0' -> { // regular file
-            Path file = resolveTarEntry(target, name, false);
-            try (var out = Files.newOutputStream(file)) {
-              byte[] buffer = new byte[64 * 1024];
-              long remaining = size;
-              while (remaining > 0) {
-                int read = tar.read(buffer, 0, (int)Math.min(buffer.length, remaining));
-                if (read < 0) {
-                  throw new IOException("Truncated tar entry: " + name);
-                }
-                out.write(buffer, 0, read);
-                remaining -= read;
-              }
-            }
-            tar.skipNBytes(padded - size);
-          }
-          default -> throw new IOException(
-            "Unsupported tar entry type '" + typeFlag + "' for " + name + " - refusing the artifact");
+        if (entry.isDirectory()) {
+          Files.createDirectories(resolved);
+        } else if (entry.isFile()) {
+          Files.createDirectories(resolved.getParent());
+          Files.copy(tar, resolved, StandardCopyOption.REPLACE_EXISTING);
+        } else {
+          throw new IOException("Unsupported tar entry type for " + entry.getName() + " - refusing the artifact");
         }
       }
-    } catch (EOFException e) {
-      // archives commonly end right after the entries without both zero blocks
     }
-  }
-
-  private static Path resolveTarEntry(Path target, String name, boolean directory) throws IOException {
-    Path resolved = target.resolve(name).normalize();
-    if (!resolved.startsWith(target)) {
-      throw new IOException("Archive entry escapes the target directory (tar-slip): " + name);
-    }
-    if (directory) {
-      Files.createDirectories(resolved);
-    } else {
-      Files.createDirectories(resolved.getParent());
-    }
-    return resolved;
-  }
-
-  private static boolean isZeroBlock(byte[] header) {
-    for (byte b : header) {
-      if (b != 0) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static String tarString(byte[] header, int offset, int length) {
-    int end = offset;
-    while (end < offset + length && header[end] != 0) {
-      end++;
-    }
-    return new String(header, offset, end - offset, StandardCharsets.UTF_8);
   }
 
   private static void deleteRecursively(Path dir) throws IOException {

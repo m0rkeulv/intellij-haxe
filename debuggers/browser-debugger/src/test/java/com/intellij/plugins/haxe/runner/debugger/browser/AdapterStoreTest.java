@@ -13,10 +13,12 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import java.util.zip.GZIPOutputStream;
 
 /**
  * Exercises the store against a LOCAL http server (the module's own
@@ -159,25 +161,17 @@ public class AdapterStoreTest {
                !Files.exists(storeRoot.resolve("test-tgz").resolve("escaped.txt")));
   }
 
-  /** A minimal ustar-enough archive: our reader needs name/size/typeflag only. */
   private static byte[] tarGzWith(String entryName, String content) throws IOException {
     byte[] data = content.getBytes(StandardCharsets.UTF_8);
-    byte[] header = new byte[512];
-    byte[] name = entryName.getBytes(StandardCharsets.UTF_8);
-    System.arraycopy(name, 0, header, 0, name.length);
-    byte[] size = String.format("%011o ", data.length).getBytes(StandardCharsets.UTF_8);
-    System.arraycopy(size, 0, header, 124, size.length);
-    header[156] = '0';
-    ByteArrayOutputStream tar = new ByteArrayOutputStream();
-    tar.write(header);
-    tar.write(data);
-    tar.write(new byte[512 - (data.length % 512 == 0 ? 512 : data.length % 512)]);
-    tar.write(new byte[1024]); // end-of-archive zero blocks
-    ByteArrayOutputStream gz = new ByteArrayOutputStream();
-    try (var out = new GZIPOutputStream(gz)) {
-      out.write(tar.toByteArray());
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (TarArchiveOutputStream tar = new TarArchiveOutputStream(new GzipCompressorOutputStream(bytes))) {
+      TarArchiveEntry entry = new TarArchiveEntry(entryName);
+      entry.setSize(data.length);
+      tar.putArchiveEntry(entry);
+      tar.write(data);
+      tar.closeArchiveEntry();
     }
-    return gz.toByteArray();
+    return bytes.toByteArray();
   }
 
   private static byte[] zipWith(String entryName, String content) throws IOException {
