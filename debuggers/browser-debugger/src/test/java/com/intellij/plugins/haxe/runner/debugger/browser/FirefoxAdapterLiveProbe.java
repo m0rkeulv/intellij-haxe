@@ -191,7 +191,10 @@ public class FirefoxAdapterLiveProbe {
     }
     for (String candidate : new String[]{
       "C:/Program Files/Mozilla Firefox/firefox.exe",
-      "C:/Program Files (x86)/Mozilla Firefox/firefox.exe"}) {
+      "C:/Program Files (x86)/Mozilla Firefox/firefox.exe",
+      "/usr/bin/firefox",
+      "/usr/bin/firefox-esr",
+      "/snap/bin/firefox"}) {
       Path path = Path.of(candidate);
       if (Files.isRegularFile(path)) {
         return path;
