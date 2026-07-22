@@ -1,9 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.dap.client;
 
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.ProtocolMessage;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import java.io.Closeable;
 import java.io.IOException;
