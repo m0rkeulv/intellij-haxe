@@ -15,8 +15,8 @@ import com.intellij.xdebugger.impl.XDebuggerHistoryManager;
 /**
  * The debugger's Set Value editor expects a plain VALUE: completion must not
  * auto-pop there, or the Enter that should submit the typed literal picks a
- * lookup suggestion instead (live-hit: entering a number appended the
- * "function" keyword). The platform never tells the editors provider which
+ * lookup suggestion instead: entering a number appends the
+ * "function" keyword. The platform never tells the editors provider which
  * editor a fragment is for, but the Set Value editor's expressions live in
  * the "setValue" expression history — an expression found there identifies
  * the editor, and the provider tags its fragment. The confidence then

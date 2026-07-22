@@ -154,8 +154,8 @@ public class BrowserDebugBackend implements DapBackend {
     // (the launcher process re-parents the real firefox out of the adapter's
     // process tree, escaping the tree-kill), keeps owning 6000, and the next
     // session's adapter then debugs the STALE instance - foreign workers it
-    // refuses to attach, dead actors that answer nothing (live-observed as
-    // ghost threads and endless evaluate timeouts).
+    // refuses to attach, dead actors that answer nothing, surfacing as
+    // ghost threads and endless evaluate timeouts.
     config.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
     if (serveContent) {
       config.put("webRoot", contentRoot.toString());
@@ -248,7 +248,7 @@ public class BrowserDebugBackend implements DapBackend {
   // ------------------------------------------------------ shared plumbing
 
   // The adapters announce their port slightly BEFORE the listener accepts
-  // (live-observed); retry inside a short window instead of failing the session.
+  //; retry inside a short window instead of failing the session.
   private static DapClient connectWithRetry(int port) throws IOException {
     return DapClient.connectWithRetry("127.0.0.1", port, CONNECT_TIMEOUT_MILLIS, CONNECT_RETRY_WINDOW_MILLIS);
   }
@@ -310,7 +310,7 @@ public class BrowserDebugBackend implements DapBackend {
 
   @Override
   public boolean awaitsLaunchResponse() {
-    // js-debug answers launch only AFTER configurationDone (live-verified);
+    // js-debug answers launch only AFTER configurationDone;
     // awaiting it would deadlock the setup sequence
     return family != BrowserFamily.CHROMIUM;
   }
@@ -334,7 +334,7 @@ public class BrowserDebugBackend implements DapBackend {
 
   // The firefox adapter matches breakpoint paths LITERALLY against native
   // paths; the IDE's forward-slash VFS paths silently never bind
-  // (live-verified). js-debug is tolerant, but native is correct for both.
+  //. js-debug is tolerant, but native is correct for both.
   @Override
   public String breakpointSourcePath(String vfsPath) {
     return vfsPath.replace('/', File.separatorChar);
@@ -371,7 +371,7 @@ public class BrowserDebugBackend implements DapBackend {
     return 8_000;
   }
 
-  // The JS runtime knows identifiers our externs may not map; evaluation is
+  // The JS runtime knows identifiers the externs may not map; evaluation is
   // runtime-truth regardless of family, so the evaluate views must not cry
   // "unresolved". (Runtime COMPLETION additionally needs the completions
   // capability, which only js-debug has.)
@@ -420,7 +420,7 @@ public class BrowserDebugBackend implements DapBackend {
       // reap the WHOLE tree: killing node does not kill the browser it
       // spawned, and when the graceful DAP disconnect did not happen (forced
       // teardown) every session would otherwise leak a headless browser
-      // (live-observed: 122 zombies after a probe day)
+      
       adapter.descendants().forEach(ProcessHandle::destroyForcibly);
       adapter.destroy();
       try {

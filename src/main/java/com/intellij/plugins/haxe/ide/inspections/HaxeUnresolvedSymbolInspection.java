@@ -25,10 +25,10 @@ import com.intellij.plugins.haxe.ide.inspections.intentions.HaxeIntroduceFieldIn
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
-import com.intellij.plugins.haxe.model.type.ResultHolder;
-import com.intellij.plugins.haxe.model.type.SpecificFunctionReference;
-import com.intellij.plugins.haxe.model.type.SpecificHaxeClassReference;
-import com.intellij.plugins.haxe.model.type.SpecificTypeReference;
+import com.intellij.plugins.haxe.model.type.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
+import com.intellij.xdebugger.XDebugSession;
+import com.intellij.xdebugger.XDebuggerManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -83,10 +83,9 @@ public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
     // there: the expression evaluates fine and the runtime provides the
     // completion, so the red markers would only cry wolf.
     if (file instanceof HaxeExpressionCodeFragment) {
-      com.intellij.xdebugger.XDebugSession session =
-        com.intellij.xdebugger.XDebuggerManager.getInstance(file.getProject()).getCurrentSession();
+      XDebugSession session = XDebuggerManager.getInstance(file.getProject()).getCurrentSession();
       if (session != null
-          && session.getDebugProcess() instanceof com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess process
+          && session.getDebugProcess() instanceof DapDebugProcess process
           && process.evaluatesAgainstForeignRuntime()) {
         return null;
       }

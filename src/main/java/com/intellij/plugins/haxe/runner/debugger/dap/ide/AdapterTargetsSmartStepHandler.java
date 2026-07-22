@@ -45,7 +45,7 @@ import org.jetbrains.concurrency.Promise;
  * Tab between them, like the Java debugger. A target whose call can't be
  * found in the PSI still works — it just isn't highlighted.
  *
- * KNOWN LIMITATION (js-debug, live-diagnosed): when the stopped line is the
+ * KNOWN LIMITATION (js-debug): when the stopped line is the
  * LAST statement of its function, js-debug reverse-maps the line AND line+1
  * through the source map; haxe emits no mappings for the closing-brace line,
  * the sibling counts differ, and the adapter bails to zero targets

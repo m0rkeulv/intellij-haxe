@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
 /**
  * The "completions" request: the ADAPTER completes the given text against the
  * live runtime (capability supportsCompletionsRequest). The debug-console
- * fallback for identifiers our PSI cannot know — browser globals reached
+ * fallback for identifiers the Haxe PSI cannot know — browser globals reached
  * through incomplete externs, dynamically attached fields, and so on.
  */
 @Data

@@ -41,7 +41,7 @@ public class DapClient implements DapEndpoint {
 
   /**
    * {@link #connect} with a retry window: the DAP adapters announce their
-   * port slightly BEFORE the listener accepts (live-observed on both vscode
+   * port slightly BEFORE the listener accepts (on both vscode
    * web adapters), so an immediate connect can be refused — retry briefly
    * instead of failing the session.
    */
@@ -127,7 +127,7 @@ public class DapClient implements DapEndpoint {
   }
 
   /**
-   * Returns the next REVERSE request the adapter sent to us (js-debug's
+   * Returns the next REVERSE request the adapter sent to the client (js-debug's
    * {@code startDebugging}), waiting up to the timeout; null when none.
    */
   public Request pollIncomingRequest(long timeoutMillis) throws InterruptedException {

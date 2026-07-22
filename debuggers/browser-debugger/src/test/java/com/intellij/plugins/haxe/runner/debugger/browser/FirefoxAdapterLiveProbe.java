@@ -28,7 +28,7 @@ import org.junit.Test;
  * M0 wire probe for the vscode-firefox-debug adapter (web-debugger project):
  * spawns the PINNED adapter bundle (Open VSX 2.15.0, sha256 f72f7443...) on the
  * local portable node, in {@code --server=<port>} TCP mode, and drives it with
- * the SAME DapClient the IDE backends use. Verifies our framing/decoding against
+ * the SAME DapClient the IDE backends use. Verifies the plugin's framing/decoding against
  * a foreign adapter and records the initialize capabilities + event ordering.
  *
  * Skips (does not fail) when node or the adapter are not provisioned — they are
@@ -117,7 +117,7 @@ public class FirefoxAdapterLiveProbe {
   }
 
   // Killing node does NOT kill the Firefox it spawned - reap the whole tree,
-  // or every probe run leaks a headless browser (live-observed: 122 zombies).
+  // or every probe run leaks a headless browser.
   private static void killTree(Process process) throws InterruptedException {
     LiveProbeUtil.killTree(process);
   }
@@ -359,7 +359,7 @@ public class FirefoxAdapterLiveProbe {
   }
 
   /**
-   * The SERVE mode the IDE backend uses: the fixture is hosted by our own
+   * The SERVE mode the IDE backend uses: the fixture is hosted by the module's own
    * ContentHttpServer and the browser navigates to the http url (webRoot maps
    * served urls back to the content directory for the source maps). Mirrors
    * BrowserDebugBackend's launch config; a stop must still land in the .hx.
@@ -635,7 +635,7 @@ public class FirefoxAdapterLiveProbe {
     launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
       // UNIQUE RDP port: the adapter's default 6000 makes it CONNECT TO A
       // LEFTOVER firefox from an earlier session/probe instead of the one it
-      // just launched (live-observed: "Not attaching to this thread" for
+      // just launched ("Not attaching to this thread" for
       // every worker, foreign processes' workers in the target list)
       launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
       Path adapterLog = fixture.resolve("adapter.log");
@@ -895,7 +895,7 @@ public class FirefoxAdapterLiveProbe {
     Path appJs = fixture.resolve("app.js");
     String pristineAppJs = Files.readString(appJs);
 
-    // Variants L/M/N (probed 2026-07-21, ALL MISSED, removed): L/M served a
+    // Variants L/M/N all fail to arm load-time breakpoints: L/M served a
     // synthetic BOOTSTRAP page first (empty page + meta refresh to the app;
     // M with an inert <script>); N registered the breakpoints only when the
     // RELOADED page requested its script (server-held response, so the first
@@ -905,7 +905,7 @@ public class FirefoxAdapterLiveProbe {
     // reload (K) is the single working sequence; its cost (early-hitting
     // breakpoints pause workers the reload cannot terminate -> zombie
     // threads) is why the refresh is optional in the run config.
-    // Variants L/M/N (probed 2026-07-21, N re-verified on a CLEAN instance
+    // Variants L/M/N (N re-checked on a CLEAN instance
     // with a unique RDP port - ALL MISSED, removed): L/M served a synthetic
     // BOOTSTRAP page first (empty page + meta refresh to the app; M with an
     // inert <script>); N registered the breakpoints only when the RELOADED

@@ -93,7 +93,7 @@ final class DapExecutionStack extends XExecutionStack {
         // the thread is RUNNING (browser threads pause independently), so it
         // has no stack. An EMPTY list would leave the PREVIOUS thread's
         // variables on screen (nothing gets selected, so the variables view
-        // never rebuilds - live-observed); a selectable placeholder row is
+        // never rebuilds); a selectable placeholder row is
         // auto-selected and clears them, saying why there is nothing to show.
         container.addStackFrames(List.of(new RunningThreadFrame()), true);
         return;

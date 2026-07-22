@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
  * Runs a child gradle build with a lane's environment. Always {@code
  * --no-daemon}: the forked test JVM must inherit THIS invocation's
  * PATH/HAXE_STD_PATH, and a warm daemon keeps the environment it was born
- * with (it would silently test the wrong haxe — live-observed). Bounded; on
+ * with (it would silently test the wrong haxe). Bounded; on
  * timeout the whole process TREE dies, plus known stray debuggees — a stuck
  * runtime error dialog must not wedge the matrix.
  */

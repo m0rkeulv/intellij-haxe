@@ -33,7 +33,7 @@ class DebuggeeProcess {
 	final onOutput:(category:String, text:String) -> Void;
 	// released by each pump thread when its stream reaches EOF; lets the
 	// session drain the tail output BEFORE reporting the exit (the pipes of a
-	// dead process still hold their buffered bytes — live-observed as the
+	// dead process still hold their buffered bytes, surfacing as the
 	// final stdout lines arriving AFTER the exited event under machine load)
 	final stdoutDrained = new sys.thread.Lock();
 	final stderrDrained = new sys.thread.Lock();

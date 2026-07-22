@@ -124,7 +124,7 @@ class StackWalker {
 		register or signal frame survives to lean on - hl's SIGSEGV handler
 		patches the context and returns (sigreturn dismantles the sigframe
 		before the error path runs), and by the throw break the C code has
-		repurposed RBP (live-observed: a heap pointer). What DOES survive is
+		repurposed RBP (in practice a heap pointer). What DOES survive is
 		the stack itself plus the VM's own throw capture (exc_stack_trace):
 
 		- the top frame's IDENTITY is exc_stack_trace[0];

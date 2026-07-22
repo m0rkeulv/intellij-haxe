@@ -44,8 +44,8 @@ final class LiveProbeUtil {
 
   /**
    * Kills the WHOLE process tree: killing node does not kill the browser it
-   * spawned, and every leaked headless browser poisons later launches
-   * (live-observed: 122 zombies after a probe day).
+   * spawned, and every leaked headless browser poisons later
+   * launches.
    */
   static void killTree(Process process) throws InterruptedException {
     process.descendants().forEach(ProcessHandle::destroyForcibly);

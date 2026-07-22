@@ -40,8 +40,8 @@ public class HaxeDebuggerEditorsProvider extends XDebuggerEditorsProvider {
    * Marks a fragment whose editor expects a plain VALUE (the Variables view's
    * Set Value field): completion must not auto-pop there — the user is typing
    * a literal and Enter means "submit", but an open lookup swallows it and
-   * inserts a suggestion instead (live-hit: typing a number, Enter appended
-   * the "function" keyword). Explicit completion (Ctrl+Space) still works.
+   * inserts a suggestion instead: typing a number and pressing Enter appends
+   * the "function" keyword. Explicit completion (Ctrl+Space) still works.
    */
   public static final Key<Boolean> LITERAL_VALUE_INPUT = Key.create("haxe.debugger.literal.value.input");
 
@@ -50,7 +50,7 @@ public class HaxeDebuggerEditorsProvider extends XDebuggerEditorsProvider {
    * under (SetValueInplaceEditor's editor id, verified in the platform
    * source). The provider is never TOLD which editor a document is for (the
    * createDocument overload with an editor id exists but is always fed
-   * null - live-verified), but the Set Value editor's expressions land in
+   * null), but the Set Value editor's expressions land in
    * this history, so an expression found there identifies the editor.
    */
   private static final String SET_VALUE_HISTORY_ID = "setValue";

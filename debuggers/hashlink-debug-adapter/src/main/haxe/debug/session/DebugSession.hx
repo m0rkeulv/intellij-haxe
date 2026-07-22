@@ -154,7 +154,7 @@ class DebugSession {
 			// linux: while Running the session thread is parked in the BLOCKING
 			// debug wait (hl's linux debug_wait ignores its timeout), so a queued
 			// command would sit until some debug event happens to arrive —
-			// live-observed as pause requests timing out. Poke the debuggee
+			// observable as pause requests timing out. Poke the debuggee
 			// (force-break = kill SIGTRAP on the traced main thread): the wait
 			// returns, the trap matches nothing of ours and is resumed silently,
 			// and pollWhileRunning's command interleave runs this command. The
@@ -1019,7 +1019,7 @@ class DebugSession {
 		Drains the debuggee's remaining output BEFORE the exited event: a dead
 		process's pipes still hold their buffered tail, and an output event
 		trailing `exited` is lost on clients that stop listening at exit —
-		live-observed under machine load as a run's final stdout lines missing.
+		observable under machine load as a run's final stdout lines missing.
 		The pipes EOF promptly once the process is dead; the timeout is a guard.
 		Attach mode has no pumps (`process` is null).
 	**/

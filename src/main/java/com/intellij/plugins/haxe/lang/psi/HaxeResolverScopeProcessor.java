@@ -32,7 +32,7 @@ class HaxeResolverScopeProcessor implements PsiScopeProcessor {
         // fragment resolving near a JavaScript context makes the JS plugin's
         // functions feed their implicit `arguments` light element, whose
         // getText() is null and NPEs textMatches); only Haxe elements can be
-        // declarations we care about, so skip everything else
+        // declarations this processor matches, so skip everything else
         if (!element.getLanguage().isKindOf(HaxeLanguage.INSTANCE)) {
             return true;
         }

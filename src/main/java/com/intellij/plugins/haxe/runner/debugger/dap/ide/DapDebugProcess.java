@@ -96,7 +96,7 @@ public class DapDebugProcess extends XDebugProcess {
    * state asynchronously, so two near-simultaneous stops (both workers'
    * ticking breakpoints) could each see "not suspended" and fight over the
    * views (duplicated thread combo entries, a frames list stuck on
-   * "Loading..." — live-observed). While a pause is on screen, another
+   * "Loading..."). While a pause is on screen, another
    * thread's stop leaves that thread paused but does not touch the views —
    * it is inspectable through the thread list, and Resume releases it.
    */
@@ -340,7 +340,7 @@ public class DapDebugProcess extends XDebugProcess {
     // per-thread FIFO queue, and firefox never answers an interrupt that
     // RACES a breakpoint pause - the unanswered request wedges that thread's
     // queue FOREVER (every later stackTrace/evaluate for it times out;
-    // live-observed, verified in the adapter's base actor proxy source).
+    // verified in the adapter's base actor proxy source).
     // Threads that pause independently therefore also keep RUNNING
     // independently while one of them is on screen.
   }
@@ -751,7 +751,7 @@ public class DapDebugProcess extends XDebugProcess {
   /**
    * References whose variables request TIMED OUT at this stop. Firefox's
    * worker devtools can crash while enumerating a specific object's
-   * properties (broken getter/previewer handling, live-observed) - that
+   * properties (broken getter/previewer handling) - that
    * object's actor then never answers, at all, ever. The platform re-requests
    * on every tree rebuild; without this cache each rebuild would stall the
    * request thread for a full timeout PER poisoned object. Pause-scoped:

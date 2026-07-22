@@ -14,8 +14,8 @@ import com.intellij.psi.PsiFile;
  * On that path the platform hands the parser a FRESH chameleon inside a
  * DummyHolder — an element with NO PSI bound; asking it for its psi went
  * through HaxeParserDefinition.createElement, which has no case for the
- * fragment type ("AssertionError: Unknown element type: HAXE_CODE_FRAGMENT",
- * live-hit in the browser debugger's Set Value editor).
+ * fragment type: "AssertionError: Unknown element type: HAXE_CODE_FRAGMENT".
+
  */
 public class HaxeCodeFragmentReparseTest extends HaxeCodeInsightFixtureTestCase {
 

@@ -88,8 +88,8 @@ public class HaxeExpressionCodeFragmentImpl extends HaxeFile implements HaxeExpr
     // construction registers permanently into a global short-indexed
     // registry, and the debugger creates fragments constantly (variable
     // hover, watches, evaluate) - a per-fragment instance exhausted the
-    // registry (~9900 leaked types) and broke ALL Haxe PSI (live-observed
-    // TooManyElementTypesException)
+    // registry (~9900 leaked types) and broke ALL Haxe PSI with a
+    // TooManyElementTypesException.
     init(HaxeCodeFragmentElementType.INSTANCE, HaxeCodeFragmentElementType.INSTANCE);
   }
 
@@ -173,7 +173,7 @@ public class HaxeExpressionCodeFragmentImpl extends HaxeFile implements HaxeExpr
       // FRESH element inside a DummyHolder - it has NO psi bound, and asking
       // it would route through HaxeParserDefinition.createElement, which has
       // no case for this type ("AssertionError: Unknown element type:
-      // HAXE_CODE_FRAGMENT", live-hit in Set Value). The holder's psi IS
+      // HAXE_CODE_FRAGMENT"). The holder's psi IS
       // bound - prefer it, exactly like the Java fragment parser does.
       ASTNode holder = chameleon.getTreeParent();
       PsiElement psi = holder != null ? holder.getPsi() : chameleon.getPsi();
