@@ -39,6 +39,32 @@ public class DapClient implements DapEndpoint {
     return new DapClient(DapConnection.connect(host, port, connectTimeoutMillis));
   }
 
+  /**
+   * {@link #connect} with a retry window: the DAP adapters announce their
+   * port slightly BEFORE the listener accepts (live-observed on both vscode
+   * web adapters), so an immediate connect can be refused — retry briefly
+   * instead of failing the session.
+   */
+  public static DapClient connectWithRetry(String host, int port, int connectTimeoutMillis,
+                                           long retryWindowMillis) throws IOException {
+    long deadline = System.currentTimeMillis() + retryWindowMillis;
+    IOException last = null;
+    while (System.currentTimeMillis() < deadline) {
+      try {
+        return connect(host, port, connectTimeoutMillis);
+      } catch (IOException e) {
+        last = e;
+        try {
+          Thread.sleep(100);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while connecting to the debug adapter", ie);
+        }
+      }
+    }
+    throw last != null ? last : new IOException("Could not connect to the debug adapter");
+  }
+
   public DapClient(DapConnection connection) {
     this.connection = connection;
     readerThread = new Thread(this::readLoop, "dap-client-reader");

@@ -20,4 +20,15 @@ public class CompletionsRequest extends Request {
   public CompletionsRequest() {
     setCommand(COMMAND);
   }
+
+  /** {@code frameId} may be null (no paused frame: complete against globals). */
+  public static CompletionsRequest of(Integer frameId, String text, int column) {
+    CompletionsRequest request = new CompletionsRequest();
+    CompletionsArguments arguments = new CompletionsArguments();
+    arguments.setFrameId(frameId);
+    arguments.setText(text);
+    arguments.setColumn(column);
+    request.setArguments(arguments);
+    return request;
+  }
 }

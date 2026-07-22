@@ -109,7 +109,7 @@ the details.
 
 ## Diagnostics
 
-`DapDebugProcess.TRACE_DAP_TO_CONSOLE` (a code constant, off by default)
+`DapConsoleTracer.ENABLED` (a code constant, off by default)
 mirrors every DAP request/response/timeout and incoming event into the
 session console as grey `[dap]` lines — command, thread/frame/reference ids,
 seq numbers and durations. Flip it in code when chasing wire-level issues;

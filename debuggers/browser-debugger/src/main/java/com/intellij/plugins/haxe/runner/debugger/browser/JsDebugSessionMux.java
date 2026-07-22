@@ -168,10 +168,8 @@ public final class JsDebugSessionMux implements DapEndpoint {
 
       // requests routed by the id they carry (composited -> session + raw id)
       case StackTraceRequest stackTrace -> {
-        int id = stackTrace.getArguments().getThreadId();
-        ChildSession session = route(id);
-        stackTrace.getArguments().setThreadId(rawOf(id));
-        return rewriteResponse(session, session.client.sendRequest(request, timeoutMillis));
+        return routeRewriting(request, stackTrace.getArguments().getThreadId(),
+                              raw -> stackTrace.getArguments().setThreadId(raw), timeoutMillis);
       }
       case ContinueRequest resume -> {
         // routed to the owning session ONLY: another session paused at its own
@@ -197,47 +195,32 @@ public final class JsDebugSessionMux implements DapEndpoint {
                              raw -> pause.getArguments().setThreadId(raw), timeoutMillis);
       }
       case ScopesRequest scopes -> {
-        int id = scopes.getArguments().getFrameId();
-        ChildSession session = route(id);
-        scopes.getArguments().setFrameId(rawOf(id));
-        return rewriteResponse(session, session.client.sendRequest(request, timeoutMillis));
+        return routeRewriting(request, scopes.getArguments().getFrameId(),
+                              raw -> scopes.getArguments().setFrameId(raw), timeoutMillis);
       }
       case VariablesRequest variables -> {
-        int id = variables.getArguments().getVariablesReference();
-        ChildSession session = route(id);
-        variables.getArguments().setVariablesReference(rawOf(id));
-        return rewriteResponse(session, session.client.sendRequest(request, timeoutMillis));
+        return routeRewriting(request, variables.getArguments().getVariablesReference(),
+                              raw -> variables.getArguments().setVariablesReference(raw), timeoutMillis);
       }
       case SetVariableRequest setVariable -> {
-        int id = setVariable.getArguments().getVariablesReference();
-        ChildSession session = route(id);
-        setVariable.getArguments().setVariablesReference(rawOf(id));
-        return rewriteResponse(session, session.client.sendRequest(request, timeoutMillis));
+        return routeRewriting(request, setVariable.getArguments().getVariablesReference(),
+                              raw -> setVariable.getArguments().setVariablesReference(raw), timeoutMillis);
       }
       case EvaluateRequest evaluate -> {
         Integer frameId = evaluate.getArguments() != null ? evaluate.getArguments().getFrameId() : null;
-        ChildSession session = frameId != null ? route(frameId) : sessions.get(0);
-        if (frameId != null) {
-          evaluate.getArguments().setFrameId(rawOf(frameId));
-        }
+        ChildSession session = sessionForOptionalId(frameId, raw -> evaluate.getArguments().setFrameId(raw));
         return rewriteResponse(session, session.client.sendRequest(request, timeoutMillis));
       }
       case StepInTargetsRequest targets -> {
         Integer frameId = targets.getArguments() != null ? targets.getArguments().getFrameId() : null;
-        ChildSession session = frameId != null ? route(frameId) : sessions.get(0);
-        if (frameId != null) {
-          targets.getArguments().setFrameId(rawOf(frameId));
-        }
+        ChildSession session = sessionForOptionalId(frameId, raw -> targets.getArguments().setFrameId(raw));
         // target ids are only meaningful within the frame's own session and
         // travel back through a stepIn routed by threadId - no rewrite needed
         return session.client.sendRequest(request, timeoutMillis);
       }
       case CompletionsRequest completions -> {
         Integer frameId = completions.getArguments() != null ? completions.getArguments().getFrameId() : null;
-        ChildSession session = frameId != null ? route(frameId) : sessions.get(0);
-        if (frameId != null) {
-          completions.getArguments().setFrameId(rawOf(frameId));
-        }
+        ChildSession session = sessionForOptionalId(frameId, raw -> completions.getArguments().setFrameId(raw));
         return session.client.sendRequest(request, timeoutMillis);
       }
 
@@ -255,11 +238,26 @@ public final class JsDebugSessionMux implements DapEndpoint {
 
   private Response routeByThread(Request request, Integer compositeThreadId, RawIdSetter setter, long timeoutMillis)
     throws IOException, InterruptedException {
-    ChildSession session = compositeThreadId != null ? route(compositeThreadId) : sessions.get(0);
-    if (compositeThreadId != null) {
-      setter.set(rawOf(compositeThreadId));
-    }
+    ChildSession session = sessionForOptionalId(compositeThreadId, setter);
     return session.client.sendRequest(request, timeoutMillis);
+  }
+
+  /** Routes by a composited id and composites the response's ids on the way back. */
+  private Response routeRewriting(Request request, int compositeId, RawIdSetter setter, long timeoutMillis)
+    throws IOException, InterruptedException {
+    ChildSession session = route(compositeId);
+    setter.set(rawOf(compositeId));
+    return rewriteResponse(session, session.client.sendRequest(request, timeoutMillis));
+  }
+
+  /** The owning session of a nullable composited id (null -> the page), un-compositing it in place. */
+  private ChildSession sessionForOptionalId(Integer compositeId, RawIdSetter setter) {
+    if (compositeId == null) {
+      return sessions.get(0);
+    }
+    ChildSession session = route(compositeId);
+    setter.set(rawOf(compositeId));
+    return session;
   }
 
   @Override
@@ -324,17 +322,23 @@ public final class JsDebugSessionMux implements DapEndpoint {
         }
       }
     }
-    if (pageResponse instanceof SetBreakpointsResponse ok && ok.isSuccess() && ok.getBody() != null
-        && ok.getBody().getBreakpoints() != null) {
-      List<Breakpoint> results = ok.getBody().getBreakpoints();
-      for (int i = 0; i < results.size() && i < tracked.size(); i++) {
-        if (!results.get(i).isVerified() && tracked.get(i).mergedVerified()) {
-          results.get(i).setVerified(true);
-          results.get(i).setMessage(null);
-        }
+    upgradeToMergedVerification(pageResponse, tracked);
+    return pageResponse;
+  }
+
+  /** Upgrades the page's answer to verified where ANY session verified the line. */
+  private static void upgradeToMergedVerification(Response pageResponse, List<TrackedBreakpoint> tracked) {
+    if (!(pageResponse instanceof SetBreakpointsResponse ok) || !ok.isSuccess() || ok.getBody() == null
+        || ok.getBody().getBreakpoints() == null) {
+      return;
+    }
+    List<Breakpoint> results = ok.getBody().getBreakpoints();
+    for (int i = 0; i < results.size() && i < tracked.size(); i++) {
+      if (!results.get(i).isVerified() && tracked.get(i).mergedVerified()) {
+        results.get(i).setVerified(true);
+        results.get(i).setMessage(null);
       }
     }
-    return pageResponse;
   }
 
   /**
@@ -437,16 +441,7 @@ public final class JsDebugSessionMux implements DapEndpoint {
           for (DapThread thread : ok.getBody().getThreads()) {
             DapThread rewritten = new DapThread();
             rewritten.setId(composite(session.index, thread.getId()));
-            String name = thread.getName() == null || thread.getName().isBlank()
-                          ? session.label : thread.getName();
-            if (session.index != 0) {
-              // js-debug names a worker's thread by its script URL - the same
-              // thing the session label was derived from; don't say it twice
-              String shortName = shortLabel(name);
-              name = shortName.equals(session.label) ? session.label
-                                                     : "[" + session.label + "] " + shortName;
-            }
-            rewritten.setName(name);
+            rewritten.setName(mergedThreadName(session, thread.getName()));
             merged.add(rewritten);
           }
         }
@@ -464,6 +459,20 @@ public final class JsDebugSessionMux implements DapEndpoint {
     response.setCommand(request.getCommand());
     response.setRequest_seq(request.getSeq());
     return response;
+  }
+
+  /**
+   * A worker thread's presented name. js-debug names a worker's thread by its
+   * script URL - the same thing the session label was derived from; don't say
+   * it twice.
+   */
+  private static String mergedThreadName(ChildSession session, String rawName) {
+    String name = rawName == null || rawName.isBlank() ? session.label : rawName;
+    if (session.index == 0) {
+      return name;
+    }
+    String shortName = shortLabel(name);
+    return shortName.equals(session.label) ? session.label : "[" + session.label + "] " + shortName;
   }
 
   // ------------------------------------------------------- response rewrite
@@ -653,54 +662,7 @@ public final class JsDebugSessionMux implements DapEndpoint {
     String label = name != null && !String.valueOf(name).isBlank() ? shortLabel(String.valueOf(name)) : "worker";
     Thread attach = new Thread(() -> {
       try {
-        int index = nextSessionIndex.incrementAndGet();
-        DapClient client = DapClient.connect("127.0.0.1", adapterPort, (int)CHILD_TIMEOUT_MILLIS);
-        InitializeRequest initialize = new InitializeRequest();
-        InitializeRequestArguments arguments = new InitializeRequestArguments();
-        arguments.setClientID("intellij");
-        arguments.setAdapterID("chrome");
-        arguments.setPathFormat("path");
-        arguments.setLinesStartAt1(true);
-        arguments.setColumnsStartAt1(true);
-        arguments.setSupportsStartDebuggingRequest(true);
-        initialize.setArguments(arguments);
-        if (!client.sendRequest(initialize, CHILD_TIMEOUT_MILLIS).isSuccess()) {
-          client.close();
-          return;
-        }
-        client.sendRequestNoWait(ConfiguredLaunchRequest.of(configuration));
-        long deadline = System.currentTimeMillis() + CHILD_TIMEOUT_MILLIS;
-        boolean initialized = false;
-        while (System.currentTimeMillis() < deadline && !initialized) {
-          initialized = client.pollEvent(100) instanceof InitializedEvent;
-        }
-        // replay the session-wide configuration this session missed; where the
-        // new target verifies a breakpoint the page could not (worker-only
-        // sources), the merged upgrade is announced to the IDE
-        List<SetBreakpointsRequest> cached;
-        synchronized (breakpointsBySource) {
-          cached = List.copyOf(breakpointsBySource.values());
-        }
-        for (SetBreakpointsRequest breakpoints : cached) {
-          Response response = client.sendRequest(breakpoints, CHILD_TIMEOUT_MILLIS);
-          List<TrackedBreakpoint> tracked;
-          synchronized (trackedBySource) {
-            tracked = trackedBySource.get(sourcePathOf(breakpoints));
-          }
-          if (tracked != null) {
-            recordBreakpointResults(index, tracked, response, true);
-          }
-        }
-        SetExceptionBreakpointsRequest filters = exceptionFilters;
-        if (filters != null) {
-          client.sendRequest(filters, CHILD_TIMEOUT_MILLIS);
-        }
-        client.sendRequest(new ConfigurationDoneRequest(), CHILD_TIMEOUT_MILLIS);
-
-        ChildSession session = new ChildSession(index, client, label);
-        sessions.put(session.index, session);
-        startPump(session);
-        logSink.accept("attached debug target '" + label + "' as an additional thread");
+        handshakeChild(configuration, label);
       } catch (IOException e) {
         logSink.accept("failed to attach debug target '" + label + "': " + e.getMessage());
       } catch (InterruptedException e) {
@@ -709,6 +671,57 @@ public final class JsDebugSessionMux implements DapEndpoint {
     }, "js-debug-mux-attach");
     attach.setDaemon(true);
     attach.start();
+  }
+
+  /** The child handshake: initialize, fire-and-forget launch, replayed configuration, join. */
+  private void handshakeChild(Map<String, Object> configuration, String label)
+    throws IOException, InterruptedException {
+    int index = nextSessionIndex.incrementAndGet();
+    DapClient client = DapClient.connect("127.0.0.1", adapterPort, (int)CHILD_TIMEOUT_MILLIS);
+    if (!client.sendRequest(InitializeRequest.standard("chrome", true), CHILD_TIMEOUT_MILLIS).isSuccess()) {
+      client.close();
+      return;
+    }
+    client.sendRequestNoWait(ConfiguredLaunchRequest.of(configuration));
+    long deadline = System.currentTimeMillis() + CHILD_TIMEOUT_MILLIS;
+    boolean initialized = false;
+    while (System.currentTimeMillis() < deadline && !initialized) {
+      initialized = client.pollEvent(100) instanceof InitializedEvent;
+    }
+    replayCachedConfiguration(client, index);
+    client.sendRequest(new ConfigurationDoneRequest(), CHILD_TIMEOUT_MILLIS);
+
+    ChildSession session = new ChildSession(index, client, label);
+    sessions.put(session.index, session);
+    startPump(session);
+    logSink.accept("attached debug target '" + label + "' as an additional thread");
+  }
+
+  /**
+   * Replays the session-wide configuration a newly attached session missed;
+   * where the new target verifies a breakpoint the page could not
+   * (worker-only sources), the merged upgrade is announced to the IDE.
+   */
+  private void replayCachedConfiguration(DapClient client, int index)
+    throws IOException, InterruptedException {
+    List<SetBreakpointsRequest> cached;
+    synchronized (breakpointsBySource) {
+      cached = List.copyOf(breakpointsBySource.values());
+    }
+    for (SetBreakpointsRequest breakpoints : cached) {
+      Response response = client.sendRequest(breakpoints, CHILD_TIMEOUT_MILLIS);
+      List<TrackedBreakpoint> tracked;
+      synchronized (trackedBySource) {
+        tracked = trackedBySource.get(sourcePathOf(breakpoints));
+      }
+      if (tracked != null) {
+        recordBreakpointResults(index, tracked, response, true);
+      }
+    }
+    SetExceptionBreakpointsRequest filters = exceptionFilters;
+    if (filters != null) {
+      client.sendRequest(filters, CHILD_TIMEOUT_MILLIS);
+    }
   }
 
   /**

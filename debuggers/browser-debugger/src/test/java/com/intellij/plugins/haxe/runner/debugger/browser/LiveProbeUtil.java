@@ -37,28 +37,9 @@ final class LiveProbeUtil {
     }
   }
 
-  /**
-   * Connects to an adapter's DAP port, retrying briefly — both adapters
-   * announce their port slightly BEFORE the listener accepts (live-observed),
-   * so an immediate connect can be refused.
-   */
+  /** Connects to an adapter's DAP port, retrying briefly (see DapClient.connectWithRetry). */
   static DapClient connectWithRetry(int port, int connectTimeoutMillis) throws IOException {
-    long deadline = System.currentTimeMillis() + 10_000;
-    IOException last = null;
-    while (System.currentTimeMillis() < deadline) {
-      try {
-        return DapClient.connect("127.0.0.1", port, connectTimeoutMillis);
-      } catch (IOException e) {
-        last = e;
-        try {
-          Thread.sleep(100);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          throw new IOException("interrupted while connecting to the adapter", ie);
-        }
-      }
-    }
-    throw last != null ? last : new IOException("could not connect to the adapter");
+    return DapClient.connectWithRetry("127.0.0.1", port, connectTimeoutMillis, 10_000);
   }
 
   /**
