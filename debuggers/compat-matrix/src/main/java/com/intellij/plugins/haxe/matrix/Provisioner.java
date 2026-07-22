@@ -226,7 +226,7 @@ final class Provisioner {
     boolean posix = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
     try (TarArchiveInputStream tar = new TarArchiveInputStream(new GzipCompressorInputStream(in))) {
       TarArchiveEntry entry;
-      while ((entry = tar.getNextTarEntry()) != null) {
+      while ((entry = tar.getNextEntry()) != null) {
         Path target = safeResolve(dir, entry.getName());
         if (entry.isDirectory()) {
           Files.createDirectories(target);

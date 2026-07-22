@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger;
 
 import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.editor.Editor;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
@@ -41,20 +42,28 @@ public class HaxeSetValueCompletionSuppressionTest extends HaxeCodeInsightFixtur
     return XDebuggerUtil.getInstance().createExpression(text, HaxeLanguage.INSTANCE, null, EvaluationMode.EXPRESSION);
   }
 
+  /** The confidence ignores the editor; any open one satisfies the signature. */
+  private Editor someEditor() {
+    myFixture.configureByText("Dummy.hx", "class Dummy {}");
+    return myFixture.getEditor();
+  }
+
+  private ThreeState skipAutopopupFor(PsiFile fragment) {
+    return new HaxeSetValueCompletionConfidence().shouldSkipAutopopup(someEditor(), fragment, fragment, 0);
+  }
+
   /** A set-value expression (present in the "setValue" history) gets its fragment tagged. */
   public void testSetValueFragmentSuppressesAutopopup() {
     XExpression expression = expression("42");
     XDebuggerHistoryManager.getInstance(getProject()).addRecentExpression("setValue", expression);
     PsiFile fragment = createFragment(expression);
-    assertEquals(ThreeState.YES,
-                 new HaxeSetValueCompletionConfidence().shouldSkipAutopopup(fragment, fragment, 0));
+    assertEquals(ThreeState.YES, skipAutopopupFor(fragment));
   }
 
   /** An evaluate/watches expression (not in that history) keeps completion. */
   public void testEvaluateFragmentKeepsAutopopup() {
     XDebuggerHistoryManager.getInstance(getProject()).addRecentExpression("setValue", expression("42"));
     PsiFile fragment = createFragment(expression("someIdentifier"));
-    assertEquals(ThreeState.UNSURE,
-                 new HaxeSetValueCompletionConfidence().shouldSkipAutopopup(fragment, fragment, 0));
+    assertEquals(ThreeState.UNSURE, skipAutopopupFor(fragment));
   }
 }
