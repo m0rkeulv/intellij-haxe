@@ -397,9 +397,6 @@ class DebugSession {
 		// for a stopped thread's top frame, but guard defensively.
 		inspector.cpuRegistersFor = tid -> state.match(Stopped(_)) ? cpuRegisters.rows(tid) : [];
 		inspector.enableWrites(new MemoryWriter(api, debuggeePid, jit.is64));
-		inspector.xmm0Writer = value ->
-			api.writeRegister(debuggeePid, stoppedThreadId, Xmm0, FPHelper.doubleToI64(value));
-		inspector.warnSink = text -> emit(EvOutput("console", text));
 		// eval-calls run in the debuggee via the injector; its hooks are the only
 		// session state an injected call touches
 		var evalCalls = new EvalCallInjector(api, debuggeePid, jit, breakpoints, {
@@ -410,6 +407,19 @@ class DebugSession {
 				releaseExitedProcess(threadId);
 			}
 		});
+		inspector.xmm0Writer = value -> {
+			var bits = FPHelper.doubleToI64(value);
+			if (jit.is64 && Sys.systemName() != "Windows") {
+				// linux: hl's debug_write_register cannot write XMM (its ptrace
+				// write path never handled the FP pseudo-offsets the read path
+				// defines - the write silently fails), so load the register by
+				// running an injected stub, eval-call style
+				evalCalls.writeXmm0(stoppedThreadId, bits);
+			} else {
+				api.writeRegister(debuggeePid, stoppedThreadId, Xmm0, bits);
+			}
+		};
+		inspector.warnSink = text -> emit(EvOutput("console", text));
 		inspector.functionCaller = (funcAddr, args, floatBits) ->
 			evalCalls.call(stoppedThreadId, funcAddr, args, floatBits);
 	}

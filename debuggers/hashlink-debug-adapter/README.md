@@ -107,7 +107,7 @@ JSON and dispatcher tests still run everywhere.
 
 HashLink publishes no linux release binaries (Windows only since 1.6), so the only
 provisionable linux runtime is the **nightly** — and the debugger works on it:
-**101 of 104 integration tests pass**, identically across haxe 4.1.5 through
+**102 of 104 integration tests pass**, identically across haxe 4.1.5 through
 5.0.0-preview.1. Getting there needed linux-only adaptations (all no-ops on
 Windows), because HashLink's linux `debug_*` natives are ptrace-based and
 behave differently from the Windows debug API:
@@ -136,17 +136,28 @@ behave differently from the Windows debug API:
 - a debuggee killed without a parseable exit status (see the threads limit
   below) used to spin the session forever — `waitpid` failure is now treated
   as process death.
+- float-register WRITES: hl's linux `debug_write_register` cannot write XMM
+  (its ptrace write path never handled the FP pseudo-offsets its read path
+  defines — the write silently no-ops). The adapter instead loads the
+  register by running a two-instruction injected stub (`movsd xmm0,[mem]` +
+  INT3) through the same eval-call machinery that already runs code in the
+  debuggee — the write becomes something the debuggee does to itself, so the
+  broken native is never called.
 
 Machine requirement: **attach mode** (attaching to a debuggee the adapter did
 not spawn) needs `kernel.yama.ptrace_scope=0` (`sudo sysctl
 kernel.yama.ptrace_scope=0`; Ubuntu defaults to 1, which only allows tracing
-your own descendants — launch mode is unaffected). The 3 known-failing tests
-are limits of HashLink's linux natives (`src/std/debug.c`), not of the
-adapter: a breakpoint executed by a SECONDARY thread kills the debuggee
-(`PTRACE_ATTACH` traces only the main thread, so the worker's SIGTRAP takes
-its default action; per-tid attach would be an upstream change), and
-float-register writes (the linux write path never handled the XMM
-pseudo-offsets its own read path defines).
+your own descendants — launch mode is unaffected). The 2 remaining failures
+are a limit of HashLink's linux natives (`src/std/debug.c`) with NO
+adapter-side workaround: a breakpoint executed by a SECONDARY thread kills
+the debuggee. `PTRACE_ATTACH`/`waitpid` on linux are per-thread and hl
+attaches only the main thread, so a worker hitting a breakpoint INT3 is
+untraced and its SIGTRAP takes the default (fatal) action before any adapter
+code can intervene. Unlike the float write, code injection cannot help — the
+obstacle is not a missing operation but which thread is traced — so this
+needs per-tid attach (`/proc/<pid>/task` + `PTRACE_O_TRACECLONE`) and
+`waitpid(-1, __WALL)` upstream. See the docs backlog entry on
+multi-threading.
 
 ## Distribution
 

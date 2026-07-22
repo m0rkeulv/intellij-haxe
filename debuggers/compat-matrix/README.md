@@ -124,10 +124,10 @@ manifest simply not listing older versions.
   `-PmatrixFull=true` runs every combination. On linux only the NIGHTLY
   runtime provisions (HashLink ships no linux release binaries; build
   1.13–1.15 from source into `debuggerResources/hashlink/<name>/` to widen
-  the grid). Expect 101/104 per cell there: the attach-mode tests need
-  `sudo sysctl kernel.yama.ptrace_scope=0` once per boot, and 3 tests
-  (secondary-thread breakpoints, float-register writes) hit limits of
-  HashLink's linux ptrace natives — see the hashlink-debug-adapter
+  the grid). Expect 102/104 per cell there: the attach-mode tests need
+  `sudo sysctl kernel.yama.ptrace_scope=0` once per boot, and 2 tests
+  (secondary-thread breakpoints) hit a limit of HashLink's linux ptrace
+  natives with no adapter-side workaround — see the hashlink-debug-adapter
   README's "Linux support" section.
 - `-PmatrixParallel=true` runs each lane in its own thread. The lanes are
   disjoint (separate modules, fixtures, and debugger binaries), so this is

@@ -1236,9 +1236,12 @@ than a missing feature, it is a landmine for users. Research directions:
   multi-threaded debuggees — if it dies the same way, the upstream issue
   affects every HL debugging front end and strengthens the PR case.
 
-Related linux limits in the same natives (parked with this item):
-float/XMM register WRITES are unimplemented (`MutateIntegrationTest.
-writeToFloatArgOnItsUseLineTakesEffect`), and the VmException stack
-recovery relies on the VM's exc_stack_trace capture (glibc-layout offset
-in `Align.threadExcStackTraceLinux`) — an upstream per-tid attach change
-may allow simplifying both.
+Related linux limit in the same natives, already WORKED AROUND (kept here
+for context): float/XMM register WRITES are unimplemented on linux, so the
+adapter loads the register through an injected code stub instead of the
+broken `debug_write_register` (see the adapter README's "Linux support").
+A per-tid attach change would not remove that workaround — it is a
+separate native gap — but a future hl that implements FP writes could
+retire it. The VmException stack recovery also leans on the VM's
+exc_stack_trace capture (glibc-layout offset in
+`Align.threadExcStackTraceLinux`).
