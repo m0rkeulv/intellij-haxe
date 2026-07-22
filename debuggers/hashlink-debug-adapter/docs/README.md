@@ -1214,27 +1214,26 @@ capability — hence parked until a real expression fails.
 
 ## Backlog: correct multi-threading on linux (assessed 2026-07-22, open)
 
-On linux a breakpoint executed by a SECONDARY thread KILLS the debuggee:
-linux ptrace attaches per-thread and hl's `debug_start` only attaches the
-main thread, so a worker hitting an INT3 takes SIGTRAP's default action
-(process kill — hl installs no SIGTRAP handler; live-verified, the adapter
-now at least reports the death instead of spinning). This makes
-ThreadsIntegrationTest (2 tests) fail on linux and means any real debug
-session dies the moment a breakpoint lands on a non-main thread — worse
-than a missing feature, it is a landmine for users. Research directions:
+**Multi-threaded debugging does not work on linux today**: a breakpoint hit by
+a SECONDARY thread KILLS the debuggee. linux ptrace attaches per-thread and
+hl's `debug_start` only attaches the main thread, so a worker's INT3 takes
+SIGTRAP's default action (process kill). The adapter now reports the death
+instead of spinning, but any real session dies the moment a breakpoint lands
+off the main thread; ThreadsIntegrationTest (2 tests) fails. Single-threaded
+debuggees and Windows are unaffected.
 
-- Per-tid attach in hashlink's `src/std/debug.c` (`/proc/<pid>/task`
-  enumeration + PTRACE_ATTACH/SEIZE each tid, plus attaching threads
-  created later via PTRACE_O_TRACECLONE). The real fix; needs an upstream
-  PR and only helps runtimes that ship it — the matrix pins released
-  runtimes, so a version gate would be needed.
-- Adapter-side mitigation until then: veto/refuse breakpoints on lines the
-  thread analysis knows run on worker threads? (Fragile — line/thread
-  mapping is not statically known.) Or document the limitation loudly in
-  the IDE when the debuggee is multi-threaded on linux.
-- Check how upstream vshaxe/hashlink-debugger behaves on linux
-  multi-threaded debuggees — if it dies the same way, the upstream issue
-  affects every HL debugging front end and strengthens the PR case.
+The fix belongs in HashLink's native debug code, not the adapter — no
+adapter-side code can change which threads ptrace attached. It is expected to
+be fixable: a proof-of-concept linux HashLink build that attaches every
+thread (not just the main one) already exists at
+<https://github.com/m0rkeulv/hashlink/releases/tag/latest> — point the tests
+at it with `-PhashlinkBin=<path>` to confirm ThreadsIntegrationTest passes.
+
+To ship it: upstream the change into a HashLink release, then version-gate
+linux multi-threading on the runtime (the matrix pins released runtimes).
+Until then, document the limitation in the IDE (an adapter-side breakpoint
+veto is not viable — line/thread mapping is not statically known). Worth
+checking whether upstream vshaxe/hashlink-debugger dies the same way.
 
 Related linux limit in the same natives, already WORKED AROUND (kept here
 for context): float/XMM register WRITES are unimplemented on linux, so the
