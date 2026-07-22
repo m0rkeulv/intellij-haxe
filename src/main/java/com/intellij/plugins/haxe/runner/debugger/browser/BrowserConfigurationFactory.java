@@ -7,6 +7,8 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import javax.swing.Icon;
+
+import icons.HaxeIcons;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 
@@ -29,7 +31,7 @@ public class BrowserConfigurationFactory extends ConfigurationFactory {
 
   @Override
   public Icon getIcon() {
-    return AllIcons.Nodes.PpWeb;
+    return HaxeIcons.DEBUGGER_WEB;
   }
 
   @Override
