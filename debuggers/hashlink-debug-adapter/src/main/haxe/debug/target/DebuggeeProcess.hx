@@ -31,6 +31,12 @@ class DebuggeeProcess {
 
 	final process:Process;
 	final onOutput:(category:String, text:String) -> Void;
+	// released by each pump thread when its stream reaches EOF; lets the
+	// session drain the tail output BEFORE reporting the exit (the pipes of a
+	// dead process still hold their buffered bytes — live-observed as the
+	// final stdout lines arriving AFTER the exited event under machine load)
+	final stdoutDrained = new sys.thread.Lock();
+	final stderrDrained = new sys.thread.Lock();
 
 	public function new(hlPath:String, program:String, programArgs:Array<String>, cwd:Null<String>, debugPort:Int,
 			onOutput:(category:String, text:String) -> Void) {
@@ -70,11 +76,22 @@ class DebuggeeProcess {
 		Starts the stdout/stderr pump threads.
 	**/
 	public function startOutputPumps():Void {
-		pump(process.stdout, "stdout");
-		pump(process.stderr, "stderr");
+		pump(process.stdout, "stdout", stdoutDrained);
+		pump(process.stderr, "stderr", stderrDrained);
 	}
 
-	function pump(input:Input, category:String):Void {
+	/**
+		Blocks until both pumps hit EOF (all buffered output was forwarded) or
+		the per-stream timeout passes — a dead process EOFs its pipes promptly,
+		so the timeout is a guard, not an expected path. Call BEFORE reporting
+		the process's exit so no output event trails the exited event.
+	**/
+	public function awaitOutputDrained(timeoutSec:Float):Void {
+		stdoutDrained.wait(timeoutSec);
+		stderrDrained.wait(timeoutSec);
+	}
+
+	function pump(input:Input, category:String, drained:sys.thread.Lock):Void {
 		Thread.create(() -> {
 			var buffer = Bytes.alloc(4096);
 			try {
@@ -92,6 +109,7 @@ class DebuggeeProcess {
 			} catch (e:Dynamic) {
 				// process gone: pump done
 			}
+			drained.release();
 		});
 	}
 

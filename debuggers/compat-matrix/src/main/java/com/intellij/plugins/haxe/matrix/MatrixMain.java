@@ -161,7 +161,8 @@ public final class MatrixMain {
   private void run() throws IOException {
     logConfig();
     Provisioner provisioner = new Provisioner(resources, log);
-    haxeDirs = applyNameFilter(provisioner.haxeDirs(), haxeFilter);
+    // haxeDirs arrive newest-first from the manifest (the run order)
+    haxeDirs = new ArrayList<>(applyNameFilter(provisioner.haxeDirs(), haxeFilter));
     hlDirs = lanes.contains("hashlink") ? applyNameFilter(provisioner.hashlinkDirs(), hlFilter) : List.of();
     nodeDirs = lanes.contains("firefox") || lanes.contains("chromium") ? provisioner.nodeDirs() : List.of();
     log.line("matrix start: lanes=" + String.join("+", lanes)
@@ -223,8 +224,11 @@ public final class MatrixMain {
    */
   private void registerHaxelibsOnce() {
     if (lanes.contains("hashlink") || lanes.contains("hxcpp")) {
+      // installHscript too: the server haxelib depends on it, and the lanes
+      // exclude every haxelib mutation - a fresh machine has no hscript
       gradle.run(List.of(":debuggers:hashlink-debug-adapter:registerDapProtocolHaxelib",
-                         ":debuggers:intellij-hxcpp-debugger:registerServerHaxelib"),
+                         ":debuggers:intellij-hxcpp-debugger:registerServerHaxelib",
+                         ":debuggers:intellij-hxcpp-debugger:installHscript"),
                  Map.of(), out.resolve("logs/preflight.log"), 300);
     }
   }
@@ -444,6 +448,7 @@ public final class MatrixMain {
    */
   private void webLane(String lane, String probeClass) throws IOException {
     log.line(lane.toUpperCase(Locale.ROOT) + " LANE (browser live probe)");
+    Map<String, String> browserEnv = discoveredBrowserEnv(lane);
     Path moduleResults = root.resolve("debuggers/browser-debugger/build/test-results/test");
     // no provisioned node (downloads failed?): one cell per haxe on the
     // probes' default node discovery rather than no coverage at all
@@ -451,6 +456,7 @@ public final class MatrixMain {
     for (Path haxeDir : haxeDirs) {
       String haxe = haxeDir.getFileName().toString();
       Map<String, String> env = haxeEnv(haxeDir);
+      env.putAll(browserEnv);
       verifyLaneHaxe(haxe, env);
       for (Path nodeDir : nodes) {
         String node = nodeDir != null ? nodeDir.getFileName().toString() : null;
@@ -469,6 +475,32 @@ public final class MatrixMain {
                 run.classes(), run.flaky(), start);
       }
     }
+  }
+
+  /**
+   * A browser dropped under {@code debuggerResources/browsers/} is exported
+   * to the probes via its WEB_DEBUG_*_EXE variable. Needed on linux, where
+   * the distro browser is typically a snap whose confinement cannot read the
+   * adapters' temp profiles under /tmp — the probes' launches fail with an
+   * empty error while everything else on the wire works. An env variable the
+   * user already set wins over discovery.
+   */
+  private Map<String, String> discoveredBrowserEnv(String lane) {
+    String var = lane.equals("firefox") ? "WEB_DEBUG_FIREFOX_EXE" : "WEB_DEBUG_CHROMIUM_EXE";
+    if (System.getenv(var) != null) {
+      return Map.of();
+    }
+    Path browsers = resources.resolve("browsers");
+    for (String binary : lane.equals("firefox")
+      ? List.of("firefox", "firefox-esr")
+      : List.of("chromium", "chrome", "chromium-browser")) {
+      Path found = Platform.findBinary(browsers, binary);
+      if (found != null) {
+        log.line("    " + lane + " : using discovered browser " + found);
+        return Map.of(var, found.toString());
+      }
+    }
+    return Map.of();
   }
 
   private void hxcppLane() throws IOException {
@@ -526,6 +558,11 @@ public final class MatrixMain {
         log.line("      started from an IDE or a stale shell, hxcpp cannot find Visual Studio.");
         log.line("      Run `gradlew --stop`, then rerun from a shell where a plain hxcpp build works.");
       }
+      if (text.contains("g++: not found") || text.contains("g++\" not found")
+          || text.contains("Could not find executable g++")) {
+        log.line("      HINT: no C++ compiler on this machine - hxcpp needs g++.");
+        log.line("      Install it (e.g. `sudo apt install g++`) and rerun the lane.");
+      }
     } catch (IOException ignored) {
     }
   }
@@ -582,9 +619,18 @@ public final class MatrixMain {
         extra.add(GRADLE_CONTINUE);
         Map<String, String> env = haxeEnv(haxeDir);
         if (!Platform.WINDOWS) {
-          // linux: hl finds libhl.so and the std .hdll libraries beside itself
+          // linux: hl finds libhl.so and the std .hdll libraries beside
+          // itself OR in ../lib (the cmake layout: bin/hl + lib/libhl.so)
+          StringBuilder ldPath = new StringBuilder(hlBinary.getParent().toString());
+          Path siblingLib = hlBinary.getParent().resolveSibling("lib");
+          if (Files.isDirectory(siblingLib)) {
+            ldPath.append(':').append(siblingLib);
+          }
           String previous = System.getenv("LD_LIBRARY_PATH");
-          env.put("LD_LIBRARY_PATH", hlBinary.getParent() + (previous != null ? ":" + previous : ""));
+          if (previous != null) {
+            ldPath.append(':').append(previous);
+          }
+          env.put("LD_LIBRARY_PATH", ldPath.toString());
         }
         SuiteRun run = runSuite(":debuggers:hashlink-debug-adapter", extra, env,
                                 out.resolve("logs/hl-" + haxe + "-" + runtime + ".log"), 1500,
@@ -651,7 +697,9 @@ public final class MatrixMain {
   }
 
   private void report() throws IOException {
-    List<String> haxeNames = !haxeDirs.isEmpty() ? names(haxeDirs)
+    // ascending here even though the lanes RUN newest-first - report columns
+    // should not depend on execution order
+    List<String> haxeNames = !haxeDirs.isEmpty() ? names(haxeDirs).stream().sorted().toList()
       : cells.stream().map(Results.Cell::haxe).distinct().sorted().toList();
     List<String> hlNames = !hlDirs.isEmpty() ? names(hlDirs)
       : cells.stream().map(Results.Cell::runtime).filter(Objects::nonNull).distinct().sorted().toList();

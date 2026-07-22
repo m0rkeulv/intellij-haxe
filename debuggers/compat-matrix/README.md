@@ -50,6 +50,16 @@ passes on its once-only retry (reported as *flaky*), the first attempt's
 failure XMLs are kept in `results/<cell>/first-attempt/` for diagnosis.
 Progress streams to the console and `progress.log`.
 
+Known load-flake families (researched 2026-07-22; the retry classifies
+them correctly, do not chase them as regressions): the eval lane's
+anti-stall step tests measure wall clock that INCLUDES the debuggee
+running under `haxe --interp` — on a loaded machine a legitimate step can
+brush the test's 8s threshold and the protocol's 10s cap; and the browser
+probes' full-session tests ride real browser startup. (The HL lane's
+truncated-final-output flake — output events trailing the exited event —
+was a real adapter race, fixed by draining the output pumps before
+reporting exit.)
+
 ## Toolchain provisioning
 
 The versions to certify live in `VersionManifest.java` (compile-checked; one
@@ -101,12 +111,24 @@ manifest simply not listing older versions.
   variables — e.g. an ungoogled-chromium build), and the pinned adapters
   must be present under `<repo>/node` (see the browser-debugger README);
   without them the probes self-skip and the cells report skipped suites
-  instead of failing the run.
+  instead of failing the run. On linux the distro browser is usually a
+  SNAP, whose confinement cannot read the adapters' temp profiles under
+  /tmp — launches fail with an empty error while the DAP wire works. Drop
+  a non-snap build (Mozilla's firefox tarball, Chrome for Testing, ...)
+  under `debuggerResources/browsers/` and the matrix discovers it and
+  exports the WEB_DEBUG_*_EXE variable to the probes itself.
 - hashlink lane: fixture build per haxe version + a test run per runtime;
   the default "smart-reduced" grid runs known-degraded old haxe versions
   (4.1.5/4.2.5) against the reference runtimes only — latest release and
   nightly — since their behaviour was proven identical on every runtime;
-  `-PmatrixFull=true` runs every combination.
+  `-PmatrixFull=true` runs every combination. On linux only the NIGHTLY
+  runtime provisions (HashLink ships no linux release binaries; build
+  1.13–1.15 from source into `debuggerResources/hashlink/<name>/` to widen
+  the grid). Expect 102/104 per cell there: the attach-mode tests need
+  `sudo sysctl kernel.yama.ptrace_scope=0` once per boot, and 2 tests
+  (secondary-thread breakpoints) hit a limit of HashLink's linux ptrace
+  natives with no adapter-side workaround — see the hashlink-debug-adapter
+  README's "Linux support" section.
 - `-PmatrixParallel=true` runs each lane in its own thread. The lanes are
   disjoint (separate modules, fixtures, and debugger binaries), so this is
   safe; the stray-process sweep is deferred to the end because it kills

@@ -93,7 +93,9 @@ final class Provisioner {
         log.line(kind + " " + tool.name() + " : provisioning FAILED (" + e.getMessage() + ") - skipped");
       }
     }
-    // hand-dropped extras (not in the manifest) join the matrix by discovery
+    // hand-dropped extras (not in the manifest) join the matrix by discovery,
+    // appended after the manifest versions in name order. Manifest order is
+    // authoritative (it sets the run order - see haxeVersions).
     try (var children = Files.list(base)) {
       for (Path dir : children.filter(Files::isDirectory).sorted().toList()) {
         if (dirs.contains(dir)) {
@@ -105,7 +107,6 @@ final class Provisioner {
         }
       }
     }
-    dirs.sort(null);
     return dirs;
   }
 
