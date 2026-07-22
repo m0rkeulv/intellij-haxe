@@ -11,9 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import org.jetbrains.annotations.Nullable;
-import com.intellij.openapi.ui.panel.ComponentPanelBuilder;
-import javax.swing.JComponent;
-import org.jetbrains.annotations.Nls;
 
 /**
  * Shared browse-button wiring for the run-configuration editors' path fields:
@@ -40,18 +37,6 @@ public final class HaxeRunConfigurationEditorUtil {
         field.setText(FileUtil.toSystemDependentName(file.getPath()));
       }
     });
-  }
-
-  /**
-   * A small gray helper line for the run-configuration editors. WRAPS at the
-   * platform's comment width instead of demanding its full text as the
-   * dialog's minimum width (a long single-line JLabel forced the browser and
-   * hxcpp dialogs far wider than normal).
-   */
-  public static JComponent hint(@Nls String text) {
-    // the platform default wraps at ~70 chars, which folds these hints into
-    // a tall narrow block; half again as wide reads better in these forms
-    return ComponentPanelBuilder.createCommentComponent(text, true, 105, true);
   }
 
   // The chooser opens at the field's current path (or its nearest existing

@@ -9,53 +9,59 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
 import com.intellij.ui.components.JBTextField;
 import org.jetbrains.annotations.NotNull;
-import javax.swing.JComponent;
 
 /**
  * Base editor for {@link DapExecutableRunConfigurationBase} configurations:
- * owns the module / executable / working-directory / program-arguments fields
- * (with browse-at-current-path wiring) and their reset/apply. The subclass
- * composes the form — labels are per-debugger bundle keys, extra rows go
- * wherever they read best — and calls {@link #resetCommon}/{@link #applyCommon}
- * from its own reset/apply.
+ * owns the reset/apply of the shared module / executable / working-directory /
+ * program-arguments fields.
+ *
+ * The COMPONENTS themselves belong to the subclass, which declares them in its
+ * .form — the GUI Designer instantiates bound fields in the class named by
+ * {@code bind-to-class}, and does so at the start of THAT class's constructor,
+ * after this one has run. Subclasses therefore expose their components through
+ * the accessors below and call {@link #wireCommonChoosers()} from their own
+ * constructor.
  */
 public abstract class DapExecutableRunConfigurationEditorBase<C extends DapExecutableRunConfigurationBase>
   extends SettingsEditor<C> {
 
   protected final Project project;
-  protected final ModulesComboBox moduleCombo = new ModulesComboBox();
-  protected final TextFieldWithBrowseButton executableField = new TextFieldWithBrowseButton();
-  protected final TextFieldWithBrowseButton workingDirectoryField = new TextFieldWithBrowseButton();
-  protected final JBTextField programArgumentsField = new JBTextField();
 
   protected DapExecutableRunConfigurationEditorBase(Project project) {
     this.project = project;
-    HaxeRunConfigurationEditorUtil.browseInto(project, executableField,
-                                              FileChooserDescriptorFactory.createSingleFileDescriptor());
-    HaxeRunConfigurationEditorUtil.browseInto(project, workingDirectoryField,
-                                              FileChooserDescriptorFactory.createSingleFolderDescriptor());
-    // preferred width from columns, not content - long arguments must not
-    // size the dialog
-    programArgumentsField.setColumns(25);
   }
 
-  /** A small gray, WRAPPING helper line (long text must not widen the dialog). */
-  protected static JComponent hint(String text) {
-    return HaxeRunConfigurationEditorUtil.hint(text);
+  protected abstract ModulesComboBox moduleCombo();
+
+  protected abstract TextFieldWithBrowseButton executableField();
+
+  protected abstract TextFieldWithBrowseButton workingDirectoryField();
+
+  protected abstract JBTextField programArgumentsField();
+
+  /**
+   * Browse-at-current-path wiring for the shared choosers. Call from the
+   * subclass constructor, where the form-built components exist.
+   */
+  protected void wireCommonChoosers() {
+    HaxeRunConfigurationEditorUtil.browseInto(project, executableField(),
+                                              FileChooserDescriptorFactory.singleFile());
+    HaxeRunConfigurationEditorUtil.browseInto(project, workingDirectoryField(),
+                                              FileChooserDescriptorFactory.createSingleFolderDescriptor());
   }
 
   protected void resetCommon(@NotNull C configuration) {
-    moduleCombo.fillModules(project);
-    moduleCombo.setSelectedModule(configuration.getConfigurationModule().getModule());
-    executableField.setText(FileUtil.toSystemDependentName(configuration.getExecutablePath()));
-    workingDirectoryField.setText(FileUtil.toSystemDependentName(configuration.getWorkingDirectory()));
-    programArgumentsField.setText(configuration.getProgramArguments());
+    moduleCombo().fillModules(project);
+    moduleCombo().setSelectedModule(configuration.getConfigurationModule().getModule());
+    executableField().setText(FileUtil.toSystemDependentName(configuration.getExecutablePath()));
+    workingDirectoryField().setText(FileUtil.toSystemDependentName(configuration.getWorkingDirectory()));
+    programArgumentsField().setText(configuration.getProgramArguments());
   }
 
   protected void applyCommon(@NotNull C configuration) {
-    configuration.setModule(moduleCombo.getSelectedModule());
-    configuration.setExecutablePath(FileUtil.toSystemIndependentName(executableField.getText().trim()));
-    configuration.setWorkingDirectory(FileUtil.toSystemIndependentName(workingDirectoryField.getText().trim()));
-    configuration.setProgramArguments(programArgumentsField.getText().trim());
+    configuration.setModule(moduleCombo().getSelectedModule());
+    configuration.setExecutablePath(FileUtil.toSystemIndependentName(executableField().getText().trim()));
+    configuration.setWorkingDirectory(FileUtil.toSystemIndependentName(workingDirectoryField().getText().trim()));
+    configuration.setProgramArguments(programArgumentsField().getText().trim());
   }
 }

@@ -1,7 +1,10 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.application.options.ModulesComboBox;
+import com.intellij.icons.AllIcons;
+import com.intellij.ide.actions.RevealFileAction;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
@@ -11,21 +14,16 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
-import com.intellij.ui.SimpleListCellRenderer;
+import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.util.ui.FormBuilder;
+import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.util.ui.UIUtil;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JTextPane;
 import org.jetbrains.annotations.NotNull;
-import com.intellij.icons.AllIcons;
-import com.intellij.ide.actions.RevealFileAction;
-import com.intellij.openapi.application.ModalityState;
-import com.intellij.ui.components.ActionLink;
-import java.awt.FlowLayout;
-import java.awt.event.ActionListener;
 
 /**
  * Settings UI for the browser debug configuration: module, browser family
@@ -35,70 +33,63 @@ import java.awt.event.ActionListener;
  * status with a Download link. The link is the ONLY acquisition path:
  * sessions never download, and a missing adapter fails configuration
  * validation — downloading third-party code is the user's explicit decision.
+ *
+ * The layout lives in the matching .form (labels bind their bundle keys
+ * there); this class owns the wiring, the adapter status row and the
+ * reset/apply mapping.
  */
 public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConfiguration> {
-  private final Project project;
-  private final ModulesComboBox moduleCombo = new ModulesComboBox();
-  private final ComboBox<BrowserFamily> familyCombo = new ComboBox<>(BrowserFamily.values());
-  private final JBCheckBox serveContentCheckBox =
-    new JBCheckBox(HaxeDebuggerBundle.message("browser.runner.editor.serve"));
-  private final TextFieldWithBrowseButton contentRootField = new TextFieldWithBrowseButton();
-  private final JBTextField urlField = new JBTextField();
-  private final JBCheckBox overrideBrowserCheckBox =
-    new JBCheckBox(HaxeDebuggerBundle.message("browser.runner.editor.override.browser"));
-  private final TextFieldWithBrowseButton browserExecutableField = new TextFieldWithBrowseButton();
-  private final JBCheckBox overrideNodeCheckBox =
-    new JBCheckBox(HaxeDebuggerBundle.message("browser.runner.editor.override.node"));
-  private final TextFieldWithBrowseButton nodePathField = new TextFieldWithBrowseButton();
-  private final JBLabel adapterStatusLabel = new JBLabel();
+  private JPanel panel;
+  private ModulesComboBox moduleCombo;
+  private ComboBox<BrowserFamily> familyCombo;
+  private JBLabel adapterStatusLabel;
+  /** Text link fetching the pinned adapter; the only acquisition path. */
+  private ActionLink downloadLink;
   /** Icon-only link revealing the adapter store directory in the system file manager. */
-  private final ActionLink openStoreLink =
-    new ActionLink("", (ActionListener)e -> revealAdapterDirectory());
-  /** Text link fetching the pinned adapter ahead of the first session's on-demand download. */
-  private final ActionLink downloadLink =
-    new ActionLink(HaxeDebuggerBundle.message("browser.runner.adapter.download"),
-                                              (ActionListener)e -> downloadAdapter());
-  private final JPanel panel;
+  private ActionLink openStoreLink;
+  private JBCheckBox serveContentCheckBox;
+  private TextFieldWithBrowseButton contentRootField;
+  private JBTextField urlField;
+  private JBCheckBox overrideBrowserCheckBox;
+  private TextFieldWithBrowseButton browserExecutableField;
+  private JBCheckBox overrideNodeCheckBox;
+  private TextFieldWithBrowseButton nodePathField;
+  private JTextPane hintArea;
+
+  private final Project project;
 
   public BrowserRunConfigurationEditor(Project project) {
     this.project = project;
     HaxeRunConfigurationEditorUtil.browseInto(project, contentRootField,
                                               FileChooserDescriptorFactory.createSingleFolderDescriptor());
     HaxeRunConfigurationEditorUtil.browseInto(project, browserExecutableField,
-                                              FileChooserDescriptorFactory.createSingleFileDescriptor());
+                                              FileChooserDescriptorFactory.singleFile());
     HaxeRunConfigurationEditorUtil.browseInto(project, nodePathField,
-                                              FileChooserDescriptorFactory.createSingleFileDescriptor());
+                                              FileChooserDescriptorFactory.singleFile());
+
+    for (BrowserFamily family : BrowserFamily.values()) {
+      familyCombo.addItem(family);
+    }
     // enum names are SHOUTY; render them as ordinary names
-    familyCombo.setRenderer(SimpleListCellRenderer.create(
+    familyCombo.setRenderer(BuilderKt.textListCellRenderer(
       "", value -> value == BrowserFamily.FIREFOX ? "Firefox" : "Chromium"));
+
     serveContentCheckBox.addActionListener(e -> updateContentModeEnablement());
     overrideBrowserCheckBox.addActionListener(e -> updateOverrideEnablement());
     overrideNodeCheckBox.addActionListener(e -> updateOverrideEnablement());
     familyCombo.addActionListener(e -> updateAdapterStatus());
+
     // secondary information, styled like the platform's context help text
     adapterStatusLabel.setForeground(UIUtil.getContextHelpForeground());
+    hintArea.setForeground(UIUtil.getContextHelpForeground());
+    hintArea.setFont(UIUtil.getLabelFont(UIUtil.FontSize.SMALL));
+    hintArea.setBorder(null);
+
+    downloadLink.setText(HaxeDebuggerBundle.message("browser.runner.adapter.download"));
+    downloadLink.addActionListener(e -> downloadAdapter());
     openStoreLink.setIcon(AllIcons.General.OpenDisk);
     openStoreLink.setToolTipText(RevealFileAction.getActionName());
-
-    JPanel adapterRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-    adapterRow.add(adapterStatusLabel);
-    adapterRow.add(downloadLink);
-    adapterRow.add(openStoreLink);
-
-    urlField.setColumns(25); // preferred width from columns, not content
-    JComponent hint = HaxeRunConfigurationEditorUtil.hint(HaxeDebuggerBundle.message("browser.runner.editor.hint"));
-    panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeDebuggerBundle.message("browser.runner.editor.module"), moduleCombo)
-      .addLabeledComponent(HaxeDebuggerBundle.message("browser.runner.editor.family"), familyCombo)
-      .addComponent(adapterRow)
-      .addComponent(serveContentCheckBox)
-      .addLabeledComponent(HaxeDebuggerBundle.message("browser.runner.editor.content.root"), contentRootField)
-      .addLabeledComponent(HaxeDebuggerBundle.message("browser.runner.editor.url"), urlField)
-      .addLabeledComponent(overrideBrowserCheckBox, browserExecutableField)
-      .addLabeledComponent(overrideNodeCheckBox, nodePathField)
-      .addComponent(hint)
-      .addComponentFillVertically(new JPanel(), 0)
-      .getPanel();
+    openStoreLink.addActionListener(e -> revealAdapterDirectory());
   }
 
   private void updateContentModeEnablement() {
