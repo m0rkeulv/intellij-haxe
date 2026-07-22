@@ -161,12 +161,8 @@ public final class MatrixMain {
   private void run() throws IOException {
     logConfig();
     Provisioner provisioner = new Provisioner(resources, log);
-    // newest haxe FIRST: end users skew to current versions, and a run
-    // stopped early should still have certified them; an old-version quirk
-    // (or a nightly runtime dropping old-bytecode support) is the less
-    // urgent signal. The report's columns stay ascending regardless.
+    // haxeDirs arrive newest-first from the manifest (the run order)
     haxeDirs = new ArrayList<>(applyNameFilter(provisioner.haxeDirs(), haxeFilter));
-    haxeDirs.sort(Comparator.reverseOrder());
     hlDirs = lanes.contains("hashlink") ? applyNameFilter(provisioner.hashlinkDirs(), hlFilter) : List.of();
     nodeDirs = lanes.contains("firefox") || lanes.contains("chromium") ? provisioner.nodeDirs() : List.of();
     log.line("matrix start: lanes=" + String.join("+", lanes)
