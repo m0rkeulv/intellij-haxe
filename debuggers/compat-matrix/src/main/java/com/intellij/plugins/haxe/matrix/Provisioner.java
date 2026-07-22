@@ -11,10 +11,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -157,7 +160,7 @@ final class Provisioner {
 
   private static String sha256Of(Path file) throws IOException {
     try {
-      java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
       try (InputStream in = Files.newInputStream(file)) {
         byte[] buffer = new byte[64 * 1024];
         int read;
@@ -165,8 +168,8 @@ final class Provisioner {
           digest.update(buffer, 0, read);
         }
       }
-      return java.util.HexFormat.of().formatHex(digest.digest());
-    } catch (java.security.NoSuchAlgorithmException e) {
+      return HexFormat.of().formatHex(digest.digest());
+    } catch (NoSuchAlgorithmException e) {
       throw new IOException("SHA-256 unavailable", e);
     }
   }

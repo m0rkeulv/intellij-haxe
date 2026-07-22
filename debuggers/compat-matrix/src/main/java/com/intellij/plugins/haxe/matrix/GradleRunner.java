@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.matrix;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,7 +64,7 @@ final class GradleRunner {
       // the redirect targets must exist or CreateProcess fails with a
       // misleading "cannot find the path specified" (fresh checkouts have
       // no logs/ directory yet; older runs left one behind, masking this)
-      java.nio.file.Files.createDirectories(logFile.toAbsolutePath().getParent());
+      Files.createDirectories(logFile.toAbsolutePath().getParent());
       Process process = builder.start();
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec);
       TestEventTail tail = liveTestProgress ? new TestEventTail(logFile, log) : null;

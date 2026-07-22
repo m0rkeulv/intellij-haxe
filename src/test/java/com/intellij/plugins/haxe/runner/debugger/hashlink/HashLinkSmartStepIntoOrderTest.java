@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.psi.PsiElement;
 import com.intellij.xdebugger.XDebuggerUtil;
@@ -38,7 +39,7 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
     XSourcePosition position = XDebuggerUtil.getInstance()
       .createPosition(myFixture.getFile().getVirtualFile(), caretLine);
     assertNotNull(position);
-    return com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.callNameElementsInExecutionOrder(getProject(), position);
+    return DapStepInTargetsSmartStepHandler.callNameElementsInExecutionOrder(getProject(), position);
   }
 
   public void testNestedCallsCollectInExecutionOrderInnerFirst() {
@@ -63,7 +64,7 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
     // the adapter reports execution order: B.reset (the argument) first
     List<StepInTarget> targets = List.of(target(1, "B.reset"), target(2, "A.reset"));
 
-    List<TextRange> ranges = com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
+    List<TextRange> ranges = DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
 
     assertEquals(2, ranges.size());
     assertEquals("B.reset highlights the inner (textually later) call",
@@ -87,7 +88,7 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
     // the initial first() already ran; the adapter offers the rest
     List<StepInTarget> targets = List.of(target(1, "A.second"), target(2, "A.first"));
 
-    List<TextRange> ranges = com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
+    List<TextRange> ranges = DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
 
     assertEquals(2, ranges.size());
     assertEquals("second highlights its own call", names.get(1).getTextRange(), ranges.get(0));
@@ -100,7 +101,7 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
     // an extra target the PSI knows nothing about (e.g. an inlined helper)
     List<StepInTarget> targets = List.of(target(1, "A.first"), target(2, "Hidden.helper"), target(3, "A.second"));
 
-    List<TextRange> ranges = com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
+    List<TextRange> ranges = DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
 
     assertEquals(3, ranges.size());
     assertEquals(names.get(0).getTextRange(), ranges.get(0));
@@ -114,7 +115,7 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
     List<PsiElement> names = namesOnCaretLine("a.first().second();");
     List<StepInTarget> targets = List.of(target(1, "first(...)"), target(2, "second(...)"));
 
-    List<TextRange> ranges = com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
+    List<TextRange> ranges = DapStepInTargetsSmartStepHandler.matchCallRanges(targets, names);
 
     assertEquals(names.get(0).getTextRange(), ranges.get(0));
     assertEquals(names.get(1).getTextRange(), ranges.get(1));
@@ -122,11 +123,11 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
 
   public void testSimpleCalleeNameHandlesBothDialects() {
     assertEquals("method",
-                 com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.simpleCalleeName("pack.Class.method"));
+                 DapStepInTargetsSmartStepHandler.simpleCalleeName("pack.Class.method"));
     assertEquals("f2",
-                 com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.simpleCalleeName("f2(...)"));
+                 DapStepInTargetsSmartStepHandler.simpleCalleeName("f2(...)"));
     assertEquals("reset",
-                 com.intellij.plugins.haxe.runner.debugger.dap.ide.DapStepInTargetsSmartStepHandler.simpleCalleeName("A.reset(v)"));
+                 DapStepInTargetsSmartStepHandler.simpleCalleeName("A.reset(v)"));
   }
 
   private static StepInTarget target(int id, String label) {
