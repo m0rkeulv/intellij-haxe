@@ -1211,3 +1211,34 @@ capability — hence parked until a real expression fails.
 | Value writes | Allocation-free only (no debuggee allocator access): literals into primitives, null into pointers, pointer-copy/box-payload updates. New strings/objects need the eval-call machinery. GC-safe because HL has no write barriers and writes happen only while stopped |
 | Constructing objects | `new X(args)` is a HACK: disassemble an `ONew X` site for the alloc call (`mov (r/e)ax,<hl_alloc_obj> … FF D0`) + the type-ptr set-arg before it (`mov rcx/rdi` on x64, `push` on x86) + the ctor findex from the following `OCall`. Arch-selected via `MachineCode.mineArgThenCall`, DCE-limited to instantiated classes, reports "experimental/unavailable" if the pattern isn't found. Never assume the call is immediately after the `mov` — win64 slips `sub rsp,0x20` in between |
 | findex ≠ array index | An `OCall`/binding carries a raw findex; `functionType`/`functionEntry`/`opcodes` want the ARRAY position. Map with `callTargetFunction`/`functionIndexByFindex`, never use a raw findex directly |
+
+## Backlog: correct multi-threading on linux (assessed 2026-07-22, open)
+
+On linux a breakpoint executed by a SECONDARY thread KILLS the debuggee:
+linux ptrace attaches per-thread and hl's `debug_start` only attaches the
+main thread, so a worker hitting an INT3 takes SIGTRAP's default action
+(process kill — hl installs no SIGTRAP handler; live-verified, the adapter
+now at least reports the death instead of spinning). This makes
+ThreadsIntegrationTest (2 tests) fail on linux and means any real debug
+session dies the moment a breakpoint lands on a non-main thread — worse
+than a missing feature, it is a landmine for users. Research directions:
+
+- Per-tid attach in hashlink's `src/std/debug.c` (`/proc/<pid>/task`
+  enumeration + PTRACE_ATTACH/SEIZE each tid, plus attaching threads
+  created later via PTRACE_O_TRACECLONE). The real fix; needs an upstream
+  PR and only helps runtimes that ship it — the matrix pins released
+  runtimes, so a version gate would be needed.
+- Adapter-side mitigation until then: veto/refuse breakpoints on lines the
+  thread analysis knows run on worker threads? (Fragile — line/thread
+  mapping is not statically known.) Or document the limitation loudly in
+  the IDE when the debuggee is multi-threaded on linux.
+- Check how upstream vshaxe/hashlink-debugger behaves on linux
+  multi-threaded debuggees — if it dies the same way, the upstream issue
+  affects every HL debugging front end and strengthens the PR case.
+
+Related linux limits in the same natives (parked with this item):
+float/XMM register WRITES are unimplemented (`MutateIntegrationTest.
+writeToFloatArgOnItsUseLineTakesEffect`), and the VmException stack
+recovery relies on the VM's exc_stack_trace capture (glibc-layout offset
+in `Align.threadExcStackTraceLinux`) — an upstream per-tid attach change
+may allow simplifying both.

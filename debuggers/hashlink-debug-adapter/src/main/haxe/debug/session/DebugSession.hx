@@ -82,6 +82,10 @@ class DebugSession {
 	// natives key on the pid, so everything downstream uses `debuggeePid`.
 	var process:DebuggeeProcess;
 	var debuggeePid:Int = 0;
+	// linux only: the attach SIGSTOP is HELD (not resumed) until
+	// configurationDone, so launch-time breakpoint installs hit a
+	// ptrace-stopped tracee; -1 = nothing held. See drainAttachEvents.
+	var heldAttachStop:Int = -1;
 	var jit:JitInfo;
 	var module:ModuleDebugInfo;
 	var breakpoints:Breakpoints;
@@ -146,6 +150,18 @@ class DebugSession {
 	**/
 	public function send(command:SessionCommand):Void {
 		commands.add(command);
+		if (debuggeePid != 0 && state == Running && Sys.systemName() != "Windows") {
+			// linux: while Running the session thread is parked in the BLOCKING
+			// debug wait (hl's linux debug_wait ignores its timeout), so a queued
+			// command would sit until some debug event happens to arrive —
+			// live-observed as pause requests timing out. Poke the debuggee
+			// (force-break = kill SIGTRAP on the traced main thread): the wait
+			// returns, the trap matches nothing of ours and is resumed silently,
+			// and pollWhileRunning's command interleave runs this command. The
+			// races are benign — a missed nudge just waits for the next event, a
+			// spurious one is a silently-resumed stop.
+			api.forceBreak(debuggeePid);
+		}
 	}
 
 	static inline function dbg(message:String):Void {
@@ -358,6 +374,9 @@ class DebugSession {
 		var align = new Align(jit.is64, jit.boolSize4);
 		threadRegistry = new ThreadRegistry(memReader, align, jit.hlVersionMajor, jit.hlVersionMinor);
 		vmExceptions = new VmExceptionControl(api, debuggeePid, memReader, align, jit.threadsPtr);
+		// linux: lets the walker recover the interrupted JIT frame through the
+		// kernel signal frame when a VM error arrived via SIGSEGV (null access)
+		stackWalker.capturedStack = vmExceptions.capturedStack;
 		inspector = new VariableInspector(module, jit, memReader);
 		descriptions = new StopDescriptions(module, inspector);
 		throwClassifier = new ThrowClassifier(api, debuggeePid, jit, memReader, stackWalker, tryRegions, inspector);
@@ -367,7 +386,11 @@ class DebugSession {
 		// for the rest of the stop.
 		inspector.frameWalker = tid -> {
 			var parked = exceptions.consumeParkedFrames(tid);
-			return parked != null ? parked : stackWalker.walk(tid);
+			// an EMPTY parked walk (a signal-delivered VM error on linux: the
+			// entry-time chain is unwalkable AND the VM's exc capture does not
+			// exist yet) must not shadow a live walk — at the throw break the
+			// capture is populated and the signal-frame recovery can use it
+			return parked != null && parked.length > 0 ? parked : stackWalker.walk(tid);
 		};
 		var cpuRegisters = new CpuRegisters(api, debuggeePid);
 		// CPU registers are only readable while stopped; the callback is invoked
@@ -420,6 +443,20 @@ class DebugSession {
 					emit(EvExited(safeExitCode()));
 					return;
 				default:
+					if (Sys.systemName() != "Windows") {
+						// linux delivers exactly ONE attach stop (the PTRACE_ATTACH
+						// SIGSTOP) and hl's linux debug_wait IGNORES its timeout —
+						// it is a plain blocking waitpid, so a second drain wait
+						// here deadlocks the session (kernel do_wait forever).
+						// Moreover linux ptrace memory writes only work on a
+						// ptrace-STOPPED tracee (Windows' WriteProcessMemory works
+						// on a running process), so the launch-time breakpoint
+						// installs need the debuggee held. Keep the attach stop —
+						// the debuggee is gated on the handshake socket anyway —
+						// and release it when configurationDone opens that gate.
+						heldAttachStop = outcome.threadId;
+						return;
+					}
 					api.resume(debuggeePid, outcome.threadId);
 			}
 		}
@@ -475,6 +512,12 @@ class DebugSession {
 				handshakeSocket.close();
 			} catch (e:Dynamic) {}
 			handshakeSocket = null;
+		}
+		// linux: the process itself is still in the held attach stop; release
+		// it now that the breakpoints are installed (see drainAttachEvents)
+		if (heldAttachStop != -1) {
+			api.resume(debuggeePid, heldAttachStop);
+			heldAttachStop = -1;
 		}
 		if (state == Configured) {
 			state = Running;
@@ -842,6 +885,21 @@ class DebugSession {
 				// create/exit/set-name, dll load, ...). Continuing again is at
 				// best a silent failure and at worst blindly continues a REAL
 				// event that arrived in the meantime — do nothing.
+				if (outcome.threadId == -1 && Sys.systemName() != "Windows") {
+					// EXCEPT with tid -1: linux waitpid() FAILED (ECHILD) — the
+					// debuggee died without a parseable exit status. Live-observed:
+					// an INT3 executed by an UNTRACED worker thread kills the whole
+					// process (SIGTRAP default action; linux traces per-thread and
+					// only the main thread is attached), debug.c maps the
+					// WIFSIGNALED status to this same code, and every later wait
+					// returns -1 — an infinite spin unless it is treated as death.
+					// (Windows WaitForDebugEvent events always carry a real tid,
+					// but the platform gate keeps this branch provably inert there.)
+					finishStep();
+					state = Exited;
+					releaseExitedProcess(outcome.threadId);
+					emit(EvExited(safeExitCode()));
+				}
 		}
 	}
 
