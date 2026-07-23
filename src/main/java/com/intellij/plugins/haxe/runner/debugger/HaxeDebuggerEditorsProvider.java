@@ -49,9 +49,9 @@ public class HaxeDebuggerEditorsProvider extends XDebuggerEditorsProvider {
    * The history id the platform's Set Value editor stores its expressions
    * under (SetValueInplaceEditor's editor id, verified in the platform
    * source). The provider is never TOLD which editor a document is for (the
-   * createDocument overload with an editor id exists but is always fed
-   * null), but the Set Value editor's expressions land in
-   * this history, so an expression found there identifies the editor.
+   * createDocument overload with an editor id exists but is always fed null),
+   * but the Set Value editor's expressions land in this history, so an
+   * expression found there identifies the editor.
    */
   private static final String SET_VALUE_HISTORY_ID = "setValue";
 

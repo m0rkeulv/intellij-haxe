@@ -49,11 +49,10 @@ import java.util.concurrent.TimeUnit;
  * The shared XDebugger process for every DAP-based debugger: a DAP client
  * over a {@link DapBackend} (the in-process vshaxe adapter, the debuggee's
  * embedded intellij-hxcpp-debug-server, or the eval adapter), bridging its
- * events into the IDE. Mirrors the
- * HashLink debug process, but simpler in two ways: the peer is reached over a
- * loopback socket (no external process to manage), and the debuggee is a
- * plain child process (no OS-level debug attachment, so killing it needs no
- * special ceremony).
+ * events into the IDE. Mirrors the HashLink debug process, but simpler in two
+ * ways: the peer is reached over a loopback socket (no external process to
+ * manage), and the debuggee is a plain child process (no OS-level debug
+ * attachment, so killing it needs no special ceremony).
  *
  * The debuggee is spawned by the debug runner; its {@link ProcessHandler} is
  * the session's process handler, so console output, stdin and the exit code
@@ -96,9 +95,9 @@ public class DapDebugProcess extends XDebugProcess {
    * state asynchronously, so two near-simultaneous stops (both workers'
    * ticking breakpoints) could each see "not suspended" and fight over the
    * views (duplicated thread combo entries, a frames list stuck on
-   * "Loading..."). While a pause is on screen, another
-   * thread's stop leaves that thread paused but does not touch the views —
-   * it is inspectable through the thread list, and Resume releases it.
+   * "Loading..."). While a pause is on screen, another thread's stop leaves
+   * that thread paused but does not touch the views — it is inspectable
+   * through the thread list, and Resume releases it.
    */
   private volatile boolean pauseOnScreen = false;
 
@@ -751,8 +750,8 @@ public class DapDebugProcess extends XDebugProcess {
   /**
    * References whose variables request TIMED OUT at this stop. Firefox's
    * worker devtools can crash while enumerating a specific object's
-   * properties (broken getter/previewer handling) - that
-   * object's actor then never answers, at all, ever. The platform re-requests
+   * properties (broken getter/previewer handling) - that object's actor then
+   * never answers, at all, ever. The platform re-requests
    * on every tree rebuild; without this cache each rebuild would stall the
    * request thread for a full timeout PER poisoned object. Pause-scoped:
    * cleared when a new stop is presented (references are pause-lifetime).

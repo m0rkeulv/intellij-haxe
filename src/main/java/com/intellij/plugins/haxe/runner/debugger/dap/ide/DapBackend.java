@@ -110,9 +110,9 @@ public interface DapBackend extends Closeable {
 
   /**
    * Whether the launch response arrives promptly enough to await. js-debug
-   * answers launch only AFTER configurationDone, so awaiting
-   * it synchronously would deadlock the setup sequence — such a backend
-   * returns false and the launch is sent fire-and-forget.
+   * answers launch only AFTER configurationDone, so awaiting it synchronously
+   * would deadlock the setup sequence — such a backend returns false and the
+   * launch is sent fire-and-forget.
    */
   default boolean awaitsLaunchResponse() {
     return true;
@@ -148,9 +148,9 @@ public interface DapBackend extends Closeable {
    * How long one DAP request may wait for its response. The browser backends
    * use a SHORTER budget: firefox's per-actor FIFO queue can wedge on a
    * request the browser never answers (a devtools-internal crash while
-   * previewing a worker object), and every request the IDE
-   * sends is serialized on one thread — a long timeout turns one wedged
-   * request into a long total freeze of the debugger views.
+   * previewing a worker object), and every request the IDE sends is
+   * serialized on one thread — a long timeout turns one wedged request into a
+   * long total freeze of the debugger views.
    */
   default long requestTimeoutMillis() {
     return 15_000;
@@ -230,8 +230,8 @@ public interface DapBackend extends Closeable {
    * The wire form of a breakpoint's source path. The IDE's VFS paths use
    * FORWARD slashes even on Windows; the haxe-side servers normalize
    * separators themselves, but the vscode web adapters match paths literally
-   * and silently never bind a forward-slash path — such a
-   * backend converts to native separators here.
+   * and silently never bind a forward-slash path — such a backend converts to
+   * native separators here.
    */
   default String breakpointSourcePath(String vfsPath) {
     return vfsPath;

@@ -895,27 +895,17 @@ public class FirefoxAdapterLiveProbe {
     Path appJs = fixture.resolve("app.js");
     String pristineAppJs = Files.readString(appJs);
 
-    // Variants L/M/N all fail to arm load-time breakpoints: L/M served a
-    // synthetic BOOTSTRAP page first (empty page + meta refresh to the app;
+    // Variants L/M/N do not arm load-time breakpoints and were removed (N
+    // was re-checked on a clean instance with a unique RDP port): L/M served
+    // a synthetic BOOTSTRAP page first (empty page + meta refresh to the app;
     // M with an inert <script>); N registered the breakpoints only when the
     // RELOADED page requested its script (server-held response, so the first
-    // load ran unpaused and its workers died cleanly). None armed: the
-    // adapter applies breakpoints to a load only when they were registered
-    // BEFORE the load that taught it the sources. Register -> load once ->
-    // reload (K) is the single working sequence; its cost (early-hitting
-    // breakpoints pause workers the reload cannot terminate -> zombie
-    // threads) is why the refresh is optional in the run config.
-    // Variants L/M/N (N re-checked on a CLEAN instance
-    // with a unique RDP port - ALL MISSED, removed): L/M served a synthetic
-    // BOOTSTRAP page first (empty page + meta refresh to the app; M with an
-    // inert <script>); N registered the breakpoints only when the RELOADED
-    // page requested its script (server-held response, first load unpaused).
-    // None armed: the adapter applies breakpoints to a load only when they
-    // were registered BEFORE the load that taught it the sources. Register ->
-    // load once -> reload (K) is the single working sequence; its cost (a
-    // worker PAUSED at a breakpoint when the reload fires lingers as a
-    // zombie thread, clean-verified by workerThreadsAcrossRefresh) is
-    // accepted and documented in the module README.
+    // load ran unpaused). None armed, because the adapter applies breakpoints
+    // to a load only when they were registered BEFORE the load that taught it
+    // the sources. Register -> load once -> reload (K) is the single working
+    // sequence; its cost is that a worker PAUSED at a breakpoint when the
+    // reload fires lingers as a zombie thread (pinned by the
+    // workerThreadsAcrossRefresh probe), which the module README documents.
     String worked = null;
     for (String variant : new String[]{"J", "K"}) {
       Files.writeString(appJs, pristineAppJs);

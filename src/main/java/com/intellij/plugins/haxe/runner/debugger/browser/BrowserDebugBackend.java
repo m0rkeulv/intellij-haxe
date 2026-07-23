@@ -154,8 +154,8 @@ public class BrowserDebugBackend implements DapBackend {
     // (the launcher process re-parents the real firefox out of the adapter's
     // process tree, escaping the tree-kill), keeps owning 6000, and the next
     // session's adapter then debugs the STALE instance - foreign workers it
-    // refuses to attach, dead actors that answer nothing, surfacing as
-    // ghost threads and endless evaluate timeouts.
+    // refuses to attach, dead actors that answer nothing, surfacing as ghost
+    // threads and endless evaluate timeouts.
     config.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
     if (serveContent) {
       config.put("webRoot", contentRoot.toString());
@@ -247,8 +247,8 @@ public class BrowserDebugBackend implements DapBackend {
 
   // ------------------------------------------------------ shared plumbing
 
-  // The adapters announce their port slightly BEFORE the listener accepts
-  //; retry inside a short window instead of failing the session.
+  // The adapters announce their port slightly BEFORE the listener accepts;
+  // retry inside a short window instead of failing the session.
   private static DapClient connectWithRetry(int port) throws IOException {
     return DapClient.connectWithRetry("127.0.0.1", port, CONNECT_TIMEOUT_MILLIS, CONNECT_RETRY_WINDOW_MILLIS);
   }
@@ -333,8 +333,8 @@ public class BrowserDebugBackend implements DapBackend {
   }
 
   // The firefox adapter matches breakpoint paths LITERALLY against native
-  // paths; the IDE's forward-slash VFS paths silently never bind
-  //. js-debug is tolerant, but native is correct for both.
+  // paths; the IDE's forward-slash VFS paths silently never bind. js-debug
+  // is tolerant, but native is correct for both.
   @Override
   public String breakpointSourcePath(String vfsPath) {
     return vfsPath.replace('/', File.separatorChar);
@@ -419,8 +419,7 @@ public class BrowserDebugBackend implements DapBackend {
     if (adapter != null) {
       // reap the WHOLE tree: killing node does not kill the browser it
       // spawned, and when the graceful DAP disconnect did not happen (forced
-      // teardown) every session would otherwise leak a headless browser
-      
+      // teardown) every session would otherwise leak a headless browser.
       adapter.descendants().forEach(ProcessHandle::destroyForcibly);
       adapter.destroy();
       try {

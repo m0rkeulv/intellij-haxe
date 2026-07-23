@@ -173,8 +173,8 @@ public class HaxeExpressionCodeFragmentImpl extends HaxeFile implements HaxeExpr
       // FRESH element inside a DummyHolder - it has NO psi bound, and asking
       // it would route through HaxeParserDefinition.createElement, which has
       // no case for this type ("AssertionError: Unknown element type:
-      // HAXE_CODE_FRAGMENT"). The holder's psi IS
-      // bound - prefer it, exactly like the Java fragment parser does.
+      // HAXE_CODE_FRAGMENT"). The holder's psi IS bound - prefer it, exactly
+      // like the Java fragment parser does.
       ASTNode holder = chameleon.getTreeParent();
       PsiElement psi = holder != null ? holder.getPsi() : chameleon.getPsi();
       return doParseContents(chameleon, psi);
