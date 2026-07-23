@@ -13,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -119,10 +120,10 @@ public final class ContentHttpServer implements Closeable {
    * breakpoints work.
    */
   public void refreshFirstPage(int seconds) {
-    refreshOnceSeconds = seconds;
+    refreshOnceSeconds.set(seconds);
   }
 
-  private volatile int refreshOnceSeconds = -1;
+  private final AtomicInteger refreshOnceSeconds = new AtomicInteger(-1);
 
   // NOTE (probed, variants L/M/N in FirefoxAdapterLiveProbe - N re-verified
   // on a CLEAN firefox instance): neither a synthetic BOOTSTRAP page (empty
@@ -137,11 +138,13 @@ public final class ContentHttpServer implements Closeable {
   // module README (Chromium is the recommended family for worker debugging).
 
   private byte[] maybeInjectRefresh(byte[] body) {
-    int seconds = refreshOnceSeconds;
+    // one-shot, and the pool serves requests concurrently: claim the value
+    // atomically so two html responses (a page plus an iframe, say) cannot
+    // both inject and reload the page twice
+    int seconds = refreshOnceSeconds.getAndSet(-1);
     if (seconds < 0) {
       return body;
     }
-    refreshOnceSeconds = -1; // one-shot: the reloaded page is served clean
     String html = new String(body, StandardCharsets.UTF_8);
     String tag = "<meta http-equiv=\"refresh\" content=\"" + seconds + "\">";
     String injected = html.replaceFirst("(?i)<head[^>]*>", "$0" + Matcher.quoteReplacement(tag));
