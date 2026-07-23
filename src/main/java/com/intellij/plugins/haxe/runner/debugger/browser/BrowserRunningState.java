@@ -39,37 +39,31 @@ public class BrowserRunningState implements RunProfileState {
   @Override
   public @Nullable ExecutionResult execute(Executor executor, @NotNull ProgramRunner<?> runner) throws ExecutionException {
     ContentHttpServer server = null;
-    String url;
+    // the server is unowned until the handler takes it: anything that throws
+    // before that must close it, or the port stays bound for the IDE's lifetime
+    boolean handedOver = false;
     try {
+      String url;
       if (configuration.isServeContent()) {
-        Path contentRoot = configuration.resolveContentRootOrNull();
-        if (contentRoot == null) {
-          throw new ExecutionException(HaxeDebuggerBundle.message("browser.runner.no.content.root"));
-        }
-        server = new ContentHttpServer(contentRoot);
+        server = createContentServer();
         url = server.getBaseUrl();
       } else {
         url = configuration.getUrl();
       }
-    } catch (IOException e) {
-      throw new ExecutionException(HaxeDebuggerBundle.message("browser.runner.server.failed", e.getMessage()), e);
-    }
-
-    try {
       openBrowser(url);
-    } catch (IOException | RuntimeException e) {
-      if (server != null) {
+
+      ConsoleView console = TextConsoleBuilderFactory.getInstance()
+        .createBuilder(configuration.getProject())
+        .getConsole();
+      ServerLifetimeHandler handler = new ServerLifetimeHandler(server, buildBanner(server, url));
+      console.attachToProcess(handler);
+      handedOver = true;
+      return new DefaultExecutionResult(console, handler);
+    } finally {
+      if (server != null && !handedOver) {
         server.close();
       }
-      throw new ExecutionException(HaxeDebuggerBundle.message("browser.runner.browser.failed", e.getMessage()), e);
     }
-
-    ConsoleView console = TextConsoleBuilderFactory.getInstance()
-      .createBuilder(configuration.getProject()).getConsole();
-    ServerLifetimeHandler handler = new ServerLifetimeHandler(server,
-      buildBanner(server, url));
-    console.attachToProcess(handler);
-    return new DefaultExecutionResult(console, handler);
   }
 
   private String buildBanner(@Nullable ContentHttpServer server, String url) {
@@ -84,18 +78,36 @@ public class BrowserRunningState implements RunProfileState {
     return banner.toString();
   }
 
+  /** The configured content directory; the run fails when it is unset. */
+  private Path contentRoot() throws ExecutionException {
+    Path root = configuration.resolveContentRootOrNull();
+    if (root == null) {
+      throw new ExecutionException(HaxeDebuggerBundle.message("browser.runner.no.content.root"));
+    }
+    return root;
+  }
+
+  /** The loopback server hosting the content directory. */
+  private ContentHttpServer createContentServer() throws ExecutionException {
+    try {
+      return new ContentHttpServer(contentRoot());
+    } catch (IOException e) {
+      throw new ExecutionException(HaxeDebuggerBundle.message("browser.runner.server.failed", e.getMessage()), e);
+    }
+  }
+
   // The configured executable gets the url as its argument (works for every
   // browser fork); blank falls back to the system default browser.
-  private void openBrowser(String url) throws IOException {
-    String executable = configuration.getBrowserExecutablePath();
-    if (executable.isBlank()) {
-      BrowserUtil.browse(url);
-      return;
-    }
+  private void openBrowser(String url) throws ExecutionException {
     try {
-      new GeneralCommandLine(executable, url).createProcess();
-    } catch (ExecutionException e) {
-      throw new IOException(e.getMessage(), e);
+      String executable = configuration.getBrowserExecutablePath();
+      if (executable.isBlank()) {
+        BrowserUtil.browse(url);
+      } else {
+        new GeneralCommandLine(executable, url).createProcess();
+      }
+    } catch (ExecutionException | RuntimeException e) {
+      throw new ExecutionException(HaxeDebuggerBundle.message("browser.runner.browser.failed", e.getMessage()), e);
     }
   }
 
