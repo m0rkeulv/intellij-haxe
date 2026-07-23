@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
+import com.intellij.concurrency.virtualThreads.IntelliJVirtualThreads;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.Closeable;
@@ -94,8 +95,10 @@ public final class ContentHttpServer implements Closeable {
     // below that number leaves the browser waiting on us. Reads of big files
     // pin their carrier, so the real parallelism is the carrier pool rather
     // than unlimited, but it scales with the machine instead of a constant.
+    // Built through IntelliJVirtualThreads rather than Thread.ofVirtual so the
+    // platform can decorate the virtual threads it hosts.
     executor = Executors.newThreadPerTaskExecutor(
-      Thread.ofVirtual().name("haxe-web-content-server-", 0).factory());
+      IntelliJVirtualThreads.ofVirtual().name("haxe-web-content-server-", 0).factory());
     server.setExecutor(executor);
     server.createContext("/", this::handle);
     server.start();
