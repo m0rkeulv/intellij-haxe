@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 /**
  * Debugger compatibility matrix: provisions the haxe/HashLink toolchains
@@ -147,7 +148,9 @@ public final class MatrixMain {
 
   private static List<String> flagValueList(String arg, String flag) {
     return Arrays.stream(flagValue(arg, flag).split(","))
-      .map(String::trim).filter(s -> !s.isEmpty()).toList();
+      .map(String::trim)
+      .filter(s -> !s.isEmpty())
+      .toList();
   }
 
   private static Path flagValuePath(String arg, String flag) {
@@ -314,13 +317,15 @@ public final class MatrixMain {
     GradleRunner.killStrays();
     List<Results.ClassResult> classes = Results.collect(moduleResults, evidence);
     List<Results.ClassResult> failing = classes.stream()
-      .filter(c -> c.failures() + c.errors() > 0).toList();
+      .filter(c -> c.failures() + c.errors() > 0)
+      .toList();
     if (failing.isEmpty() || failing.size() > 8 || status == GradleRunner.Status.TIMEOUT) {
       return new SuiteRun(status, classes, List.of());
     }
     log.line("      " + failing.size() + " suite(s) failed - retrying them once to tell machine flakes from real failures");
     List<String> before = failing.stream()
-      .flatMap(c -> c.failed().stream().map(f -> c.name() + "::" + f.test())).toList();
+      .flatMap(MatrixMain::failedTestIds)
+      .toList();
     preserveFirstAttempt(failing, evidence);
     List<String> retry = new ArrayList<>(List.of(modulePath + TASK_CLEAN_TEST, modulePath + TASK_TEST));
     for (Results.ClassResult failed : failing) {
@@ -333,7 +338,8 @@ public final class MatrixMain {
     overlayResults(moduleResults, evidence);
     List<Results.ClassResult> merged = Results.parse(evidence);
     List<String> after = merged.stream()
-      .flatMap(c -> c.failed().stream().map(f -> c.name() + "::" + f.test())).toList();
+      .flatMap(MatrixMain::failedTestIds)
+      .toList();
     List<String> flaky = before.stream().filter(t -> !after.contains(t)).toList();
     if (!flaky.isEmpty()) {
       log.line("      flaky (passed on retry): " + String.join(", ", flaky));
@@ -347,6 +353,11 @@ public final class MatrixMain {
    * undiagnosable without the stack traces (and adapter output) that first
    * failed it.
    */
+  /** "ClassName::testName" for every failed test of one class result. */
+  private static Stream<String> failedTestIds(Results.ClassResult result) {
+    return result.failed().stream().map(failure -> result.name() + "::" + failure.test());
+  }
+
   private void preserveFirstAttempt(List<Results.ClassResult> failing, Path evidence) throws IOException {
     Path firstAttempt = evidence.resolve("first-attempt");
     Files.createDirectories(firstAttempt);
@@ -522,7 +533,8 @@ public final class MatrixMain {
       gradle.run(build, haxeEnv(haxeDir), out.resolve("logs/hxcpp-" + haxe + "-build.log"), 1200);
       List<String> missing = fixtures.entrySet().stream()
         .filter(e -> !Files.isRegularFile(moduleBuild.resolve(e.getValue())))
-        .map(Map.Entry::getKey).toList();
+        .map(Map.Entry::getKey)
+        .toList();
       if (missing.size() == fixtures.size()) {
         diagnoseCompileFail(out.resolve("logs/hxcpp-" + haxe + "-build.log"));
         addCell("hxcpp", haxe, null, "compile-fail", List.of(), List.of(), start);
