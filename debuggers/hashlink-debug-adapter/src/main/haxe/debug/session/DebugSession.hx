@@ -72,6 +72,9 @@ class DebugSession {
 	// waits this long. It only fires when the VM dies/stalls mid-handshake,
 	// turning a would-be forever-hang into a clean launch failure.
 	static inline var HANDSHAKE_READ_TIMEOUT_S = 3.0;
+	// spawn attempts when the VM loses its debug port to another socket
+	// (the findFreePort reservation race) - see spawnAndHandshake
+	static inline var LAUNCH_BIND_ATTEMPTS = 3;
 
 	final api:DebugApi;
 	final commands = new Deque<SessionCommand>();
@@ -311,31 +314,9 @@ class DebugSession {
 				// the debuggee's first window on Windows (see docs/README.md).
 				debuggeePid = config.attachPid;
 				handshakeSocket = connectWithRetries(config.debugPort);
+				jit = readHandshake();
 			} else {
-				var port = DebuggeeProcess.findFreePort();
-				process = new DebuggeeProcess(config.hlPath, config.program, config.args, config.cwd, port,
-					(category, text) -> emit(EvOutput(category, text)));
-				process.startOutputPumps();
-				debuggeePid = process.pid;
-				handshakeSocket = connectWithRetries(port);
-			}
-			// The VM sends the whole handshake then blocks on the socket. The format
-			// is self-delimiting (JitInfoReader derives every size as it parses and
-			// never over-reads), so parse straight off a buffered view: it recvs in
-			// large chunks but only refills when the parser still NEEDS bytes, so it
-			// cannot block after the final handshake byte. The socket timeout is a
-			// truncation guard only - on a healthy handshake it never fires. (The
-			// previous approach slurped until a 0.5s read timeout marked the end,
-			// a dead half-second on EVERY launch.)
-			handshakeSocket.setTimeout(HANDSHAKE_READ_TIMEOUT_S);
-			try {
-				jit = JitInfoReader.read(new HandshakeInput(handshakeSocket.input));
-			} catch (e:DebugError) {
-				throw e;
-			} catch (e:haxe.io.Eof) {
-				throw new DebugError("The debuggee closed the connection mid-handshake");
-			} catch (e:Dynamic) {
-				throw new DebugError('Debug handshake stalled or unreadable: ${Std.string(e)}');
+				jit = spawnAndHandshake(config);
 			}
 			// register reads/writes must use the DEBUGGEE's context layout: with the
 			// wrong bitness a 32-bit debuggee's registers read as garbage and EIP
@@ -357,6 +338,83 @@ class DebugSession {
 		} catch (e:Dynamic) {
 			cleanupAfterFailure();
 			emit(EvLaunchFailed(requestSeq, Std.string(e)));
+		}
+	}
+
+	/**
+		Launch mode: spawns the debuggee on a reserved port and reads the debug
+		handshake. The reservation (findFreePort) must be RELEASED before the VM
+		can bind it, and in that window another socket can take the port: the VM
+		prints "Could not start debugger on port N" and whatever owns the port
+		drops the connection, surfacing as a connect failure or a handshake EOF.
+		That case retries the whole spawn on a fresh port instead of failing the
+		launch.
+	**/
+	function spawnAndHandshake(config:LaunchConfig):JitInfo {
+		for (attempt in 1...LAUNCH_BIND_ATTEMPTS + 1) {
+			var port = DebuggeeProcess.findFreePort();
+			process = new DebuggeeProcess(config.hlPath, config.program, config.args, config.cwd, port,
+				(category, text) -> emit(EvOutput(category, text)));
+			process.startOutputPumps();
+			debuggeePid = process.pid;
+			try {
+				handshakeSocket = connectWithRetries(port);
+				return readHandshake();
+			} catch (e:DebugError) {
+				if (!lostPortBind()) {
+					throw e;
+				}
+				if (attempt == LAUNCH_BIND_ATTEMPTS) {
+					throw new DebugError('The VM could not bind its debug port (taken by another process, $LAUNCH_BIND_ATTEMPTS attempts)');
+				}
+				emit(EvOutput("stderr", 'debug port $port was taken before the VM could bind it - relaunching\n'));
+				discardFailedSpawn();
+			}
+		}
+		throw new DebugError("unreachable");
+	}
+
+	// The VM prints the bind failure at startup, but the stderr pump may not
+	// have delivered it yet when the connect or handshake fails - give it a
+	// beat before deciding.
+	function lostPortBind():Bool {
+		if (process == null) {
+			return false;
+		}
+		if (!process.debugBindFailed) {
+			Sys.sleep(0.1);
+		}
+		return process.debugBindFailed;
+	}
+
+	function discardFailedSpawn():Void {
+		closeHandshake();
+		process.kill();
+		process.close();
+		process = null;
+		debuggeePid = 0;
+	}
+
+	/**
+		The VM sends the whole handshake then blocks on the socket. The format
+		is self-delimiting (JitInfoReader derives every size as it parses and
+		never over-reads), so parse straight off a buffered view: it recvs in
+		large chunks but only refills when the parser still NEEDS bytes, so it
+		cannot block after the final handshake byte. The socket timeout is a
+		truncation guard only - on a healthy handshake it never fires. (The
+		previous approach slurped until a 0.5s read timeout marked the end,
+		a dead half-second on EVERY launch.)
+	**/
+	function readHandshake():JitInfo {
+		handshakeSocket.setTimeout(HANDSHAKE_READ_TIMEOUT_S);
+		try {
+			return JitInfoReader.read(new HandshakeInput(handshakeSocket.input));
+		} catch (e:DebugError) {
+			throw e;
+		} catch (e:haxe.io.Eof) {
+			throw new DebugError("The debuggee closed the connection mid-handshake");
+		} catch (e:Dynamic) {
+			throw new DebugError('Debug handshake stalled or unreadable: ${Std.string(e)}');
 		}
 	}
 

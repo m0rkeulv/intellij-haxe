@@ -29,6 +29,19 @@ import sys.thread.Thread;
 class DebuggeeProcess {
 	public var pid(default, null):Int;
 
+	/**
+		Set when the VM's FIRST stderr output is its "Could not start debugger
+		on port" startup banner: the reserved debug port was taken between the
+		reservation being released (findFreePort) and the VM binding it. The
+		session retries the launch on a fresh port when this is set. Only the
+		first chunk is ever inspected - it is emitted before the program can
+		run (the debuggee is still held by --debug-wait), so program output
+		containing the same words can never set the flag.
+	**/
+	public var debugBindFailed(default, null) = false;
+
+	var stderrSeen = false;
+
 	final process:Process;
 	final onOutput:(category:String, text:String) -> Void;
 	// released by each pump thread when its stream reaches EOF; lets the
@@ -102,7 +115,12 @@ class DebuggeeProcess {
 					if (read <= 0) {
 						break;
 					}
-					onOutput(category, buffer.getString(0, read));
+					var text = buffer.getString(0, read);
+					if (category == "stderr" && !stderrSeen) {
+						stderrSeen = true;
+						debugBindFailed = text.indexOf("Could not start debugger") >= 0;
+					}
+					onOutput(category, text);
 				}
 			} catch (e:Eof) {
 				// stream closed: pump done

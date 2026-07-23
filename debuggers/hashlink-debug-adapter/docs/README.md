@@ -230,6 +230,19 @@ slurped the whole message until a 0.5 s read timeout marked the end — that
 timeout fired on EVERY launch, a dead half-second each time.) The pump buffer
 is 4096 bytes (streaming, size just bounds one copy).
 
+**The debug-port reservation can be lost.** `findFreePort` must release its
+reservation before the VM can bind the port, and in that window (process
+spawn + VM startup) another socket can take it — the VM then prints
+`Could not start debugger on port N` and whatever owns the port drops the
+adapter's connect, surfacing as a connect failure or a handshake EOF.
+`spawnAndHandshake` detects the VM's startup banner (first stderr chunk
+only; the program cannot have produced output yet under `--debug-wait`) and
+relaunches on a fresh port, up to `LAUNCH_BIND_ATTEMPTS` times. The banner
+text is a retry trigger, not a correctness dependency: if a future HL
+rewords it (string verified present in 1.13–nightly), the launch degrades
+to the plain error instead of retrying — the nightly matrix lane is the
+canary for that.
+
 Rules for any future VM socket exchange where the peer sends a
 variable-length message and then waits: don't issue exact-size reads straight
 off the socket unless the format is self-delimiting and the reader never
