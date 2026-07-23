@@ -104,8 +104,13 @@ final class Results {
     }
   }
 
-  /** Copies a module's junit XMLs into the report's evidence dir and parses them. */
-  static List<ClassResult> collect(Path moduleResults, Path evidenceDir) throws IOException {
+  /**
+   * Copies a module's junit XMLs into the report's evidence dir and parses
+   * them. A non-null {@code classNameFilter} keeps only XMLs whose filename
+   * contains it — for lanes that share a module's results dir and must not
+   * pick up another lane's suites.
+   */
+  static List<ClassResult> collect(Path moduleResults, Path evidenceDir, String classNameFilter) throws IOException {
     if (Files.exists(evidenceDir)) {
       try (var walk = Files.walk(evidenceDir)) {
         for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
@@ -116,12 +121,17 @@ final class Results {
     Files.createDirectories(evidenceDir);
     if (Files.isDirectory(moduleResults)) {
       try (var files = Files.list(moduleResults)) {
-        for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".xml")).toList()) {
+        for (Path file : files.filter(f -> isResultXml(f, classNameFilter)).toList()) {
           Files.copy(file, evidenceDir.resolve(file.getFileName()), StandardCopyOption.REPLACE_EXISTING);
         }
       }
     }
     return parse(evidenceDir);
+  }
+
+  static boolean isResultXml(Path file, String classNameFilter) {
+    String name = file.getFileName().toString();
+    return name.endsWith(".xml") && (classNameFilter == null || name.contains(classNameFilter));
   }
 
   // An Assume skip's message is "org.junit.AssumptionViolatedException: <reason>";

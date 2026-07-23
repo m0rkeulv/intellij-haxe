@@ -237,14 +237,18 @@ public final class MatrixMain {
   }
 
   /**
-   * One thread per lane. The lanes are disjoint by construction — separate
-   * gradle modules, separate fixtures, separate debugger binaries, and each
-   * child build carries its own environment — so the only shared state is
-   * this process (log/cells, synchronized) and the machine-wide stray-process
-   * sweep, which must be deferred until every lane is done: it kills hl/haxe
-   * by NAME, and one lane's sweep would kill another lane's live compiler.
-   * Note the wall-clock win is bounded by the slowest lane (hashlink, by
-   * far); eval+hxcpp just disappear inside it.
+   * One thread per gradle MODULE, not per lane: threads must be disjoint —
+   * separate gradle build dirs, separate fixtures, separate debugger
+   * binaries, each child build carrying its own environment. The firefox and
+   * chromium lanes both drive the browser-debugger module (one build dir,
+   * ONE test-results dir), so they share a thread and run sequentially;
+   * concurrent, the faster lane rewrites the shared results dir between the
+   * slower lane's test run and its collection, and cells collect the OTHER
+   * lane's XMLs. Remaining shared state is this process (log/cells,
+   * synchronized) and the machine-wide stray-process sweep, deferred until
+   * every lane is done: it kills hl/haxe by NAME, and one lane's sweep would
+   * kill another lane's live compiler. Note the wall-clock win is bounded by
+   * the slowest lane (hashlink, by far); eval+hxcpp just disappear inside it.
    */
   private void runLanesInParallel() {
     log.line("running " + lanes.size() + " lanes in parallel (one thread per lane)");
@@ -260,11 +264,8 @@ public final class MatrixMain {
       if (lanes.contains("hxcpp")) {
         threads.add(laneThread("hxcpp", this::hxcppLane));
       }
-      if (lanes.contains("firefox")) {
-        threads.add(laneThread("firefox", this::firefoxLane));
-      }
-      if (lanes.contains("chromium")) {
-        threads.add(laneThread("chromium", this::chromiumLane));
+      if (lanes.contains("firefox") || lanes.contains("chromium")) {
+        threads.add(laneThread("web", this::webLanesSequentially));
       }
       threads.forEach(Thread::start);
       for (Thread thread : threads) {
@@ -308,14 +309,20 @@ public final class MatrixMain {
    * failing the cell. The debugger ITs drive real debuggees against wait
    * timeouts, so contention flakes are a fact of life; the certified-green
    * combos kept "failing surprisingly" on busy machines without this.
+   *
+   * {@code resultFilter} (nullable): only XMLs whose filename contains it are
+   * collected as this cell's evidence. Lanes sharing a module's results dir
+   * (firefox/chromium) must pass their probe class, or a leftover run of the
+   * OTHER lane's suite would be picked up as this cell's outcome.
    */
   private SuiteRun runSuite(String modulePath, List<String> extraArgs, Map<String, String> env,
-                            Path logFile, int timeoutSec, Path moduleResults, Path evidence) throws IOException {
+                            Path logFile, int timeoutSec, Path moduleResults, Path evidence,
+                            String resultFilter) throws IOException {
     List<String> first = new ArrayList<>(List.of(modulePath + TASK_CLEAN_TEST, modulePath + TASK_TEST));
     first.addAll(extraArgs);
     GradleRunner.Status status = gradle.run(first, env, logFile, timeoutSec, true);
     GradleRunner.killStrays();
-    List<Results.ClassResult> classes = Results.collect(moduleResults, evidence);
+    List<Results.ClassResult> classes = Results.collect(moduleResults, evidence, resultFilter);
     List<Results.ClassResult> failing = classes.stream()
       .filter(c -> c.failures() + c.errors() > 0)
       .toList();
@@ -335,7 +342,7 @@ public final class MatrixMain {
     retry.addAll(extraArgs);
     gradle.run(retry, env, Path.of(logFile + ".retry"), timeoutSec, true);
     GradleRunner.killStrays();
-    overlayResults(moduleResults, evidence);
+    overlayResults(moduleResults, evidence, resultFilter);
     List<Results.ClassResult> merged = Results.parse(evidence);
     List<String> after = merged.stream()
       .flatMap(MatrixMain::failedTestIds)
@@ -374,12 +381,12 @@ public final class MatrixMain {
    * REPLACE the first run's, while suites the retry did not touch keep their
    * first-run XMLs.
    */
-  private void overlayResults(Path moduleResults, Path evidence) throws IOException {
+  private void overlayResults(Path moduleResults, Path evidence, String resultFilter) throws IOException {
     if (!Files.isDirectory(moduleResults)) {
       return;
     }
     try (var files = Files.list(moduleResults)) {
-      for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".xml")).toList()) {
+      for (Path file : files.filter(f -> Results.isResultXml(f, resultFilter)).toList()) {
         Files.copy(file, evidence.resolve(file.getFileName()), StandardCopyOption.REPLACE_EXISTING);
       }
     }
@@ -433,7 +440,7 @@ public final class MatrixMain {
       SuiteRun run = runSuite(":debuggers:eval-debugger",
                               List.of(GRADLE_NO_BUILD_CACHE, GRADLE_CONTINUE),
                               env, out.resolve("logs/eval-" + haxe + ".log"), 900,
-                              moduleResults, out.resolve("results/eval_" + haxe));
+                              moduleResults, out.resolve("results/eval_" + haxe), null);
       addCell("eval", haxe, null, run.status().name().toLowerCase(Locale.ROOT),
               run.classes(), run.flaky(), start);
     }
@@ -445,6 +452,16 @@ public final class MatrixMain {
 
   private void chromiumLane() throws IOException {
     webLane("chromium", "JsDebugAdapterLiveProbe");
+  }
+
+  // both web lanes on one thread in parallel mode — see runLanesInParallel
+  private void webLanesSequentially() throws IOException {
+    if (lanes.contains("firefox")) {
+      firefoxLane();
+    }
+    if (lanes.contains("chromium")) {
+      chromiumLane();
+    }
   }
 
   /**
@@ -479,9 +496,11 @@ public final class MatrixMain {
         if (nodeDir != null) {
           extra.add("-PwebDebugNodeExe=" + Platform.findBinary(nodeDir, "node"));
         }
+        // the module's results dir is shared with the OTHER web lane: collect
+        // only this lane's probe suite as evidence
         SuiteRun run = runSuite(":debuggers:browser-debugger", extra,
                                 env, out.resolve("logs/" + lane + "-" + cellName + ".log"), 1200,
-                                moduleResults, out.resolve("results/" + lane + "_" + cellName));
+                                moduleResults, out.resolve("results/" + lane + "_" + cellName), probeClass);
         addCell(lane, haxe, node, run.status().name().toLowerCase(Locale.ROOT),
                 run.classes(), run.flaky(), start);
       }
@@ -548,7 +567,7 @@ public final class MatrixMain {
       extra.add(GRADLE_CONTINUE);
       SuiteRun run = runSuite(":debuggers:intellij-hxcpp-debugger", extra, haxeEnv(haxeDir),
                               out.resolve("logs/hxcpp-" + haxe + "-test.log"), 1500,
-                              moduleBuild.resolve("test-results/test"), out.resolve("results/hxcpp_" + haxe));
+                              moduleBuild.resolve("test-results/test"), out.resolve("results/hxcpp_" + haxe), null);
       addCell("hxcpp", haxe, null, run.status().name().toLowerCase(Locale.ROOT),
               run.classes(), run.flaky(), start);
     }
@@ -647,7 +666,7 @@ public final class MatrixMain {
         SuiteRun run = runSuite(":debuggers:hashlink-debug-adapter", extra, env,
                                 out.resolve("logs/hl-" + haxe + "-" + runtime + ".log"), 1500,
                                 moduleBuild.resolve("test-results/test"),
-                                out.resolve("results/hl_" + haxe + "__" + runtime));
+                                out.resolve("results/hl_" + haxe + "__" + runtime), null);
         addCell("hashlink", haxe, runtime, run.status().name().toLowerCase(Locale.ROOT),
                 run.classes(), run.flaky(), cellStart);
       }
