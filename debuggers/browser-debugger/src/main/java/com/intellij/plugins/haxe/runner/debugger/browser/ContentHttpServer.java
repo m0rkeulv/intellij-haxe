@@ -116,7 +116,7 @@ public final class ContentHttpServer implements Closeable {
    * when scripts first execute, so nothing can pause that first run); the
    * injected refresh makes the page reload itself once, and the SECOND load
    * happens on the already-attached thread where entry pauses and armed
-   * breakpoints work. Live-verified against vscode-firefox-debug.
+   * breakpoints work.
    */
   public void refreshFirstPage(int seconds) {
     refreshOnceSeconds = seconds;

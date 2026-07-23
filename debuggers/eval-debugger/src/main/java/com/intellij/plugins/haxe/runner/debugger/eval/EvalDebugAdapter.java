@@ -356,7 +356,7 @@ public class EvalDebugAdapter implements Closeable {
    * SUCCESS: the VM acks continue from a helper thread while the resumed
    * program runs, and when the program finishes the process can exit before
    * that ack is flushed — the resume happened, the terminated event (from
-   * the disconnect callback) ends the session. Live-observed race. Any OTHER
+   * the disconnect callback) ends the session. Any OTHER
    * failure (a request timeout, a socket reset mid-write) means the VM is
    * gone or wedged — the session is ended deterministically rather than
    * letting every later request burn its own timeout.
