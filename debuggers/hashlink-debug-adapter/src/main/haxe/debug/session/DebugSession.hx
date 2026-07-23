@@ -157,7 +157,7 @@ class DebugSession {
 			// command would sit until some debug event happens to arrive —
 			// observable as pause requests timing out. Poke the debuggee
 			// (force-break = kill SIGTRAP on the traced main thread): the wait
-			// returns, the trap matches nothing of ours and is resumed silently,
+			// returns, the trap matches no known patch site and is resumed silently,
 			// and pollWhileRunning's command interleave runs this command. The
 			// races are benign — a missed nudge just waits for the next event, a
 			// spurious one is a silently-resumed stop.
@@ -916,7 +916,7 @@ class DebugSession {
 
 	// Classifies an INT3 stop by what is patched at the trap address and routes
 	// it: a user breakpoint always wins, then an armed exception site, then the
-	// hl_throw entry trap, then a step temp; a trap nothing of ours is patched at
+	// hl_throw entry trap, then a step temp; a trap with no known patch site
 	// is an unpatched trap (hl_throw's own break, or attach/loader noise).
 	function handleBreakpointHit(threadId:Int):Void {
 		// INT3 leaves the instruction pointer one byte past the trap
@@ -946,7 +946,7 @@ class DebugSession {
 		}
 	}
 
-	// A trap with nothing of ours patched at it: either hl_throw's own
+	// A trap with no known patch site: either hl_throw's own
 	// hl_debug_break completing a parked VM throw (the ExceptionController
 	// reports that stop), or an attach/loader breakpoint / spurious trap,
 	// resumed past silently.

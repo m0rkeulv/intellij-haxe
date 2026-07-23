@@ -70,7 +70,9 @@ public class HaxeDebuggerEditorsProvider extends XDebuggerEditorsProvider {
                                                                 sourcePosition != null ? sourcePosition.getFile() : null,
                                                                 sourcePosition != null ? sourcePosition.getOffset() : -1
     );
-    if (XDebuggerHistoryManager.getInstance(project).getRecentExpressions(SET_VALUE_HISTORY_ID).contains(expression)) {
+    if (XDebuggerHistoryManager.getInstance(project)
+          .getRecentExpressions(SET_VALUE_HISTORY_ID)
+          .contains(expression)) {
       PsiFile fragment = PsiDocumentManager.getInstance(project).getPsiFile(document);
       if (fragment != null) {
         fragment.putUserData(LITERAL_VALUE_INPUT, Boolean.TRUE);

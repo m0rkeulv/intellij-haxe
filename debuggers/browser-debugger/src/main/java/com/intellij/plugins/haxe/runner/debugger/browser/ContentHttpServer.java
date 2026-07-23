@@ -92,13 +92,15 @@ public final class ContentHttpServer implements Closeable {
     // One virtual thread per exchange: an asset-heavy target (a game loading
     // atlases, audio and json) opens as many connections as the browser
     // allows, across the page, its workers and any iframes — a fixed pool
-    // below that number leaves the browser waiting on us. Reads of big files
+    // below that number leaves the browser waiting on the server. Reads of big files
     // pin their carrier, so the real parallelism is the carrier pool rather
     // than unlimited, but it scales with the machine instead of a constant.
     // Built through IntelliJVirtualThreads rather than Thread.ofVirtual so the
     // platform can decorate the virtual threads it hosts.
     executor = Executors.newThreadPerTaskExecutor(
-      IntelliJVirtualThreads.ofVirtual().name("haxe-web-content-server-", 0).factory());
+      IntelliJVirtualThreads.ofVirtual()
+        .name("haxe-web-content-server-", 0)
+        .factory());
     server.setExecutor(executor);
     server.createContext("/", this::handle);
     server.start();

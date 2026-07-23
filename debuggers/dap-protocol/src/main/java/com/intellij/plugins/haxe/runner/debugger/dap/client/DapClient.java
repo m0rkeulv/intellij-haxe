@@ -146,7 +146,7 @@ public class DapClient implements DapEndpoint {
     connection.send(request);
   }
 
-  /** Answers a reverse request (assigns our next seq and sends the response). */
+  /** Answers a reverse request (assigns the next outgoing seq and sends the response). */
   public void respond(Request incoming, boolean success) throws IOException {
     Response response = new Response();
     response.setSeq(nextSeq.getAndIncrement());
