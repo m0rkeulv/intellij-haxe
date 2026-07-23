@@ -229,7 +229,7 @@ public class JsDebugAdapterLiveProbe {
    * stop, with no serving tricks. Guards the family split in the backend
    * (no refreshFirstPage for chromium).
    */
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void loadTimeBreakpointHitsOnFirstLoad() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = Files.createTempDirectory("haxe-jsdbg-load");
@@ -271,7 +271,7 @@ public class JsDebugAdapterLiveProbe {
    * the runtime-truth fallback for identifiers the Haxe PSI cannot resolve
    * (browser globals behind incomplete externs).
    */
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void stepInTargetsAndRuntimeCompletions() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = Files.createTempDirectory("haxe-jsdbg-smart");
@@ -365,7 +365,7 @@ public class JsDebugAdapterLiveProbe {
    * Exists because the IDE reported no step-in chooser while the probe's own
    * sequence got targets fine — this pins whether the SEQUENCE is the culprit.
    */
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void stepInTargetsUnderTheIdeExactSequence() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = Files.createTempDirectory("haxe-jsdbg-idelike");
@@ -388,7 +388,7 @@ public class JsDebugAdapterLiveProbe {
       parentConfig.put("runtimeArgs", List.of("--headless=new"));
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
       StartDebuggingRequest startDebugging = null;
-      long deadline = System.currentTimeMillis() + 60_000;
+      long deadline = System.currentTimeMillis() + 20_000;
       while (System.currentTimeMillis() < deadline && startDebugging == null) {
         Event event = parent.pollEvent(100);
         if (event instanceof InitializedEvent) {
@@ -447,7 +447,7 @@ public class JsDebugAdapterLiveProbe {
         assertTrue("child configurationDone", child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess());
 
         StoppedEvent stopped = null;
-        deadline = System.currentTimeMillis() + 60_000;
+        deadline = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < deadline && stopped == null) {
           if (child.pollEvent(250) instanceof StoppedEvent s) {
             stopped = s;
@@ -516,7 +516,7 @@ public class JsDebugAdapterLiveProbe {
         resume.setArguments(cArgs);
         assertTrue("continue", child.sendRequest(resume, TIMEOUT).isSuccess());
         StoppedEvent second = null;
-        deadline = System.currentTimeMillis() + 30_000;
+        deadline = System.currentTimeMillis() + 15_000;
         while (System.currentTimeMillis() < deadline && second == null) {
           if (child.pollEvent(250) instanceof StoppedEvent s) {
             second = s;
@@ -588,7 +588,7 @@ public class JsDebugAdapterLiveProbe {
     }
     """;
 
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void stepInTargetsOnABareExpressionStatement() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = Files.createTempDirectory("haxe-jsdbg-expr");
@@ -624,7 +624,7 @@ public class JsDebugAdapterLiveProbe {
    * plain step into. If a future js-debug pin fixes this, THIS TEST FAILS -
    * celebrate and delete it.
    */
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void stepInTargetsKnownLimitationOnLastStatementOfFunction() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = Files.createTempDirectory("haxe-jsdbg-lastline");
@@ -651,7 +651,7 @@ public class JsDebugAdapterLiveProbe {
    * Smart-step INSIDE A DOM EVENT HANDLER works when the call line is
    * followed by another mapped statement (the general case).
    */
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void stepInTargetsInsideADomEventHandler() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = Files.createTempDirectory("haxe-jsdbg-click");
@@ -716,7 +716,7 @@ public class JsDebugAdapterLiveProbe {
    * frameId/variablesReference, merged threads listing both targets, and
    * continue routed back to the worker.
    */
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void workerAppearsAsAdditionalThreadThroughTheMux() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = Files.createTempDirectory("haxe-jsdbg-worker");
@@ -741,7 +741,7 @@ public class JsDebugAdapterLiveProbe {
       parentConfig.put("runtimeArgs", List.of("--headless=new"));
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
       StartDebuggingRequest startDebugging = null;
-      long deadline = System.currentTimeMillis() + 60_000;
+      long deadline = System.currentTimeMillis() + 20_000;
       while (System.currentTimeMillis() < deadline && startDebugging == null) {
         Event event = parent.pollEvent(100);
         if (event instanceof InitializedEvent) {
@@ -799,7 +799,7 @@ public class JsDebugAdapterLiveProbe {
         // under the page's breakpoint id (the gutter's lazy checkmark).
         StoppedEvent stopped = null;
         boolean verifiedUpgradeSeen = false;
-        deadline = System.currentTimeMillis() + 90_000;
+        deadline = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = mux.pollEvent(250);
           if (event instanceof BreakpointEvent be
@@ -885,7 +885,7 @@ public class JsDebugAdapterLiveProbe {
 
         // the ticking worker re-hits: the composite ids are stable across stops
         StoppedEvent second = null;
-        deadline = System.currentTimeMillis() + 30_000;
+        deadline = System.currentTimeMillis() + 15_000;
         while (System.currentTimeMillis() < deadline && second == null) {
           if (mux.pollEvent(250) instanceof StoppedEvent s) {
             second = s;
@@ -908,7 +908,7 @@ public class JsDebugAdapterLiveProbe {
         pause.setArguments(pArgs);
         assertTrue("pause the page thread", mux.sendRequest(pause, TIMEOUT).isSuccess());
         StoppedEvent pageStop = null;
-        deadline = System.currentTimeMillis() + 30_000;
+        deadline = System.currentTimeMillis() + 15_000;
         while (System.currentTimeMillis() < deadline && pageStop == null) {
           if (mux.pollEvent(250) instanceof StoppedEvent s) {
             pageStop = s;
@@ -928,7 +928,7 @@ public class JsDebugAdapterLiveProbe {
         next.setArguments(nArgs);
         assertTrue("step the page thread", mux.sendRequest(next, TIMEOUT).isSuccess());
         StoppedEvent stepStop = null;
-        deadline = System.currentTimeMillis() + 30_000;
+        deadline = System.currentTimeMillis() + 15_000;
         while (System.currentTimeMillis() < deadline && stepStop == null) {
           if (mux.pollEvent(250) instanceof StoppedEvent s) {
             stepStop = s;
@@ -968,7 +968,7 @@ public class JsDebugAdapterLiveProbe {
         workerResume.setArguments(wcArgs);
         assertTrue("resume via the worker thread", mux.sendRequest(workerResume, TIMEOUT).isSuccess());
         StoppedEvent workerAgain = null;
-        deadline = System.currentTimeMillis() + 30_000;
+        deadline = System.currentTimeMillis() + 15_000;
         while (System.currentTimeMillis() < deadline && workerAgain == null) {
           if (mux.pollEvent(250) instanceof StoppedEvent s && s.getBody().getThreadId() != null
               && s.getBody().getThreadId() >= COMPOSITE_FLOOR) {
@@ -1027,7 +1027,7 @@ public class JsDebugAdapterLiveProbe {
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(launchConfig));
 
       StartDebuggingRequest startDebugging = null;
-      long deadline = System.currentTimeMillis() + 60_000;
+      long deadline = System.currentTimeMillis() + 20_000;
       while (System.currentTimeMillis() < deadline && startDebugging == null) {
         Event event = parent.pollEvent(100);
         if (traceAdapter && event instanceof OutputEvent o && o.getBody() != null) {
@@ -1062,7 +1062,7 @@ public class JsDebugAdapterLiveProbe {
 
         boolean childConfigured = false;
         StoppedEvent stopped = null;
-        deadline = System.currentTimeMillis() + 60_000;
+        deadline = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = child.pollEvent(100);
           if (traceAdapter && event instanceof OutputEvent o && o.getBody() != null) {
@@ -1112,7 +1112,7 @@ public class JsDebugAdapterLiveProbe {
     }
   }
 
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void fullSessionWithChildViaStartDebugging() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path fixture = buildFixture();
@@ -1139,7 +1139,7 @@ public class JsDebugAdapterLiveProbe {
       CompletableFuture<Response> launchFuture = new CompletableFuture<>();
       Thread launcher = new Thread(() -> {
         try {
-          launchFuture.complete(parent.sendRequest(ConfiguredLaunchRequest.of(launchConfig), 60_000));
+          launchFuture.complete(parent.sendRequest(ConfiguredLaunchRequest.of(launchConfig), 20_000));
         } catch (Exception e) {
           launchFuture.completeExceptionally(e);
         }
@@ -1151,7 +1151,7 @@ public class JsDebugAdapterLiveProbe {
       // meanwhile watch for the startDebugging reverse request
       StartDebuggingRequest startDebugging = null;
       boolean parentConfigured = false;
-      long deadline = System.currentTimeMillis() + 60_000;
+      long deadline = System.currentTimeMillis() + 20_000;
       while (System.currentTimeMillis() < deadline && startDebugging == null) {
         Event event = parent.pollEvent(100);
         if (event != null) {
@@ -1192,7 +1192,7 @@ public class JsDebugAdapterLiveProbe {
         CompletableFuture<Response> childLaunchFuture = new CompletableFuture<>();
         Thread childLauncher = new Thread(() -> {
           try {
-            childLaunchFuture.complete(child.sendRequest(ConfiguredLaunchRequest.of(childConfig), 60_000));
+            childLaunchFuture.complete(child.sendRequest(ConfiguredLaunchRequest.of(childConfig), 20_000));
           } catch (Exception e) {
             childLaunchFuture.completeExceptionally(e);
           }
@@ -1202,7 +1202,7 @@ public class JsDebugAdapterLiveProbe {
 
         boolean childConfigured = false;
         StoppedEvent stopped = null;
-        deadline = System.currentTimeMillis() + 60_000;
+        deadline = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = child.pollEvent(100);
           if (event == null) {

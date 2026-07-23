@@ -95,8 +95,8 @@ public class FirefoxAdapterLiveProbe {
     client = connectWithRetry(port);
   }
 
-  // WIRE FINDING: the adapter prints its "waiting for debug protocol" line
-  // slightly BEFORE the TCP listener accepts, so an immediate connect can be
+  // The adapter prints its "waiting for debug protocol" line slightly
+  // BEFORE the TCP listener accepts, so an immediate connect can be
   // refused - retry briefly (the production launcher must do the same).
   private static DapClient connectWithRetry(int port) throws IOException {
     return LiveProbeUtil.connectWithRetry(port, (int)TIMEOUT);
@@ -127,8 +127,8 @@ public class FirefoxAdapterLiveProbe {
     InitializeRequestArguments arguments = new InitializeRequestArguments();
     arguments.setClientID("intellij");
     arguments.setAdapterID("firefox");
-    // WIRE FINDING: the firefox adapter REJECTS initialize unless
-    // pathFormat=="path" ("debug adapter only supports native paths")
+    // the firefox adapter REJECTS initialize unless pathFormat=="path"
+    // ("debug adapter only supports native paths")
     arguments.setPathFormat("path");
     arguments.setLinesStartAt1(true);
     arguments.setColumnsStartAt1(true);
@@ -235,7 +235,7 @@ public class FirefoxAdapterLiveProbe {
     return dir;
   }
 
-  @Test(timeout = 120_000)
+  @Test(timeout = 60_000)
   public void fullSessionBreakpointInHxSourceViaFileUrl() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
@@ -259,14 +259,14 @@ public class FirefoxAdapterLiveProbe {
     launchConfig.put("firefoxExecutable", firefox.toString());
     launchConfig.put("firefoxArgs", List.of("-headless"));
     launchConfig.put("port", LiveProbeUtil.freePort()); // never the shared default 6000
-    Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
+    Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000);
     System.out.println("[probe] launch success=" + launch.isSuccess()
                        + (launch.isSuccess() ? "" : " message=" + launch.getMessage()));
     assertTrue("launch failed: " + launch.getMessage(), launch.isSuccess());
 
     // event order observation: wait for the initialized event (post-launch here)
     boolean initialized = false;
-    long deadline = System.currentTimeMillis() + 30_000;
+    long deadline = System.currentTimeMillis() + 15_000;
     while (System.currentTimeMillis() < deadline && !initialized) {
       Event event = client.pollEvent(250);
       if (event != null) {
@@ -297,7 +297,7 @@ public class FirefoxAdapterLiveProbe {
 
     // the ticking fixture must hit the breakpoint soon
     StoppedEvent stopped = null;
-    deadline = System.currentTimeMillis() + 45_000;
+    deadline = System.currentTimeMillis() + 15_000;
     while (System.currentTimeMillis() < deadline && stopped == null) {
       Event event = client.pollEvent(250);
       if (event != null) {
@@ -363,7 +363,7 @@ public class FirefoxAdapterLiveProbe {
    * served urls back to the content directory for the source maps). Mirrors
    * BrowserDebugBackend's launch config; a stop must still land in the .hx.
    */
-  @Test(timeout = 120_000)
+  @Test(timeout = 60_000)
   public void fullSessionBreakpointInHxSourceViaContentServer() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
@@ -390,11 +390,11 @@ public class FirefoxAdapterLiveProbe {
       launchConfig.put("firefoxExecutable", firefox.toString());
       launchConfig.put("firefoxArgs", List.of("-headless"));
     launchConfig.put("port", LiveProbeUtil.freePort()); // never the shared default 6000
-      Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
+      Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000);
       assertTrue("launch failed: " + launch.getMessage(), launch.isSuccess());
 
       boolean initialized = false;
-      long deadline = System.currentTimeMillis() + 30_000;
+      long deadline = System.currentTimeMillis() + 15_000;
       while (System.currentTimeMillis() < deadline && !initialized) {
         initialized = client.pollEvent(250) instanceof InitializedEvent;
       }
@@ -413,7 +413,7 @@ public class FirefoxAdapterLiveProbe {
       assertTrue("setBreakpoints failed", client.sendRequest(setBreakpoints, TIMEOUT).isSuccess());
 
       StoppedEvent stopped = null;
-      deadline = System.currentTimeMillis() + 45_000;
+      deadline = System.currentTimeMillis() + 15_000;
       while (System.currentTimeMillis() < deadline && stopped == null) {
         if (client.pollEvent(250) instanceof StoppedEvent s) {
           stopped = s;
@@ -450,7 +450,7 @@ public class FirefoxAdapterLiveProbe {
    * native backslash paths? (The IDE smoke test showed breakpoints never
    * binding; my earlier probes all sent native paths and worked.)
    */
-  @Test(timeout = 180_000)
+  @Test(timeout = 60_000)
   public void breakpointPathSeparatorSensitivity() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
@@ -501,10 +501,10 @@ public class FirefoxAdapterLiveProbe {
         launchConfig.put("firefoxExecutable", firefox.toString());
         launchConfig.put("firefoxArgs", List.of("-headless"));
     launchConfig.put("port", LiveProbeUtil.freePort()); // never the shared default 6000
-        if (!session.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess()) {
+        if (!session.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000).isSuccess()) {
           return false;
         }
-        long deadline = System.currentTimeMillis() + 30_000;
+        long deadline = System.currentTimeMillis() + 15_000;
         boolean initialized = false;
         while (System.currentTimeMillis() < deadline && !initialized) {
           initialized = session.pollEvent(250) instanceof InitializedEvent;
@@ -601,7 +601,7 @@ public class FirefoxAdapterLiveProbe {
    * wedges that thread forever. The TAB thread's evaluate is the control.
    * Runs variables BEFORE evaluate (evaluate may poison the queue).
    */
-  @Test(timeout = 240_000)
+  @Test(timeout = 60_000)
   public void workerFrameEvaluateBehaviour() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
@@ -644,8 +644,8 @@ public class FirefoxAdapterLiveProbe {
       launchConfig.put("log", Map.of(
         "fileName", adapterLog.toString(),
         "fileLevel", Map.of("default", "Debug")));
-      assertTrue("launch", client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess());
-      long deadline = System.currentTimeMillis() + 30_000;
+      assertTrue("launch", client.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000).isSuccess());
+      long deadline = System.currentTimeMillis() + 15_000;
       boolean initialized = false;
       while (System.currentTimeMillis() < deadline && !initialized) {
         initialized = client.pollEvent(250) instanceof InitializedEvent;
@@ -654,7 +654,7 @@ public class FirefoxAdapterLiveProbe {
 
       // breakpoint in the worker only; the ticking line hits ~immediately
       sendBreakpoint(fixture.resolve("WorkerMain.hx"), FF_WORKER_TICK_LINE);
-      StoppedEvent workerStop = awaitStop(60_000);
+      StoppedEvent workerStop = awaitStop(15_000);
       assertNotNull("worker breakpoint never hit", workerStop);
       int workerThread = workerStop.getBody().getThreadId() != null ? workerStop.getBody().getThreadId() : 1;
       StackFrame workerFrame = topFrame(workerThread);
@@ -673,7 +673,7 @@ public class FirefoxAdapterLiveProbe {
       sendBreakpoints(fixture.resolve("WorkerMain.hx"), List.of()); // clear worker bp
       sendBreakpoint(fixture.resolve("WebPage.hx"), FF_PAGE_BEAT_LINE);
       resumeThread(workerThread);
-      StoppedEvent tabStop = awaitStop(60_000);
+      StoppedEvent tabStop = awaitStop(15_000);
       assertNotNull("page heartbeat breakpoint never hit", tabStop);
       int tabThread = tabStop.getBody().getThreadId() != null ? tabStop.getBody().getThreadId() : 1;
       StackFrame tabFrame = topFrame(tabThread);
@@ -694,7 +694,7 @@ public class FirefoxAdapterLiveProbe {
    * actors answered nothing; this pins whether that happens without the
    * stale-instance pollution.)
    */
-  @Test(timeout = 240_000)
+  @Test(timeout = 60_000)
   public void workerThreadsAcrossRefresh() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
@@ -728,8 +728,8 @@ public class FirefoxAdapterLiveProbe {
       launchConfig.put("firefoxExecutable", firefox.toString());
       launchConfig.put("firefoxArgs", List.of("-headless"));
       launchConfig.put("port", LiveProbeUtil.freePort());
-      assertTrue("launch", client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess());
-      long deadline = System.currentTimeMillis() + 30_000;
+      assertTrue("launch", client.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000).isSuccess());
+      long deadline = System.currentTimeMillis() + 15_000;
       boolean initialized = false;
       while (System.currentTimeMillis() < deadline && !initialized) {
         initialized = client.pollEvent(250) instanceof InitializedEvent;
@@ -739,12 +739,12 @@ public class FirefoxAdapterLiveProbe {
 
       // first stop: the first load's worker hits its ticking bp BEFORE the 2s
       // reload; then the reload fires while that worker is paused
-      StoppedEvent first = awaitStop(60_000);
+      StoppedEvent first = awaitStop(15_000);
       assertNotNull("worker breakpoint never hit on the first load", first);
       System.out.println("[probe] first stop: thread=" + first.getBody().getThreadId());
 
       // let the reload happen and the second load settle (its worker re-hits)
-      StoppedEvent second = awaitStop(30_000);
+      StoppedEvent second = awaitStop(15_000);
       System.out.println("[probe] second stop: "
                          + (second == null ? "none" : "thread=" + second.getBody().getThreadId()));
 
@@ -884,7 +884,7 @@ public class FirefoxAdapterLiveProbe {
    * Each variant is a fresh DAP connection to the same adapter server (it
    * accepts sequential connections). Asserts at least one variant stops.
    */
-  @Test(timeout = 300_000)
+  @Test(timeout = 60_000)
   public void loadTimeBreakpointStrategies() throws Exception {
     Assume.assumeTrue("haxe not on PATH - skipping", haxeOnPath());
     Path firefox = firefoxExe();
@@ -974,13 +974,13 @@ public class FirefoxAdapterLiveProbe {
         // unique RDP port: default 6000 would CONNECT TO A LEFTOVER firefox
         // from an earlier variant/session instead of the launched one
         launchConfig.put("port", LiveProbeUtil.freePort());
-        Response launch = session.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
+        Response launch = session.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000);
         if (!launch.isSuccess()) {
           System.out.println("[probe]   variant " + variant + " launch failed: " + launch.getMessage());
           return false;
         }
 
-        long deadline = System.currentTimeMillis() + 30_000;
+        long deadline = System.currentTimeMillis() + 15_000;
         boolean initialized = false;
         while (System.currentTimeMillis() < deadline && !initialized) {
           initialized = session.pollEvent(250) instanceof InitializedEvent;
@@ -1005,7 +1005,7 @@ public class FirefoxAdapterLiveProbe {
 
         // observe everything; an entry pause (non-breakpoint stop) is resumed
         // after a beat so the map can bind; success = a stop ON the .hx line
-        deadline = System.currentTimeMillis() + 45_000;
+        deadline = System.currentTimeMillis() + 15_000;
         while (System.currentTimeMillis() < deadline) {
           Event event = session.pollEvent(250);
           if (event == null) {
