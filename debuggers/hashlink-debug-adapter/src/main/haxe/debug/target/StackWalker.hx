@@ -1,5 +1,6 @@
 package debug.target;
 
+import debug.HostPlatform;
 import debug.Pointer;
 import debug.module.JitInfo;
 import debug.target.DebugApi;
@@ -139,7 +140,7 @@ class StackWalker {
 	function recoverThroughSignalFrame(threadId:Int, frames:Array<StackFrameLocation>):Pointer {
 		// linux-only by construction: the capture offset in Align is the
 		// GLIBC layout, and on Windows the seed's RBP unwind works anyway
-		if (capturedStack == null || Sys.systemName() == "Windows") {
+		if (capturedStack == null || HostPlatform.IS_WINDOWS) {
 			return Int64.ofInt(0);
 		}
 		var captured = capturedStack(threadId);

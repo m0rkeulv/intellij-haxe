@@ -2,6 +2,7 @@ package debug.session;
 import haxe.io.Bytes;
 import haxe.io.FPHelper;
 import debug.DebugErrorCode;
+import debug.HostPlatform;
 import debug.Trace;
 import dap.protocol.Breakpoint;
 
@@ -150,7 +151,7 @@ class DebugSession {
 	**/
 	public function send(command:SessionCommand):Void {
 		commands.add(command);
-		if (debuggeePid != 0 && state == Running && Sys.systemName() != "Windows") {
+		if (debuggeePid != 0 && state == Running && HostPlatform.isPtraceBased()) {
 			// linux: while Running the session thread is parked in the BLOCKING
 			// debug wait (hl's linux debug_wait ignores its timeout), so a queued
 			// command would sit until some debug event happens to arrive —
@@ -409,7 +410,7 @@ class DebugSession {
 		});
 		inspector.xmm0Writer = value -> {
 			var bits = FPHelper.doubleToI64(value);
-			if (jit.is64 && Sys.systemName() != "Windows") {
+			if (jit.is64 && HostPlatform.isPtraceBased()) {
 				// linux: hl's debug_write_register cannot write XMM (its ptrace
 				// write path never handled the FP pseudo-offsets the read path
 				// defines - the write silently fails), so load the register by
@@ -453,7 +454,7 @@ class DebugSession {
 					emitExitedAfterOutputDrain();
 					return;
 				default:
-					if (Sys.systemName() != "Windows") {
+					if (HostPlatform.isPtraceBased()) {
 						// linux delivers exactly ONE attach stop (the PTRACE_ATTACH
 						// SIGSTOP) and hl's linux debug_wait IGNORES its timeout —
 						// it is a plain blocking waitpid, so a second drain wait
@@ -895,9 +896,9 @@ class DebugSession {
 				// create/exit/set-name, dll load, ...). Continuing again is at
 				// best a silent failure and at worst blindly continues a REAL
 				// event that arrived in the meantime — do nothing.
-				if (outcome.threadId == -1 && Sys.systemName() != "Windows") {
+				if (outcome.threadId == -1 && HostPlatform.isPtraceBased()) {
 					// EXCEPT with tid -1: linux waitpid() FAILED (ECHILD) — the
-					// debuggee died without a parseable exit status. Live-observed:
+					// debuggee died without a parseable exit status:
 					// an INT3 executed by an UNTRACED worker thread kills the whole
 					// process (SIGTRAP default action; linux traces per-thread and
 					// only the main thread is attached), debug.c maps the
