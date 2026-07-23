@@ -170,7 +170,12 @@ public class BrowserRunConfiguration extends DapRunConfigurationBase {
       browserFamily = BrowserFamily.FIREFOX;
     }
     url = orEmpty(JDOMExternalizerUtil.readField(element, URL));
-    serveContent = Boolean.parseBoolean(orEmpty(JDOMExternalizerUtil.readField(element, SERVE_CONTENT)));
+    // absent field keeps the field default (serve mode) - parsing "" would
+    // silently turn it off
+    String storedServeContent = JDOMExternalizerUtil.readField(element, SERVE_CONTENT);
+    if (storedServeContent != null) {
+      serveContent = Boolean.parseBoolean(storedServeContent);
+    }
     contentRoot = orEmpty(JDOMExternalizerUtil.readField(element, CONTENT_ROOT));
     browserExecutablePath = orEmpty(JDOMExternalizerUtil.readField(element, BROWSER_EXECUTABLE));
     nodePath = orEmpty(JDOMExternalizerUtil.readField(element, NODE_PATH));
