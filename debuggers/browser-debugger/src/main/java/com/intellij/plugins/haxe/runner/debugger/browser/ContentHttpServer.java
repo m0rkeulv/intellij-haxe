@@ -88,13 +88,14 @@ public final class ContentHttpServer implements Closeable {
     // 8.3 names, case) - everything served must stay under THIS path
     this.root = root.toRealPath();
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    // a page load fetches html+js+map+assets concurrently; a small pool keeps
-    // the browser from serializing on the server
-    executor = Executors.newFixedThreadPool(4, runnable -> {
-      Thread thread = new Thread(runnable, "haxe-web-content-server");
-      thread.setDaemon(true);
-      return thread;
-    });
+    // One virtual thread per exchange: an asset-heavy target (a game loading
+    // atlases, audio and json) opens as many connections as the browser
+    // allows, across the page, its workers and any iframes — a fixed pool
+    // below that number leaves the browser waiting on us. Reads of big files
+    // pin their carrier, so the real parallelism is the carrier pool rather
+    // than unlimited, but it scales with the machine instead of a constant.
+    executor = Executors.newThreadPerTaskExecutor(
+      Thread.ofVirtual().name("haxe-web-content-server-", 0).factory());
     server.setExecutor(executor);
     server.createContext("/", this::handle);
     server.start();
