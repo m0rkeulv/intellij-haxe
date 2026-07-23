@@ -83,7 +83,15 @@ the details.
   from a previous session (the Windows launcher process re-parents the real
   browser out of the adapter's process tree, escaping cleanup) would then be
   picked up by the NEXT session's adapter — stale tabs, foreign workers,
-  dead actors. The plugin assigns a unique random port per session.
+  dead actors. The plugin assigns a unique port per session.
+- **Ports must be OS-assigned, never picked at random.** Windows reserves
+  blocks of the port space as *excluded port ranges* (Hyper-V/WinNAT;
+  `netsh interface ipv4 show excludedportrange protocol=tcp`) and a bind
+  inside one dies with EACCES — the adapter exits before announcing its DAP
+  port, or the RDP listener fails and `launch` errors with an empty message.
+  Every port (adapter `--server`, per-session RDP) comes from
+  `NetUtils.findAvailableSocketPort()`; the OS never allocates from an
+  excluded range. js-debug is immune — it accepts port `0` directly.
 - **Breakpoint paths are matched literally** — the plugin converts the IDE's
   forward-slash VFS paths to native separators, or breakpoints silently
   never bind.
