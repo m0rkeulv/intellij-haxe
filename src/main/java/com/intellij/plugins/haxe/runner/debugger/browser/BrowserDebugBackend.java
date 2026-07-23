@@ -11,13 +11,13 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.util.net.NetUtils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.AdapterTargetsSmartStepHandler;
@@ -145,7 +145,7 @@ public class BrowserDebugBackend implements DapBackend {
     return connectWithRetry(launched.port());
   }
 
-  private Map<String, Object> firefoxLaunchConfig(String targetUrl) {
+  private Map<String, Object> firefoxLaunchConfig(String targetUrl) throws IOException {
     Map<String, Object> config = new LinkedHashMap<>();
     config.put("request", "launch");
     config.put("url", targetUrl);
@@ -155,8 +155,11 @@ public class BrowserDebugBackend implements DapBackend {
     // process tree, escaping the tree-kill), keeps owning 6000, and the next
     // session's adapter then debugs the STALE instance - foreign workers it
     // refuses to attach, dead actors that answer nothing, surfacing as ghost
-    // threads and endless evaluate timeouts.
-    config.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
+    // threads and endless evaluate timeouts. OS-assigned rather than random:
+    // a random pick can land in a Windows excluded port range (Hyper-V/
+    // WinNAT reservations), where the bind fails and the launch dies with an
+    // empty adapter message.
+    config.put("port", NetUtils.findAvailableSocketPort());
     if (serveContent) {
       config.put("webRoot", contentRoot.toString());
     }

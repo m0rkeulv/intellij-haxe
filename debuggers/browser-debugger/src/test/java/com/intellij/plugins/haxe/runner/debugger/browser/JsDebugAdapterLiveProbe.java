@@ -18,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -120,7 +119,7 @@ public class JsDebugAdapterLiveProbe {
     Assume.assumeTrue("no chromium-family browser found (set WEB_DEBUG_CHROMIUM_EXE or install Chrome/Edge) - skipping",
                       chromiumExe() != null);
 
-    adapterPort = ThreadLocalRandom.current().nextInt(20000, 60000);
+    adapterPort = LiveProbeUtil.freePort();
     adapter = new ProcessBuilder(nodeExe().toString(), dapServerJs().toString(),
                                  String.valueOf(adapterPort), "127.0.0.1")
       .directory(dapServerJs().getParent().toFile())

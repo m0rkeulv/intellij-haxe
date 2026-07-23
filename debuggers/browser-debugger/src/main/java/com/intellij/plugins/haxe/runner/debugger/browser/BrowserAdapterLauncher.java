@@ -1,11 +1,11 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
+import com.intellij.util.net.NetUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Spawns a vscode debug adapter bundle on the user's node in DAP-over-TCP
@@ -14,7 +14,8 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <ul>
  *   <li>{@code --server=<port>} needs a 4-5 digit port (the adapter's own
- *       argv regex), so the port is chosen HERE, not by the OS;</li>
+ *       argv regex — it cannot bind port 0 itself), so the port is chosen
+ *       HERE and passed explicitly;</li>
  *   <li>the adapter prints {@code waiting for debug protocol on port N}
  *       slightly BEFORE its listener accepts — callers must connect with a
  *       short retry, which {@code DapClient.connect} alone does not do;</li>
@@ -43,7 +44,11 @@ public final class BrowserAdapterLauncher {
    * chosen HERE (its argv regex wants 4-5 digits; no ephemeral-port support).
    */
   public static LaunchedAdapter launch(Path nodeExecutable, Path adapterBundle) throws IOException {
-    int port = ThreadLocalRandom.current().nextInt(20_000, 60_000);
+    // OS-assigned, never random: a random pick can land in a Windows
+    // excluded port range (Hyper-V/WinNAT reserve blocks of the ephemeral
+    // space) and the adapter then dies with EACCES before announcing.
+    // Ephemeral ports are 5 digits, satisfying the adapter's argv regex.
+    int port = NetUtils.findAvailableSocketPort();
     Process process = new ProcessBuilder(
       nodeExecutable.toString(), adapterBundle.toString(), "--server=" + port)
       .directory(adapterBundle.getParent().toFile())

@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.util.net.NetUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -36,6 +37,16 @@ final class LiveProbeUtil {
     if (!haxe.waitFor(30, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
       throw new AssertionError("fixture compile of " + mainClass + " failed:\n" + output);
     }
+  }
+
+  /**
+   * A free TCP port from the OS, for the adapter's DAP listener and the RDP
+   * port in launch configs. A random pick from a fixed range flakes on
+   * Windows: Hyper-V/WinNAT reserve blocks of the port space (excluded port
+   * ranges) and a bind inside one dies with EACCES.
+   */
+  static int freePort() throws IOException {
+    return NetUtils.findAvailableSocketPort();
   }
 
   /** Connects to an adapter's DAP port, retrying briefly (see DapClient.connectWithRetry). */

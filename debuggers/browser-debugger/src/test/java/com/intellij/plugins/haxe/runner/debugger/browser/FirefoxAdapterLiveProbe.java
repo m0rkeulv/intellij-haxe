@@ -18,7 +18,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -64,7 +63,7 @@ public class FirefoxAdapterLiveProbe {
     Assume.assumeTrue("portable node not provisioned - skipping", Files.isRegularFile(nodeExe()));
     Assume.assumeTrue("firefox adapter not provisioned - skipping", Files.isRegularFile(adapterBundle()));
 
-    int port = ThreadLocalRandom.current().nextInt(20000, 60000);
+    int port = LiveProbeUtil.freePort();
     adapter = new ProcessBuilder(nodeExe().toString(), adapterBundle().toString(), "--server=" + port)
       // cwd = dist so the bundle finds mappings.wasm however it resolves it
       .directory(adapterBundle().getParent().toFile())
@@ -259,7 +258,7 @@ public class FirefoxAdapterLiveProbe {
     launchConfig.put("file", fixture.resolve("index.html").toString());
     launchConfig.put("firefoxExecutable", firefox.toString());
     launchConfig.put("firefoxArgs", List.of("-headless"));
-    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
+    launchConfig.put("port", LiveProbeUtil.freePort()); // never the shared default 6000
     Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
     System.out.println("[probe] launch success=" + launch.isSuccess()
                        + (launch.isSuccess() ? "" : " message=" + launch.getMessage()));
@@ -390,7 +389,7 @@ public class FirefoxAdapterLiveProbe {
       launchConfig.put("webRoot", fixture.toString());
       launchConfig.put("firefoxExecutable", firefox.toString());
       launchConfig.put("firefoxArgs", List.of("-headless"));
-    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
+    launchConfig.put("port", LiveProbeUtil.freePort()); // never the shared default 6000
       Response launch = client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
       assertTrue("launch failed: " + launch.getMessage(), launch.isSuccess());
 
@@ -476,7 +475,7 @@ public class FirefoxAdapterLiveProbe {
 
   private boolean runSeparatorVariant(String label, Path fixture, Path firefox,
                                       ContentHttpServer content, String breakpointPath) throws Exception {
-    int ownPort = ThreadLocalRandom.current().nextInt(20000, 60000);
+    int ownPort = LiveProbeUtil.freePort();
     Process ownAdapter = new ProcessBuilder(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort)
       .directory(adapterBundle().getParent().toFile())
       .redirectErrorStream(true)
@@ -501,7 +500,7 @@ public class FirefoxAdapterLiveProbe {
         launchConfig.put("webRoot", fixture.toString());
         launchConfig.put("firefoxExecutable", firefox.toString());
         launchConfig.put("firefoxArgs", List.of("-headless"));
-    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
+    launchConfig.put("port", LiveProbeUtil.freePort()); // never the shared default 6000
         if (!session.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess()) {
           return false;
         }
@@ -632,12 +631,12 @@ public class FirefoxAdapterLiveProbe {
       launchConfig.put("webRoot", fixture.toString());
       launchConfig.put("firefoxExecutable", firefox.toString());
       launchConfig.put("firefoxArgs", List.of("-headless"));
-    launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000)); // never the shared default 6000
+    launchConfig.put("port", LiveProbeUtil.freePort()); // never the shared default 6000
       // UNIQUE RDP port: the adapter's default 6000 makes it CONNECT TO A
       // LEFTOVER firefox from an earlier session/probe instead of the one it
       // just launched ("Not attaching to this thread" for
       // every worker, foreign processes' workers in the target list)
-      launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
+      launchConfig.put("port", LiveProbeUtil.freePort());
       Path adapterLog = fixture.resolve("adapter.log");
       launchConfig.put("log", Map.of(
         "fileName", adapterLog.toString(),
@@ -725,7 +724,7 @@ public class FirefoxAdapterLiveProbe {
       launchConfig.put("webRoot", fixture.toString());
       launchConfig.put("firefoxExecutable", firefox.toString());
       launchConfig.put("firefoxArgs", List.of("-headless"));
-      launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
+      launchConfig.put("port", LiveProbeUtil.freePort());
       assertTrue("launch", client.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000).isSuccess());
       long deadline = System.currentTimeMillis() + 30_000;
       boolean initialized = false;
@@ -926,7 +925,7 @@ public class FirefoxAdapterLiveProbe {
     throws Exception {
     // every variant gets its OWN adapter process + first connection, so no
     // verdict is polluted by session-reuse behaviour of the adapter server
-    int ownPort = ThreadLocalRandom.current().nextInt(20000, 60000);
+    int ownPort = LiveProbeUtil.freePort();
     Process ownAdapter = new ProcessBuilder(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort)
       .directory(adapterBundle().getParent().toFile())
       .redirectErrorStream(true)
@@ -971,7 +970,7 @@ public class FirefoxAdapterLiveProbe {
         launchConfig.put("firefoxArgs", List.of("-headless"));
         // unique RDP port: default 6000 would CONNECT TO A LEFTOVER firefox
         // from an earlier variant/session instead of the launched one
-        launchConfig.put("port", ThreadLocalRandom.current().nextInt(20000, 60000));
+        launchConfig.put("port", LiveProbeUtil.freePort());
         Response launch = session.sendRequest(new FirefoxLaunchRequest(launchConfig), 60_000);
         if (!launch.isSuccess()) {
           System.out.println("[probe]   variant " + variant + " launch failed: " + launch.getMessage());
