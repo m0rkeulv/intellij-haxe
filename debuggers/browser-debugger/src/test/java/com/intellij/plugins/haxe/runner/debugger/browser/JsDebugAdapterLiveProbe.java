@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +92,14 @@ public class JsDebugAdapterLiveProbe {
       Path fromEnv = Path.of(env);
       return Files.isRegularFile(fromEnv) ? fromEnv : null;
     }
+    List<Path> candidates = new ArrayList<>();
+    String localAppData = System.getenv("LOCALAPPDATA");
+    if (localAppData != null && !localAppData.isBlank()) {
+      // per-user installs; plain Chromium (e.g. ungoogled-chromium, the
+      // reference browser of this module) ahead of the branded ones
+      candidates.add(Path.of(localAppData, "Chromium/Application/chrome.exe"));
+      candidates.add(Path.of(localAppData, "Google/Chrome/Application/chrome.exe"));
+    }
     for (String candidate : new String[]{
       "C:/Program Files/Google/Chrome/Application/chrome.exe",
       "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
@@ -100,7 +109,9 @@ public class JsDebugAdapterLiveProbe {
       "/usr/bin/chromium-browser",
       "/usr/bin/google-chrome",
       "/snap/bin/chromium"}) {
-      Path path = Path.of(candidate);
+      candidates.add(Path.of(candidate));
+    }
+    for (Path path : candidates) {
       if (Files.isRegularFile(path)) {
         return path;
       }
