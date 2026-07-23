@@ -733,9 +733,11 @@ public final class MatrixMain {
     long seconds = (System.nanoTime() - startNanos) / 1_000_000_000L;
     Results.Cell cell = new Results.Cell(lane, haxe, runtime, status, classes, flaky, seconds);
     cells.add(cell);
-    log.line(String.format("  %s %s%s : %s classes=%d failures=%d%s (%ds)",
+    int skipped = cell.totalSkipped();
+    log.line(String.format("  %s %s%s : %s classes=%d failures=%d%s%s (%ds)",
                            lane, haxe, runtime != null ? " x " + runtime : "", status,
                            classes.size(), cell.totalFailures(),
+                           skipped > 0 ? " skipped=" + skipped : "",
                            flaky.isEmpty() ? "" : " flaky=" + flaky.size(), seconds));
   }
 

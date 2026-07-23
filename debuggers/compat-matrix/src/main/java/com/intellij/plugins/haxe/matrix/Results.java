@@ -18,8 +18,18 @@ final class Results {
   record FailedTest(String test, String message) {
   }
 
+  /**
+   * {@code known} = the test flagged itself as a deliberate version/OS
+   * constraint (its Assume message starts with "known limitation:", stripped
+   * here). Everything else is a missing prerequisite of THIS pass — a runtime
+   * not provisioned, a fixture not built — and must not be presented as a
+   * limitation.
+   */
+  record SkippedTest(String test, String message, boolean known) {
+  }
+
   record ClassResult(String name, String fqName, int tests, int failures, int errors, int skipped,
-                     List<FailedTest> failed) {
+                     List<FailedTest> failed, List<SkippedTest> skippedTests) {
   }
 
   record Cell(String lane, String haxe, String runtime, String status, List<ClassResult> classes,
@@ -27,7 +37,14 @@ final class Results {
     int totalFailures() {
       return classes.stream().mapToInt(c -> c.failures() + c.errors()).sum();
     }
+
+    int totalSkipped() {
+      return classes.stream().mapToInt(ClassResult::skipped).sum();
+    }
   }
+
+  /** Assume-message marker for deliberate version/OS constraint skips. */
+  static final String KNOWN_LIMITATION_PREFIX = "known limitation:";
 
   private Results() {
   }
@@ -58,6 +75,7 @@ final class Results {
       Document doc = factory.newDocumentBuilder().parse(file.toFile());
       Element suite = doc.getDocumentElement();
       List<FailedTest> failed = new ArrayList<>();
+      List<SkippedTest> skippedTests = new ArrayList<>();
       NodeList cases = suite.getElementsByTagName("testcase");
       for (int i = 0; i < cases.getLength(); i++) {
         Element testcase = (Element)cases.item(i);
@@ -66,12 +84,21 @@ final class Results {
           failed.add(new FailedTest(testcase.getAttribute("name"),
                                     ((Element)failures.item(0)).getAttribute("message")));
         }
+        NodeList skips = testcase.getElementsByTagName("skipped");
+        if (skips.getLength() > 0) {
+          String reason = skipReason(((Element)skips.item(0)).getAttribute("message"));
+          boolean known = reason.startsWith(KNOWN_LIMITATION_PREFIX);
+          if (known) {
+            reason = reason.substring(KNOWN_LIMITATION_PREFIX.length()).trim();
+          }
+          skippedTests.add(new SkippedTest(testcase.getAttribute("name"), reason, known));
+        }
       }
       String name = suite.getAttribute("name");
       return new ClassResult(
         name.substring(name.lastIndexOf('.') + 1), name,
         intAttr(suite, "tests"), intAttr(suite, "failures"),
-        intAttr(suite, "errors"), intAttr(suite, "skipped"), failed);
+        intAttr(suite, "errors"), intAttr(suite, "skipped"), failed, skippedTests);
     } catch (Exception e) {
       return null;
     }
@@ -95,6 +122,12 @@ final class Results {
       }
     }
     return parse(evidenceDir);
+  }
+
+  // An Assume skip's message is "org.junit.AssumptionViolatedException: <reason>";
+  // only the reason is worth showing.
+  private static String skipReason(String message) {
+    return message == null ? "" : message.replaceFirst("^[A-Za-z0-9_.$]+(?:Exception|Error): ", "");
   }
 
   private static int intAttr(Element element, String name) {

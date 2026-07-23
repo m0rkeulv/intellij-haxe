@@ -6,6 +6,21 @@ them, and writes a self-contained HTML report: a summary card per debugger,
 a green/red grid per lane, and the list of any failing tests. This is the
 "full check on all our debugger work" button.
 
+Skips are first-class in the report: a cell shows `passed/total` (the
+shortfall is skips, never failures — those get their own red pill), a
+fully-skipped cell shows an orange `skipped` pill, and each grid carries
+collapsible lists of the skipped tests with their `Assume` reasons and the
+cells they skipped on. Two classes are kept apart and worded honestly:
+
+- **Known limitations** — tests deliberately flagged not to run on an OS or
+  toolchain version (the HashLink pre-4.3 exception tests, the multi-thread
+  tests on linux). To flag one, start its `Assume` message with
+  `known limitation:` — the report strips the marker and groups these under
+  their own heading.
+- **Missing prerequisites** — everything else: a runtime not provisioned, a
+  fixture not built, a lane not selected for this pass. Listed as exactly
+  that, never presented as something that cannot run.
+
 Implemented as a plain JVM tool (`src/main/java`, module
 `:debuggers:compat-matrix`) so it runs anywhere the build runs — Windows and
 linux — with no PowerShell or python requirement.
