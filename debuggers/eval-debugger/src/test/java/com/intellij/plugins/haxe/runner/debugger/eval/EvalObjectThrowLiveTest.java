@@ -68,7 +68,8 @@ public class EvalObjectThrowLiveTest {
     adapter = new EvalDebugAdapter(TIMEOUT);
     haxe = new ProcessBuilder("haxe", "-cp", fixtures.toString(), "-main", "EvalThrowObj",
                               "-D", "eval-debugger=127.0.0.1:" + adapter.getVmPort(), "--interp")
-      .redirectErrorStream(true).start();
+      .redirectErrorStream(true)
+      .start();
     dapListener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
     Socket clientSide = new Socket(InetAddress.getLoopbackAddress(), dapListener.getLocalPort());
     adapter.start(new DapConnection(dapListener.accept()));

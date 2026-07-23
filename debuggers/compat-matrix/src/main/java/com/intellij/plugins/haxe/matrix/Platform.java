@@ -32,7 +32,8 @@ final class Platform {
       return children.filter(Files::isDirectory)
         .map(sub -> binaryAt(sub, name))
         .filter(java.util.Objects::nonNull)
-        .findFirst().orElse(null);
+        .findFirst()
+        .orElse(null);
     } catch (Exception e) {
       return null;
     }

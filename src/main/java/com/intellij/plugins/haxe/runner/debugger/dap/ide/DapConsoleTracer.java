@@ -51,8 +51,10 @@ final class DapConsoleTracer {
       case ScopesRequest r when r.getArguments() != null ->
         text.append(" frame=").append(r.getArguments().getFrameId());
       case EvaluateRequest r when r.getArguments() != null ->
-        text.append(" frame=").append(r.getArguments().getFrameId())
-            .append(" expr=").append(r.getArguments().getExpression());
+        text.append(" frame=")
+            .append(r.getArguments().getFrameId())
+            .append(" expr=")
+            .append(r.getArguments().getExpression());
       case VariablesRequest r when r.getArguments() != null ->
         text.append(" ref=").append(r.getArguments().getVariablesReference());
       case SetVariableRequest r when r.getArguments() != null ->

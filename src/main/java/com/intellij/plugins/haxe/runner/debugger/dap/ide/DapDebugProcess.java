@@ -154,7 +154,8 @@ public class DapDebugProcess extends XDebugProcess {
   @Override
   public @NotNull ExecutionConsole createConsole() {
     ConsoleView console = TextConsoleBuilderFactory.getInstance()
-      .createBuilder(getSession().getProject()).getConsole();
+      .createBuilder(getSession().getProject())
+      .getConsole();
     console.attachToProcess(processHandler);
     return console;
   }

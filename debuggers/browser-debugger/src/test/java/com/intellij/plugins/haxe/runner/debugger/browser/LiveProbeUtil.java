@@ -30,7 +30,8 @@ final class LiveProbeUtil {
   static void compileHaxeJs(Path classPath, String mainClass, String outJsName) throws Exception {
     Process haxe = new ProcessBuilder("haxe", "-cp", classPath.toString(), "-main", mainClass,
                                       "-js", classPath.resolve(outJsName).toString(), "-debug")
-      .redirectErrorStream(true).start();
+      .redirectErrorStream(true)
+      .start();
     String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     if (!haxe.waitFor(30, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
       throw new AssertionError("fixture compile of " + mainClass + " failed:\n" + output);

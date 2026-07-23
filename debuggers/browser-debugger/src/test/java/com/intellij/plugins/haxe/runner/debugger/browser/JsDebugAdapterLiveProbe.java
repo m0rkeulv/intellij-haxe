@@ -288,7 +288,8 @@ public class JsDebugAdapterLiveProbe {
       }
       assertTrue("expected at least 2 step-in targets, got " + targets.size(), targets.size() >= 2);
       var f2Target = targets.stream().filter(t -> t.getLabel() != null && t.getLabel().contains("f2"))
-        .findFirst().orElseThrow(() -> new AssertionError("no f2 target among the labels"));
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no f2 target among the labels"));
 
       // --- runtime completions: 'docum' must complete to the browser global ---
       CompletionsRequest completions =
@@ -886,7 +887,9 @@ public class JsDebugAdapterLiveProbe {
 
         // --- multi-pause routing: pause the PAGE while the worker stays paused ---
         int pageThreadId = threads.stream().filter(t -> t.getId() < COMPOSITE_FLOOR)
-          .findFirst().orElseThrow().getId();
+          .findFirst()
+          .orElseThrow()
+          .getId();
         PauseRequest pause =
           new PauseRequest();
         PauseArguments pArgs =

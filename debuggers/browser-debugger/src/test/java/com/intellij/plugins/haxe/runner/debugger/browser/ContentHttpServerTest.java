@@ -127,7 +127,8 @@ public class ContentHttpServerTest {
   public void writeMethodsAreRejected() throws Exception {
     HttpResponse<String> response = http.send(
       HttpRequest.newBuilder(URI.create(server.getBaseUrl() + "index.html"))
-        .POST(HttpRequest.BodyPublishers.ofString("x")).build(),
+        .POST(HttpRequest.BodyPublishers.ofString("x"))
+        .build(),
       HttpResponse.BodyHandlers.ofString());
     assertEquals(405, response.statusCode());
   }
@@ -149,7 +150,8 @@ public class ContentHttpServerTest {
   public void headHasNoBody() throws Exception {
     HttpResponse<String> response = http.send(
       HttpRequest.newBuilder(URI.create(server.getBaseUrl() + "index.html"))
-        .method("HEAD", HttpRequest.BodyPublishers.noBody()).build(),
+        .method("HEAD", HttpRequest.BodyPublishers.noBody())
+        .build(),
       HttpResponse.BodyHandlers.ofString());
     assertEquals(200, response.statusCode());
     assertEquals("", response.body());
