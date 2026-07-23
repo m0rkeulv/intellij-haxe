@@ -525,7 +525,10 @@ public class FirefoxAdapterLiveProbe {
         session.sendRequest(setBreakpoints, TIMEOUT);
 
         StoppedEvent stopped = null;
-        deadline = System.currentTimeMillis() + 20_000;
+        // the fixture ticks every 250ms and lazy verification takes 1-2s, so
+        // a path that binds stops well inside this window; the forward
+        // variant is EXPECTED not to stop and pays the full wait
+        deadline = System.currentTimeMillis() + 8_000;
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = session.pollEvent(250);
           if (event instanceof StoppedEvent s) {
@@ -1011,6 +1014,17 @@ public class FirefoxAdapterLiveProbe {
           String detail = event instanceof StoppedEvent s ? " reason=" + s.getBody().getReason() : "";
           System.out.println("[probe]   variant " + variant + " event '" + event.getEvent() + "' ("
                              + event.getClass().getSimpleName() + ")" + detail);
+          // No-refresh variants: the fixture logs AFTER the breakpoint line,
+          // so page output arriving without a stop is definitive - the load
+          // ran through unpaused. Refresh variants skip this: their FIRST
+          // load is expected to run through, only the reloaded one stops.
+          if (!refreshOnce && event instanceof OutputEvent output
+              && output.getBody() != null && output.getBody().getOutput() != null
+              && output.getBody().getOutput().contains("-loaded")) {
+            System.out.println("[probe]   variant " + variant + " page output without a stop - missed");
+            session.sendRequest(new DisconnectRequest(), TIMEOUT);
+            return false;
+          }
           if (!(event instanceof StoppedEvent stopped)) {
             continue;
           }
