@@ -48,6 +48,12 @@ public final class JsDebugSessionMux implements DapEndpoint {
   /** Session index lives above this bit; raw ids must stay below it. */
   private static final int SESSION_SHIFT = 24;
   private static final int RAW_MASK = (1 << SESSION_SHIFT) - 1;
+  /**
+   * Highest index the remaining bits can hold. One past it, the shift
+   * overflows to zero and the session's ids become indistinguishable from the
+   * PAGE's - silent misrouting, so attaching stops here instead.
+   */
+  private static final int MAX_SESSION_INDEX = (1 << (Integer.SIZE - SESSION_SHIFT)) - 1;
   private static final long CHILD_TIMEOUT_MILLIS = 10_000;
   private static final long PUMP_POLL_MILLIS = 200;
 
@@ -676,7 +682,12 @@ public final class JsDebugSessionMux implements DapEndpoint {
   /** The child handshake: initialize, fire-and-forget launch, replayed configuration, join. */
   private void handshakeChild(Map<String, Object> configuration, String label)
     throws IOException, InterruptedException {
-    int index = nextSessionIndex.incrementAndGet();
+    int index = nextSessionIndex.getAndIncrement();
+    if (index > MAX_SESSION_INDEX) {
+      logSink.accept("cannot debug target '" + label + "': " + MAX_SESSION_INDEX
+                     + " targets already attached in this session");
+      return;
+    }
     DapClient client = DapClient.connect("127.0.0.1", adapterPort, (int)CHILD_TIMEOUT_MILLIS);
     if (!client.sendRequest(InitializeRequest.standard("chrome", true), CHILD_TIMEOUT_MILLIS).isSuccess()) {
       client.close();
