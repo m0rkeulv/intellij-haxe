@@ -270,7 +270,7 @@ class VariableInspector {
 		return mutator.setVariable(reference, name, valueExpr);
 	}
 
-	// intellij/setToStringRendering: the user's opt-in for toString object
+	// custom/setToStringRendering: the user's opt-in for toString object
 	// labels. STORED but not rendered through yet — labels only switch once
 	// the injected call is fault-PROOF via hl_dyn_call_safe (an SO inside a
 	// plain injected call is unrecoverable: the HL debug API cannot continue

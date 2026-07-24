@@ -105,7 +105,7 @@ class RequestDispatcher {
 				handleSetBreakpoints(request);
 			case "setExceptionBreakpoints":
 				handleSetExceptionBreakpoints(request);
-			case "intellij/setToStringRendering":
+			case "custom/setToStringRendering":
 				handleSetToStringRendering(request);
 			case "configurationDone":
 				handleConfigurationDone(request);

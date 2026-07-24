@@ -19,7 +19,7 @@ class Values {
 	/**
 		Object labels via the object's own toString() — a DELIBERATE, opt-in
 		exception to the safety rule above, controlled by the user through the
-		custom `intellij/setToStringRendering` request (a project-level IDE
+		custom `custom/setToStringRendering` request (a project-level IDE
 		setting, off by default, toggleable live from the Variables view).
 		Only a class whose chain DECLARES toString ever runs code (the
 		reflection probe itself calls nothing), and a THROWING toString

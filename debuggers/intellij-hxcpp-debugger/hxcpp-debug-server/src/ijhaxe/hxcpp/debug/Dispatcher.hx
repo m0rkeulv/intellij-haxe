@@ -67,7 +67,7 @@ class Dispatcher {
 	var stepFromLine:Int = 0;
 	var stepIterations:Int = 0;
 
-	// Smart step into (custom request "intellij/stepIntoFunction"): a TEMPORARY
+	// Smart step into (custom request "custom/stepIntoFunction"): a TEMPORARY
 	// class-function breakpoint at the chosen callee's entry races a STEP_OVER —
 	// whichever lands first is the stop, reported as a plain step. -1 = none.
 	// The temp lives outside the user-breakpoint bookkeeping (no DAP id, no
@@ -217,9 +217,9 @@ class Dispatcher {
 				stoppedStacks.clear();
 				sendResponse(seq, command, true, {allThreadsContinued: true});
 				debugger.continueThreads(resumeThread(request.arguments), 1);
-			case "intellij/stepIntoFunction":
+			case "custom/stepIntoFunction":
 				handleStepIntoFunction(seq, command, request.arguments);
-			case "intellij/setToStringRendering":
+			case "custom/setToStringRendering":
 				// live toggle for toString object labels (see Values.objectLabel);
 				// the client re-requests variables afterwards, so the current
 				// stop's rows re-describe with the new labels

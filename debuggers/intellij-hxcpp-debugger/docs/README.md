@@ -59,7 +59,7 @@ self-starting Server class into the build.
   static access through dotted package paths, `new`, and assignments.
 - **Exception breakpoints**: uncaught throws, critical errors (both default
   ON), the "thrown" haxe.Exception filter and per-class typed filters.
-- **toString rendering toggle** (`intellij/setToStringRendering`): object
+- **toString rendering toggle** (`custom/setToStringRendering`): object
   labels via `toString()` can be switched on live from the Variables view;
   OFF by default (running user code implicitly is opt-in — see Decisions).
 
@@ -252,7 +252,7 @@ handler and travels with the event; the server thread only formats and sends.
 Target discovery is IDE-side: `PsiResolvedSmartStepHandler` walks the Haxe PSI
 for the calls on the stopped line and resolves each to its declaring class
 (the server has no line→calls knowledge — there is no bytecode to mine).
-Choosing a variant sends the custom `intellij/stepIntoFunction` request with
+Choosing a variant sends the custom `custom/stepIntoFunction` request with
 (className, functionName); the server installs a TEMPORARY class-function
 breakpoint at the callee's entry racing a STEP_OVER — whichever lands first
 is the stop, reported as a plain step, so a call that never executes

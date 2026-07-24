@@ -214,7 +214,7 @@ class DispatcherTest {
 		t.dispatcher.handleDebugEvent(stop(1, DebugThread.STATUS_STOPPED_BREAK_IMMEDIATE, -1, "Main.hx", 12));
 		t.sent.resize(0);
 		t.dispatcher.handleRequest(Json.stringify({
-			seq: 4, type: "request", command: "intellij/stepIntoFunction",
+			seq: 4, type: "request", command: "custom/stepIntoFunction",
 			arguments: {threadId: 1, className: "my.pack.Target", functionName: "two"}
 		}));
 	}
