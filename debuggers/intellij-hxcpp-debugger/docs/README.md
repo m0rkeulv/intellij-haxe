@@ -80,7 +80,7 @@ toolchain; integration tests are opt-in via `-PdebuggerTests=true`.
 
 ```
 hxcpp-debug-server/               the published library (server sources)
-  intellij/hxcpp/debug/           Server, Dispatcher, Macro, DebuggerApi, ...
+  src/ijhaxe/hxcpp/debug/           Server, Dispatcher, Macro, DebuggerApi, ...
 src/test/haxe/                    interpreter-run unit tests (no C++ needed)
 src/test/java/                    DAP integration tests against real fixtures
 test-fixtures/                    debuggee programs compiled with the haxelib

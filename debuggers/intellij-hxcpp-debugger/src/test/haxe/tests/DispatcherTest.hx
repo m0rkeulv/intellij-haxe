@@ -1,8 +1,8 @@
 package tests;
 
 import haxe.Json;
-import intellij.hxcpp.debug.DebuggerApi;
-import intellij.hxcpp.debug.Dispatcher;
+import ijhaxe.hxcpp.debug.DebuggerApi;
+import ijhaxe.hxcpp.debug.Dispatcher;
 
 // An exception hierarchy for the typed-filter tests. SubError inherits its
 // constructor — the case a per-type entry breakpoint could never catch, and
