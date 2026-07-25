@@ -779,6 +779,16 @@ fields of `this` (implicit member access) → the owning class's statics → a
 class named by a leading dotted prefix (`MyClass.someValue`, `pkg.Cls.member`
 — the statics container `pkg.$Cls`).
 
+That order is a chain of PROBES, so each step must be able to answer "no".
+`tryChildTarget` (the "is <root> a field of `this`?" step) returns null for an
+unknown member rather than throwing: it used to throw, which only surfaced in
+an INSTANCE frame and only for an operator expression — a bare path is read
+through the evaluator's own tolerant lookup, while an operand of `a + b` is
+read through the write-target resolver. `Cls.member + 1` therefore died on the
+`this` probe with `"this.Cls" cannot be resolved to a writable location`
+(`"this.net"` for a packaged root) instead of falling through to the
+class-prefix step. A static frame has no `this` to probe and never hit it.
+
 Architecture (see `debug/eval/ExprParser|ExprAst|EvalValue|Operators`): a
 Pratt parser (HAXE precedence: bitwise ops in ONE tier binding tighter than
 comparisons; shifts between additive and bitwise) produces an AST whose
