@@ -712,10 +712,25 @@ the indirection:
   is omitted entirely when a class has no static data).
 
 The "Statics" scope is shown for the class owning the stopped frame — static
-AND instance methods (instance methods map back to their `$Class` container
-via the container's `bindings`, `binding.mid` = the method's findex). The
-compiler's `__name__`/`__constructs__`/`__meta__` bookkeeping fields are
-hidden.
+AND instance methods. The compiler's `__name__`/`__constructs__`/`__meta__`
+bookkeeping fields are hidden.
+
+**The container's name `$`-prefixes the LAST segment**: `pkg.Cls` keeps its
+statics on `pkg.$Cls`, never `$pkg.Cls` (`ModuleDebugInfo.staticsContainerName`
+is the one place that rule lives — it was duplicated, and the copy that got it
+wrong is what this section documents). The two frame kinds reach the container
+differently, which is why only one of them broke:
+
+- a STATIC method is a binding of the container itself (`binding.mid` = its
+  findex), so it needs no name lookup and worked everywhere;
+- an INSTANCE method lives in the instance type's virtual table
+  (`proto.proto`) and is mapped to its container BY NAME — so with the naive
+  `"$" + name` a packaged class resolved nothing: an instance frame there had
+  no Statics scope, and `myStaticField` (which Haxe source may write
+  unqualified) failed to evaluate while `pkg.Cls.myStaticField` worked.
+
+Covered by `PackagedStaticsIntegrationTest` against the packaged `pkg.Deep`
+fixture, with the top-level shapes guarded alongside.
 
 ### Interfaces are virtuals, and a virtual's slots mean three things
 

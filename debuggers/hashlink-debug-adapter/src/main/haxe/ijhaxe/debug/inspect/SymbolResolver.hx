@@ -160,8 +160,7 @@ class SymbolResolver {
 	// A class `pkg.Cls` keeps its statics on a container type named `pkg.$Cls`
 	// ($ prefixes the LAST segment, not the whole qualified name).
 	public static function staticsContainerName(className:String):String {
-		var lastDot = className.lastIndexOf(".");
-		return lastDot < 0 ? "$" + className : className.substr(0, lastDot + 1) + "$" + className.substr(lastDot + 1);
+		return ModuleDebugInfo.staticsContainerName(className);
 	}
 
 	// The live statics singleton of the class named `className`, or null when

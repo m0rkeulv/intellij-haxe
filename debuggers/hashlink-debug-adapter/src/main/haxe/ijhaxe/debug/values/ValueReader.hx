@@ -477,8 +477,16 @@ class ValueReader {
 		}
 	}
 
+	// hl `$`-prefixes the LAST segment of a statics container (`pkg.$Cls`), so
+	// the `$` is not always leading.
 	static function displayName(name:String):String {
-		return (name != null && StringTools.startsWith(name, "$")) ? name.substr(1) : name;
+		if (name == null) {
+			return name;
+		}
+		var dot = name.lastIndexOf(".");
+		return dot + 1 < name.length && name.charCodeAt(dot + 1) == "$".code
+			? name.substr(0, dot + 1) + name.substr(dot + 2)
+			: name;
 	}
 
 	// A function/method type rendered as its Haxe signature: `(Arg, Arg) -> Ret`
