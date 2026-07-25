@@ -717,6 +717,32 @@ via the container's `bindings`, `binding.mid` = the method's findex). The
 compiler's `__name__`/`__constructs__`/`__meta__` bookkeeping fields are
 hidden.
 
+### Interfaces are virtuals, and a virtual's slots mean three things
+
+A class that implements an interface carries one **empty-named `HVirtual`
+field per interface** — genhl's cache for that interface view of the object
+(`hl_to_virtual`). It is emitted whether or not the program ever casts, sits
+between the declared fields (a class that only `extends` has none), and is
+skipped for DISPLAY only: the LAYOUT must keep it or every field after it
+lands at the wrong offset.
+
+A `vvirtual` is `{t, value, next}` followed by one slot per member, and the
+slot's meaning depends on the member kind:
+
+| member | `fields_data[i]` holds |
+|---|---|
+| real data field | the field's ADDRESS inside the wrapped object |
+| method | the function's CODE pointer (never dereference it) |
+| accessor-backed property | null — there is no storage to point at |
+
+So an interface view is a poor thing to show structurally: its members are
+mostly properties and methods, which carry no data. When `value` is non-null
+the virtual is presented AS the wrapped instance instead (real field values,
+and the class name drives source navigation); a standalone virtual — an
+anonymous structure, `value` null, slots pointing into its own data area —
+keeps the member-list rendering. Verified live in
+`IfaceVirtualIntegrationTest` against the `Iface.hx` fixture.
+
 ### The per-stop reference registry
 
 `variablesReference`s (and the frame cache) are handed out lazily from
