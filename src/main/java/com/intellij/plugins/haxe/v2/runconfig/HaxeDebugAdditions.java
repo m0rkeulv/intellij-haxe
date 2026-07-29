@@ -1,0 +1,30 @@
+package com.intellij.plugins.haxe.v2.runconfig;
+
+import com.intellij.plugins.haxe.config.HaxeTarget;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+
+/**
+ * Compiler additions that make a target's output debuggable, applied on top of the
+ * action's normal compile. The first concrete form of the planned "profiles"
+ * concept: a named argument set layered over a build.
+ */
+public final class HaxeDebugAdditions {
+
+  private HaxeDebugAdditions() {
+  }
+
+  /** Extra compiler arguments for a debuggable build, or null when the target has no debugger support yet. */
+  @Nullable
+  public static List<String> forTarget(@NotNull HaxeTarget target) {
+    return switch (target) {
+      // HL: debug info in the bytecode; JS: -debug emits the .js.map the
+      // browser adapters need; FLASH: -debug embeds the fdb line tables
+      case HL, JAVA_SCRIPT, FLASH -> List.of("-debug");
+      // remaining targets follow in phase C (hxcpp: debug server lib + port, eval)
+      default -> null;
+    };
+  }
+}

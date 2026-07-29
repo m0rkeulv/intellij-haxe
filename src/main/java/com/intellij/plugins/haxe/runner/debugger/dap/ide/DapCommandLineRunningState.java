@@ -11,22 +11,35 @@ import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Plain (non-debug) execution of a prepared command line, with its output in
- * the console — the Run half of every DAP-debugger configuration.
+ * Plain (non-debug) execution of a command line, with its output in the
+ * console — the Run half of every DAP-debugger configuration.
+ *
+ * The command line is built lazily in {@link #startProcess()}: the platform
+ * calls {@code getState()} BEFORE before-launch tasks run, so resolving the
+ * program artifact there aborts a run whose compile step would have produced
+ * it. Resolution must wait until the process actually starts.
  */
 public class DapCommandLineRunningState extends CommandLineState {
-  private final Project project;
-  private final GeneralCommandLine commandLine;
 
-  public DapCommandLineRunningState(ExecutionEnvironment env, Project project, GeneralCommandLine commandLine) {
+  /** Builds the command line at process start; may fail with a user-readable error. */
+  @FunctionalInterface
+  public interface CommandLineSupplier {
+    GeneralCommandLine get() throws ExecutionException;
+  }
+
+  private final Project project;
+  private final CommandLineSupplier commandLineSupplier;
+
+  public DapCommandLineRunningState(ExecutionEnvironment env, Project project, CommandLineSupplier commandLineSupplier) {
     super(env);
     this.project = project;
-    this.commandLine = commandLine;
+    this.commandLineSupplier = commandLineSupplier;
   }
 
   @NotNull
   @Override
   protected ProcessHandler startProcess() throws ExecutionException {
+    GeneralCommandLine commandLine = commandLineSupplier.get();
     setConsoleBuilder(TextConsoleBuilderFactory.getInstance().createBuilder(project));
     return new ColoredProcessHandler(commandLine.createProcess(), commandLine.getCommandLineString());
   }

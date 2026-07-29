@@ -1,0 +1,113 @@
+package com.intellij.plugins.haxe.v2.buildtools.settings.ui;
+
+import com.intellij.openapi.options.SearchableConfigurable;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.ProjectJdkTable;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import javax.swing.*;
+import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Settings page under Build, Execution, Deployment | Build Tools | Haxe.
+ */
+public final class HaxeBuildToolsConfigurable implements SearchableConfigurable {
+
+  public static final String ID = "settings.haxe.build.tools";
+
+  private final Project project;
+  private HaxeBuildToolsSettingsPanel panel;
+
+  public HaxeBuildToolsConfigurable(@NotNull Project project) {
+    this.project = project;
+  }
+
+  @Override
+  public @NotNull String getId() {
+    return ID;
+  }
+
+  @Override
+  public String getDisplayName() {
+    return HaxeBundle.message("haxe.build.tools.configurable.name");
+  }
+
+  @Override
+  public @Nullable JComponent createComponent() {
+    if (panel == null) {
+      panel = new HaxeBuildToolsSettingsPanel();
+    }
+    reset();
+    return panel.getComponent();
+  }
+
+  @Override
+  public boolean isModified() {
+    if (panel == null) return false;
+    HaxeBuildToolSettings settings = getSettings();
+    return !Objects.equals(panel.getSelectedSdkName(), settings.getSdkName())
+           || !panel.getHaxelibPath().equals(settings.getHaxelibPath())
+           || !panel.getNekoPath().equals(settings.getNekoPath())
+           || !panel.getHashlinkPath().equals(settings.getHashlinkPath())
+           || panel.isServerEnabled() != settings.isCompilationServerEnabled()
+           || panel.getServerPort() != settings.getCompilationServerPort()
+           || !panel.getServerArguments().equals(settings.getCompilationServerArguments());
+  }
+
+  @Override
+  public void apply() {
+    if (panel == null) return;
+    HaxeBuildToolSettings settings = getSettings();
+    settings.setSdkName(panel.getSelectedSdkName());
+    settings.setHaxelibPath(panel.getHaxelibPath());
+    settings.setNekoPath(panel.getNekoPath());
+    settings.setHashlinkPath(panel.getHashlinkPath());
+
+    settings.setCompilationServerEnabled(panel.isServerEnabled());
+    settings.setCompilationServerPort(panel.getServerPort());
+    settings.setCompilationServerArguments(panel.getServerArguments());
+    // config changes invalidate the running server; the next connected compile restarts it
+    HaxeCompilationServerManager.getInstance(project).stop();
+  }
+
+  @Override
+  public void reset() {
+    if (panel == null) return;
+    HaxeBuildToolSettings settings = getSettings();
+    panel.reset(getHaxeSdkNames(),
+                settings.getSdkName(),
+                settings.getHaxelibPath(),
+                settings.getNekoPath(),
+                settings.getHashlinkPath());
+    panel.resetServerFields(settings.isCompilationServerEnabled(),
+                            settings.getCompilationServerPort(),
+                            settings.getCompilationServerArguments());
+  }
+
+  @Override
+  public void disposeUIResources() {
+    panel = null;
+  }
+
+  @NotNull
+  private HaxeBuildToolSettings getSettings() {
+    return HaxeBuildToolSettings.getInstance(project);
+  }
+
+  @NotNull
+  private static Set<String> getHaxeSdkNames() {
+    Set<String> names = new LinkedHashSet<>();
+    for (Sdk sdk : ProjectJdkTable.getInstance().getSdksOfType(HaxeSdkType.getInstance())) {
+      names.add(sdk.getName());
+    }
+    return names;
+  }
+}

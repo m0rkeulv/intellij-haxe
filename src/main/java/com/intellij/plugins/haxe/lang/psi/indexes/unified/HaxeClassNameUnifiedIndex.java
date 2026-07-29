@@ -47,12 +47,17 @@ public class HaxeClassNameUnifiedIndex {
         Collection<HaxeClass> stubResults = HaxeClassNameStubIndex.getByNameFiltered(name, project, scope);
         Collection<HaxeComponentIndexData> values = HaxeClassNameFileIndex.getValues(name, project, scope);
 
+        // target-package filter: classes of inactive targets (flash.* while building
+        // hl, ...) must not be offered - the stub filter only covers sdk-root files,
+        // so library-shipped target externs need the package check on both paths
         List<HaxeClassLookupData> listA = stubResults.stream()
                 .map(HaxeClass::getModel)
+                .filter(model -> LookupUtil.isActiveTargetPackage(model.getQualifiedInfo().getPackageName(), project))
                 .map(HaxeClassLookupData::new)
                 .toList();
 
         List<HaxeClassLookupData> listB = values.stream()
+                .filter(indexData -> LookupUtil.isActiveTargetPackage(indexData.getFqn().getPackageName(), project))
                 .map( indexData -> new  HaxeClassLookupData(indexData, ()->{
                     return resolveModel(indexData.getFqn(), project, scope);
                 }))
@@ -101,7 +106,18 @@ public class HaxeClassNameUnifiedIndex {
         ArrayList<HaxeClass> haxeClasses = new ArrayList<>(stubResults);
         haxeClasses.addAll(fileResults);
 
-        return haxeClasses;
+        // classes of inactive targets (flash.* while building hl, ...) must not be
+        // offered as import candidates - the stub-side filter only covers sdk-root
+        // files, not library-shipped target externs
+        return haxeClasses.stream()
+          .filter(haxeClass -> LookupUtil.isActiveTargetPackage(packageNameOf(haxeClass), project))
+          .toList();
+    }
+
+    @Nullable
+    private static String packageNameOf(@NotNull HaxeClass haxeClass) {
+        HaxeClassModel model = haxeClass.getModel();
+        return model != null ? model.getQualifiedInfo().getPackageName() : null;
     }
 
 

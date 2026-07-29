@@ -50,8 +50,7 @@ import com.intellij.plugins.haxe.config.sdk.HaxeSdkAdditionalDataBase;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.module.HaxeModuleSettingsBase;
-import com.intellij.plugins.haxe.runner.debugger.HaxeDebugRunner;
-import com.intellij.plugins.haxe.tests.runner.HaxeTestsConfiguration;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.legacy.LegacyHxcppDebugRunner;
 import com.intellij.plugins.haxe.util.CompilationContext;
 import com.intellij.plugins.haxe.util.HaxeCommonCompilerUtil;
 import com.intellij.plugins.haxe.util.HaxeProcessTreeUtil;
@@ -210,14 +209,6 @@ public class HaxeCompiler implements FileProcessingCompiler {
       return null;
     }
 
-    HaxeTestsConfiguration haxeTestsConfiguration = null;
-
-    if(configuration != null && configuration instanceof HaxeTestsConfiguration testsConfiguration) {
-      haxeTestsConfiguration = testsConfiguration;
-    }
-
-    final HaxeTestsConfiguration finalHaxeTestsConfiguration = haxeTestsConfiguration;
-
     return new CompilationContext() {
       private String myErrorRoot;
 
@@ -239,7 +230,7 @@ public class HaxeCompiler implements FileProcessingCompiler {
 
       @Override
       public String getCompilationClass() {
-        return getIsTestBuild() ? finalHaxeTestsConfiguration.getRunnerClass() : getModuleSettings().getMainClass();
+        return getModuleSettings().getMainClass();
       }
 
       @Override
@@ -254,7 +245,7 @@ public class HaxeCompiler implements FileProcessingCompiler {
 
       @Override
       public Boolean getIsTestBuild() {
-        return finalHaxeTestsConfiguration != null;
+        return false;
       }
 
       @Override
@@ -395,7 +386,7 @@ public class HaxeCompiler implements FileProcessingCompiler {
       if (configuration != null) {
         String name = RunnerAndConfigurationSettingsImpl.getUniqueIdFor(configuration);
         return ExecutionManagerImpl.getInstance(module.getProject())
-          .isStarting(name, DefaultDebugExecutor.EXECUTOR_ID, HaxeDebugRunner.HAXE_DEBUG_RUNNER_ID);
+          .isStarting(name, DefaultDebugExecutor.EXECUTOR_ID, LegacyHxcppDebugRunner.RUNNER_ID);
       }
       return false;
     }

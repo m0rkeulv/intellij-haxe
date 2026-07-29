@@ -288,6 +288,11 @@ tasks {
         from(project(":debuggers:hashlink-debug-adapter").layout.buildDirectory.file("hl/hl-debug-adapter.hl")) {
             into(pluginName.map { "$it/adapter" })
         }
+        // the lime project evaluator runs on the IDE's own JRE; ship it beside the plugin jars
+        dependsOn(":tools:LimeProjectParser:buildParser")
+        from(project(":tools:LimeProjectParser").layout.buildDirectory.file("libs/LimeProjectParser.jar")) {
+            into(pluginName.map { "$it/tools" })
+        }
     }
 
 

@@ -40,7 +40,6 @@
 
 
   <extensionPoints>
-    <extensionPoint dynamic="true" name="module.config"  interface="com.intellij.plugins.haxe.ide.projectStructure.HaxeModuleConfigurationExtensionPoint"/>
     <extensionPoint dynamic="true" name="haxeMethodsSearch" interface="com.intellij.util.QueryExecutor"/>
   </extensionPoints>
 
@@ -60,10 +59,10 @@
     <gotoDeclarationHandler implementation="com.intellij.plugins.haxe.ide.HaxeGotoDeclarationHandler"/>
 
     <sdkType implementation="com.intellij.plugins.haxe.config.sdk.HaxeSdkType"/>
-    <compiler.task implementation="com.intellij.plugins.haxe.compilation.HaxePreCompilerTask"/>
+    <!-- HAXE_MODULE stays registered so legacy projects still open; the v1
+         module builder and settings tab are gone - v2 (plain modules + tool
+         window) is the only configuration surface -->
     <moduleType id="HAXE_MODULE" implementationClass="com.intellij.plugins.haxe.ide.module.HaxeModuleType"/>
-    <moduleBuilder builderClass="com.intellij.plugins.haxe.ide.module.HaxeModuleBuilder"/>
-    <moduleConfigurationEditorProvider implementation="com.intellij.plugins.haxe.ide.projectStructure.HaxeModuleConfigurationEditorProvider"/>
     <projectStructureDetector implementation="com.intellij.plugins.haxe.ide.projectStructure.detection.HaxeProjectStructureDetector"/>
     <projectSdkSetupValidator id="haxeSdk" implementation="com.intellij.plugins.haxe.codeInsight.daemon.HaxeProjectSdkSetupValidator"/>
     <projectOpenProcessor id="openOpenFlProjectProcessor"  implementation="com.intellij.plugins.haxe.ide.projectStructure.processor.HaxeOpenOpenFlProjectProcessor"/>
@@ -145,8 +144,11 @@
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.interp.InterpDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.browser.BrowserDebugRunner"/>
-    <programRunner implementation="com.intellij.plugins.haxe.runner.HaxeRunner"/>
-    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebugRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.flash.FlashRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.flash.FlashDebugRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.legacy.LegacyHxcppRunner"/>
+    <programRunner  implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.legacy.LegacyHxcppDebugRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.v2.runconfig.HaxeActionRunner"/>
     <xdebugger.breakpointType implementation="com.intellij.plugins.haxe.runner.debugger.HaxeBreakpointType"/>
     <!-- ONE exception breakpoint category shared by the HashLink and HXCPP
          debuggers (Java-style: a default "Any exception" with Notifications
@@ -329,17 +331,9 @@
 
     <weigher key="completion" implementationClass="com.intellij.plugins.haxe.ide.completion.weigher.HaxeLookupCompletionWeigher" id="Haxe"  />
 
-    <!-- Keep the compiler contributor last because it is slow compared to the internal stuff.
-         Don't use order="LAST" because that puts it after the default contributor, which puts up the "No Suggestions"
-         box, and we want compiler error messages to be displayed instead. -->
-    <completion.contributor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeCompilerCompletionContributor"/>
-
     <configurationType implementation="com.intellij.plugins.haxe.runner.HaxeRunConfigurationType"/>
 
     <moduleService serviceImplementation="com.intellij.plugins.haxe.ide.module.HaxeModuleSettings"/>
-
-    <statusBarWidgetFactory id="HaxeTargetWidget"
-                            implementation="com.intellij.plugins.haxe.ide.statusbar.HaxeTargetStatusBarWidgetFactory"/>
 
     <internalFileTemplate name="HaxeClass"/>
     <internalFileTemplate name="HaxeInterface"/>
@@ -426,12 +420,6 @@
 
     <projectService serviceImplementation="com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSettings"/>
 
-    <projectConfigurable instance="com.intellij.plugins.haxe.config.HaxeProjectSettingsConfigurable"
-                         parentId="build"
-                         id="com.intellij.plugins.haxe.config.HaxeProjectSettingsConfigurable"
-                         key="haxe.settings.name" bundle="messages.HaxeBundle"
-                         nonDefaultProject="true" />
-
     <!-- parentId is the Debugger node's LEGACY configurable id (verified in
          the platform's DebuggerConfigurable), NOT "debugger" - an unknown
          parent silently drops the page to the settings ROOT -->
@@ -440,6 +428,34 @@
                          id="haxe.debugger.settings"
                          key="haxe.debugger.settings.display.name" bundle="messages.HaxeDebuggerBundle"
                          nonDefaultProject="true" />
+
+    <!-- V2 build system: compiler settings (Settings | Build, Execution, Deployment | Compiler | Haxe Compiler) -->
+    <projectService serviceInterface="com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings"
+                    serviceImplementation="com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerProjectSettings"/>
+
+    <projectConfigurable instance="com.intellij.plugins.haxe.v2.compiler.settings.ui.HaxeCompilerConfigurable"
+                         parentId="project.propCompiler"
+                         id="settings.haxe.compiler"
+                         key="haxe.compiler.configurable.name" bundle="messages.HaxeBundle"
+                         nonDefaultProject="true"/>
+
+
+    <!-- V2 build system: build tool settings (Settings | Build, Execution, Deployment | Build Tools | Haxe) -->
+    <projectService serviceInterface="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings"
+                    serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolProjectSettings"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.toolwindow.HaxeCustomActionsStore"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.toolwindow.HaxeBuildFilesStore"/>
+
+    <!-- V2 build system: "Haxe" entry in the New Project / New Module wizard, creating plain modules -->
+    <newProjectWizard.languageGenerator implementation="com.intellij.plugins.haxe.v2.wizard.HaxeNewProjectWizard"/>
+    <projectConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable"
+                         parentId="build.tools"
+                         id="settings.haxe.build.tools"
+                         key="haxe.build.tools.configurable.name" bundle="messages.HaxeBundle"
+                         nonDefaultProject="true"/>
 
     <importFilteringRule implementation="com.intellij.plugins.haxe.ide.HaxeImportFilteringRule"/>
     <targetElementEvaluator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.HaxeTargetElementEvaluator"/>
@@ -631,14 +647,35 @@
                 canCloseContents="true"
                 factoryClass="com.intellij.plugins.haxe.ide.toolWindow.HaxelibConsoleWindowFactory"/>
 
+    <!-- V2 build system: Gradle/Maven-style Haxe tool window -->
+    <toolWindow id="Haxe"
+                anchor="right"
+                icon="/icons/Haxe_logo.svg"
+                factoryClass="com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowFactory"/>
+
+    <!-- V2 build system: compilation server stdio console -->
+    <toolWindow id="Haxe Compilation Server"
+                anchor="bottom"
+                icon="/icons/Haxe_logo.svg"
+                factoryClass="com.intellij.plugins.haxe.v2.toolwindow.HaxeServerConsoleWindowFactory"/>
+
+    <!-- V2 build system: Build Project / Build Module delegates to configured build commands -->
+    <projectTaskRunner implementation="com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTaskRunner"/>
+
+    <!-- V2 build system: "Run Haxe action" before-launch step (compiles before run/debug) -->
+    <stepsBeforeRunProvider implementation="com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider"/>
+
     <readWriteAccessDetector implementation="com.intellij.plugins.haxe.ide.HaxeReadWriteAccessDetector"
                              id="haxe"
                              order="first, before kotlin, before java"/>
 
     <postStartupActivity implementation="com.intellij.plugins.haxe.haxelib.HaxelibProjectStartActivity"/>
+    <postStartupActivity implementation="com.intellij.plugins.haxe.v2.HaxeV2ProjectActivity"/>
 
     <notificationGroup id="haxe.haxelib.warning" displayType="BALLOON" bundle="messages.HaxeBundle" key="haxe.haxelib.library.dependencies"/>
     <notificationGroup id="haxe.build.process" displayType="STICKY_BALLOON" bundle="messages.HaxeBundle" key="haxe.build.process.notification.group"/>
+    <notificationGroup id="haxe.command" displayType="BALLOON" bundle="messages.HaxeBundle" key="haxe.command.notification.group"/>
+    <notificationGroup id="haxe.debugger.legacy" displayType="BALLOON" bundle="messages.HaxeDebuggerBundle" key="legacy.hxcpp.notification.group"/>
 
 
     <vfs.asyncListener implementation="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"/>
@@ -707,26 +744,6 @@
             icon="HaxeIcons.HAXE_LOGO">
       <add-to-group group-id="ProjectViewPopupMenu"/>
     </action>
-
-    <action id="Haxe.project.sync-libs" class="com.intellij.plugins.haxe.ide.actions.haxelib.SyncProjectLibraryListAction"
-            text="Reload Haxe Project"
-            description="Reloads project and imports all libraries"
-            icon="AllIcons.Actions.Refresh">
-    </action>
-
-    <action id="Haxe.haxlib.update-cache" class="com.intellij.plugins.haxe.ide.actions.haxelib.UpdateHaxeLibCacheAction"
-            text="Purge Haxelib Cache"
-            description="Removes all cached haxelib values"
-            icon="AllIcons.Actions.Refresh">
-    </action>
-
-
-    <group id="Haxe.projectUtils" icon="HaxeIcons.HAXE_LOGO" popup="true"  text="Haxe" class="com.intellij.plugins.haxe.ide.actions.haxelib.HaxeActionGroup">
-      <reference ref="Haxe.project.sync-libs"/>
-      <reference ref="Haxe.haxlib.update-cache"/>
-      <add-to-group group-id="ProjectViewPopupMenu"/>
-      <add-to-group group-id="EditorPopupMenu"/>
-    </group>
 
   </actions>
 </idea-plugin>

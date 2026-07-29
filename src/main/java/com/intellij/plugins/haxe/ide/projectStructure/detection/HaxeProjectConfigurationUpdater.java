@@ -42,7 +42,7 @@ import com.intellij.plugins.haxe.ide.library.HaxeLibraryType;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.ide.projectStructure.HXMLData;
-import com.intellij.plugins.haxe.runner.HaxeApplicationConfiguration;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.legacy.LegacyHxcppRunConfiguration;
 import com.intellij.plugins.haxe.runner.HaxeRunConfigurationType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -135,7 +135,7 @@ public class HaxeProjectConfigurationUpdater implements ProjectFromSourcesBuilde
     HaxeModuleSettings settings = HaxeModuleSettings.getInstance(module);
     String hxmlPath = settings.getHxmlPath();
     if(hxmlPath != null && !hxmlPath.isEmpty()) {
-      HaxeApplicationConfiguration config = (HaxeApplicationConfiguration)factory.createTemplateConfiguration(module.getProject());
+      LegacyHxcppRunConfiguration config = (LegacyHxcppRunConfiguration)factory.createTemplateConfiguration(module.getProject());
       config.setName(module.getName() + " " + new File(hxmlPath).getName());
       config.setModule(module);
       RunnerAndConfigurationSettings runSettings = manager.createConfiguration(config, factory);

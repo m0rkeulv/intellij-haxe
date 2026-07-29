@@ -1,0 +1,55 @@
+package com.intellij.plugins.haxe.v2.buildtools.settings;
+
+import com.intellij.openapi.project.Project;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+/**
+ * Project-level Haxe build tool configuration (v2), shown under Settings | Build Tools | Haxe:
+ * the Haxe SDK plus paths to the commonly used companion tools. Empty paths mean
+ * "auto-detect" (from the SDK or the system PATH).
+ */
+public interface HaxeBuildToolSettings {
+
+  @NotNull
+  static HaxeBuildToolSettings getInstance(@NotNull Project project) {
+    return project.getService(HaxeBuildToolSettings.class);
+  }
+
+  /** Name of the Haxe SDK in the SDK table, or {@code null} when none is selected. */
+  @Nullable
+  String getSdkName();
+
+  void setSdkName(@Nullable String sdkName);
+
+  @NotNull
+  String getNekoPath();
+
+  void setNekoPath(@NotNull String path);
+
+  @NotNull
+  String getHashlinkPath();
+
+  void setHashlinkPath(@NotNull String path);
+
+  @NotNull
+  String getHaxelibPath();
+
+  void setHaxelibPath(@NotNull String path);
+
+  /** Whether the project keeps a haxe compilation server (`haxe --wait`) for faster compiles. */
+  boolean isCompilationServerEnabled();
+
+  void setCompilationServerEnabled(boolean enabled);
+
+  /** Fixed server port, or 0 to pick a free port automatically. */
+  int getCompilationServerPort();
+
+  void setCompilationServerPort(int port);
+
+  /** Extra arguments passed to the server process (e.g. "-v"). */
+  @NotNull
+  String getCompilationServerArguments();
+
+  void setCompilationServerArguments(@NotNull String arguments);
+}

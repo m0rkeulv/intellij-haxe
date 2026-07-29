@@ -18,3 +18,7 @@ include(":debuggers:eval-debugger")
 include(":debuggers:browser-debugger")
 include(":debuggers:compat-matrix")
 
+// build-tool helpers under tools/ (the :tools node is an empty grouping
+// project with no build logic of its own)
+include(":tools:LimeProjectParser")
+
