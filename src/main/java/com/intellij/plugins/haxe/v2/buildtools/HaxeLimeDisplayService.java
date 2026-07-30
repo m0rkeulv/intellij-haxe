@@ -260,6 +260,11 @@ public final class HaxeLimeDisplayService implements Disposable {
       case "hl" -> appPath + "/hl/obj/ApplicationMain.hl";
       case "html5" -> appPath + "/html5/bin/" + (appFile.isEmpty() ? "index" : appFile) + ".js";
       case "flash" -> appPath + "/flash/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
+      // desktop cpp: lime copies the built executable into bin, named after
+      // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
+      case "windows" -> appFile.isEmpty() ? null : appPath + "/windows/bin/" + appFile + ".exe";
+      case "linux" -> appFile.isEmpty() ? null : appPath + "/linux/bin/" + appFile;
+      // TODO mac: the artifact is a .app bundle (Contents/MacOS/<app file>) - needs bundle-aware launch
       default -> null;
     };
   }

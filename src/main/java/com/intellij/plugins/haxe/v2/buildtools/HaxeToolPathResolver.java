@@ -6,6 +6,7 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -71,6 +72,28 @@ public final class HaxeToolPathResolver {
       }
     }
     return findConfiguredSdk(project);
+  }
+
+  /**
+   * The SDK a module compiles and resolves against: its Environment SDK when
+   * set, else the project-wide one from Build Tools | Haxe. Null when neither
+   * is configured — the editor then asks the user to pick one. This is the
+   * single authority; nothing consults the Project SDK.
+   */
+  @Nullable
+  public static Sdk effectiveSdk(@NotNull Project project, @NotNull String containerId) {
+    String name = effectiveSdkName(project, containerId);
+    return name != null ? ProjectJdkTable.getInstance().findJdk(name) : null;
+  }
+
+  @Nullable
+  public static String effectiveSdkName(@NotNull Project project, @NotNull String containerId) {
+    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
+    if (environmentSdk != null && ProjectJdkTable.getInstance().findJdk(environmentSdk) != null) {
+      return environmentSdk;
+    }
+    String settingsSdk = HaxeBuildToolSettings.getInstance(project).getSdkName();
+    return settingsSdk != null && ProjectJdkTable.getInstance().findJdk(settingsSdk) != null ? settingsSdk : null;
   }
 
   /** The SDK selected in Build Tools | Haxe, or the first registered Haxe SDK, or null. */

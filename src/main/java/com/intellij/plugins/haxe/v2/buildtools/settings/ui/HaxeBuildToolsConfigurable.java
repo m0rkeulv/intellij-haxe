@@ -1,18 +1,29 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings.ui;
 
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
+import com.intellij.plugins.haxe.util.HaxeModuleDetection;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -66,7 +77,13 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
   public void apply() {
     if (panel == null) return;
     HaxeBuildToolSettings settings = getSettings();
+    boolean sdkChanged = !Objects.equals(panel.getSelectedSdkName(), settings.getSdkName());
     settings.setSdkName(panel.getSelectedSdkName());
+    if (sdkChanged) {
+      // the default SDK is only real once it reaches the module entities -
+      // resolution reads the project model, not this settings page
+      applyDefaultSdkToModules();
+    }
     settings.setHaxelibPath(panel.getHaxelibPath());
     settings.setNekoPath(panel.getNekoPath());
     settings.setHashlinkPath(panel.getHashlinkPath());
@@ -76,6 +93,28 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
     settings.setCompilationServerArguments(panel.getServerArguments());
     // config changes invalidate the running server; the next connected compile restarts it
     HaxeCompilationServerManager.getInstance(project).stop();
+  }
+
+  /** Haxe modules without an Environment override follow the default SDK. */
+  private void applyDefaultSdkToModules() {
+    HaxeModuleSdkApplier applier = HaxeModuleSdkApplier.getInstance(project);
+    HaxeEnvironmentStore environment = HaxeEnvironmentStore.getInstance(project);
+    ReadAction.nonBlocking(() -> {
+        List<String> names = new ArrayList<>();
+        for (Module module : ModuleManager.getInstance(project).getModules()) {
+          if (HaxeModuleDetection.isHaxeModule(module) && environment.getSdkName(module.getName()) == null) {
+            names.add(module.getName());
+          }
+        }
+        return names;
+      })
+      .inSmartMode(project)
+      .finishOnUiThread(ModalityState.defaultModalityState(), names -> {
+        for (String moduleName : names) {
+          applier.applyAsync(moduleName, HaxeToolPathResolver.effectiveSdkName(project, moduleName));
+        }
+      })
+      .submit(AppExecutorUtil.getAppExecutorService());
   }
 
   @Override

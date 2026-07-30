@@ -12,6 +12,7 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -24,25 +25,35 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Keeps the project's haxe compilation server (`haxe --wait <port>`) alive: one
- * process per project, tied to the haxe binary it was started with (the server's
- * cache is per binary, so an SDK change forces a restart). Started lazily by the
- * first connected compile, killed with the project.
+ * Keeps the project's haxe compilation servers (`haxe --wait <port>`) alive.
+ * The server's cache is per haxe BINARY, and per-module SDKs mean one project
+ * can need several haxe versions at once — so instances are keyed by the
+ * resolved executable path, one process each, started lazily by the first
+ * connected compile against that SDK. A dead instance keeps its entry (and
+ * output backlog) so console tabs survive restarts; everything dies with the
+ * project.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeCompilationServerManager implements Disposable {
 
-  /** Receives the server process output (and lifecycle lines) for the server console window. */
+  /** Receives one server's process output (and lifecycle lines) for the server console window. */
   public interface ServerOutputListener {
     void onOutput(@NotNull String text, @NotNull Key<?> outputType);
+  }
+
+  /** UI snapshot of one server instance; {@code id} is the haxe executable path the instance is keyed by. */
+  public record ServerInfo(@NotNull String id, @NotNull String displayName, int port, boolean running) {
   }
 
   private record OutputChunk(@NotNull String text, @NotNull Key<?> outputType) {
@@ -50,12 +61,28 @@ public final class HaxeCompilationServerManager implements Disposable {
 
   private static final int BACKLOG_LIMIT = 2000;
 
+  private static final class ServerInstance {
+    final String exePath;
+    final String displayName;
+    @Nullable final String sdkName;
+    final List<ServerOutputListener> listeners = new CopyOnWriteArrayList<>();
+    final Deque<OutputChunk> backlog = new ArrayDeque<>();
+    OSProcessHandler handler;
+    int port = -1;
+
+    ServerInstance(String exePath, String displayName, @Nullable String sdkName) {
+      this.exePath = exePath;
+      this.displayName = displayName;
+      this.sdkName = sdkName;
+    }
+
+    boolean isAlive() {
+      return handler != null && !handler.isProcessTerminated();
+    }
+  }
+
   private final Project project;
-  private final List<ServerOutputListener> outputListeners = new CopyOnWriteArrayList<>();
-  private final Deque<OutputChunk> outputBacklog = new ArrayDeque<>();
-  private OSProcessHandler processHandler;
-  private int port = -1;
-  private String startedExePath;
+  private final Map<String, ServerInstance> servers = new LinkedHashMap<>();
 
   public HaxeCompilationServerManager(@NotNull Project project) {
     this.project = project;
@@ -67,7 +94,7 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   /**
-   * Ensures the server runs for the haxe binary the given SDK resolves to and
+   * Ensures a server runs for the haxe binary the given SDK resolves to and
    * returns its port, or -1 when the server is disabled or failed to start
    * (callers then compile without --connect).
    */
@@ -76,20 +103,105 @@ public final class HaxeCompilationServerManager implements Disposable {
     if (!settings.isCompilationServerEnabled()) {
       return -1;
     }
-
     String exePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
-    if (isAlive() && exePath.equals(startedExePath)) {
-      return port;
+    ServerInstance instance = servers.get(exePath);
+    if (instance == null) {
+      instance = new ServerInstance(exePath, displayNameFor(preferredSdkName, exePath), preferredSdkName);
+      servers.put(exePath, instance);
     }
+    if (instance.isAlive()) {
+      return instance.port;
+    }
+    return startLocked(instance);
+  }
 
-    stopLocked();
-    int chosenPort = settings.getCompilationServerPort();
+  /** The running server's port for the given SDK's binary, or -1. */
+  public synchronized int getRunningPort(@Nullable String preferredSdkName) {
+    String exePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
+    ServerInstance instance = servers.get(exePath);
+    return instance != null && instance.isAlive() ? instance.port : -1;
+  }
+
+  public synchronized boolean isRunning() {
+    return servers.values().stream().anyMatch(ServerInstance::isAlive);
+  }
+
+  /** Known instances (running or stopped-with-history), in start order. */
+  @NotNull
+  public synchronized List<ServerInfo> getServers() {
+    List<ServerInfo> result = new ArrayList<>();
+    for (ServerInstance instance : servers.values()) {
+      result.add(new ServerInfo(instance.exePath, instance.displayName,
+                                instance.isAlive() ? instance.port : -1, instance.isAlive()));
+    }
+    return result;
+  }
+
+  /** Stops every instance (settings changes invalidate all of them). Entries and backlogs remain. */
+  public synchronized void stop() {
+    boolean anyStopped = false;
+    for (ServerInstance instance : servers.values()) {
+      anyStopped |= stopInstanceLocked(instance);
+    }
+    if (anyStopped) {
+      fireStateChanged();
+    }
+  }
+
+  public synchronized void stopServer(@NotNull String id) {
+    ServerInstance instance = servers.get(id);
+    if (instance != null && stopInstanceLocked(instance)) {
+      fireStateChanged();
+    }
+  }
+
+  /**
+   * Stops the instance AND forgets it (backlog included) — closing its console
+   * tab means this SDK's server is no longer wanted; the entry reappears when a
+   * compile against that SDK next asks for it.
+   */
+  public synchronized void removeServer(@NotNull String id) {
+    ServerInstance instance = servers.remove(id);
+    if (instance != null) {
+      stopInstanceLocked(instance);
+      // fire even for a dead instance - the console mirrors the entry list
+      fireStateChanged();
+    }
+  }
+
+  /** (Re)starts the given instance's binary; also serves as plain start for a dead instance. Call off the EDT. */
+  public synchronized void restartServer(@NotNull String id) {
+    ServerInstance instance = servers.get(id);
+    if (instance == null) {
+      return;
+    }
+    stopInstanceLocked(instance);
+    startLocked(instance);
+  }
+
+  /** Registers a console sink for one instance and replays its buffered output. */
+  public synchronized void addOutputListener(@NotNull String id, @NotNull ServerOutputListener listener) {
+    ServerInstance instance = servers.get(id);
+    if (instance == null) {
+      return;
+    }
+    instance.listeners.add(listener);
+    instance.backlog.forEach(chunk -> listener.onOutput(chunk.text(), chunk.outputType()));
+  }
+
+  public synchronized void removeOutputListener(@NotNull String id, @NotNull ServerOutputListener listener) {
+    ServerInstance instance = servers.get(id);
+    if (instance != null) {
+      instance.listeners.remove(listener);
+    }
+  }
+
+  private int startLocked(ServerInstance instance) {
+    HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
     try {
-      if (chosenPort <= 0) {
-        chosenPort = NetUtils.findAvailableSocketPort();
-      }
+      int chosenPort = choosePortLocked(settings, instance);
       List<String> command = new ArrayList<>();
-      command.add(exePath);
+      command.add(instance.exePath);
       command.addAll(ParametersListUtil.parse(settings.getCompilationServerArguments()));
       command.add("--wait");
       command.add(String.valueOf(chosenPort));
@@ -97,99 +209,89 @@ public final class HaxeCompilationServerManager implements Disposable {
       // the process handler itself announces the command line as its first output
       GeneralCommandLine commandLine = new GeneralCommandLine(command)
         .withWorkDirectory(project.getBasePath());
-      processHandler = new OSProcessHandler(commandLine) {
+      OSProcessHandler handler = new OSProcessHandler(commandLine) {
         // long-running, mostly idle daemon - the default reader busy-polls and wastes CPU
         @Override
         protected @NotNull BaseOutputReader.Options readerOptions() {
           return BaseOutputReader.Options.forMostlySilentProcess();
         }
       };
-      processHandler.addProcessListener(new ProcessListener() {
+      handler.addProcessListener(new ProcessListener() {
         @Override
         public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
-          broadcast(event.getText(), outputType);
+          broadcast(instance, event.getText(), outputType);
         }
 
         @Override
         public void processTerminated(@NotNull ProcessEvent event) {
-          broadcast(HaxeBundle.message("haxe.compilation.server.terminated", event.getExitCode()) + "\n",
+          broadcast(instance, HaxeBundle.message("haxe.compilation.server.terminated", event.getExitCode()) + "\n",
                     ProcessOutputType.SYSTEM);
-          onServerTerminated(event.getExitCode());
+          onServerTerminated(instance, handler, event.getExitCode());
         }
       });
-      processHandler.startNotify();
-      port = chosenPort;
-      startedExePath = exePath;
-      log.info("Started haxe compilation server on port " + chosenPort + " (" + exePath + ")");
+      handler.startNotify();
+      instance.handler = handler;
+      instance.port = chosenPort;
+      log.info("Started haxe compilation server on port " + chosenPort + " (" + instance.exePath + ")");
       fireStateChanged();
-      return port;
+      return chosenPort;
     }
     catch (ExecutionException | IOException e) {
       notifyStartFailed(StringUtil.notNullize(e.getMessage()));
-      stopLocked();
+      stopInstanceLocked(instance);
       return -1;
     }
   }
 
-  /** Registers a console sink and replays the buffered output so late-opened windows show history. */
-  public synchronized void addOutputListener(@NotNull ServerOutputListener listener) {
-    outputListeners.add(listener);
-    outputBacklog.forEach(chunk -> listener.onOutput(chunk.text(), chunk.outputType()));
-  }
-
-  public void removeOutputListener(@NotNull ServerOutputListener listener) {
-    outputListeners.remove(listener);
-  }
-
-  private synchronized void broadcast(@NotNull String text, @NotNull Key<?> outputType) {
-    outputBacklog.addLast(new OutputChunk(text, outputType));
-    while (outputBacklog.size() > BACKLOG_LIMIT) {
-      outputBacklog.removeFirst();
+  /** The configured fixed port serves the first instance; concurrent instances get auto-allocated ports. */
+  private int choosePortLocked(HaxeBuildToolSettings settings, ServerInstance starting) throws IOException {
+    int configured = settings.getCompilationServerPort();
+    if (configured > 0) {
+      boolean taken = servers.values().stream()
+        .anyMatch(other -> other != starting && other.isAlive() && other.port == configured);
+      if (!taken) {
+        return configured;
+      }
     }
-    for (ServerOutputListener listener : outputListeners) {
+    return NetUtils.findAvailableSocketPort();
+  }
+
+  private boolean stopInstanceLocked(ServerInstance instance) {
+    // clear state before destroying so the termination listener sees a deliberate stop
+    OSProcessHandler handler = instance.handler;
+    boolean wasAlive = instance.isAlive();
+    instance.handler = null;
+    instance.port = -1;
+    if (handler != null && !handler.isProcessTerminated()) {
+      handler.destroyProcess();
+    }
+    return wasAlive;
+  }
+
+  private String displayNameFor(@Nullable String preferredSdkName, String exePath) {
+    if (preferredSdkName != null) {
+      return preferredSdkName;
+    }
+    Sdk configured = HaxeToolPathResolver.findConfiguredSdk(project);
+    return configured != null ? configured.getName() : Path.of(exePath).getFileName().toString();
+  }
+
+  private synchronized void broadcast(ServerInstance instance, @NotNull String text, @NotNull Key<?> outputType) {
+    instance.backlog.addLast(new OutputChunk(text, outputType));
+    while (instance.backlog.size() > BACKLOG_LIMIT) {
+      instance.backlog.removeFirst();
+    }
+    for (ServerOutputListener listener : instance.listeners) {
       listener.onOutput(text, outputType);
     }
   }
 
-  public synchronized boolean isRunning() {
-    return isAlive();
-  }
-
-  /** The running server's port, or -1. */
-  public synchronized int getPort() {
-    return isAlive() ? port : -1;
-  }
-
-  public synchronized void stop() {
-    boolean wasRunning = isAlive();
-    stopLocked();
-    if (wasRunning) {
-      fireStateChanged();
-    }
-  }
-
-  private boolean isAlive() {
-    return processHandler != null && !processHandler.isProcessTerminated();
-  }
-
-  private void stopLocked() {
-    // clear state before destroying so the termination listener sees a deliberate stop
-    OSProcessHandler handler = processHandler;
-    processHandler = null;
-    port = -1;
-    startedExePath = null;
-    if (handler != null && !handler.isProcessTerminated()) {
-      handler.destroyProcess();
-    }
-  }
-
-  private synchronized void onServerTerminated(int exitCode) {
+  private synchronized void onServerTerminated(ServerInstance instance, OSProcessHandler handler, int exitCode) {
     // deliberate stops null the handler first - anything else is the server dying on its own
-    if (processHandler != null) {
-      log.info("haxe compilation server terminated with exit code " + exitCode);
-      processHandler = null;
-      port = -1;
-      startedExePath = null;
+    if (instance.handler == handler) {
+      log.info("haxe compilation server terminated with exit code " + exitCode + " (" + instance.exePath + ")");
+      instance.handler = null;
+      instance.port = -1;
       fireStateChanged();
     }
   }

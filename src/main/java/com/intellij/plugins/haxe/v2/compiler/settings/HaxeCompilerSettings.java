@@ -46,4 +46,13 @@ public interface HaxeCompilerSettings {
   default HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull Module module) {
     return getEffectiveLanguageLevel(module.getName());
   }
+
+  /**
+   * Whether editor problems come from the compilation server's
+   * {@code display/diagnostics} (experimental) instead of only the plugin's
+   * own static analysis.
+   */
+  boolean isCompilerDiagnosticsEnabled();
+
+  void setCompilerDiagnosticsEnabled(boolean enabled);
 }

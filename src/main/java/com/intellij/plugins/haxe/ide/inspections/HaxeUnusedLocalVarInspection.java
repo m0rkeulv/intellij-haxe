@@ -7,10 +7,9 @@ import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalVarDeclaration;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorSearchUtil;
+import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiReference;
 import com.intellij.psi.search.SearchScope;
-import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.util.ArrayUtil;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -51,8 +50,9 @@ public class HaxeUnusedLocalVarInspection extends LocalInspectionTool {
             @Override
             public void visitLocalVarDeclaration(@NotNull HaxeLocalVarDeclaration varDeclaration) {
                 SearchScope searchScope = HaxeExpressionEvaluatorSearchUtil.getSmallestPossibleSearchScope(varDeclaration, null);
-                Collection<PsiReference> references = ReferencesSearch.search(varDeclaration, searchScope, false).findAll();
-                if (references.isEmpty()) {
+                // USED covers compiler-known usages too (generated code); UNKNOWN
+                // keeps the static verdict until the compiler answer lands
+                if (HaxeUsageSearch.usageState(varDeclaration, searchScope) != HaxeUsageSearch.UsageState.USED) {
                     unusedVarDeclarations.add(varDeclaration);
                 }
             }

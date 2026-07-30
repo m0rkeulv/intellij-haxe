@@ -46,9 +46,12 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeLimeDisplayService;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.toolwindow.actions.*;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.*;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
@@ -127,7 +130,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   }
 
   /** The container's environment as shown in the tree, resolved during the scan read action. */
-  private record EnvironmentData(String sdkDisplay, boolean sdkMissing,
+  private record EnvironmentData(String sdkDisplay, boolean sdkMissing, String languageLevelDisplay,
                                  List<EnvDefineNode> defines, Set<String> activeBuildFileDefines) {
   }
 
@@ -288,7 +291,11 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   private CompilationServerNode compilationServerNode(@NotNull String containerId, boolean connectEligible) {
     boolean projectEnabled = HaxeBuildToolSettings.getInstance(project).isCompilationServerEnabled();
     boolean moduleUses = HaxeEnvironmentStore.getInstance(project).isUsingCompilationServer(containerId);
-    boolean running = HaxeCompilationServerManager.getInstance(project).isRunning();
+    // per-module SDKs mean per-SDK server instances - this row reports the one
+    // THIS container's compiles connect to, not whichever server happens to run
+    String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
+    int port = HaxeCompilationServerManager.getInstance(project).getRunningPort(sdkName);
+    boolean running = port > 0;
 
     String display;
     if (!projectEnabled) {
@@ -301,10 +308,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       display = HaxeBundle.message("haxe.toolwindow.server.not.applicable");
     }
     else {
-      int port = HaxeCompilationServerManager.getInstance(project).getPort();
       // port passed as text - MessageFormat would render the int with grouping separators
-      display = port > 0 ? HaxeBundle.message("haxe.toolwindow.server.running", String.valueOf(port))
-                         : HaxeBundle.message("haxe.toolwindow.server.on.idle");
+      display = running ? HaxeBundle.message("haxe.toolwindow.server.running", String.valueOf(port))
+                        : HaxeBundle.message("haxe.toolwindow.server.on.idle");
     }
     return new CompilationServerNode(containerId, display, projectEnabled, moduleUses, running, connectEligible);
   }
@@ -557,11 +563,19 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       sdkMissing = ProjectJdkTable.getInstance().findJdk(sdkName) == null;
     }
 
+    // same store the Haxe Compiler settings page edits - the two stay in sync
+    HaxeCompilerSettings compilerSettings = HaxeCompilerSettings.getInstance(project);
+    HaxeLanguageLevel levelOverride = compilerSettings.getModuleLanguageLevelOverride(containerId);
+    String levelDisplay = levelOverride != null
+      ? levelOverride.getPresentableText()
+      : HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default",
+                           compilerSettings.getDefaultLanguageLevel().getPresentableText());
+
     List<EnvDefineNode> defines = environmentStore.getDefines(containerId).stream()
       .map(define -> new EnvDefineNode(containerId, define.name(), define.value(), define.effect(),
                                        activeFileDefines.contains(define.name())))
       .toList();
-    return new EnvironmentData(sdkDisplay, sdkMissing, defines, activeFileDefines);
+    return new EnvironmentData(sdkDisplay, sdkMissing, levelDisplay, defines, activeFileDefines);
   }
 
   @Nullable
@@ -615,7 +629,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   @NotNull
   private static DefaultMutableTreeNode buildActionsGroupNode(@NotNull FileEntry entry) {
-    String launchKind = HaxeProgramLaunches.launchKind(entry.info());
+    String launchKind = HaxeProgramLaunches.launchKind(entry.info(), entry.buildFile().type());
     int count = entry.actions().size() + (launchKind != null ? 1 : 0);
     DefaultMutableTreeNode actionsNode = new DefaultMutableTreeNode(
       new ActionsGroupNode(entry.buildFile().file().getPath(), count));
@@ -653,6 +667,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       new EnvironmentNode(container.id(), container.displayName(), environment.activeBuildFileDefines()));
     environmentNode.add(new DefaultMutableTreeNode(
       new EnvSdkNode(container.id(), environment.sdkDisplay(), environment.sdkMissing())));
+    environmentNode.add(new DefaultMutableTreeNode(
+      new EnvLanguageLevelNode(container.id(), environment.languageLevelDisplay())));
 
     DefaultMutableTreeNode definesNode =
       new DefaultMutableTreeNode(new EnvDefinesNode(container.id(), environment.defines().size()));
@@ -746,6 +762,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .setRenderer(BuilderKt.textListCellRenderer("", SdkChoice::display))
       .setItemChosenCallback(choice -> {
         HaxeEnvironmentStore.getInstance(project).setSdkName(sdkNode.containerId(), choice.name());
+        HaxeModuleSdkApplier.getInstance(project).applyAsync(sdkNode.containerId(), choice.name());
         refreshTree();
       })
       .createPopup()
@@ -753,6 +770,30 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   }
 
   private record SdkChoice(@Nullable String name, @NotNull String display) {
+  }
+
+  /** Level choices mirror the Haxe Compiler settings page: an explicit level, or null = project default. */
+  public void showLanguageLevelPopup(@NotNull EnvLanguageLevelNode levelNode, @NotNull RelativePoint point) {
+    HaxeCompilerSettings compilerSettings = HaxeCompilerSettings.getInstance(project);
+    List<LevelChoice> choices = new ArrayList<>();
+    choices.add(new LevelChoice(null, HaxeBundle.message(
+      "haxe.toolwindow.node.environment.sdk.default", compilerSettings.getDefaultLanguageLevel().getPresentableText())));
+    for (HaxeLanguageLevel level : HaxeLanguageLevel.values()) {
+      choices.add(new LevelChoice(level, level.getPresentableText()));
+    }
+    JBPopupFactory.getInstance()
+      .createPopupChooserBuilder(choices)
+      .setTitle(HaxeBundle.message("haxe.toolwindow.select.language.level.title"))
+      .setRenderer(BuilderKt.textListCellRenderer("", LevelChoice::display))
+      .setItemChosenCallback(choice -> {
+        compilerSettings.setModuleLanguageLevelOverride(levelNode.containerId(), choice.level());
+        refreshTree();
+      })
+      .createPopup()
+      .show(point);
+  }
+
+  private record LevelChoice(@Nullable HaxeLanguageLevel level, @NotNull String display) {
   }
 
   /** User object of the tree's selected node, or null. */
@@ -786,6 +827,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       case CompilationServerNode serverNode -> serverNode.display();
       case EnvCompileCommandNode buildCommand -> buildCommand.display();
       case EnvSdkNode sdkNode -> sdkNode.displayName();
+      case EnvLanguageLevelNode levelNode -> levelNode.displayName();
       case EnvDefinesNode ignored -> HaxeBundle.message("haxe.toolwindow.node.environment.defines");
       case EnvDefineNode defineNode -> defineNode.name();
       case null, default -> "";
@@ -1024,6 +1066,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       case ActionNode actionNode -> "action:" + actionNode.name();
       case ProgramNode ignored -> "program";
       case EnvSdkNode ignored -> "envsdk";
+      case EnvLanguageLevelNode ignored -> "envlevel";
       case EnvDefinesNode ignored -> "envdefines";
       case EnvDefineNode defineNode -> "envdef:" + defineNode.name();
       default -> String.valueOf(userObject);
@@ -1042,6 +1085,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       }
       else if (e.getClickCount() == 1 && node.getUserObject() instanceof EnvSdkNode sdkNode) {
         showEnvironmentSdkPopup(sdkNode, new RelativePoint(e.getComponent(), e.getPoint()));
+      }
+      else if (e.getClickCount() == 1 && node.getUserObject() instanceof EnvLanguageLevelNode levelNode) {
+        showLanguageLevelPopup(levelNode, new RelativePoint(e.getComponent(), e.getPoint()));
       }
       else if (e.getClickCount() == 1 && node.getUserObject() instanceof EnvCompileCommandNode buildCommand) {
         configureCompileCommand(buildCommand);

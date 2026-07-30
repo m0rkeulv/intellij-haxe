@@ -18,7 +18,9 @@ public final class HaxeBuildToolProjectSettings implements HaxeBuildToolSettings
     public String nekoPath = "";
     public String hashlinkPath = "";
     public String haxelibPath = "";
-    public boolean compilationServerEnabled;
+    // on by default: compiler-backed features (diagnostics, generated-member
+    // resolve) all need the server, and it only starts on the first compile
+    public boolean compilationServerEnabled = true;
     public int compilationServerPort;
     public String compilationServerArguments = "";
   }

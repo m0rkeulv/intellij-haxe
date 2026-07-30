@@ -22,3 +22,6 @@ include(":debuggers:compat-matrix")
 // project with no build logic of its own)
 include(":tools:LimeProjectParser")
 
+// haxe JSON-RPC display protocol client (compiler-assisted IDE features)
+include(":display-protocol")
+

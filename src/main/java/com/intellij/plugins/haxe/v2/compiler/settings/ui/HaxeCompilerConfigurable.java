@@ -6,6 +6,7 @@ import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -52,7 +53,8 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     if (panel == null) return false;
     HaxeCompilerSettings settings = getSettings();
     return panel.getDefaultLanguageLevel() != settings.getDefaultLanguageLevel()
-           || !panel.getModuleOverrides().equals(settings.getModuleLanguageLevelOverrides());
+           || !panel.getModuleOverrides().equals(settings.getModuleLanguageLevelOverrides())
+           || panel.isCompilerDiagnosticsEnabled() != settings.isCompilerDiagnosticsEnabled();
   }
 
   @Override
@@ -61,6 +63,9 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     HaxeCompilerSettings settings = getSettings();
     settings.setDefaultLanguageLevel(panel.getDefaultLanguageLevel());
     settings.setModuleLanguageLevelOverrides(panel.getModuleOverrides());
+    settings.setCompilerDiagnosticsEnabled(panel.isCompilerDiagnosticsEnabled());
+    // the tool window's Language level rows mirror these settings
+    project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
   }
 
   @Override
@@ -68,6 +73,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     if (panel == null) return;
     HaxeCompilerSettings settings = getSettings();
     panel.reset(settings.getDefaultLanguageLevel(), settings.getModuleLanguageLevelOverrides(), getModuleNames());
+    panel.setCompilerDiagnosticsEnabled(settings.isCompilerDiagnosticsEnabled());
   }
 
   @Override

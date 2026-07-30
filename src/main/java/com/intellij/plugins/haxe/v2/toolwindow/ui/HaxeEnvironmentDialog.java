@@ -6,6 +6,7 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
@@ -134,7 +135,9 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
     }
 
     HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
-    store.setSdkName(containerId, (String)sdkCombo.getSelectedItem());
+    String sdkName = (String)sdkCombo.getSelectedItem();
+    store.setSdkName(containerId, sdkName);
+    HaxeModuleSdkApplier.getInstance(project).applyAsync(containerId, sdkName);
     store.setDefines(containerId, defines);
     super.doOKAction();
   }

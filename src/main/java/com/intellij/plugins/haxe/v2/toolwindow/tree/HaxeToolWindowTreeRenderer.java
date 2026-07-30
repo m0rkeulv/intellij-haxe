@@ -121,6 +121,12 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         append("  " + buildCommand.display(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
+      case EnvLanguageLevelNode levelNode -> {
+        setIcon(AllIcons.Nodes.Property);
+        append(HaxeBundle.message("haxe.toolwindow.node.environment.language.level"));
+        append("  " + levelNode.displayName(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      }
       case EnvDefinesNode definesNode -> {
         setIcon(AllIcons.Nodes.Folder);
         append(HaxeBundle.message("haxe.toolwindow.node.environment.defines"));
@@ -171,6 +177,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
                                      : HaxeBundle.message("haxe.toolwindow.tooltip.server.not.connectable");
       case EnvironmentNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment");
       case EnvSdkNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.sdk");
+      case EnvLanguageLevelNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.language.level");
       case EnvDefinesNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.defines");
       case BuildGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.build.files");
       case TargetNode targetNode ->

@@ -43,6 +43,7 @@ import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.plugins.haxe.model.type.HaxeArgument;
 import com.intellij.plugins.haxe.util.HaxeAbstractForwardUtil;
 import com.intellij.plugins.haxe.util.HaxeDebugUtil;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerResolveService;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.*;
@@ -98,8 +99,27 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
     return project.getService(HaxeResolver.class);
   }
 
+  /**
+   * Static resolution first; when it comes up empty, the compilation server's
+   * cached knowledge is the last resort — the compiler runs macros, so it
+   * knows generated members static analysis cannot see. The fallback sits
+   * OUTSIDE the resolve cache on purpose: it is a cheap in-memory lookup, and
+   * a blueprint arriving later must not be shadowed by a cached empty result.
+   */
   @Override
   public List<? extends PsiElement> resolve(@NotNull HaxeReference reference, boolean incompleteCode) {
+    List<? extends PsiElement> elements = staticResolve(reference, incompleteCode);
+    if (elements == null || elements.isEmpty()) {
+      List<? extends PsiElement> compilerResolved =
+        HaxeCompilerResolveService.getInstance(reference.getProject()).tryResolve(reference);
+      if (compilerResolved != null && !compilerResolved.isEmpty()) {
+        return compilerResolved;
+      }
+    }
+    return elements == null ? EMPTY_LIST : elements;
+  }
+
+  private List<? extends PsiElement> staticResolve(@NotNull HaxeReference reference, boolean incompleteCode) {
        /** See docs on {@link HaxeDebugUtil#isCachingDisabled} for how to set this flag. */
        boolean skipCachingForDebug = HaxeDebugUtil.isCachingDisabled();
 

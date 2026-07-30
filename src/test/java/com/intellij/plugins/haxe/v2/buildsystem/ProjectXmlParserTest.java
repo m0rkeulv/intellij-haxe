@@ -72,6 +72,32 @@ public class ProjectXmlParserTest {
   }
 
   @Test
+  @DisplayName("collects source and classpath elements")
+  public void collectsSourceAndClasspathElements() {
+    HaxeBuildFileInfo info = ProjectXmlParser.parse("""
+      <?xml version="1.0" encoding="utf-8"?>
+      <project>
+        <source path="src"/>
+        <source path="gen"/>
+        <classpath name="legacy-src"/>
+      </project>
+      """);
+    assertEquals(List.of("src", "gen", "legacy-src"), info.classpaths());
+  }
+
+  @Test
+  @DisplayName("parses app path attribute")
+  public void parsesAppPathAttribute() {
+    String appPath = ProjectXmlParser.parseAppPath("""
+      <?xml version="1.0" encoding="utf-8"?>
+      <project>
+        <app main="Main" path="Export" file="NyanCat"/>
+      </project>
+      """);
+    assertEquals("Export", appPath);
+  }
+
+  @Test
   @DisplayName("external entities are not resolved")
   public void externalEntitiesAreNotResolved() {
     HaxeBuildFileInfo info = ProjectXmlParser.parse("""

@@ -6,11 +6,9 @@ import com.intellij.plugins.haxe.ide.annotator.HaxeAnnotatingVisitor;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorSearchUtil;
+import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiReference;
-import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.SearchScope;
-import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.util.ArrayUtil;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -53,8 +51,9 @@ public class HaxeUnusedFunctionInspection extends LocalInspectionTool {
             @Override
             public void visitLocalFunctionDeclaration(@NotNull HaxeLocalFunctionDeclaration functionDeclaration) {
                 SearchScope searchScope = HaxeExpressionEvaluatorSearchUtil.getSmallestPossibleSearchScope(functionDeclaration, null);
-                Collection<PsiReference> references = ReferencesSearch.search(functionDeclaration, searchScope, false).findAll();
-                if (references.isEmpty()) {
+                // USED covers compiler-known usages too (generated code); UNKNOWN
+                // keeps the static verdict until the compiler answer lands
+                if (HaxeUsageSearch.usageState(functionDeclaration, searchScope) != HaxeUsageSearch.UsageState.USED) {
                     LocalFunctionDeclarations.add(functionDeclaration);
                 }
             }

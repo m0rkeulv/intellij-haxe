@@ -31,12 +31,13 @@ public final class ProjectXmlParser {
   public static HaxeBuildFileInfo parse(@NotNull String content) {
     List<HaxeDefine> defines = new ArrayList<>();
     List<HaxeLibDependency> libraries = new ArrayList<>();
+    List<String> classpaths = new ArrayList<>();
 
     try {
       XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
       while (reader.hasNext()) {
         if (reader.next() == XMLStreamConstants.START_ELEMENT) {
-          handleElement(reader, defines, libraries);
+          handleElement(reader, defines, libraries, classpaths);
         }
       }
     }
@@ -44,7 +45,31 @@ public final class ProjectXmlParser {
       // malformed or partially edited file - keep whatever was collected so far
       log.debug("Failed to parse project xml: " + e.getMessage());
     }
-    return new HaxeBuildFileInfo(null, null, List.copyOf(defines), List.copyOf(libraries), List.of());
+    return new HaxeBuildFileInfo(null, null, List.copyOf(defines), List.copyOf(libraries), List.copyOf(classpaths));
+  }
+
+  /**
+   * The {@code <app path="...">} attribute — the export directory lime writes
+   * every target's output under (conventionally {@code Export}); null when
+   * the file declares none.
+   */
+  @Nullable
+  public static String parseAppPath(@NotNull String content) {
+    try {
+      XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
+      while (reader.hasNext()) {
+        if (reader.next() != XMLStreamConstants.START_ELEMENT) continue;
+        if (!"app".equals(reader.getLocalName().toLowerCase())) continue;
+        String path = StringUtil.nullize(attribute(reader, "path"), true);
+        if (path != null) {
+          return path.trim();
+        }
+      }
+    }
+    catch (XMLStreamException e) {
+      log.debug("Failed to parse project xml: " + e.getMessage());
+    }
+    return null;
   }
 
   /**
@@ -73,7 +98,8 @@ public final class ProjectXmlParser {
 
   private static void handleElement(@NotNull XMLStreamReader reader,
                                     @NotNull List<HaxeDefine> defines,
-                                    @NotNull List<HaxeLibDependency> libraries) {
+                                    @NotNull List<HaxeLibDependency> libraries,
+                                    @NotNull List<String> classpaths) {
     String tag = reader.getLocalName().toLowerCase();
     switch (tag) {
       case "haxelib" -> {
@@ -86,6 +112,14 @@ public final class ProjectXmlParser {
         String name = attribute(reader, "name");
         if (name != null) {
           defines.add(new HaxeDefine(name, StringUtil.nullize(attribute(reader, "value"))));
+        }
+      }
+      // lime/openfl use <source path>, historic NMML uses <classpath name>
+      case "source", "classpath" -> {
+        String path = attribute(reader, "path");
+        if (path == null) path = attribute(reader, "name");
+        if (path != null && !path.isBlank()) {
+          classpaths.add(path.trim());
         }
       }
       default -> { }

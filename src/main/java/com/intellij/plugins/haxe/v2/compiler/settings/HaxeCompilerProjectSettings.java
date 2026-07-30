@@ -20,6 +20,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   public static final class State {
     public String defaultLanguageLevel = HaxeLanguageLevel.latest().getVersionString();
     public Map<String, String> moduleLanguageLevels = new TreeMap<>();
+    public boolean compilerDiagnostics = false;
   }
 
   private State state = new State();
@@ -86,5 +87,15 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   public @NotNull HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String moduleName) {
     HaxeLanguageLevel override = getModuleLanguageLevelOverride(moduleName);
     return override != null ? override : getDefaultLanguageLevel();
+  }
+
+  @Override
+  public boolean isCompilerDiagnosticsEnabled() {
+    return state.compilerDiagnostics;
+  }
+
+  @Override
+  public void setCompilerDiagnosticsEnabled(boolean enabled) {
+    state.compilerDiagnostics = enabled;
   }
 }

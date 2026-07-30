@@ -18,6 +18,8 @@ import com.intellij.plugins.haxe.runner.debugger.flash.FlashRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.flash.FlashConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationFactory;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
@@ -40,9 +42,10 @@ import java.util.Locale;
  * matched by that step's build file afterwards, so tree launches and the
  * run-configuration dropdown stay in sync.
  *
- * CPP is deliberately absent: a -debug build renames the executable
- * (Main-debug.exe), so run and debug launch different artifacts — a single
- * static executable path cannot serve both executors yet.
+ * CPP is wired for lime-family files only (lime names the executable after
+ * {@code <app file>} regardless of -debug); for plain hxml a -debug build
+ * renames the executable (Main-debug.exe), so run and debug launch different
+ * artifacts — a single static executable path cannot serve both executors yet.
  */
 public final class HaxeProgramLaunches {
 
@@ -51,9 +54,9 @@ public final class HaxeProgramLaunches {
 
   /** Display name of the configuration kind that launches this build ("HashLink Application", …), or null when unsupported. */
   @Nullable
-  public static String launchKind(@NotNull HaxeBuildFileInfo info) {
+  public static String launchKind(@NotNull HaxeBuildFileInfo info, @NotNull HaxeBuildFileType type) {
     if (info.target() == null || info.targetOutput() == null) return null;
-    Class<? extends RunConfiguration> configurationClass = configurationClassFor(info.target(), info.targetOutput());
+    Class<? extends RunConfiguration> configurationClass = configurationClassFor(info.target(), info.targetOutput(), type);
     if (configurationClass == HashLinkRunConfiguration.class) {
       return HaxeRunConfigurationType.getInstance().getFactory(HashLinkConfigurationFactory.class).getName();
     }
@@ -63,18 +66,23 @@ public final class HaxeProgramLaunches {
     if (configurationClass == FlashRunConfiguration.class) {
       return HaxeRunConfigurationType.getInstance().getFactory(FlashConfigurationFactory.class).getName();
     }
+    if (configurationClass == HxcppIntellijRunConfiguration.class) {
+      return HaxeRunConfigurationType.getInstance().getFactory(HxcppIntellijConfigurationFactory.class).getName();
+    }
     return null;
   }
 
   @Nullable
   private static Class<? extends RunConfiguration> configurationClassFor(@NotNull HaxeTarget target,
-                                                                         @NotNull String targetOutput) {
+                                                                         @NotNull String targetOutput,
+                                                                         @NotNull HaxeBuildFileType type) {
     String output = targetOutput.toLowerCase(Locale.ROOT);
     return switch (target) {
       // HL/C output (-hl out/main.c) is a source directory, not runnable bytecode
       case HL -> output.endsWith(".hl") ? HashLinkRunConfiguration.class : null;
       case JAVA_SCRIPT -> output.endsWith(".js") ? BrowserRunConfiguration.class : null;
       case FLASH -> output.endsWith(".swf") ? FlashRunConfiguration.class : null;
+      case CPP -> type != HaxeBuildFileType.HXML ? HxcppIntellijRunConfiguration.class : null;
       default -> null;
     };
   }
@@ -90,7 +98,7 @@ public final class HaxeProgramLaunches {
                                                             @NotNull HaxeBuildFile buildFile,
                                                             @NotNull HaxeTarget target,
                                                             @NotNull String targetOutput) {
-    Class<? extends RunConfiguration> configurationClass = configurationClassFor(target, targetOutput);
+    Class<? extends RunConfiguration> configurationClass = configurationClassFor(target, targetOutput, buildFile.type());
     if (configurationClass == null) return null;
     VirtualFile file = buildFile.file();
 
@@ -138,9 +146,43 @@ public final class HaxeProgramLaunches {
       case HL -> createHashLink(project, buildFile, targetOutput);
       case JAVA_SCRIPT -> createBrowser(project, buildFile.file(), targetOutput);
       case FLASH -> createFlash(project, buildFile.file(), targetOutput);
+      case CPP -> createHxcppIntellij(project, buildFile, targetOutput);
       // unreachable: configurationClassFor gates every other target to null
       default -> throw new IllegalStateException("no launch configuration for target " + target);
     };
+  }
+
+  @NotNull
+  private static RunnerAndConfigurationSettings createHxcppIntellij(@NotNull Project project,
+                                                                    @NotNull HaxeBuildFile buildFile,
+                                                                    @NotNull String targetOutput) {
+    VirtualFile file = buildFile.file();
+    String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.hxcpp", file.getName());
+    RunnerAndConfigurationSettings settings = RunManager.getInstance(project)
+      .createConfiguration(name, HaxeRunConfigurationType.getInstance().getFactory(HxcppIntellijConfigurationFactory.class));
+    HxcppIntellijRunConfiguration configuration = (HxcppIntellijRunConfiguration)settings.getConfiguration();
+    configureLimeHxcpp(configuration, buildFile, resolvedOutput(file, targetOutput));
+    return settings;
+  }
+
+  /**
+   * lime places the desktop executable at {@code <export>/<target>/bin/<app file>[.exe]}.
+   * The display pipeline reports that path directly; the legacy `lime display`
+   * fallback yields the C++ obj directory instead — derive bin from it the way
+   * the HL flavor does. Unresolvable (hxp, no app file): the visible
+   * configuration prompts for the executable.
+   */
+  private static void configureLimeHxcpp(@NotNull HxcppIntellijRunConfiguration configuration,
+                                         @NotNull HaxeBuildFile buildFile,
+                                         @NotNull Path output) {
+    if ("obj".equals(String.valueOf(output.getFileName()))) {
+      Path targetDir = output.getParent();
+      String appFile = appFileName(buildFile);
+      if (targetDir == null || appFile == null) return;
+      String executable = SystemInfo.isWindows ? appFile + ".exe" : appFile;
+      output = targetDir.resolve("bin").resolve(executable);
+    }
+    configuration.setExecutablePath(output.toString());
   }
 
   @NotNull

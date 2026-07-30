@@ -49,6 +49,8 @@ public final class HaxeCompilerSettingsPanel {
   }
 
   private final ComboBox<HaxeLanguageLevel> defaultLevelCombo = new ComboBox<>(HaxeLanguageLevel.values());
+  private final JCheckBox compilerDiagnosticsCheckBox =
+    new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.checkbox"));
   private final ListTableModel<ModuleLevelRow> tableModel = new ListTableModel<>(new ModuleColumn(), new LevelColumn());
   private final TableView<ModuleLevelRow> table = new TableView<>(tableModel);
   private final JPanel mainPanel;
@@ -58,13 +60,24 @@ public final class HaxeCompilerSettingsPanel {
     // "Project default (x.y)" cells display the selected default, keep them in sync.
     defaultLevelCombo.addActionListener(e -> table.repaint());
 
+    compilerDiagnosticsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.tooltip"));
+
     table.setShowGrid(false);
     table.setRowHeight(defaultLevelCombo.getPreferredSize().height);
 
     mainPanel = FormBuilder.createFormBuilder()
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.default.language.level"), defaultLevelCombo)
+      .addComponent(compilerDiagnosticsCheckBox)
       .addComponentFillVertically(new JBScrollPane(table), 8)
       .getPanel();
+  }
+
+  public boolean isCompilerDiagnosticsEnabled() {
+    return compilerDiagnosticsCheckBox.isSelected();
+  }
+
+  public void setCompilerDiagnosticsEnabled(boolean enabled) {
+    compilerDiagnosticsCheckBox.setSelected(enabled);
   }
 
   @NotNull

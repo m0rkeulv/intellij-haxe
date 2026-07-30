@@ -92,6 +92,10 @@ public final class HaxeToolWindowNodes {
   public record EnvSdkNode(@NotNull String containerId, @NotNull String displayName, boolean missing) {
   }
 
+  /** Environment language-level row; clicking opens the level chooser popup. Backed by the Haxe Compiler settings page. */
+  public record EnvLanguageLevelNode(@NotNull String containerId, @NotNull String displayName) {
+  }
+
   /** Environment "Defines" grouping row. */
   public record EnvDefinesNode(@NotNull String containerId, int count) {
   }
