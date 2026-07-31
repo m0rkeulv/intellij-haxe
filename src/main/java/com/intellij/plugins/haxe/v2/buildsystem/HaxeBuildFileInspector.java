@@ -30,7 +30,7 @@ public final class HaxeBuildFileInspector {
     return switch (buildFile.type()) {
       case HXML -> HxmlFileParser.parse(content, path -> resolveInclude(buildFile.file(), path));
       case OPENFL, LIME, NMML -> ProjectXmlParser.parse(content);
-      case HXP -> HaxeBuildFileInfo.EMPTY;
+      case HXP_PROJECT, HXP_SCRIPT -> HaxeBuildFileInfo.EMPTY;
     };
   }
 

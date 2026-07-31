@@ -16,7 +16,7 @@ public class HaxeTargetOptionsTest {
     assertTrue(HaxeTargetOptions.isTargetSelectable(HaxeBuildFileType.OPENFL));
     assertTrue(HaxeTargetOptions.isTargetSelectable(HaxeBuildFileType.LIME));
     assertTrue(HaxeTargetOptions.isTargetSelectable(HaxeBuildFileType.NMML));
-    assertTrue(HaxeTargetOptions.isTargetSelectable(HaxeBuildFileType.HXP));
+    assertTrue(HaxeTargetOptions.isTargetSelectable(HaxeBuildFileType.HXP_PROJECT));
   }
 
   @Test

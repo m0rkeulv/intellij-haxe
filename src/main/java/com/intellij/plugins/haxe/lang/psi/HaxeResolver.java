@@ -276,12 +276,14 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
                   for (PsiElement element : matchesInImport) {
                     if (element instanceof HaxeClass haxeClass) {
                       if (haxeClass.getModel().getName().equals(memberName)) {
-                        return List.of(element);
+                        if(haxeClass.getComponentName() != null) {
+                        return List.of(haxeClass.getComponentName());
+                        }
                       }
                     }
                   }
                 }
-            return matchesInImport.isEmpty() ? null : matchesInImport;
+            return matchesInImport.isEmpty() ? null : normalizeClassResults(matchesInImport);
           }
         boolean expectedEnumIsConstructor = parent instanceof HaxeCallExpression|| parent.getParent() instanceof  HaxeEnumArgumentExtractor;
         PsiElement target = HaxeResolveUtil.searchInSamePackage(fileModel, reference.getText(), true, expectedEnumIsConstructor);
@@ -2472,6 +2474,25 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
       }
     }
     return null;
+  }
+
+  /**
+   * The resolver's convention is that a CLASS resolves to its COMPONENT NAME,
+   * but the import/same-package walks return raw class declarations. Mixing
+   * the shapes makes the result depend on which branch answers first — the
+   * index-based paths only win once newly attached library roots finish
+   * indexing — which the ResolveCache idempotence checker reports and which
+   * caches the losing shape.
+   */
+  private static PsiElement normalizeClassResult(PsiElement element) {
+    if (element instanceof HaxeClass haxeClass && haxeClass.getComponentName() != null) {
+      return haxeClass.getComponentName();
+    }
+    return element;
+  }
+
+  private static List<PsiElement> normalizeClassResults(List<PsiElement> elements) {
+    return elements.stream().map(HaxeResolver::normalizeClassResult).toList();
   }
 
   private static void LogResolution(HaxeReference ref, String tailmsg) {

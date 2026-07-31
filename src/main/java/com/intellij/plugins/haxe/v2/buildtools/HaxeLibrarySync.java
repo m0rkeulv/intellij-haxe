@@ -101,9 +101,30 @@ public final class HaxeLibrarySync {
           }
         }
       }
+      addHxpToolchainLibraries(buildFiles, moduleDependencies);
       dependencies.put(module, moduleDependencies);
     }
     return dependencies;
+  }
+
+  /**
+   * Modules holding .hxp build scripts get the hxp and lime haxelibs attached
+   * as regular module libraries, so the scripts (importing hxp.* /
+   * lime.tools.* from the toolchain) resolve with completion. Deliberate
+   * trade-off: the module's own sources can reference these libs too, and
+   * only the compiler will complain.
+   */
+  private static void addHxpToolchainLibraries(@NotNull List<HaxeBuildFile> buildFiles,
+                                               @NotNull List<HaxeBuildFileInfo.HaxeLibDependency> dependencies) {
+    boolean hasHxpScript = buildFiles.stream()
+      .anyMatch(file -> file.type() == HaxeBuildFileType.HXP_PROJECT || file.type() == HaxeBuildFileType.HXP_SCRIPT);
+    if (!hasHxpScript) return;
+    for (String lib : List.of("hxp", "lime")) {
+      boolean known = dependencies.stream().anyMatch(existing -> existing.name().equals(lib));
+      if (!known) {
+        dependencies.add(new HaxeBuildFileInfo.HaxeLibDependency(lib, null));
+      }
+    }
   }
 
   /**
@@ -119,7 +140,7 @@ public final class HaxeLibrarySync {
                                                                               @NotNull HaxeBuildFile buildFile) {
     HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
     HaxeBuildFileType type = buildFile.type();
-    boolean limeFamily = type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP;
+    boolean limeFamily = type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP_PROJECT;
     if (!limeFamily) return raw.libraries();
 
     String targetFlag = HaxeTargetOptions.targetFlagFor(

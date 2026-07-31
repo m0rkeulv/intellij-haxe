@@ -7,6 +7,7 @@ import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.ide.projectStructure.detection.HaxeProjectFileDetectionUtil;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Finds Haxe build/project files (hxml, OpenFL/Lime xml, nmml, hxp). Only the top
@@ -76,7 +78,7 @@ public final class HaxeBuildFileScanner {
     if (extension == null) return null;
     return switch (extension.toLowerCase(Locale.ROOT)) {
       case "hxml" -> HaxeBuildFileType.HXML;
-      case "hxp" -> HaxeBuildFileType.HXP;
+      case "hxp" -> isLimeHxpProject(file) ? HaxeBuildFileType.HXP_PROJECT : HaxeBuildFileType.HXP_SCRIPT;
       case "nmml" -> HaxeProjectFileDetectionUtil.isNMMLProject(file) ? HaxeBuildFileType.NMML : null;
       case "xml" -> {
         if (HaxeProjectFileDetectionUtil.isOpenFLProject(file)) yield HaxeBuildFileType.OPENFL;
@@ -85,6 +87,20 @@ public final class HaxeBuildFileScanner {
       }
       default -> null;
     };
+  }
+
+  // a class extending HXProject, optionally qualified (lime.tools.HXProject) -
+  // the shape lime's HXProject.fromFile requires of a project script
+  private static final Pattern LIME_HXP_PROJECT = Pattern.compile("extends\\s+([A-Za-z_][\\w.]*\\.)?HXProject\\b");
+
+  /**
+   * Whether the .hxp is a lime/openfl PROJECT script. Anything else is a plain
+   * hxp build script: arbitrary Haxe that lime cannot load - offering lime
+   * actions or targets for it would run `lime build` against a non-project.
+   */
+  private static boolean isLimeHxpProject(@NotNull VirtualFile file) {
+    String text = HaxeBuildFileInspector.loadText(file);
+    return text != null && LIME_HXP_PROJECT.matcher(text).find();
   }
 
   private static void sortByName(@NotNull List<HaxeBuildFile> files) {

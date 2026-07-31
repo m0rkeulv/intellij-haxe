@@ -94,6 +94,11 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     environment.defines = cleaned;
   }
 
+  /** Drops every stored setting of the container (a removed module leaves no stale state behind). */
+  public void clearContainer(@NotNull String containerId) {
+    state.environments.removeIf(environment -> containerId.equals(environment.containerId));
+  }
+
   /** SDK name chosen for the container, or null to use the Build Tools default. */
   @Nullable
   public String getSdkName(@NotNull String containerId) {

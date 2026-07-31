@@ -23,7 +23,7 @@ public final class HaxeBuildFileNavigation {
       case HXML -> List.of("-D " + defineName, "--define " + defineName);
       // xml attribute form used by haxedef/define/undefine tags
       case OPENFL, LIME, NMML -> List.of("name=\"" + defineName + "\"", "name='" + defineName + "'");
-      case HXP -> List.of();
+      case HXP_PROJECT, HXP_SCRIPT -> List.of();
     };
 
     for (String pattern : patterns) {

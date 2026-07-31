@@ -148,7 +148,7 @@ public final class HaxeDefineContextService implements Disposable {
   private HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile) {
     HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
     HaxeBuildFileType type = buildFile.type();
-    boolean limeFamily = type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP;
+    boolean limeFamily = type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP_PROJECT;
     if (!limeFamily) return raw;
 
     String targetFlag = HaxeTargetOptions.targetFlagFor(

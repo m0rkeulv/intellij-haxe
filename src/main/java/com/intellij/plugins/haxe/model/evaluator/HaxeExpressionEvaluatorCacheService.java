@@ -48,7 +48,7 @@ public class HaxeExpressionEvaluatorCacheService  {
 
     ResultHolder holder = _handle(element, context, resolver);
     if (holder == null) return SpecificTypeReference.getUnknown(element).createHolder();
-    if (holder.cacheable && !holder.isUnknown()) {
+    if (holder.isCacheable() && !holder.isUnknown()) {
       if (!holder.containsUnknownOrUnresolvedTypes()) {
         cacheMap.put(key, holder);
       }

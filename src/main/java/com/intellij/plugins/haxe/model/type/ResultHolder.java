@@ -20,11 +20,11 @@
 package com.intellij.plugins.haxe.model.type;
 
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
-import com.intellij.plugins.haxe.model.HaxeGenericParamModel;
 import com.intellij.plugins.haxe.model.evaluator.assign.HaxeAssignEvaluation;
 import com.intellij.plugins.haxe.model.evaluator.assign.HaxeTypeCompatible;
 import com.intellij.psi.PsiElement;
 import lombok.EqualsAndHashCode;
+import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,7 +35,7 @@ import java.util.List;
 public class ResultHolder {
   static public ResultHolder[] EMPTY = new ResultHolder[0];
 
-  public  boolean cacheable = true;
+  @Setter private boolean cacheable = true;
 
   @NotNull
   private SpecificTypeReference type;
@@ -190,7 +190,7 @@ public class ResultHolder {
 
   public ResultHolder duplicate() {
     ResultHolder resultHolder = new ResultHolder(this.getType());
-    resultHolder.cacheable = cacheable;
+    resultHolder.setCacheable(isCacheable());
     resultHolder.canMutate = canMutate;
     return resultHolder;
   }
@@ -266,7 +266,7 @@ public class ResultHolder {
 
 
   public @NotNull ResultHolder noCache() {
-    cacheable = false;
+    setCacheable(false);
     return this;
   }
 
@@ -280,5 +280,16 @@ public class ResultHolder {
 
   public void disableMorphing() {
     canMorph = false;
+  }
+
+  public boolean isCacheable() {
+    return cacheable && !classPsiMissing();
+  }
+
+  private boolean classPsiMissing() {
+    if(type instanceof SpecificHaxeClassReference classReference) {
+      return classReference.getTypePsi() == null;
+    }
+    return false;
   }
 }

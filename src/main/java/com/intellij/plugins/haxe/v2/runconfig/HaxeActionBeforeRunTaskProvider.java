@@ -264,7 +264,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
         () -> HaxeBuildFileInspector.inspect(new HaxeBuildFile(file, HaxeBuildFileType.HXML)));
       return info.target() != null ? HaxeDebugAdditions.forTarget(info.target()) : null;
     }
-    if (type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP) {
+    if (type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP_PROJECT) {
       // the lime tool takes -debug itself and forwards it into the haxe build it
       // generates - one flag covers every lime target
       List<String> additions = new ArrayList<>();

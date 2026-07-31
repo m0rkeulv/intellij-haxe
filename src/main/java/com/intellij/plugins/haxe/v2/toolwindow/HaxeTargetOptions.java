@@ -23,7 +23,8 @@ public final class HaxeTargetOptions {
   }
 
   public static boolean isTargetSelectable(@NotNull HaxeBuildFileType type) {
-    return type != HaxeBuildFileType.HXML;
+    // hxml declares its target in the file; a plain hxp script decides in code
+    return type != HaxeBuildFileType.HXML && type != HaxeBuildFileType.HXP_SCRIPT;
   }
 
   @NotNull

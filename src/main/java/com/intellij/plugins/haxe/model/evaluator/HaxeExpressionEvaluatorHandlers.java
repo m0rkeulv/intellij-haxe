@@ -1013,7 +1013,7 @@ public class HaxeExpressionEvaluatorHandlers {
   }
   static ResultHolder createUnknown(PsiElement element, boolean cacheable) {
       ResultHolder holder = getUnknown(element).createHolder();
-      holder.cacheable = cacheable;
+      holder.setCacheable(cacheable);
       return holder;
   }
 
@@ -1880,20 +1880,20 @@ public class HaxeExpressionEvaluatorHandlers {
 
       if(returnType.getFunctionType() != null){
           ResultHolder holder = returnType.getFunctionType().createHolder();
-          holder.cacheable = allowCaching;
+          holder.setCacheable(allowCaching);
           return holder;
       }
 
       if(returnType.isClassType() || returnType.isEnumValueType()) {
           ResultHolder result = returnType.copy();
-          result.cacheable = allowCaching;
+          result.setCacheable(allowCaching);
           return result;
       }
     }
 
     if (functionType!= null && functionType.isDynamic()) {
         ResultHolder holder = functionType.withoutConstantValue().createHolder();
-        holder.cacheable = allowCaching;
+        holder.setCacheable(allowCaching);
         return holder;
     }
 

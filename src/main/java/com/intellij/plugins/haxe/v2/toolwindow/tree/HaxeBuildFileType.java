@@ -13,7 +13,10 @@ public enum HaxeBuildFileType {
   OPENFL("OpenFL", HaxeIcons.OPENFL_LOGO),
   LIME("Lime", HaxeIcons.LIME_LOGO),
   NMML("NME", HaxeIcons.NMML_LOGO),
-  HXP("HXP", HaxeIcons.LIME_LOGO);
+  /** A lime/openfl project script ({@code class X extends HXProject}) - lime targets and actions apply. */
+  HXP_PROJECT("HXP project", HaxeIcons.LIME_LOGO),
+  /** A plain hxp build script (arbitrary Haxe run via {@code haxelib run hxp}) - no lime semantics. */
+  HXP_SCRIPT("HXP script", HaxeIcons.HAXE_LOGO);
 
   private final String displayName;
   private final Icon icon;

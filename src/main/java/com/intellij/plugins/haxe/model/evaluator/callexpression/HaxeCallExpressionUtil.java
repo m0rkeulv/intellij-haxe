@@ -122,7 +122,7 @@ public class HaxeCallExpressionUtil {
 
     HaxeGenericResolver methodTranslatedResolver = translateResolverToMethodDeclaringClass(genericResolver, callieClass, methodPsi);
 
-    boolean canCache = argumentList.stream().allMatch(CallExpressionArgumentModel::isCanCache) && returnType.cacheable;
+    boolean canCache = argumentList.stream().allMatch(CallExpressionArgumentModel::isCanCache) && returnType.isCacheable();
 
     HaxeCallExpressionContext evaluation = new HaxeCallExpressionContext(argumentList, parameterList, returnType, parentResolver, methodTranslatedResolver);
     evaluation.assignHint = tryCastAssignHintToReturnType(assignHint, returnType); // casting to returnType to make sure typeParams matches.
@@ -292,7 +292,7 @@ public class HaxeCallExpressionUtil {
     List<CallExpressionArgumentModel> argumentList = getArgumentList(newExpression);
     ResultHolder type = HaxeTypeResolver.getTypeFromType(newExpression.getType());
     SpecificHaxeClassReference classType = type.getClassType();
-    boolean canCache = type.cacheable && argumentList.stream().allMatch(CallExpressionArgumentModel::isCanCache);
+    boolean canCache = type.isCacheable() && argumentList.stream().allMatch(CallExpressionArgumentModel::isCanCache);
     if (classType != null) {
       SpecificTypeReference typeRef = classType.fullyResolveTypeDefAndUnwrapNullTypeReference();
       if (typeRef instanceof SpecificHaxeClassReference classReference ) {
@@ -361,7 +361,8 @@ public class HaxeCallExpressionUtil {
       for (HaxeExpression expression : expressions) {
         ProgressIndicatorProvider.checkCanceled();
         ResultHolder result = HaxeExpressionEvaluator.evaluateWithRecursionGuard(expression).result;
-        CallExpressionArgumentModel model = CallExpressionArgumentModel.create(expression, result.getType(), !result.isUnknown() && result.cacheable);
+        CallExpressionArgumentModel model = CallExpressionArgumentModel.create(expression, result.getType(), !result.isUnknown() &&
+                                                                                                             result.isCacheable());
         argumentList.add(model);
       }
     }
@@ -373,8 +374,8 @@ public class HaxeCallExpressionUtil {
       for (HaxeExpression expression : expressions) {
         ProgressIndicatorProvider.checkCanceled();
           ResultHolder result = HaxeExpressionEvaluator.evaluateWithRecursionGuard(expression).result;
-          CallExpressionArgumentModel model = CallExpressionArgumentModel.create(expression, result.getType(), result.cacheable);
-          model.canCache = result.cacheable;
+          CallExpressionArgumentModel model = CallExpressionArgumentModel.create(expression, result.getType(), result.isCacheable());
+          model.canCache = result.isCacheable();
           argumentList.add(model);
       }
     return argumentList;

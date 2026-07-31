@@ -175,6 +175,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeSyncProjectAction(this::refreshTree));
     group.add(new HaxePurgeCachesAction(this::refreshTree));
     group.addSeparator();
+    group.add(new HaxeAddModuleAction());
+    group.add(new HaxeRemoveModuleAction(this));
+    group.addSeparator();
     group.add(new HaxeExecuteCommandAction());
     group.addSeparator();
     group.add(new HaxeSettingsActionGroup());
@@ -386,7 +389,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   private HaxeBuildFileInfo effectiveInfo(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
     HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
     HaxeBuildFileType type = buildFile.type();
-    if (type != HaxeBuildFileType.OPENFL && type != HaxeBuildFileType.LIME && type != HaxeBuildFileType.HXP) {
+    if (type != HaxeBuildFileType.OPENFL && type != HaxeBuildFileType.LIME && type != HaxeBuildFileType.HXP_PROJECT) {
       return raw;
     }
 
@@ -441,7 +444,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
                                    List.of(haxeExe, file.getName()), workDirectory,
                                    "haxe " + file.getName(), false));
       }
-      case OPENFL, LIME, HXP -> {
+      case OPENFL, LIME, HXP_PROJECT -> {
         String tool = type == HaxeBuildFileType.OPENFL ? "openfl" : "lime";
         String haxelibExe = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
         String targetFlag = HaxeTargetOptions.targetFlagFor(
@@ -452,6 +455,13 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
                                      workDirectory,
                                      tool + " " + actionName + " " + targetFlag, false));
         }
+      }
+      case HXP_SCRIPT -> {
+        // a plain hxp script builds itself - the hxp tool runs it, no lime target
+        String haxelibExe = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
+        actions.add(new ActionNode(ownerId, HaxeCompileCommands.HXP_SCRIPT_BUILD_ACTION,
+                                   List.of(haxelibExe, "run", "hxp", file.getName()), workDirectory,
+                                   "hxp " + file.getName(), false));
       }
       case NMML -> { }
     }
@@ -520,13 +530,15 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     VirtualFile file = buildFile.file();
     return switch (buildFile.type()) {
       case HXML -> List.of(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk), file.getName());
-      case OPENFL, LIME, HXP -> {
+      case OPENFL, LIME, HXP_PROJECT -> {
         String tool = buildFile.type() == HaxeBuildFileType.OPENFL ? "openfl" : "lime";
         String targetFlag = HaxeTargetOptions.targetFlagFor(
           buildFile.type(), HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file));
         yield List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
                       "run", tool, "build", file.getName(), targetFlag);
       }
+      case HXP_SCRIPT -> List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
+                                 "run", "hxp", file.getName());
       case NMML -> null;
     };
   }
@@ -536,12 +548,13 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     VirtualFile file = buildFile.file();
     return switch (buildFile.type()) {
       case HXML -> "haxe " + file.getName();
-      case OPENFL, LIME, HXP -> {
+      case OPENFL, LIME, HXP_PROJECT -> {
         String tool = buildFile.type() == HaxeBuildFileType.OPENFL ? "openfl" : "lime";
         String targetFlag = HaxeTargetOptions.targetFlagFor(
           buildFile.type(), HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file));
         yield tool + " build " + file.getName() + " " + targetFlag;
       }
+      case HXP_SCRIPT -> "hxp " + file.getName();
       case NMML -> file.getName();
     };
   }
@@ -696,7 +709,10 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
                                                @Nullable Map<String, String> installedLibraries) {
     HaxeBuildFile buildFile = entry.buildFile();
     DefaultMutableTreeNode fileNode = new DefaultMutableTreeNode(new BuildFileRow(buildFile, containerId, active, manual));
-    fileNode.add(new DefaultMutableTreeNode(buildTargetNode(entry)));
+    // a plain hxp script decides its own targets in code - no target row
+    if (buildFile.type() != HaxeBuildFileType.HXP_SCRIPT) {
+      fileNode.add(new DefaultMutableTreeNode(buildTargetNode(entry)));
+    }
 
 
     HaxeBuildFileInfo info = entry.info();

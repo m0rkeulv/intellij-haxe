@@ -92,6 +92,16 @@
         language="HXML"
         extensions="hxml"/>
 
+    <!-- hxp project scripts are Haxe source; SECONDARY type of the Haxe
+         language (the class supplies the language - the language attribute
+         must stay off here, it may only appear on the language's PRIMARY
+         file type, and the platform asserts on violations) -->
+    <fileType
+        name="HXP"
+        implementationClass="com.intellij.plugins.haxe.buildsystem.hxp.HxpFileType"
+        fieldName="INSTANCE"
+        extensions="hxp"/>
+
 
     <fileType
         name="Haxelib.json"

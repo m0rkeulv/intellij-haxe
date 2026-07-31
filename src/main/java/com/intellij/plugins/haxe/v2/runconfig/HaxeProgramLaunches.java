@@ -231,7 +231,7 @@ public final class HaxeProgramLaunches {
   /** The {@code <app file>} name from the project xml; null for hxp (a script, not xml) or when undeclared. */
   @Nullable
   private static String appFileName(@NotNull HaxeBuildFile buildFile) {
-    if (buildFile.type() == HaxeBuildFileType.HXP) return null;
+    if (buildFile.type() == HaxeBuildFileType.HXP_PROJECT) return null;
     String content = ReadAction.compute(() -> HaxeBuildFileInspector.loadText(buildFile.file()));
     return content == null ? null : ProjectXmlParser.parseAppFile(content);
   }
