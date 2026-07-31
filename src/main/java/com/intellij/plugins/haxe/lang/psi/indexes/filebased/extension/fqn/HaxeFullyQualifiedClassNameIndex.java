@@ -52,7 +52,7 @@ public class HaxeFullyQualifiedClassNameIndex extends HaxeComponentBaseIndex {
 
     @Override
     public @NotNull DataIndexer<String, HaxeComponentIndexData, FileContent> getIndexer() {
-        return new HaxeFullyQualifiedNameIndexer();
+        return new HaxeFullyQualifiedNameIndexer(HaxeFullyQualifiedNameIndexer.CollectType.TYPES);
     }
 
 
