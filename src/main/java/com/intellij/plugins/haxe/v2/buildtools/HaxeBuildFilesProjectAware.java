@@ -47,7 +47,7 @@ public final class HaxeBuildFilesProjectAware implements ExternalSystemProjectAw
 
   @Override
   public @NotNull Set<String> getSettingsFiles() {
-    return ReadAction.compute(() -> {
+    return ReadAction.computeBlocking(() -> {
       Set<String> files = new HashSet<>();
       for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scanProjectRoot(project)) {
         files.add(buildFile.file().getPath());

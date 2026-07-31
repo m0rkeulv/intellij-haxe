@@ -14,7 +14,6 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
@@ -66,7 +65,7 @@ public final class HaxeDefineContextService implements Disposable {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return null;
 
-    return ReadAction.compute(() -> {
+    return ReadAction.computeBlocking(() -> {
       HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
       if (type == null) return null;
 
@@ -105,7 +104,7 @@ public final class HaxeDefineContextService implements Disposable {
   private String cacheKey(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
     Document document = FileDocumentManager.getInstance().getCachedDocument(file);
     long stamp = document != null ? document.getModificationStamp() : file.getModificationStamp();
-    String containerId = HaxeCompileCommands.containerIdFor(project, file);
+    String containerId = HaxeContainers.containerIdFor(project, file);
     String targetId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file);
     String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     List<HaxeEnvironmentStore.EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
@@ -127,7 +126,7 @@ public final class HaxeDefineContextService implements Disposable {
       info.target().getDefinitions().forEach(definition -> defines.putIfAbsent(definition, "true"));
     }
 
-    String containerId = HaxeCompileCommands.containerIdFor(project, file);
+    String containerId = HaxeContainers.containerIdFor(project, file);
     for (HaxeEnvironmentStore.EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
       if (override.effect() == HaxeEnvironmentStore.DefineEffect.REMOVE) {
         defines.remove(override.name());
@@ -148,12 +147,10 @@ public final class HaxeDefineContextService implements Disposable {
   private HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile) {
     HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
     HaxeBuildFileType type = buildFile.type();
-    boolean limeFamily = type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP_PROJECT;
-    if (!limeFamily) return raw;
+    if (!LimeProjects.isLimeFamily(type)) return raw;
 
-    String targetFlag = HaxeTargetOptions.targetFlagFor(
-      type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(buildFile.file()));
-    String containerId = HaxeCompileCommands.containerIdFor(project, buildFile.file());
+    String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
+    String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     HaxeBuildFileInfo display = HaxeLimeDisplayService.getInstance(project)
       .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, this::refreshAsync);

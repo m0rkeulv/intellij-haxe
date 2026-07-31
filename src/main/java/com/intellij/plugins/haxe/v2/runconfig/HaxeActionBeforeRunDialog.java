@@ -100,7 +100,7 @@ final class HaxeActionBeforeRunDialog extends DialogWrapper {
     String path = fileField.getText().trim();
     // additions derive from the file's type and selected target - content sniffing needs a read action
     List<String> additions = path.isEmpty() ? null
-      : ReadAction.compute(() -> HaxeActionBeforeRunTaskProvider.debugAdditions(project, path));
+      : ReadAction.computeBlocking(() -> HaxeActionBeforeRunTaskProvider.debugAdditions(project, path));
     if (additions == null || additions.isEmpty()) {
       injectDebugPreview.setText(HaxeDebuggerBundle.message("haxe.before.run.dialog.inject.debug.none"));
       injectDebugCheckBox.setEnabled(false);
@@ -119,7 +119,7 @@ final class HaxeActionBeforeRunDialog extends DialogWrapper {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(fileField.getText().trim());
     if (file != null && file.isValid()) {
       // type detection may sniff file content - EDT has no implicit read access
-      ReadAction.compute(() -> HaxeCompileCommands.availableActionNames(project, file))
+      ReadAction.computeBlocking(() -> HaxeCompileCommands.availableActionNames(project, file))
         .forEach(model::addElement);
     }
     if (!StringUtil.isEmptyOrSpaces(previous) && model.getIndexOf(previous) < 0) {

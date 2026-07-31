@@ -333,7 +333,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
       return;
     }
 
-    String path = ReadAction.compute(() -> getRelativePath(project, position.getFile()));
+    String path = ReadAction.computeBlocking(() -> getRelativePath(project, position.getFile()));
 
     enqueueCommand(Command.AddFileLineBreakpoint(path, position.getLine() + 1), (messageId, message) -> {
       if (messageId == JavaProtocol.IdFileLineBreakpointNumber) {
@@ -472,7 +472,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
       // Filename index can only deal with the name, not any paths.
       String name = VfsUtil.extractFileName(fileName);
       String fileNameToLookFor = name == null ? fileName : name;
-      Collection<VirtualFile> files = ReadAction.compute(() -> findByName(fileNameToLookFor));
+      Collection<VirtualFile> files = ReadAction.computeBlocking(() -> findByName(fileNameToLookFor));
 
       Collection<VirtualFile> matches = new HashSet<>();
       for (VirtualFile candidate : files) {

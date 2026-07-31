@@ -9,8 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * type name). One {@code server/type} request per generated type, then every
  * member lookup in the editor answers from here. The context signature
  * changes whenever the argument set does, so stale contexts age out
- * naturally; per-file invalidation is the caller's job (it knows which
- * modules a change dirties, via {@code server/module} dependents).
+ * naturally; anything finer than {@link #clear()} waits for the automatic
+ * invalidation wiring (see the TODO in HaxeCompilerResolveService).
  */
 public class BlueprintCache {
 
@@ -25,16 +25,6 @@ public class BlueprintCache {
 
   public void put(String signature, String modulePath, String typeName, TypeBlueprint blueprint) {
     blueprints.put(new Key(signature, modulePath, typeName), blueprint);
-  }
-
-  /** Drops every blueprint of one module (a file changed). */
-  public void invalidateModule(String signature, String modulePath) {
-    blueprints.keySet().removeIf(key -> key.signature().equals(signature) && key.modulePath().equals(modulePath));
-  }
-
-  /** Drops every blueprint of one context (the argument set changed or a build ran). */
-  public void invalidateSignature(String signature) {
-    blueprints.keySet().removeIf(key -> key.signature().equals(signature));
   }
 
   public void clear() {

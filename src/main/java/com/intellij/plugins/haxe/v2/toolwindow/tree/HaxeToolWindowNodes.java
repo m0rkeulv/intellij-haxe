@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
 import org.jetbrains.annotations.NotNull;
@@ -18,11 +19,43 @@ public final class HaxeToolWindowNodes {
   private HaxeToolWindowNodes() {
   }
 
-  public record ModuleNode(@NotNull String name) {
+  /**
+   * Behaviour every tree user object provides itself, so the panel needs no
+   * per-type switches that grow with each node kind.
+   */
+  public sealed interface HaxeToolWindowNode {
+    /** Stable identity used to preserve expansion state across tree rebuilds. */
+    @NotNull
+    String expansionKey();
+
+    /** The text the tree's speed search matches against. */
+    @NotNull
+    String speedSearchText();
+  }
+
+  public record ModuleNode(@NotNull String name) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "module:" + name;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
+    }
   }
 
   /** Project-root container row, listing build files that belong to no module. */
-  public record ProjectNode(@NotNull String name) {
+  public record ProjectNode(@NotNull String name) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "project";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
+    }
   }
 
   /**
@@ -30,15 +63,43 @@ public final class HaxeToolWindowNodes {
    * the build). Manual rows were added by hand and can be removed; auto-detected
    * rows can only be hidden.
    */
-  public record BuildFileRow(@NotNull HaxeBuildFile buildFile, @NotNull String containerId, boolean active, boolean manual) {
+  public record BuildFileRow(@NotNull HaxeBuildFile buildFile, @NotNull String containerId, boolean active, boolean manual)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "file:" + buildFile.file().getPath();
+    }
+
+    @Override
+    public String speedSearchText() {
+      return buildFile.file().getName();
+    }
   }
 
   /** "Build" grouping row containing the container's build files. */
-  public record BuildGroupNode(@NotNull String containerId, int count) {
+  public record BuildGroupNode(@NotNull String containerId, int count) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "build";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.build");
+    }
   }
 
   /** "Actions" grouping row under a build file; ownerId is the build file's path. */
-  public record ActionsGroupNode(@NotNull String ownerId, int count) {
+  public record ActionsGroupNode(@NotNull String ownerId, int count) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "actions";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.actions");
+    }
   }
 
   /**
@@ -52,7 +113,16 @@ public final class HaxeToolWindowNodes {
                            @NotNull List<String> command,
                            @Nullable String workDirectory,
                            @NotNull String presentableCommand,
-                           boolean custom) {
+                           boolean custom) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "action:" + name;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
+    }
   }
 
   /**
@@ -66,42 +136,129 @@ public final class HaxeToolWindowNodes {
   public record ProgramNode(@NotNull HaxeBuildFile buildFile,
                             @NotNull String kind,
                             @NotNull HaxeTarget target,
-                            @NotNull String targetOutput) {
+                            @NotNull String targetOutput) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "program";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.program");
+    }
   }
 
   /** Target row under a build file; selectable for XML/HXP projects, static for HXML. */
-  public record TargetNode(@NotNull HaxeBuildFile buildFile, @NotNull String displayName, boolean selectable) {
+  public record TargetNode(@NotNull HaxeBuildFile buildFile, @NotNull String displayName, boolean selectable)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "target:" + buildFile.file().getPath();
+    }
+
+    @Override
+    public String speedSearchText() {
+      return displayName;
+    }
   }
 
   public enum GroupKind { DEFINES, LIBRARIES }
 
   /** "Defines" / "Libraries" grouping row with its child count. */
-  public record GroupNode(@NotNull GroupKind kind, int count) {
+  public record GroupNode(@NotNull GroupKind kind, int count) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "group:" + kind;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return kind == GroupKind.LIBRARIES
+             ? HaxeBundle.message("haxe.toolwindow.node.libraries")
+             : HaxeBundle.message("haxe.toolwindow.node.defines");
+    }
   }
 
-  public record DefineNode(@NotNull HaxeBuildFile owner, @NotNull String name, @Nullable String value) {
+  public record DefineNode(@NotNull HaxeBuildFile owner, @NotNull String name, @Nullable String value)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "define:" + name;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
+    }
   }
 
   /** "Environment" row under a container: its SDK choice and user defines. */
   public record EnvironmentNode(@NotNull String containerId,
                                 @NotNull String displayName,
-                                @NotNull Set<String> activeBuildFileDefines) {
+                                @NotNull Set<String> activeBuildFileDefines) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "env";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.environment");
+    }
   }
 
   /** Environment SDK row; clicking opens the SDK chooser popup. */
-  public record EnvSdkNode(@NotNull String containerId, @NotNull String displayName, boolean missing) {
+  public record EnvSdkNode(@NotNull String containerId, @NotNull String displayName, boolean missing)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "envsdk";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return displayName;
+    }
   }
 
   /** Environment language-level row; clicking opens the level chooser popup. Backed by the Haxe Compiler settings page. */
-  public record EnvLanguageLevelNode(@NotNull String containerId, @NotNull String displayName) {
+  public record EnvLanguageLevelNode(@NotNull String containerId, @NotNull String displayName)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "envlevel";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return displayName;
+    }
   }
 
   /** Environment "Defines" grouping row. */
-  public record EnvDefinesNode(@NotNull String containerId, int count) {
+  public record EnvDefinesNode(@NotNull String containerId, int count) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "envdefines";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.environment.defines");
+    }
   }
 
   /** "Compilation" grouping row: the compile command and compilation server rows. */
-  public record CompilationGroupNode(@NotNull String containerId) {
+  public record CompilationGroupNode(@NotNull String containerId) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "compilation";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.compilation");
+    }
   }
 
   /**
@@ -114,7 +271,16 @@ public final class HaxeToolWindowNodes {
                                       boolean projectEnabled,
                                       boolean moduleUses,
                                       boolean running,
-                                      boolean connectEligible) {
+                                      boolean connectEligible) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "server";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return display;
+    }
   }
 
   /**
@@ -129,7 +295,16 @@ public final class HaxeToolWindowNodes {
                                       @Nullable String workDirectory,
                                       @NotNull List<String> candidateFilePaths,
                                       @NotNull Map<String, List<String>> actionNamesByFile,
-                                      boolean connectEligible) {
+                                      boolean connectEligible) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "envcompile";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return display;
+    }
   }
 
   /** A user define entry; inBuildFile = the container's active build file declares the same name. */
@@ -137,7 +312,16 @@ public final class HaxeToolWindowNodes {
                               @NotNull String name,
                               @NotNull String value,
                               @NotNull HaxeEnvironmentStore.DefineEffect effect,
-                              boolean inBuildFile) {
+                              boolean inBuildFile) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "envdef:" + name;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
+    }
   }
 
   /**
@@ -149,12 +333,22 @@ public final class HaxeToolWindowNodes {
                             @NotNull String name,
                             @Nullable String version,
                             @Nullable String resolvedVersion,
-                            boolean installed) {
+                            boolean installed) implements HaxeToolWindowNode {
 
     /** The version to show: the pinned one when declared, otherwise haxelib's selected version. */
     @Nullable
     public String displayVersion() {
       return version != null ? version : resolvedVersion;
+    }
+
+    @Override
+    public String expansionKey() {
+      return "lib:" + name;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
     }
   }
 }

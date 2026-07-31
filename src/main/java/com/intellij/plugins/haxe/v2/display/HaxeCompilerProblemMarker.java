@@ -58,7 +58,7 @@ public final class HaxeCompilerProblemMarker {
       VirtualFile file = LocalFileSystem.getInstance().findFileByPath(entry.file());
       if (file == null || !file.isValid()) continue;
       // library files are not the user's problem to fix - only mark project content
-      boolean inContent = ReadAction.compute(() -> ProjectFileIndex.getInstance(project).isInContent(file));
+      boolean inContent = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInContent(file));
       if (!inContent) continue;
       nowBroken.add(file.getPath());
       resolved.put(file.getPath(), file);

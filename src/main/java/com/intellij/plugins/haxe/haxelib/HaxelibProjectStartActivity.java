@@ -31,6 +31,6 @@ public class HaxelibProjectStartActivity implements ProjectActivity {
    * tracking.
    */
   static boolean hasLegacyHaxeModules(@NotNull Project project) {
-    return !ReadAction.compute(() -> ModuleUtil.getModulesOfType(project, HaxeModuleType.getInstance())).isEmpty();
+    return !ReadAction.computeBlocking(() -> ModuleUtil.getModulesOfType(project, HaxeModuleType.getInstance())).isEmpty();
   }
 }

@@ -32,10 +32,6 @@ public enum HaxeLanguageLevel {
     return major;
   }
 
-  public int getMinor() {
-    return minor;
-  }
-
   /** Stable identifier used for persistence, e.g. {@code "4.3"}. */
   @NotNull
   public String getVersionString() {

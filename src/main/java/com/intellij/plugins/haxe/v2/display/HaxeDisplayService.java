@@ -16,13 +16,12 @@ import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.InitializeResult;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import com.intellij.util.PsiErrorElementUtil;
@@ -112,7 +111,7 @@ public final class HaxeDisplayService {
     // a plain hxp script generates its compiler args in code - nothing to derive statically
     if (type == null || type == HaxeBuildFileType.NMML || type == HaxeBuildFileType.HXP_SCRIPT) return null;
 
-    String containerId = HaxeCompileCommands.containerIdFor(project, buildFile);
+    String containerId = HaxeContainers.containerIdFor(project, buildFile);
     HaxeEnvironmentStore environment = HaxeEnvironmentStore.getInstance(project);
     // the per-container server opt-out covers display requests too - compiler
     // diagnostics ride the same server the module's builds would use
@@ -123,9 +122,8 @@ public final class HaxeDisplayService {
     if (type == HaxeBuildFileType.HXML) {
       return new DisplayContext(List.of("--cwd", directory, buildFile.getName()), null, sdkName);
     }
-    String tool = type == HaxeBuildFileType.OPENFL ? "openfl" : "lime";
-    String targetFlag = HaxeTargetOptions.targetFlagFor(
-      type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(buildFile));
+    String tool = LimeProjects.toolFor(type);
+    String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile);
     LimeDisplaySpec lime =
       new LimeDisplaySpec(directory, buildFile.getName(), tool, targetFlag, buildFile.getModificationStamp());
     return new DisplayContext(null, lime, sdkName);
@@ -318,6 +316,6 @@ public final class HaxeDisplayService {
     if (path == null || path.isBlank()) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return null;
-    return HaxeCompileCommands.containerIdFor(project, file).equals(module.getName()) ? file : null;
+    return HaxeContainers.containerIdFor(project, file).equals(module.getName()) ? file : null;
   }
 }

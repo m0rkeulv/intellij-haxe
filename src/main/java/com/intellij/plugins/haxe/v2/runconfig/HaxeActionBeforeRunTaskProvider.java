@@ -31,8 +31,8 @@ import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore;
+import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
@@ -65,7 +65,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     private static final String INJECT_DEBUG = "injectDebugArguments";
 
     private String buildFilePath = "";
-    private String actionName = HaxeCompileCommands.HXML_BUILD_ACTION;
+    private String actionName = HxmlProjects.BUILD_ACTION;
     private String extraArguments = "";
     // opt-out for projects whose build files already carry the debug flags/lib
     private boolean injectDebugArguments = true;
@@ -120,7 +120,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       super.readExternal(element);
       buildFilePath = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, BUILD_FILE));
       actionName = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, ACTION),
-                                         HaxeCompileCommands.HXML_BUILD_ACTION);
+                                         HxmlProjects.BUILD_ACTION);
       extraArguments = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, ARGUMENTS));
       // absent in configurations saved before the option existed - keep injecting
       injectDebugArguments = !"false".equals(JDOMExternalizerUtil.readField(element, INJECT_DEBUG));
@@ -177,7 +177,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     Project project = configuration.getProject();
     boolean debug = DefaultDebugExecutor.EXECUTOR_ID.equals(environment.getExecutor().getId());
 
-    HaxeCompileCommands.Resolved resolved = ReadAction.compute(
+    HaxeCompileCommands.Resolved resolved = ReadAction.computeBlocking(
       () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), task.getExtraArguments()));
     if (resolved == null) {
       notifyFailure(project, HaxeDebuggerBundle.message("haxe.before.run.unresolvable", task.getBuildFilePath()));
@@ -260,17 +260,16 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     if (file == null) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
     if (type == HaxeBuildFileType.HXML) {
-      HaxeBuildFileInfo info = ReadAction.compute(
+      HaxeBuildFileInfo info = ReadAction.computeBlocking(
         () -> HaxeBuildFileInspector.inspect(new HaxeBuildFile(file, HaxeBuildFileType.HXML)));
       return info.target() != null ? HaxeDebugAdditions.forTarget(info.target()) : null;
     }
-    if (type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP_PROJECT) {
+    if (LimeProjects.isLimeFamily(type)) {
       // the lime tool takes -debug itself and forwards it into the haxe build it
       // generates - one flag covers every lime target
       List<String> additions = new ArrayList<>();
       additions.add("-debug");
-      String targetFlag = HaxeTargetOptions.targetFlagFor(
-        type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file));
+      String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
       // hxcpp debugging needs the in-debuggee DAP server compiled in; lime's
       // --haxelib override merges the lib exactly like a project <haxelib>
       // entry (include.xml and extraParams included), so no project.xml edit.

@@ -50,7 +50,7 @@ public final class HaxeAddModuleAction extends DumbAwareAction {
       return;
     }
     // module-roots lookups need a read action - the EDT has no implicit read access
-    Module owner = ReadAction.compute(() -> contentRootOwner(project, directory));
+    Module owner = ReadAction.computeBlocking(() -> contentRootOwner(project, directory));
     if (owner != null) {
       Messages.showErrorDialog(project,
                                HaxeBundle.message("haxe.toolwindow.add.module.already.root", owner.getName()),

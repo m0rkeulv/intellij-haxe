@@ -6,12 +6,9 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;
 import com.intellij.execution.process.ProcessOutput;
-import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
@@ -22,13 +19,12 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
+import com.intellij.plugins.haxe.util.HaxePluginPaths;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +53,6 @@ import java.util.concurrent.ExecutorService;
 public final class HaxeLimeDisplayService implements Disposable {
 
   private static final int DISPLAY_TIMEOUT_MS = 60_000;
-  private static final String PLUGIN_ID = "com.intellij.plugins.haxe";
   private static final String PARSER_RELATIVE_PATH = "tools/LimeProjectParser.jar";
 
   // failed/fallback evaluations retry this many times (per file revision) before
@@ -137,7 +132,7 @@ public final class HaxeLimeDisplayService implements Disposable {
       return;
     }
 
-    String tool = buildFile.type() == HaxeBuildFileType.OPENFL ? "openfl" : "lime";
+    String tool = LimeProjects.toolFor(buildFile.type());
     VirtualFile parent = buildFile.file().getParent();
     String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
     String filePath = buildFile.file().getPath();
@@ -306,11 +301,7 @@ public final class HaxeLimeDisplayService implements Disposable {
   /** The evaluator jar shipped inside the plugin directory, or null when absent (fallback applies). */
   @Nullable
   private static Path bundledParserJar() {
-    //TODO  we must replace this API once there is an alternative made available
-    // ref: https://platform.jetbrains.com/t/pluginmanagercore-getplugin-is-now-internal/4272/32
-    IdeaPluginDescriptor plugin = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID));
-    Path jar = plugin != null ? plugin.getPluginPath().resolve(PARSER_RELATIVE_PATH) : null;
-    return jar != null && Files.isRegularFile(jar) ? jar : null;
+    return HaxePluginPaths.bundledFile(PARSER_RELATIVE_PATH);
   }
 
   // --- legacy lime display fallback ---

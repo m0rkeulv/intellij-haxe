@@ -59,11 +59,6 @@ public final class HaxeUsageSearch {
     return HaxeCompilerUsageService.getInstance(declaration.getProject()).usageState(declaration);
   }
 
-  /** True only when a reference is known to exist. */
-  public static boolean hasKnownReferences(@NotNull HaxeNamedComponent declaration) {
-    return usageState(declaration) == UsageState.USED;
-  }
-
   /**
    * Whether the declaration's metadata should exempt it from "unused"
    * warnings. Registry-known metadata (except {@code @:deprecated}) may be

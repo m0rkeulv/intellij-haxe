@@ -75,17 +75,25 @@ public final class HaxeToolPathResolver {
   }
 
   /**
+   * The SDK the container's tool invocations run with: its Environment SDK when
+   * registered, else the Build Tools SDK, else any registered Haxe SDK — the
+   * same fallback chain the resolve*Executable methods use. Contrast
+   * {@link #effectiveSdkName}, which reports what is CONFIGURED; this reports
+   * what will actually be USED.
+   */
+  @Nullable
+  public static Sdk resolveSdk(@NotNull Project project, @NotNull String containerId) {
+    return findSdk(project, HaxeEnvironmentStore.getInstance(project).getSdkName(containerId));
+  }
+
+  /**
    * The SDK a module compiles and resolves against: its Environment SDK when
    * set, else the project-wide one from Build Tools | Haxe. Null when neither
    * is configured — the editor then asks the user to pick one. This is the
-   * single authority; nothing consults the Project SDK.
+   * single authority; nothing consults the Project SDK. For the SDK a tool
+   * process should actually run with (permissive fallbacks), use
+   * {@link #resolveSdk}.
    */
-  @Nullable
-  public static Sdk effectiveSdk(@NotNull Project project, @NotNull String containerId) {
-    String name = effectiveSdkName(project, containerId);
-    return name != null ? ProjectJdkTable.getInstance().findJdk(name) : null;
-  }
-
   @Nullable
   public static String effectiveSdkName(@NotNull Project project, @NotNull String containerId) {
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);

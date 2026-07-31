@@ -88,7 +88,7 @@ public final class HaxeProjectTaskRunner extends ProjectTaskRunner {
   private static Result buildAll(@NotNull Project project, @NotNull Set<String> containerIds, @NotNull ConsoleView console) {
     for (String containerId : containerIds) {
       HaxeCompileCommands.Resolved resolved =
-        ReadAction.compute(() -> HaxeCompileCommands.resolve(project, containerId));
+        ReadAction.computeBlocking(() -> HaxeCompileCommands.resolve(project, containerId));
       if (resolved == null) {
         // canRun saw a command, but it may have gone stale since - not an error
         continue;

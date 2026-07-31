@@ -63,7 +63,7 @@ public class HaxeDebugProcess extends FlexDebugProcess {
       return reference;
     }
     Module module = getModule();
-    boolean inScope = module == null || ReadAction.compute(
+    boolean inScope = module == null || ReadAction.computeBlocking(
       () -> module.getModuleWithDependenciesAndLibrariesScope(false).contains(file));
     return inScope ? reference : file.getPath();
   }

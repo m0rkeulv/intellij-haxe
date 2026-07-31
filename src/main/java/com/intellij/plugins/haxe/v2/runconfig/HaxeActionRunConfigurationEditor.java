@@ -11,8 +11,8 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeBuildFilesStore;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
 import com.intellij.ui.components.JBTextField;
@@ -97,8 +97,8 @@ public final class HaxeActionRunConfigurationEditor extends SettingsEditor<HaxeA
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null) return null;
     // module lookup hits the file index - EDT has no implicit read access
-    String containerId = ReadAction.compute(() -> HaxeCompileCommands.containerIdFor(project, file));
-    return HaxeToolWindowPanel.PROJECT_ROOT_CONTAINER.equals(containerId) ? null : containerId;
+    String containerId = ReadAction.computeBlocking(() -> HaxeContainers.containerIdFor(project, file));
+    return HaxeContainers.isProjectRoot(containerId) ? null : containerId;
   }
 
   private void refillFileCombo(@Nullable String selectedPath) {
@@ -122,7 +122,7 @@ public final class HaxeActionRunConfigurationEditor extends SettingsEditor<HaxeA
       VirtualFile file = LocalFileSystem.getInstance().findFileByPath(selectedPath);
       if (file != null && file.isValid()) {
         // type detection may sniff file content - EDT has no implicit read access
-        ReadAction.compute(() -> HaxeCompileCommands.availableActionNames(project, file))
+        ReadAction.computeBlocking(() -> HaxeCompileCommands.availableActionNames(project, file))
           .forEach(actionModel::addElement);
       }
     }
@@ -137,7 +137,7 @@ public final class HaxeActionRunConfigurationEditor extends SettingsEditor<HaxeA
   @NotNull
   private Set<String> collectBuildFilePaths(@Nullable String moduleName) {
     // the scanner walks module roots - EDT has no implicit read access
-    return ReadAction.compute(() -> {
+    return ReadAction.computeBlocking(() -> {
       Set<String> paths = new LinkedHashSet<>();
       HaxeBuildFilesStore filesStore = HaxeBuildFilesStore.getInstance(project);
 

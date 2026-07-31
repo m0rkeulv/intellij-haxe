@@ -7,7 +7,6 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
-import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -18,8 +17,6 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
@@ -73,7 +70,7 @@ public final class HaxeLibrarySync {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         Map<Module, List<HaxeBuildFileInfo.HaxeLibDependency>> dependencies =
-          ReadAction.compute(() -> collectDependencies(project));
+          ReadAction.computeBlocking(() -> collectDependencies(project));
         Map<String, Map<String, List<String>>> byModuleName = new LinkedHashMap<>();
         dependencies.forEach((module, moduleDependencies) ->
           byModuleName.put(module.getName(), resolveClasspaths(project, module, moduleDependencies, indicator)));
@@ -140,11 +137,9 @@ public final class HaxeLibrarySync {
                                                                               @NotNull HaxeBuildFile buildFile) {
     HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
     HaxeBuildFileType type = buildFile.type();
-    boolean limeFamily = type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP_PROJECT;
-    if (!limeFamily) return raw.libraries();
+    if (!LimeProjects.isLimeFamily(type)) return raw.libraries();
 
-    String targetFlag = HaxeTargetOptions.targetFlagFor(
-      type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(buildFile.file()));
+    String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(module.getName());
     HaxeBuildFileInfo display = HaxeLimeDisplayService.getInstance(project)
       .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, () -> sync(project, null));
@@ -189,7 +184,7 @@ public final class HaxeLibrarySync {
   }
 
   private static boolean ownedBy(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull Module module) {
-    return HaxeCompileCommands.containerIdFor(project, buildFile.file()).equals(module.getName());
+    return HaxeContainers.containerIdFor(project, buildFile.file()).equals(module.getName());
   }
 
 
@@ -199,7 +194,7 @@ public final class HaxeLibrarySync {
                                                              @NotNull List<HaxeBuildFileInfo.HaxeLibDependency> dependencies,
                                                              @NotNull ProgressIndicator indicator) {
     VirtualFile workDir = ProjectUtil.guessProjectDir(project);
-    Sdk sdk = findSdkForModule(project, module);
+    Sdk sdk = HaxeToolPathResolver.resolveSdk(project, module.getName());
     Map<String, List<String>> libraries = new LinkedHashMap<>();
     if (sdk != null && workDir != null) {
       for (HaxeBuildFileInfo.HaxeLibDependency dependency : dependencies) {
@@ -217,18 +212,6 @@ public final class HaxeLibrarySync {
       }
     }
     return libraries;
-  }
-
-  @Nullable
-  private static Sdk findSdkForModule(@NotNull Project project, @NotNull Module module) {
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(module.getName());
-    if (environmentSdk != null) {
-      Sdk sdk = ProjectJdkTable.getInstance().findJdk(environmentSdk);
-      if (sdk != null) {
-        return sdk;
-      }
-    }
-    return HaxeToolPathResolver.findConfiguredSdk(project);
   }
 
   @NotNull

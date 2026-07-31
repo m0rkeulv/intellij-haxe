@@ -102,7 +102,7 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
     return new CommandLineState(environment) {
       @Override
       protected @NotNull ProcessHandler startProcess() throws ExecutionException {
-        HaxeCompileCommands.Resolved resolved = ReadAction.compute(
+        HaxeCompileCommands.Resolved resolved = ReadAction.computeBlocking(
           () -> HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments));
         if (resolved == null) {
           throw new ExecutionException(

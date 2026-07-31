@@ -34,7 +34,8 @@ import com.intellij.plugins.haxe.runner.debugger.flash.FlashRunConfiguration
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.legacy.LegacyHxcppRunConfiguration
 import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands
+import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore
@@ -203,7 +204,7 @@ class HaxeV1Migrator(private val project: Project, private val scope: CoroutineS
 
       val buildFile = buildFilePath?.let { LocalFileSystem.getInstance().findFileByPath(it) }
       if (buildFile != null && buildFile.isValid) {
-        val action = if (settings.isUseHxmlToBuild) HaxeCompileCommands.HXML_BUILD_ACTION else "build"
+        val action = if (settings.isUseHxmlToBuild) HxmlProjects.BUILD_ACTION else LimeProjects.BUILD_ACTION
         environment.setCompileCommand(
           module.name,
           HaxeEnvironmentStore.CompileCommand(buildFile.path, action, settings.arguments ?: ""))
