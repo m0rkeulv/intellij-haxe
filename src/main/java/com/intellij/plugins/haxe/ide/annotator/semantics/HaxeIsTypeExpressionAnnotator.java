@@ -10,6 +10,8 @@ import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.fixer.HaxeSurroundFixer;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,7 +47,11 @@ public class HaxeIsTypeExpressionAnnotator implements Annotator, DumbAware {
         .create();
     }
 
-    if (IS_TYPE_INSPECTION_4dot1_COMPATIBLE.isEnabled(expr)) {
+    // the pre-4.2 restrictions (parenthesized-only `is`) apply automatically when
+    // the module's language level is below 4.2; the inspection remains a manual
+    // opt-in for newer levels
+    boolean pre42Semantics = !HaxeLanguageLevelUtil.isAtLeast(expr, HaxeLanguageLevel.HAXE_4_2);
+    if (pre42Semantics || IS_TYPE_INSPECTION_4dot1_COMPATIBLE.isEnabled(expr)) {
 
       PsiElement lhs = expr.getLeftExpression();
       if (isComplexExpression(lhs)) {

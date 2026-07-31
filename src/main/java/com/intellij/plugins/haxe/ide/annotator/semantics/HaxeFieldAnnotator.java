@@ -197,13 +197,18 @@ public class HaxeFieldAnnotator implements Annotator {
     PsiElement fieldBasePsi = field.getBasePsi();
     if (PROPERTY_ACCESSOR_VALID.isEnabled(fieldBasePsi)) {
 // TODO: Bug here.  (set,get) are being marked as errors.
-      if (field.getGetterPsi() != null && !field.getGetterType().isValidGetAccessor()) {
+      // an accessor parsed as a reference expression is the pre-4.0 custom
+      // accessor-method-name form, not a misplaced keyword: valid below 4.0,
+      // flagged as removed at 4.0+ by HaxeLanguageFeatureAnnotator
+      if (field.getGetterPsi() != null && field.getGetterPsi().getReferenceExpression() == null
+          && !field.getGetterType().isValidGetAccessor()) {
         holder.newAnnotation(HighlightSeverity.ERROR, "Invalid getter accessor")
           .range(field.getGetterPsi())
           .create();
       }
 
-      if (field.getSetterPsi() != null && !field.getSetterType().isValidSetAccessor()) {
+      if (field.getSetterPsi() != null && field.getSetterPsi().getReferenceExpression() == null
+          && !field.getSetterType().isValidSetAccessor()) {
         holder.newAnnotation(HighlightSeverity.ERROR, "Invalid setter accessor")
           .range(field.getSetterPsi())
           .create();
