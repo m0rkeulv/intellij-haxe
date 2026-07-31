@@ -46,7 +46,7 @@ import org.jetbrains.annotations.Nullable;
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
-public final class HaxeDisplayService {
+public final class HaxeCompilerDisplayService {
 
   /**
    * The read-action half of a request. Either {@code args} is present (HXML)
@@ -82,13 +82,13 @@ public final class HaxeDisplayService {
   private final Map<String, CachedLimeArgs> limeArgsCache = new ConcurrentHashMap<>();
   private volatile Capability capability;
 
-  public HaxeDisplayService(@NotNull Project project) {
+  public HaxeCompilerDisplayService(@NotNull Project project) {
     this.project = project;
   }
 
   @NotNull
-  public static HaxeDisplayService getInstance(@NotNull Project project) {
-    return project.getService(HaxeDisplayService.class);
+  public static HaxeCompilerDisplayService getInstance(@NotNull Project project) {
+    return project.getService(HaxeCompilerDisplayService.class);
   }
 
   @NotNull

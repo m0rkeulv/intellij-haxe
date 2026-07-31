@@ -51,7 +51,6 @@ public class HaxeUnusedMethodInspection extends LocalInspectionTool {
 
             @Override
             public void visitMethodDeclaration(@NotNull HaxeMethodDeclaration methodDeclaration) {
-                //TODO
                 if (methodDeclaration.isPublic()) return;
                 if (methodDeclaration.isOverride()) return;
                 if (implementsAbstractParentMethod(methodDeclaration)) return;

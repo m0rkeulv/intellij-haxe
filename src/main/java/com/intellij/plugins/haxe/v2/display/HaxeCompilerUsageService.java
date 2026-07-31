@@ -50,7 +50,7 @@ public final class HaxeCompilerUsageService {
   }
 
   private record Request(@NotNull UsageKey key,
-                         @NotNull HaxeDisplayService.DisplayContext context,
+                         @NotNull HaxeCompilerDisplayService.DisplayContext context,
                          @Nullable String contents,
                          @NotNull FindReferencesKind kind,
                          long fileStamp) {
@@ -87,11 +87,11 @@ public final class HaxeCompilerUsageService {
     if (file == null) return UsageState.UNKNOWN;
     VirtualFile virtualFile = file.getOriginalFile().getVirtualFile();
     if (virtualFile == null) return UsageState.UNKNOWN;
-    HaxeDisplayService.DisplayContext context = HaxeDisplayService.getInstance(project).contextFor(virtualFile);
+    HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(virtualFile);
     if (context == null) return UsageState.UNKNOWN;
 
     long fileStamp = virtualFile.getModificationStamp();
-    UsageKey key = new UsageKey(HaxeDisplayService.contextKey(context),
+    UsageKey key = new UsageKey(HaxeCompilerDisplayService.contextKey(context),
                                 virtualFile.getPath(),
                                 componentName.getText(),
                                 componentName.getTextRange().getStartOffset());
@@ -102,7 +102,7 @@ public final class HaxeCompilerUsageService {
 
     // no request while the text does not parse - cached verdicts above are
     // still served, only new server work waits for valid syntax
-    if (!HaxeDisplayService.isSyntaxClean(project, virtualFile)) return UsageState.UNKNOWN;
+    if (!HaxeCompilerDisplayService.isSyntaxClean(project, virtualFile)) return UsageState.UNKNOWN;
 
     // overriding methods can be reached through a base-typed call
     FindReferencesKind kind = declaration instanceof HaxeMethod
@@ -150,8 +150,8 @@ public final class HaxeCompilerUsageService {
 
   @NotNull
   private UsageState fetchVerdict(@NotNull Request request) {
-    HaxeDisplayService.Connected connected =
-      HaxeDisplayService.getInstance(project).connectFor(request.context(), DisplayMethods.FIND_REFERENCES);
+    HaxeCompilerDisplayService.Connected connected =
+      HaxeCompilerDisplayService.getInstance(project).connectFor(request.context(), DisplayMethods.FIND_REFERENCES);
     if (connected == null) return UsageState.UNKNOWN;
     try {
       String filePath = request.key().filePath();

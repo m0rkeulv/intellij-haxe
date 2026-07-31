@@ -137,15 +137,15 @@ public final class HaxeCompilerResolveService {
   @Nullable
   private BlueprintLookup blueprintLookup(@NotNull VirtualFile contextFile, @Nullable String dotPath) {
     if (dotPath == null || dotPath.isEmpty()) return null;
-    HaxeDisplayService.DisplayContext context = HaxeDisplayService.getInstance(project).contextFor(contextFile);
+    HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile);
     if (context == null) return null;
 
-    BlueprintKey key = new BlueprintKey(HaxeDisplayService.contextKey(context), dotPath);
+    BlueprintKey key = new BlueprintKey(HaxeCompilerDisplayService.contextKey(context), dotPath);
     TypeBlueprint blueprint = blueprints.get(key);
     if (blueprint == null) {
       // hydration compiles the context - pointless while the edited file
       // does not even parse; cache hits above stay served regardless
-      if (HaxeDisplayService.isSyntaxClean(project, contextFile)) {
+      if (HaxeCompilerDisplayService.isSyntaxClean(project, contextFile)) {
         scheduleHydration(key, context);
       }
       return null;
@@ -286,7 +286,7 @@ public final class HaxeCompilerResolveService {
 
   // --- hydration ---
 
-  private void scheduleHydration(@NotNull BlueprintKey key, @NotNull HaxeDisplayService.DisplayContext context) {
+  private void scheduleHydration(@NotNull BlueprintKey key, @NotNull HaxeCompilerDisplayService.DisplayContext context) {
     Long failed = failedAt.get(key);
     if (failed != null && System.currentTimeMillis() - failed < FAILURE_COOLDOWN_MS) return;
     if (!hydrating.add(key)) return;
@@ -311,9 +311,9 @@ public final class HaxeCompilerResolveService {
   }
 
   @Nullable
-  private TypeBlueprint hydrate(@NotNull BlueprintKey key, @NotNull HaxeDisplayService.DisplayContext context) {
-    HaxeDisplayService.Connected connected =
-      HaxeDisplayService.getInstance(project).connectFor(context, DisplayMethods.SERVER_TYPE);
+  private TypeBlueprint hydrate(@NotNull BlueprintKey key, @NotNull HaxeCompilerDisplayService.DisplayContext context) {
+    HaxeCompilerDisplayService.Connected connected =
+      HaxeCompilerDisplayService.getInstance(project).connectFor(context, DisplayMethods.SERVER_TYPE);
     if (connected == null) return null;
 
     // the server's module cache only fills from an actual compile - warm each
@@ -351,7 +351,7 @@ public final class HaxeCompilerResolveService {
 
   /** The cache context that actually holds the module (the macro context does not). */
   @Nullable
-  private String signatureFor(@NotNull HaxeDisplayService.Connected connected, @NotNull String modulePath)
+  private String signatureFor(@NotNull HaxeCompilerDisplayService.Connected connected, @NotNull String modulePath)
     throws DisplayRequestException {
     List<HaxeServerContext> contexts = connected.client().contexts(connected.args());
     for (HaxeServerContext context : contexts) {

@@ -152,7 +152,7 @@ public final class HaxeDefineContextService implements Disposable {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
     String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    HaxeBuildFileInfo display = HaxeLimeDisplayService.getInstance(project)
+    HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
       .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, this::refreshAsync);
     return display != null ? display : raw;
   }

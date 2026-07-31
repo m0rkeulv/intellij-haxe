@@ -102,8 +102,9 @@ final class HaxeToolWindowModelBuilder {
       EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files());
       EnvironmentData environment = buildEnvironmentData(raw.id(), activeDefines);
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
-      containers.add(new ContainerEntry(raw.id(), raw.displayName(), raw.projectRoot(), raw.files(),
-                                        activePath, environment, compileCommand, server));
+      ContainerEntry container = new ContainerEntry(raw.id(), raw.displayName(), raw.projectRoot(), raw.files(),
+                                                    activePath, environment, compileCommand, server);
+      containers.add(container);
     }
     return containers;
   }
@@ -150,8 +151,8 @@ final class HaxeToolWindowModelBuilder {
     Arrays.sort(modules, Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
     for (Module module : modules) {
       if (module.equals(rootModule)) continue;
-      rawContainers.add(new RawContainer(module.getName(), module.getName(), false,
-                                         mergeAndInspect(module.getName(), HaxeBuildFileScanner.scan(module))));
+      List<FileEntry> files = mergeAndInspect(module.getName(), HaxeBuildFileScanner.scan(module));
+      rawContainers.add(new RawContainer(module.getName(), module.getName(), false, files));
     }
     return rawContainers;
   }
@@ -210,7 +211,7 @@ final class HaxeToolWindowModelBuilder {
 
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    HaxeBuildFileInfo display = HaxeLimeDisplayService.getInstance(project)
+    HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
       .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, onLimeEvaluationReady);
     if (display == null) {
       return raw;
@@ -269,8 +270,10 @@ final class HaxeToolWindowModelBuilder {
       case HXP_SCRIPT -> {
         // a plain hxp script builds itself - the hxp tool runs it, no lime target
         List<String> command = HaxeCompileCommands.hxpScriptCommand(project, environmentSdk, file);
-        actions.add(new ActionNode(ownerId, HaxeCompileCommands.HXP_SCRIPT_BUILD_ACTION, command,
-                                   workDirectory, "hxp " + file.getName(), false));
+        String presentable = "hxp " + file.getName();
+        ActionNode actionNode = new ActionNode(ownerId, HaxeCompileCommands.HXP_SCRIPT_BUILD_ACTION, command,
+                                      workDirectory, presentable, false);
+        actions.add(actionNode);
       }
       case NMML -> { }
     }

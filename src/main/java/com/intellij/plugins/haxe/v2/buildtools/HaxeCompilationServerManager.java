@@ -131,8 +131,9 @@ public final class HaxeCompilationServerManager implements Disposable {
   public synchronized List<ServerInfo> getServers() {
     List<ServerInfo> result = new ArrayList<>();
     for (ServerInstance instance : servers.values()) {
-      result.add(new ServerInfo(instance.exePath, instance.displayName,
-                                instance.isAlive() ? instance.port : -1, instance.isAlive()));
+      boolean running = instance.isAlive();
+      int port = running ? instance.port : -1;
+      result.add(new ServerInfo(instance.exePath, instance.displayName, port, running));
     }
     return result;
   }

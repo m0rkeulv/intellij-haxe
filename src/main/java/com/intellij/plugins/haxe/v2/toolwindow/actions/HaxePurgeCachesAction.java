@@ -8,7 +8,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCacheManager;
 import com.intellij.plugins.haxe.haxelib.HaxelibUtil;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeLimeDisplayService;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerResolveService;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerUsageService;
 import org.jetbrains.annotations.NotNull;
@@ -36,7 +36,7 @@ public final class HaxePurgeCachesAction extends DumbAwareAction {
 
     HaxelibUtil.clearCache();
     HaxelibCacheManager.getAllInstances().forEach(HaxelibCacheManager::reload);
-    HaxeLimeDisplayService.getInstance(project).clearCache();
+    HaxeLimeProjectInfoService.getInstance(project).clearCache();
     HaxeCompilerResolveService.getInstance(project).clearCaches();
     HaxeCompilerUsageService.getInstance(project).clearCaches();
     afterPurge.run();

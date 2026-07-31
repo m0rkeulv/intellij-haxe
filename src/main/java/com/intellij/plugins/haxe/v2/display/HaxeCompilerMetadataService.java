@@ -77,7 +77,7 @@ public final class HaxeCompilerMetadataService {
   private Registry lookup(@NotNull VirtualFile contextFile) {
     if (!HaxeCompilerSettings.getInstance(project).isCompilerDiagnosticsEnabled()) return null;
     if (DumbService.isDumb(project)) return null;
-    HaxeDisplayService.DisplayContext context = HaxeDisplayService.getInstance(project).contextFor(contextFile);
+    HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile);
     if (context == null) return null;
     // the registry is a property of the compiler binary, so it lives and dies
     // with that SDK's server instance; another SDK's registry is never served
@@ -90,12 +90,12 @@ public final class HaxeCompilerMetadataService {
     return null;
   }
 
-  private void scheduleHydration(@NotNull HaxeDisplayService.DisplayContext context) {
+  private void scheduleHydration(@NotNull HaxeCompilerDisplayService.DisplayContext context) {
     if (!hydrating.compareAndSet(false, true)) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        HaxeDisplayService.Connected connected =
-          HaxeDisplayService.getInstance(project).connectFor(context, DisplayMethods.METADATA);
+        HaxeCompilerDisplayService.Connected connected =
+          HaxeCompilerDisplayService.getInstance(project).connectFor(context, DisplayMethods.METADATA);
         if (connected == null) return;
         List<MetadataEntry> entries = connected.client().metadata(connected.args());
         Set<String> bareNames = entries.stream()

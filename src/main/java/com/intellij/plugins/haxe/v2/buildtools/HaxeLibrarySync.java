@@ -141,7 +141,7 @@ public final class HaxeLibrarySync {
 
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(module.getName());
-    HaxeBuildFileInfo display = HaxeLimeDisplayService.getInstance(project)
+    HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
       .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, () -> sync(project, null));
     return display != null && !display.libraries().isEmpty() ? display.libraries() : raw.libraries();
   }

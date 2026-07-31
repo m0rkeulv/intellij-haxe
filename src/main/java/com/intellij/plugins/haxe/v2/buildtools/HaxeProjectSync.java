@@ -22,7 +22,7 @@ public final class HaxeProjectSync {
     ApplicationManager.getApplication().invokeLater(() -> {
       if (project.isDisposed()) return;
       FileDocumentManager.getInstance().saveAllDocuments();
-      HaxeLimeDisplayService.getInstance(project).clearCache();
+      HaxeLimeProjectInfoService.getInstance(project).clearCache();
       HaxeLibrarySync.sync(project, () -> {
         if (!project.isDisposed()) {
           project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();

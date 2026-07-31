@@ -50,7 +50,7 @@ import java.util.concurrent.ExecutorService;
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
-public final class HaxeLimeDisplayService implements Disposable {
+public final class HaxeLimeProjectInfoService implements Disposable {
 
   private static final int DISPLAY_TIMEOUT_MS = 60_000;
   private static final String PARSER_RELATIVE_PATH = "tools/LimeProjectParser.jar";
@@ -77,13 +77,13 @@ public final class HaxeLimeDisplayService implements Disposable {
   private final ExecutorService executor =
     AppExecutorUtil.createBoundedApplicationPoolExecutor("Haxe lime display", 1);
 
-  public HaxeLimeDisplayService(@NotNull Project project) {
+  public HaxeLimeProjectInfoService(@NotNull Project project) {
     this.project = project;
   }
 
   @NotNull
-  public static HaxeLimeDisplayService getInstance(@NotNull Project project) {
-    return project.getService(HaxeLimeDisplayService.class);
+  public static HaxeLimeProjectInfoService getInstance(@NotNull Project project) {
+    return project.getService(HaxeLimeProjectInfoService.class);
   }
 
   /**

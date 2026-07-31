@@ -256,8 +256,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       actionsNode.add(new DefaultMutableTreeNode(action));
     }
     if (launchKind != null) {
-      actionsNode.add(new DefaultMutableTreeNode(
-        new ProgramNode(entry.buildFile(), launchKind, entry.info().target(), entry.info().targetOutput())));
+      ProgramNode program =
+        new ProgramNode(entry.buildFile(), launchKind, entry.info().target(), entry.info().targetOutput());
+      actionsNode.add(new DefaultMutableTreeNode(program));
     }
     return actionsNode;
   }
@@ -282,15 +283,19 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   @NotNull
   private static DefaultMutableTreeNode buildEnvironmentNode(@NotNull ContainerEntry container) {
     EnvironmentData environment = container.environment();
-    DefaultMutableTreeNode environmentNode = new DefaultMutableTreeNode(
-      new EnvironmentNode(container.id(), container.displayName(), environment.activeBuildFileDefines()));
-    environmentNode.add(new DefaultMutableTreeNode(
-      new EnvSdkNode(container.id(), environment.sdkDisplay(), environment.sdkMissing())));
-    environmentNode.add(new DefaultMutableTreeNode(
-      new EnvLanguageLevelNode(container.id(), environment.languageLevelDisplay())));
+    EnvironmentNode environmentRow =
+      new EnvironmentNode(container.id(), container.displayName(), environment.activeBuildFileDefines());
+    DefaultMutableTreeNode environmentNode = new DefaultMutableTreeNode(environmentRow);
 
-    DefaultMutableTreeNode definesNode =
-      new DefaultMutableTreeNode(new EnvDefinesNode(container.id(), environment.defines().size()));
+    EnvSdkNode sdkRow = new EnvSdkNode(container.id(), environment.sdkDisplay(), environment.sdkMissing());
+    environmentNode.add(new DefaultMutableTreeNode(sdkRow));
+
+    EnvLanguageLevelNode levelRow = new EnvLanguageLevelNode(container.id(), environment.languageLevelDisplay());
+    environmentNode.add(new DefaultMutableTreeNode(levelRow));
+
+    EnvDefinesNode definesRow = new EnvDefinesNode(container.id(), environment.defines().size());
+    DefaultMutableTreeNode definesNode = new DefaultMutableTreeNode(definesRow);
+
     for (EnvDefineNode define : environment.defines()) {
       definesNode.add(new DefaultMutableTreeNode(define));
     }
@@ -335,8 +340,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       String key = library.name().toLowerCase(Locale.ROOT);
       boolean installed = installedLibraries == null || installedLibraries.containsKey(key);
       String resolvedVersion = installedLibraries != null ? installedLibraries.get(key) : null;
-      librariesNode.add(new DefaultMutableTreeNode(
-        new LibraryNode(buildFile, library.name(), library.version(), resolvedVersion, installed)));
+      LibraryNode libraryRow = new LibraryNode(buildFile, library.name(), library.version(), resolvedVersion, installed);
+      librariesNode.add(new DefaultMutableTreeNode(libraryRow));
     }
     fileNode.add(librariesNode);
     fileNode.add(buildActionsGroupNode(entry));
@@ -398,8 +403,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   public void showLanguageLevelPopup(@NotNull EnvLanguageLevelNode levelNode, @NotNull RelativePoint point) {
     HaxeCompilerSettings compilerSettings = HaxeCompilerSettings.getInstance(project);
     List<LevelChoice> choices = new ArrayList<>();
-    choices.add(new LevelChoice(null, HaxeBundle.message(
-      "haxe.toolwindow.node.environment.sdk.default", compilerSettings.getDefaultLanguageLevel().getPresentableText())));
+    String defaultDisplay = HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default",
+                                               compilerSettings.getDefaultLanguageLevel().getPresentableText());
+    choices.add(new LevelChoice(null, defaultDisplay));
     for (HaxeLanguageLevel level : HaxeLanguageLevel.values()) {
       choices.add(new LevelChoice(level, level.getPresentableText()));
     }

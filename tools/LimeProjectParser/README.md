@@ -59,7 +59,7 @@ mapping lime's CommandLineTools applies.
 
 ## Planned
 
-- Plugin integration: `HaxeLimeDisplayService` invoking the jar (with a
+- Plugin integration: `HaxeLimeProjectInfoService` invoking the jar (with a
   seed-define builder for target/platform/tool-version defines) instead of
   `haxelib run lime display`.
 - Validation lane in the compat matrix comparing this tool's output against

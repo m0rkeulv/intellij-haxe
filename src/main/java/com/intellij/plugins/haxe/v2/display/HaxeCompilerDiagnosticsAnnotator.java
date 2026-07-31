@@ -32,8 +32,8 @@ public class HaxeCompilerDiagnosticsAnnotator
   extends ExternalAnnotator<HaxeCompilerDiagnosticsAnnotator.Request, List<Diagnostic>> {
 
   /** Collected under the read lock; the network half runs on it unlocked. */
-  public record Request(@NotNull HaxeDisplayService.DisplayContext context,
-                        @NotNull HaxeDisplayService service,
+  public record Request(@NotNull HaxeCompilerDisplayService.DisplayContext context,
+                        @NotNull HaxeCompilerDisplayService service,
                         @NotNull String filePath,
                         @Nullable String contents) {
   }
@@ -47,10 +47,10 @@ public class HaxeCompilerDiagnosticsAnnotator
 
     // no request while the text does not parse - the compiler would choke on
     // the same syntax, and the parser's own error highlighting covers it
-    if (!HaxeDisplayService.isSyntaxClean(file.getProject(), virtualFile)) return null;
+    if (!HaxeCompilerDisplayService.isSyntaxClean(file.getProject(), virtualFile)) return null;
 
-    HaxeDisplayService service = HaxeDisplayService.getInstance(file.getProject());
-    HaxeDisplayService.DisplayContext context = service.contextFor(virtualFile);
+    HaxeCompilerDisplayService service = HaxeCompilerDisplayService.getInstance(file.getProject());
+    HaxeCompilerDisplayService.DisplayContext context = service.contextFor(virtualFile);
     if (context == null) return null;
 
     Document document = editor.getDocument();

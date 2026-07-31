@@ -150,13 +150,11 @@ public final class DisplayJson {
       for (JsonNode define : entry.path("defines")) {
         defines.put(define.path("key").asString(""), define.path("value").asString(""));
       }
-      contexts.add(new HaxeServerContext(
-        entry.path("index").asInt(0),
-        entry.path("desc").asString(""),
-        entry.path("signature").asString(""),
-        entry.path("platform").asString(""),
-        List.copyOf(classPaths),
-        defines));
+      int index = entry.path("index").asInt(0);
+      String desc = entry.path("desc").asString("");
+      String signature = entry.path("signature").asString("");
+      String platform = entry.path("platform").asString("");
+      contexts.add(new HaxeServerContext(index, desc, signature, platform, List.copyOf(classPaths), defines));
     }
     return List.copyOf(contexts);
   }
@@ -164,10 +162,10 @@ public final class DisplayJson {
   public static List<MetadataEntry> decodeMetadataList(JsonNode data) {
     List<MetadataEntry> entries = new ArrayList<>();
     for (JsonNode entry : data) {
-      entries.add(new MetadataEntry(
-        entry.path("name").asString(""),
-        entry.path("doc").asString(""),
-        entry.path("internal").asBoolean(false)));
+      String name = entry.path("name").asString("");
+      String doc = entry.path("doc").asString("");
+      boolean internal = entry.path("internal").asBoolean(false);
+      entries.add(new MetadataEntry(name, doc, internal));
     }
     return List.copyOf(entries);
   }
