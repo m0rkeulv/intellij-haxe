@@ -1,14 +1,15 @@
 package com.intellij.plugins.haxe.buildsystem.hxp;
 
 import com.intellij.openapi.fileTypes.LanguageFileType;
-import com.intellij.openapi.vfs.CharsetToolkit;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.swing.*;
+import java.nio.charset.StandardCharsets;
 
 /**
  * HXP project scripts (lime/hxp build files). The content IS Haxe source (a
@@ -40,6 +41,14 @@ public final class HxpFileType extends LanguageFileType {
     return HaxeBundle.message("hxp.file.type.description");
   }
 
+  // LanguageFileType defaults to the LANGUAGE's display name ("Haxe"), which
+  // collides with HaxeFileType - the platform requires unique display names
+  @Override
+  @NotNull
+  public String getDisplayName() {
+    return HaxeBundle.message("hxp.file.type.display.name");
+  }
+
   @Override
   @NotNull
   @NonNls
@@ -53,7 +62,7 @@ public final class HxpFileType extends LanguageFileType {
   }
 
   @Override
-  public String getCharset(@NotNull VirtualFile file, byte[] content) {
-    return CharsetToolkit.UTF8;
+  public String getCharset(@NotNull VirtualFile file, byte @NonNull [] content) {
+    return StandardCharsets.UTF_8.name();
   }
 }
