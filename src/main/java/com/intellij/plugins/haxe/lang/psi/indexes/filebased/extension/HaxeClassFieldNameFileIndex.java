@@ -57,9 +57,11 @@ public class HaxeClassFieldNameFileIndex extends HaxeComponentBaseIndex {
                             HaxeModule module = haxeFile.getModule();
                             if (module != null && module.getModel() instanceof HaxeModuleModel model) {
                                 HaxeClassModel aClass = model.getClass(className);
-                                HaxeFieldModel member = aClass.getField(name, null);
-                                if (member != null) {
-                                    elements.add(member.getPsiField());
+                                if(aClass != null) {
+                                    HaxeFieldModel member = aClass.getField(name, null);
+                                    if (member != null) {
+                                        elements.add(member.getPsiField());
+                                    }
                                 }
                             }
 

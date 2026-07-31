@@ -67,8 +67,6 @@ public class HaxeModuleMethodNameFileIndex extends HaxeComponentBaseIndex {
                     @Override
                     public boolean process(VirtualFile virtualFile) {
                         PsiFile file = PsiManager.getInstance(project).findFile(virtualFile);
-                        HaxeComponentIndexData data = FileBasedIndex.getInstance().getFileData(INDEX, virtualFile, project).get(name);
-                        String className = data.getFqn().getClassName();
                         if (file instanceof HaxeFile haxeFile) {
                             HaxeModule module = haxeFile.getModule();
                             if (module != null && module.getModel() instanceof HaxeModuleModel model) {

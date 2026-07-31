@@ -29,8 +29,6 @@ public class HaxeFqnIndexUtil {
                     @Override
                     public boolean process(VirtualFile virtualFile) {
                         PsiFile file = PsiManager.getInstance(project).findFile(virtualFile);
-                        HaxeComponentIndexData data = FileBasedIndex.getInstance().getFileData(index, virtualFile, project).get(qName);
-                        String className = data.getFqn().getClassName();
                         if (file instanceof HaxeFile haxeFile) {
                             if(haxeFile.getModule().getModel() instanceof HaxeModuleModel moduleModel) {
                                 reference.set(moduleModel);
