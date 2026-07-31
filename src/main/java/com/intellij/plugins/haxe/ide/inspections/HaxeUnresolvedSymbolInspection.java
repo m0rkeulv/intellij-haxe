@@ -115,6 +115,7 @@ public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
             ProblemHighlightType.ERROR,
             isOnTheFly
           ));
+          return;
         }
 
         // ignore unnamed (avoid incorrect annotation for function bind etc.)
