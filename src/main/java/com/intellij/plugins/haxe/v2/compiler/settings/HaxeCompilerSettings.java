@@ -21,11 +21,28 @@ public interface HaxeCompilerSettings {
     return project.getService(HaxeCompilerSettings.class);
   }
 
-  /** The language level used by every module without an explicit override. */
+  /**
+   * The effective project-wide default level: the explicit choice, or in
+   * "use compiler level" mode the level resolved from the configured SDK
+   * (latest known level when no SDK is registered).
+   */
   @NotNull
   HaxeLanguageLevel getDefaultLanguageLevel();
 
-  void setDefaultLanguageLevel(@NotNull HaxeLanguageLevel level);
+  /**
+   * The effective default for one container: same as {@link #getDefaultLanguageLevel()},
+   * except that "use compiler level" mode resolves the CONTAINER's SDK, so
+   * containers with different Environment SDKs get different levels.
+   */
+  @NotNull
+  HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String moduleName);
+
+  /** The explicitly chosen default level, or null in "use compiler level" mode. */
+  @Nullable
+  HaxeLanguageLevel getExplicitDefaultLanguageLevel();
+
+  /** Null selects "use compiler level" mode (the default for new projects). */
+  void setDefaultLanguageLevel(@Nullable HaxeLanguageLevel level);
 
   /** Explicit per-module overrides, keyed by module name. Modules without an entry use the default. */
   @NotNull
@@ -55,4 +72,10 @@ public interface HaxeCompilerSettings {
   boolean isCompilerDiagnosticsEnabled();
 
   void setCompilerDiagnosticsEnabled(boolean enabled);
+
+  /** Where completion and resolve get their symbols; see {@link HaxeCompletionMode}. */
+  @NotNull
+  HaxeCompletionMode getCompletionMode();
+
+  void setCompletionMode(@NotNull HaxeCompletionMode mode);
 }

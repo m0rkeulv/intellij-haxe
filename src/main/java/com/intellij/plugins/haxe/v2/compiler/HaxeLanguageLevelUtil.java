@@ -4,10 +4,13 @@ import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The language level editor features assume for a PSI element: the element's
@@ -19,6 +22,21 @@ import org.jetbrains.annotations.NotNull;
 public final class HaxeLanguageLevelUtil {
 
   private HaxeLanguageLevelUtil() {
+  }
+
+  /**
+   * The level implied by the compiler the container actually compiles with
+   * (the container's Environment SDK, else the Build Tools SDK - the same
+   * chain tool invocations use). A version between known levels resolves to
+   * the closest LOWER level, so a future 4.4 compiler reads as 4.3, not 5.0.
+   * Null when no SDK is registered or its version is unparsable; pass a null
+   * containerId for the project-wide SDK.
+   */
+  @Nullable
+  public static HaxeLanguageLevel fromCompiler(@NotNull Project project, @Nullable String containerId) {
+    Sdk sdk = containerId != null ? HaxeToolPathResolver.resolveSdk(project, containerId)
+                                  : HaxeToolPathResolver.findConfiguredSdk(project);
+    return sdk == null ? null : HaxeLanguageLevel.fromVersionString(sdk.getVersionString());
   }
 
   @NotNull

@@ -16,14 +16,75 @@ public class HaxeCompilerProjectSettingsTest {
   @Test
   @DisplayName("default language level is latest when unset")
   public void defaultLanguageLevelIsLatestWhenUnset() {
-    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings();
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     assertEquals(HaxeLanguageLevel.latest(), settings.getDefaultLanguageLevel());
+  }
+
+  @Test
+  @DisplayName("use compiler level is the default mode")
+  public void useCompilerLevelIsTheDefaultMode() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    assertNull(settings.getExplicitDefaultLanguageLevel());
+  }
+
+  @Test
+  @DisplayName("explicit default turns compiler mode off and null restores it")
+  public void explicitDefaultTurnsCompilerModeOffAndNullRestoresIt() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    settings.setDefaultLanguageLevel(HaxeLanguageLevel.HAXE_4_2);
+    assertEquals(HaxeLanguageLevel.HAXE_4_2, settings.getExplicitDefaultLanguageLevel());
+    settings.setDefaultLanguageLevel(null);
+    assertNull(settings.getExplicitDefaultLanguageLevel());
+    // without a project there is no SDK to resolve - the fallback is the latest level
+    assertEquals(HaxeLanguageLevel.latest(), settings.getDefaultLanguageLevel());
+  }
+
+  @Test
+  @DisplayName("use compiler level survives xml serialization round trip")
+  public void useCompilerLevelSurvivesXmlSerializationRoundTrip() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    settings.setDefaultLanguageLevel(HaxeLanguageLevel.HAXE_4_1);
+    settings.setDefaultLanguageLevel(null);
+
+    Element serialized = XmlSerializer.serialize(settings.getState());
+    HaxeCompilerProjectSettings.State deserialized =
+      XmlSerializer.deserialize(serialized, HaxeCompilerProjectSettings.State.class);
+    HaxeCompilerProjectSettings reloaded = new HaxeCompilerProjectSettings(null);
+    reloaded.loadState(deserialized);
+
+    assertNull(reloaded.getExplicitDefaultLanguageLevel());
+  }
+
+  @Test
+  @DisplayName("completion mode defaults to ide and compiler and survives round trip")
+  public void completionModeDefaultsToIdeAndCompilerAndSurvivesRoundTrip() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    assertEquals(HaxeCompletionMode.IDE_AND_COMPILER, settings.getCompletionMode());
+    settings.setCompletionMode(HaxeCompletionMode.IDE_ONLY);
+
+    Element serialized = XmlSerializer.serialize(settings.getState());
+    HaxeCompilerProjectSettings.State deserialized =
+      XmlSerializer.deserialize(serialized, HaxeCompilerProjectSettings.State.class);
+    HaxeCompilerProjectSettings reloaded = new HaxeCompilerProjectSettings(null);
+    reloaded.loadState(deserialized);
+
+    assertEquals(HaxeCompletionMode.IDE_ONLY, reloaded.getCompletionMode());
+  }
+
+  @Test
+  @DisplayName("unknown completion mode falls back to ide and compiler")
+  public void unknownCompletionModeFallsBackToIdeAndCompiler() {
+    HaxeCompilerProjectSettings.State state = new HaxeCompilerProjectSettings.State();
+    state.completionMode = "garbage";
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    settings.loadState(state);
+    assertEquals(HaxeCompletionMode.IDE_AND_COMPILER, settings.getCompletionMode());
   }
 
   @Test
   @DisplayName("effective level falls back to default")
   public void effectiveLevelFallsBackToDefault() {
-    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings();
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.setDefaultLanguageLevel(HaxeLanguageLevel.HAXE_4_2);
     settings.setModuleLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_3_4);
 
@@ -34,7 +95,7 @@ public class HaxeCompilerProjectSettingsTest {
   @Test
   @DisplayName("clearing an override restores default")
   public void clearingAnOverrideRestoresDefault() {
-    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings();
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.setModuleLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_4_0);
     settings.setModuleLanguageLevelOverride("app", null);
 
@@ -45,7 +106,7 @@ public class HaxeCompilerProjectSettingsTest {
   @Test
   @DisplayName("overrides map replaces previous entries")
   public void overridesMapReplacesPreviousEntries() {
-    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings();
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.setModuleLanguageLevelOverride("old", HaxeLanguageLevel.HAXE_4_0);
     settings.setModuleLanguageLevelOverrides(Map.of("app", HaxeLanguageLevel.HAXE_4_1));
 
@@ -56,7 +117,7 @@ public class HaxeCompilerProjectSettingsTest {
   @Test
   @DisplayName("state survives xml serialization round trip")
   public void stateSurvivesXmlSerializationRoundTrip() {
-    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings();
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.setDefaultLanguageLevel(HaxeLanguageLevel.HAXE_4_3);
     settings.setModuleLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_5_0);
     settings.setModuleLanguageLevelOverride("legacy", HaxeLanguageLevel.HAXE_3_4);
@@ -65,7 +126,7 @@ public class HaxeCompilerProjectSettingsTest {
     HaxeCompilerProjectSettings.State deserialized =
       XmlSerializer.deserialize(serialized, HaxeCompilerProjectSettings.State.class);
 
-    HaxeCompilerProjectSettings reloaded = new HaxeCompilerProjectSettings();
+    HaxeCompilerProjectSettings reloaded = new HaxeCompilerProjectSettings(null);
     reloaded.loadState(deserialized);
 
     assertEquals(HaxeLanguageLevel.HAXE_4_3, reloaded.getDefaultLanguageLevel());
@@ -80,7 +141,7 @@ public class HaxeCompilerProjectSettingsTest {
     state.defaultLanguageLevel = "garbage";
     state.moduleLanguageLevels.put("app", "also-garbage");
 
-    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings();
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.loadState(state);
 
     assertEquals(HaxeLanguageLevel.latest(), settings.getDefaultLanguageLevel());

@@ -3,7 +3,9 @@ package com.intellij.plugins.haxe.v2.compiler.settings;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
+import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -17,13 +19,23 @@ import java.util.TreeMap;
 @State(name = "HaxeCompilerConfiguration", storages = @Storage("haxeCompiler.xml"))
 public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, PersistentStateComponent<HaxeCompilerProjectSettings.State> {
 
+  /** Stored in place of a version to select "use compiler level" mode. */
+  static final String USE_COMPILER_LEVEL = "auto";
+
   public static final class State {
-    public String defaultLanguageLevel = HaxeLanguageLevel.latest().getVersionString();
+    public String defaultLanguageLevel = USE_COMPILER_LEVEL;
     public Map<String, String> moduleLanguageLevels = new TreeMap<>();
     public boolean compilerDiagnostics = false;
+    public String completionMode = HaxeCompletionMode.IDE_AND_COMPILER.getId();
   }
 
+  private final @Nullable Project project;
   private State state = new State();
+
+  /** Null project (tests): "use compiler level" cannot resolve an SDK and falls back to the latest level. */
+  public HaxeCompilerProjectSettings(@Nullable Project project) {
+    this.project = project;
+  }
 
   @Override
   public @NotNull State getState() {
@@ -40,13 +52,32 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
 
   @Override
   public @NotNull HaxeLanguageLevel getDefaultLanguageLevel() {
-    HaxeLanguageLevel level = HaxeLanguageLevel.fromVersionString(state.defaultLanguageLevel);
-    return level != null ? level : HaxeLanguageLevel.latest();
+    return defaultLevelFor(null);
   }
 
   @Override
-  public void setDefaultLanguageLevel(@NotNull HaxeLanguageLevel level) {
-    state.defaultLanguageLevel = level.getVersionString();
+  public @NotNull HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String moduleName) {
+    return defaultLevelFor(moduleName);
+  }
+
+  @Override
+  public @Nullable HaxeLanguageLevel getExplicitDefaultLanguageLevel() {
+    return HaxeLanguageLevel.fromVersionString(state.defaultLanguageLevel);
+  }
+
+  @Override
+  public void setDefaultLanguageLevel(@Nullable HaxeLanguageLevel level) {
+    state.defaultLanguageLevel = level == null ? USE_COMPILER_LEVEL : level.getVersionString();
+  }
+
+  // In "use compiler level" mode (also the fallback for unparsable stored
+  // values) the container's SDK decides; latest() when no SDK is registered.
+  @NotNull
+  private HaxeLanguageLevel defaultLevelFor(@Nullable String moduleName) {
+    HaxeLanguageLevel explicit = getExplicitDefaultLanguageLevel();
+    if (explicit != null) return explicit;
+    HaxeLanguageLevel fromCompiler = project == null ? null : HaxeLanguageLevelUtil.fromCompiler(project, moduleName);
+    return fromCompiler != null ? fromCompiler : HaxeLanguageLevel.latest();
   }
 
   @Override
@@ -86,7 +117,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public @NotNull HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String moduleName) {
     HaxeLanguageLevel override = getModuleLanguageLevelOverride(moduleName);
-    return override != null ? override : getDefaultLanguageLevel();
+    return override != null ? override : defaultLevelFor(moduleName);
   }
 
   @Override
@@ -97,5 +128,15 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public void setCompilerDiagnosticsEnabled(boolean enabled) {
     state.compilerDiagnostics = enabled;
+  }
+
+  @Override
+  public @NotNull HaxeCompletionMode getCompletionMode() {
+    return HaxeCompletionMode.fromId(state.completionMode);
+  }
+
+  @Override
+  public void setCompletionMode(@NotNull HaxeCompletionMode mode) {
+    state.completionMode = mode.getId();
   }
 }

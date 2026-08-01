@@ -20,6 +20,7 @@ import java.awt.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Swing panel for the Haxe compiler settings page: a project default language level
@@ -39,12 +40,16 @@ public final class HaxeCompilerSettingsPanel {
     }
   }
 
-  /** Combo item wrapper so "project default" does not need a null entry in the combo model. */
+  /**
+   * Combo item wrapper so the "no explicit level" choice does not need a null
+   * entry in the combo model. In the default combo the null choice means
+   * "use compiler level"; in a module row it means "project default".
+   */
   private record LevelChoice(@Nullable HaxeLanguageLevel level) {
-    static final LevelChoice PROJECT_DEFAULT = new LevelChoice(null);
+    static final LevelChoice NO_EXPLICIT_LEVEL = new LevelChoice(null);
 
     static LevelChoice of(@Nullable HaxeLanguageLevel level) {
-      return level == null ? PROJECT_DEFAULT : new LevelChoice(level);
+      return level == null ? NO_EXPLICIT_LEVEL : new LevelChoice(level);
     }
   }
 
@@ -56,7 +61,6 @@ public final class HaxeCompilerSettingsPanel {
   private final JPanel mainPanel;
 
   public HaxeCompilerSettingsPanel() {
-    defaultLevelCombo.setRenderer(BuilderKt.textListCellRenderer("", HaxeLanguageLevel::getPresentableText));
     // "Project default (x.y)" cells display the selected default, keep them in sync.
     defaultLevelCombo.addActionListener(e -> table.repaint());
 
@@ -85,20 +89,24 @@ public final class HaxeCompilerSettingsPanel {
     return mainPanel;
   }
 
-  public void reset(@NotNull HaxeLanguageLevel defaultLevel,
+  /** A null {@code explicitDefault} selects "use compiler level"; {@code compilerLevel} feeds its label. */
+  public void reset(@Nullable HaxeLanguageLevel explicitDefault,
+                    @Nullable HaxeLanguageLevel compilerLevel,
                     @NotNull Map<String, HaxeLanguageLevel> overrides,
                     @NotNull List<String> moduleNames) {
-    defaultLevelCombo.setSelectedItem(defaultLevel);
+    this.compilerLevel = compilerLevel;
+    defaultLevelCombo.setSelectedItem(LevelChoice.of(explicitDefault));
     List<ModuleLevelRow> rows = moduleNames.stream()
       .map(name -> new ModuleLevelRow(name, overrides.get(name)))
       .toList();
     tableModel.setItems(rows);
   }
 
-  @NotNull
-  public HaxeLanguageLevel getDefaultLanguageLevel() {
-    HaxeLanguageLevel selected = defaultLevelCombo.getItem();
-    return selected != null ? selected : HaxeLanguageLevel.latest();
+  /** The chosen explicit default level, or null for "use compiler level". */
+  @Nullable
+  public HaxeLanguageLevel getSelectedDefaultLevel() {
+    LevelChoice choice = defaultLevelCombo.getItem();
+    return choice == null ? null : choice.level();
   }
 
   /** Only modules with an explicit override are returned. */
@@ -170,7 +178,7 @@ public final class HaxeCompilerSettingsPanel {
 
   private final class LevelCellEditor extends DefaultCellEditor {
     LevelCellEditor() {
-      super(createLevelChoiceCombo());
+      super(createLevelChoiceCombo(choice -> levelText(choice.level())));
     }
 
     @Override
@@ -189,15 +197,25 @@ public final class HaxeCompilerSettingsPanel {
   }
 
   @NotNull
-  private ComboBox<LevelChoice> createLevelChoiceCombo() {
+  private static ComboBox<LevelChoice> createLevelChoiceCombo(@NotNull Function<LevelChoice, String> choiceText) {
     DefaultComboBoxModel<LevelChoice> model = new DefaultComboBoxModel<>();
-    model.addElement(LevelChoice.PROJECT_DEFAULT);
+    model.addElement(LevelChoice.NO_EXPLICIT_LEVEL);
     for (HaxeLanguageLevel level : HaxeLanguageLevel.values()) {
       model.addElement(LevelChoice.of(level));
     }
     ComboBox<LevelChoice> combo = new ComboBox<>(model);
-    combo.setRenderer(BuilderKt.textListCellRenderer("", choice -> levelText(choice.level())));
+    combo.setRenderer(BuilderKt.textListCellRenderer("", choiceText::apply));
     return combo;
+  }
+
+  @NotNull
+  private String defaultChoiceText(@NotNull LevelChoice choice) {
+    if (choice.level() != null) {
+      return choice.level().getPresentableText();
+    }
+    return compilerLevel != null
+           ? HaxeBundle.message("haxe.compiler.use.compiler.level", compilerLevel.getPresentableText())
+           : HaxeBundle.message("haxe.compiler.use.compiler.level.no.sdk");
   }
 
   @NotNull
@@ -205,6 +223,14 @@ public final class HaxeCompilerSettingsPanel {
     if (level != null) {
       return level.getPresentableText();
     }
-    return HaxeBundle.message("haxe.compiler.project.default.level", getDefaultLanguageLevel().getPresentableText());
+    return HaxeBundle.message("haxe.compiler.project.default.level", effectiveDefaultLevel().getPresentableText());
+  }
+
+  /** Mirrors the settings' fallback: explicit choice, else compiler level, else latest. */
+  @NotNull
+  private HaxeLanguageLevel effectiveDefaultLevel() {
+    HaxeLanguageLevel selected = getSelectedDefaultLevel();
+    if (selected != null) return selected;
+    return compilerLevel != null ? compilerLevel : HaxeLanguageLevel.latest();
   }
 }

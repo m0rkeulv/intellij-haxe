@@ -387,7 +387,7 @@ final class HaxeToolWindowModelBuilder {
     String levelDisplay = levelOverride != null
       ? levelOverride.getPresentableText()
       : HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default",
-                           compilerSettings.getDefaultLanguageLevel().getPresentableText());
+                           compilerSettings.getDefaultLanguageLevel(containerId).getPresentableText());
 
     List<EnvDefineNode> defines = environmentStore.getDefines(containerId).stream()
       .map(define -> new EnvDefineNode(containerId, define.name(), define.value(), define.effect(),

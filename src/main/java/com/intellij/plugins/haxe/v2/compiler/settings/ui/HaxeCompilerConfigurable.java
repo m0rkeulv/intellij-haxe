@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.compiler.settings.ui;
 
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.options.Configurable;
@@ -7,6 +8,7 @@ import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -52,7 +54,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
   public boolean isModified() {
     if (panel == null) return false;
     HaxeCompilerSettings settings = getSettings();
-    return panel.getDefaultLanguageLevel() != settings.getDefaultLanguageLevel()
+    return panel.getSelectedDefaultLevel() != settings.getExplicitDefaultLanguageLevel()
            || !panel.getModuleOverrides().equals(settings.getModuleLanguageLevelOverrides())
            || panel.isCompilerDiagnosticsEnabled() != settings.isCompilerDiagnosticsEnabled();
   }
@@ -61,18 +63,22 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
   public void apply() {
     if (panel == null) return;
     HaxeCompilerSettings settings = getSettings();
-    settings.setDefaultLanguageLevel(panel.getDefaultLanguageLevel());
+    settings.setDefaultLanguageLevel(panel.getSelectedDefaultLevel());
     settings.setModuleLanguageLevelOverrides(panel.getModuleOverrides());
     settings.setCompilerDiagnosticsEnabled(panel.isCompilerDiagnosticsEnabled());
     // the tool window's Language level rows mirror these settings
     project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
+    DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
   }
 
   @Override
   public void reset() {
     if (panel == null) return;
     HaxeCompilerSettings settings = getSettings();
-    panel.reset(settings.getDefaultLanguageLevel(), settings.getModuleLanguageLevelOverrides(), getModuleNames());
+    panel.reset(settings.getExplicitDefaultLanguageLevel(),
+                HaxeLanguageLevelUtil.fromCompiler(project, null),
+                settings.getModuleLanguageLevelOverrides(),
+                getModuleNames());
     panel.setCompilerDiagnosticsEnabled(settings.isCompilerDiagnosticsEnabled());
   }
 

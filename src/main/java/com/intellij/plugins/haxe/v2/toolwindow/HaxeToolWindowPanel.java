@@ -404,7 +404,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     HaxeCompilerSettings compilerSettings = HaxeCompilerSettings.getInstance(project);
     List<LevelChoice> choices = new ArrayList<>();
     String defaultDisplay = HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default",
-                                               compilerSettings.getDefaultLanguageLevel().getPresentableText());
+                                               compilerSettings.getDefaultLanguageLevel(levelNode.containerId()).getPresentableText());
     choices.add(new LevelChoice(null, defaultDisplay));
     for (HaxeLanguageLevel level : HaxeLanguageLevel.values()) {
       choices.add(new LevelChoice(level, level.getPresentableText()));
