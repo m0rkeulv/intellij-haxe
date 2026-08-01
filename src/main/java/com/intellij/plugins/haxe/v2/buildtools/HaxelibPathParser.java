@@ -16,6 +16,47 @@ public final class HaxelibPathParser {
   private HaxelibPathParser() {
   }
 
+  /** One library of a {@code haxelib path} run: its own classpath roots only, not its dependencies'. */
+  public record LibrarySection(@NotNull String name, @Nullable String version, @NotNull List<String> classpaths) {
+  }
+
+  /**
+   * Splits {@code haxelib path <lib>} output into per-library sections: each
+   * classpath line belongs to the {@code -D name=version} marker that FOLLOWS
+   * it (the requested lib prints first, dependencies after, each closing its
+   * own section). Attributing the whole output to the requested lib mounts
+   * dependency sources under the wrong External Libraries entry — and, with
+   * version skew between entries, duplicates type definitions.
+   * Trailing classpaths without a marker (extraParams.hxml additions) fall to
+   * {@code requestedLib} with no version.
+   */
+  @NotNull
+  public static List<LibrarySection> parseSections(@NotNull String requestedLib, @NotNull List<String> outputLines) {
+    List<LibrarySection> sections = new ArrayList<>();
+    List<String> pending = new ArrayList<>();
+    for (String line : outputLines) {
+      String trimmed = line.trim();
+      if (trimmed.isEmpty()) continue;
+      if (trimmed.startsWith("-D ")) {
+        int equals = trimmed.indexOf('=');
+        if (equals > 3) {
+          String name = trimmed.substring(3, equals).trim();
+          String version = trimmed.substring(equals + 1).trim();
+          sections.add(new LibrarySection(name, version, List.copyOf(pending)));
+          pending.clear();
+        }
+        continue;
+      }
+      if (trimmed.startsWith("-")) continue;
+      if (trimmed.startsWith("Error") || trimmed.contains("is not installed")) continue;
+      pending.add(trimmed);
+    }
+    if (!pending.isEmpty()) {
+      sections.add(new LibrarySection(requestedLib, null, List.copyOf(pending)));
+    }
+    return sections;
+  }
+
   @NotNull
   public static List<String> parseClasspaths(@NotNull List<String> outputLines) {
     List<String> classpaths = new ArrayList<>();

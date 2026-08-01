@@ -200,18 +200,32 @@ public final class HaxeLibrarySync {
       for (HaxeBuildFileInfo.HaxeLibDependency dependency : dependencies) {
         indicator.setText2(dependency.name());
         List<String> output = haxelibPathOutput(sdk, workDir, dependency);
-        List<String> classpaths = HaxelibPathParser.parseClasspaths(output);
-        if (!classpaths.isEmpty()) {
-          String version = HaxelibPathParser.parseVersion(dependency.name(), output);
-          if (version == null) {
-            version = dependency.version();
-          }
-          String entryName = version == null ? dependency.name() : dependency.name() + " " + version;
-          libraries.put(managedLibraryName(entryName), classpaths);
+        // one External Libraries entry PER library in the output: `haxelib
+        // path` prints the requested lib and its transitive dependencies, and
+        // attaching the whole closure to the requested lib's entry mounts
+        // dependency sources under the wrong library (and duplicates type
+        // definitions when entries disagree on a dependency's version)
+        for (HaxelibPathParser.LibrarySection section : HaxelibPathParser.parseSections(dependency.name(), output)) {
+          if (section.classpaths().isEmpty()) continue;
+          String version = section.version() != null ? section.version()
+                                                     : section.name().equals(dependency.name()) ? dependency.version() : null;
+          String entryName = version == null ? section.name() : section.name() + " " + version;
+          libraries.merge(managedLibraryName(entryName), section.classpaths(), HaxeLibrarySync::unionPreservingOrder);
         }
       }
     }
     return libraries;
+  }
+
+  @NotNull
+  private static List<String> unionPreservingOrder(@NotNull List<String> first, @NotNull List<String> second) {
+    List<String> union = new ArrayList<>(first);
+    for (String path : second) {
+      if (!union.contains(path)) {
+        union.add(path);
+      }
+    }
+    return union;
   }
 
   @NotNull
