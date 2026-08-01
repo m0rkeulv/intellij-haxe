@@ -111,7 +111,7 @@ public class HaxeReferenceCopyPasteProcessor extends CopyPastePostProcessor<Haxe
 
     HaxeRestoreReferencesDialog dialog = new HaxeRestoreReferencesDialog(project, ArrayUtil.toStringArray(haxeClassList));
     dialog.show();
-    String[] selectedObjects = dialog.getSelectedElements();
+    List<String> selectedObjects = dialog.getSelectedElements();
 
     for (final String object : selectedObjects) {
       WriteCommandAction.writeCommandAction(project, file).run(() -> HaxeAddImportHelper.addImport(object, file));

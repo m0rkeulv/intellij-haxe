@@ -28,6 +28,6 @@ public class HaxeDisplayCacheInvalidator implements HaxeCompilationServerListene
     HaxeCompilerMetadataService.getInstance(project).clearCache();
     // delivered on the EDT (see the topic contract) - safe for both calls
     PsiManager.getInstance(project).dropPsiCaches();
-    DaemonCodeAnalyzer.getInstance(project).restart();
+    DaemonCodeAnalyzer.getInstance(project).restart("haxe: compilation server state changed");
   }
 }

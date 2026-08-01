@@ -49,6 +49,6 @@ public final class HaxeLanguageLevelUtil {
       settings.setDefaultLanguageLevel(level);
     }
     project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
-    DaemonCodeAnalyzer.getInstance(project).restart();
+    DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
   }
 }

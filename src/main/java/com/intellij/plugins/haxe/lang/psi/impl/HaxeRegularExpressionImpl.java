@@ -28,6 +28,7 @@ import com.intellij.psi.LiteralTextEscaper;
 import com.intellij.psi.PsiLanguageInjectionHost;
 import org.intellij.lang.regexp.DefaultRegExpPropertiesProvider;
 import org.intellij.lang.regexp.psi.RegExpChar;
+import org.intellij.lang.regexp.psi.RegExpElement;
 import org.intellij.lang.regexp.psi.RegExpGroup;
 import org.intellij.lang.regexp.psi.RegExpNamedGroupRef;
 import org.jetbrains.annotations.NotNull;
@@ -98,7 +99,7 @@ public class HaxeRegularExpressionImpl extends HaxeReferenceImpl implements Haxe
   }
 
   @Override
-  public boolean supportsPossessiveQuantifiers() {
+  public boolean supportsPossessiveQuantifiers(RegExpElement context) {
     return false;
   }
 

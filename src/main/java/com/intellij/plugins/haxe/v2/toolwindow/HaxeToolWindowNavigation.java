@@ -116,7 +116,7 @@ public final class HaxeToolWindowNavigation {
         for (OrderEntry orderEntry : ModuleRootManager.getInstance(module).getOrderEntries()) {
           if (orderEntry instanceof LibraryOrderEntry libraryEntry
               && HaxeLibrarySync.isManagedEntryFor(libraryEntry.getLibraryName(), libraryName)) {
-            VirtualFile[] roots = libraryEntry.getFiles(OrderRootType.CLASSES);
+            VirtualFile[] roots = libraryEntry.getRootFiles(OrderRootType.CLASSES);
             if (roots.length > 0) {
               return roots[0];
             }

@@ -214,7 +214,7 @@ public class HaxeDebugUtil {
     StringBuilder msg = new StringBuilder();
     if (includeThreadId) {
       msg.append("thread=");
-      msg.append(Thread.currentThread().getId());
+      msg.append(Thread.currentThread().threadId());
       msg.append(':');
     }
     msg.append("depth=");

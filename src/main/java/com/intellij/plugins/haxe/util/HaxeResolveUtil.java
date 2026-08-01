@@ -445,7 +445,7 @@ public class HaxeResolveUtil {
     if (log.isTraceEnabled()) {
       StringBuilder out = new StringBuilder();
 
-      out.append(Thread.currentThread().getId()); // Name());
+      out.append(Thread.currentThread().threadId());
       out.append(' ');
 
       while (0 < depth--) {

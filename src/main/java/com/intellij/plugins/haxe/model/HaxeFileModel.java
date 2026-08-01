@@ -27,7 +27,6 @@ import com.intellij.psi.stubs.StubElement;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
 import com.intellij.psi.util.PsiTreeUtil;
-import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -425,7 +424,8 @@ public class HaxeFileModel implements HaxeExposableModel {
   private String detectPackageName() {
     HaxeSourceRootModel sourceRootModel = getProject().getContainingRoot(file.getContainingFile().getParent());
     if (sourceRootModel != null) {
-      return StringUtils.replace(sourceRootModel.resolvePath(file.getParent()), "/", ".");
+      String relativePath = sourceRootModel.resolvePath(file.getParent());
+      return relativePath == null ? null : relativePath.replace('/', '.');
     }
 
     return "";

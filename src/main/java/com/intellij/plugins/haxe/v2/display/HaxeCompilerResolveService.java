@@ -379,7 +379,7 @@ public final class HaxeCompilerResolveService {
     ApplicationManager.getApplication().invokeLater(() -> {
       if (!project.isDisposed()) {
         PsiManager.getInstance(project).dropPsiCaches();
-        DaemonCodeAnalyzer.getInstance(project).restart();
+        DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler resolve results hydrated");
       }
     });
   }

@@ -170,7 +170,7 @@ public final class HaxeCompilerUsageService {
   private void restartHighlighting() {
     ApplicationManager.getApplication().invokeLater(() -> {
       if (!project.isDisposed()) {
-        DaemonCodeAnalyzer.getInstance(project).restart();
+        DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler usage data updated");
       }
     });
   }

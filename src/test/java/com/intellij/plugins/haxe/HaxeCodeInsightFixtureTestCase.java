@@ -33,6 +33,7 @@ import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiElementFactory;
+import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.impl.PsiManagerEx;
@@ -243,9 +244,9 @@ abstract public class HaxeCodeInsightFixtureTestCase {
 
   public void setTestStyleSettings(int indent) {
     Project project = getProject();
-    CodeStyleSettings currSettings = CodeStyleSettingsManager.getSettings(project);
+    CodeStyleSettings currSettings = CodeStyle.getSettings(project);
     assertNotNull(currSettings);
-    CodeStyleSettings tempSettings = currSettings.clone();
+    CodeStyleSettings tempSettings = CodeStyleSettingsManager.getInstance(project).cloneSettings(currSettings);
     CodeStyleSettings.IndentOptions indentOptions = tempSettings.getIndentOptions(HaxeFileType.INSTANCE);
     indentOptions.INDENT_SIZE = indent;
     assertNotNull(indentOptions);

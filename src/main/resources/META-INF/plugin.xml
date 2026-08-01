@@ -512,18 +512,6 @@
 
     <spellchecker.support language="Haxe" implementationClass="com.intellij.plugins.haxe.spellchecker.HaxeSpellcheckingStrategy"/>
 
-<!--
-    <localInspection language="Haxe" shortName="SemanticAnnotator" bundle="messages.HaxeBundle"
-                     groupPath="Haxe" groupKey="inspections.semantic.annotation.group.name"
-                     key="haxe.inspections.semantic.annotator.name" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeHighlightRangeExtension$SemanticAnnotator"/>
-
-    <localInspection language="Haxe" bundle="messages.HaxeBundle" enabledByDefault="true"
-                     groupPath="Haxe" groupKey="inspections.semantic.annotation.group.name"
-                     key="haxe.inspections.incompatible.type.checks.name"
-                     shortName="IncompatibleTypeChecks"
-                     implementationClass="com.intellij.plugins.haxe.ide.annotator.TypeCheckExpressionChecker$IncompatibleTypeChecks"/>
--->
 
     <localInspection language="XML" shortName="NMEBuildDirectory" bundle="messages.HaxeBundle"
                      key="haxe.inspections.nme.build.directory" groupKey="haxe.inspections.group.name" enabledByDefault="true"
