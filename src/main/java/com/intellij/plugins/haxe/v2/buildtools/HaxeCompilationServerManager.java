@@ -24,6 +24,7 @@ import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -208,8 +209,14 @@ public final class HaxeCompilationServerManager implements Disposable {
       command.add(String.valueOf(chosenPort));
 
       // the process handler itself announces the command line as its first output
-      GeneralCommandLine commandLine = new GeneralCommandLine(command)
-        .withWorkDirectory(project.getBasePath());
+      GeneralCommandLine commandLine = new GeneralCommandLine(command);
+      // every request carries its own --cwd, so the server's working directory
+      // is irrelevant - and a missing project directory (fixture projects,
+      // freshly moved projects) must not fail the start
+      String basePath = project.getBasePath();
+      if (basePath != null && new File(basePath).isDirectory()) {
+        commandLine.withWorkDirectory(basePath);
+      }
       OSProcessHandler handler = new OSProcessHandler(commandLine) {
         // long-running, mostly idle daemon - the default reader busy-polls and wastes CPU
         @Override

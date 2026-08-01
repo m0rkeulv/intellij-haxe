@@ -15,6 +15,8 @@ import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.InitializeResult;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
+import com.intellij.plugins.haxe.display.transport.DisplayResponse;
+import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
@@ -80,6 +82,8 @@ public final class HaxeCompilerDisplayService {
 
   private final Project project;
   private final Map<String, CachedLimeArgs> limeArgsCache = new ConcurrentHashMap<>();
+  /** Contexts already warmed with a compile this session (the server's module cache needs one). */
+  private final Set<String> compiledContexts = ConcurrentHashMap.newKeySet();
   private volatile Capability capability;
 
   public HaxeCompilerDisplayService(@NotNull Project project) {
@@ -104,7 +108,16 @@ public final class HaxeCompilerDisplayService {
   @Nullable
   public DisplayContext contextFor(@NotNull VirtualFile file) {
     Module module = ModuleUtilCore.findModuleForFile(file, project);
-    if (module == null) return null;
+    return module == null ? null : contextFor(module);
+  }
+
+  /**
+   * The display context of a module's current build file — for callers that
+   * have no source file in hand (the type catalog enumerates per module).
+   * Same contract as {@link #contextFor(VirtualFile)}.
+   */
+  @Nullable
+  public DisplayContext contextFor(@NotNull Module module) {
     VirtualFile buildFile = currentBuildFile(module);
     if (buildFile == null || buildFile.getParent() == null) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(buildFile);
@@ -281,19 +294,68 @@ public final class HaxeCompilerDisplayService {
 
     Capability known = capability;
     if (known == null || known.port() != port) {
-      try {
-        InitializeResult initialized = client.initialize(args);
-        known = new Capability(port, Set.copyOf(initialized.methods()));
-        log.info("haxe display protocol " + initialized.protocolVersion()
-                 + " (haxe " + initialized.haxeVersion() + "), "
-                 + known.methods().size() + " methods");
-      } catch (DisplayRequestException e) {
-        log.info("display initialize failed: " + e.getMessage());
-        return null;
-      }
+      InitializeResult initialized = initializeWithRetry(client, args);
+      if (initialized == null) return null;
+      known = new Capability(port, Set.copyOf(initialized.methods()));
+      log.info("haxe display protocol " + initialized.protocolVersion()
+               + " (haxe " + initialized.haxeVersion() + "), "
+               + known.methods().size() + " methods");
       capability = known;
     }
     return known.methods().contains(method) ? new Connected(client, args, port) : null;
+  }
+
+  /** A freshly spawned server needs a moment to bind its port; retry briefly before giving up. */
+  @Nullable
+  private static InitializeResult initializeWithRetry(@NotNull HaxeDisplayClient client, @NotNull List<String> args) {
+    long deadline = System.currentTimeMillis() + 10_000;
+    while (true) {
+      try {
+        return client.initialize(args);
+      } catch (DisplayRequestException e) {
+        if (System.currentTimeMillis() > deadline) {
+          log.info("display initialize failed: " + e.getMessage());
+          return null;
+        }
+        try {
+          Thread.sleep(250);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          return null;
+        }
+      }
+    }
+  }
+
+  // --- context warm-up ---
+
+  /**
+   * The server's module cache only fills from an actual compile — warm each
+   * context once per session. A FAILED compile (broken code) must not count
+   * as warmed, or module lookups stay broken until a purge even after the
+   * code is fixed; the next attempt retries instead. Background threads only.
+   */
+  boolean ensureContextCompiled(@NotNull Connected connected, @NotNull String contextKey) {
+    if (compiledContexts.contains(contextKey)) return true;
+    List<String> compileArgs = new ArrayList<>(connected.args());
+    compileArgs.add("--no-output");
+    try {
+      DisplayResponse compiled = HaxeDisplayTransport.request("127.0.0.1", connected.port(), compileArgs, 120_000);
+      if (compiled.hasError()) {
+        log.info("context warm-up compile reported errors - will retry: " + compiled.payload());
+        return false;
+      }
+      compiledContexts.add(contextKey);
+      return true;
+    } catch (DisplayRequestException e) {
+      log.info("context warm-up compile failed: " + e.getMessage());
+      return false;
+    }
+  }
+
+  /** Forget which contexts were warmed; the next module lookup re-compiles. */
+  public void resetCompiledContexts() {
+    compiledContexts.clear();
   }
 
   // --- build file resolution ---

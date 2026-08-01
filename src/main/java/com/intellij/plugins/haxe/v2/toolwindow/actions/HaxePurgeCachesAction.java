@@ -9,14 +9,14 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCacheManager;
 import com.intellij.plugins.haxe.haxelib.HaxelibUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeLimeProjectInfoService;
-import com.intellij.plugins.haxe.v2.display.HaxeCompilerResolveService;
-import com.intellij.plugins.haxe.v2.display.HaxeCompilerUsageService;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Tool window button that clears every cached haxelib/evaluation value: the
- * haxelib metadata caches and the lime project evaluation cache. The tree
- * refresh afterwards re-resolves everything.
+ * Tool window button that clears every cached value: the haxelib metadata
+ * caches, the lime project evaluation cache and all compiler-derived caches
+ * (with the PSI drop + daemon restart that makes editors recompute). The
+ * tree refresh afterwards rebuilds the tool window from the emptied caches.
  */
 public final class HaxePurgeCachesAction extends DumbAwareAction {
 
@@ -37,8 +37,7 @@ public final class HaxePurgeCachesAction extends DumbAwareAction {
     HaxelibUtil.clearCache();
     HaxelibCacheManager.getAllInstances().forEach(HaxelibCacheManager::reload);
     HaxeLimeProjectInfoService.getInstance(project).clearCache();
-    HaxeCompilerResolveService.getInstance(project).clearCaches();
-    HaxeCompilerUsageService.getInstance(project).clearCaches();
+    HaxeCompilerCaches.clearAndRehighlight(project, "haxe: caches purged");
     afterPurge.run();
   }
 

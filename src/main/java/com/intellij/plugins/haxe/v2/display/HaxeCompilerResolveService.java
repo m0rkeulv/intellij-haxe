@@ -12,8 +12,6 @@ import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
 import com.intellij.plugins.haxe.display.protocol.server.HaxeServerContext;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
-import com.intellij.plugins.haxe.display.transport.DisplayResponse;
-import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeModule;
@@ -39,6 +37,7 @@ import java.util.stream.StreamSupport;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 /**
  * The compiler-backed last resort of {@code HaxeResolver}: when static
@@ -66,13 +65,22 @@ public final class HaxeCompilerResolveService {
   }
 
   private static final long FAILURE_COOLDOWN_MS = 30_000;
+  /**
+   * Depth-one bound: resolving the RECEIVER inside the fallback re-runs the
+   * resolver, whose own failures re-enter this fallback. The resolver cannot
+   * negatively cache failures (a wrong path's cached failure would mask a
+   * success reachable through another path), so failed sub-chains recompute
+   * on every visit - nested fallbacks multiply that cost without bound and
+   * once froze a full resolve pass. Each reference gets the fallback when it
+   * is the SUBJECT of resolution, never transitively inside another
+   * reference's fallback.
+   */
+  private static final ThreadLocal<Boolean> inFallback = ThreadLocal.withInitial(() -> false);
 
   private final Project project;
   private final Map<BlueprintKey, TypeBlueprint> blueprints = new ConcurrentHashMap<>();
   private final Set<BlueprintKey> hydrating = ConcurrentHashMap.newKeySet();
   private final Map<BlueprintKey, Long> failedAt = new ConcurrentHashMap<>();
-  /** Contexts already warmed with a compile this session (the module cache needs one). */
-  private final Set<String> compiledContexts = ConcurrentHashMap.newKeySet();
   private final Map<BlueprintKey, HaxeFile> blueprintFiles = new ConcurrentHashMap<>();
 
   public HaxeCompilerResolveService(@NotNull Project project) {
@@ -102,14 +110,25 @@ public final class HaxeCompilerResolveService {
     String name = expression.getReferenceName();
     if (name == null || name.isEmpty()) return null;
 
-    HaxeClass targetClass = targetClassOf(expression);
-    if (targetClass == null) return null;
+    // context check BEFORE resolving the receiver: targetClassOf recurses into
+    // resolve, and without a build context (fixture tests, non-v2 projects)
+    // this path can never answer - the recursion would be pure overhead
     VirtualFile contextFile = fileOf(expression);
     if (contextFile == null) return null;
-    BlueprintLookup lookup = blueprintLookup(contextFile, targetClass.getQualifiedName());
-    if (lookup == null || lookup.blueprint().findMember(name) == null) return null;
-    PsiElement member = blueprintMember(lookup.key(), lookup.blueprint(), name);
-    return member != null ? List.of(member) : null;
+    if (HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile) == null) return null;
+
+    if (inFallback.get()) return null;
+    inFallback.set(true);
+    try {
+      HaxeClass targetClass = targetClassOf(expression);
+      if (targetClass == null) return null;
+      BlueprintLookup lookup = blueprintLookup(contextFile, targetClass.getQualifiedName());
+      if (lookup == null || lookup.blueprint().findMember(name) == null) return null;
+      PsiElement member = blueprintMember(lookup.key(), lookup.blueprint(), name);
+      return member != null ? List.of(member) : null;
+    } finally {
+      inFallback.set(false);
+    }
   }
 
   /** The class whose blueprint can hold the referenced member. */
@@ -133,6 +152,24 @@ public final class HaxeCompilerResolveService {
     if (DumbService.isDumb(project)) return null;
     BlueprintLookup lookup = blueprintLookup(contextFile, dotPath);
     return lookup != null ? lookup.blueprint() : null;
+  }
+
+  /**
+   * The blueprint-rendered class of a compiler-known type, addressed through
+   * an explicit display context — for the type catalog, whose entries carry
+   * no source file. Cache-only; a miss schedules hydration and returns null.
+   * Call in a read action.
+   */
+  @Nullable
+  public HaxeClassModel blueprintClass(@NotNull HaxeCompilerDisplayService.DisplayContext context, @NotNull String dotPath) {
+    if (!HaxeCompilerSettings.getInstance(project).getCompletionMode().usesCompiler()) return null;
+    BlueprintKey key = new BlueprintKey(HaxeCompilerDisplayService.contextKey(context), dotPath);
+    TypeBlueprint blueprint = blueprints.get(key);
+    if (blueprint == null) {
+      scheduleHydration(key, context);
+      return null;
+    }
+    return renderedClassModel(key, blueprint);
   }
 
   private record BlueprintLookup(@NotNull BlueprintKey key, @NotNull TypeBlueprint blueprint) {
@@ -171,7 +208,6 @@ public final class HaxeCompilerResolveService {
     blueprints.clear();
     blueprintFiles.clear();
     failedAt.clear();
-    compiledContexts.clear();
   }
 
   // --- synthetic PSI ---
@@ -185,14 +221,19 @@ public final class HaxeCompilerResolveService {
    */
   @Nullable
   private PsiElement blueprintMember(@NotNull BlueprintKey key, @NotNull TypeBlueprint blueprint, @NotNull String name) {
+    HaxeClassModel renderedClass = renderedClassModel(key, blueprint);
+    if (renderedClass == null) return null;
+    HaxeBaseMemberModel member = renderedClass.getMember(name, null);
+    return member != null ? member.getBasePsi() : null;
+  }
+
+  @Nullable
+  private HaxeClassModel renderedClassModel(@NotNull BlueprintKey key, @NotNull TypeBlueprint blueprint) {
     HaxeFile file = blueprintFiles.computeIfAbsent(key, k -> buildBlueprintFile(k, blueprint));
     HaxeModule module = file.getModule();
     if (module == null) return null;
     HaxeModuleModel model = (HaxeModuleModel)module.getModel();
-    HaxeClassModel renderedClass = model.getClass(typeNameOf(key.dotPath()));
-    if (renderedClass == null) return null;
-    HaxeBaseMemberModel member = renderedClass.getMember(name, null);
-    return member != null ? member.getBasePsi() : null;
+    return model.getClass(typeNameOf(key.dotPath()));
   }
 
   @NotNull
@@ -290,7 +331,22 @@ public final class HaxeCompilerResolveService {
 
   // --- hydration ---
 
+  /**
+   * Synchronous hydration for the gated live-integration tests (production
+   * hydration stays background-scheduled and never runs in unit-test mode).
+   */
+  @TestOnly
+  public void hydrateNowForTests(@NotNull HaxeCompilerDisplayService.DisplayContext context, @NotNull String dotPath) {
+    BlueprintKey key = new BlueprintKey(HaxeCompilerDisplayService.contextKey(context), dotPath);
+    TypeBlueprint blueprint = hydrate(key, context);
+    if (blueprint != null) {
+      blueprints.put(key, blueprint);
+    }
+  }
+
   private void scheduleHydration(@NotNull BlueprintKey key, @NotNull HaxeCompilerDisplayService.DisplayContext context) {
+    // fixture tests have no server to hydrate from; never spawn the attempt
+    if (ApplicationManager.getApplication().isUnitTestMode()) return;
     Long failed = failedAt.get(key);
     if (failed != null && System.currentTimeMillis() - failed < FAILURE_COOLDOWN_MS) return;
     if (!hydrating.add(key)) return;
@@ -316,55 +372,56 @@ public final class HaxeCompilerResolveService {
 
   @Nullable
   private TypeBlueprint hydrate(@NotNull BlueprintKey key, @NotNull HaxeCompilerDisplayService.DisplayContext context) {
-    HaxeCompilerDisplayService.Connected connected =
-      HaxeCompilerDisplayService.getInstance(project).connectFor(context, DisplayMethods.SERVER_TYPE);
+    HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
+    HaxeCompilerDisplayService.Connected connected = displayService.connectFor(context, DisplayMethods.SERVER_TYPE);
     if (connected == null) return null;
 
-    // the server's module cache only fills from an actual compile - warm each
-    // context once per session. A FAILED compile (broken code) must not count
-    // as warmed, or hydration stays broken until a purge even after the code
-    // is fixed; retry on the next attempt instead.
-    if (!compiledContexts.contains(key.contextKey())) {
-      List<String> compileArgs = new ArrayList<>(connected.args());
-      compileArgs.add("--no-output");
-      try {
-        DisplayResponse compiled =
-          HaxeDisplayTransport.request("127.0.0.1", connected.port(), compileArgs, 120_000);
-        if (!compiled.hasError()) {
-          compiledContexts.add(key.contextKey());
-        } else {
-          log.info("context warm-up compile reported errors - will retry: " + compiled.payload());
-        }
-      } catch (DisplayRequestException e) {
-        log.info("context warm-up compile failed: " + e.getMessage());
-      }
-    }
+    // best effort: a failed warm-up still tries the lookup - the module may
+    // already sit in the server's cache from an earlier compile
+    displayService.ensureContextCompiled(connected, key.contextKey());
 
     try {
       // the type's module path: for Module.SubType the module is the prefix
       String modulePath = key.dotPath();
       String typeName = modulePath.substring(modulePath.lastIndexOf('.') + 1);
-      String signature = signatureFor(connected, modulePath);
-      if (signature == null) return null;
-      return connected.client().typeBlueprint(connected.args(), signature, modulePath, typeName);
+      return blueprintFromAnyContext(connected, modulePath, typeName);
     } catch (DisplayRequestException e) {
       log.info("server/type failed for " + key.dotPath() + ": " + e.getMessage());
       return null;
     }
   }
 
-  /** The cache context that actually holds the module (the macro context does not). */
+  /**
+   * server/type against the context holding the module. A source module's
+   * context is found through the module listing; a Context.defineType module
+   * is LISTED nowhere (see the display-protocol README), so the typed
+   * ({@code after_init_macros}) contexts are tried blind — server/type itself
+   * is the test of whether the type lives there.
+   */
   @Nullable
-  private String signatureFor(@NotNull HaxeCompilerDisplayService.Connected connected, @NotNull String modulePath)
-    throws DisplayRequestException {
-    List<HaxeServerContext> contexts = connected.client().contexts(connected.args());
-    for (HaxeServerContext context : contexts) {
+  private TypeBlueprint blueprintFromAnyContext(@NotNull HaxeCompilerDisplayService.Connected connected,
+                                                @NotNull String modulePath,
+                                                @NotNull String typeName) throws DisplayRequestException {
+    List<String> candidates = new ArrayList<>();
+    for (HaxeServerContext context : connected.client().contexts(connected.args())) {
       try {
         if (connected.client().modules(connected.args(), context.signature()).contains(modulePath)) {
-          return context.signature();
+          // listed = certain; try before the blind candidates
+          candidates.add(0, context.signature());
+          continue;
         }
       } catch (DisplayRequestException ignored) {
         // some contexts reject module listing - try the next
+      }
+      if ("after_init_macros".equals(context.desc())) {
+        candidates.add(context.signature());
+      }
+    }
+    for (String signature : candidates) {
+      try {
+        return connected.client().typeBlueprint(connected.args(), signature, modulePath, typeName);
+      } catch (DisplayRequestException ignored) {
+        // the type does not live in this context - try the next
       }
     }
     return null;

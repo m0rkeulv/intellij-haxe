@@ -56,5 +56,12 @@ Facts that shape the client:
   modules) → `server/module` (dependencies/dependents, for invalidation) →
   `server/type` (the complete post-macro type: every field with its
   `JsonType` — macro-generated members included).
+- **`Context.defineType` modules are invisible to `server/modules`** and
+  `server/module` rejects them ("Compiler error") — they surface ONLY in the
+  `dependencies` lists of the modules using them. `server/type` on the
+  defined dot path answers normally. Pinned by
+  `LiveDisplayServerTest.macroDefinedTypeAppearsInModulesAndBlueprintsAfterACompile`;
+  the IDE's type catalog discovers generated types through this dependency
+  sweep.
 - Gate features on the method list returned by `initialize`
   (`display/diagnostics` is haxe 4.3+).

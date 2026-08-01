@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.display.client;
 
 import com.intellij.plugins.haxe.display.protocol.*;
 import com.intellij.plugins.haxe.display.protocol.server.HaxeServerContext;
+import com.intellij.plugins.haxe.display.protocol.server.ModuleInfo;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
 import com.intellij.plugins.haxe.display.transport.DisplayResponse;
 import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
@@ -130,7 +131,7 @@ public class LiveDisplayServerTest {
 
     List<HaxeServerContext> contexts = client.contexts(baseArgs);
     HaxeServerContext modulesContext = contexts.stream()
-      .filter(context -> contextHasModule(context, "Live"))
+      .filter(context -> contextHasModule(baseArgs, context, "Live"))
       .findFirst().orElse(null);
     assertNotNull(modulesContext, "a context holding the compiled module must exist");
 
@@ -140,9 +141,93 @@ public class LiveDisplayServerTest {
     assertEquals("() -> String", blueprint.findMember("shout").type().presentable());
   }
 
-  private static boolean contextHasModule(HaxeServerContext context, String module) {
+  // A macro-defined type: exists in NO source file, only in the compiler's
+  // post-macro world - the case the IDE's type catalog serves.
+  private static final String GEN_MACRO = """
+    import haxe.macro.Context;
+    class GenMacro {
+    	public static function define() {
+    		Context.defineType({
+    			pack: ["gen"],
+    			name: "GeneratedThing",
+    			pos: Context.currentPos(),
+    			kind: TDClass(),
+    			fields: [{
+    				name: "tag",
+    				access: [APublic],
+    				kind: FVar(macro :String, macro "gen"),
+    				pos: Context.currentPos()
+    			}, {
+    				name: "make",
+    				access: [APublic, AStatic],
+    				kind: FFun({args: [], ret: macro :String, expr: macro return "made"}),
+    				pos: Context.currentPos()
+    			}]
+    		});
+    	}
+    }
+    """;
+  private static final String GEN_MAIN = """
+    class LiveGen {
+    	static function main() trace(gen.GeneratedThing.make());
+    }
+    """;
+
+  @Test
+  @Timeout(90)
+  @DisplayName("macro defined type appears in modules and blueprints after a compile")
+  public void macroDefinedTypeAppearsInModulesAndBlueprintsAfterACompile() throws Exception {
+    Files.writeString(workDir.resolve("GenMacro.hx"), GEN_MACRO);
+    Files.writeString(workDir.resolve("LiveGen.hx"), GEN_MAIN);
+    List<String> genArgs = List.of("--cwd", workDir.toString(), "-cp", ".", "-main", "LiveGen",
+                                   "--macro", "GenMacro.define()", "-js", "gen.js", "--no-output");
+
+    // the module cache is EMPTY until a real compile - the wire fact the
+    // IDE's context warm-up compile exists for
+    assertNull(typedContextHolding(genArgs, "LiveGen"), "no module cache before a compile");
+
+    DisplayResponse compiled = HaxeDisplayTransport.request("127.0.0.1", port, genArgs, 30_000);
+    assertFalse(compiled.hasError(), "fixture compile must succeed: " + compiled.payload());
+
+    HaxeServerContext context = typedContextHolding(genArgs, "LiveGen");
+    assertNotNull(context, "the typed context must list the compiled module");
+    assertEquals("after_init_macros", context.desc(), "the IDE filters typed contexts by this desc");
+
+    // a defineType-created module is INVISIBLE to the flat listing and has no
+    // ModuleInfo of its own; it surfaces only in the dependency lists of the
+    // modules using it - the discovery path the IDE's type catalog walks
+    List<String> listed = client.modules(genArgs, context.signature());
+    assertFalse(listed.contains("gen.GeneratedThing"), "server/modules must not list the defined module");
+    ModuleInfo userInfo = client.module(genArgs, context.signature(), "LiveGen");
+    assertTrue(userInfo.dependencies().contains("gen.GeneratedThing"),
+               "the using module's dependencies expose the defined module");
+    assertFalse(userInfo.sign().isEmpty(), "sign drives the catalog's incremental refresh");
+    assertThrows(Exception.class,
+                 () -> client.module(genArgs, context.signature(), "gen.GeneratedThing"),
+                 "server/module rejects a defined module");
+
+    // server/type answers regardless - blueprints are how the defined type's
+    // members become visible
+    TypeBlueprint blueprint = client.typeBlueprint(genArgs, context.signature(), "gen.GeneratedThing", "GeneratedThing");
+    assertEquals("String", blueprint.findMember("tag").type().dotPath());
+    assertEquals("() -> String", blueprint.findMember("make").type().presentable());
+  }
+
+  /** The server context whose module cache holds {@code module}, or null (also while no cache exists at all). */
+  private static HaxeServerContext typedContextHolding(List<String> args, String module) {
     try {
-      return client.modules(baseArgs, context.signature()).contains(module);
+      for (HaxeServerContext context : client.contexts(args)) {
+        if (contextHasModule(args, context, module)) return context;
+      }
+    } catch (Exception ignored) {
+      // a fresh server rejects context listing until something compiled
+    }
+    return null;
+  }
+
+  private static boolean contextHasModule(List<String> args, HaxeServerContext context, String module) {
+    try {
+      return client.modules(args, context.signature()).contains(module);
     } catch (Exception e) {
       return false;
     }

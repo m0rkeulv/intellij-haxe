@@ -1,9 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
-import com.intellij.psi.PsiManager;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -23,11 +21,7 @@ public class HaxeDisplayCacheInvalidator implements HaxeCompilationServerListene
 
   @Override
   public void serverStateChanged() {
-    HaxeCompilerResolveService.getInstance(project).clearCaches();
-    HaxeCompilerUsageService.getInstance(project).clearCaches();
-    HaxeCompilerMetadataService.getInstance(project).clearCache();
-    // delivered on the EDT (see the topic contract) - safe for both calls
-    PsiManager.getInstance(project).dropPsiCaches();
-    DaemonCodeAnalyzer.getInstance(project).restart("haxe: compilation server state changed");
+    // delivered on the EDT (see the topic contract), as the clear requires
+    HaxeCompilerCaches.clearAndRehighlight(project, "haxe: compilation server state changed");
   }
 }

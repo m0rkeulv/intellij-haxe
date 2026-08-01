@@ -44,7 +44,7 @@ public class LookupUtil {
      * js.*, cpp.* …) of a target that is not active — those classes cannot be used
      * in the current build and must not be offered by completion.
      */
-    static boolean isActiveTargetPackage(@Nullable String packageName, @NotNull Project project) {
+    public static boolean isActiveTargetPackage(@Nullable String packageName, @NotNull Project project) {
         if (packageName == null || packageName.isEmpty()) return true;
         int dot = packageName.indexOf('.');
         String root = dot < 0 ? packageName : packageName.substring(0, dot);

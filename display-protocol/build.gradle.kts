@@ -25,6 +25,15 @@ dependencies {
     testRuntimeOnly(libs.junitPlatformLauncher)
 }
 
+// The live-server tests drive a real `haxe --wait` process: opt-in like the
+// debugger suites, since the machine may lack haxe (or carry an unexpected
+// version). The DTO/transport unit tests always run.
+val displayTests = providers.gradleProperty("displayTests").getOrElse("false").toBoolean()
+
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    if (!displayTests) {
+        logger.lifecycle("SKIPPING live display server tests (opt in with -PdisplayTests=true)")
+        filter.excludeTestsMatching("com.intellij.plugins.haxe.display.client.LiveDisplayServerTest")
+    }
 }
