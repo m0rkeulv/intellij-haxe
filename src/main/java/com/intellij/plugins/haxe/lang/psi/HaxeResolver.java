@@ -1357,6 +1357,45 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
             return findTypeParameterPsi(reference, params);
           }
         }
+      }else {
+        // check if reference points to a typeParameter
+        HaxeTypeListPart typeListPart = PsiTreeUtil.getParentOfType(reference, HaxeTypeListPart.class);
+        if(typeListPart != null) {
+
+          HaxeMethod method = PsiTreeUtil.getParentOfType(reference, HaxeMethod.class);
+          if (method != null && method.getGenericParam() != null) {
+            for (HaxeGenericParamModel param : method.getModel().getGenericParams()) {
+              HaxeClass aClass = param.haxeClass;
+              HaxeComponentName name = aClass.getComponentName();
+              if (name != null && reference.textMatches(name)) {
+                HaxeNamedComponent component = aClass.getTypeComponent();
+                if (component != null) return List.of(component);
+              }
+            }
+          }
+
+          HaxeClass haxeClass = PsiTreeUtil.getParentOfType(reference, HaxeClass.class);
+          if (haxeClass != null && haxeClass.getGenericParam() != null) {
+            for (HaxeGenericParamModel param : haxeClass.getModel().getGenericParams()) {
+              HaxeClass aClass = param.haxeClass;
+              HaxeComponentName name = aClass.getComponentName();
+              if (name != null && reference.textMatches(name)) {
+                HaxeNamedComponent component = aClass.getTypeComponent();
+                if (component != null) return List.of(component);
+              }
+            }
+          }
+        }else {
+          HaxeGenericParam genericParam = PsiTreeUtil.getParentOfType(reference, HaxeGenericParam.class);
+          if (genericParam != null) {
+            for (HaxeGenericListPart part : genericParam.getGenericListPartList()) {
+              HaxeComponentName component = part.getComponentName();
+              if (component != null && reference.textMatches(component)) {
+                return List.of(component);
+              }
+            }
+          }
+        }
       }
     }
     return null;
@@ -2371,7 +2410,7 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
       if (referenceExpression.getParent() instanceof HaxeType type) {
         //NOTE: EXPERIMENTAL CACHING
         // the theory is that aa Type texts that are idientical will resolve to the same type in the same file
-        // the only exception beeing TypeParameters, this experimental feature is caching non TypeParameter results
+        // the only exception being TypeParameters, this experimental feature is caching non TypeParameter results
         HaxeFileTypeResolverCacheService cacheService = HaxeFileTypeResolverCacheService.getInstance(type.getProject());
         HaxeClass cahcedResolvedType = cacheService.getCachedResolvedType(type);
         if(cahcedResolvedType != null) {
