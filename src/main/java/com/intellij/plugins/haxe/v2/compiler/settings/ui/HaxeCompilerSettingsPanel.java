@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.compiler.settings.ui;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompletionMode;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.ui.table.TableView;
@@ -53,7 +54,10 @@ public final class HaxeCompilerSettingsPanel {
     }
   }
 
-  private final ComboBox<HaxeLanguageLevel> defaultLevelCombo = new ComboBox<>(HaxeLanguageLevel.values());
+  private final ComboBox<LevelChoice> defaultLevelCombo = createLevelChoiceCombo(this::defaultChoiceText);
+  private final ComboBox<HaxeCompletionMode> completionModeCombo = new ComboBox<>(HaxeCompletionMode.values());
+  /** Level resolved from the SDK, shown in the "use compiler level" labels; null when no SDK. */
+  private @Nullable HaxeLanguageLevel compilerLevel;
   private final JCheckBox compilerDiagnosticsCheckBox =
     new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.checkbox"));
   private final ListTableModel<ModuleLevelRow> tableModel = new ListTableModel<>(new ModuleColumn(), new LevelColumn());
@@ -65,12 +69,15 @@ public final class HaxeCompilerSettingsPanel {
     defaultLevelCombo.addActionListener(e -> table.repaint());
 
     compilerDiagnosticsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.tooltip"));
+    completionModeCombo.setRenderer(BuilderKt.textListCellRenderer("", HaxeCompletionMode::getPresentableText));
+    completionModeCombo.setToolTipText(HaxeBundle.message("haxe.compiler.completion.mode.tooltip"));
 
     table.setShowGrid(false);
     table.setRowHeight(defaultLevelCombo.getPreferredSize().height);
 
     mainPanel = FormBuilder.createFormBuilder()
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.default.language.level"), defaultLevelCombo)
+      .addLabeledComponent(HaxeBundle.message("haxe.compiler.completion.mode"), completionModeCombo)
       .addComponent(compilerDiagnosticsCheckBox)
       .addComponentFillVertically(new JBScrollPane(table), 8)
       .getPanel();
@@ -82,6 +89,16 @@ public final class HaxeCompilerSettingsPanel {
 
   public void setCompilerDiagnosticsEnabled(boolean enabled) {
     compilerDiagnosticsCheckBox.setSelected(enabled);
+  }
+
+  @NotNull
+  public HaxeCompletionMode getCompletionMode() {
+    HaxeCompletionMode selected = completionModeCombo.getItem();
+    return selected != null ? selected : HaxeCompletionMode.IDE_AND_COMPILER;
+  }
+
+  public void setCompletionMode(@NotNull HaxeCompletionMode mode) {
+    completionModeCombo.setSelectedItem(mode);
   }
 
   @NotNull

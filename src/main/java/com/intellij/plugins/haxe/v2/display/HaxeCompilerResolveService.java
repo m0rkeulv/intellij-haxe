@@ -53,6 +53,10 @@ import org.jetbrains.annotations.Nullable;
  * type inference, completion and chained member access downstream all work
  * off it (a generated {@code button1:haxe.ui.components.Button} makes
  * {@code button1.text} resolve statically against the real Button class).
+ *
+ * Gated on the completion mode (Settings | Compiler | Haxe Compiler): in
+ * "IDE only" this service answers nothing; the compiler-diagnostics toggle
+ * only governs problem highlighting.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -93,7 +97,7 @@ public final class HaxeCompilerResolveService {
   @Nullable
   public List<? extends PsiElement> tryResolve(@NotNull HaxeReference reference) {
     if (!(reference instanceof HaxeReferenceExpression expression)) return null;
-    if (!HaxeCompilerSettings.getInstance(project).isCompilerDiagnosticsEnabled()) return null;
+    if (!HaxeCompilerSettings.getInstance(project).getCompletionMode().usesCompiler()) return null;
     if (DumbService.isDumb(project)) return null;
     String name = expression.getReferenceName();
     if (name == null || name.isEmpty()) return null;
@@ -125,7 +129,7 @@ public final class HaxeCompilerResolveService {
    */
   @Nullable
   public TypeBlueprint blueprintForType(@NotNull VirtualFile contextFile, @Nullable String dotPath) {
-    if (!HaxeCompilerSettings.getInstance(project).isCompilerDiagnosticsEnabled()) return null;
+    if (!HaxeCompilerSettings.getInstance(project).getCompletionMode().usesCompiler()) return null;
     if (DumbService.isDumb(project)) return null;
     BlueprintLookup lookup = blueprintLookup(contextFile, dotPath);
     return lookup != null ? lookup.blueprint() : null;

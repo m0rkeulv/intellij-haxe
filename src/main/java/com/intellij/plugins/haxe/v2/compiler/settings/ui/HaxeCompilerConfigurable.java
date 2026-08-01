@@ -56,7 +56,8 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     HaxeCompilerSettings settings = getSettings();
     return panel.getSelectedDefaultLevel() != settings.getExplicitDefaultLanguageLevel()
            || !panel.getModuleOverrides().equals(settings.getModuleLanguageLevelOverrides())
-           || panel.isCompilerDiagnosticsEnabled() != settings.isCompilerDiagnosticsEnabled();
+           || panel.isCompilerDiagnosticsEnabled() != settings.isCompilerDiagnosticsEnabled()
+           || panel.getCompletionMode() != settings.getCompletionMode();
   }
 
   @Override
@@ -66,6 +67,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     settings.setDefaultLanguageLevel(panel.getSelectedDefaultLevel());
     settings.setModuleLanguageLevelOverrides(panel.getModuleOverrides());
     settings.setCompilerDiagnosticsEnabled(panel.isCompilerDiagnosticsEnabled());
+    settings.setCompletionMode(panel.getCompletionMode());
     // the tool window's Language level rows mirror these settings
     project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
     DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
@@ -80,6 +82,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
                 settings.getModuleLanguageLevelOverrides(),
                 getModuleNames());
     panel.setCompilerDiagnosticsEnabled(settings.isCompilerDiagnosticsEnabled());
+    panel.setCompletionMode(settings.getCompletionMode());
   }
 
   @Override
