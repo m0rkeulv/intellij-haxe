@@ -880,7 +880,11 @@ abstract public class HaxeReferenceImpl extends HaxeStubBasedPsiElementBase<Haxe
           if (parameterList.getParent() instanceof HaxeFunctionLiteral literal) {
           // if parameter type is unknown  (allowed in function literals) we can try to find it from assignment, ex. callExpression
             ResultHolder holder = tryToFindTypeFromCallExpression(literal, resolve);
-          if (holder != null && !holder.isUnknown()) return holder.getType().asResolveResult();
+          if (holder != null && !holder.isUnknown()) {
+            // SpecificFunctionReference can return null asResolveResult
+            HaxeResolveResult asResult = holder.getType().asResolveResult();
+            if (asResult != null) return asResult;
+          }
         }
           else if (parameterList.getParent() instanceof HaxeMethodDeclaration method) {
           HaxeGenericParam methodGenericParam = method.getGenericParam();
@@ -918,7 +922,11 @@ abstract public class HaxeReferenceImpl extends HaxeStubBasedPsiElementBase<Haxe
               HaxeGenericConstraintPart constraintPart = listPart.getGenericConstraintPart();
               if(constraintPart != null ) {
                 ResultHolder constraint = HaxeTypeResolver.getTypeFromGenericConstraint(constraintPart);
-                if (constraint != null) return constraint.getType().asResolveResult();
+                if (constraint != null) {
+                  // SpecificFunctionReference can return null asResolveResult
+                  HaxeResolveResult asResult = constraint.getType().asResolveResult();
+                  if (asResult != null) return asResult;
+                }
               }
             }
           }
@@ -930,7 +938,9 @@ abstract public class HaxeReferenceImpl extends HaxeStubBasedPsiElementBase<Haxe
             HaxeMethod method = PsiTreeUtil.getParentOfType(parameter, HaxeMethod.class);
             ResultHolder holder = searchReferencesForType(componentName, context, null, method == null ? null : method.getBody());
             if (!holder.isUnknown()) {
-              return holder.getType().asResolveResult();
+              // SpecificFunctionReference can return null asResolveResult
+              HaxeResolveResult asResult = holder.getType().asResolveResult();
+              if (asResult != null) return asResult;
             }
           }
         }
