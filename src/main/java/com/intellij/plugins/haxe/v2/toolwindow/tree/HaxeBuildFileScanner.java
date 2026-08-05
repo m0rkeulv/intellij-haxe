@@ -16,6 +16,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Finds Haxe build/project files (hxml, OpenFL/Lime xml, nmml, hxp). Only the top
@@ -73,7 +75,27 @@ public final class HaxeBuildFileScanner {
 
   /** Detects the build file type of an arbitrary file (any xml name is accepted). */
   @Nullable
+  private record DetectedType(long modificationStamp, @Nullable HaxeBuildFileType type) {
+  }
+
+  // detection parses the file (SAX for xml/nmml, regex scan for hxp) and is
+  // queried from hot paths (define context feeds conditional compilation);
+  // build files are few, so a per-path stamp-keyed cache stays tiny
+  private static final Map<String, DetectedType> detectionCache = new ConcurrentHashMap<>();
+
   public static HaxeBuildFileType detectType(@NotNull VirtualFile file) {
+    String path = file.getPath();
+    long stamp = file.getModificationStamp();
+    DetectedType cached = detectionCache.get(path);
+    if (cached != null && cached.modificationStamp() == stamp) {
+      return cached.type();
+    }
+    HaxeBuildFileType type = doDetectType(file);
+    detectionCache.put(path, new DetectedType(stamp, type));
+    return type;
+  }
+
+  private static HaxeBuildFileType doDetectType(@NotNull VirtualFile file) {
     String extension = file.getExtension();
     if (extension == null) return null;
     return switch (extension.toLowerCase(Locale.ROOT)) {

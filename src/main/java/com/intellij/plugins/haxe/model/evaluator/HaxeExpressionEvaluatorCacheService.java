@@ -48,8 +48,19 @@ public class HaxeExpressionEvaluatorCacheService  {
 
     ResultHolder holder = _handle(element, context, resolver);
     if (holder == null) return SpecificTypeReference.getUnknown(element).createHolder();
-    if (holder.isCacheable() && !holder.isUnknown()) {
-      if (!holder.containsUnknownOrUnresolvedTypes()) {
+    boolean complete = stamp.mayCacheNow() && !HaxeEvaluationTaint.taintedSince(taintMark);
+    if (complete && holder.isCacheable()) {
+      boolean isUnknown = holder.isUnknown();
+      // success: fully resolved with all typeParameters
+      boolean cacheableSuccess = !isUnknown && !holder.containsUnknownOrUnresolvedTypes();
+      // failures additionally require guard-depth zero: inside a guarded
+      // computation a result can be shaped by held guard keys without any
+      // prevention firing, and the same element that fails there may
+      // evaluate to a real type at top level (see HaxeEvaluationTaint)
+      //failure:  unknown and
+      boolean cacheableFailure = isUnknown  && !HaxeEvaluationTaint.insideGuardedComputation();
+
+      if (cacheableSuccess || cacheableFailure) {
         cacheMap.put(key, holder);
       }
     }
