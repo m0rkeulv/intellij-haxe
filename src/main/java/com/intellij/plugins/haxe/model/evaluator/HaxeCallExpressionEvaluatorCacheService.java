@@ -135,6 +135,16 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     inProgress.merge(key, -1, (a, b) -> a + b <= 0 ? null : a + b);
   }
 
+  /**
+   * True while the current thread is computing any call-expression context.
+   * The precise "inside a deep evaluation tower" signal: cheaper queries
+   * (inlay providers evaluating a declaration) never set it, while resolve
+   * storms and call evaluations always do.
+   */
+  public static boolean anyComputeInFlight() {
+    return inFlightTotal.get()[0] > 0;
+  }
+
   public static @Nullable HoleEvaluation cachedHoleEvaluation(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
     HaxeCallExpressionEvaluatorCacheService service = method.getProject().getService(HaxeCallExpressionEvaluatorCacheService.class);
     return service.holeEvaluation(method, callExpression, holeArgumentIndex);

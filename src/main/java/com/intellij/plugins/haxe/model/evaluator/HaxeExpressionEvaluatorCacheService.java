@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator._handle;
 
@@ -24,6 +25,7 @@ import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.
 public class HaxeExpressionEvaluatorCacheService  {
 
   private volatile  Map<EvaluationKey, ResultHolder> cacheMap = new ConcurrentHashMap<>();
+  private volatile Map<PsiElement, ResultHolder> methodReturnTypes = new ConcurrentHashMap<>();
   public static boolean skipCaching = false;// just convenience flag for debugging
 
 
@@ -83,8 +85,32 @@ public class HaxeExpressionEvaluatorCacheService  {
   }
 
 
+  /**
+   * Inferred method return types under the certainty rule: a result computed
+   * while truncation was observed (a probe gate refusal, a prevention) is
+   * served but NOT stored, so a later clean compute can land. A
+   * PsiDependentCache here froze the first tower-computed Unknown for the
+   * whole tick and starved every later consumer - the return-type inlay and
+   * any local initialized from the call.
+   */
+  public @NotNull ResultHolder methodReturnType(@NotNull PsiElement method, @NotNull Supplier<ResultHolder> compute) {
+    ResultHolder cached = methodReturnTypes.get(method);
+    if (cached != null) return cached;
+    long taintMark = HaxeEvaluationTaint.mark();
+    ResultHolder computed = compute.get();
+    boolean clean = !HaxeEvaluationTaint.taintedSince(taintMark);
+    // clean Unknown inside a guarded computation is still path-dependent
+    // (same rule as the expression cache's failure caching)
+    boolean unknownInsideGuards = computed.isUnknown() && HaxeEvaluationTaint.insideGuardedComputation();
+    if (clean && !unknownInsideGuards && computed.isCacheable()) {
+      methodReturnTypes.put(method, computed);
+    }
+    return computed;
+  }
+
   public void clearCaches() {
     synchronized(this) {
+      methodReturnTypes.clear();
       cacheMap.clear();
     }
   }

@@ -44,5 +44,37 @@ public class HaxeUntypedParameterInlayTest extends HaxeInlayTestBase {
     doTest(hintsProvider);
   }
 
+  // The following fixtures encode the compiler's monomorph-binding order
+  // (doc/untyped-parameter-inference-haxe-compiler.md): body usage first,
+  // call-site argument types only for what the body leaves open.
 
+  @Test
+  @DisplayName("call site binds unused parameter")
+  public void testCallSiteBindsUnusedParameter() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  @Test
+  @DisplayName("body binds before call site")
+  public void testBodyBindsBeforeCallSite() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  @Test
+  @DisplayName("self recursive only stays unknown")
+  public void testSelfRecursiveOnlyStaysUnknown() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  @Test
+  @DisplayName("generic argument not informative")
+  public void testGenericArgumentNotInformative() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  @Test
+  @DisplayName("chained call site binding")
+  public void testChainedCallSiteBinding() throws Exception {
+    doTest(hintsProvider);
+  }
 }
