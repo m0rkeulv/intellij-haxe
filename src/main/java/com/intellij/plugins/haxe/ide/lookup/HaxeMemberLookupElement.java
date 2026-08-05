@@ -21,6 +21,7 @@ import com.intellij.codeInsight.completion.InsertionContext;
 import com.intellij.codeInsight.completion.JavaCompletionUtil;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementPresentation;
+import com.intellij.codeInsight.lookup.LookupElementRenderer;
 import com.intellij.plugins.haxe.HaxeComponentType;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.plugins.haxe.lang.psi.*;
@@ -31,6 +32,7 @@ import icons.HaxeIcons;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 
 import javax.swing.*;
 import java.util.ArrayList;
@@ -58,7 +60,11 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
   private boolean strikeout = false;
   private boolean bold = false;
   private Icon icon = null;
-  private boolean presentationCalculated = false;
+  // computed by the expensive renderer on a background thread after the
+  // lookup is shown; preferred over the fast values once present
+  private volatile boolean expensivePresentationCalculated = false;
+  private volatile String resolvedTypeText;
+  private volatile String resolvedTailText;
 
 
   // TODO create visibility "evaluator" to filter members
@@ -179,23 +185,42 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
     return model.getName();
   }
 
+  /**
+   * Fast by contract: this runs while the completion list is being shown.
+   * Type text and resolved parameter lists need the evaluator, so they are
+   * produced by {@link #getExpensiveRenderer()} on a background thread and
+   * the platform repaints the visible lookup when they land.
+   */
   @Override
-  public void renderElement(LookupElementPresentation presentation) {
-    if (!presentationCalculated) {
-      calculatePresentation();
-      presentationCalculated = true;
+  public void renderElement(@NonNull LookupElementPresentation presentation) {
+    if (presentableText == null) {
+      calculateBasePresentation();
     }
+
     presentation.setItemText(presentableText);
     presentation.setStrikeout(strikeout);
     presentation.setItemTextBold(bold);
     presentation.setIcon(icon);
-    presentation.setTypeText(typeText);
 
-    if (tailText != null) presentation.setTailText(tailText, true);
+    String type = resolvedTypeText != null ? resolvedTypeText : typeText;
+    String tail = resolvedTailText != null ? resolvedTailText : tailText;
 
+    presentation.setTypeText(type);
+    if (tail != null) presentation.setTailText(tail, true);
   }
 
-  public void calculatePresentation() {
+  @Override
+  public LookupElementRenderer<? extends LookupElement> getExpensiveRenderer() {
+    return new LookupElementRenderer<HaxeMemberLookupElement>() {
+      @Override
+      public void renderElement(HaxeMemberLookupElement element, LookupElementPresentation presentation) {
+        element.calculateExpensivePresentation();
+        element.renderElement(presentation);
+      }
+    };
+  }
+
+  public void calculateBasePresentation() {
     presentableText = getLookupString();
 
     if (!isFunctionType) {
@@ -211,16 +236,33 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
       determineStrikethrough();
       determineBold();
 
-      evaluateTailText();
-      evaluateTypeText();
+      // no-resolve versions; the expensive renderer refines them
+      if (model instanceof HaxeMethodModel methodModel) {
+        if (!isFunctionType) {
+          tailText = "(" + HaxePresentableUtil.getPresentableParameterList(model.getNamedComponentPsi()) + ")";
+        }
+        typeText = tryGetReturnTypeTextFast(methodModel);
+      }
     }
   }
+
+  public void calculateExpensivePresentation() {
+    if (expensivePresentationCalculated) return;
+    if (presentableText == null) {
+      calculateBasePresentation();
+    }
+    evaluateTailText();
+    evaluateTypeText();
+
+    expensivePresentationCalculated = true;
+  }
+
 
   private void evaluateTypeText() {
     if(model instanceof HaxeLocalValueElementModel localValueModel){
       ResultHolder type = localValueModel.getVariableType();
       if(type != null && !type.isUnknown()) {
-        typeText = type.toPresentationString();
+        resolvedTypeText = type.toPresentationString();
       }
     }
     if (isFunctionType && model instanceof HaxeMethodModel methodModel) {
@@ -232,13 +274,13 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
           SpecificFunctionReference functionType = methodModel.getFunctionType(resolver);
           SpecificFunctionReference resolve = translatedResolver.resolve(functionType);
           if (resolve != null && !resolve.isUnknown()) {
-            typeText = resolve.toPresentationString();
+            resolvedTypeText = resolve.toPresentationString();
             return;
           }
         }
       }
       SpecificFunctionReference functionType = methodModel.getFunctionType(resolver);
-      typeText =  functionType.toPresentationString();
+      resolvedTypeText =  functionType.toPresentationString();
       return;
     }
     if (leftReference instanceof SpecificHaxeClassReference classReference) {
@@ -246,7 +288,7 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
       if(model instanceof HaxeMethodModel methodModel) {
         String fastReturnType = tryGetReturnTypeTextFast(methodModel);
         if(fastReturnType != null) {
-          typeText = fastReturnType;
+          resolvedTypeText = fastReturnType;
           return;
         }
       }
@@ -261,7 +303,7 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
         type = translatedResolver.resolve(type);
 
         if (type != null && !type.isUnknown()) {
-          typeText = type.toPresentationString();
+          resolvedTypeText = type.toPresentationString();
           return;
         }
       }
@@ -269,14 +311,14 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
 
     ResultHolder type = model.getResultType(resolver);
     if (type != null && !type.isUnknown()) {
-      typeText = type.toPresentationString();
+      resolvedTypeText = type.toPresentationString();
     }
   }
 
 
   private void evaluateTailText() {
     if (model instanceof HaxeMethodModel && !isFunctionType) {
-      tailText = "(" + getParameterListAsText() + ")";
+      resolvedTailText = "(" + getParameterListAsText() + ")";
     }
   }
 
