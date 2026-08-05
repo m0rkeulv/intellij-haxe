@@ -26,6 +26,7 @@ import com.intellij.plugins.haxe.HaxeComponentType;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.*;
+import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
 import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.plugins.haxe.util.HaxePresentableUtil;
 import icons.HaxeIcons;
@@ -259,10 +260,11 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
 
 
   private void evaluateTypeText() {
-    if(model instanceof HaxeLocalValueElementModel localValueModel){
-      ResultHolder type = localValueModel.getVariableType();
-      if(type != null && !type.isUnknown()) {
+    if (model instanceof HaxeLocalValueElementModel || model instanceof HaxeLocalVarModel) {
+      ResultHolder type = HaxeExpressionEvaluator.evaluate(model.getBasePsi()).result;
+      if (type != null && !type.isUnknown()) {
         resolvedTypeText = type.toPresentationString();
+        return;
       }
     }
     if (isFunctionType && model instanceof HaxeMethodModel methodModel) {
