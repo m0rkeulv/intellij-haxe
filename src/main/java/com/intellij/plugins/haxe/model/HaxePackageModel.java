@@ -23,6 +23,8 @@ import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.util.CachedValueProvider;
+import com.intellij.psi.util.CachedValuesManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -244,25 +246,33 @@ public class HaxePackageModel implements HaxeExposableModel {
     return Collections.emptyList();
   }
 
+  /**
+   * The main class of every module in this package. Cached on the package
+   * directory: the same-package check runs this for every reference that no
+   * earlier check resolved, and re-enumerating the directory per reference
+   * dominated resolve time in editing profiles. Rebuilds only when a file in
+   * the directory changes.
+   */
   @NotNull
   public List<HaxeModel> getModulesMainClass() {
     PsiDirectory directory = root.access(path);
-    if (directory != null) {
-      PsiFile[] files = directory.getFiles();
+    if (directory == null) return Collections.emptyList();
+    return CachedValuesManager.getCachedValue(directory, () -> modulesMainClassResult(directory));
+  }
 
-      List<HaxeModel>  result = new ArrayList<>();
-      for(PsiFile file : files) {
-        if( file instanceof HaxeFile) {
-          HaxeFileModel fileModel = HaxeFileModel.fromElement(file);
-          if(fileModel != null) {
-            HaxeClassModel mainClassModel = fileModel.getMainClassModel();
-            if(mainClassModel != null)result.add(mainClassModel);
-          }
-        }
-      }
-      return result;
+  private static CachedValueProvider.Result<List<HaxeModel>> modulesMainClassResult(PsiDirectory directory) {
+    List<HaxeModel> result = new ArrayList<>();
+    List<Object> dependencies = new ArrayList<>();
+    dependencies.add(directory);
+    for (PsiFile file : directory.getFiles()) {
+      if (!(file instanceof HaxeFile haxeFile)) continue;
+      dependencies.add(haxeFile);
+      HaxeFileModel fileModel = HaxeFileModel.fromElement(haxeFile);
+      if (fileModel == null) continue;
+      HaxeClassModel mainClassModel = fileModel.getMainClassModel();
+      if (mainClassModel != null) result.add(mainClassModel);
     }
-    return Collections.emptyList();
+    return CachedValueProvider.Result.create(result, dependencies.toArray());
   }
 
   @Override

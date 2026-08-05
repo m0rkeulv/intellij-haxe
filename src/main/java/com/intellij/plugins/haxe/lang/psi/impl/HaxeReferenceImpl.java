@@ -1293,6 +1293,10 @@ abstract public class HaxeReferenceImpl extends HaxeStubBasedPsiElementBase<Haxe
       final boolean chain = references != null && references.length == 2;
       if (chain) return false;
     }
+    if (element instanceof HaxeComponentName componentName && HaxeIsReferenceToFastPath.isLocalScopedTarget(componentName)) {
+      Boolean fastPathAnswer = HaxeIsReferenceToFastPath.tryIsReferenceTo(this, componentName);
+      if (fastPathAnswer != null) return fastPathAnswer;
+    }
     final PsiElement resolve = element instanceof HaxeComponentName ? resolveToComponentName() : resolve();
     if (element instanceof HaxeFile && resolve instanceof HaxeClass) {
       return element == resolve.getContainingFile();

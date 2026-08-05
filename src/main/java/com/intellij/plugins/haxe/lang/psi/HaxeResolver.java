@@ -214,6 +214,9 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
     if (result == null) result = checkMacroIdentifier(reference);
 
     if (result == null) result = checkIsAccessor(reference);
+    // also runs in the restricted pipeline: untyped-parameter inference has
+    // no other source than the usage walk. The call-evaluation cycle it can
+    // enter is cut at the call cache's same-key in-flight check instead.
     if (result == null) result = checkElementUsage(reference);
 
 
