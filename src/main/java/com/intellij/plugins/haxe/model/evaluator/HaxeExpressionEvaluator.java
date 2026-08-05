@@ -697,7 +697,7 @@ public class HaxeExpressionEvaluator {
       if (expression.getParent() instanceof  HaxeObjectLiteralElement literalElement) {
         HaxeObjectLiteral objectLiteral = PsiTreeUtil.getParentOfType(literalElement, HaxeObjectLiteral.class);
         if(objectLiteral != null) {
-          ResultHolder result = checkSearchResultRecursionGuard.computePreventingRecursion(objectLiteral, false, () -> {
+          ResultHolder result = HaxeEvaluationTaint.computeOrTaint(checkSearchResultRecursionGuard, objectLiteral, false, () -> {
             ResultHolder objectLiteralType = findObjectLiteralType(context, resolver, objectLiteral);
             if (objectLiteralType != null && !objectLiteralType.isUnknown()) {
               SpecificHaxeClassReference classType = objectLiteralType.getClassType();

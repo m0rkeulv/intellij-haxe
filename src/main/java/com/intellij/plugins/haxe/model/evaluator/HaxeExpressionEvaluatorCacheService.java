@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.model.evaluator;
 
 import com.intellij.openapi.util.LowMemoryWatcher;
+import com.intellij.openapi.util.RecursionGuard;
+import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.model.type.HaxeGenericResolver;
 import com.intellij.plugins.haxe.model.type.ResultHolder;
 import com.intellij.plugins.haxe.model.type.SpecificTypeReference;
@@ -25,6 +27,7 @@ public class HaxeExpressionEvaluatorCacheService  {
   public static boolean skipCaching = false;// just convenience flag for debugging
 
 
+
   public HaxeExpressionEvaluatorCacheService() {
     LowMemoryWatcher.register(() -> {
       clearCaches();
@@ -42,10 +45,21 @@ public class HaxeExpressionEvaluatorCacheService  {
     }
 
     EvaluationKey key = new EvaluationKey(element, resolver == null ? "NO_RESOLVER" : resolver.toCacheString());
-    if (cacheMap.containsKey(key)) {
-      return cacheMap.get(key);
+    ResultHolder cached = cacheMap.get(key);
+    if (cached != null) {
+      return cached;
     }
 
+    // The stamp distinguishes COMPLETE results from guard-truncated ones: any
+    // recursion guard firing beneath this point makes mayCacheNow() false, and
+    // such a result is only valid for this exact evaluation stack. The taint
+    // mark covers what the stamp cannot see: a guard-truncated CACHED call
+    // evaluation served from another stack's computation. A failure computed
+    // with both signals clean genuinely tried every path and is as
+    // authoritative as a success - caching it is what keeps broken references
+    // from re-running the whole evaluation on every visit.
+    RecursionGuard.StackStamp stamp = RecursionManager.markStack();
+    long taintMark = HaxeEvaluationTaint.mark();
     ResultHolder holder = _handle(element, context, resolver);
     if (holder == null) return SpecificTypeReference.getUnknown(element).createHolder();
     boolean complete = stamp.mayCacheNow() && !HaxeEvaluationTaint.taintedSince(taintMark);

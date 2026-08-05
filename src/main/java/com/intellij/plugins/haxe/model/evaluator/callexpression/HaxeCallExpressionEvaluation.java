@@ -29,8 +29,15 @@ public class HaxeCallExpressionEvaluation {
     @Getter
     @Setter
     private boolean valid = true;
+    /**
+     * A recursion guard fired somewhere beneath this evaluation's computation.
+     * The cache still stores such evaluations (their hits terminate deep
+     * resolve recursion), but consumers get taint-marked so they never judge
+     * their own results "complete" from this truncated data.
+     */
     @Getter
-    private boolean failedBecauseOfRecursionGuard = false;
+    @Setter
+    private boolean computedWithGuardFired = false;
 
 
     @Getter
@@ -149,10 +156,6 @@ public class HaxeCallExpressionEvaluation {
     }
 
     public HaxeCallExpressionEvaluation validationFailed() {
-        return validationFailed(false);
-    }
-    public HaxeCallExpressionEvaluation validationFailed( boolean recursion) {
-        failedBecauseOfRecursionGuard = recursion;
         valid = false;
         return this;
     }

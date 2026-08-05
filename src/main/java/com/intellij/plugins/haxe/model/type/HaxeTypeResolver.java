@@ -48,6 +48,7 @@ import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionUsageUtil.
 import static com.intellij.plugins.haxe.model.type.HaxeMacroTypeUtil.isRestClassType;
 import static com.intellij.plugins.haxe.model.type.ResultHolder.nullOrUnknown;
 import static com.intellij.plugins.haxe.model.type.SpecificTypeReference.getUnknown;
+import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 
 @CustomLog
 public class HaxeTypeResolver {
@@ -320,7 +321,7 @@ public class HaxeTypeResolver {
       // Resolve any generics on the resolved type as well. myVar:Array<Map<String, Q>> where Q is known
       if (result.getType() instanceof SpecificHaxeClassReference classReference  && !result.isTypeParameter() && result.isOrContainsTypeParameters()) {
 
-        ResultHolder holder = propagateRecursionGuard.computePreventingRecursion(result, true, () ->
+        ResultHolder holder = HaxeEvaluationTaint.computeOrTaint(propagateRecursionGuard, result, true, () ->
            SpecificHaxeClassReference.propagateGenericsToType(classReference.createHolder(), resolver, returnType)
         );
         if (holder != null) result = holder;
@@ -380,7 +381,7 @@ public class HaxeTypeResolver {
       List<HaxeReturnStatement> returnStatementList =
         CachedValuesManager.getCachedValue(methodBody, () -> HaxeTypeResolver.findReturnStatementsForMethod(methodBody));
       List<ResultHolder> returnTypes = returnStatementList.stream().map(statement ->
-                      getReturnTypeRecursionGuard.computePreventingRecursion(statement, true, () ->
+                      HaxeEvaluationTaint.computeOrTaint(getReturnTypeRecursionGuard, statement, true, () ->
                               getPsiElementType(statement, resolver))).filter(Objects::nonNull)
               .toList();
 
@@ -761,7 +762,7 @@ public class HaxeTypeResolver {
 
   @Nullable
   public static ResultHolder getTypeFromGenericConstraint(HaxeGenericConstraintPart constraint) {
-    return genericConstraintRecursionGuard.doPreventingRecursion(constraint, true, () -> {
+    return HaxeEvaluationTaint.computeOrTaint(genericConstraintRecursionGuard, constraint, true, () -> {
 
       HaxeTypeOrAnonymous typeOrAnonymous = constraint.getTypeOrAnonymous();
       if (typeOrAnonymous != null){

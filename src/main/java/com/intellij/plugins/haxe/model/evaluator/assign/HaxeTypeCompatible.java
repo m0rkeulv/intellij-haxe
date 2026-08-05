@@ -12,6 +12,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
+import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 
 @CustomLog
 public class HaxeTypeCompatible {
@@ -197,7 +198,7 @@ public class HaxeTypeCompatible {
         if(!evaluation.completed) {
             // NOTE: memoize can not be used as the context elements does not necessarily represent the type
             // (could maybe do some tricks with fully qualified names but recursive typeParameter constraints will be problematic)
-            Boolean done = canAssignRecursionGuard.doPreventingRecursion(evaluation.recursionGuardKey(), false, () -> {
+            Boolean done = HaxeEvaluationTaint.computeOrTaint(canAssignRecursionGuard, evaluation.recursionGuardKey(), false, () -> {
                 if (!evaluation.completed) evaluation.testClassAssignRules();
                 if (!evaluation.completed) evaluation.testEnumAssignRules();
                 if (!evaluation.completed) evaluation.testEnumValueAssignRules();
