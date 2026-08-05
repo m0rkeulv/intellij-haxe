@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.TreeMap;
 import java.util.Map;
+import org.jetbrains.annotations.TestOnly;
 
 /**
  * Remembers the target platform the user picked per build file in the Haxe tool
@@ -19,6 +20,24 @@ import java.util.Map;
  */
 @State(name = "HaxeToolWindowTargets", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class HaxeTargetSelectionStore implements PersistentStateComponent<HaxeTargetSelectionStore.State> {
+  private final @Nullable Project project;
+
+  public HaxeTargetSelectionStore(@NotNull Project project) {
+    this.project = project;
+  }
+
+  /** State tests exercise load/get/set without a project; no events fire then. */
+  @TestOnly
+  public HaxeTargetSelectionStore() {
+    this.project = null;
+  }
+
+  private void notifyChanged() {
+    if (project != null) {
+      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
+    }
+  }
+
 
   public static final class State {
     public Map<String, String> targetsByFile = new TreeMap<>();
@@ -38,6 +57,7 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
 
   @Override
   public void loadState(@NotNull State state) {
+    notifyChanged();
     if (state.targetsByFile == null) {
       state.targetsByFile = new TreeMap<>();
     }
@@ -50,6 +70,7 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
   }
 
   public void setSelectedTargetId(@NotNull VirtualFile buildFile, @NotNull String targetId) {
+    notifyChanged();
     state.targetsByFile.put(buildFile.getPath(), targetId);
   }
 }
