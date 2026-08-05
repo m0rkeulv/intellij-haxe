@@ -478,9 +478,9 @@ public class HaxeGenericResolverCastUtil {
                             }
                         }
                     }
-                    for (@NotNull ResolverEntry entry : genericResolver.getConstaints()) {
+                    for (@NotNull ResolverEntry entry : genericResolver.getConstraints()) {
                         String lookupName = entry.typeParameter().getName();
-                        for (ResolverEntry constraintEntry : resolver.getConstaints()) {
+                        for (ResolverEntry constraintEntry : resolver.getConstraints()) {
                             if(Objects.equals(constraintEntry.typeParameter().getName(), lookupName)) {
                                 newResolver.addConstraint(entry.withType(constraintEntry.type()));
                             }
