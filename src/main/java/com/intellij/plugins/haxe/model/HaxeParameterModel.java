@@ -156,8 +156,7 @@ public class HaxeParameterModel extends HaxeBaseMemberModel implements HaxeModel
         if(fromUsage != null && !fromUsage.isUnknown()) {
           type = fromUsage.getType();
         } else {
-          // body left the parameter open: the compiler's fallback is the
-          // first typed call site (see doc/untyped-parameter-inference-haxe-compiler.md)
+          // body left the parameter open: the compiler's fallback is the first typed call site
           ResultHolder fromCallSite = HaxeUntypedParameterInference.callSiteDerivedType(parameterPsi);
           if (fromCallSite != null && !fromCallSite.isUnknown()) {
             type = fromCallSite.getType();

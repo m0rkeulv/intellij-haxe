@@ -218,7 +218,6 @@ public class HaxeResolveUtil {
     return candidates.getFirst();
   }
 
-  /** True when the request spells the candidate's module segment: {@code Test3.Void} for Void inside Test3.hx. */
   private static boolean isModuleQualifiedMatch(@NotNull String qName, @NotNull HaxeClass candidate, @Nullable String moduleName) {
     int lastDot = qName.lastIndexOf('.');
     if (lastDot < 0 || moduleName == null) return false;
