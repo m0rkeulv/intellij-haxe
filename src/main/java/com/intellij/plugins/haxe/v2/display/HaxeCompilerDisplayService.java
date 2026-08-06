@@ -120,7 +120,7 @@ public final class HaxeCompilerDisplayService {
   public DisplayContext contextFor(@NotNull Module module) {
     VirtualFile buildFile = currentBuildFile(module);
     if (buildFile == null || buildFile.getParent() == null) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(buildFile);
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, buildFile);
     // a plain hxp script generates its compiler args in code - nothing to derive statically
     if (type == null || type == HaxeBuildFileType.NMML || type == HaxeBuildFileType.HXP_SCRIPT) return null;
 

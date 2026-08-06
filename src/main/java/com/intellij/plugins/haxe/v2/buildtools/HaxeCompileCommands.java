@@ -43,7 +43,7 @@ public final class HaxeCompileCommands {
 
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(stored.buildFilePath());
     if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     if (type == null) return null;
 
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
@@ -71,7 +71,7 @@ public final class HaxeCompileCommands {
                                        @NotNull String extraArguments) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     if (type == null) return null;
 
     String containerId = HaxeContainers.containerIdFor(project, file);
@@ -84,7 +84,7 @@ public final class HaxeCompileCommands {
   /** Action names offered for a build file: the type's defaults plus its custom actions. */
   @NotNull
   public static List<String> availableActionNames(@NotNull Project project, @NotNull VirtualFile file) {
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     List<String> names = new ArrayList<>();
     if (type == HaxeBuildFileType.HXML) {
       names.add(HxmlProjects.BUILD_ACTION);

@@ -104,7 +104,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     if (file == null || !file.isValid()) return null;
 
     Map<String, String> result = ReadAction.computeBlocking(() -> {
-      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
       if (type == null) return null;
 
       String key = cacheKey(file, type);
