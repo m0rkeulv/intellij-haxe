@@ -69,11 +69,14 @@ public class HaxeExpressionEvaluatorCacheService  {
       boolean isUnknown = holder.isUnknown();
       // success: fully resolved with all typeParameters
       boolean cacheableSuccess = !isUnknown && !holder.containsUnknownOrUnresolvedTypes();
-      // failures additionally require guard-depth zero: inside a guarded
-      // computation a result can be shaped by held guard keys without any
-      // prevention firing, and the same element that fails there may
-      // evaluate to a real type at top level (see HaxeEvaluationTaint)
-      //failure:  unknown and
+      // A failure (Unknown) is only trustworthy when computed OUTSIDE any
+      // recursion guard. Inside a guarded computation, a nested step that
+      // needs an element already under evaluation backs out QUIETLY - no
+      // prevention fires, so the stamp and taint checks above both stay
+      // clean - and the result comes out Unknown even though the element
+      // has a real type (evaluating it fresh at top level finds it).
+      // Only at guard depth zero does Unknown reliably mean "genuinely has
+      // no type" rather than "could not look at itself mid-evaluation".
       boolean cacheableFailure = isUnknown  && !HaxeEvaluationTaint.insideGuardedComputation();
 
       if (cacheableSuccess || cacheableFailure) {
