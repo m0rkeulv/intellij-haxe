@@ -9,6 +9,7 @@ import com.intellij.plugins.haxe.model.type.ResultHolder;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiReference;
 import com.intellij.psi.util.PsiTreeUtil;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -37,7 +38,7 @@ public final class HaxeUntypedParameterInference {
   // continues the chain until some call site finally passes a concrete
   // value; the cap bounds that chain when call graphs are deep or cyclic
   private static final int MAX_PROBE_CHAIN_DEPTH = 8;
-  private static final ThreadLocal<int[]> probeChainDepth = ThreadLocal.withInitial(() -> new int[1]);
+  private static final ThreadLocal<MutableInt> probeChainDepth = ThreadLocal.withInitial(MutableInt::new);
 
   private static final RecursionGuard<PsiElement>
     callSiteProbeGuard = RecursionManager.createGuard("haxeUntypedParameterCallSiteProbe");
@@ -118,7 +119,7 @@ public final class HaxeUntypedParameterInference {
     // other exception is a probe running under ANOTHER probe: a probed
     // argument that is itself an untyped parameter continues the chain
     // toward a concrete call site, bounded by the chain cap.
-    int chainDepth = probeChainDepth.get()[0];
+    int chainDepth = probeChainDepth.get().intValue();
     boolean insideProbeChain = chainDepth > 0;
     if ((HaxeCallExpressionEvaluatorCacheService.anyComputeInFlight() && !insideProbeChain)
         || chainDepth >= MAX_PROBE_CHAIN_DEPTH) {
@@ -128,12 +129,12 @@ public final class HaxeUntypedParameterInference {
 
     long probeMark = HaxeEvaluationTaint.mark();
     ProbeOutcome outcome = HaxeEvaluationTaint.computeOrTaint(callSiteProbeGuard, parameter, false, () -> {
-      int[] depth = probeChainDepth.get();
-      depth[0]++;
+      MutableInt depth = probeChainDepth.get();
+      depth.increment();
       try {
         return probeCallSites(methodName, parameterIndex);
       } finally {
-        depth[0]--;
+        depth.decrement();
       }
     });
     if (outcome == null) return null;
