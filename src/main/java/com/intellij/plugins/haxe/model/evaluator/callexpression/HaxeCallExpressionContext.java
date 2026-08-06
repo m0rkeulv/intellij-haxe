@@ -206,14 +206,10 @@ public class HaxeCallExpressionContext {
         SpecificTypeReference argumentType = null;
         SpecificTypeReference parameterType = null;
 
-        // ALIGN + BIND phase: match arguments to parameters and bind type
-        // parameters. Note: argument and parameter index can deviate a lot
+        // align + bind phase:
+        // match arguments to parameters and bind type parameters.
+        // Note: argument and parameter index can deviate a lot
         // (optional parameters, rest values, extension method etc).
-        // Diagnostics are NOT emitted here - each decided pair is recorded
-        // and reported by reportDiagnostics afterwards, so reporting policy
-        // (e.g. suppressing errors built on incomplete argument data) lives
-        // in one place and later inference rounds can amend pairs first.
-        List<AlignedPair> pairs = new ArrayList<>();
         boolean aborted = false;
 
         while (true) {
@@ -247,10 +243,16 @@ public class HaxeCallExpressionContext {
                 } else {
                     // out of parameters and last is not var arg, must mean that ve have skipped optionals and still had arguments left
                     if (parameterModel != null && argumentModel != null) {
-                        // the recorded types/assign are the LAST CHECKED pair's -
-                        // the error explains why the leftover argument could not
-                        // take the previous parameter slot
-                        pairs.add(new AlignedPair(argumentModel, argumentType, parameterType, assignEvaluation, null, PairOutcome.OUT_OF_PARAMETERS));
+                        if (trackErrors) {
+                            // the reported types/assign are the LAST CHECKED argument's -
+                            // the error explains why the leftover argument could not
+                            // take the previous parameter slot
+                            AssignExplanation explanations = assignEvaluation != null ? assignEvaluation.explanations : null;
+                            addTypeMismatchError(evaluation,
+                                                 argumentType, parameterType,
+                                                 explanations, argumentModel.psiElement,
+                                                 hasOptionalParams);
+                        }
                         evaluation.validationFailed();
                         aborted = true;
                     }
@@ -267,8 +269,10 @@ public class HaxeCallExpressionContext {
             // resolved type, but is never type-checked and never binds type
             // parameters (its own type is the unknown being asked for)
             if (argumentModel.isHole()) {
-                evaluation.addArgumentToParameterMapping(argumentCounter - 1, parameterCounter - 1,
-                                                         argumentType, parameterType, parameterModel.getName());
+                evaluation.addArgumentToParameterMapping(argumentCounter - 1,
+                                                         parameterCounter - 1,
+                                                         argumentType, parameterType,
+                                                         parameterModel.getName());
                 continue;
             }
 
@@ -309,7 +313,10 @@ public class HaxeCallExpressionContext {
                 // if we use the resolved value we would be trying to update values for a different class.
                 TypeConstraintMismatch constraintMismatch = updateResolverIfNecessary(argumentType, argumentResolver, originalParameterType, parameterResolver);
                 if(constraintMismatch != null) {
-                    pairs.add(new AlignedPair(argumentModel, argumentType, parameterType, assignEvaluation, constraintMismatch, PairOutcome.MATCHED));
+                    // the argument assigns, but violates the type parameter's constraint
+                    if (trackErrors) {
+                        addConstraintMismatchError(evaluation, argumentType, constraintMismatch, argumentModel.psiElement);
+                    }
                     evaluation.validationFailed();
                 }
                 combinedResolver.addAll(parameterResolver);// update commbined resolver
@@ -318,16 +325,24 @@ public class HaxeCallExpressionContext {
                 argumentCounter--;  //prevent loop from picking next argument
             } else {
                 // argument did not match parameter
-                pairs.add(new AlignedPair(argumentModel, argumentType, parameterType, assignEvaluation, null, PairOutcome.MISMATCH));
+                if (trackErrors) {
+                    if (assignEvaluation.explanations.hasMissingModel()) {
+                        addMissingModelWarning(assignEvaluation, evaluation, argumentModel);
+                    } else if (!isBindIgnoreArgument(argumentModel)) {
+                        // ignored bind arguments ("_") get no type error - they can
+                        // resolve to types in some switch expressions
+                        addTypeMismatchError(evaluation,
+                                             argumentType, parameterType,
+                                             assignEvaluation.explanations,
+                                             argumentModel.psiElement,
+                                             false);
+                    }
+                }
                 evaluation.validationFailed();
             }
 
         }
 
-        // DIAGNOSTICS phase: report from the decided pairs
-        if (trackErrors) {
-            reportDiagnostics(evaluation, pairs, hasOptionalParams);
-        }
         if (aborted) return evaluation;
 
         // update callExpressionResolver with any new resolve values from argument-parameter types
@@ -336,55 +351,7 @@ public class HaxeCallExpressionContext {
         return evaluation;
     }
 
-    /**
-     * Which reporting rule an aligned pair falls under. Only outcomes that
-     * can carry a diagnostic are recorded - skipped optionals and holes are
-     * pure alignment decisions and leave no pair.
-     */
-    private enum PairOutcome {MATCHED, MISMATCH, OUT_OF_PARAMETERS}
 
-    private record AlignedPair(CallExpressionArgumentModel argument,
-                               SpecificTypeReference argumentType,
-                               SpecificTypeReference parameterType,
-                               @Nullable HaxeAssignEvaluation assign,
-                               @Nullable TypeConstraintMismatch constraintMismatch,
-                               PairOutcome outcome) {
-    }
-
-    private void reportDiagnostics(HaxeCallExpressionEvaluation evaluation, List<AlignedPair> pairs, boolean hasOptionalParams) {
-        // NOTE: incomplete arguments still report - a prevention beneath an
-        // argument's evaluation is usually benign (typedef unwrap cycles,
-        // repeat resolution) and suppressing on it hides real errors.
-        // Unreliable pairs are a re-evaluation problem, not a reporting one.
-        for (AlignedPair pair : pairs) {
-            switch (pair.outcome()) {
-                case MATCHED -> addConstraintMismatchError(evaluation, pair.argumentType(), pair.constraintMismatch(), pair.argument().psiElement);
-                case MISMATCH -> {
-                    if (pair.assign().explanations.hasMissingModel()) {
-                        addMissingModelWarning(pair.assign(), evaluation, pair.argument());
-                    } else {
-                        // do not add type errors for "ignored"  arguments (named "_") in  bindCall callExpressions
-                        // while its not common to have references that resolves to types,  they do occur in some switch expresisons
-                        if (!isBindIgnoreArgument(pair.argument())) {
-                            addTypeMismatchError(evaluation,
-                                    pair.argumentType(),
-                                    pair.parameterType(),
-                                    pair.assign().explanations,
-                                    pair.argument().psiElement, false);
-                        }
-                    }
-                }
-                case OUT_OF_PARAMETERS -> {
-                    AssignExplanation explanations = pair.assign() != null ? pair.assign().explanations : null;
-                    addTypeMismatchError(evaluation,
-                            pair.argumentType(),
-                            pair.parameterType(),
-                            explanations,
-                            pair.argument().psiElement, hasOptionalParams);
-                }
-            }
-        }
-    }
 
     private boolean isBindIgnoreArgument(CallExpressionArgumentModel argumentModel) {
         return isBindCall && argumentModel.getPsiElement().textMatches("_");
@@ -609,6 +576,7 @@ public class HaxeCallExpressionContext {
                 .filter(p -> !p.isOptional() && !p.hasIntiValue() && !p.isRest())
                 .count();
     }
+
     private void addConstraintMismatchError(HaxeCallExpressionEvaluation evaluation, SpecificTypeReference argumentType, TypeConstraintMismatch constraintMismatch, PsiElement argumentPsi) {
         if (argumentPsi != null) {
             String message = "Constraint violation want" +constraintMismatch.expected().toPresentationString() + " got " + constraintMismatch.got().toPresentationString();
