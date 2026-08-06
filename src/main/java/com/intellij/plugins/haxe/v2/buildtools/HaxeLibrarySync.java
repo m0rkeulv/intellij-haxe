@@ -156,13 +156,13 @@ public final class HaxeLibrarySync {
                                                @NotNull Module module,
                                                @NotNull List<HaxeBuildFile> scanned) {
     String activePath = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
-    HaxeBuildFile active = byPath(scanned, activePath);
+    HaxeBuildFile active = byPath(project, scanned, activePath);
     if (active != null && ownedBy(project, active, module)) {
       return active;
     }
     HaxeEnvironmentStore.CompileCommand command = HaxeEnvironmentStore.getInstance(project).getCompileCommand(module.getName());
     if (command != null) {
-      HaxeBuildFile commandFile = byPath(scanned, command.buildFilePath());
+      HaxeBuildFile commandFile = byPath(project, scanned, command.buildFilePath());
       if (commandFile != null && ownedBy(project, commandFile, module)) {
         return commandFile;
       }
@@ -172,14 +172,14 @@ public final class HaxeLibrarySync {
 
   /** Finds the path among the scanned files, or loads it directly (manually added files live outside the scan). */
   @Nullable
-  private static HaxeBuildFile byPath(@NotNull List<HaxeBuildFile> scanned, @Nullable String path) {
+  private static HaxeBuildFile byPath(@NotNull Project project, @NotNull List<HaxeBuildFile> scanned, @Nullable String path) {
     if (StringUtil.isEmptyOrSpaces(path)) return null;
     for (HaxeBuildFile buildFile : scanned) {
       if (buildFile.file().getPath().equals(path)) return buildFile;
     }
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     return type == null ? null : new HaxeBuildFile(file, type);
   }
 

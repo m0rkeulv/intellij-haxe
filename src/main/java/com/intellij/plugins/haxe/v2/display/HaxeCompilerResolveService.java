@@ -122,6 +122,12 @@ public final class HaxeCompilerResolveService {
     try {
       HaxeClass targetClass = targetClassOf(expression);
       if (targetClass == null) return null;
+
+      // check if we got a real PSI element before we use compiler blueprint
+      HaxeClassModel targetModel = targetClass.getModel();
+      HaxeBaseMemberModel memberModel = targetModel.getMember(name, null);
+      if (memberModel != null) return null;
+
       BlueprintLookup lookup = blueprintLookup(contextFile, targetClass.getQualifiedName());
       if (lookup == null || lookup.blueprint().findMember(name) == null) return null;
       PsiElement member = blueprintMember(lookup.key(), lookup.blueprint(), name);

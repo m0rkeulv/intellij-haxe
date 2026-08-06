@@ -258,7 +258,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   static List<String> debugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     if (type == HaxeBuildFileType.HXML) {
       HaxeBuildFileInfo info = ReadAction.computeBlocking(
         () -> HaxeBuildFileInspector.inspect(new HaxeBuildFile(file, HaxeBuildFileType.HXML)));

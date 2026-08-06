@@ -177,7 +177,7 @@ final class HaxeToolWindowModelBuilder {
       if (byPath.containsKey(path)) continue;
       VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
       if (file == null || !file.isValid()) continue;
-      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
       if (type != null) {
         byPath.put(path, new HaxeBuildFile(file, type));
       }

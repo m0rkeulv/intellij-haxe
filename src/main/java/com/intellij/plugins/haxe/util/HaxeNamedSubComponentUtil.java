@@ -26,6 +26,7 @@ import java.util.*;
 
 import static com.intellij.plugins.haxe.model.type.HaxeTypeResolver.getTypeFromGenericConstraint;
 import static com.intellij.plugins.haxe.util.HaxeAbstractForwardUtil.getAbstractForwardingFieldsNames;
+import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 
 /**
  * Util class that finds NamedComponents and cache the result where possible
@@ -293,7 +294,7 @@ public class HaxeNamedSubComponentUtil {
             baseTypes.addAll(classType.getHaxeExtendsList());
             baseTypes.addAll(classType.getHaxeImplementsList());
             for (HaxeType baseType : baseTypes) {
-                List<HaxeNamedComponent> members = membersFromClassTypeRecursionGuard.doPreventingRecursion(baseType, true, () -> {
+                List<HaxeNamedComponent> members = HaxeEvaluationTaint.computeOrTaint(membersFromClassTypeRecursionGuard, baseType, true, () -> {
                     ResultHolder type = HaxeTypeResolver.getTypeFromType(baseType);
                     return getNamedSubComponentsInType(type.getType(), includeInherited, fromTypes);
                 });
@@ -355,7 +356,7 @@ public class HaxeNamedSubComponentUtil {
                     // Note these can only be structs so it should not be necessary to use generic resolver
                     List<HaxeType> typeList = typeExtendsList.getTypeList();
                     for (HaxeType haxeType : typeList) {
-                        List<HaxeNamedComponent> members = membersInAnonymousTypeRecursionGuard.doPreventingRecursion(haxeType, true, () -> {
+                        List<HaxeNamedComponent> members = HaxeEvaluationTaint.computeOrTaint(membersInAnonymousTypeRecursionGuard, haxeType, true, () -> {
                             ResultHolder type = HaxeTypeResolver.getTypeFromType(haxeType);
                             return getNamedSubComponentsInType(type.getType(), includeInherited);
                         });
@@ -365,7 +366,7 @@ public class HaxeNamedSubComponentUtil {
             }
             // haxe 4 inheritance ({typeA & TypeB})
             for (HaxeType haxeType : anonymousType.getTypeList()) {
-                List<HaxeNamedComponent> members = membersInAnonymousTypeRecursionGuard.doPreventingRecursion(haxeType, true, () -> {
+                List<HaxeNamedComponent> members = HaxeEvaluationTaint.computeOrTaint(membersInAnonymousTypeRecursionGuard, haxeType, true, () -> {
                     ResultHolder type = HaxeTypeResolver.getTypeFromType(haxeType);
                     return getNamedSubComponentsInType(type.getType(), includeInherited);
                 });

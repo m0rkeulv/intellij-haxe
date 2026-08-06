@@ -38,18 +38,18 @@ import java.util.*;
 
 @CustomLog
 public class HaxeGenericResolver {
-  @Getter final private LinkedList<ResolverEntry> resolvers;
-  @Getter final private LinkedList<ResolverEntry> constaints;
-  @Getter final private LinkedList<ResolverEntry> arguments;
+  @Getter final private List<ResolverEntry> resolvers;
+  @Getter final private List<ResolverEntry> constraints;
+  @Getter final private List<ResolverEntry> arguments;
 
   @Getter
   @Setter
   private ResultHolder assignHint;
 
   public HaxeGenericResolver() {
-    this.resolvers = new LinkedList<>();
-    this.constaints = new LinkedList<>();
-    this.arguments = new LinkedList<>();
+    this.resolvers = new ArrayList<>();
+    this.constraints = new ArrayList<>();
+    this.arguments = new ArrayList<>();
   }
 
   public void add(@NotNull HaxeTypeParameterDeclaration typeParameter, @NotNull ResultHolder specificType) {
@@ -65,6 +65,7 @@ public class HaxeGenericResolver {
     resolvers.add(new ResolverEntry(name, typeParameter, specificType, scope, restIndex));
   }
 
+
     public void addConstraint(@NotNull HaxeTypeParameterDeclaration typeParameter, @NotNull ResultHolder specificType) {
         addConstraint(typeParameter, specificType, -1);
     }
@@ -73,8 +74,8 @@ public class HaxeGenericResolver {
     String name = typeParameter.getQualifiedName();
     specificType = replaceAnyEnumValueWithEnumClass(specificType);
     HaxeTypeParameterScope scope = typeParameter.getTypeParameterScope();
-    constaints.removeIf(entry -> isSameTypeParameter(typeParameter, entry, index));
-    constaints.add(new ResolverEntry(name,typeParameter,  specificType, scope, index));
+    constraints.removeIf(entry -> isSameTypeParameter(typeParameter, entry, index));
+    constraints.add(new ResolverEntry(name, typeParameter, specificType, scope, index));
   }
     private static boolean isSameTypeParameter(@NotNull HaxeTypeParameterDeclaration typeParameter, ResolverEntry entry, int index) {
         HaxeTypeParameterScope typeParameterScope = typeParameter.getTypeParameterScope();
@@ -89,6 +90,7 @@ public class HaxeGenericResolver {
     arguments.removeIf(entry -> entry.typeParameter().equals(typeParameter));
     arguments.add(new ResolverEntry(name,typeParameter,  specificType, null));
   }
+
 
   public void addArguments(@NotNull HaxeGenericResolver otherResolver) {
     for (ResolverEntry argument : otherResolver.arguments) {
@@ -118,13 +120,14 @@ public class HaxeGenericResolver {
       }
       // not using "collection.addAll" because there is extra logic in add() that we need to execute
       for (ResolverEntry resolver : parentResolver.resolvers) {
-        this.add(resolver.typeParameter(), resolver.type(), resolver.index());
+        //this.add(resolver.typeParameter(), resolver.type(), resolver.index());
+        this.addInternal(resolver);
       }
-      for (ResolverEntry entry : parentResolver.constaints) {
-        this.addConstraint(entry.typeParameter(), entry.type(), entry.index());
+      for (ResolverEntry entry : parentResolver.constraints) {
+        this.addConstraintInternal(entry);
       }
       for (ResolverEntry entry : parentResolver.arguments) {
-        this.addArgument(entry.typeParameter(), entry.type());
+        this.addArgumentInternal(entry);
       }
     }
     return this;
@@ -136,7 +139,7 @@ public class HaxeGenericResolver {
       for (ResolverEntry resolver : parentResolver.resolvers) {
         if (resolver.scope() == scope) this.add(resolver);
       }
-      for (ResolverEntry entry : parentResolver.constaints) {
+      for (ResolverEntry entry : parentResolver.constraints) {
         if (entry.scope() == scope)  this.addConstraint(entry);
       }
       for (ResolverEntry entry : parentResolver.arguments) {
@@ -146,6 +149,43 @@ public class HaxeGenericResolver {
   }
 
 
+  // same as normal "add" but reuses calculated name and type for faster copy
+  private void addInternal(@NotNull ResolverEntry resolverEntry) {
+    String name = resolverEntry.name();
+    ResultHolder type = resolverEntry.type();
+    HaxeTypeParameterDeclaration typeParameter = resolverEntry.typeParameter();
+    HaxeTypeParameterScope scope = resolverEntry.scope();
+    int restIndex = resolverEntry.index();
+
+    resolvers.removeIf(entry -> isSameTypeParameter(typeParameter, entry, restIndex));
+    resolvers.add(new ResolverEntry(name, typeParameter, type, scope, restIndex));
+  }
+
+  // same as normal "add" but reuses calculated name and type for faster copy
+  private void addConstraintInternal(@NotNull ResolverEntry resolverEntry) {
+    String name = resolverEntry.name();
+    ResultHolder type = resolverEntry.type();
+    HaxeTypeParameterDeclaration typeParameter = resolverEntry.typeParameter();
+    HaxeTypeParameterScope scope = resolverEntry.scope();
+    int restIndex = resolverEntry.index();
+
+    constraints.removeIf(entry -> isSameTypeParameter(typeParameter, entry, restIndex));
+    constraints.add(new ResolverEntry(name, typeParameter, type, scope, restIndex));
+  }
+
+  // same as normal "add" but reuses calculated name and type for faster copy
+  private void addArgumentInternal(@NotNull ResolverEntry resolverEntry) {
+    String name = resolverEntry.name();
+    ResultHolder type = resolverEntry.type();
+    HaxeTypeParameterDeclaration typeParameter = resolverEntry.typeParameter();
+
+    arguments.removeIf(entry -> entry.typeParameter().equals(typeParameter));
+    arguments.add(new ResolverEntry(name,typeParameter,  type, null));
+  }
+
+
+
+
   @Nullable
   public ResultHolder resolveArgument(@NotNull HaxeTypeParameterDeclaration typeParameter) {
     return listSearch(arguments, typeParameter, -1);
@@ -153,7 +193,7 @@ public class HaxeGenericResolver {
 
   @Nullable
   public ResultHolder resolveConstraint(@NotNull HaxeTypeParameterDeclaration typeParameter) {
-    return listSearch(constaints, typeParameter, -1);
+    return listSearch(constraints, typeParameter, -1);
   }
 
   @Nullable
@@ -332,7 +372,7 @@ public class HaxeGenericResolver {
         ResolverEntry resolverEntry = listSearchForEntry(resolvers, typeParam, -1);
         if(resolverEntry != null) return resolverEntry;
 
-        resolverEntry = listSearchForEntry(constaints, typeParam, -1);
+        resolverEntry = listSearchForEntry(constraints, typeParam, -1);
         if(resolverEntry != null) return resolverEntry;
 
         resolverEntry = listSearchForEntry(arguments, typeParam, -1);
@@ -364,7 +404,7 @@ public class HaxeGenericResolver {
   @Nullable
   public SpecificFunctionReference resolve(SpecificFunctionReference functionReference, boolean useAssignHint) {
     if (null == functionReference ) return null;
-    if (resolvers.isEmpty() && constaints.isEmpty()) return functionReference;
+    if (resolvers.isEmpty() && constraints.isEmpty()) return functionReference;
 
     List<HaxeArgument> arguments = functionReference.getArguments();
     ResultHolder returnType = functionReference.getReturnType();
@@ -436,7 +476,7 @@ public class HaxeGenericResolver {
   }
   @NotNull
   public ResolverEntry[] constraints() {
-    return constaints.toArray(ResolverEntry[]::new);
+    return constraints.toArray(ResolverEntry[]::new);
   }
 
 
@@ -446,7 +486,7 @@ public class HaxeGenericResolver {
   @NotNull
   public ResultHolder[] getSpecifics() {
     if (resolvers.isEmpty()) return ResultHolder.EMPTY;
-    ResultHolder results[] = new ResultHolder[resolvers.size()];
+    ResultHolder[] results = new ResultHolder[resolvers.size()];
     int i = 0;
     for (ResolverEntry resolverEntry : resolvers) {
       results[i++] = resolverEntry.type();
@@ -470,7 +510,7 @@ public class HaxeGenericResolver {
    * @return whether or not this resolver has any entries.
    */
   public boolean isEmpty() {
-    return resolvers.isEmpty() && constaints.isEmpty();
+    return resolvers.isEmpty() && constraints.isEmpty();
   }
 
   @NotNull
@@ -482,7 +522,7 @@ public class HaxeGenericResolver {
   public HaxeGenericResolver copy() {
     HaxeGenericResolver resolver = new HaxeGenericResolver();
     resolver.resolvers.addAll(resolvers);
-    resolver.constaints.addAll(constaints);
+    resolver.constraints.addAll(constraints);
     resolver.arguments.addAll(arguments);
     resolver.assignHint = assignHint;
     return resolver;
@@ -542,7 +582,7 @@ public class HaxeGenericResolver {
     }
 
     builder.append("], constraints: [");
-    for (ResolverEntry entry : constaints) {
+    for (ResolverEntry entry : constraints) {
       builder.append(entry.name()).append(":").append(entry.type().toPresentationString()).append(":").append(entry.scope());
     }
     builder.append("]");
@@ -563,7 +603,7 @@ public class HaxeGenericResolver {
   public HaxeGenericResolver without(HaxeTypeParameterScope scope) {
     HaxeGenericResolver copy = copy();
     copy.resolvers.removeIf(entry -> entry.scope() == scope);
-    copy.constaints.removeIf(entry -> entry.scope() == scope);
+    copy.constraints.removeIf(entry -> entry.scope() == scope);
     return copy;
   }
 
@@ -583,9 +623,9 @@ public class HaxeGenericResolver {
         resolver.resolvers.add(resolverEntry);
       }
     }
-    for (ResolverEntry entry : constaints) {
+    for (ResolverEntry entry : constraints) {
       if (!entry.type().isUnknown()) {
-        resolver.constaints.add(entry);
+        resolver.constraints.add(entry);
       }
     }
     for (ResolverEntry entry : arguments) {
@@ -599,7 +639,7 @@ public class HaxeGenericResolver {
   public HaxeGenericResolver withoutAssignHint() {
     HaxeGenericResolver resolver = new HaxeGenericResolver();
     resolver.resolvers.addAll(resolvers);
-    resolver.constaints.addAll(constaints);
+    resolver.constraints.addAll(constraints);
     resolver.arguments.addAll(arguments);
     return resolver;
   }
@@ -626,7 +666,7 @@ public class HaxeGenericResolver {
         resolver.resolvers.add(new ResolverEntry(name, param.getTypeParameter(), holder, match.get().scope()));
       }
     }
-    resolver.constaints.addAll(constaints);
+    resolver.constraints.addAll(constraints);
     return resolver;
   }
 
@@ -641,11 +681,11 @@ public class HaxeGenericResolver {
   public boolean equals(Object obj) {
     if (obj instanceof HaxeGenericResolver otherResolver) {
       if (otherResolver.resolvers.size() != resolvers.size()) return false;
-      if (otherResolver.constaints.size() != constaints.size()) return false;
+      if (otherResolver.constraints.size() != constraints.size()) return false;
       if (otherResolver.arguments.size() != arguments.size()) return false;
 
       if (listCompare(otherResolver.resolvers, resolvers)) return false;
-      if (listCompare(otherResolver.constaints, constaints)) return false;
+      if (listCompare(otherResolver.constraints, constraints)) return false;
       if (listCompare(otherResolver.arguments, arguments)) return false;
 
       return true;
@@ -655,27 +695,32 @@ public class HaxeGenericResolver {
 
   @Override
   public int hashCode() {
-    return resolvers.hashCode() * constaints.hashCode() * arguments.hashCode() ;
+    return resolvers.hashCode() * constraints.hashCode() * arguments.hashCode() ;
   }
 
 
-  private static @Nullable ResultHolder listSearch(LinkedList<ResolverEntry> resolvers, @NotNull HaxeTypeParameterDeclaration typeParameter, int restIndex) {
-    return resolvers.stream()
-      .filter(entry -> entry.typeParameter() == typeParameter)
-      .filter(entry -> restIndex == -1 || entry.index() == restIndex)
-      .findFirst()
-      .map(ResolverEntry::type)
-      .orElse(null);
+  private static @Nullable ResultHolder listSearch(List<ResolverEntry> resolvers, @NotNull HaxeTypeParameterDeclaration typeParameter, int restIndex) {
+    for (ResolverEntry entry : resolvers) {
+      if (entry.typeParameter() == typeParameter) {
+        if (restIndex == -1 || entry.index() == restIndex) {
+          return entry.type();
+        }
+      }
+    }
+    return null;
   }
-  private static @Nullable ResolverEntry listSearchForEntry(LinkedList<ResolverEntry> resolvers, @NotNull HaxeTypeParameterDeclaration typeParameter, int restIndex) {
-    return resolvers.stream()
-      .filter(entry -> entry.typeParameter() == typeParameter)
-      .filter(entry -> restIndex == -1 || entry.index() == restIndex)
-      .findFirst()
-      .orElse(null);
+  private static @Nullable ResolverEntry listSearchForEntry(List<ResolverEntry> resolvers, @NotNull HaxeTypeParameterDeclaration typeParameter, int restIndex) {
+    for (ResolverEntry entry : resolvers) {
+      if (entry.typeParameter() == typeParameter) {
+        if (restIndex == -1 || entry.index() == restIndex) {
+          return entry;
+        }
+      }
+    }
+    return null;
   }
 
-  private static boolean listCompare(LinkedList<ResolverEntry> otherResolver, LinkedList<ResolverEntry> resolvers) {
+  private static boolean listCompare(List<ResolverEntry> otherResolver, List<ResolverEntry> resolvers) {
     for (int i = 0; i < otherResolver.size(); i++) {
       ResolverEntry otherEntry = otherResolver.get(i);
       ResolverEntry thisEntry = resolvers.get(i);
@@ -688,18 +733,16 @@ public class HaxeGenericResolver {
     return listSearch(resolvers, parameter, -1) != null;
   }
   public boolean containsConstraint(HaxeTypeParameterDeclaration parameter) {
-    return listSearch(constaints, parameter, -1) != null;
+    return listSearch(constraints, parameter, -1) != null;
   }
 
   public void update(HaxeTypeParameterDeclaration typeParameter, ResultHolder resultHolder) {
-    Optional<ResolverEntry> match = resolvers.stream()
-      .filter(entry -> entry.typeParameter() == typeParameter)
-      .findFirst();
-
-    if (match.isPresent()) {
-      ResolverEntry old = match.get();
-      resolvers.remove(old);
-      resolvers.add(old.withType(resultHolder));
+    for (ResolverEntry entry : resolvers) {
+      if (entry.typeParameter() == typeParameter) {
+        resolvers.remove(entry);
+        resolvers.add(entry.withType(resultHolder));
+        break;
+      }
     }
   }
 }

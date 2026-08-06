@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import org.jetbrains.annotations.TestOnly;
 
 /**
  * Per-container (module / project root) environment: the Haxe SDK to use and
@@ -21,6 +22,24 @@ import java.util.List;
  */
 @State(name = "HaxeEnvironments", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeEnvironmentStore implements PersistentStateComponent<HaxeEnvironmentStore.State> {
+  private final @Nullable Project project;
+
+  public HaxeEnvironmentStore(@NotNull Project project) {
+    this.project = project;
+  }
+
+  /** State tests exercise load/get/set without a project; no events fire then. */
+  @TestOnly
+  public HaxeEnvironmentStore() {
+    this.project = null;
+  }
+
+  private void notifyChanged() {
+    if (project != null) {
+      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
+    }
+  }
+
 
   public enum DefineEffect {SET, REMOVE}
 
@@ -68,6 +87,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   @Override
   public void loadState(@NotNull State state) {
+    notifyChanged();
     if (state.environments == null) {
       state.environments = new ArrayList<>();
     }
@@ -107,6 +127,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void setSdkName(@NotNull String containerId, @Nullable String sdkName) {
+    notifyChanged();
     getOrCreate(containerId).sdkName = sdkName;
   }
 
@@ -121,6 +142,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void setCompileCommand(@NotNull String containerId, @Nullable CompileCommand compileCommand) {
+    notifyChanged();
     ContainerEnvironment environment = getOrCreate(containerId);
     environment.compileFilePath = compileCommand == null ? null : compileCommand.buildFilePath();
     environment.compileActionName = compileCommand == null ? null : compileCommand.actionName();
@@ -134,6 +156,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void setUsingCompilationServer(@NotNull String containerId, boolean use) {
+    notifyChanged();
     getOrCreate(containerId).useCompilationServer = use;
   }
 
@@ -151,6 +174,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   /** Replaces the container's define entries (the Configure Environment dialog applies the whole list). */
   public void setDefines(@NotNull String containerId, @NotNull List<EnvironmentDefine> defines) {
+    notifyChanged();
     List<DefineState> serialized = new ArrayList<>();
     for (EnvironmentDefine define : defines) {
       if (StringUtil.isEmptyOrSpaces(define.name())) continue;
@@ -174,6 +198,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void removeDefine(@NotNull String containerId, @NotNull String name) {
+    notifyChanged();
     ContainerEnvironment environment = find(containerId);
     if (environment != null) {
       environment.defines.removeIf(define -> name.equals(define.name));

@@ -69,6 +69,7 @@ import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.canBeQna
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.evaluate;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.findIteratorType;
 import static com.intellij.plugins.haxe.util.HaxeDebugLogUtil.traceAs;
+import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 
 /**
  * @author: Fedor.Korotkov
@@ -192,6 +193,50 @@ public class HaxeResolveUtil {
     return findClassOrMemberByQName(qName, psiManager, searchScope);
   }
 
+  /**
+   * Picks among index candidates for a qname. Short-form index keys make an
+   * ANCILLARY type of any module answer its bare name, but haxe only lets a
+   * bare name mean a MAIN (module-named) type or a StdTypes member (the
+   * implicitly imported primitives) — a project file declaring an ancillary
+   * {@code Void} must not hijack the primitive (imports resolve before this
+   * lookup ever runs). Order: exact module-qualified match, then StdTypes,
+   * then main types, then the first remaining candidate.
+   */
+  @Nullable
+  private static HaxeClass selectVisibleCandidate(@NotNull String qName, @NotNull List<HaxeClass> candidates) {
+    if (candidates.size() == 1) return candidates.getFirst();
+    HaxeClass stdType = null;
+    HaxeClass mainType = null;
+    for (HaxeClass candidate : candidates) {
+      String moduleName = moduleNameOf(candidate);
+      if (isModuleQualifiedMatch(qName, candidate, moduleName)) return candidate;
+      if (stdType == null && "StdTypes".equals(moduleName)) stdType = candidate;
+      if (mainType == null && moduleName != null && moduleName.equals(candidate.getName())) mainType = candidate;
+    }
+    if (stdType != null) return stdType;
+    if (mainType != null) return mainType;
+    return candidates.getFirst();
+  }
+
+  private static boolean isModuleQualifiedMatch(@NotNull String qName, @NotNull HaxeClass candidate, @Nullable String moduleName) {
+    int lastDot = qName.lastIndexOf('.');
+    if (lastDot < 0 || moduleName == null) return false;
+    String requestedType = qName.substring(lastDot + 1);
+    String beforeType = qName.substring(0, lastDot);
+    int previousDot = beforeType.lastIndexOf('.');
+    String requestedModule = previousDot < 0 ? beforeType : beforeType.substring(previousDot + 1);
+    return requestedType.equals(candidate.getName()) && requestedModule.equals(moduleName);
+  }
+
+  @Nullable
+  private static String moduleNameOf(@NotNull HaxeClass haxeClass) {
+    PsiFile file = haxeClass.getContainingFile();
+    if (file == null) return null;
+    String fileName = file.getName();
+    int dot = fileName.lastIndexOf('.');
+    return dot < 0 ? fileName : fileName.substring(0, dot);
+  }
+
   @NotNull
   public static GlobalSearchScope getScopeForElement(@NotNull PsiElement context) {
     final Project project = context.getProject();
@@ -208,7 +253,7 @@ public class HaxeResolveUtil {
     if (!DumbService.isDumb(scope.getProject())) {
       List<HaxeClass> results = HaxeFullyQualifiedClassNameUnifiedIndex.getByFqn(qName, psiManager.getProject(), scope);
       if (!results.isEmpty()) {
-        return results.getFirst();
+        return selectVisibleCandidate(qName, results);
       }
     }
 
@@ -236,7 +281,7 @@ public class HaxeResolveUtil {
       if (!qualifiedInfo.hasMemberName()) {
         List<HaxeClass> classList = HaxeFullyQualifiedClassNameUnifiedIndex.getByFqn(qName, psiManager.getProject(), scope);
         if (!classList.isEmpty()) {
-          return classList.getFirst();
+          return selectVisibleCandidate(qName, classList);
         }
       } else {
         List<PsiElement> memberList = HaxeFullyQualifiedMemberNameUnifiedIndex.getByFqn(qName, psiManager.getProject(), scope);
@@ -1285,14 +1330,13 @@ public class HaxeResolveUtil {
   public static PsiElement searchInSamePackage(@NotNull HaxeFileModel file, @NotNull String name, boolean checkForEnumValues, boolean expectedEnumIsConstructor) {
     final HaxePackageModel packageModel = file.getPackageModel();
     if (packageModel != null) {
-      // TODO make index of package members
       List<HaxeModel> exposedMembers = packageModel.getModulesMainClass();
       for (HaxeModel model : exposedMembers) {
         if (name.equals(model.getName())) {
           return model.getBasePsi();
         }else if (checkForEnumValues) {
           if (model instanceof HaxeClassModel classModel) {
-            HaxeModel possibleModel = typeDefRecursionGuard.doPreventingRecursion(classModel.getPsi(), true, () -> tryResolveTypeDefClass(classModel));
+            HaxeModel possibleModel = HaxeEvaluationTaint.computeOrTaint(typeDefRecursionGuard, classModel.getPsi(), true, () -> tryResolveTypeDefClass(classModel));
             if (possibleModel != null )model = possibleModel;
           }
           if (model instanceof HaxeEnumModel enumModel) {
@@ -1653,5 +1697,69 @@ public class HaxeResolveUtil {
       }
     }
     return reference.getText();
+  }
+
+  @NotNull
+  public static HaxeResolveResult fullyResolveTypedef(@Nullable HaxeClass typedef, @Nullable HaxeGenericSpecialization specialization) {
+    if (null == typedef) return HaxeResolveResult.EMPTY;
+
+    HashSet<String> recursionGuard = new HashSet<>(); // Track which typedefs we've already resolved so we don't end up in an infinite loop.
+
+    HaxeResolveResult result = HaxeResolveResult.EMPTY;
+    HaxeClassModel model = typedef.getModel();
+    while (null != model && model.isTypedef() && !recursionGuard.contains(model.getName())) {
+      recursionGuard.add(model.getName());
+      final HaxeTypeOrAnonymous toa = model.getUnderlyingTypeOrAnonymous();
+      if (toa != null) {
+        final HaxeType type = toa.getType();
+        if (null == type) {
+          // Anonymous structure
+          result = HaxeResolveResult.create(toa.getAnonymousType(), specialization);
+          break;
+        }
+
+
+      // If the reference is to a type parameter, resolve that instead.
+      HaxeResolveResult nakedResult = specialization.get(type, type.getReferenceExpression().getIdentifier().getText());
+      if (null == nakedResult) {
+        nakedResult = type.getReferenceExpression().resolveHaxeClass();
+      }
+      // translate  type params from typedef left side to right side value
+      HaxeGenericResolver genericResolver = new HaxeGenericResolver();
+        HaxeTypeParam param = type.getTypeParam();
+        if(param != null ) {
+        HaxeGenericResolver localResolver = specialization.toGenericResolver(type);
+          List<HaxeTypeParameterDeclaration> typeparameters = getTypeParameters(nakedResult);
+          List<HaxeTypeListPart> typeParameterList = param.getTypeList();
+        for (int i = 0; i < typeParameterList.size(); i++) {
+          if (typeparameters.size() -1 < i) break;
+          HaxeTypeParameterDeclaration parameter = typeparameters.get(i);
+          HaxeTypeListPart part = typeParameterList.get(i);
+          if (part.getTypeOrAnonymous() != null) {
+            ResultHolder holder = HaxeTypeResolver.getTypeFromTypeOrAnonymous(part.getTypeOrAnonymous(), localResolver);
+            genericResolver.add(parameter, holder);
+          }
+          else if (part.getFunctionType() != null) {
+            //TODO resolve  with resolver ?
+            ResultHolder type1 = HaxeTypeResolver.getTypeFromFunctionType(part.getFunctionType());
+            genericResolver.add(parameter, type1);
+          }
+        }
+      }
+
+      result = HaxeResolveResult.create(nakedResult.getHaxeClass(), HaxeGenericSpecialization.fromGenericResolver(null, genericResolver));
+      model = null != result.getHaxeClass() ? result.getHaxeClass().getModel() : null;
+      specialization = result.getSpecialization();
+      }
+    }
+    return result;
+  }
+
+  private static List<HaxeTypeParameterDeclaration> getTypeParameters(HaxeResolveResult nakedResult) {
+    HaxeClass haxeClass = nakedResult.getHaxeClass();
+    if (haxeClass == null) return  List.of();
+    HaxeGenericParam param = haxeClass.getGenericParam();
+    if (param == null) return  List.of();
+    return  param.getGenericListPartList().stream().map(HaxeTypeParameterDeclaration.class::cast).toList();
   }
 }

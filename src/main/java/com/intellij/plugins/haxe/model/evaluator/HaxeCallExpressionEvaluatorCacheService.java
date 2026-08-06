@@ -5,10 +5,13 @@ import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionContext;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionContextContainer;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionEvaluation;
+import com.intellij.plugins.haxe.model.type.HaxeGenericResolver;
 import com.intellij.plugins.haxe.model.type.ResultHolder;
 import lombok.CustomLog;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,7 +24,59 @@ import static com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallE
 public class HaxeCallExpressionEvaluatorCacheService  {
 
   private volatile  Map<CallExpressionEvaluationKey, HaxeCallExpressionEvaluation> cacheMap = new ConcurrentHashMap<>();
+  // usage-based parameter inference evaluates the call with a HOLE at the
+  // argument being typed, so those evaluations key on the hole index too
+  private volatile Map<CallExpressionHoleKey, HoleEvaluation> holeCacheMap = new ConcurrentHashMap<>();
   public static boolean skipCaching = false;// just convenience flag for debugging
+
+  // WHY THE FOLLOWING LIMITS EXIST
+  //
+  // Evaluating a call can indirectly start evaluating the SAME call again
+  // before the first evaluation has finished. Example: to type a call we
+  // evaluate its arguments; typing an argument may require asking "what
+  // parameter does this argument land in?" - which evaluates the enclosing
+  // call again. Each round uses fresh helper objects, so the platform's
+  // recursion guards (which only detect an exact repeat of the same object)
+  // never notice. Left unlimited, this nesting grows until the thread runs
+  // out of stack, which crashes mid-analysis and corrupts the platform's
+  // recursion bookkeeping - much worse than giving up on one answer.
+  //
+  // WHAT HAPPENS AT THE LIMIT: the newest attempt simply does not run. It
+  // returns null and marks the thread's work as incomplete (see
+  // HaxeEvaluationTaint), so nothing built on the missing answer is stored
+  // as final. One inference path gives up; the IDE keeps working.
+  //
+  // THE TWO LIMITS DO DIFFERENT JOBS:
+  //
+  // PER_KEY limits how deeply ONE specific call may be nested inside its
+  // own evaluation. Some of that nesting is legitimate and needed - typing
+  // an argument through its enclosing call takes a few levels, and overload
+  // selection adds more. TOO LOW IS INCORRECT: needed nesting gets cut and
+  // real types come out wrong or missing (values below 4 fail the extern
+  // overload and untyped-parameter tests). 8 doubles the deepest need the
+  // tests demonstrate.
+  //
+  // TOTAL limits how many call evaluations of ANY kind may be nested on one
+  // thread. It is the stack-overflow protection, and also a performance
+  // guard for files where many calls chain into each other: beyond a point,
+  // deeper re-evaluation cannot learn anything the shallower rounds are not
+  // already computing. Too LOW is slow in the other direction - evaluations
+  // get cut before producing anything storable, so the same work repeats
+  // over and over. Benchmarks (see HaxeRecursiveStdInferenceTest) showed
+  // both raising and lowering TOTAL from 16 made the worst-case file
+  // slower; removing the caps entirely was ~60% slower with much larger
+  // run-to-run swings.
+  //
+  // The COUNTER below matters even apart from the limits:
+  // anyComputeInFlight() reads it to tell "we are deep inside call
+  // evaluation" from "this is a cheap top-level query".
+  private static final int MAX_IN_FLIGHT_PER_KEY = 8;
+  private static final int MAX_IN_FLIGHT_TOTAL = 16;
+
+  private static final ThreadLocal<Map<Object, Integer>> inFlight = ThreadLocal.withInitial(HashMap::new);
+  // per-thread (inside the ThreadLocal), so no atomicity is needed - just a mutable int
+  private static final ThreadLocal<MutableInt> inFlightTotal = ThreadLocal.withInitial(MutableInt::new);
+
 
   public static @Nullable HaxeCallExpressionEvaluation cachedHaxeCallExpressionEvaluation(HaxeMethod method, HaxeCallExpression callExpression) {
 
@@ -39,27 +94,149 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     }
 
     CallExpressionEvaluationKey key = new CallExpressionEvaluationKey(method, callExpression);
-    if (cacheMap.containsKey(key)) {
-      return cacheMap.get(key);
+    HaxeCallExpressionEvaluation cached = cacheMap.get(key);
+    if (cached != null) {
+      if (cached.isComputedWithGuardFired()) {
+        HaxeEvaluationTaint.taint();
+      }
+      return cached;
     }
 
-    HaxeCallExpressionContextContainer contextContainer = createContextForMethodCall(callExpression, method);
-    HaxeCallExpressionEvaluation evaluate = contextContainer.evaluateContexts();
-    if(evaluate == null) return null;
+    Map<Object, Integer> inProgress = inFlight.get();
+    MutableInt total = inFlightTotal.get();
+    int depth = inProgress.merge(key, 1, Integer::sum);
+    total.increment();
+    if (depth > MAX_IN_FLIGHT_PER_KEY || total.intValue() > MAX_IN_FLIGHT_TOTAL) {
+      releaseInFlight(inProgress, key);
+      total.decrement();
+      HaxeEvaluationTaint.taint();
+      return null;
+    }
+    try {
+      // Taint marks, not the platform stamp: mayCacheNow() throws under the
+      // test-mode assertOnMissedCache, and preventions routinely fire beneath
+      // this compute. The mark also inherits dirtiness from nested dirty cache
+      // hits, so the flag propagates transitively.
+      long taintMark = HaxeEvaluationTaint.mark();
+      HaxeCallExpressionContextContainer contextContainer = createContextForMethodCall(callExpression, method);
+      HaxeCallExpressionEvaluation evaluate = contextContainer.evaluateContexts();
+      if(evaluate == null) return null;
+      evaluate.setComputedWithGuardFired(isDirty(taintMark, evaluate));
 
-    if(evaluate.isValid() && evaluate.isCompleted()) {
-      HaxeCallExpressionContext context = contextContainer.getContext();
-      if(context != null && context.canCache) {
-        if (noUnknownResolvedValues(evaluate)) {
+      // Deliberately NOT gated on the platform's mayCacheNow(): this cache
+      // is load-bearing for termination, not just speed. Resolving one
+      // reference can require evaluating a call, whose arguments resolve
+      // further references, which evaluate further calls - and anything
+      // that resolves many references in a row (refactorings, usage
+      // searches) sends such chains very deep. The cache hit - including an
+      // entry that was computed while a recursion guard had fired - is what
+      // stops a chain from growing; gating the writes on mayCacheNow()
+      // overflowed the stack. Staleness is bounded by the PSI-change
+      // listener clearing the cache. The DIRTY flag travels with each entry
+      // so consumers taint instead of trusting it as complete, and entries
+      // containing Unknown types are stored too: in files whose types never
+      // settle they are the ONLY entries, and refusing them means every
+      // reference rebuilds the same call context on every pass.
+      if(evaluate.isValid() && evaluate.isCompleted()) {
+        HaxeCallExpressionContext context = contextContainer.getContext();
+        if(context != null && context.canCache) {
           cacheMap.put(key, evaluate);
         }
       }
-    }
 
-    return evaluate;
+      return evaluate;
+    } finally {
+      releaseInFlight(inProgress, key);
+      total.decrement();
+    }
   }
 
-  private boolean noUnknownResolvedValues( HaxeCallExpressionEvaluation evaluate) {
+  private static void releaseInFlight(Map<Object, Integer> inProgress, Object key) {
+    inProgress.merge(key, -1, (a, b) -> a + b <= 0 ? null : a + b);
+  }
+
+  /**
+   * True while the current thread is computing any call-expression context.
+   * The precise "inside a deep evaluation tower" signal: cheaper queries
+   * (inlay providers evaluating a declaration) never set it, while resolve
+   * storms and call evaluations always do.
+   */
+  public static boolean anyComputeInFlight() {
+    return inFlightTotal.get().intValue() > 0;
+  }
+
+  public static @Nullable HoleEvaluation cachedHoleEvaluation(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
+    HaxeCallExpressionEvaluatorCacheService service = method.getProject().getService(HaxeCallExpressionEvaluatorCacheService.class);
+    return service.holeEvaluation(method, callExpression, holeArgumentIndex);
+  }
+
+  private @Nullable HoleEvaluation holeEvaluation(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
+    if (skipCaching) {
+      return computeHoleEvaluation(method, callExpression, holeArgumentIndex);
+    }
+
+    CallExpressionHoleKey key = new CallExpressionHoleKey(method, callExpression, holeArgumentIndex);
+    HoleEvaluation cached = holeCacheMap.get(key);
+    if (cached != null) {
+      if (cached.dirty()) {
+        HaxeEvaluationTaint.taint();
+      }
+      return cached;
+    }
+
+    Map<Object, Integer> inProgress = inFlight.get();
+    MutableInt total = inFlightTotal.get();
+    int depth = inProgress.merge(key, 1, Integer::sum);
+    total.increment();
+    if (depth > MAX_IN_FLIGHT_PER_KEY || total.intValue() > MAX_IN_FLIGHT_TOTAL) {
+      releaseInFlight(inProgress, key);
+      total.decrement();
+      HaxeEvaluationTaint.taint();
+      return null;
+    }
+    try {
+      HoleEvaluation result = computeHoleEvaluation(method, callExpression, holeArgumentIndex);
+      boolean storable = result != null
+        && result.evaluation().isValid()
+        && result.evaluation().isCompleted()
+        && result.canCache();
+      if (storable) {
+        holeCacheMap.put(key, result);
+      }
+      return result;
+    } finally {
+      releaseInFlight(inProgress, key);
+      total.decrement();
+    }
+  }
+
+  private static @Nullable HoleEvaluation computeHoleEvaluation(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
+    long taintMark = HaxeEvaluationTaint.mark();
+    HaxeCallExpressionContextContainer container = createContextForMethodCall(callExpression, method, holeArgumentIndex);
+    HaxeCallExpressionEvaluation evaluate = container.evaluateContexts();
+    if (evaluate == null) return null;
+    HaxeCallExpressionContext context = container.getContext();
+    boolean staticExtension = context != null && context.isStaticExtension;
+    boolean canCache = context != null && context.canCache;
+    return new HoleEvaluation(evaluate, staticExtension, canCache, isDirty(taintMark, evaluate));
+  }
+
+  /** A hole-context evaluation; dirty entries are served with a taint, like the main cache's. */
+  public record HoleEvaluation(HaxeCallExpressionEvaluation evaluation, boolean staticExtension, boolean canCache, boolean dirty) {}
+
+  /**
+   * Dirty when the compute observed truncation OR the result carries unknown
+   * types anywhere. The content check covers what the taint bracket cannot
+   * see: an Unknown binding from an argument whose resolve was prevented
+   * inside the platform's ResolveCache. A dirty entry is still cached and
+   * served, but serving it taints the reader, so no caching boundary judges
+   * a failure "complete" on this data.
+   */
+  private static boolean isDirty(long taintMark, HaxeCallExpressionEvaluation evaluate) {
+    return HaxeEvaluationTaint.taintedSince(taintMark) || !noUnknownResolvedValues(evaluate);
+  }
+
+  private static boolean noUnknownResolvedValues( HaxeCallExpressionEvaluation evaluate) {
       if(evaluate.getReturnTypeWithoutResolve().containsUnknownTypes()) {
         return false;
       }
@@ -68,16 +245,26 @@ public class HaxeCallExpressionEvaluatorCacheService  {
           return false;
         }
       }
-      return true;
+      return resolverFreeOfUnknowns(evaluate.getCallExpressionResolver())
+          && resolverFreeOfUnknowns(evaluate.getCallieResolver());
     }
+
+  private static boolean resolverFreeOfUnknowns(@Nullable HaxeGenericResolver resolver) {
+    if (resolver == null) return true;
+    return resolver.entries().length == resolver.withoutUnknowns().entries().length;
+  }
 
 
   public void clearCaches() {
     synchronized(this) {
+      holeCacheMap.clear();
       cacheMap.clear();
     }
   }
 }
 
 record CallExpressionEvaluationKey(HaxeMethod method, HaxeCallExpression callExpression) {
+}
+
+record CallExpressionHoleKey(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
 }

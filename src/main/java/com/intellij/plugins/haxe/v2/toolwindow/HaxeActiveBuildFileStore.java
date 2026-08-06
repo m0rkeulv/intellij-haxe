@@ -9,6 +9,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import org.jetbrains.annotations.TestOnly;
 
 /**
  * The project's single active build file. There is exactly one because the IDE has
@@ -18,6 +19,24 @@ import java.util.List;
  */
 @State(name = "HaxeActiveBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeActiveBuildFileStore implements PersistentStateComponent<HaxeActiveBuildFileStore.State> {
+  private final @Nullable Project project;
+
+  public HaxeActiveBuildFileStore(@NotNull Project project) {
+    this.project = project;
+  }
+
+  /** State tests exercise load/get/set without a project; no events fire then. */
+  @TestOnly
+  public HaxeActiveBuildFileStore() {
+    this.project = null;
+  }
+
+  private void notifyChanged() {
+    if (project != null) {
+      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
+    }
+  }
+
 
   public static final class State {
     public String activeFile;
@@ -37,6 +56,7 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
 
   @Override
   public void loadState(@NotNull State state) {
+    notifyChanged();
     this.state = state;
   }
 
@@ -46,6 +66,7 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
   }
 
   public void setActiveFile(@NotNull String filePath) {
+    notifyChanged();
     state.activeFile = filePath;
   }
 

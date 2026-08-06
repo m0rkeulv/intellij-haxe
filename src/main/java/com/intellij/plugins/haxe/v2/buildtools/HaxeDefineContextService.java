@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeBuildSettingsListener;
 
 /**
  * The IDE's conditional-compilation define context, derived from the v2 build
@@ -37,7 +38,7 @@ import java.util.Objects;
  * project-wide reparse.
  */
 @Service(Service.Level.PROJECT)
-public final class HaxeDefineContextService implements Disposable {
+public final class HaxeDefineContextService implements Disposable, HaxeBuildSettingsListener {
 
   private record Snapshot(@NotNull String key, @NotNull Map<String, String> defines) {
   }
@@ -46,11 +47,38 @@ public final class HaxeDefineContextService implements Disposable {
   private volatile Snapshot snapshot;
 
   public HaxeDefineContextService(@NotNull Project project) {
+    // any build-settings mutation invalidates the derived define context
+    project.getMessageBus().connect().subscribe(HaxeBuildSettingsListener.TOPIC, this);
     this.project = project;
+  }
+
+  /** Drops the derived context; the next query recomputes from the stores. */
+  @Override
+  public void buildSettingsChanged() {
+    snapshot = null;
+    fastState = null;
   }
 
   public static HaxeDefineContextService getInstance(@NotNull Project project) {
     return project.getService(HaxeDefineContextService.class);
+  }
+
+  /**
+   * Lock-free identity of every input reachable without VFS or read-action
+   * work: the active path, the file's content stamp and the three stores'
+   * modification counters. A match short-circuits the whole computation -
+   * this runs per candidate inside index lookups, so the fast path must not
+   * touch findFileByPath or take a read action.
+   */
+  private record FastState(@NotNull String path, @NotNull VirtualFile file, long contentStamp,
+                           @Nullable Map<String, String> defines) {
+  }
+
+  private volatile FastState fastState;
+
+  private static long contentStamp(@NotNull VirtualFile file) {
+    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
+    return document != null ? document.getModificationStamp() : file.getModificationStamp();
   }
 
   /**
@@ -62,11 +90,21 @@ public final class HaxeDefineContextService implements Disposable {
   public Map<String, String> getActiveDefines() {
     String path = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
     if (StringUtil.isEmptyOrSpaces(path)) return null;
+
+    FastState fast = fastState;
+    boolean fastHit = fast != null
+                      && fast.path().equals(path)
+                      && fast.file().isValid()
+                      && contentStamp(fast.file()) == fast.contentStamp();
+    if (fastHit) {
+      return fast.defines();
+    }
+
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return null;
 
-    return ReadAction.computeBlocking(() -> {
-      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(file);
+    Map<String, String> result = ReadAction.computeBlocking(() -> {
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
       if (type == null) return null;
 
       String key = cacheKey(file, type);
@@ -78,6 +116,8 @@ public final class HaxeDefineContextService implements Disposable {
       snapshot = new Snapshot(key, defines);
       return defines;
     });
+    fastState = new FastState(path, file, contentStamp(file), result);
+    return result;
   }
 
   /**
@@ -90,6 +130,7 @@ public final class HaxeDefineContextService implements Disposable {
       if (project.isDisposed()) return;
       Snapshot before = snapshot;
       snapshot = null;
+      fastState = null;
       Map<String, String> after = getActiveDefines();
       boolean changed = before != null && !Objects.equals(before.defines(), after);
       if (changed) {

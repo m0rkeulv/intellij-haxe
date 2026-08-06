@@ -51,7 +51,7 @@ public final class HaxeAddBuildFileAction extends DumbAwareAction {
     VirtualFile chosen = FileChooser.chooseFile(descriptor, project, ProjectUtil.guessProjectDir(project));
     if (chosen == null) return;
 
-    if (HaxeBuildFileScanner.detectType(chosen) == null) {
+    if (HaxeBuildFileScanner.detectType(project, chosen) == null) {
       Messages.showErrorDialog(project,
                                HaxeBundle.message("haxe.toolwindow.add.build.file.invalid", chosen.getName()),
                                HaxeBundle.message("haxe.toolwindow.add.build.file.chooser.title"));
