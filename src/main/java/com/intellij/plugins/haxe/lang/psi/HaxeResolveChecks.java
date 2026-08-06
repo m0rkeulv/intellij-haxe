@@ -51,10 +51,8 @@ import static com.intellij.plugins.haxe.lang.psi.HaxeResolver.EMPTY_LIST;
 import static com.intellij.plugins.haxe.lang.psi.HaxeResolver.MAX_DEBUG_MESSAGE_LENGTH;
 
 /**
- * The resolver pipeline's check steps and their helpers. Stateless by
- * design: {@link HaxeResolver#doResolveInner} owns the ORDER the checks
- * run in (and the ordering constraints documented there); this class owns
- * what each check does.
+ * Collection of all the methods used by HaxeResolver to try to find a references.
+ * Moved here to its own util class to try to ma HaxeResolver class simpler and easier to understand.
  */
 @CustomLog
 public class HaxeResolveChecks {
@@ -150,7 +148,8 @@ public class HaxeResolveChecks {
    * Checks if reference is to a method or field that does not exist in the std but that the compiler accepts
    *  there are several variants some are on instances like `.bind`and  `.code`
    *  this method only handles "stand alone"  like `__cpp__`  `__js`etc
-   *  https://haxe.org/manual/target-syntax.html
+   *  <br/>
+   *  see haxe manual <a href="https://haxe.org/manual/target-syntax.html">target-syntax</a> for details
    */
     static List<? extends PsiElement> checkIsFakeReference(@NotNull HaxeReference reference, String referenceText) {
       return switch (referenceText) {
@@ -186,7 +185,7 @@ public class HaxeResolveChecks {
         HaxeProjectModel.fromElement(reference).resolve(new FullyQualifiedInfo(reference.getText()), reference.getResolveScope());
       if (resolvedPackage != null && !resolvedPackage.isEmpty() && resolvedPackage.getFirst() instanceof HaxePackageModel) {
         LogResolution(reference, "via project qualified name.");
-        return Collections.singletonList(resolvedPackage.get(0).getBasePsi());
+        return Collections.singletonList(resolvedPackage.getFirst().getBasePsi());
       }
     }
     return null;
@@ -284,7 +283,6 @@ public class HaxeResolveChecks {
    * Returns {@code null} when no expected type can be determined.
    */
   @Nullable
-  /** ide-facing entry (goto declaration): the assign-hint machinery behind it is check-internal. */
   public static ResultHolder findExpectedType(@NotNull PsiElement expression) {
     return findParentAssignType(expression, true);
   }
@@ -512,8 +510,7 @@ public class HaxeResolveChecks {
   private static @Nullable HaxeCallExpressionEvaluation cachedHaxeCallExpressionEvaluation(HaxeMethod method, HaxeCallExpression callExpression) {
 
     HaxeCallExpressionEvaluatorCacheService service = method.getProject().getService(HaxeCallExpressionEvaluatorCacheService.class);
-    HaxeCallExpressionEvaluation evaluation = service.callExpressionCachedEvaluation(method, callExpression);
-    return evaluation;
+    return service.callExpressionCachedEvaluation(method, callExpression);
   }
 
   private static boolean testAsEnumValueConstructor(@NotNull HaxeEnumValueDeclarationConstructor enumValueDeclaration, @NotNull HaxeReference reference) {
@@ -527,13 +524,14 @@ public class HaxeResolveChecks {
 
   private static List<? extends PsiElement> checkIsSwitchExtractedValue(PsiElement psiElement) {
     if (psiElement instanceof  HaxeEnumExtractedValueReference extractedValueReference) {
-      if(extractedValueReference.getParent() instanceof HaxeEnumExtractedValue extractedValue)
-      if(extractedValue.getParent() instanceof HaxeEnumExtractorArgumentList argumentList) {
-        if (argumentList.getParent() instanceof HaxeEnumArgumentExtractor extractor) {
-          int argumentIndex = getExtractorArgumentIndex(extractedValueReference, extractor);
-          if(argumentIndex > -1) {
-            HaxeParameter parameter = findExtractedValueEnumParameter(extractor, argumentIndex);
-            if(parameter != null) return List.of(parameter.getComponentName());
+      if (extractedValueReference.getParent() instanceof HaxeEnumExtractedValue extractedValue) {
+        if (extractedValue.getParent() instanceof HaxeEnumExtractorArgumentList argumentList) {
+          if (argumentList.getParent() instanceof HaxeEnumArgumentExtractor extractor) {
+            int argumentIndex = getExtractorArgumentIndex(extractedValueReference, extractor);
+            if (argumentIndex > -1) {
+              HaxeParameter parameter = findExtractedValueEnumParameter(extractor, argumentIndex);
+              if (parameter != null) return List.of(parameter.getComponentName());
+            }
           }
         }
       }
