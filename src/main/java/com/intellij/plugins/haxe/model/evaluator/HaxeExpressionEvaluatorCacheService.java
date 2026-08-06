@@ -90,7 +90,7 @@ public class HaxeExpressionEvaluatorCacheService  {
    * while truncation was observed (a probe gate refusal, a prevention) is
    * served but NOT stored, so a later clean compute can land. A
    * PsiDependentCache here froze the first tower-computed Unknown for the
-   * whole tick and starved every later consumer - the return-type inlay and
+   * span between two code changes and starved every later consumer - the return-type inlay and
    * any local initialized from the call.
    */
   public @NotNull ResultHolder methodReturnType(@NotNull PsiElement method, @NotNull Supplier<ResultHolder> compute) {

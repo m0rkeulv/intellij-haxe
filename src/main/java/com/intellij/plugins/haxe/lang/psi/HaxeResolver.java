@@ -190,7 +190,7 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
       List<? extends PsiElement> resolved = doResolveInner(reference, incompleteCode, referenceText, false);
       // A miss is only cacheable when it is CERTAIN: an empty computed on
       // truncated data (visible via the taint counter) may succeed on
-      // recomputation and must not be frozen for the PSI tick, so the
+      // recomputation and must not be frozen until the next code change, so the
       // platform's cache write is suppressed. Certain misses stay cacheable
       // - a definitively-broken reference must not re-resolve every query.
       if ((resolved == null || resolved.isEmpty()) && HaxeEvaluationTaint.taintedSince(taintMark)) {

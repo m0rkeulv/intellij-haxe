@@ -619,7 +619,7 @@ public class HaxeExpressionEvaluator {
     return createUnknown(componentName);
   }
   /**
-   * Deliberately NOT memoized per PSI tick: the result GROWS as types settle
+   * Deliberately NOT memoized: the result GROWS as types settle
    * (an occurrence only enters the list once its isReferenceTo resolve
    * succeeds), and usage-based inference converges by re-running the search
    * until it stabilizes. Freezing one snapshot - even one computed without

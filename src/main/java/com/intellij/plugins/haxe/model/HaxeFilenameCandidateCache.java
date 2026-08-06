@@ -12,8 +12,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Memoizes FilenameIndex candidate lookups per file name for the current PSI
- * tick (cleared with the evaluator caches on any PSI change). Package-file
+ * Memoizes FilenameIndex candidate lookups per file name, valid until the
+ * next code change (cleared with the evaluator caches). Package-file
  * resolution probes the same names constantly - std primitives like Void or
  * Int probe "Void.hx" on every type creation and can never hit (they live in
  * StdTypes.hx) - so without the memo every probe pays a full index query.

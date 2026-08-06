@@ -43,7 +43,7 @@ public final class HaxeUntypedParameterInference {
   private static final RecursionGuard<PsiElement>
     callSiteProbeGuard = RecursionManager.createGuard("haxeUntypedParameterCallSiteProbe");
 
-  // Per-tick memo of probe outcomes, including clean misses: probing chains
+  // Memo of probe outcomes, valid until the next code change, including clean misses: probing chains
   // into argument evaluations that can cycle across methods, and without the
   // memo every query re-runs the whole probe. Only UNTAINTED outcomes are
   // stored (certainty rule) - a result shaped by a cut or prevention must
@@ -61,7 +61,7 @@ public final class HaxeUntypedParameterInference {
                                                                 @NotNull HaxeExpressionEvaluatorContext context,
                                                                 @NotNull HaxeGenericResolver resolver) {
     // a settled binding (clean body-derived or call-site type from an earlier
-    // query this tick) answers directly; without it, a deep query would
+    // query since the last code change) answers directly; without it, a deep query would
     // re-run the body search inside guards where its own usage walk
     // truncates and return Unknown for a parameter the signature shows typed
     Optional<ResultHolder> settled = bindingCache.get(parameter);
