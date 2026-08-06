@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The three stack frames a resolve runs under, and the protocol each one
- * exists for. All RecursionManager frame geometry lives here so the
- * resolver reads as plain steps.
+ * Every resolve runs inside three nested "frames" (RecursionManager guard
+ * scopes). This class owns all of them, so HaxeResolver itself reads as
+ * plain steps. Nesting order, outermost first:
  *
  * <pre>
  *   cache gate frame            (runCacheGated)
@@ -26,15 +26,33 @@ import java.util.Set;
  *         [restricted frame]    (runRestrictedPipeline, re-entry only)
  * </pre>
  *
- * Frame mechanics this design rests on:
- * {@code prohibitResultCaching(key)} marks only the frames strictly ABOVE
- * the key's frame, and a marked frame propagates the bumped reentrancy
- * count outward when it pops ({@code StackFrame.addPrevention} overwrites
- * {@code reentrancyStamp}; {@code afterComputation} restores the count from
- * it). So suppressing the platform's cache write requires a key BELOW its
- * frame — the cache gate — and a prohibit keyed anywhere inside the
- * resolver can never reach it. The bump also dies at the gate frame on
- * exit, leaving enclosing evaluations unaffected.
+ * THE CACHE GATE FRAME solves one problem: sometimes a resolve finishes
+ * but we know the answer is not trustworthy enough to save (the compute
+ * observed truncated data - see {@link HaxeEvaluationTaint}), and the
+ * platform's ResolveCache would otherwise store it until the next PSI
+ * change. The platform only skips its cache write when a frame OUTSIDE its
+ * own is flagged with {@code prohibitResultCaching} - flags on frames
+ * inside it are invisible to it. So this frame is opened around the
+ * platform call purely to be that flaggable outer frame:
+ * {@link #suppressCacheWrite} flags it, the platform skips saving, and the
+ * flag disappears when the frame closes so nothing around the resolve is
+ * affected.
+ *
+ * THE FULL PIPELINE FRAME solves re-entry detection: some resolver checks
+ * evaluate expressions, and those expressions can contain the very
+ * reference currently being resolved - resolving it again the normal way
+ * would loop. Entering this frame records "this reference is being
+ * resolved right now" ({@link #fullResolveInProgress}), so the resolver
+ * can send the inner attempt to the restricted pipeline instead of letting
+ * the platform cut it off with a wrong empty answer. Results are never
+ * memoized here: callers track whether an answer was computed complete or
+ * truncated, and a replayed value would hide that.
+ *
+ * THE RESTRICTED FRAME hosts that inner attempt. It runs the check list
+ * minus the expression-evaluating checks (they are what caused the loop),
+ * which is enough to still find locals and members by walking the tree.
+ * Having its own frame lets a THIRD attempt on the same reference be
+ * detected ({@link #restrictedResolveInProgress}) and stopped.
  */
 final class HaxeResolveFrames {
 
