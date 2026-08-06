@@ -8,6 +8,7 @@ import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressi
 import com.intellij.plugins.haxe.model.type.HaxeGenericResolver;
 import com.intellij.plugins.haxe.model.type.ResultHolder;
 import lombok.CustomLog;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -28,37 +29,53 @@ public class HaxeCallExpressionEvaluatorCacheService  {
   private volatile Map<CallExpressionHoleKey, HoleEvaluation> holeCacheMap = new ConcurrentHashMap<>();
   public static boolean skipCaching = false;// just convenience flag for debugging
 
-  // A compute can arrive back at its own key before anything is stored:
-  // evaluating an argument resolves references whose expected-type walk
-  // re-evaluates the SAME call expression, with fresh resolver instances so
-  // no element-keyed recursion guard ever sees a repeat. BOUNDED re-entry is
-  // a real inference pattern - an argument's expected type comes from
-  // evaluating its own enclosing call, and overload selection with
-  // function-valued arguments nests that several levels (more than 3, at
-  // most 8 in the extern-overload fixtures). Past the cap the cut acts like
-  // a fired prevention: null result, thread tainted.
+  // WHY THE FOLLOWING LIMITS EXIST
   //
-  // Correctness does NOT depend on these caps (the suite is green with both
-  // disabled); their roles differ and both values are measured, not guessed:
+  // Evaluating a call can indirectly start evaluating the SAME call again
+  // before the first evaluation has finished. Example: to type a call we
+  // evaluate its arguments; typing an argument may require asking "what
+  // parameter does this argument land in?" - which evaluates the enclosing
+  // call again. Each round uses fresh helper objects, so the platform's
+  // recursion guards (which only detect an exact repeat of the same object)
+  // never notice. Left unlimited, this nesting grows until the thread runs
+  // out of stack, which crashes mid-analysis and corrupts the platform's
+  // recursion bookkeeping - much worse than giving up on one answer.
   //
-  // PER_KEY is the correctness floor. Legitimate same-key nesting in the
-  // fixtures needs more than 2 and at most 4 (extern overloads with
-  // function-valued arguments); 8 doubles that margin and never fires on
-  // the recursion-heavy ArraySort fixture at all.
+  // WHAT HAPPENS AT THE LIMIT: the newest attempt simply does not run. It
+  // returns null and marks the thread's work as incomplete (see
+  // HaxeEvaluationTaint), so nothing built on the missing answer is stored
+  // as final. One inference path gives up; the IDE keeps working.
   //
-  // TOTAL is the performance knob, and its curve is U-SHAPED on that
-  // fixture: ~21s at 8, ~34s at 12, ~8.5s at 16, ~9s at 24, ~12s at 32,
-  // ~20s uncapped. Too high wastes time in redundant deep circling (inner
-  // re-evaluations only see degraded inputs the outer, shallower iteration
-  // is already improving on); too low aborts computes before they produce
-  // storable results, so everything comes back dirty and consumers re-query
-  // in a recompute storm. It is also the stack-overflow fuse: an SOE mid
-  // unwind corrupts RecursionManager's frame bookkeeping ("Map size
-  // changed" errors), which degrades far worse than a tainted cut.
+  // THE TWO LIMITS DO DIFFERENT JOBS:
+  //
+  // PER_KEY limits how deeply ONE specific call may be nested inside its
+  // own evaluation. Some of that nesting is legitimate and needed - typing
+  // an argument through its enclosing call takes a few levels, and overload
+  // selection adds more. TOO LOW IS INCORRECT: needed nesting gets cut and
+  // real types come out wrong or missing (values below 4 fail the extern
+  // overload and untyped-parameter tests). 8 doubles the deepest need the
+  // tests demonstrate.
+  //
+  // TOTAL limits how many call evaluations of ANY kind may be nested on one
+  // thread. It is the stack-overflow protection, and also a performance
+  // guard for files where many calls chain into each other: beyond a point,
+  // deeper re-evaluation cannot learn anything the shallower rounds are not
+  // already computing. Too LOW is slow in the other direction - evaluations
+  // get cut before producing anything storable, so the same work repeats
+  // over and over. Benchmarks (see HaxeRecursiveStdInferenceTest) showed
+  // both raising and lowering TOTAL from 16 made the worst-case file
+  // slower; removing the caps entirely was ~60% slower with much larger
+  // run-to-run swings.
+  //
+  // The COUNTER below matters even apart from the limits:
+  // anyComputeInFlight() reads it to tell "we are deep inside call
+  // evaluation" from "this is a cheap top-level query".
   private static final int MAX_IN_FLIGHT_PER_KEY = 8;
   private static final int MAX_IN_FLIGHT_TOTAL = 16;
+
   private static final ThreadLocal<Map<Object, Integer>> inFlight = ThreadLocal.withInitial(HashMap::new);
-  private static final ThreadLocal<int[]> inFlightTotal = ThreadLocal.withInitial(() -> new int[1]);
+  // per-thread (inside the ThreadLocal), so no atomicity is needed - just a mutable int
+  private static final ThreadLocal<MutableInt> inFlightTotal = ThreadLocal.withInitial(MutableInt::new);
 
 
   public static @Nullable HaxeCallExpressionEvaluation cachedHaxeCallExpressionEvaluation(HaxeMethod method, HaxeCallExpression callExpression) {
@@ -86,12 +103,12 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     }
 
     Map<Object, Integer> inProgress = inFlight.get();
-    int[] total = inFlightTotal.get();
+    MutableInt total = inFlightTotal.get();
     int depth = inProgress.merge(key, 1, Integer::sum);
-    total[0]++;
-    if (depth > MAX_IN_FLIGHT_PER_KEY || total[0] > MAX_IN_FLIGHT_TOTAL) {
+    total.increment();
+    if (depth > MAX_IN_FLIGHT_PER_KEY || total.intValue() > MAX_IN_FLIGHT_TOTAL) {
       releaseInFlight(inProgress, key);
-      total[0]--;
+      total.decrement();
       HaxeEvaluationTaint.taint();
       return null;
     }
@@ -106,17 +123,20 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       if(evaluate == null) return null;
       evaluate.setComputedWithGuardFired(isDirty(taintMark, evaluate));
 
-      // Deliberately NOT gated on RecursionManager.markStack()/mayCacheNow():
-      // this cache is load-bearing for termination, not just speed. Deep
-      // isReferenceTo/resolve storms (move refactorings) recurse through
-      // findParentAssignType -> call evaluation chains, and the cache hit -
-      // including one computed above a fired recursion guard - is what flattens
-      // the recursion; gating it overflowed the stack. The PSI-change listener
-      // bounds the staleness; the DIRTY flag travels with the entry so
-      // consumers taint instead of trusting it as complete. Unknown-containing
-      // entries are stored too - in files whose types cannot settle (untyped
-      // recursive helpers) they are the ONLY entries, and refusing them means
-      // every reference rebuilds the same call context every pass.
+      // Deliberately NOT gated on the platform's mayCacheNow(): this cache
+      // is load-bearing for termination, not just speed. Resolving one
+      // reference can require evaluating a call, whose arguments resolve
+      // further references, which evaluate further calls - and anything
+      // that resolves many references in a row (refactorings, usage
+      // searches) sends such chains very deep. The cache hit - including an
+      // entry that was computed while a recursion guard had fired - is what
+      // stops a chain from growing; gating the writes on mayCacheNow()
+      // overflowed the stack. Staleness is bounded by the PSI-change
+      // listener clearing the cache. The DIRTY flag travels with each entry
+      // so consumers taint instead of trusting it as complete, and entries
+      // containing Unknown types are stored too: in files whose types never
+      // settle they are the ONLY entries, and refusing them means every
+      // reference rebuilds the same call context on every pass.
       if(evaluate.isValid() && evaluate.isCompleted()) {
         HaxeCallExpressionContext context = contextContainer.getContext();
         if(context != null && context.canCache) {
@@ -127,7 +147,7 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       return evaluate;
     } finally {
       releaseInFlight(inProgress, key);
-      total[0]--;
+      total.decrement();
     }
   }
 
@@ -142,7 +162,7 @@ public class HaxeCallExpressionEvaluatorCacheService  {
    * storms and call evaluations always do.
    */
   public static boolean anyComputeInFlight() {
-    return inFlightTotal.get()[0] > 0;
+    return inFlightTotal.get().intValue() > 0;
   }
 
   public static @Nullable HoleEvaluation cachedHoleEvaluation(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
@@ -165,12 +185,12 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     }
 
     Map<Object, Integer> inProgress = inFlight.get();
-    int[] total = inFlightTotal.get();
+    MutableInt total = inFlightTotal.get();
     int depth = inProgress.merge(key, 1, Integer::sum);
-    total[0]++;
-    if (depth > MAX_IN_FLIGHT_PER_KEY || total[0] > MAX_IN_FLIGHT_TOTAL) {
+    total.increment();
+    if (depth > MAX_IN_FLIGHT_PER_KEY || total.intValue() > MAX_IN_FLIGHT_TOTAL) {
       releaseInFlight(inProgress, key);
-      total[0]--;
+      total.decrement();
       HaxeEvaluationTaint.taint();
       return null;
     }
@@ -186,7 +206,7 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       return result;
     } finally {
       releaseInFlight(inProgress, key);
-      total[0]--;
+      total.decrement();
     }
   }
 

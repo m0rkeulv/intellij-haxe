@@ -438,11 +438,16 @@ public class HaxeCallExpressionUtil {
         }
         long taintMark = HaxeEvaluationTaint.mark();
         ResultHolder result = HaxeExpressionEvaluator.evaluateWithRecursionGuard(expression).result;
-        // Unknown-ness is DIRTINESS, not un-cacheability: an unknown argument
-        // marks the evaluation incomplete (served from cache with a taint),
-        // while canCache only tracks whether the type is safe to retain.
-        // Treating unknown as uncacheable made unknown-heavy files (untyped
-        // recursive std helpers) rebuild every call context on every query.
+        // Note: incomplete and canCache answer different questions:
+        // - canCache: is the type OBJECT safe to keep in a cache at all
+        //   (valid PSI etc., see ResultHolder.isCacheable)?
+        // - incomplete: might a later evaluation know MORE than this one?
+        //   An argument whose type came out Unknown counts as incomplete,
+        //   not as uncacheable - the evaluation is still stored, just
+        //   marked dirty so consumers never treat it as the final answer
+        //   (see HaxeEvaluationTaint).
+        // Refusing to cache on Unknown instead would mean files whose
+        // types never settle rebuild every call context on every query.
         boolean incomplete = HaxeEvaluationTaint.taintedSince(taintMark) || result.isUnknown();
         boolean canCache = result.isCacheable();
         CallExpressionArgumentModel model = CallExpressionArgumentModel.create(expression, result.getType(), canCache, incomplete);
