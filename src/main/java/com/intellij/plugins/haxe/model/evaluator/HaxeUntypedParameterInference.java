@@ -21,11 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.*;
 
 /**
- * Type inference for method parameters without a type tag, ordered like the
- * compiler's monomorph binding (doc/untyped-parameter-inference-haxe-compiler.md):
- * usage inside the BODY binds first; argument types at CALL SITES only fill
- * parameters the body leaves open. A conflict between the two is the
- * compiler's error case, so the body-derived type is never overridden.
+ * Type inference for method parameters without a type tag, ordered like the compiler's monomorph binding.
+ * Usage inside the BODY binds first; argument types at CALL SITES only fill parameters the body leaves open.
+ * A conflict between the two is the compiler's error case, so the body-derived type is never overridden.
  */
 public final class HaxeUntypedParameterInference {
 
@@ -38,6 +36,7 @@ public final class HaxeUntypedParameterInference {
   // continues the chain until some call site finally passes a concrete
   // value; the cap bounds that chain when call graphs are deep or cyclic
   private static final int MAX_PROBE_CHAIN_DEPTH = 8;
+
   private static final ThreadLocal<MutableInt> probeChainDepth = ThreadLocal.withInitial(MutableInt::new);
 
   private static final RecursionGuard<PsiElement>
@@ -85,7 +84,7 @@ public final class HaxeUntypedParameterInference {
     HaxeMethod method = PsiTreeUtil.getParentOfType(parameter, HaxeMethod.class);
     if (method == null || method.getBody() == null) return null;
     ResultHolder holder = searchReferencesForType(parameter.getComponentName(), context, resolver, method.getBody());
-    return holder != null && !holder.isUnknown() ? holder : null;
+    return !holder.isUnknown() ? holder : null;
   }
 
   /**
