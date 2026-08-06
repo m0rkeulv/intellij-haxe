@@ -10,19 +10,29 @@ public class CallExpressionArgumentModel {
   SpecificTypeReference type;
   boolean canCache;
   /**
-   * Alignment placeholder for evaluate-with-hole queries: the argument whose
-   * own type is the unknown being asked for. It consumes its parameter slot
-   * during mapping but is never evaluated, never type-checked and never
-   * binds type parameters.
+   * This argument is a "hole": a deliberately left-out slot in the call.
+   * <p>
+   * Used when the question being answered is "what type does THIS argument
+   * have?" - typically an untyped parameter or variable being typed by
+   * looking at which parameter it lands in when passed to a call. To answer
+   * that, the call is evaluated - but evaluating the argument itself would
+   * need the very answer being computed, an endless loop. So the argument
+   * is swapped for this placeholder: it still occupies its position (so the
+   * OTHER arguments line up with the right parameters), but it is never
+   * evaluated, never type-checked, and never contributes to type-parameter
+   * binding. Its type stays Unknown on purpose.
    */
   boolean hole;
   /**
-   * The argument's own evaluation observed truncated data (a recursion
-   * prevention fired beneath it), so its recorded type may be unreliable.
-   * Marks the snapshot entry as a candidate for re-evaluation once the
-   * call's type parameters are bound; NOT a reason to suppress diagnostics -
-   * most preventions are benign (typedef unwrap cycles, repeat resolution)
-   * and suppression hides real errors.
+   * While this argument's type was being computed, a recursion guard
+   * stopped part of the work, so the recorded type may be unfinished or
+   * wrong. The flag marks it as worth re-evaluating later, once the call's
+   * type parameters are known.
+   * <p>
+   * It is deliberately NOT used to hide error messages: most guard stops
+   * are harmless (a typedef referring to itself, the same thing being
+   * resolved twice) and still produce the right type - hiding errors on
+   * this flag would mask real ones.
    */
   boolean incomplete;
 

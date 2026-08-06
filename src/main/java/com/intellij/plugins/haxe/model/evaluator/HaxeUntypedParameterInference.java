@@ -34,8 +34,8 @@ public final class HaxeUntypedParameterInference {
   private static final int MAX_PROBED_CALL_SITES = 8;
 
   // a probed argument can itself be an untyped parameter, whose own probe
-  // continues the chain (lower <- doMerge <- rec <- sort in ArraySort);
-  // the cap bounds that chain when call graphs are deep or cyclic
+  // continues the chain until some call site finally passes a concrete
+  // value; the cap bounds that chain when call graphs are deep or cyclic
   private static final int MAX_PROBE_CHAIN_DEPTH = 8;
   private static final ThreadLocal<int[]> probeChainDepth = ThreadLocal.withInitial(() -> new int[1]);
 
