@@ -11,21 +11,16 @@ import java.util.List;
 import static com.intellij.plugins.haxe.lang.psi.HaxeResolveChecks.*;
 
 /**
- * Candidate-directed shortcut for isReferenceTo. A local-scoped target can
- * only be produced by the tree-walk check family, and Haxe's resolution
- * order ranks locals above everything except keywords, so the answer never
- * needs the chain / enum-hint / element-usage checks or the ResolveCache
- * machinery. The one position where that ranking inverts is a switch-case
- * pattern (an enum constructor beats a capture variable there), which is
- * deferred to the full pipeline. See doc/isreferenceto-restricted-resolve.md.
+ * A util that allows us to perform faster isReferenceTo checks for local fields.
+ * Normal resolve can be very slow for untyped parameters as the default Resolve
+ * will attempt to find type in some of the resolve steps.
  *
- * Runs OUTSIDE the resolver frames and writes nothing into any cache: the
- * answer is candidate-relative, not the reference's general resolution.
+ * Since this is just a check if the reference is to a local component,
+ * we don't need to try to find EnumValues or class types.  we can
+ * save time by just doing the local steps.
  */
-public final class HaxeIsReferenceToFastPath {
+public final class HaxeIsReferenceToUtil {
 
-  private HaxeIsReferenceToFastPath() {
-  }
 
   /** Candidate kinds only the tree-walk check family can resolve to. */
   public static boolean isLocalScopedTarget(@NotNull HaxeComponentName componentName) {
@@ -43,16 +38,15 @@ public final class HaxeIsReferenceToFastPath {
    * occurrence needs the full pipeline (switch-case pattern position).
    */
   public static @Nullable Boolean tryIsReferenceTo(@NotNull HaxeReference reference, @NotNull HaxeComponentName target) {
-    // in a case pattern an identifier naming an enum constructor IS the
-    // constructor; capture-variable reading only applies when none matches
+    // ignore enum constructors
     if (inSwitchCasePatternPosition(reference)) return null;
 
-    // locals are never accessed as expr.name
+    // locals are never accessed in chain (expr.name)
     if (isMemberPartOfQualifiedChain(reference)) return Boolean.FALSE;
 
     // a local is only visible inside the scope owning its declaration
     PsiElement scope = declaringScope(target);
-    if (scope == null || !PsiTreeUtil.isAncestor(scope, reference, false)) return Boolean.FALSE;
+    if (!PsiTreeUtil.isAncestor(scope, reference, false)) return Boolean.FALSE;
 
     // the tree-walk family in pipeline order; the nearest declaration wins,
     // which also settles shadowing
@@ -65,7 +59,7 @@ public final class HaxeIsReferenceToFastPath {
     if (result == null) result = checkCaptureVar(reference);
 
     if (result == null || result.isEmpty()) return Boolean.FALSE;
-    return resolvesTo(result.get(0), target);
+    return resolvesTo(result.getFirst(), target);
   }
 
   private static boolean inSwitchCasePatternPosition(HaxeReference reference) {
@@ -81,18 +75,14 @@ public final class HaxeIsReferenceToFastPath {
   }
 
   /**
-   * The element whose subtree bounds the candidate's visibility: nearest
-   * enclosing function for parameters and locals, enclosing class for class
-   * type parameters. Conservative (a larger scope only costs pruning, never
-   * correctness - the tree walk still decides).
+   * Nearest enclosing function for parameters and locals, class for class typeParameters.
    */
-  private static @Nullable PsiElement declaringScope(HaxeComponentName target) {
+  private static @NotNull PsiElement declaringScope(HaxeComponentName target) {
     PsiElement declaration = target.getParent();
     PsiElement scope = PsiTreeUtil.getParentOfType(declaration, HaxeMethod.class, HaxeFunctionLiteral.class, HaxeClass.class);
     return scope != null ? scope : declaration.getContainingFile();
   }
 
-  /** Mirrors resolveToComponentName(): compare on the component name. */
   private static boolean resolvesTo(PsiElement resolved, HaxeComponentName target) {
     if (resolved == target) return true;
     if (resolved instanceof HaxeNamedComponent namedComponent) {
