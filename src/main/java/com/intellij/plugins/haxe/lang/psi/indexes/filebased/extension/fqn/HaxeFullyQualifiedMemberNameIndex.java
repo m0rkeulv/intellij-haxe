@@ -55,7 +55,7 @@ public class HaxeFullyQualifiedMemberNameIndex extends HaxeComponentBaseIndex {
 
     @Override
     public @NotNull DataIndexer<String, HaxeComponentIndexData, FileContent> getIndexer() {
-        return new HaxeFullyQualifiedNameIndexer();
+        return new HaxeFullyQualifiedNameIndexer(HaxeFullyQualifiedNameIndexer.CollectType.MEMBERS);
     }
 
 
@@ -105,6 +105,14 @@ public class HaxeFullyQualifiedMemberNameIndex extends HaxeComponentBaseIndex {
                     if (member instanceof HaxeMethodModel methodModel) {
                         if (findAndAddParameter(fqn, results, methodModel)) continue;
                     }
+                }
+                // module-level member: the stored fqn carries no class segment
+            }else {
+                HaxeBaseMemberModel member = moduleModel.getMember(fqn.memberName, null);
+                if (findAndAddMember(fqn, results, member)) continue;
+
+                if (member instanceof HaxeMethodModel methodModel) {
+                    if (findAndAddParameter(fqn, results, methodModel)) continue;
                 }
             }
         }

@@ -78,10 +78,12 @@ public abstract class DapExecutableRunConfigurationBase extends DapRunConfigurat
     }
   }
 
+  // Resolution stays inside the supplier: getState runs before before-launch
+  // tasks, so an executable a build step produces may not exist yet.
   @Override
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
     requireModule();
-    return new DapCommandLineRunningState(env, getProject(), createCommandLine());
+    return new DapCommandLineRunningState(env, getProject(), this::createCommandLine);
   }
 
   // --- resolution ---

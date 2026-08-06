@@ -1,4 +1,18 @@
 # Changelog
+## 2.0.0
+**IMPORTANT**
+
+This version changes how projects are configured and will not work with  1.x configurations
+however it allows for a one way migration.
+
+Changes:
+Project/module Configuration is now done in a Haxe toolwindow instead of the module in Project structure. 
+* Experimental support for HXP build files
+* Experimental support for compilation server
+* When compilation server is enabled: 
+* - Generated members should resolve and show in completion suggestions.
+* - Files with compilation errors should  be highlighted.
+
 ## 1.9.0
 * Added: New (experimental) debugger support for javascript, Eval, hashlink and hxcpp. 
 

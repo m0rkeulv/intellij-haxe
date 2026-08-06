@@ -28,6 +28,7 @@ import com.intellij.plugins.haxe.model.type.SpecificHaxeClassReference;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.Nullable;
+import com.intellij.plugins.haxe.lang.psi.HaxeResolveChecks;
 
 /**
  * Lets you Ctrl/Cmd+Click the <em>key</em> of an object literal and jump to the field it fills in
@@ -65,7 +66,7 @@ public class HaxeGotoDeclarationHandler implements GotoDeclarationHandler {
       // findObjectLiteralType only understands a few direct contexts (assignment, return, var init,
       // plain call). Fall back to the resolver's full finder, which also handles constructor
       // arguments and literals nested inside arrays or other object literals.
-      expectedType = HaxeResolver.findExpectedType(objectLiteral);
+      expectedType = HaxeResolveChecks.findExpectedType(objectLiteral);
     }
     if (expectedType == null || expectedType.isUnknown()) return null;
 

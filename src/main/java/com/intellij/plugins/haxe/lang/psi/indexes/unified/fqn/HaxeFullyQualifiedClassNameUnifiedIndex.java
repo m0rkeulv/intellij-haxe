@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.lang.psi.indexes.unified.fqn;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
+import com.intellij.plugins.haxe.lang.psi.indexes.compiler.HaxeFullyQualifiedClassNameCompilerIndex;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.extension.fqn.HaxeFullyQualifiedClassNameIndex;
 import com.intellij.plugins.haxe.lang.psi.stubs.index.fqn.HaxeFullyQualifiedClassNameStubIndex;
 import com.intellij.plugins.haxe.model.FullyQualifiedInfo;
@@ -36,11 +37,14 @@ public class HaxeFullyQualifiedClassNameUnifiedIndex {
         if (DumbService.isDumb(project)) return Collections.emptyList();
 
         GlobalSearchScope searchScope = scope != null ? scope : GlobalSearchScope.allScope(project);
+
         Collection<HaxeClass> stubResults = HaxeFullyQualifiedClassNameStubIndex.getByFqn(name, project, searchScope);
         Collection<HaxeClass> fileResults = HaxeFullyQualifiedClassNameIndex.getByFqn(name, project, searchScope);
+        Collection<HaxeClass> compilerResults = HaxeFullyQualifiedClassNameCompilerIndex.getByFqn(name, project, searchScope);
 
         ArrayList<HaxeClass> results = new ArrayList<>(stubResults);
         results.addAll(fileResults);
+        results.addAll(compilerResults);
 
         return results;
     }

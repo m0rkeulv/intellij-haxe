@@ -20,6 +20,9 @@ package com.intellij.plugins.haxe.runner.debugger;
 import com.intellij.lang.javascript.flex.debug.FlexDebugProcess;
 import com.intellij.lang.javascript.flex.projectStructure.model.FlexBuildConfiguration;
 import com.intellij.lang.javascript.flex.run.BCBasedRunnerParameters;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider;
 import org.jetbrains.annotations.NotNull;
@@ -40,5 +43,28 @@ public class HaxeDebugProcess extends FlexDebugProcess {
   @Override
   public XDebuggerEditorsProvider getEditorsProvider() {
     return new HaxeDebuggerEditorsProvider();
+  }
+
+  /**
+   * fdb matches name-based breakpoint markers ({@code break Main.hx:6}) against
+   * ANY file with that name in the swf, and flex's out-of-scope breakpoint
+   * filter fails open for Haxe files (its ActionScript resolver cannot see
+   * them) — so a breakpoint in an unrelated module's Main.hx would land in the
+   * debugged module's Main.hx. For files outside the debugged module's scope
+   * the marker becomes the absolute path instead: it only matches when fdb
+   * truly knows that file, and is reported "not set" (breakpoint shown invalid
+   * for this session) otherwise — the correct outcome for foreign breakpoints.
+   */
+  @Override
+  protected String resolveFileReference(VirtualFile file) {
+    String reference = super.resolveFileReference(file);
+    if (reference.startsWith("#")) {
+      // a real fdb file id - precise, nothing to guard
+      return reference;
+    }
+    Module module = getModule();
+    boolean inScope = module == null || ReadAction.computeBlocking(
+      () -> module.getModuleWithDependenciesAndLibrariesScope(false).contains(file));
+    return inScope ? reference : file.getPath();
   }
 }

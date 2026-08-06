@@ -151,10 +151,10 @@ public abstract class HaxeBaseCopyPasteReferenceProcessor <TRef extends PsiEleme
         dialog.setTitle(JavaBundle.message("dialog.import.on.paste.title3"));
 //        dialog.setExplanation(JavaBundle.message("dialog.paste.on.import.text3"));
         if (dialog.showAndGet()) {
-            Object[] selectedElements = dialog.getSelectedElements();
-            if (selectedElements.length > 0) {
+            List<String> selectedElements = dialog.getSelectedElements();
+            if (!selectedElements.isEmpty()) {
                 WriteCommandAction.runWriteCommandAction(project, "", null, () ->
-                        removeImports(file, Arrays.stream(selectedElements).map(o -> (String)o).collect(Collectors.toSet())));
+                        removeImports(file, new HashSet<>(selectedElements)));
             }
         }
     }
@@ -203,7 +203,7 @@ public abstract class HaxeBaseCopyPasteReferenceProcessor <TRef extends PsiEleme
         String[] strings = Arrays.stream(selectedObjects).map(Object::toString).toArray(String[]::new);
         HaxeRestoreReferencesDialog dialog = new HaxeRestoreReferencesDialog(project, strings);
         dialog.show();
-        selectedObjects = dialog.getSelectedElements();
+        selectedObjects = dialog.getSelectedElements().toArray();
 
         for (int i = 0; i < referenceData.length; i++) {
             PsiElement ref = refs[i];

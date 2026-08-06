@@ -18,6 +18,7 @@ import com.intellij.plugins.haxe.haxelib.definitions.tags.ProjectXmlHaxelibValue
 import com.intellij.plugins.haxe.haxelib.definitions.tags.ProjectXmlUndefineValue;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeDefineContextService;
 import com.intellij.psi.xml.XmlFile;
 import com.intellij.util.text.SemVer;
 import lombok.CustomLog;
@@ -64,6 +65,12 @@ public class HaxeDefineDetectionManager implements Disposable {
 
 
   public Map<String, String> getAllDefinitions() {
+    // v2 projects derive the context from the active build file; the legacy
+    // detection below only sees HAXE_MODULE-type modules and returns nothing
+    // for plain modules
+    Map<String, String> v2Defines = HaxeDefineContextService.getInstance(myProject).getActiveDefines();
+    if (v2Defines != null) return v2Defines;
+
     HashMap<String, String> map = new HashMap<>();
     HaxeProjectSettings instance = HaxeProjectSettings.getInstance(myProject);
     Map<String, String> projectUserDefineMap = instance.getUserCompilerDefinitionMap();

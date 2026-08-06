@@ -127,20 +127,25 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase {
 
   // Plain Run: hl <program.hl>, output in the console. Default working
   // directory is the program's directory so relative resource loading behaves
-  // like a manual launch.
+  // like a manual launch. Resolution stays inside the supplier: getState runs
+  // before before-launch tasks, so the .hl a compile step produces may not
+  // exist yet.
   @Override
-  public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
+  public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) {
+    return new DapCommandLineRunningState(env, getProject(), this::createRunCommandLine);
+  }
+
+  private GeneralCommandLine createRunCommandLine() throws ExecutionException {
     Module module = requireModule();
     Path hlExecutable = resolveHlExecutable(module);
     Path hlProgram = resolveProgram(module);
     Path workingDir = resolveWorkingDirectory(module);
     Path workDir = workingDir != null ? workingDir : hlProgram.getParent();
 
-    GeneralCommandLine commandLine = new GeneralCommandLine()
+    return new GeneralCommandLine()
       .withExePath(hlExecutable.toString())
       .withParameters(hlProgram.toString())
       .withWorkDirectory(workDir != null ? workDir.toString() : null);
-    return new DapCommandLineRunningState(env, getProject(), commandLine);
   }
 
   /**

@@ -60,7 +60,12 @@ public final class HaxelibModuleManagerService implements ProjectManagerListener
     }
   }
 
+  // The legacy updater only tracks projects with HAXE_MODULE-type modules
+  // (see HaxelibProjectStartActivity); v2 projects have no tracker and must not
+  // trigger external-system refreshes from here.
+
   public void modulesAdded(@NotNull Project project, @NotNull List<? extends Module> modules) {
+    if (HaxelibProjectUpdater.getInstance().findProjectTracker(project) == null) return;
     for (Module module : modules) {
       log.debug("Module added event for " + module.getName());
       ExternalSystemProjectTracker.getInstance(project).scheduleProjectRefresh();
@@ -72,7 +77,9 @@ public final class HaxelibModuleManagerService implements ProjectManagerListener
   public void moduleRemoved(@NotNull Project project, @NotNull Module module) {
     HaxelibCacheManager.removeInstance(module);
     HaxeDefineDetectionManager.getInstance(project).removeDetectedDefinitions(module);
-    HaxelibProjectUpdater.getInstance().findProjectTracker(project).moduleRemoved(module);
+    HaxelibProjectUpdater.ProjectTracker tracker = HaxelibProjectUpdater.getInstance().findProjectTracker(project);
+    if (tracker == null) return;
+    tracker.moduleRemoved(module);
     ExternalSystemProjectTracker.getInstance(project).scheduleProjectRefresh();
   }
 
