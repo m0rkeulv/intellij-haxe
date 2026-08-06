@@ -61,9 +61,11 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
   private boolean strikeout = false;
   private boolean bold = false;
   private Icon icon = null;
-  // computed by the expensive renderer on a background thread after the
-  // lookup is shown; preferred over the fast values once present
+
+  // Resolving types can be slow, so we defer this to a background thread
+  // and update presentation once we got the results.
   private volatile boolean expensivePresentationCalculated = false;
+
   private volatile String resolvedTypeText;
   private volatile String resolvedTailText;
 
@@ -187,10 +189,9 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
   }
 
   /**
-   * Fast by contract: this runs while the completion list is being shown.
-   * Type text and resolved parameter lists need the evaluator, so they are
-   * produced by {@link #getExpensiveRenderer()} on a background thread and
-   * the platform repaints the visible lookup when they land.
+   * Runs while the completion list is being shown, so keep it as fast as possible.
+   * Expensive calculations (type resolve etc.) should be performed by {@link #getExpensiveRenderer()}
+   * It will call this method a second time once the expensive calculations are done.
    */
   @Override
   public void renderElement(@NonNull LookupElementPresentation presentation) {
