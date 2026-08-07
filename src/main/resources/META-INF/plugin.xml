@@ -58,6 +58,7 @@
     <qualifiedNameProvider implementation="com.intellij.plugins.haxe.ide.HaxeQualifiedNameProvider"/>
     <gotoDeclarationHandler implementation="com.intellij.plugins.haxe.ide.HaxeGotoDeclarationHandler"/>
     <gotoDeclarationHandler implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewGotoHandler"/>
+    <psi.referenceContributor language="Haxe" implementation="com.intellij.plugins.haxe.ide.references.HaxeStringLiteralReferenceContributor"/>
     <defaultHighlightingSettingProvider implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewHighlightingSetting"/>
 
     <sdkType implementation="com.intellij.plugins.haxe.config.sdk.HaxeSdkType"/>
@@ -475,6 +476,7 @@
     <annotator language="Haxe" id="slowColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeSlowColorAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="type" implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeUnresolvedTypeAnnotator" order="after slowColor"/>
     <annotator language="Haxe" id="invalidEscape" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInvalidEscapeAnnotator" order="after fastColor"/>
+    <annotator language="Haxe" id="stringLink" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeStringLinkColorAnnotator" order="after slowColor"/>
 
     <annotator language="HXML" id="hxmlFastColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeHxmlFastColorAnnotator" order="first"/>
 
