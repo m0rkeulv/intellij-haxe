@@ -57,6 +57,8 @@
     <iconProvider implementation="com.intellij.plugins.haxe.ide.HaxeIconProvider"/>
     <qualifiedNameProvider implementation="com.intellij.plugins.haxe.ide.HaxeQualifiedNameProvider"/>
     <gotoDeclarationHandler implementation="com.intellij.plugins.haxe.ide.HaxeGotoDeclarationHandler"/>
+    <gotoDeclarationHandler implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewGotoHandler"/>
+    <defaultHighlightingSettingProvider implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewHighlightingSetting"/>
 
     <sdkType implementation="com.intellij.plugins.haxe.config.sdk.HaxeSdkType"/>
     <!-- HAXE_MODULE stays registered so legacy projects still open; the v1

@@ -133,6 +133,10 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .subscribe(HaxeCompilationServerListener.TOPIC, (HaxeCompilationServerListener)this::refreshTree);
     project.getMessageBus().connect(this)
       .subscribe(HaxeBuildConfigListener.TOPIC, (HaxeBuildConfigListener)this::refreshTree);
+    // store mutations can originate outside this panel (the define quickfix
+    // edits environment overrides) - the tree must follow those too
+    project.getMessageBus().connect(this)
+      .subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::refreshTree);
 
     refreshTree();
   }

@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
@@ -63,6 +64,13 @@ public final class HaxeCompilerResolveService {
 
   private record BlueprintKey(@NotNull String contextKey, @NotNull String dotPath) {
   }
+
+  /**
+   * Marks blueprint-rendered files with their type's dot path — the
+   * generated-code preview's goto handler recognizes blueprint-resolved
+   * members by this key on the resolve target's containing file.
+   */
+  public static final Key<String> BLUEPRINT_DOT_PATH = Key.create("haxe.blueprint.dotpath");
 
   private static final long FAILURE_COOLDOWN_MS = 30_000;
   /**
@@ -259,7 +267,9 @@ public final class HaxeCompilerResolveService {
       appendMember(text, member, true);
     }
     text.append("}\n");
-    return HaxeElementGenerator.createFile(project, typeName, text.toString());
+    HaxeFile file = HaxeElementGenerator.createFile(project, typeName, text.toString());
+    file.putUserData(BLUEPRINT_DOT_PATH, key.dotPath());
+    return file;
   }
 
   private static void appendMember(@NotNull StringBuilder text, @NotNull TypeBlueprint.Member member, boolean isStatic) {

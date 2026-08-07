@@ -257,7 +257,7 @@ public final class HaxeCompilerDisplayService {
    * standalone arguments, {@code #} starts a comment.
    */
   @NotNull
-  private static List<String> parseHxmlLines(@NotNull List<String> lines) {
+  static List<String> parseHxmlLines(@NotNull List<String> lines) {
     List<String> args = new ArrayList<>();
     for (String line : lines) {
       String trimmed = line.trim();

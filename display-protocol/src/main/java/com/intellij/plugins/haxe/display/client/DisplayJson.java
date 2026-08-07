@@ -48,7 +48,8 @@ public final class DisplayJson {
     }
     JsonNode error = root.path("error");
     if (!error.isMissingNode()) {
-      throw new DisplayRequestException("Display request failed: " + error.path("message").asString("unknown error")
+      throw new DisplayRequestException("Display request failed: "
+                                        + error.path("message").asString("unknown error")
                                         + " (code " + error.path("code").asInt(0) + ")");
     }
     return root.path("result").path("result");

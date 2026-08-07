@@ -107,6 +107,12 @@ public final class HxmlFileParser {
   }
 
   @NotNull
+  /** The target a compiler flag selects ({@code -js}, {@code --jvm}, ...), or null for non-target flags. */
+  @Nullable
+  public static HaxeTarget targetForFlag(@NotNull String flag) {
+    return TARGET_FLAGS.get(flag);
+  }
+
   private static Map<String, HaxeTarget> buildTargetFlagMap() {
     Map<String, HaxeTarget> map = new HashMap<>();
     for (HaxeTarget target : HaxeTarget.values()) {

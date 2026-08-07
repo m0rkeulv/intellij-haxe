@@ -24,6 +24,7 @@ import static com.intellij.plugins.haxe.model.evaluator.assign.HaxeTypeCompatibl
 
 public class HaxeAssignExpressionAnnotator implements Annotator {
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
+    if (AnnotatorUtil.isInGeneratedPreview(element)) return;
     if(!element.isValid()) return;
 
     if (element instanceof HaxeAssignExpression assignExpression) {

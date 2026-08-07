@@ -35,11 +35,13 @@ final class FqnNavigateLink {
       new Task.Backgroundable(project, "Resolving",  true) {
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
-          FullyQualifiedInfo qualifiedInfo = new FullyQualifiedInfo(possibleQname);
           PsiElement element = resolve(project, possibleQname);
           if (element instanceof HaxeNamedComponent component) {
+            // getName() reads the stub tree - back under the read lock, the
+            // resolve() above releases it before returning
+            String componentName = ReadAction.compute(component::getName);
             String message = HaxeDebuggerBundle.message("dap.debugger.value.navigate.link");
-            String tooltip = HaxeDebuggerBundle.message("dap.debugger.value.navigate.tooltip", component.getName());
+            String tooltip = HaxeDebuggerBundle.message("dap.debugger.value.navigate.tooltip", componentName);
             node.setFullValueEvaluator(new NavigatableValue(message, tooltip, possibleQname, project).setShowValuePopup(false));
           }
         }

@@ -52,11 +52,16 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     this.project = project;
   }
 
-  /** Drops the derived context; the next query recomputes from the stores. */
+  /**
+   * Drops the derived context and recomputes in the background — a settings
+   * mutation must reach parsing (reparse) and highlighting WITHOUT relying on
+   * the tool window being open to call {@link #refreshAsync()}.
+   */
   @Override
   public void buildSettingsChanged() {
     snapshot = null;
     fastState = null;
+    refreshAsync();
   }
 
   public static HaxeDefineContextService getInstance(@NotNull Project project) {
@@ -75,6 +80,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   private volatile FastState fastState;
+  /** The defines most recently handed to a consumer — what current PSI state was parsed against. */
+  private volatile Map<String, String> lastComputed;
 
   private static long contentStamp(@NotNull VirtualFile file) {
     Document document = FileDocumentManager.getInstance().getCachedDocument(file);
@@ -117,6 +124,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       return defines;
     });
     fastState = new FastState(path, file, contentStamp(file), result);
+    lastComputed = result;
     return result;
   }
 
@@ -128,11 +136,15 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   public void refreshAsync() {
     AppExecutorUtil.getAppExecutorService().execute(() -> {
       if (project.isDisposed()) return;
-      Snapshot before = snapshot;
+      // compare against the defines last handed to consumers, NOT the snapshot
+      // cache: the invalidation topic clears the snapshot synchronously before
+      // this runs, and a null-vs-null comparison used to swallow the change
+      Map<String, String> before = lastComputed;
       snapshot = null;
       fastState = null;
       Map<String, String> after = getActiveDefines();
-      boolean changed = before != null && !Objects.equals(before.defines(), after);
+      lastComputed = after;
+      boolean changed = before != null && !Objects.equals(before, after);
       if (changed) {
         // false = do not mark the LEGACY auto-import dirty; v2 has its own tracker
         HaxeUtil.reparseProjectFiles(project, false);
@@ -154,6 +166,23 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   @NotNull
   private Map<String, String> compute(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
+    Map<String, String> defines = baseDefines(file, type);
+
+    String containerId = HaxeContainers.containerIdFor(project, file);
+    for (HaxeEnvironmentStore.EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
+      if (override.effect() == HaxeEnvironmentStore.DefineEffect.REMOVE) {
+        defines.remove(override.name());
+      }
+      else {
+        defines.put(override.name(), override.value().isEmpty() ? "true" : override.value());
+      }
+    }
+    return defines;
+  }
+
+  /** The build context's defines BEFORE the container's environment overrides apply. */
+  @NotNull
+  private Map<String, String> baseDefines(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
     HaxeBuildFile buildFile = new HaxeBuildFile(file, type);
     HaxeBuildFileInfo info = effectiveInfo(buildFile);
 
@@ -166,17 +195,35 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     if (info.target() != null) {
       info.target().getDefinitions().forEach(definition -> defines.putIfAbsent(definition, "true"));
     }
-
-    String containerId = HaxeContainers.containerIdFor(project, file);
-    for (HaxeEnvironmentStore.EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
-      if (override.effect() == HaxeEnvironmentStore.DefineEffect.REMOVE) {
-        defines.remove(override.name());
-      }
-      else {
-        defines.put(override.name(), override.value().isEmpty() ? "true" : override.value());
-      }
-    }
     return defines;
+  }
+
+  /**
+   * Whether the ACTIVE build context defines the name before environment
+   * overrides apply — the define quickfix uses this to decide between merely
+   * dropping its own override and masking a build-file define with a REMOVE
+   * entry. False when no v2 active build file is configured.
+   */
+  public boolean isDefinedWithoutOverrides(@NotNull String name) {
+    String path = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
+    if (StringUtil.isEmptyOrSpaces(path)) return false;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    if (file == null || !file.isValid()) return false;
+    return Boolean.TRUE.equals(ReadAction.compute(() -> {
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+      if (type == null) return false;
+      return baseDefines(file, type).containsKey(name);
+    }));
+  }
+
+  /** The container owning the ACTIVE build file, or null without one — where define overrides belong. */
+  @Nullable
+  public String activeContainerId() {
+    String path = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
+    if (StringUtil.isEmptyOrSpaces(path)) return null;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    if (file == null || !file.isValid()) return null;
+    return HaxeContainers.containerIdFor(project, file);
   }
 
   /**
