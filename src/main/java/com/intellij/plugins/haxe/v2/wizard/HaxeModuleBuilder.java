@@ -10,7 +10,7 @@ import com.intellij.openapi.roots.ContentEntry;
 import com.intellij.openapi.roots.ModifiableRootModel;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeWizardBundle;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import org.jetbrains.annotations.NotNull;
 
@@ -47,13 +47,13 @@ public final class HaxeModuleBuilder extends ModuleBuilder {
     try {
       VirtualFile contentRoot = VfsUtil.createDirectoryIfMissing(contentEntryPath);
       if (contentRoot == null) {
-        throw new ConfigurationException(HaxeBundle.message("haxe.wizard.cannot.create.content.root", contentEntryPath));
+        throw new ConfigurationException(HaxeWizardBundle.message("haxe.wizard.cannot.create.content.root", contentEntryPath));
       }
       VfsUtil.createDirectoryIfMissing(contentRoot, SOURCE_DIR);
       return contentRoot;
     }
     catch (IOException e) {
-      throw new ConfigurationException(HaxeBundle.message("haxe.wizard.cannot.create.content.root", contentEntryPath));
+      throw new ConfigurationException(HaxeWizardBundle.message("haxe.wizard.cannot.create.content.root", contentEntryPath));
     }
   }
 

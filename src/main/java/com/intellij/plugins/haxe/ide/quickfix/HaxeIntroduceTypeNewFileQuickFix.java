@@ -67,7 +67,7 @@ public class HaxeIntroduceTypeNewFileQuickFix implements LocalQuickFix {
 
             builder.setDefaultText(createDefaultNewFileQname());
             builder.setGenericsCount(countGenerics(myPsiTargetPointer.getElement()));
-            builder.show("Unable to create haxe type", "HaxeClass", this::updateElement);
+            builder.show("Unable to create haxe type", "Haxe Class", this::updateElement);
         });
     }
 

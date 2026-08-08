@@ -115,10 +115,10 @@ public class HaxeTypeCreator {
 
     private PsiElement createTypePsi(@NotNull Project project, String typeName, @NonNls @NotNull String type) {
         return switch (type) {
-            case "HaxeClass" -> HaxeElementGenerator.createClass(project, typeName);
-            case "HaxeInterface" -> HaxeElementGenerator.createInterface(project, typeName);
-            case "HaxeEnum" -> HaxeElementGenerator.createEnum(project, typeName);
-            case "HaxeAbstract" -> HaxeElementGenerator.createAbstract(project, typeName);
+            case "Haxe Class" -> HaxeElementGenerator.createClass(project, typeName);
+            case "Haxe Interface" -> HaxeElementGenerator.createInterface(project, typeName);
+            case "Haxe Enum" -> HaxeElementGenerator.createEnum(project, typeName);
+            case "Haxe Abstract" -> HaxeElementGenerator.createAbstract(project, typeName);
             default -> null;
         };
     }
