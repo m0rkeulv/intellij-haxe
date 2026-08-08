@@ -9,6 +9,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCacheManager;
 import com.intellij.plugins.haxe.haxelib.HaxelibUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
 import org.jetbrains.annotations.NotNull;
 
@@ -37,6 +38,7 @@ public final class HaxePurgeCachesAction extends DumbAwareAction {
     HaxelibUtil.clearCache();
     HaxelibCacheManager.getAllInstances().forEach(HaxelibCacheManager::reload);
     HaxeLimeProjectInfoService.getInstance(project).clearCache();
+    HaxeNmeProjectInfoService.getInstance(project).clearCache();
     HaxeCompilerCaches.clearAndRehighlight(project, "haxe: caches purged");
     afterPurge.run();
   }

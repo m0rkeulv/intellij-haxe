@@ -209,7 +209,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Never lets a haxelib failure prevent the tree from updating - install state just becomes unknown. */
   private void updateTree(@NotNull List<ContainerEntry> scan) {
-    Map<String, String> installed = null;
+    Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installed = null;
     try {
       installed = HaxeToolWindowModelBuilder.fetchInstalledLibraryVersions(project);
     }
@@ -228,7 +228,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Gradle-style structure: one project root node containing root-level build files and the modules. */
   @NotNull
-  private DefaultMutableTreeNode buildTreeRoot(@NotNull List<ContainerEntry> scan, @Nullable Map<String, String> installedLibraries) {
+  private DefaultMutableTreeNode buildTreeRoot(@NotNull List<ContainerEntry> scan,
+                                               @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     DefaultMutableTreeNode root = new DefaultMutableTreeNode();
     DefaultMutableTreeNode projectNode = new DefaultMutableTreeNode(new ProjectNode(project.getName()));
     root.add(projectNode);
@@ -277,7 +278,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   @NotNull
   private DefaultMutableTreeNode buildBuildGroupNode(@NotNull ContainerEntry container,
-                                                     @Nullable Map<String, String> installedLibraries) {
+                                                     @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     DefaultMutableTreeNode buildNode =
       new DefaultMutableTreeNode(new BuildGroupNode(container.id(), container.files().size()));
     addContainerFiles(buildNode, container, installedLibraries);
@@ -309,7 +310,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   private void addContainerFiles(@NotNull DefaultMutableTreeNode parentNode,
                                  @NotNull ContainerEntry container,
-                                 @Nullable Map<String, String> installedLibraries) {
+                                 @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     for (FileEntry fileEntry : container.files()) {
       boolean active = fileEntry.buildFile().file().getPath().equals(container.activePath());
       parentNode.add(buildFileNode(fileEntry, container.id(), active, fileEntry.manual(), installedLibraries));
@@ -321,7 +322,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
                                                @NotNull String containerId,
                                                boolean active,
                                                boolean manual,
-                                               @Nullable Map<String, String> installedLibraries) {
+                                               @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     HaxeBuildFile buildFile = entry.buildFile();
     DefaultMutableTreeNode fileNode = new DefaultMutableTreeNode(new BuildFileRow(buildFile, containerId, active, manual));
     // a plain hxp script decides its own targets in code - no target row
@@ -342,8 +343,13 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       new DefaultMutableTreeNode(new GroupNode(GroupKind.LIBRARIES, info.libraries().size()));
     for (HaxeBuildFileInfo.HaxeLibDependency library : info.libraries()) {
       String key = library.name().toLowerCase(Locale.ROOT);
-      boolean installed = installedLibraries == null || installedLibraries.containsKey(key);
-      String resolvedVersion = installedLibraries != null ? installedLibraries.get(key) : null;
+      HaxeToolWindowModelBuilder.InstalledLibrary installedLibrary =
+        installedLibraries != null ? installedLibraries.get(key) : null;
+      // a pinned version must itself be installed - the name alone is not enough
+      boolean pinSatisfied = library.version() == null
+                             || (installedLibrary != null && installedLibrary.versions().contains(library.version()));
+      boolean installed = installedLibraries == null || (installedLibrary != null && pinSatisfied);
+      String resolvedVersion = installedLibrary != null ? installedLibrary.selectedVersion() : null;
       LibraryNode libraryRow = new LibraryNode(buildFile, library.name(), library.version(), resolvedVersion, installed);
       librariesNode.add(new DefaultMutableTreeNode(libraryRow));
     }

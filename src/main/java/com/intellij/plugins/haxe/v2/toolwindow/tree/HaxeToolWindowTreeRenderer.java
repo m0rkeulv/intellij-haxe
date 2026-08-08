@@ -157,7 +157,11 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
           append(" : " + libraryNode.displayVersion(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
         if (!libraryNode.installed()) {
-          append("  " + HaxeBundle.message("haxe.toolwindow.node.library.missing"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          // a resolved version means the library name IS installed - only the pinned version is absent
+          String message = libraryNode.resolvedVersion() != null
+                           ? HaxeBundle.message("haxe.toolwindow.node.library.version.missing")
+                           : HaxeBundle.message("haxe.toolwindow.node.library.missing");
+          append("  " + message, SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
       }
       case null, default -> {

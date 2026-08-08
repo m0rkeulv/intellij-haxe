@@ -325,9 +325,10 @@ public final class HaxeToolWindowNodes {
   }
 
   /**
-   * A haxelib dependency; missing = not installed according to haxelib.
-   * {@code version} is what the build file pins; {@code resolvedVersion} is the version
-   * haxelib has selected (possibly "dev" or "git") and is used when the file pins nothing.
+   * A haxelib dependency; missing = the name - or the PINNED version - is not
+   * installed according to haxelib. {@code version} is what the build file pins;
+   * {@code resolvedVersion} is the version haxelib has selected (possibly "dev"
+   * or "git") and is used when the file pins nothing.
    */
   public record LibraryNode(@NotNull HaxeBuildFile owner,
                             @NotNull String name,

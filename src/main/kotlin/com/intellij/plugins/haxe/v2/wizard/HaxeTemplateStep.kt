@@ -154,8 +154,8 @@ private class LimeFamilyTemplateStep(parent: NewProjectWizardStep, private val f
   }
 
   private val targets: List<TargetChoice> = when (flavor) {
-    LimeFlavor.NME -> listOf(NMETarget.HTML5, NMETarget.WINDOWS, NMETarget.LINUX, NMETarget.MAC,
-                             NMETarget.NEKO, NMETarget.FLASH, NMETarget.ANDROID, NMETarget.IOS)
+    LimeFlavor.NME -> listOf(NMETarget.CPP, NMETarget.WINDOWS, NMETarget.LINUX, NMETarget.MAC,
+                             NMETarget.NEKO, NMETarget.FLASH, NMETarget.HTML5, NMETarget.ANDROID, NMETarget.IOS)
       .map { TargetChoice(it.name, it.toString()) }
     else -> listOf(OpenFLTarget.HTML5, OpenFLTarget.WINDOWS, OpenFLTarget.LINUX, OpenFLTarget.MAC,
                    OpenFLTarget.NEKO, OpenFLTarget.HL, OpenFLTarget.FLASH, OpenFLTarget.ANDROID,

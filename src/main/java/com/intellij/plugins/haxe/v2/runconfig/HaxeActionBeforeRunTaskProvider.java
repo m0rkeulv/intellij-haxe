@@ -33,6 +33,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
@@ -250,8 +251,8 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     };
   }
 
-  /** Lime target ids compiled through hxcpp whose output the HXCPP (IntelliJ) debugger can attach to. */
-  private static final List<String> LIME_DESKTOP_CPP_TARGETS = List.of("windows", "linux", "mac");
+  /** Target ids compiled through hxcpp whose output the HXCPP (IntelliJ) debugger can attach to ("cpp" is nme's host-desktop word; lime and nme share the rest). */
+  private static final List<String> DESKTOP_CPP_TARGETS = List.of("windows", "linux", "mac", "cpp");
 
   /** The target's debug compile additions, or null when the file/target has none. Call in a read action. */
   @Nullable
@@ -274,8 +275,20 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       // --haxelib override merges the lib exactly like a project <haxelib>
       // entry (include.xml and extraParams included), so no project.xml edit.
       // Run builds never get this: additions apply only under the Debug executor.
-      if (LIME_DESKTOP_CPP_TARGETS.contains(targetFlag)) {
+      if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
         additions.add("--haxelib=intellij-hxcpp-debug-server");
+      }
+      return additions;
+    }
+    if (type == HaxeBuildFileType.NMML) {
+      List<String> additions = new ArrayList<>();
+      additions.add("-debug");
+      String targetFlag = NmeProjects.selectedTargetFlag(project, file);
+      // nme has no lime-style --haxelib override; a single-token "--library
+      // <lib>" haxeflag becomes one line of the generated build.hxml, and
+      // haxe pulls the lib with its extraParams (the server-injection macro).
+      if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
+        additions.add("--library intellij-hxcpp-debug-server");
       }
       return additions;
     }

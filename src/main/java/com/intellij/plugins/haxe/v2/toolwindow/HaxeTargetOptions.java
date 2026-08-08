@@ -53,19 +53,32 @@ public final class HaxeTargetOptions {
   /** The lime/openfl command-line flag for the stored target id, e.g. "html5" (falls back to the default target). */
   @NotNull
   public static String targetFlagFor(@NotNull HaxeBuildFileType type, @Nullable String targetId) {
-    String resolvedId = choicesFor(type).stream()
-      .map(TargetChoice::id)
-      .filter(id -> id.equals(targetId))
-      .findFirst()
-      .orElseGet(() -> defaultChoice(type).id());
+    String resolvedId = resolvedId(type, targetId);
     return type == HaxeBuildFileType.NMML
            ? NMETarget.valueOf(resolvedId).getTargetFlag()
            : OpenFLTarget.valueOf(resolvedId).getTargetFlag();
   }
 
+  /** The NMETarget for the stored id (falls back to the default target). */
+  @NotNull
+  public static NMETarget nmeTargetFor(@Nullable String targetId) {
+    return NMETarget.valueOf(resolvedId(HaxeBuildFileType.NMML, targetId));
+  }
+
+  @NotNull
+  private static String resolvedId(@NotNull HaxeBuildFileType type, @Nullable String targetId) {
+    return choicesFor(type).stream()
+      .map(TargetChoice::id)
+      .filter(id -> id.equals(targetId))
+      .findFirst()
+      .orElseGet(() -> defaultChoice(type).id());
+  }
+
   @NotNull
   public static TargetChoice defaultChoice(@NotNull HaxeBuildFileType type) {
-    String defaultId = type == HaxeBuildFileType.NMML ? NMETarget.HTML5.name() : OpenFLTarget.HTML5.name();
+    // nme's own no-target default is the host desktop build; its html5 target
+    // needs an Emscripten runtime the stock haxelib release does not ship
+    String defaultId = type == HaxeBuildFileType.NMML ? NMETarget.CPP.name() : OpenFLTarget.HTML5.name();
     return choicesFor(type).stream()
       .filter(choice -> choice.id().equals(defaultId))
       .findFirst()

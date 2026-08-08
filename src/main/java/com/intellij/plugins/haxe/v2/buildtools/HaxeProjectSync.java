@@ -8,9 +8,9 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The v2 sync pipeline, shared by the tool window's sync button and the build file
- * auto-reload: flush editors, drop the lime display cache, resync module libraries,
- * then announce the change on {@link HaxeBuildConfigListener#TOPIC} (which refreshes
- * the tool window tree).
+ * auto-reload: flush editors, drop the lime/nme evaluation caches, resync module
+ * libraries, then announce the change on {@link HaxeBuildConfigListener#TOPIC}
+ * (which refreshes the tool window tree).
  */
 public final class HaxeProjectSync {
 
@@ -23,6 +23,7 @@ public final class HaxeProjectSync {
       if (project.isDisposed()) return;
       FileDocumentManager.getInstance().saveAllDocuments();
       HaxeLimeProjectInfoService.getInstance(project).clearCache();
+      HaxeNmeProjectInfoService.getInstance(project).clearCache();
       HaxeLibrarySync.sync(project, () -> {
         if (!project.isDisposed()) {
           project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();

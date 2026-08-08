@@ -73,6 +73,9 @@ public final class HaxeInstallLibraryAction extends DumbAwareAction {
           .withWorkDirectory(project.getBasePath());
         try {
           ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
+          if (output.getExitCode() == 0 && !output.isTimeout()) {
+            restoreSelectedVersion(project, library);
+          }
           reportResult(project, library, output);
         }
         catch (ExecutionException ex) {
@@ -98,6 +101,30 @@ public final class HaxeInstallLibraryAction extends DumbAwareAction {
   private static boolean isPlainVersion(@Nullable String version) {
     // a release version like 1.2.3 or 9.2.0-rc.1 - not git:/path: source specs
     return version != null && version.matches("\\d+(\\.\\d+)*([-.].*)?");
+  }
+
+  /**
+   * Installing a pinned version makes it haxelib's SELECTED version as a side
+   * effect, silently switching every unpinned project. Restore the previous
+   * selection ("dev"/"git" pseudo-versions cannot be re-set and stay put).
+   */
+  private static void restoreSelectedVersion(@NotNull Project project, @NotNull LibraryNode library) {
+    String previous = library.resolvedVersion();
+    boolean selectionHijacked = isPlainVersion(library.version())
+                                && isPlainVersion(previous)
+                                && !previous.equals(library.version());
+    if (!selectionHijacked) return;
+
+    GeneralCommandLine commandLine = new GeneralCommandLine()
+      .withExePath(HaxeToolPathResolver.resolveHaxelibExecutable(project))
+      .withParameters("set", library.name(), previous, "--always")
+      .withWorkDirectory(project.getBasePath());
+    try {
+      new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
+    }
+    catch (ExecutionException e) {
+      // the install itself succeeded; a failed restore only leaves the new version selected
+    }
   }
 
   private void reportResult(@NotNull Project project, @NotNull LibraryNode library, @NotNull ProcessOutput output) {
