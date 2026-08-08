@@ -13,6 +13,8 @@ import com.intellij.psi.PsiReferenceBase;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.regex.Pattern;
+
 /**
  * A string literal whose VALUE is a resolvable file path — navigable like a
  * URL in a string, but inside the IDE. Resolution tries three bases in
@@ -62,9 +64,24 @@ public class HaxeStringFilePathReference extends PsiReferenceBase<HaxeStringLite
     return parent != null ? parent.findFileByRelativePath(normalized) : null;
   }
 
+  // a bare file name with an extension ("build.hxml") - the shape that can
+  // be a path without containing any separator
+  private static final Pattern NAME_WITH_EXTENSION = Pattern.compile(".+\\.[A-Za-z0-9]{1,10}");
+
+  /**
+   * Whether the text READS as a path (separator or extension). Gates the
+   * link painting only: completion references attach more broadly, so a
+   * bare word that happens to match a file never lights up as a link but
+   * still completes on explicit request.
+   */
+  public static boolean looksLikePath(@NotNull String value) {
+    return value.indexOf('/') >= 0 || value.indexOf('\\') >= 0 || NAME_WITH_EXTENSION.matcher(value).matches();
+  }
+
   // a drive-letter prefix (C:/) or a leading slash - anything else is
   // treated as relative and never handed to the local file system root
-  private static boolean looksAbsolute(@NotNull String normalized) {
+  static boolean looksAbsolute(@NotNull String path) {
+    String normalized = path.replace('\\', '/');
     if (normalized.startsWith("/")) return true;
     return normalized.length() > 2
            && Character.isLetter(normalized.charAt(0))

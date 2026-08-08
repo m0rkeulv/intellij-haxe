@@ -102,6 +102,17 @@ public final class HaxeCompilerTypeCatalogService {
     return result;
   }
 
+  /** Every generated type's FQN — the compiler leg of qualified-name enumeration. */
+  @NotNull
+  public Set<String> allFqns() {
+    if (!enabled()) return Set.of();
+    Set<String> result = new HashSet<>();
+    for (ContextCatalog catalog : catalogs.values()) {
+      result.addAll(catalog.byFqn().keySet());
+    }
+    return result;
+  }
+
   @NotNull
   public Set<String> allNames() {
     if (!enabled()) return Set.of();

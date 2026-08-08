@@ -40,10 +40,24 @@ public class HaxeStringLinkColorAnnotator implements Annotator {
       if (key == null) continue;
       paint(holder, literal, reference.getRangeInElement(), key);
     }
-    if (lastSegment != null && lastSegment.resolve() != null) {
+    // segment references attach to every clean constant string so explicit
+    // completion works from the first segment - painting stays reserved for
+    // strings that READ as paths, so a bare word matching a file never
+    // lights up
+    boolean paintable = lastSegment != null
+                        && HaxeStringFilePathReference.looksLikePath(contentOf(literal))
+                        && lastSegment.resolve() != null;
+    if (paintable) {
       TextRange span = new TextRange(1, lastSegment.getRangeInElement().getEndOffset());
       paint(holder, literal, span, HaxeSyntaxHighlighterColors.STRING_FILE_LINK);
     }
+  }
+
+  /** The literal's text between the quotes. */
+  @NotNull
+  private static String contentOf(@NotNull HaxeStringLiteralExpression literal) {
+    String text = literal.getText();
+    return text.length() >= 2 ? text.substring(1, text.length() - 1) : "";
   }
 
   private static void paint(@NotNull AnnotationHolder holder,

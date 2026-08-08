@@ -1,8 +1,10 @@
 package com.intellij.plugins.haxe.util;
 
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIndex;
+import com.intellij.plugins.haxe.lang.psi.indexes.unified.fqn.HaxeFullyQualifiedClassNameUnifiedIndex;
 import com.intellij.plugins.haxe.model.FullyQualifiedInfo;
 import com.intellij.plugins.haxe.model.HaxeBaseMemberModel;
 import com.intellij.psi.PsiElement;
@@ -31,6 +33,22 @@ public final class HaxeQnameResolveUtil {
     PsiElement element = HaxeResolveUtil.findClassOrMemberByQName(qname, project);
     if (element != null) return element;
     return resolveRuntimeName(project, qname);
+  }
+
+  /**
+   * Whether a dotted prefix names something the project knows: a resolvable
+   * class/member, or a PACKAGE some class FQN lives under. Drives the
+   * "auto-popup only once the typed prefix is real" rule for qualified-name
+   * completion in strings. Call in a read action; false while dumb.
+   */
+  public static boolean isKnownQnamePrefix(@NotNull String prefix, @NotNull Project project) {
+    if (DumbService.isDumb(project)) return false;
+    if (findClassOrMember(prefix, project) != null) return true;
+    String packagePrefix = prefix + ".";
+    for (String fqn : HaxeFullyQualifiedClassNameUnifiedIndex.getAllKeys(project)) {
+      if (fqn.startsWith(packagePrefix)) return true;
+    }
+    return false;
   }
 
   @Nullable
