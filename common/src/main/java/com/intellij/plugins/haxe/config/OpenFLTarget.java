@@ -18,12 +18,8 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * The openfl tool's project targets, as listed by {@code openfl help build}.
- * The single source of the openfl target list: the tool window's target
- * selector and the project wizard both offer exactly these. The HaxeTarget is
- * the haxe compilation backend each target uses - informational, never passed
- * to the tool. Lime has its own list ({@link LimeTarget}) - identical today,
- * maintained per build system.
+ * Default openFL Targets (based on lime targets)
+ * <a href="https://lime.openfl.org/docs/getting-started/targets/">...</a>
  */
 public enum OpenFLTarget {
 
@@ -33,6 +29,7 @@ public enum OpenFLTarget {
   LINUX("Linux", HaxeTarget.CPP, "linux"),
   HL("HashLink", HaxeTarget.HL, "hl"),
   NEKO("Neko", HaxeTarget.NEKO, "neko"),
+  RPI("Raspberry Pi", HaxeTarget.CPP, "rpi"),
   FLASH("Flash", HaxeTarget.FLASH, "flash"),
   AIR("Adobe AIR", HaxeTarget.FLASH, "air"),
   ANDROID("Android", HaxeTarget.CPP, "android"),
