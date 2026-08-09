@@ -4,8 +4,11 @@ import com.intellij.ide.highlighter.ModuleFileType
 import com.intellij.ide.wizard.NewProjectWizardBaseData.Companion.baseData
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.openapi.application.WriteAction
+import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers
@@ -76,6 +79,37 @@ internal object HaxeTemplateScaffold {
       if (environment.getCompileCommand(containerId) == null) {
         environment.setCompileCommand(containerId, HaxeEnvironmentStore.CompileCommand(registered.path, null, ""))
       }
+    }
+  }
+
+  /**
+   * Creates the project-local haxelib repository: an empty {@code .haxelib}
+   * directory in the content root — the haxelib binary uses it as the
+   * repository for every command run inside the project (what
+   * {@code haxelib newrepo} creates). Excluded from the module (its content
+   * is installed libraries, not sources); a .gitkeep keeps the otherwise
+   * empty directory alive when the project is a git repository.
+   */
+  fun createLocalHaxelibRepo(project: Project, step: NewProjectWizardStep, gitEnabled: Boolean) {
+    val base = step.baseData ?: return
+    val contentRoot = "${base.path}/${base.name}"
+    WriteAction.runAndWait<IOException> {
+      val root = VfsUtil.createDirectoryIfMissing(contentRoot) ?: return@runAndWait
+      val repo = VfsUtil.createDirectoryIfMissing(root, ".haxelib")
+      if (gitEnabled) {
+        repo.findOrCreateChildData(this, ".gitkeep")
+      }
+      excludeFromModule(project, repo)
+    }
+  }
+
+  private fun excludeFromModule(project: Project, folder: VirtualFile) {
+    val module = ModuleUtilCore.findModuleForFile(folder, project) ?: return
+    ModuleRootModificationUtil.updateModel(module) { model ->
+      val owningEntry = model.contentEntries.firstOrNull { entry ->
+        entry.file?.let { contentRoot -> VfsUtilCore.isAncestor(contentRoot, folder, false) } == true
+      }
+      owningEntry?.addExcludeFolder(folder)
     }
   }
 }

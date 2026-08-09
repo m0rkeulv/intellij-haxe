@@ -297,10 +297,10 @@ final class HaxeToolWindowModelBuilder {
       }
       case OPENFL, LIME, HXP_PROJECT -> {
         String tool = LimeProjects.toolFor(type);
-        String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
+        String targetFlags = String.join(" ", LimeProjects.selectedTargetFlags(project, type, file));
         for (String actionName : LimeProjects.DEFAULT_ACTIONS) {
           List<String> command = LimeProjects.actionCommand(project, environmentSdk, file, type, actionName);
-          String presentable = tool + " " + actionName + " " + targetFlag;
+          String presentable = tool + " " + actionName + " " + targetFlags;
           actions.add(new ActionNode(ownerId, actionName, command, workDirectory, presentable, false));
         }
       }
@@ -313,10 +313,10 @@ final class HaxeToolWindowModelBuilder {
         actions.add(actionNode);
       }
       case NMML -> {
-        String targetFlag = NmeProjects.selectedTargetFlag(project, file);
+        String targetFlags = String.join(" ", NmeProjects.selectedTargetFlags(project, file));
         for (String actionName : NmeProjects.DEFAULT_ACTIONS) {
           List<String> command = NmeProjects.actionCommand(project, environmentSdk, file, actionName);
-          String presentable = "nme " + actionName + " " + targetFlag;
+          String presentable = "nme " + actionName + " " + targetFlags;
           actions.add(new ActionNode(ownerId, actionName, command, workDirectory, presentable, false));
         }
       }
@@ -400,11 +400,12 @@ final class HaxeToolWindowModelBuilder {
       case HXML -> "haxe " + file.getName();
       case OPENFL, LIME, HXP_PROJECT -> {
         String tool = LimeProjects.toolFor(buildFile.type());
-        String targetFlag = LimeProjects.selectedTargetFlag(project, buildFile.type(), file);
-        yield tool + " build " + file.getName() + " " + targetFlag;
+        String targetFlags = String.join(" ", LimeProjects.selectedTargetFlags(project, buildFile.type(), file));
+        yield tool + " build " + file.getName() + " " + targetFlags;
       }
       case HXP_SCRIPT -> "hxp " + file.getName();
-      case NMML -> "nme build " + file.getName() + " " + NmeProjects.selectedTargetFlag(project, file);
+      case NMML -> "nme build " + file.getName() + " "
+                   + String.join(" ", NmeProjects.selectedTargetFlags(project, file));
     };
   }
 

@@ -2,14 +2,15 @@ package com.intellij.plugins.haxe.v2.wizard
 
 import com.intellij.ide.wizard.AbstractNewProjectWizardMultiStepBase
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
+import com.intellij.ide.wizard.GitNewProjectWizardData.Companion.gitData
 import com.intellij.ide.wizard.NewProjectWizardBaseData.Companion.baseData
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.openapi.observable.properties.GraphProperty
 import com.intellij.openapi.observable.util.transform
 import com.intellij.openapi.project.Project
 import com.intellij.plugins.haxe.HaxeWizardBundle
-import com.intellij.plugins.haxe.config.NMETarget
-import com.intellij.plugins.haxe.config.OpenFLTarget
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
@@ -19,18 +20,35 @@ import com.intellij.ui.dsl.builder.columns
 /**
  * The template switcher: Empty | HXML | Lime | OpenFL | NME | Haxelib —
  * each child step owns its fields and its generation. Only the SELECTED
- * template's {@code setupProject} runs (multi-step base contract).
+ * template's {@code setupProject} runs (multi-step base contract). The
+ * haxelib-repository choice sits here because it applies to every template.
  */
 class HaxeTemplateStep(parent: NewProjectWizardStep) : AbstractNewProjectWizardStep(parent) {
 
+  /** Dropdown entry for the repository choice; local = create a project .haxelib. */
+  private data class RepoChoice(val local: Boolean, val label: String) {
+    override fun toString(): String = label
+  }
+
+  private val repoChoices = listOf(
+    RepoChoice(false, HaxeWizardBundle.message("haxe.wizard.haxelib.repo.global")),
+    RepoChoice(true, HaxeWizardBundle.message("haxe.wizard.haxelib.repo.local")))
+
   private val switcher = Switcher(this)
+  private val repoProperty: GraphProperty<RepoChoice> = propertyGraph.property(repoChoices.first())
 
   override fun setupUI(builder: Panel) {
     switcher.setupUI(builder)
+    builder.row(HaxeWizardBundle.message("haxe.wizard.haxelib.repo.label")) {
+      comboBox(repoChoices).bindItem(repoProperty)
+    }
   }
 
   override fun setupProject(project: Project) {
     switcher.setupProject(project)
+    if (repoProperty.get().local) {
+      HaxeTemplateScaffold.createLocalHaxelibRepo(project, this, gitData?.git == true)
+    }
   }
 
   private class Switcher(parent: NewProjectWizardStep) : AbstractNewProjectWizardMultiStepBase(parent) {
@@ -148,19 +166,20 @@ private enum class LimeFlavor(val haxelib: String, val buildFileName: String) {
 private class LimeFamilyTemplateStep(parent: NewProjectWizardStep, private val flavor: LimeFlavor)
   : AbstractNewProjectWizardStep(parent) {
 
-  /** id = the enum NAME the target-selection store expects; label = the enum's presentable description. */
+  /** id = the name the target-selection store expects; label = the presentable name (identical today). */
   private data class TargetChoice(val id: String, val label: String) {
     override fun toString(): String = label
   }
 
-  private val targets: List<TargetChoice> = when (flavor) {
-    LimeFlavor.NME -> listOf(NMETarget.CPP, NMETarget.WINDOWS, NMETarget.LINUX, NMETarget.MAC,
-                             NMETarget.NEKO, NMETarget.FLASH, NMETarget.HTML5, NMETarget.ANDROID, NMETarget.IOS)
-      .map { TargetChoice(it.name, it.toString()) }
-    else -> listOf(OpenFLTarget.HTML5, OpenFLTarget.WINDOWS, OpenFLTarget.LINUX, OpenFLTarget.MAC,
-                   OpenFLTarget.NEKO, OpenFLTarget.HL, OpenFLTarget.FLASH, OpenFLTarget.ANDROID,
-                   OpenFLTarget.IOS)
-      .map { TargetChoice(it.name, it.toString()) }
+  // each build system's CONFIGURED target list (Settings | Haxe | Frameworks)
+  // is the single source - the tool window's target selector offers the same
+  private val targets: List<TargetChoice> = HaxeTargetOptions.choicesFor(buildFileType())
+    .map { TargetChoice(it.id, it.displayName) }
+
+  private fun buildFileType(): HaxeBuildFileType = when (flavor) {
+    LimeFlavor.NME -> HaxeBuildFileType.NMML
+    LimeFlavor.OPENFL -> HaxeBuildFileType.OPENFL
+    LimeFlavor.LIME -> HaxeBuildFileType.LIME
   }
 
   private val targetProperty: GraphProperty<TargetChoice> = propertyGraph.property(targets.first())

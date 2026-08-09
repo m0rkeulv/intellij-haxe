@@ -8,6 +8,7 @@ import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -45,6 +46,14 @@ public final class LimeProjects {
     return HaxeTargetOptions.targetFlagFor(type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file));
   }
 
+  /** The selected target's full flag list — the target word plus configured extras (e.g. "-64"). */
+  @NotNull
+  public static List<String> selectedTargetFlags(@NotNull Project project,
+                                                 @NotNull HaxeBuildFileType type,
+                                                 @NotNull VirtualFile file) {
+    return HaxeTargetOptions.targetFlagsFor(type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file));
+  }
+
   /**
    * A {@code haxelib run lime|openfl …} invocation. The lime tool forwards a
    * trailing {@code --connect <port>} pair into the haxe builds it generates
@@ -57,14 +66,16 @@ public final class LimeProjects {
     return tool.equals("lime") || tool.equals("openfl");
   }
 
-  /** One of the tool's actions as a full command line, using the file's selected target. */
+  /** One of the tool's actions as a full command line, using the file's selected target (all its flags). */
   @NotNull
   public static List<String> actionCommand(@NotNull Project project,
                                            @Nullable String environmentSdk,
                                            @NotNull VirtualFile file,
                                            @NotNull HaxeBuildFileType type,
                                            @NotNull String actionName) {
-    return List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
-                   "run", toolFor(type), actionName, file.getName(), selectedTargetFlag(project, type, file));
+    List<String> command = new ArrayList<>(List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
+                                                   "run", toolFor(type), actionName, file.getName()));
+    command.addAll(selectedTargetFlags(project, type, file));
+    return command;
   }
 }

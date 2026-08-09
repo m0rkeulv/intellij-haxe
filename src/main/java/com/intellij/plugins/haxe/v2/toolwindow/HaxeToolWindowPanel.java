@@ -181,6 +181,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeRemoveBuildFileAction(this));
     group.add(new HaxeSelectTargetAction(this));
     group.add(new HaxeInstallLibraryAction(this));
+    group.add(new HaxeInstallAllMissingLibrariesAction(this));
     group.add(new HaxeConfigureEnvironmentAction(this));
     group.add(new HaxeConfigureCompileCommandAction(this));
     group.add(new HaxeRunCompileCommandAction(this));
@@ -440,6 +441,36 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     TreePath path = tree.getSelectionPath();
     if (path == null) return null;
     return path.getLastPathComponent() instanceof DefaultMutableTreeNode node ? node.getUserObject() : null;
+  }
+
+  /**
+   * The missing library rows of the selection's Libraries group — the group row
+   * itself, or any MISSING library row in it (siblings included); empty otherwise.
+   */
+  @NotNull
+  public List<LibraryNode> getSelectedGroupMissingLibraries() {
+    TreePath path = tree.getSelectionPath();
+    if (path == null || !(path.getLastPathComponent() instanceof DefaultMutableTreeNode node)) return List.of();
+
+    DefaultMutableTreeNode groupNode = null;
+    if (node.getUserObject() instanceof GroupNode group && group.kind() == GroupKind.LIBRARIES) {
+      groupNode = node;
+    }
+    else if (node.getUserObject() instanceof LibraryNode library && !library.installed()
+             && node.getParent() instanceof DefaultMutableTreeNode parent) {
+      groupNode = parent;
+    }
+    if (groupNode == null) return List.of();
+
+    List<LibraryNode> missing = new ArrayList<>();
+    for (int i = 0; i < groupNode.getChildCount(); i++) {
+      if (groupNode.getChildAt(i) instanceof DefaultMutableTreeNode child
+          && child.getUserObject() instanceof LibraryNode library
+          && !library.installed()) {
+        missing.add(library);
+      }
+    }
+    return missing;
   }
 
   /** The text speed search matches against - the row's primary label as rendered. */

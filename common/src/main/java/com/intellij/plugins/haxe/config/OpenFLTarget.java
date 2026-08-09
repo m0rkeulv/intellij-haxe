@@ -17,40 +17,29 @@
  */
 package com.intellij.plugins.haxe.config;
 
-import org.jetbrains.annotations.NotNull;
-
-import javax.swing.*;
-
 /**
- * @author: Fedor.Korotkov
+ * The openfl tool's project targets, as listed by {@code openfl help build}.
+ * The single source of the openfl target list: the tool window's target
+ * selector and the project wizard both offer exactly these. The HaxeTarget is
+ * the haxe compilation backend each target uses - informational, never passed
+ * to the tool. Lime has its own list ({@link LimeTarget}) - identical today,
+ * maintained per build system.
  */
 public enum OpenFLTarget {
 
-  // This mapping of the target to output target is the most likely scenario
-  // and is mapped according to the lime templates.  (In other words,
-  // this is what target lime will pick for you when you select an
-  // OS target.)  This may end up being incorrect, but it's normally
-  // correct when degugging and is a lot better than being presented
-  // the interface file.
-  // Note that the HaxeTarget is only used for IDEA's convenience and is not
-  // passed to the compiler (lime) command, while the flags (third and later
-  // arguments) are passed to the compiler.
-  IOS("iOS", HaxeTarget.CPP, "ios", "-simulator"),
-  ANDROID("Android", HaxeTarget.CPP, "android"),
-  WEBOS("webOS", HaxeTarget.CPP, "webos"),
-  BLACKBERRY("BlackBerry", HaxeTarget.CPP, "blackberry"),
+  HTML5("HTML5", HaxeTarget.JAVA_SCRIPT, "html5"),
   WINDOWS("Windows", HaxeTarget.CPP, "windows"),
-  CPPIA("Cppia", HaxeTarget.CPPIA, "cppia"),
   MAC("Mac OS", HaxeTarget.CPP, "mac"),
   LINUX("Linux", HaxeTarget.CPP, "linux"),
-  LINUX64("Linux 64", HaxeTarget.CPP, "linux", "-64"),
-  FLASH("Flash", HaxeTarget.FLASH, "flash"),
-  HTML5("HTML5", HaxeTarget.JAVA_SCRIPT, "html5"),
-  NEKO("Neko", HaxeTarget.NEKO, "neko"),
   HL("HashLink", HaxeTarget.HL, "hl"),
-  TIZEN("Tizen", HaxeTarget.CPP, "tizen"),
-  EMSCRIPTEN("Emscripten", HaxeTarget.CPP, "emscripten"),
-  AIR("Adobe AIR", HaxeTarget.FLASH, "air");
+  NEKO("Neko", HaxeTarget.NEKO, "neko"),
+  FLASH("Flash", HaxeTarget.FLASH, "flash"),
+  AIR("Adobe AIR", HaxeTarget.FLASH, "air"),
+  ANDROID("Android", HaxeTarget.CPP, "android"),
+  IOS("iOS", HaxeTarget.CPP, "ios"),
+  TVOS("tvOS", HaxeTarget.CPP, "tvos"),
+  WEBASSEMBLY("WebAssembly", HaxeTarget.CPP, "webassembly"),
+  ELECTRON("Electron", HaxeTarget.JAVA_SCRIPT, "electron");
 
   private final String[] flags;
   private final String description;
@@ -70,15 +59,7 @@ public enum OpenFLTarget {
     return flags;
   }
 
-  public HaxeTarget getOutputTarget() {
-    return outputTarget;
-  }
-
-  public static void initCombo(@NotNull DefaultComboBoxModel comboBoxModel) {
-    for (OpenFLTarget target : OpenFLTarget.values()) {
-      comboBoxModel.insertElementAt(target, 0);
-    }
-  }
+  public HaxeTarget getOutputTarget() { return outputTarget; }
 
   @Override
   public String toString() {

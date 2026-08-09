@@ -478,6 +478,30 @@
                          key="haxe.build.tools.configurable.name" bundle="messages.HaxeBundle"
                          nonDefaultProject="true"/>
 
+    <!-- Settings | Languages & Frameworks | Haxe | Frameworks | Lime/OpenFL/NME:
+         the configurable target lists (application-level - targets describe
+         the machine's toolchains). The two group pages carry no UI. -->
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$HaxeRoot"
+                             parentId="language"
+                             id="settings.haxe"
+                             key="haxe.settings.root.name" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$Frameworks"
+                             parentId="settings.haxe"
+                             id="settings.haxe.frameworks"
+                             key="haxe.settings.frameworks.name" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$LimeTargets"
+                             parentId="settings.haxe.frameworks"
+                             id="settings.haxe.frameworks.lime"
+                             key="haxe.frameworks.targets.lime" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$OpenflTargets"
+                             parentId="settings.haxe.frameworks"
+                             id="settings.haxe.frameworks.openfl"
+                             key="haxe.frameworks.targets.openfl" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$NmeTargets"
+                             parentId="settings.haxe.frameworks"
+                             id="settings.haxe.frameworks.nme"
+                             key="haxe.frameworks.targets.nme" bundle="messages.HaxeBundle"/>
+
     <importFilteringRule implementation="com.intellij.plugins.haxe.ide.HaxeImportFilteringRule"/>
     <targetElementEvaluator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.HaxeTargetElementEvaluator"/>
 

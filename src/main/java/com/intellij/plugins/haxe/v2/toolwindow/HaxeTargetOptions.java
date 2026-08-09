@@ -1,18 +1,20 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
-import com.intellij.plugins.haxe.config.NMETarget;
-import com.intellij.plugins.haxe.config.OpenFLTarget;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeFrameworkTargetSettings;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeFrameworkTargetSettings.Framework;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeFrameworkTargetSettings.TargetDefinition;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
  * The selectable target platforms for XML/HXP-based build files (HXML declares its
- * target inside the file and is not selectable). Ids are the enum constant names of
- * {@link OpenFLTarget} / {@link NMETarget}.
+ * target inside the file and is not selectable). Each build system's list comes
+ * from {@link HaxeFrameworkTargetSettings} (Settings | Haxe | Frameworks) —
+ * user-configurable, seeded from the built-in defaults — and is offered
+ * identically here and in the project wizard. Ids are the configured names.
  */
 public final class HaxeTargetOptions {
 
@@ -29,59 +31,53 @@ public final class HaxeTargetOptions {
 
   @NotNull
   public static List<TargetChoice> choicesFor(@NotNull HaxeBuildFileType type) {
-    if (type == HaxeBuildFileType.NMML) {
-      return Arrays.stream(NMETarget.values())
-        .map(target -> new TargetChoice(target.name(), target.toString()))
-        .toList();
-    }
-    return Arrays.stream(OpenFLTarget.values())
-      .map(target -> new TargetChoice(target.name(), target.toString()))
+    return targetsFor(type).stream()
+      .map(target -> new TargetChoice(target.name(), target.name()))
       .toList();
   }
 
   /** Display name for the stored id, falling back to the default target when unset or stale. */
   @NotNull
   public static String displayNameFor(@NotNull HaxeBuildFileType type, @Nullable String targetId) {
-    List<TargetChoice> choices = choicesFor(type);
-    return choices.stream()
-      .filter(choice -> choice.id().equals(targetId))
-      .findFirst()
-      .orElseGet(() -> defaultChoice(type))
-      .displayName();
+    return resolvedTarget(type, targetId).name();
   }
 
-  /** The lime/openfl command-line flag for the stored target id, e.g. "html5" (falls back to the default target). */
+  /** The tool's command-line flag for the stored target id, e.g. "html5" (falls back to the default target). */
   @NotNull
   public static String targetFlagFor(@NotNull HaxeBuildFileType type, @Nullable String targetId) {
-    String resolvedId = resolvedId(type, targetId);
-    return type == HaxeBuildFileType.NMML
-           ? NMETarget.valueOf(resolvedId).getTargetFlag()
-           : OpenFLTarget.valueOf(resolvedId).getTargetFlag();
+    return resolvedTarget(type, targetId).primaryFlag();
   }
 
-  /** The NMETarget for the stored id (falls back to the default target). */
+  /** All configured flags for the stored id — the target word first, extras (e.g. "-64") after. */
   @NotNull
-  public static NMETarget nmeTargetFor(@Nullable String targetId) {
-    return NMETarget.valueOf(resolvedId(HaxeBuildFileType.NMML, targetId));
-  }
-
-  @NotNull
-  private static String resolvedId(@NotNull HaxeBuildFileType type, @Nullable String targetId) {
-    return choicesFor(type).stream()
-      .map(TargetChoice::id)
-      .filter(id -> id.equals(targetId))
-      .findFirst()
-      .orElseGet(() -> defaultChoice(type).id());
+  public static List<String> targetFlagsFor(@NotNull HaxeBuildFileType type, @Nullable String targetId) {
+    return resolvedTarget(type, targetId).flags();
   }
 
   @NotNull
   public static TargetChoice defaultChoice(@NotNull HaxeBuildFileType type) {
-    // nme's own no-target default is the host desktop build; its html5 target
-    // needs an Emscripten runtime the stock haxelib release does not ship
-    String defaultId = type == HaxeBuildFileType.NMML ? NMETarget.CPP.name() : OpenFLTarget.HTML5.name();
-    return choicesFor(type).stream()
-      .filter(choice -> choice.id().equals(defaultId))
+    TargetDefinition first = targetsFor(type).get(0);
+    return new TargetChoice(first.name(), first.name());
+  }
+
+  /** The stored id's configured target, or the list's first entry when unset or stale. */
+  @NotNull
+  private static TargetDefinition resolvedTarget(@NotNull HaxeBuildFileType type, @Nullable String targetId) {
+    List<TargetDefinition> targets = targetsFor(type);
+    return targets.stream()
+      .filter(target -> target.name().equals(targetId))
       .findFirst()
-      .orElse(choicesFor(type).get(0));
+      .orElse(targets.get(0));
+  }
+
+  @NotNull
+  private static List<TargetDefinition> targetsFor(@NotNull HaxeBuildFileType type) {
+    Framework framework = switch (type) {
+      case NMML -> Framework.NME;
+      case OPENFL -> Framework.OPENFL;
+      // hxp scripts build through the lime tool
+      default -> Framework.LIME;
+    };
+    return HaxeFrameworkTargetSettings.getInstance().getTargets(framework);
   }
 }
