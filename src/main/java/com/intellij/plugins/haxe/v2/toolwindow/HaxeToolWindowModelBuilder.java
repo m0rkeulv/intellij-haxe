@@ -248,11 +248,12 @@ final class HaxeToolWindowModelBuilder {
 
     String targetFlag = NmeProjects.selectedTargetFlag(project, file);
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    HaxeBuildFileInfo prepared = HaxeNmeProjectInfoService.getInstance(project)
+    HaxeNmeProjectInfoService.Evaluation evaluation = HaxeNmeProjectInfoService.getInstance(project)
       .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, onEvaluationReady);
-    if (prepared == null) {
+    if (evaluation == null) {
       return withArtifact;
     }
+    HaxeBuildFileInfo prepared = evaluation.info();
     List<HaxeBuildFileInfo.HaxeLibDependency> libraries =
       !prepared.libraries().isEmpty() ? prepared.libraries() : raw.libraries();
     return new HaxeBuildFileInfo(withArtifact.target(), withArtifact.targetOutput(), prepared.defines(), libraries,
@@ -466,6 +467,8 @@ final class HaxeToolWindowModelBuilder {
       display = running ? HaxeBundle.message("haxe.toolwindow.server.running", String.valueOf(port))
                         : HaxeBundle.message("haxe.toolwindow.server.on.idle");
     }
-    return new CompilationServerNode(containerId, display, projectEnabled, moduleUses, running, connectEligible);
+    String contextFailure = HaxeContextHealth.getInstance(project).lastFailure(containerId);
+    return new CompilationServerNode(containerId, display, projectEnabled, moduleUses, running, connectEligible,
+                                     contextFailure);
   }
 }

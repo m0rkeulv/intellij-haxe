@@ -60,10 +60,24 @@ public final class HaxeNmeProjectInfoService implements Disposable {
   // library name (<repo>/<name>/<version>/...)
   private static final Pattern HAXELIB_VERSION_SEGMENT = Pattern.compile("\\d+(?:,\\d+)+|git");
 
+  /**
+   * One landed evaluation: the parsed info for the tool window plus the
+   * generated build hxml's content — the display service builds the
+   * compilation-server context from it. The hxml references the RETAINED
+   * prepared directory (generated ApplicationMain, boot classpath, asset
+   * resources), which lives until the evaluation is replaced or invalidated.
+   */
+  public record Evaluation(@NotNull HaxeBuildFileInfo info, @NotNull String hxmlContent) {
+  }
+
   private record CacheKey(@NotNull String filePath, @NotNull String targetFlag, @NotNull String haxelibPath) {
   }
 
-  private record CacheValue(long modificationStamp, @Nullable HaxeBuildFileInfo info, int attempts) {
+  private record CacheValue(long modificationStamp, @Nullable Evaluation evaluation, int attempts,
+                            @Nullable Path preparedDir) {
+  }
+
+  private record PreparedRun(@NotNull Evaluation evaluation, @NotNull Path preparedDir) {
   }
 
   private final Project project;
@@ -84,36 +98,43 @@ public final class HaxeNmeProjectInfoService implements Disposable {
   }
 
   /**
-   * The file's effective configuration for the target, or null when not resolved
-   * (yet). Schedules a background run when the cache is stale; {@code onUpdated}
+   * The file's evaluation for the target, or null when not resolved (yet).
+   * Schedules a background run when the cache is stale; {@code onUpdated}
    * fires on the EDT after the run completes. Safe to call from read actions.
    */
   @Nullable
-  public HaxeBuildFileInfo getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
-                                               @NotNull String targetFlag,
-                                               @Nullable String preferredSdkName,
-                                               @NotNull Runnable onUpdated) {
+  public Evaluation getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
+                                        @NotNull String targetFlag,
+                                        @Nullable String preferredSdkName,
+                                        @NotNull Runnable onUpdated) {
     String haxelibPath = HaxeToolPathResolver.resolveHaxelibExecutable(project, preferredSdkName);
     CacheKey key = new CacheKey(buildFile.file().getPath(), targetFlag, haxelibPath);
     long stamp = buildFile.file().getModificationStamp();
 
     CacheValue cached = cache.get(key);
     boolean fresh = cached != null && cached.modificationStamp() == stamp;
-    if (fresh && (cached.info() != null || cached.attempts() >= MAX_ATTEMPTS)) {
-      return cached.info();
+    if (fresh && (cached.evaluation() != null || cached.attempts() >= MAX_ATTEMPTS)) {
+      return cached.evaluation();
     }
     schedule(key, buildFile, stamp, fresh ? cached.attempts() : 0, onUpdated);
     // serve the stale value while the refresh runs
-    return cached != null ? cached.info() : null;
+    return cached != null ? cached.evaluation() : null;
   }
 
   public void clearCache() {
+    cache.values().forEach(HaxeNmeProjectInfoService::deletePreparedDir);
     cache.clear();
   }
 
   /** Drops every cached evaluation of one build file (all targets/toolchains), forcing a re-run on the next ask. */
   public void invalidate(@NotNull String filePath) {
-    cache.keySet().removeIf(key -> key.filePath().equals(filePath));
+    cache.entrySet().removeIf(entry -> {
+      boolean matches = entry.getKey().filePath().equals(filePath);
+      if (matches) {
+        deletePreparedDir(entry.getValue());
+      }
+      return matches;
+    });
   }
 
   private void schedule(@NotNull CacheKey key,
@@ -134,8 +155,12 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     executor.execute(() -> {
       List<Runnable> callbacks;
       try {
-        HaxeBuildFileInfo info = runPrepare(key, fileName, workDirectory);
-        cache.put(key, new CacheValue(stamp, info, previousAttempts + 1));
+        PreparedRun run = runPrepare(key, fileName, workDirectory);
+        CacheValue replaced = cache.put(key, new CacheValue(stamp,
+                                                            run != null ? run.evaluation() : null,
+                                                            previousAttempts + 1,
+                                                            run != null ? run.preparedDir() : null));
+        deletePreparedDir(replaced);
       }
       finally {
         // callbacks drained BEFORE the in-flight flag drops: an ask arriving in
@@ -152,11 +177,19 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     });
   }
 
+  /**
+   * Runs one prepare into a fresh temp directory. On success the directory is
+   * RETAINED (the returned evaluation's hxml references its generated sources
+   * and resources — the compilation server reads them per request) and only
+   * released when the cache entry is replaced or invalidated; a failed run
+   * cleans up immediately.
+   */
   @Nullable
-  private HaxeBuildFileInfo runPrepare(@NotNull CacheKey key,
-                                       @NotNull String fileName,
-                                       @Nullable String workDirectory) {
+  private PreparedRun runPrepare(@NotNull CacheKey key,
+                                 @NotNull String fileName,
+                                 @Nullable String workDirectory) {
     Path tempBin = null;
+    PreparedRun run = null;
     try {
       tempBin = Files.createTempDirectory("haxe-nme-prepare");
       List<String> command = List.of(key.haxelibPath(), "run", "nme", "prepare",
@@ -168,23 +201,27 @@ public final class HaxeNmeProjectInfoService implements Disposable {
                  + output.getStderr().lines().findFirst().orElse("exit code " + output.getExitCode()));
         return null;
       }
-      return parsePreparedBuildFile(output.getStdout(), workDirectory, fileName);
+      Evaluation evaluation = parsePreparedBuildFile(output.getStdout(), workDirectory, fileName);
+      if (evaluation != null) {
+        run = new PreparedRun(evaluation, tempBin);
+      }
+      return run;
     }
     catch (Exception e) {
       log.warn("nme prepare could not run for " + fileName + ": " + e.getMessage());
       return null;
     }
     finally {
-      if (tempBin != null) {
+      if (tempBin != null && run == null) {
         FileUtil.delete(tempBin.toFile());
       }
     }
   }
 
   @Nullable
-  private static HaxeBuildFileInfo parsePreparedBuildFile(@NotNull String stdout,
-                                                          @Nullable String workDirectory,
-                                                          @NotNull String fileName) throws Exception {
+  private static Evaluation parsePreparedBuildFile(@NotNull String stdout,
+                                                   @Nullable String workDirectory,
+                                                   @NotNull String fileName) throws Exception {
     String buildFilePath = stdout.lines()
       .filter(line -> line.startsWith(BUILD_FILE_MARKER))
       .map(line -> line.substring(BUILD_FILE_MARKER.length()).trim())
@@ -199,10 +236,18 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     if (!hxml.isAbsolute() && workDirectory != null) {
       hxml = Path.of(workDirectory).resolve(hxml);
     }
-    HaxeBuildFileInfo parsed = HxmlFileParser.parse(Files.readString(hxml), path -> null);
+    String content = Files.readString(hxml);
+    HaxeBuildFileInfo parsed = HxmlFileParser.parse(content, path -> null);
     List<HaxeLibDependency> libraries = withDerivedLibraries(parsed.libraries(), parsed.classpaths());
-    return new HaxeBuildFileInfo(parsed.target(), parsed.targetOutput(), parsed.defines(), libraries,
-                                 parsed.classpaths());
+    HaxeBuildFileInfo info = new HaxeBuildFileInfo(parsed.target(), parsed.targetOutput(), parsed.defines(), libraries,
+                                                   parsed.classpaths());
+    return new Evaluation(info, content);
+  }
+
+  private static void deletePreparedDir(@Nullable CacheValue value) {
+    if (value != null && value.preparedDir() != null) {
+      FileUtil.delete(value.preparedDir().toFile());
+    }
   }
 
   /** The hxml's explicit -lib entries plus the identities its haxelib-repo classpaths encode. */
@@ -237,6 +282,6 @@ public final class HaxeNmeProjectInfoService implements Disposable {
   @Override
   public void dispose() {
     executor.shutdownNow();
-    cache.clear();
+    clearCache();
   }
 }

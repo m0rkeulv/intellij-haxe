@@ -9,6 +9,7 @@ import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.DumbAwareAction;
@@ -18,13 +19,16 @@ import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
+import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager.ServerInfo;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager.ServerOutputListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.content.ContentManager;
@@ -33,6 +37,8 @@ import com.intellij.ui.content.ContentManagerListener;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import javax.swing.JComponent;
 
 /**
  * Bottom tool window streaming the haxe compilation servers' stdio - startup
@@ -43,15 +49,25 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, DumbAware {
 
+  /** The tool window id, as registered in plugin.xml. */
+  public static final String TOOL_WINDOW_ID = "Haxe Compilation Server";
+
   private static final String TOOLBAR_PLACE = "HaxeServerConsoleToolbar";
   /** Marks a tab with the server-instance id it renders; absent on the placeholder tab. */
   private static final Key<String> SERVER_ID = Key.create("haxe.server.console.server.id");
+  /** The tab's status half, refreshed when context health or server state changes. */
+  private static final Key<HaxeServerStatusPanel> STATUS_PANEL = Key.create("haxe.server.console.status.panel");
 
   @Override
   public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
     project.getMessageBus()
       .connect(toolWindow.getDisposable())
       .subscribe(HaxeCompilationServerListener.TOPIC, () -> syncTabs(project, toolWindow));
+    // context-health transitions arrive on background threads
+    project.getMessageBus()
+      .connect(toolWindow.getDisposable())
+      .subscribe(HaxeBuildConfigListener.TOPIC,
+                 () -> ApplicationManager.getApplication().invokeLater(() -> updateStatuses(project, toolWindow)));
     // closing a tab means "done with that SDK's server": stop the process and
     // forget the instance (on project close the manager kills everything anyway,
     // so shutdown-time removals are harmless)
@@ -65,6 +81,18 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
       }
     });
     syncTabs(project, toolWindow);
+  }
+
+  /** Activates the console window and selects the server's tab (plain activation when the tab is absent). */
+  public static void open(@NotNull Project project, @NotNull String serverId) {
+    ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+    if (toolWindow == null) return;
+    toolWindow.activate(() -> {
+      Content tab = findTab(toolWindow.getContentManager(), serverId);
+      if (tab != null) {
+        toolWindow.getContentManager().setSelectedContent(tab);
+      }
+    });
   }
 
   /** Mirrors the manager's instance list into tabs; runs on the EDT (the topic delivers there). */
@@ -82,6 +110,25 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
       if (findTab(contentManager, info.id()) == null) {
         contentManager.addContent(createServerTab(project, info));
       }
+    }
+    updateStatuses(project, toolWindow);
+  }
+
+  /** Refreshes every tab's status view and its red/green tab icon. */
+  private static void updateStatuses(@NotNull Project project, @NotNull ToolWindow toolWindow) {
+    if (project.isDisposed()) return;
+    var serverInfos = HaxeCompilationServerManager.getInstance(project).getServers();
+    for (Content content : toolWindow.getContentManager().getContents()) {
+      String serverId = content.getUserData(SERVER_ID);
+      HaxeServerStatusPanel status = content.getUserData(STATUS_PANEL);
+      if (serverId == null || status == null) continue;
+      boolean running = serverInfos.stream().anyMatch(info -> info.id().equals(serverId) && info.running());
+      if (!running) {
+        status.clearFetchedStats();
+      }
+      status.update(project, serverId);
+      content.setIcon(status.hasFailures() ? AllIcons.General.Error
+                                           : running ? AllIcons.General.InspectionsOK : null);
     }
   }
 
@@ -117,9 +164,17 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     toolbarGroup.add(new StartTabServerAction(project, info.id()));
     toolbarGroup.add(new RestartTabServerAction(project, info.id()));
     toolbarGroup.add(new StopTabServerAction(project, info.id()));
+
+    // console left, status view right - failures need selectable text, not tooltips
+    HaxeServerStatusPanel status = new HaxeServerStatusPanel();
+    JBSplitter splitter = new JBSplitter(false, 0.7f);
+    splitter.setFirstComponent(console.getComponent());
+    splitter.setSecondComponent(status);
+
     Content content = ContentFactory.getInstance()
-      .createContent(wrapWithToolbar(console, toolbarGroup), info.displayName(), false);
+      .createContent(wrapWithToolbar(splitter, toolbarGroup), info.displayName(), false);
     content.putUserData(SERVER_ID, info.id());
+    content.putUserData(STATUS_PANEL, status);
     content.setCloseable(true);
     content.setDisposer(() -> {
       manager.removeOutputListener(info.id(), listener);
@@ -142,19 +197,19 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     DefaultActionGroup toolbarGroup = new DefaultActionGroup();
     toolbarGroup.add(new StartDefaultServerAction(project));
     Content content = ContentFactory.getInstance()
-      .createContent(wrapWithToolbar(console, toolbarGroup), "", false);
+      .createContent(wrapWithToolbar(console.getComponent(), toolbarGroup), "", false);
     content.setCloseable(false);
     content.setDisposer(() -> Disposer.dispose(console));
     return content;
   }
 
   @NotNull
-  private static SimpleToolWindowPanel wrapWithToolbar(@NotNull ConsoleView console, @NotNull DefaultActionGroup group) {
+  private static SimpleToolWindowPanel wrapWithToolbar(@NotNull JComponent component, @NotNull DefaultActionGroup group) {
     SimpleToolWindowPanel panel = new SimpleToolWindowPanel(false, true);
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, group, false);
     toolbar.setTargetComponent(panel);
     panel.setToolbar(toolbar.getComponent());
-    panel.setContent(console.getComponent());
+    panel.setContent(component);
     return panel;
   }
 

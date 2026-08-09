@@ -31,6 +31,7 @@ import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
@@ -178,6 +179,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     Project project = configuration.getProject();
     boolean debug = DefaultDebugExecutor.EXECUTOR_ID.equals(environment.getExecutor().getId());
 
+    HaxeUnsavedDocuments.saveAll();
     HaxeCompileCommands.Resolved resolved = ReadAction.computeBlocking(
       () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), task.getExtraArguments()));
     if (resolved == null) {

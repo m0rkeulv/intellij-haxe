@@ -37,8 +37,10 @@ import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
@@ -57,6 +59,7 @@ import com.intellij.pom.Navigatable;
 import com.intellij.util.PathUtil;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
@@ -71,7 +74,9 @@ import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
+import java.awt.Component;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -604,7 +609,12 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       ShowSettingsUtil.getInstance().showSettingsDialog(project, HaxeBuildToolsConfigurable.class);
     }
     else {
-      HaxeEnvironmentStore.getInstance(project).setUsingCompilationServer(serverNode.containerId(), !serverNode.moduleUses());
+      boolean enable = !serverNode.moduleUses();
+      HaxeEnvironmentStore.getInstance(project).setUsingCompilationServer(serverNode.containerId(), enable);
+      if (!enable) {
+        // an opted-out container sends no more requests - a lingering failure could never clear itself
+        HaxeContextHealth.getInstance(project).record(serverNode.containerId(), null);
+      }
     }
     refreshTree();
   }
@@ -710,21 +720,50 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       RelativePoint point = new RelativePoint(e.getComponent(), e.getPoint());
 
       if (clicks == 1) {
-        handleSingleClick(userObject, point);
+        handleSingleClick(userObject, point, fragmentTagAt(e, path));
       } else if (clicks == 2) {
         handleDoubleClick(userObject);
       }
     }
 
-    private void handleSingleClick(@Nullable Object userObject, @NotNull RelativePoint point) {
+    /** The renderer fragment tag under the click — tags mark clickable fragments (the server failure link). */
+    @Nullable
+    private Object fragmentTagAt(@NotNull MouseEvent e, @NotNull TreePath path) {
+      Rectangle bounds = tree.getPathBounds(path);
+      if (bounds == null || !(path.getLastPathComponent() instanceof DefaultMutableTreeNode node)) return null;
+      Component renderer = tree.getCellRenderer()
+        .getTreeCellRendererComponent(tree, node, tree.isPathSelected(path), tree.isExpanded(path),
+                                      node.isLeaf(), tree.getRowForPath(path), false);
+      if (!(renderer instanceof SimpleColoredComponent colored)) return null;
+      renderer.setSize(bounds.width, bounds.height);
+      return colored.getFragmentTagAt(e.getX() - bounds.x);
+    }
+
+    private void handleSingleClick(@Nullable Object userObject, @NotNull RelativePoint point, @Nullable Object fragmentTag) {
       switch (userObject) {
         case TargetNode targetNode when targetNode.selectable() -> showTargetPopup(targetNode, point);
         case EnvSdkNode sdkNode -> showEnvironmentSdkPopup(sdkNode, point);
         case EnvLanguageLevelNode levelNode -> showLanguageLevelPopup(levelNode, point);
         case EnvCompileCommandNode buildCommand -> configureCompileCommand(buildCommand);
-        case CompilationServerNode serverNode -> toggleCompilationServer(serverNode);
+        case CompilationServerNode serverNode -> {
+          // the red failure text links to the server console's status view;
+          // the rest of the row keeps the participation toggle
+          if (fragmentTag instanceof HaxeToolWindowNodes.ServerFailureLink link) {
+            openServerConsole(link.containerId());
+          }
+          else {
+            toggleCompilationServer(serverNode);
+          }
+        }
         case null, default -> { }
       }
+    }
+
+    /** Opens the server console at the tab serving this container's SDK — the status view holds the failure detail. */
+    private void openServerConsole(@NotNull String containerId) {
+      String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
+      String serverId = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
+      HaxeServerConsoleWindowFactory.open(project, serverId);
     }
 
     private void handleDoubleClick(@Nullable Object userObject) {

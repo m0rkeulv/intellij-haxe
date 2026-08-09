@@ -264,14 +264,21 @@ public final class HaxeToolWindowNodes {
   /**
    * Compilation server row: shows the project server's state for this container.
    * Clicking toggles the container's participation, or opens Build Tools settings
-   * while the server is disabled project-wide.
+   * while the server is disabled project-wide. {@code contextFailure} carries the
+   * container's last failed compiler request (a build context that does not
+   * compile), shown as a warning on the row.
    */
+  /** Renderer fragment tag on the server row's failure text: clicking it opens the server console's status view. */
+  public record ServerFailureLink(@NotNull String containerId) {
+  }
+
   public record CompilationServerNode(@NotNull String containerId,
                                       @NotNull String display,
                                       boolean projectEnabled,
                                       boolean moduleUses,
                                       boolean running,
-                                      boolean connectEligible) implements HaxeToolWindowNode {
+                                      boolean connectEligible,
+                                      @Nullable String contextFailure) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
       return "server";

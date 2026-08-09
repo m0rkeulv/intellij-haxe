@@ -94,51 +94,55 @@ public final class NmeProjects {
     String appFile = content == null ? null : ProjectXmlParser.parseAppFile(content);
     if (appFile == null) return raw;
 
-    TargetArtifact artifact = targetArtifact(selectedTargetFlag(project, file), appFile);
+    // the nmml's <app path> overrides the tool's default "bin" output root
+    String appPath = ProjectXmlParser.parseAppPath(content);
+    String outputRoot = appPath != null ? appPath : "bin";
+    TargetArtifact artifact = targetArtifact(selectedTargetFlag(project, file), appFile, outputRoot);
     if (artifact == null) return raw;
     return new HaxeBuildFileInfo(artifact.target(), artifact.relativeOutput(), raw.defines(), raw.libraries(), raw.classpaths());
   }
 
   /**
    * Where the nme tool packages a target's runnable artifact, relative to the
-   * project file: {@code bin/<platform dir>/<app file>/...} (mac wraps an .app
-   * bundle instead of a plain directory). Platform dirs follow the tool's
-   * naming, which suffixes "64" for the 64-bit desktop builds every modern
-   * mac/linux host produces. "cpp" builds for the host desktop. Target flags
-   * without a launchable artifact mapping (android, ios, neko's bootstrapped
-   * executable, user-configured console targets...) return null.
+   * project file: {@code <output root>/<platform dir>/<app file>/...} (mac
+   * wraps an .app bundle instead of a plain directory). The output root is the
+   * nmml's {@code <app path>}, defaulting to {@code bin}. Platform dirs follow
+   * the tool's naming, which suffixes "64" for the 64-bit desktop builds every
+   * modern mac/linux host produces. "cpp" builds for the host desktop. Target
+   * flags without a launchable artifact mapping (android, ios, neko's
+   * bootstrapped executable, user-configured console targets...) return null.
    */
   @Nullable
-  public static TargetArtifact targetArtifact(@NotNull String targetFlag, @NotNull String appFile) {
+  public static TargetArtifact targetArtifact(@NotNull String targetFlag, @NotNull String appFile, @NotNull String outputRoot) {
     return switch (targetFlag) {
-      case "cpp" -> hostDesktopArtifact(appFile);
-      case "windows" -> windowsArtifact(appFile);
-      case "linux" -> linuxArtifact(appFile);
-      case "mac" -> macArtifact(appFile);
-      case "flash" -> new TargetArtifact(HaxeTarget.FLASH, "bin/flash/" + appFile + "/" + appFile + ".swf");
+      case "cpp" -> hostDesktopArtifact(appFile, outputRoot);
+      case "windows" -> windowsArtifact(appFile, outputRoot);
+      case "linux" -> linuxArtifact(appFile, outputRoot);
+      case "mac" -> macArtifact(appFile, outputRoot);
+      case "flash" -> new TargetArtifact(HaxeTarget.FLASH, outputRoot + "/flash/" + appFile + "/" + appFile + ".swf");
       default -> null;
     };
   }
 
   @NotNull
-  private static TargetArtifact hostDesktopArtifact(@NotNull String appFile) {
-    if (SystemInfo.isWindows) return windowsArtifact(appFile);
-    if (SystemInfo.isMac) return macArtifact(appFile);
-    return linuxArtifact(appFile);
+  private static TargetArtifact hostDesktopArtifact(@NotNull String appFile, @NotNull String outputRoot) {
+    if (SystemInfo.isWindows) return windowsArtifact(appFile, outputRoot);
+    if (SystemInfo.isMac) return macArtifact(appFile, outputRoot);
+    return linuxArtifact(appFile, outputRoot);
   }
 
   @NotNull
-  private static TargetArtifact windowsArtifact(@NotNull String appFile) {
-    return new TargetArtifact(HaxeTarget.CPP, "bin/windows/" + appFile + "/" + appFile + ".exe");
+  private static TargetArtifact windowsArtifact(@NotNull String appFile, @NotNull String outputRoot) {
+    return new TargetArtifact(HaxeTarget.CPP, outputRoot + "/windows/" + appFile + "/" + appFile + ".exe");
   }
 
   @NotNull
-  private static TargetArtifact linuxArtifact(@NotNull String appFile) {
-    return new TargetArtifact(HaxeTarget.CPP, "bin/linux64/" + appFile + "/" + appFile);
+  private static TargetArtifact linuxArtifact(@NotNull String appFile, @NotNull String outputRoot) {
+    return new TargetArtifact(HaxeTarget.CPP, outputRoot + "/linux64/" + appFile + "/" + appFile);
   }
 
   @NotNull
-  private static TargetArtifact macArtifact(@NotNull String appFile) {
-    return new TargetArtifact(HaxeTarget.CPP, "bin/mac64/" + appFile + ".app/Contents/MacOS/" + appFile);
+  private static TargetArtifact macArtifact(@NotNull String appFile, @NotNull String outputRoot) {
+    return new TargetArtifact(HaxeTarget.CPP, outputRoot + "/mac64/" + appFile + ".app/Contents/MacOS/" + appFile);
   }
 }

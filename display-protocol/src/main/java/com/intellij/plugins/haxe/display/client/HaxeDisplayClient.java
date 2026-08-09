@@ -20,11 +20,17 @@ import tools.jackson.databind.JsonNode;
  */
 public class HaxeDisplayClient {
 
+  /** Notified after every request round-trip — the IDE records per-server metrics from it. */
+  public interface RequestObserver {
+    void afterRequest(String method, long millis, boolean success);
+  }
+
   private static final int DEFAULT_READ_TIMEOUT_MS = 30_000;
 
   private final String host;
   private final int port;
   private final int readTimeoutMs;
+  private RequestObserver observer;
 
   public HaxeDisplayClient(String host, int port) {
     this(host, port, DEFAULT_READ_TIMEOUT_MS);
@@ -34,6 +40,10 @@ public class HaxeDisplayClient {
     this.host = host;
     this.port = port;
     this.readTimeoutMs = readTimeoutMs;
+  }
+
+  public void setObserver(RequestObserver observer) {
+    this.observer = observer;
   }
 
   // --- lifecycle / capability ---
@@ -112,6 +122,11 @@ public class HaxeDisplayClient {
     return DisplayJson.decodeContexts(rpc(baseArgs, DisplayMethods.SERVER_CONTEXTS, Map.of()));
   }
 
+  /** Cache memory per compilation context; server-global, works with empty base args. */
+  public ServerMemory serverMemory(List<String> baseArgs) throws DisplayRequestException {
+    return DisplayJson.decodeServerMemory(rpc(baseArgs, DisplayMethods.SERVER_MEMORY, Map.of()));
+  }
+
   public List<String> modules(List<String> baseArgs, String signature) throws DisplayRequestException {
     return DisplayJson.decodeStringList(
       rpc(baseArgs, DisplayMethods.SERVER_MODULES, Map.of("signature", signature)));
@@ -152,14 +167,41 @@ public class HaxeDisplayClient {
 
   private JsonNode rpc(List<String> baseArgs, String method, Map<String, Object> params)
     throws DisplayRequestException {
-    List<String> args = new ArrayList<>(baseArgs);
-    args.add("--display");
-    args.add(DisplayJson.encodeRequest(method, params));
-    DisplayResponse response = HaxeDisplayTransport.request(host, port, args, readTimeoutMs);
-    if (response.payload().isEmpty()) {
-      String detail = response.hasError() ? "compiler reported an error" : "empty response";
-      throw new DisplayRequestException("Display request '" + method + "' got no result: " + detail);
+    long start = System.nanoTime();
+    boolean success = false;
+    try {
+      List<String> args = new ArrayList<>(baseArgs);
+      args.add("--display");
+      args.add(DisplayJson.encodeRequest(method, params));
+      DisplayResponse response = HaxeDisplayTransport.request(host, port, args, readTimeoutMs);
+      if (response.payload().isEmpty()) {
+        throw new DisplayRequestException("Display request '" + method + "' got no result: " + failureDetail(response));
+      }
+      JsonNode result = DisplayJson.unwrap(response.payload());
+      success = true;
+      return result;
     }
-    return DisplayJson.unwrap(response.payload());
+    finally {
+      if (observer != null) {
+        observer.afterRequest(method, (System.nanoTime() - start) / 1_000_000, success);
+      }
+    }
+  }
+
+  /**
+   * An empty response usually means the build context itself failed to
+   * compile; the compiler explains WHY in its log lines (e.g. a define
+   * override making a library uncompilable) — surface their tail instead of
+   * a bare "empty response".
+   */
+  private static String failureDetail(DisplayResponse response) {
+    List<String> lines = response.logs().stream()
+      .filter(line -> !line.isBlank())
+      .toList();
+    if (lines.isEmpty()) {
+      return response.hasError() ? "compiler reported an error" : "empty response";
+    }
+    String tail = String.join(" | ", lines.subList(Math.max(0, lines.size() - 3), lines.size()));
+    return (response.hasError() ? "compiler error: " : "") + tail;
   }
 }

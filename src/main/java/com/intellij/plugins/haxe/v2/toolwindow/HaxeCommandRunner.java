@@ -14,6 +14,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -37,6 +38,7 @@ public final class HaxeCommandRunner {
                          @NotNull String presentableName,
                          @NotNull List<String> command,
                          @Nullable String workDirectory) {
+    HaxeUnsavedDocuments.saveAll();
     GeneralCommandLine commandLine = new GeneralCommandLine(command)
       .withWorkDirectory(workDirectory != null ? workDirectory : project.getBasePath());
     try {

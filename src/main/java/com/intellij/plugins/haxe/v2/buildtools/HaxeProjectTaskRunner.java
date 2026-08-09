@@ -86,6 +86,7 @@ public final class HaxeProjectTaskRunner extends ProjectTaskRunner {
 
   @NotNull
   private static Result buildAll(@NotNull Project project, @NotNull Set<String> containerIds, @NotNull ConsoleView console) {
+    HaxeUnsavedDocuments.saveAll();
     for (String containerId : containerIds) {
       HaxeCompileCommands.Resolved resolved =
         ReadAction.computeBlocking(() -> HaxeCompileCommands.resolve(project, containerId));

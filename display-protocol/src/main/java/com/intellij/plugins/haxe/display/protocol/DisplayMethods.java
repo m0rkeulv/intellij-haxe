@@ -31,6 +31,7 @@ public final class DisplayMethods {
   public static final String SERVER_TYPE = "server/type";
   public static final String SERVER_FILES = "server/files";
   public static final String SERVER_MODULE_CREATED = "server/moduleCreated";
+  public static final String SERVER_MEMORY = "server/memory";
 
   private DisplayMethods() {
   }
