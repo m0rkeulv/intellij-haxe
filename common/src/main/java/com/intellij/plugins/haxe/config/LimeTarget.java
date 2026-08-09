@@ -1,8 +1,8 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * Default Lime Targets
- * <a href="https://lime.openfl.org/docs/getting-started/targets/">...</a>
+ * Lime Targets based on
+ * <a href="https://lime.openfl.org/docs/getting-started/targets/">Lime targets docs</a>
  */
 public enum LimeTarget {
 

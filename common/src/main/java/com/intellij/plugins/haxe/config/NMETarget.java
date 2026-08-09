@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * NME targets based "NME help"
+ * NME targets based on commandline output from "NME help"
  */
 public enum NMETarget {
 
@@ -29,8 +29,7 @@ public enum NMETarget {
 
   /**
    * The default target for new projects and unset selections — the tool's own
-   * no-target default. Not HTML5: nme's html5/jsprime needs an Emscripten
-   * runtime the stock haxelib release does not ship.
+   * no-target default. avoid HTML5, nmes html5/jsprime target needs Emscripten
    */
   public static final NMETarget DEFAULT = CPP;
 

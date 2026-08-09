@@ -18,8 +18,8 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * Default openFL Targets (based on lime targets)
- * <a href="https://lime.openfl.org/docs/getting-started/targets/">...</a>
+ * Default openFL Targets (based on lime targets)<br/>
+ * See <a href="https://lime.openfl.org/docs/getting-started/targets/">Lime targets docs</a>
  */
 public enum OpenFLTarget {
 
