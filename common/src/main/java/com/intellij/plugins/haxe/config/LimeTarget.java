@@ -21,6 +21,9 @@ public enum LimeTarget {
   NEKO("Neko", HaxeTarget.NEKO, "neko"),
   RPI("Raspberry Pi", HaxeTarget.CPP, "rpi");
 
+  /** The default target for new projects and unset selections. */
+  public static final LimeTarget DEFAULT = HTML5;
+
   private final String[] flags;
   private final String description;
   private final HaxeTarget outputTarget;

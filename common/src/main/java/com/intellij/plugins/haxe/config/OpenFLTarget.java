@@ -38,6 +38,9 @@ public enum OpenFLTarget {
   WEBASSEMBLY("WebAssembly", HaxeTarget.CPP, "webassembly"),
   ELECTRON("Electron", HaxeTarget.JAVA_SCRIPT, "electron");
 
+  /** The default target for new projects and unset selections. */
+  public static final OpenFLTarget DEFAULT = HTML5;
+
   private final String[] flags;
   private final String description;
   private final HaxeTarget outputTarget;

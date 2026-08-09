@@ -123,6 +123,16 @@ public final class HaxeFrameworkTargetSettings implements PersistentStateCompone
     }
   }
 
+  /** The name of the framework's built-in default target (each target enum declares its own {@code DEFAULT}). */
+  @NotNull
+  public static String defaultTargetName(@NotNull Framework framework) {
+    return switch (framework) {
+      case LIME -> LimeTarget.DEFAULT.toString();
+      case OPENFL -> OpenFLTarget.DEFAULT.toString();
+      case NME -> NMETarget.DEFAULT.toString();
+    };
+  }
+
   /** The built-in list a framework starts from — and returns to when every row is removed. */
   @NotNull
   public static List<TargetDefinition> defaults(@NotNull Framework framework) {

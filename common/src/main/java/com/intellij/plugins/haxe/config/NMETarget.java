@@ -27,6 +27,13 @@ public enum NMETarget {
   NEKO("Neko", HaxeTarget.NEKO, "neko"),
   HTML5("HTML5 (jsprime)", HaxeTarget.JAVA_SCRIPT, "html5");
 
+  /**
+   * The default target for new projects and unset selections — the tool's own
+   * no-target default. Not HTML5: nme's html5/jsprime needs an Emscripten
+   * runtime the stock haxelib release does not ship.
+   */
+  public static final NMETarget DEFAULT = CPP;
+
   private final String[] flags;
   private final String description;
   private final HaxeTarget outputTarget;
