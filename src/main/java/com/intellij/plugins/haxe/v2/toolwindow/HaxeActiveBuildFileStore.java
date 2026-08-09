@@ -56,8 +56,8 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
 
   @Override
   public void loadState(@NotNull State state) {
-    notifyChanged();
     this.state = state;
+    notifyChanged();
   }
 
   @Nullable
@@ -66,8 +66,8 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
   }
 
   public void setActiveFile(@NotNull String filePath) {
-    notifyChanged();
     state.activeFile = filePath;
+    notifyChanged();
   }
 
   /**

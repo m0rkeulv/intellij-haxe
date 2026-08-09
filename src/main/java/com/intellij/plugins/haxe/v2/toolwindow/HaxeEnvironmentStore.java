@@ -87,12 +87,12 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   @Override
   public void loadState(@NotNull State state) {
-    notifyChanged();
     if (state.environments == null) {
       state.environments = new ArrayList<>();
     }
     state.environments.forEach(HaxeEnvironmentStore::sanitizeDefines);
     this.state = state;
+    notifyChanged();
   }
 
   /**
@@ -127,8 +127,8 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void setSdkName(@NotNull String containerId, @Nullable String sdkName) {
-    notifyChanged();
     getOrCreate(containerId).sdkName = sdkName;
+    notifyChanged();
   }
 
   /** The container's compile command, or null when unset (the container is skipped on project build). */
@@ -142,11 +142,11 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void setCompileCommand(@NotNull String containerId, @Nullable CompileCommand compileCommand) {
-    notifyChanged();
     ContainerEnvironment environment = getOrCreate(containerId);
     environment.compileFilePath = compileCommand == null ? null : compileCommand.buildFilePath();
     environment.compileActionName = compileCommand == null ? null : compileCommand.actionName();
     environment.compileArguments = compileCommand == null ? "" : compileCommand.arguments();
+    notifyChanged();
   }
 
   /** Whether the container's compile command connects to the project's compilation server (when enabled). */
@@ -156,8 +156,8 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void setUsingCompilationServer(@NotNull String containerId, boolean use) {
-    notifyChanged();
     getOrCreate(containerId).useCompilationServer = use;
+    notifyChanged();
   }
 
   /** The container's define entries, in name order. */
@@ -174,7 +174,6 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   /** Replaces the container's define entries (the Configure Environment dialog applies the whole list). */
   public void setDefines(@NotNull String containerId, @NotNull List<EnvironmentDefine> defines) {
-    notifyChanged();
     List<DefineState> serialized = new ArrayList<>();
     for (EnvironmentDefine define : defines) {
       if (StringUtil.isEmptyOrSpaces(define.name())) continue;
@@ -185,6 +184,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
       serialized.add(defineState);
     }
     getOrCreate(containerId).defines = serialized;
+    notifyChanged();
   }
 
   /** Adds or updates a SET define, keeping any other entries. */
@@ -198,11 +198,11 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   }
 
   public void removeDefine(@NotNull String containerId, @NotNull String name) {
-    notifyChanged();
     ContainerEnvironment environment = find(containerId);
     if (environment != null) {
       environment.defines.removeIf(define -> name.equals(define.name));
     }
+    notifyChanged();
   }
 
   @NotNull

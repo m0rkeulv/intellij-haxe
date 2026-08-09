@@ -57,11 +57,11 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
 
   @Override
   public void loadState(@NotNull State state) {
-    notifyChanged();
     if (state.targetsByFile == null) {
       state.targetsByFile = new TreeMap<>();
     }
     this.state = state;
+    notifyChanged();
   }
 
   @Nullable
@@ -70,7 +70,7 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
   }
 
   public void setSelectedTargetId(@NotNull VirtualFile buildFile, @NotNull String targetId) {
-    notifyChanged();
     state.targetsByFile.put(buildFile.getPath(), targetId);
+    notifyChanged();
   }
 }
