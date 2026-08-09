@@ -49,44 +49,35 @@ public final class ProjectXmlParser {
   }
 
   /**
-   * The {@code <app path="...">} attribute — the export directory lime writes
-   * every target's output under (conventionally {@code Export}); null when
-   * the file declares none.
-   */
-  @Nullable
-  public static String parseAppPath(@NotNull String content) {
-    try {
-      XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
-      while (reader.hasNext()) {
-        if (reader.next() != XMLStreamConstants.START_ELEMENT) continue;
-        if (!"app".equals(reader.getLocalName().toLowerCase())) continue;
-        String path = StringUtil.nullize(attribute(reader, "path"), true);
-        if (path != null) {
-          return path.trim();
-        }
-      }
-    }
-    catch (XMLStreamException e) {
-      log.debug("Failed to parse project xml: " + e.getMessage());
-    }
-    return null;
-  }
-
-  /**
    * The {@code <app file="...">} attribute — the base name of the launcher
    * executable lime produces (e.g. {@code NyanCat} → {@code NyanCat.exe} on
    * Windows); null when the file declares none.
    */
   @Nullable
   public static String parseAppFile(@NotNull String content) {
+    return appAttribute(content, "file");
+  }
+
+  /**
+   * The {@code <app path="...">} attribute — the output root the tool exports
+   * every target under (conventionally {@code Export}); null when the file
+   * declares none (the tools default to {@code bin}).
+   */
+  @Nullable
+  public static String parseAppPath(@NotNull String content) {
+    return appAttribute(content, "path");
+  }
+
+  @Nullable
+  private static String appAttribute(@NotNull String content, @NotNull String attributeName) {
     try {
       XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
       while (reader.hasNext()) {
         if (reader.next() != XMLStreamConstants.START_ELEMENT) continue;
         if (!"app".equals(reader.getLocalName().toLowerCase())) continue;
-        String file = StringUtil.nullize(attribute(reader, "file"), true);
-        if (file != null) {
-          return file.trim();
+        String value = StringUtil.nullize(attribute(reader, attributeName), true);
+        if (value != null) {
+          return value.trim();
         }
       }
     }

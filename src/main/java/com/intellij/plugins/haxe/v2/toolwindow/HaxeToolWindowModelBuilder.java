@@ -45,12 +45,12 @@ import java.util.stream.Collectors;
 final class HaxeToolWindowModelBuilder {
 
   private final Project project;
-  // fired when a background lime evaluation lands, so the owner can re-scan
-  private final Runnable onLimeEvaluationReady;
+  // fired when a background lime/nme evaluation lands, so the owner can re-scan
+  private final Runnable onEvaluationReady;
 
-  HaxeToolWindowModelBuilder(@NotNull Project project, @NotNull Runnable onLimeEvaluationReady) {
+  HaxeToolWindowModelBuilder(@NotNull Project project, @NotNull Runnable onEvaluationReady) {
     this.project = project;
-    this.onLimeEvaluationReady = onLimeEvaluationReady;
+    this.onEvaluationReady = onEvaluationReady;
   }
 
   record FileEntry(HaxeBuildFile buildFile, HaxeBuildFileInfo info, boolean manual, List<ActionNode> actions) {
@@ -109,23 +109,27 @@ final class HaxeToolWindowModelBuilder {
     return containers;
   }
 
+  /** One installed haxelib: the selected version (null when none is set) and every installed version. */
+  record InstalledLibrary(@Nullable String selectedVersion, @NotNull Set<String> versions) {
+  }
+
   /**
-   * Haxelib's selected version per installed library (lower-cased name, value may be null
-   * when no version is selected), or null when haxelib is unavailable. Runs an external
-   * process - call outside read actions.
+   * Haxelib's install state per library (lower-cased name), or null when haxelib
+   * is unavailable. Runs an external process - call outside read actions.
    */
   @Nullable
-  static Map<String, String> fetchInstalledLibraryVersions(@NotNull Project project) {
+  static Map<String, InstalledLibrary> fetchInstalledLibraryVersions(@NotNull Project project) {
     Sdk sdk = HaxeToolPathResolver.findConfiguredSdk(project);
     VirtualFile workDir = ProjectUtil.guessProjectDir(project);
     if (sdk == null || workDir == null) return null;
 
     HaxelibInstalledIndex index = HaxelibInstalledIndex.fetchFromHaxelib(sdk, workDir);
-    Map<String, String> selectedByName = new HashMap<>();
+    Map<String, InstalledLibrary> byName = new HashMap<>();
     for (String name : index.getInstalledLibraries()) {
-      selectedByName.put(name.toLowerCase(Locale.ROOT), index.getSelectedVersion(name));
+      InstalledLibrary library = new InstalledLibrary(index.getSelectedVersion(name), index.getInstalledVersions(name));
+      byName.put(name.toLowerCase(Locale.ROOT), library);
     }
-    return selectedByName;
+    return byName;
   }
 
   @NotNull
@@ -205,6 +209,9 @@ final class HaxeToolWindowModelBuilder {
   private HaxeBuildFileInfo effectiveInfo(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
     HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
     HaxeBuildFileType type = buildFile.type();
+    if (type == HaxeBuildFileType.NMML) {
+      return nmeEffectiveInfo(containerId, buildFile, raw);
+    }
     if (!LimeProjects.isLimeFamily(type)) {
       return raw;
     }
@@ -212,7 +219,7 @@ final class HaxeToolWindowModelBuilder {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
-      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, onLimeEvaluationReady);
+      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, onEvaluationReady);
     if (display == null) {
       return raw;
     }
@@ -222,6 +229,35 @@ final class HaxeToolWindowModelBuilder {
     // artifact path of the SELECTED lime target (the raw xml declares neither)
     return new HaxeBuildFileInfo(display.target(), display.targetOutput(), display.defines(), libraries,
                                  display.classpaths());
+  }
+
+  /**
+   * NMML info: target + artifact derive statically from the selected target
+   * (the nme tool's output layout is fixed), while defines, classpaths and the
+   * FULL library set (include.nmml transitives, asset handlers) come from the
+   * background `nme prepare` evaluation - the raw xml parse serves until it
+   * lands. The prepared hxml flattens libs into classpaths, so a run whose
+   * derived library list is empty keeps the declared one.
+   */
+  @NotNull
+  private HaxeBuildFileInfo nmeEffectiveInfo(@NotNull String containerId,
+                                             @NotNull HaxeBuildFile buildFile,
+                                             @NotNull HaxeBuildFileInfo raw) {
+    VirtualFile file = buildFile.file();
+    HaxeBuildFileInfo withArtifact = NmeProjects.withTargetArtifact(project, file, raw);
+
+    String targetFlag = NmeProjects.selectedTargetFlag(project, file);
+    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
+    HaxeNmeProjectInfoService.Evaluation evaluation = HaxeNmeProjectInfoService.getInstance(project)
+      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, onEvaluationReady);
+    if (evaluation == null) {
+      return withArtifact;
+    }
+    HaxeBuildFileInfo prepared = evaluation.info();
+    List<HaxeBuildFileInfo.HaxeLibDependency> libraries =
+      !prepared.libraries().isEmpty() ? prepared.libraries() : raw.libraries();
+    return new HaxeBuildFileInfo(withArtifact.target(), withArtifact.targetOutput(), prepared.defines(), libraries,
+                                 prepared.classpaths());
   }
 
   /**
@@ -239,8 +275,10 @@ final class HaxeToolWindowModelBuilder {
 
     addDefaultActions(actions, ownerId, buildFile, environmentSdk, workDirectory);
     for (HaxeCustomActionsStore.CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(ownerId)) {
-      List<String> command = ParametersListUtil.parse(custom.command());
-      actions.add(new ActionNode(ownerId, custom.name(), command, workDirectory, custom.command(), true));
+      // the row shows the expanded command, so a ${target} action reads like the default ones
+      String expanded = HaxeCustomCommands.expandVariables(project, buildFile.file(), buildFile.type(), custom.command());
+      List<String> command = HaxeCustomCommands.parse(expanded);
+      actions.add(new ActionNode(ownerId, custom.name(), command, workDirectory, expanded, true));
     }
     return actions;
   }
@@ -260,10 +298,10 @@ final class HaxeToolWindowModelBuilder {
       }
       case OPENFL, LIME, HXP_PROJECT -> {
         String tool = LimeProjects.toolFor(type);
-        String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
+        String targetFlags = String.join(" ", LimeProjects.selectedTargetFlags(project, type, file));
         for (String actionName : LimeProjects.DEFAULT_ACTIONS) {
           List<String> command = LimeProjects.actionCommand(project, environmentSdk, file, type, actionName);
-          String presentable = tool + " " + actionName + " " + targetFlag;
+          String presentable = tool + " " + actionName + " " + targetFlags;
           actions.add(new ActionNode(ownerId, actionName, command, workDirectory, presentable, false));
         }
       }
@@ -275,7 +313,14 @@ final class HaxeToolWindowModelBuilder {
                                       workDirectory, presentable, false);
         actions.add(actionNode);
       }
-      case NMML -> { }
+      case NMML -> {
+        String targetFlags = String.join(" ", NmeProjects.selectedTargetFlags(project, file));
+        for (String actionName : NmeProjects.DEFAULT_ACTIONS) {
+          List<String> command = NmeProjects.actionCommand(project, environmentSdk, file, actionName);
+          String presentable = "nme " + actionName + " " + targetFlags;
+          actions.add(new ActionNode(ownerId, actionName, command, workDirectory, presentable, false));
+        }
+      }
     }
   }
 
@@ -335,7 +380,7 @@ final class HaxeToolWindowModelBuilder {
                                      connectEligible);
   }
 
-  /** The type-derived build command, or null when the type has no build support (nmml). */
+  /** The type-derived build command. */
   @Nullable
   private List<String> defaultBuildCommand(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
@@ -345,7 +390,7 @@ final class HaxeToolWindowModelBuilder {
       case OPENFL, LIME, HXP_PROJECT ->
         LimeProjects.actionCommand(project, environmentSdk, file, buildFile.type(), LimeProjects.BUILD_ACTION);
       case HXP_SCRIPT -> HaxeCompileCommands.hxpScriptCommand(project, environmentSdk, file);
-      case NMML -> null;
+      case NMML -> NmeProjects.actionCommand(project, environmentSdk, file, NmeProjects.BUILD_ACTION);
     };
   }
 
@@ -356,11 +401,12 @@ final class HaxeToolWindowModelBuilder {
       case HXML -> "haxe " + file.getName();
       case OPENFL, LIME, HXP_PROJECT -> {
         String tool = LimeProjects.toolFor(buildFile.type());
-        String targetFlag = LimeProjects.selectedTargetFlag(project, buildFile.type(), file);
-        yield tool + " build " + file.getName() + " " + targetFlag;
+        String targetFlags = String.join(" ", LimeProjects.selectedTargetFlags(project, buildFile.type(), file));
+        yield tool + " build " + file.getName() + " " + targetFlags;
       }
       case HXP_SCRIPT -> "hxp " + file.getName();
-      case NMML -> file.getName();
+      case NMML -> "nme build " + file.getName() + " "
+                   + String.join(" ", NmeProjects.selectedTargetFlags(project, file));
     };
   }
 
@@ -421,6 +467,8 @@ final class HaxeToolWindowModelBuilder {
       display = running ? HaxeBundle.message("haxe.toolwindow.server.running", String.valueOf(port))
                         : HaxeBundle.message("haxe.toolwindow.server.on.idle");
     }
-    return new CompilationServerNode(containerId, display, projectEnabled, moduleUses, running, connectEligible);
+    String contextFailure = HaxeContextHealth.getInstance(project).lastFailure(containerId);
+    return new CompilationServerNode(containerId, display, projectEnabled, moduleUses, running, connectEligible,
+                                     contextFailure);
   }
 }

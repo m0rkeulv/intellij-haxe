@@ -48,7 +48,8 @@ public final class DisplayJson {
     }
     JsonNode error = root.path("error");
     if (!error.isMissingNode()) {
-      throw new DisplayRequestException("Display request failed: " + error.path("message").asString("unknown error")
+      throw new DisplayRequestException("Display request failed: "
+                                        + error.path("message").asString("unknown error")
                                         + " (code " + error.path("code").asInt(0) + ")");
     }
     return root.path("result").path("result");
@@ -142,21 +143,35 @@ public final class DisplayJson {
   public static List<HaxeServerContext> decodeContexts(JsonNode data) {
     List<HaxeServerContext> contexts = new ArrayList<>();
     for (JsonNode entry : data) {
-      List<String> classPaths = new ArrayList<>();
-      for (JsonNode path : entry.path("classPaths")) {
-        classPaths.add(path.asString(""));
-      }
-      Map<String, String> defines = new LinkedHashMap<>();
-      for (JsonNode define : entry.path("defines")) {
-        defines.put(define.path("key").asString(""), define.path("value").asString(""));
-      }
-      int index = entry.path("index").asInt(0);
-      String desc = entry.path("desc").asString("");
-      String signature = entry.path("signature").asString("");
-      String platform = entry.path("platform").asString("");
-      contexts.add(new HaxeServerContext(index, desc, signature, platform, List.copyOf(classPaths), defines));
+      contexts.add(decodeContext(entry));
     }
     return List.copyOf(contexts);
+  }
+
+  public static HaxeServerContext decodeContext(JsonNode entry) {
+    List<String> classPaths = new ArrayList<>();
+    for (JsonNode path : entry.path("classPaths")) {
+      classPaths.add(path.asString(""));
+    }
+    Map<String, String> defines = new LinkedHashMap<>();
+    for (JsonNode define : entry.path("defines")) {
+      defines.put(define.path("key").asString(""), define.path("value").asString(""));
+    }
+    int index = entry.path("index").asInt(0);
+    String desc = entry.path("desc").asString("");
+    String signature = entry.path("signature").asString("");
+    String platform = entry.path("platform").asString("");
+    return new HaxeServerContext(index, desc, signature, platform, List.copyOf(classPaths), defines);
+  }
+
+  public static ServerMemory decodeServerMemory(JsonNode data) {
+    List<ServerMemory.ContextSize> contexts = new ArrayList<>();
+    for (JsonNode entry : data.path("contexts")) {
+      contexts.add(new ServerMemory.ContextSize(decodeContext(entry.path("context")),
+                                                entry.path("size").asLong(0)));
+    }
+    long totalCache = data.path("memory").path("totalCache").asLong(0);
+    return new ServerMemory(totalCache, List.copyOf(contexts));
   }
 
   public static List<MetadataEntry> decodeMetadataList(JsonNode data) {

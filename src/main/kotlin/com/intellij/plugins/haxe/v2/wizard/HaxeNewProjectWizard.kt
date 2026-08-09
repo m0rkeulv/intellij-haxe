@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.wizard
 import com.intellij.ide.highlighter.ModuleFileType
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardBaseData.Companion.baseData
+import com.intellij.ide.wizard.NewProjectWizardChainStep
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardStep.Companion.ADD_SAMPLE_CODE_PROPERTY_NAME
 import com.intellij.ide.wizard.language.LanguageGeneratorNewProjectWizard
@@ -10,7 +11,7 @@ import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.observable.util.bindBooleanStorage
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
-import com.intellij.plugins.haxe.HaxeBundle
+import com.intellij.plugins.haxe.HaxeWizardBundle
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore
 import com.intellij.ui.UIBundle
@@ -35,7 +36,8 @@ class HaxeNewProjectWizard : LanguageGeneratorNewProjectWizard {
 
   override val ordinal: Int = 600
 
-  override fun createStep(parent: NewProjectWizardStep): NewProjectWizardStep = Step(parent)
+  override fun createStep(parent: NewProjectWizardStep): NewProjectWizardStep =
+    NewProjectWizardChainStep(HaxeProjectSdkStep(parent)).nextStep(::Step)
 
   private class Step(parent: NewProjectWizardStep) : AbstractNewProjectWizardStep(parent) {
 
@@ -47,7 +49,7 @@ class HaxeNewProjectWizard : LanguageGeneratorNewProjectWizard {
       builder.row {
         checkBox(UIBundle.message("label.project.wizard.new.project.add.sample.code"))
           .bindSelected(addSampleCodeProperty)
-          .comment(HaxeBundle.message("haxe.wizard.add.sample.comment"))
+          .comment(HaxeWizardBundle.message("haxe.wizard.add.sample.comment"))
       }
     }
 

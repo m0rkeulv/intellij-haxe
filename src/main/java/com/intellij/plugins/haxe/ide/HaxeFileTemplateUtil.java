@@ -58,7 +58,8 @@ public class HaxeFileTemplateUtil {
 
   public static String getTemplateShortName(String templateName) {
     if (templateName.startsWith(HAXE_TEMPLATE_PREFIX)) {
-      return templateName.substring(HAXE_TEMPLATE_PREFIX.length());
+      // template names follow the platform's spaced convention ("Haxe Class")
+      return templateName.substring(HAXE_TEMPLATE_PREFIX.length()).trim();
     }
     return templateName;
   }

@@ -21,6 +21,7 @@ import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import com.intellij.util.PathUtil;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
@@ -102,6 +103,7 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
     return new CommandLineState(environment) {
       @Override
       protected @NotNull ProcessHandler startProcess() throws ExecutionException {
+        HaxeUnsavedDocuments.saveAll();
         HaxeCompileCommands.Resolved resolved = ReadAction.computeBlocking(
           () -> HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments));
         if (resolved == null) {

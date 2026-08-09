@@ -37,8 +37,10 @@ import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
@@ -57,6 +59,7 @@ import com.intellij.pom.Navigatable;
 import com.intellij.util.PathUtil;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
@@ -71,7 +74,9 @@ import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
+import java.awt.Component;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -133,6 +138,10 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .subscribe(HaxeCompilationServerListener.TOPIC, (HaxeCompilationServerListener)this::refreshTree);
     project.getMessageBus().connect(this)
       .subscribe(HaxeBuildConfigListener.TOPIC, (HaxeBuildConfigListener)this::refreshTree);
+    // store mutations can originate outside this panel (the define quickfix
+    // edits environment overrides) - the tree must follow those too
+    project.getMessageBus().connect(this)
+      .subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::refreshTree);
 
     refreshTree();
   }
@@ -177,6 +186,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeRemoveBuildFileAction(this));
     group.add(new HaxeSelectTargetAction(this));
     group.add(new HaxeInstallLibraryAction(this));
+    group.add(new HaxeInstallAllMissingLibrariesAction(this));
     group.add(new HaxeConfigureEnvironmentAction(this));
     group.add(new HaxeConfigureCompileCommandAction(this));
     group.add(new HaxeRunCompileCommandAction(this));
@@ -205,7 +215,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Never lets a haxelib failure prevent the tree from updating - install state just becomes unknown. */
   private void updateTree(@NotNull List<ContainerEntry> scan) {
-    Map<String, String> installed = null;
+    Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installed = null;
     try {
       installed = HaxeToolWindowModelBuilder.fetchInstalledLibraryVersions(project);
     }
@@ -224,7 +234,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Gradle-style structure: one project root node containing root-level build files and the modules. */
   @NotNull
-  private DefaultMutableTreeNode buildTreeRoot(@NotNull List<ContainerEntry> scan, @Nullable Map<String, String> installedLibraries) {
+  private DefaultMutableTreeNode buildTreeRoot(@NotNull List<ContainerEntry> scan,
+                                               @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     DefaultMutableTreeNode root = new DefaultMutableTreeNode();
     DefaultMutableTreeNode projectNode = new DefaultMutableTreeNode(new ProjectNode(project.getName()));
     root.add(projectNode);
@@ -273,7 +284,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   @NotNull
   private DefaultMutableTreeNode buildBuildGroupNode(@NotNull ContainerEntry container,
-                                                     @Nullable Map<String, String> installedLibraries) {
+                                                     @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     DefaultMutableTreeNode buildNode =
       new DefaultMutableTreeNode(new BuildGroupNode(container.id(), container.files().size()));
     addContainerFiles(buildNode, container, installedLibraries);
@@ -305,7 +316,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   private void addContainerFiles(@NotNull DefaultMutableTreeNode parentNode,
                                  @NotNull ContainerEntry container,
-                                 @Nullable Map<String, String> installedLibraries) {
+                                 @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     for (FileEntry fileEntry : container.files()) {
       boolean active = fileEntry.buildFile().file().getPath().equals(container.activePath());
       parentNode.add(buildFileNode(fileEntry, container.id(), active, fileEntry.manual(), installedLibraries));
@@ -317,7 +328,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
                                                @NotNull String containerId,
                                                boolean active,
                                                boolean manual,
-                                               @Nullable Map<String, String> installedLibraries) {
+                                               @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     HaxeBuildFile buildFile = entry.buildFile();
     DefaultMutableTreeNode fileNode = new DefaultMutableTreeNode(new BuildFileRow(buildFile, containerId, active, manual));
     // a plain hxp script decides its own targets in code - no target row
@@ -338,8 +349,13 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       new DefaultMutableTreeNode(new GroupNode(GroupKind.LIBRARIES, info.libraries().size()));
     for (HaxeBuildFileInfo.HaxeLibDependency library : info.libraries()) {
       String key = library.name().toLowerCase(Locale.ROOT);
-      boolean installed = installedLibraries == null || installedLibraries.containsKey(key);
-      String resolvedVersion = installedLibraries != null ? installedLibraries.get(key) : null;
+      HaxeToolWindowModelBuilder.InstalledLibrary installedLibrary =
+        installedLibraries != null ? installedLibraries.get(key) : null;
+      // a pinned version must itself be installed - the name alone is not enough
+      boolean pinSatisfied = library.version() == null
+                             || (installedLibrary != null && installedLibrary.versions().contains(library.version()));
+      boolean installed = installedLibraries == null || (installedLibrary != null && pinSatisfied);
+      String resolvedVersion = installedLibrary != null ? installedLibrary.selectedVersion() : null;
       LibraryNode libraryRow = new LibraryNode(buildFile, library.name(), library.version(), resolvedVersion, installed);
       librariesNode.add(new DefaultMutableTreeNode(libraryRow));
     }
@@ -430,6 +446,36 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     TreePath path = tree.getSelectionPath();
     if (path == null) return null;
     return path.getLastPathComponent() instanceof DefaultMutableTreeNode node ? node.getUserObject() : null;
+  }
+
+  /**
+   * The missing library rows of the selection's Libraries group — the group row
+   * itself, or any MISSING library row in it (siblings included); empty otherwise.
+   */
+  @NotNull
+  public List<LibraryNode> getSelectedGroupMissingLibraries() {
+    TreePath path = tree.getSelectionPath();
+    if (path == null || !(path.getLastPathComponent() instanceof DefaultMutableTreeNode node)) return List.of();
+
+    DefaultMutableTreeNode groupNode = null;
+    if (node.getUserObject() instanceof GroupNode group && group.kind() == GroupKind.LIBRARIES) {
+      groupNode = node;
+    }
+    else if (node.getUserObject() instanceof LibraryNode library && !library.installed()
+             && node.getParent() instanceof DefaultMutableTreeNode parent) {
+      groupNode = parent;
+    }
+    if (groupNode == null) return List.of();
+
+    List<LibraryNode> missing = new ArrayList<>();
+    for (int i = 0; i < groupNode.getChildCount(); i++) {
+      if (groupNode.getChildAt(i) instanceof DefaultMutableTreeNode child
+          && child.getUserObject() instanceof LibraryNode library
+          && !library.installed()) {
+        missing.add(library);
+      }
+    }
+    return missing;
   }
 
   /** The text speed search matches against - the row's primary label as rendered. */
@@ -563,7 +609,12 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       ShowSettingsUtil.getInstance().showSettingsDialog(project, HaxeBuildToolsConfigurable.class);
     }
     else {
-      HaxeEnvironmentStore.getInstance(project).setUsingCompilationServer(serverNode.containerId(), !serverNode.moduleUses());
+      boolean enable = !serverNode.moduleUses();
+      HaxeEnvironmentStore.getInstance(project).setUsingCompilationServer(serverNode.containerId(), enable);
+      if (!enable) {
+        // an opted-out container sends no more requests - a lingering failure could never clear itself
+        HaxeContextHealth.getInstance(project).record(serverNode.containerId(), null);
+      }
     }
     refreshTree();
   }
@@ -669,21 +720,50 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       RelativePoint point = new RelativePoint(e.getComponent(), e.getPoint());
 
       if (clicks == 1) {
-        handleSingleClick(userObject, point);
+        handleSingleClick(userObject, point, fragmentTagAt(e, path));
       } else if (clicks == 2) {
         handleDoubleClick(userObject);
       }
     }
 
-    private void handleSingleClick(@Nullable Object userObject, @NotNull RelativePoint point) {
+    /** The renderer fragment tag under the click — tags mark clickable fragments (the server failure link). */
+    @Nullable
+    private Object fragmentTagAt(@NotNull MouseEvent e, @NotNull TreePath path) {
+      Rectangle bounds = tree.getPathBounds(path);
+      if (bounds == null || !(path.getLastPathComponent() instanceof DefaultMutableTreeNode node)) return null;
+      Component renderer = tree.getCellRenderer()
+        .getTreeCellRendererComponent(tree, node, tree.isPathSelected(path), tree.isExpanded(path),
+                                      node.isLeaf(), tree.getRowForPath(path), false);
+      if (!(renderer instanceof SimpleColoredComponent colored)) return null;
+      renderer.setSize(bounds.width, bounds.height);
+      return colored.getFragmentTagAt(e.getX() - bounds.x);
+    }
+
+    private void handleSingleClick(@Nullable Object userObject, @NotNull RelativePoint point, @Nullable Object fragmentTag) {
       switch (userObject) {
         case TargetNode targetNode when targetNode.selectable() -> showTargetPopup(targetNode, point);
         case EnvSdkNode sdkNode -> showEnvironmentSdkPopup(sdkNode, point);
         case EnvLanguageLevelNode levelNode -> showLanguageLevelPopup(levelNode, point);
         case EnvCompileCommandNode buildCommand -> configureCompileCommand(buildCommand);
-        case CompilationServerNode serverNode -> toggleCompilationServer(serverNode);
+        case CompilationServerNode serverNode -> {
+          // the red failure text links to the server console's status view;
+          // the rest of the row keeps the participation toggle
+          if (fragmentTag instanceof HaxeToolWindowNodes.ServerFailureLink link) {
+            openServerConsole(link.containerId());
+          }
+          else {
+            toggleCompilationServer(serverNode);
+          }
+        }
         case null, default -> { }
       }
+    }
+
+    /** Opens the server console at the tab serving this container's SDK — the status view holds the failure detail. */
+    private void openServerConsole(@NotNull String containerId) {
+      String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
+      String serverId = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
+      HaxeServerConsoleWindowFactory.open(project, serverId);
     }
 
     private void handleDoubleClick(@Nullable Object userObject) {

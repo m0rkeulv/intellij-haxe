@@ -92,6 +92,9 @@ public final class HaxeCompileCommands {
     else if (LimeProjects.isLimeFamily(type)) {
       names.addAll(LimeProjects.DEFAULT_ACTIONS);
     }
+    else if (type == HaxeBuildFileType.NMML) {
+      names.addAll(NmeProjects.DEFAULT_ACTIONS);
+    }
     else if (type == HaxeBuildFileType.HXP_SCRIPT) {
       names.add(HXP_SCRIPT_BUILD_ACTION);
     }
@@ -118,18 +121,20 @@ public final class HaxeCompileCommands {
     return new Resolved(containerId, command, workDirectory, String.join(" ", command), connectEligible);
   }
 
-  /** True when the command can compile through the server: a direct haxe compile or a lime/openfl build. */
+  /** True when the command can compile through the server: a direct haxe compile or a lime/openfl/nme build. */
   public static boolean isConnectEligible(@NotNull Project project,
                                           @Nullable String environmentSdk,
                                           @NotNull List<String> command) {
-    return HxmlProjects.isDirectHaxeCommand(project, environmentSdk, command) || LimeProjects.isToolCommand(command);
+    return HxmlProjects.isDirectHaxeCommand(project, environmentSdk, command)
+           || LimeProjects.isToolCommand(command)
+           || NmeProjects.isToolCommand(command);
   }
 
   /**
    * Adds {@code --connect <port>} when the compilation server is enabled and the
    * container participates: right after the executable for a direct haxe compile,
-   * appended for a lime/openfl build (the tool forwards it to its haxe calls);
-   * otherwise returns the command unchanged.
+   * appended for a lime/openfl/nme build (the tools forward it to their haxe
+   * calls); otherwise returns the command unchanged.
    */
   @NotNull
   public static List<String> connectIfEnabled(@NotNull Project project,
@@ -150,6 +155,14 @@ public final class HaxeCompileCommands {
     if (HxmlProjects.isDirectHaxeCommand(project, environmentSdk, command)) {
       connected.addAll(1, connectArguments);
     }
+    else if (NmeProjects.isToolCommand(command)) {
+      // The nme tool pushes a standalone "--connect" into its haxeflags twice
+      // (all versions), so haxe reads the duplicate as the port and fails with
+      // "Invalid port". A single "--connect <port>" token dodges the double
+      // push and becomes one line of the generated build.hxml, which haxe
+      // parses as flag + value.
+      connected.add("--connect " + port);
+    }
     else {
       connected.addAll(connectArguments);
     }
@@ -165,7 +178,7 @@ public final class HaxeCompileCommands {
       case HXML -> HxmlProjects.buildCommand(project, environmentSdk, file);
       case OPENFL, LIME, HXP_PROJECT -> LimeProjects.actionCommand(project, environmentSdk, file, type, LimeProjects.BUILD_ACTION);
       case HXP_SCRIPT -> hxpScriptCommand(project, environmentSdk, file);
-      case NMML -> null;
+      case NMML -> NmeProjects.actionCommand(project, environmentSdk, file, NmeProjects.BUILD_ACTION);
     };
   }
 
@@ -194,10 +207,13 @@ public final class HaxeCompileCommands {
     if (LimeProjects.isLimeFamily(type) && LimeProjects.DEFAULT_ACTIONS.contains(actionName)) {
       return LimeProjects.actionCommand(project, environmentSdk, file, type, actionName);
     }
+    if (type == HaxeBuildFileType.NMML && NmeProjects.DEFAULT_ACTIONS.contains(actionName)) {
+      return NmeProjects.actionCommand(project, environmentSdk, file, actionName);
+    }
     return HaxeCustomActionsStore.getInstance(project).getActions(file.getPath()).stream()
       .filter(custom -> custom.name().equals(actionName))
       .findFirst()
-      .map(custom -> ParametersListUtil.parse(custom.command()))
+      .map(custom -> HaxeCustomCommands.parse(HaxeCustomCommands.expandVariables(project, file, type, custom.command())))
       .orElse(null);
   }
 }

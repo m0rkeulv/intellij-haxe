@@ -33,7 +33,7 @@ import static com.intellij.psi.SmartPointerManager.createPointer;
 
 public class HaxeIntroduceTypeInModuleQuickFix implements LocalQuickFix {
 
-    private final static List<String> TYPE_TEMPLATE_NAMES = List.of("HaxeClass", "HaxeInterface", "HaxeEnum", "HaxeAbstract");
+    private final static List<String> TYPE_TEMPLATE_NAMES = List.of("Haxe Class", "Haxe Interface", "Haxe Enum", "Haxe Abstract");
 
     protected final @NotNull SmartPsiElementPointer<HaxeIdentifier> myPsiTargetPointer;
 
@@ -68,7 +68,7 @@ public class HaxeIntroduceTypeInModuleQuickFix implements LocalQuickFix {
 
             builder.setDefaultText(createDefaultModuleQname());
             builder.setGenericsCount(countGenerics(myPsiTargetPointer.getElement()));
-            builder.show("Unable to create haxe type", "HaxeClass", this::updateElement);
+            builder.show("Unable to create haxe type", "Haxe Class", this::updateElement);
         });
     }
 

@@ -67,20 +67,42 @@ public final class HaxeInstallLibraryAction extends DumbAwareAction {
     new Task.Backgroundable(project, HaxeBundle.message("haxe.toolwindow.install.library.progress", library.name()), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        GeneralCommandLine commandLine = new GeneralCommandLine()
-          .withExePath(HaxeToolPathResolver.resolveHaxelibExecutable(project))
-          .withParameters(installParameters(library))
-          .withWorkDirectory(project.getBasePath());
-        try {
-          ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
-          reportResult(project, library, output);
+        String failure = installQuietly(project, library);
+        if (failure == null) {
+          notifyUser(project, HaxeBundle.message("haxe.toolwindow.install.library.success", library.name()),
+                     "", NotificationType.INFORMATION);
+          HaxeLibrarySync.sync(project, panel::refreshTree);
         }
-        catch (ExecutionException ex) {
+        else {
           notifyUser(project, HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name()),
-                     StringUtil.notNullize(ex.getMessage()), NotificationType.ERROR);
+                     failure, NotificationType.ERROR);
         }
       }
     }.queue();
+  }
+
+  /**
+   * Runs one {@code haxelib install} (restoring the previously selected version
+   * when the install would hijack it); null on success, else the failure detail.
+   * Call on a background thread.
+   */
+  @Nullable
+  static String installQuietly(@NotNull Project project, @NotNull LibraryNode library) {
+    GeneralCommandLine commandLine = new GeneralCommandLine()
+      .withExePath(HaxeToolPathResolver.resolveHaxelibExecutable(project))
+      .withParameters(installParameters(library))
+      .withWorkDirectory(project.getBasePath());
+    try {
+      ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
+      if (output.getExitCode() != 0 || output.isTimeout()) {
+        return StringUtil.trimTrailing(output.getStdout() + "\n" + output.getStderr());
+      }
+      restoreSelectedVersion(project, library);
+      return null;
+    }
+    catch (ExecutionException e) {
+      return StringUtil.notNullize(e.getMessage());
+    }
   }
 
   // "haxelib install name [version] --always"; git/path pseudo-versions cannot be passed to install
@@ -100,21 +122,32 @@ public final class HaxeInstallLibraryAction extends DumbAwareAction {
     return version != null && version.matches("\\d+(\\.\\d+)*([-.].*)?");
   }
 
-  private void reportResult(@NotNull Project project, @NotNull LibraryNode library, @NotNull ProcessOutput output) {
-    if (output.getExitCode() == 0 && !output.isTimeout()) {
-      notifyUser(project, HaxeBundle.message("haxe.toolwindow.install.library.success", library.name()),
-                 "", NotificationType.INFORMATION);
-      HaxeLibrarySync.sync(project, panel::refreshTree);
+  /**
+   * Installing a pinned version makes it haxelib's SELECTED version as a side
+   * effect, silently switching every unpinned project. Restore the previous
+   * selection ("dev"/"git" pseudo-versions cannot be re-set and stay put).
+   */
+  private static void restoreSelectedVersion(@NotNull Project project, @NotNull LibraryNode library) {
+    String previous = library.resolvedVersion();
+    boolean selectionHijacked = isPlainVersion(library.version())
+                                && isPlainVersion(previous)
+                                && !previous.equals(library.version());
+    if (!selectionHijacked) return;
+
+    GeneralCommandLine commandLine = new GeneralCommandLine()
+      .withExePath(HaxeToolPathResolver.resolveHaxelibExecutable(project))
+      .withParameters("set", library.name(), previous, "--always")
+      .withWorkDirectory(project.getBasePath());
+    try {
+      new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
     }
-    else {
-      String detail = StringUtil.trimTrailing(output.getStdout() + "\n" + output.getStderr());
-      notifyUser(project, HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name()),
-                 detail, NotificationType.ERROR);
+    catch (ExecutionException e) {
+      // the install itself succeeded; a failed restore only leaves the new version selected
     }
   }
 
-  private static void notifyUser(@NotNull Project project, @NotNull String title, @NotNull String content,
-                                 @NotNull NotificationType type) {
+  static void notifyUser(@NotNull Project project, @NotNull String title, @NotNull String content,
+                         @NotNull NotificationType type) {
     NotificationGroupManager.getInstance()
       .getNotificationGroup(NOTIFICATION_GROUP)
       .createNotification(title, content, type)

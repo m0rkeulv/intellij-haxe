@@ -57,6 +57,9 @@
     <iconProvider implementation="com.intellij.plugins.haxe.ide.HaxeIconProvider"/>
     <qualifiedNameProvider implementation="com.intellij.plugins.haxe.ide.HaxeQualifiedNameProvider"/>
     <gotoDeclarationHandler implementation="com.intellij.plugins.haxe.ide.HaxeGotoDeclarationHandler"/>
+    <gotoDeclarationHandler implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewGotoHandler"/>
+    <psi.referenceContributor language="Haxe" implementation="com.intellij.plugins.haxe.ide.references.HaxeStringLiteralReferenceContributor"/>
+    <defaultHighlightingSettingProvider implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewHighlightingSetting"/>
 
     <sdkType implementation="com.intellij.plugins.haxe.config.sdk.HaxeSdkType"/>
     <!-- HAXE_MODULE stays registered so legacy projects still open; the v1
@@ -308,9 +311,18 @@
     <extendWordSelectionHandler implementation="com.intellij.plugins.haxe.editor.actions.wordSelection.HaxeStringSelectioner" />
     <extendWordSelectionHandler implementation="com.intellij.plugins.haxe.editor.actions.wordSelection.HaxeCommentSelectioner" />
     <!-- Overriding default to allow completion on "$"-->
-    <typedHandler implementation="com.intellij.plugins.haxe.ide.completion.HaxeCompletionAutoPopupHandler" id="TestingAutopopup"/>
+    <typedHandler implementation="com.intellij.plugins.haxe.ide.completion.HaxeCompletionAutoPopupHandler"/>
+    <!-- String completion for FQN and files (but only when it makes sense) -->
+    <typedHandler implementation="com.intellij.plugins.haxe.ide.references.HaxeStringPathTypedHandler"/>
+    <typedHandler implementation="com.intellij.plugins.haxe.ide.references.HaxeStringQnameTypedHandler"/>
 
-    <completion.confidence language="Haxe" implementationClass="com.intellij.plugins.haxe.runner.debugger.HaxeSetValueCompletionConfidence" order="first"/>
+    <!-- explicit chain, most specific first: the Set Value guard decides its
+         fragment (and answers UNSURE everywhere else), then the string-link
+         policy decides ordinary string literals -->
+    <completion.confidence language="Haxe" id="haxeSetValueConfidence" implementationClass="com.intellij.plugins.haxe.runner.debugger.HaxeSetValueCompletionConfidence" order="first"/>
+    <completion.confidence language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.references.HaxeStringLinkCompletionConfidence" order="after haxeSetValueConfidence"/>
+
+    <completion.contributor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.references.HaxeStringQnameCompletionContributor"/>
 
     <completion.contributor id="ControllingCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeControllingCompletionContributor" order="FIRST"/>
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRuntimeCompletionContributor"/>
@@ -341,12 +353,14 @@
 
     <moduleService serviceImplementation="com.intellij.plugins.haxe.ide.module.HaxeModuleSettings"/>
 
-    <internalFileTemplate name="HaxeClass"/>
-    <internalFileTemplate name="HaxeInterface"/>
-    <internalFileTemplate name="HaxeEnum"/>
-    <internalFileTemplate name="HaxeAbstract"/>
-    <internalFileTemplate name="HaxeModule"/>
-    <internalFileTemplate name="NMMLProjectFile"/>
+    <internalFileTemplate name="Haxe Class"/>
+    <internalFileTemplate name="Haxe Interface"/>
+    <internalFileTemplate name="Haxe Enum"/>
+    <internalFileTemplate name="Haxe Abstract"/>
+    <internalFileTemplate name="Haxe Module"/>
+    <internalFileTemplate name="NMML Project File"/>
+
+    <fileTemplateGroup implementation="com.intellij.plugins.haxe.v2.wizard.HaxeProjectTemplatesFactory"/>
 
     <liveTemplateMacro implementation="com.intellij.plugins.haxe.ide.template.macro.HaxeArrayVariableMacro"/>
     <liveTemplateMacro implementation="com.intellij.plugins.haxe.ide.template.macro.HaxeSuggestIndexNameMacro"/>
@@ -457,11 +471,36 @@
 
     <!-- V2 build system: "Haxe" entry in the New Project / New Module wizard, creating plain modules -->
     <newProjectWizard.languageGenerator implementation="com.intellij.plugins.haxe.v2.wizard.HaxeNewProjectWizard"/>
+    <moduleBuilder builderClass="com.intellij.plugins.haxe.v2.wizard.HaxeProjectGeneratorBuilder"/>
     <projectConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable"
                          parentId="build.tools"
                          id="settings.haxe.build.tools"
                          key="haxe.build.tools.configurable.name" bundle="messages.HaxeBundle"
                          nonDefaultProject="true"/>
+
+    <!-- Settings | Languages & Frameworks | Haxe | Frameworks | Lime/OpenFL/NME:
+         the configurable target lists (application-level - targets describe
+         the machine's toolchains). The two group pages carry no UI. -->
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$HaxeRoot"
+                             parentId="language"
+                             id="settings.haxe"
+                             key="haxe.settings.root.name" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$Frameworks"
+                             parentId="settings.haxe"
+                             id="settings.haxe.frameworks"
+                             key="haxe.settings.frameworks.name" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$LimeTargets"
+                             parentId="settings.haxe.frameworks"
+                             id="settings.haxe.frameworks.lime"
+                             key="haxe.frameworks.targets.lime" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$OpenflTargets"
+                             parentId="settings.haxe.frameworks"
+                             id="settings.haxe.frameworks.openfl"
+                             key="haxe.frameworks.targets.openfl" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$NmeTargets"
+                             parentId="settings.haxe.frameworks"
+                             id="settings.haxe.frameworks.nme"
+                             key="haxe.frameworks.targets.nme" bundle="messages.HaxeBundle"/>
 
     <importFilteringRule implementation="com.intellij.plugins.haxe.ide.HaxeImportFilteringRule"/>
     <targetElementEvaluator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.HaxeTargetElementEvaluator"/>
@@ -473,6 +512,7 @@
     <annotator language="Haxe" id="slowColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeSlowColorAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="type" implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeUnresolvedTypeAnnotator" order="after slowColor"/>
     <annotator language="Haxe" id="invalidEscape" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInvalidEscapeAnnotator" order="after fastColor"/>
+    <annotator language="Haxe" id="stringLink" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeStringLinkColorAnnotator" order="after slowColor"/>
 
     <annotator language="HXML" id="hxmlFastColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeHxmlFastColorAnnotator" order="first"/>
 

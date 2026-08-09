@@ -8,6 +8,7 @@ import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.util.indexing.FileBasedIndex;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.server.HaxeServerContext;
 import com.intellij.plugins.haxe.display.protocol.server.ModuleInfo;
@@ -101,6 +102,17 @@ public final class HaxeCompilerTypeCatalogService {
     return result;
   }
 
+  /** Every generated type's FQN — the compiler leg of qualified-name enumeration. */
+  @NotNull
+  public Set<String> allFqns() {
+    if (!enabled()) return Set.of();
+    Set<String> result = new HashSet<>();
+    for (ContextCatalog catalog : catalogs.values()) {
+      result.addAll(catalog.byFqn().keySet());
+    }
+    return result;
+  }
+
   @NotNull
   public Set<String> allNames() {
     if (!enabled()) return Set.of();
@@ -165,6 +177,11 @@ public final class HaxeCompilerTypeCatalogService {
     // fixture tests have no compilation server to fill from, and the fill's
     // background index queries only add storage contention to the test run
     if (ApplicationManager.getApplication().isUnitTestMode()) return;
+    // resolve running INSIDE an indexer reaches this service through the
+    // unified index; scheduling a fill from there feeds a churn loop (the
+    // fill's stub queries force more indexing, whose resolve pokes this
+    // again). The next non-indexing caller schedules instead.
+    if (FileBasedIndex.getInstance().getFileBeingCurrentlyIndexed() != null) return;
     if (System.currentTimeMillis() - lastFillScheduledAt < FAILURE_COOLDOWN_MS) return;
     if (!filling.add("*")) return;
     lastFillScheduledAt = System.currentTimeMillis();
@@ -330,10 +347,16 @@ public final class HaxeCompilerTypeCatalogService {
   /**
    * The subset of a module's types that no source index knows — the generated
    * ones. Null while indexing is in progress (the diff would be wrong).
+   *
+   * A non-blocking read on purpose: these index queries can be forced to
+   * inline-index PENDING files (e.g. everything a define-change reparse just
+   * invalidated), and a blocking read action holding the lock through that
+   * work starves the reparse's write action — the EDT then freezes behind
+   * this background fill. Non-blocking yields to the write and restarts.
    */
   @Nullable
   private List<String> sourcelessTypes(@NotNull List<String> typeFqns) {
-    return ReadAction.computeBlocking(() -> {
+    return ReadAction.nonBlocking(() -> {
       if (DumbService.isDumb(project)) return null;
       GlobalSearchScope scope = GlobalSearchScope.allScope(project);
       List<String> generated = new ArrayList<>();
@@ -347,7 +370,7 @@ public final class HaxeCompilerTypeCatalogService {
         }
       }
       return generated;
-    });
+    }).executeSynchronously();
   }
 
   @NotNull

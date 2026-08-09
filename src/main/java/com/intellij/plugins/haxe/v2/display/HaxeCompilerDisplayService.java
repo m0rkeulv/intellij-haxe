@@ -17,13 +17,20 @@ import com.intellij.plugins.haxe.display.protocol.InitializeResult;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.DisplayResponse;
 import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
+import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import com.intellij.util.PsiErrorElementUtil;
@@ -44,7 +51,9 @@ import org.jetbrains.annotations.Nullable;
  * HXML build files supply their args directly. Lime-family files (openfl,
  * lime, hxp) go through {@code haxelib run <tool> display <file> <target>}:
  * its hxml output IS the evaluated compiler argument set (macros, libs and
- * conditional sources included), cached per build-file stamp.
+ * conditional sources included), cached per build-file stamp. NMML files use
+ * the last landed `nme prepare` evaluation, whose generated hxml references
+ * the evaluation's retained prepared directory.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -52,11 +61,15 @@ public final class HaxeCompilerDisplayService {
 
   /**
    * The read-action half of a request. Either {@code args} is present (HXML)
-   * or {@code lime} still needs resolving on a background thread.
+   * or {@code lime} still needs resolving on a background thread. The
+   * container's define overrides ride along and are applied to whichever
+   * argument list resolves.
    */
   public record DisplayContext(@Nullable List<String> args,
                                @Nullable LimeDisplaySpec lime,
-                               @Nullable String sdkName) {
+                               @Nullable String sdkName,
+                               @NotNull HaxeDisplayConfiguration.DefineOverrides overrides,
+                               @NotNull String containerId) {
   }
 
   /** A pending lime-display resolution, captured under the read lock. */
@@ -122,7 +135,7 @@ public final class HaxeCompilerDisplayService {
     if (buildFile == null || buildFile.getParent() == null) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, buildFile);
     // a plain hxp script generates its compiler args in code - nothing to derive statically
-    if (type == null || type == HaxeBuildFileType.NMML || type == HaxeBuildFileType.HXP_SCRIPT) return null;
+    if (type == null || type == HaxeBuildFileType.HXP_SCRIPT) return null;
 
     String containerId = HaxeContainers.containerIdFor(project, buildFile);
     HaxeEnvironmentStore environment = HaxeEnvironmentStore.getInstance(project);
@@ -131,15 +144,42 @@ public final class HaxeCompilerDisplayService {
     if (!environment.isUsingCompilationServer(containerId)) return null;
     String sdkName = environment.getSdkName(containerId);
     String directory = buildFile.getParent().getPath();
+    HaxeDisplayConfiguration.DefineOverrides overrides = HaxeDisplayConfiguration.overridesFor(project, containerId);
 
     if (type == HaxeBuildFileType.HXML) {
-      return new DisplayContext(List.of("--cwd", directory, buildFile.getName()), null, sdkName);
+      return new DisplayContext(List.of("--cwd", directory, buildFile.getName()), null, sdkName, overrides, containerId);
+    }
+    if (type == HaxeBuildFileType.NMML) {
+      return nmeContext(buildFile, directory, sdkName, overrides, containerId);
     }
     String tool = LimeProjects.toolFor(type);
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile);
     LimeDisplaySpec lime =
       new LimeDisplaySpec(directory, buildFile.getName(), tool, targetFlag, buildFile.getModificationStamp());
-    return new DisplayContext(null, lime, sdkName);
+    return new DisplayContext(null, lime, sdkName, overrides, containerId);
+  }
+
+  /**
+   * NMML context from the last landed `nme prepare` evaluation: its generated
+   * hxml (referencing the evaluation's retained prepared directory) becomes
+   * the argument list. Null until an evaluation lands — the tool window
+   * schedules one on every scan, so the context appears shortly after a
+   * project opens.
+   */
+  @Nullable
+  private DisplayContext nmeContext(@NotNull VirtualFile buildFile,
+                                    @NotNull String directory,
+                                    @Nullable String sdkName,
+                                    @NotNull HaxeDisplayConfiguration.DefineOverrides overrides,
+                                    @NotNull String containerId) {
+    String targetFlag = NmeProjects.selectedTargetFlag(project, buildFile);
+    HaxeNmeProjectInfoService.Evaluation evaluation = HaxeNmeProjectInfoService.getInstance(project)
+      .getCachedOrSchedule(new HaxeBuildFile(buildFile, HaxeBuildFileType.NMML), targetFlag, sdkName, () -> { });
+    if (evaluation == null) return null;
+
+    List<String> args = new ArrayList<>(List.of("--cwd", directory));
+    args.addAll(parseHxmlLines(evaluation.hxmlContent().lines().toList()));
+    return new DisplayContext(List.copyOf(args), null, sdkName, overrides, containerId);
   }
 
   /**
@@ -158,10 +198,39 @@ public final class HaxeCompilerDisplayService {
       if (contents != null) {
         connected.client().invalidate(connected.args(), filePath);
       }
-      return connected.client().diagnostics(connected.args(), filePath, contents);
+      List<FileDiagnostics> results = connected.client().diagnostics(connected.args(), filePath, contents);
+      HaxeContextHealth.getInstance(project).record(context.containerId(), null);
+      return results;
     } catch (DisplayRequestException e) {
-      log.info("display/diagnostics failed: " + e.getMessage());
+      String failure = explainRequestFailure(connected, e);
+      log.info("display/diagnostics failed: " + failure);
+      HaxeContextHealth.getInstance(project).record(context.containerId(), failure);
       return null;
+    }
+  }
+
+  /**
+   * An empty display response usually means the build context itself does not
+   * compile — and the json-rpc channel then carries NO reason at all. A plain
+   * probe compile of the same arguments DOES report the errors, so run one and
+   * let its output explain the failure (e.g. a define override making a
+   * library uncompilable).
+   */
+  @NotNull
+  private static String explainRequestFailure(@NotNull Connected connected, @NotNull DisplayRequestException failure) {
+    String message = StringUtil.notNullize(failure.getMessage());
+    if (!message.endsWith("empty response")) {
+      return message;
+    }
+    List<String> compileArgs = new ArrayList<>(connected.args());
+    compileArgs.add("--no-output");
+    try {
+      DisplayResponse compiled = HaxeDisplayTransport.request("127.0.0.1", connected.port(), compileArgs, 120_000);
+      String errors = compiled.hasError() ? compiled.payload().strip() : "";
+      return errors.isEmpty() ? message
+                              : HaxeBundle.message("haxe.display.context.compile.failed", errors);
+    } catch (DisplayRequestException probeFailure) {
+      return message;
     }
   }
 
@@ -198,18 +267,31 @@ public final class HaxeCompilerDisplayService {
   /** Stable identity of a context's argument source — cache-key material for the sibling services. */
   @NotNull
   static String contextKey(@NotNull DisplayContext context) {
-    if (context.args() != null) return String.join(" ", context.args());
-    LimeDisplaySpec lime = context.lime();
-    return lime != null ? lime.directory() + "/" + lime.fileName() + "@" + lime.targetFlag() : "?";
+    String base;
+    if (context.args() != null) {
+      base = String.join(" ", context.args());
+    }
+    else {
+      LimeDisplaySpec lime = context.lime();
+      base = lime != null ? lime.directory() + "/" + lime.fileName() + "@" + lime.targetFlag() : "?";
+    }
+    String overrides = context.overrides().signature();
+    return overrides.isEmpty() ? base : base + "|" + overrides;
   }
 
   // --- args resolution ---
 
   @Nullable
   private List<String> resolveArgs(@NotNull DisplayContext context) {
-    if (context.args() != null) return context.args();
-    LimeDisplaySpec lime = context.lime();
-    return lime != null ? limeArgsFor(lime, context.sdkName()) : null;
+    List<String> base;
+    if (context.args() != null) {
+      base = context.args();
+    }
+    else {
+      LimeDisplaySpec lime = context.lime();
+      base = lime != null ? limeArgsFor(lime, context.sdkName()) : null;
+    }
+    return base == null ? null : HaxeDisplayConfiguration.applyOverrides(base, context.overrides());
   }
 
   // TODO: keyed on the project file's stamp only - an edited lib
@@ -257,7 +339,7 @@ public final class HaxeCompilerDisplayService {
    * standalone arguments, {@code #} starts a comment.
    */
   @NotNull
-  private static List<String> parseHxmlLines(@NotNull List<String> lines) {
+  static List<String> parseHxmlLines(@NotNull List<String> lines) {
     List<String> args = new ArrayList<>();
     for (String line : lines) {
       String trimmed = line.trim();
@@ -291,6 +373,9 @@ public final class HaxeCompilerDisplayService {
     int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(context.sdkName());
     if (port <= 0) return null;
     HaxeDisplayClient client = new HaxeDisplayClient("127.0.0.1", port);
+    String serverId = HaxeToolPathResolver.resolveHaxeExecutable(project, context.sdkName());
+    client.setObserver((requestMethod, millis, success) ->
+                         HaxeServerMetrics.getInstance(project).record(serverId, millis, success));
 
     Capability known = capability;
     if (known == null || known.port() != port) {

@@ -31,6 +31,7 @@ public class HaxeLanguageFeatureAnnotator implements Annotator, DumbAware {
 
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
+    if (AnnotatorUtil.isInGeneratedPreview(element)) return;
     if (!element.isValid()) return;
 
     if (element instanceof LeafPsiElement leaf) {

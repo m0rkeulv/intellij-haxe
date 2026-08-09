@@ -153,6 +153,7 @@ public final class HaxeCompilationServerManager implements Disposable {
   public synchronized void stopServer(@NotNull String id) {
     ServerInstance instance = servers.get(id);
     if (instance != null && stopInstanceLocked(instance)) {
+      clearServerDerivedState(id);
       fireStateChanged();
     }
   }
@@ -166,6 +167,7 @@ public final class HaxeCompilationServerManager implements Disposable {
     ServerInstance instance = servers.remove(id);
     if (instance != null) {
       stopInstanceLocked(instance);
+      clearServerDerivedState(id);
       // fire even for a dead instance - the console mirrors the entry list
       fireStateChanged();
     }
@@ -178,7 +180,14 @@ public final class HaxeCompilationServerManager implements Disposable {
       return;
     }
     stopInstanceLocked(instance);
+    clearServerDerivedState(id);
     startLocked(instance);
+  }
+
+  /** Failures and request statistics describe the stopped process — a fresh server starts clean. */
+  private void clearServerDerivedState(@NotNull String id) {
+    HaxeContextHealth.getInstance(project).clearForServer(id);
+    HaxeServerMetrics.getInstance(project).clear(id);
   }
 
   /** Registers a console sink for one instance and replays its buffered output. */

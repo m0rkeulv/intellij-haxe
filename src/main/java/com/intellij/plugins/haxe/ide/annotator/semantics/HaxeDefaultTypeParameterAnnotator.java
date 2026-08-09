@@ -18,6 +18,7 @@ import org.jetbrains.annotations.NotNull;
 
 public class HaxeDefaultTypeParameterAnnotator implements Annotator {
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
+    if (AnnotatorUtil.isInGeneratedPreview(element)) return;
     if(!element.isValid()) return;
 
     if (element instanceof HaxeGenericListPart genericListPart) {

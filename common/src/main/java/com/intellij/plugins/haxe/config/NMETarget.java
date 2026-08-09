@@ -17,36 +17,28 @@
  */
 package com.intellij.plugins.haxe.config;
 
-import org.jetbrains.annotations.NotNull;
-
-import javax.swing.*;
-
 /**
- * @author: Fedor.Korotkov
+ * The nme tool's project targets (its accepted target words; the tool also
+ * takes "jsprime" as the canonical name of what "html5" aliases). "cpp" builds
+ * for the host desktop and is the tool's own default; the explicit desktop
+ * names select the same C++ build. The HaxeTarget is the haxe compilation
+ * backend each target uses - informational, never passed to the tool.
  */
 public enum NMETarget {
 
-  // The HaxeTarget values declared here are the most obvious intention.
-  // They may not be correct.  They follow the mapping that the lime command
-  // does when invoked for a target OS.  They are used by the classpath generator
-  // the create the implicit classpath that the Haxe compiler uses.
-  // This may lead to the wrong source file being presented when debugging,
-  // but it's a definite step up from showing the interface file.
-  // Note that the HaxeTarget is only used for IDEA's convenience and is not
-  // passed to the compiler (lime) command, while the flags (third and later
-  // arguments) are passed to the compiler.
-
-  IOS("iOS", HaxeTarget.NEKO, "ios", "-simulator"),
-  ANDROID("Android", HaxeTarget.NEKO, "android"),
-  WEBOS("webOS", HaxeTarget.NEKO, "webos"),
-  BLACKBERRY("BlackBerry", HaxeTarget.NEKO, "blackberry"),
-  WINDOWS("Windows", HaxeTarget.NEKO, "windows"),
-  MAC("Mac OS", HaxeTarget.NEKO, "mac"),
-  LINUX("Linux", HaxeTarget.NEKO, "linux"),
-  LINUX64("Linux 64", HaxeTarget.NEKO,  "linux", "-64"),
+  CPP("Desktop (C++)", HaxeTarget.CPP, "cpp"),
+  WINDOWS("Windows", HaxeTarget.CPP, "windows"),
+  MAC("Mac OS", HaxeTarget.CPP, "mac"),
+  LINUX("Linux", HaxeTarget.CPP, "linux"),
+  NEKO("Neko", HaxeTarget.NEKO, "neko"),
+  CPPIA("Cppia (acadnme host)", HaxeTarget.CPPIA, "cppia"),
   FLASH("Flash", HaxeTarget.FLASH, "flash"),
-  HTML5("HTML5", HaxeTarget.JAVA_SCRIPT, "html5"),
-  NEKO("Neko", HaxeTarget.NEKO, "neko");
+  // needs an nme with the Emscripten runtime; the stock haxelib release ships without it
+  HTML5("HTML5 (jsprime)", HaxeTarget.JAVA_SCRIPT, "html5"),
+  ANDROID("Android", HaxeTarget.CPP, "android"),
+  IOS("iOS", HaxeTarget.CPP, "ios"),
+  RPI("Raspberry Pi", HaxeTarget.CPP, "rpi"),
+  WINRT("WinRT / UWP", HaxeTarget.CPP, "winrt");
 
   private final String[] flags;
   private final String description;
@@ -67,12 +59,6 @@ public enum NMETarget {
   }
 
   public HaxeTarget getOutputTarget() { return outputTarget; }
-
-  public static void initCombo(@NotNull DefaultComboBoxModel comboBoxModel) {
-    for (NMETarget target : NMETarget.values()) {
-      comboBoxModel.insertElementAt(target, 0);
-    }
-  }
 
   @Override
   public String toString() {

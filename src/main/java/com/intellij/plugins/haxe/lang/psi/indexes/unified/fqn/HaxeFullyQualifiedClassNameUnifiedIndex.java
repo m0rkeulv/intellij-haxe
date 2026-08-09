@@ -9,9 +9,11 @@ import com.intellij.plugins.haxe.lang.psi.stubs.index.fqn.HaxeFullyQualifiedClas
 import com.intellij.plugins.haxe.model.FullyQualifiedInfo;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerTypeCatalogService;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.stubs.StubIndex;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -29,6 +31,15 @@ public class HaxeFullyQualifiedClassNameUnifiedIndex {
             return haxeClass.getModel();
         }
         return null;
+    }
+
+    /** Every known class FQN across the three legs (stub, file-based, compiler catalog). */
+    public static Collection<String> getAllKeys(@NotNull Project project) {
+        if (DumbService.isDumb(project)) return Collections.emptyList();
+        Set<String> keys = new HashSet<>(StubIndex.getInstance().getAllKeys(HaxeFullyQualifiedClassNameStubIndex.KEY, project));
+        keys.addAll(HaxeFullyQualifiedClassNameIndex.getAllKeys(project));
+        keys.addAll(HaxeCompilerTypeCatalogService.getInstance(project).allFqns());
+        return keys;
     }
 
     public static List<HaxeClass> getByFqn(@NotNull String name,

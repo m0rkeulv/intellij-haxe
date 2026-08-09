@@ -25,6 +25,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
 import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
@@ -44,10 +45,11 @@ import java.util.Locale;
  * matched by that step's build file afterwards, so tree launches and the
  * run-configuration dropdown stay in sync.
  *
- * CPP is wired for lime-family files only (lime names the executable after
- * {@code <app file>} regardless of -debug); for plain hxml a -debug build
- * renames the executable (Main-debug.exe), so run and debug launch different
- * artifacts — a single static executable path cannot serve both executors yet.
+ * CPP is wired for lime-family and nmml files only (both tools name the
+ * executable after {@code <app file>} regardless of -debug); for plain hxml a
+ * -debug build renames the executable (Main-debug.exe), so run and debug launch
+ * different artifacts — a single static executable path cannot serve both
+ * executors yet.
  */
 public final class HaxeProgramLaunches {
 
@@ -201,7 +203,7 @@ public final class HaxeProgramLaunches {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.hxcpp", file.getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, HxcppIntellijConfigurationFactory.class);
     HxcppIntellijRunConfiguration configuration = (HxcppIntellijRunConfiguration)settings.getConfiguration();
-    configureLimeHxcpp(configuration, buildFile, resolvedOutput(file, targetOutput));
+    configureHxcppExecutable(configuration, buildFile, resolvedOutput(file, targetOutput));
     return settings;
   }
 
@@ -228,15 +230,16 @@ public final class HaxeProgramLaunches {
   }
 
   /**
-   * lime places the desktop executable at {@code <export>/<target>/bin/<app file>[.exe]}.
-   * The display pipeline reports that path directly; the legacy `lime display`
+   * An nmml target output is the executable path already and passes through.
+   * lime places the desktop executable at {@code <export>/<target>/bin/<app file>[.exe]};
+   * its display pipeline reports that path directly, but the legacy `lime display`
    * fallback yields the C++ obj directory instead — derive bin from it the way
    * the HL flavor does. Unresolvable (hxp, no app file): the visible
    * configuration prompts for the executable.
    */
-  private static void configureLimeHxcpp(@NotNull HxcppIntellijRunConfiguration configuration,
-                                         @NotNull HaxeBuildFile buildFile,
-                                         @NotNull Path output) {
+  private static void configureHxcppExecutable(@NotNull HxcppIntellijRunConfiguration configuration,
+                                               @NotNull HaxeBuildFile buildFile,
+                                               @NotNull Path output) {
     if ("obj".equals(String.valueOf(output.getFileName()))) {
       // the CPP output path IS the obj dir; the executable sits in bin beside it
       Path binDir = binDirBesideObj(output);
@@ -277,7 +280,11 @@ public final class HaxeProgramLaunches {
   /** The default build action of the file's type - what the attached build step runs. */
   @NotNull
   private static String buildActionFor(@NotNull HaxeBuildFileType type) {
-    return type == HaxeBuildFileType.HXML ? HxmlProjects.BUILD_ACTION : LimeProjects.BUILD_ACTION;
+    return switch (type) {
+      case HXML -> HxmlProjects.BUILD_ACTION;
+      case NMML -> NmeProjects.BUILD_ACTION;
+      default -> LimeProjects.BUILD_ACTION;
+    };
   }
 
   private static boolean matches(@NotNull RunnerAndConfigurationSettings candidate,

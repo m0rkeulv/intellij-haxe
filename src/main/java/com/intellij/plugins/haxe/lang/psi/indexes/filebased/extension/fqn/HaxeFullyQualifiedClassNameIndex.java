@@ -56,6 +56,10 @@ public class HaxeFullyQualifiedClassNameIndex extends HaxeComponentBaseIndex {
     }
 
 
+    public static Collection<String> getAllKeys(@NotNull Project project) {
+        return FileBasedIndex.getInstance().getAllKeys(INDEX, project);
+    }
+
     public static Collection<HaxeClass> getByFqn(@NotNull String name, @NotNull Project project, @Nullable GlobalSearchScope scope) {
 
         List<HaxeClass> results = new ArrayList<>();

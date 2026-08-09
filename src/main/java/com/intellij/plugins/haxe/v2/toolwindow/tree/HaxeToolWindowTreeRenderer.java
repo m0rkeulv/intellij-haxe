@@ -92,6 +92,10 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         append(HaxeBundle.message("haxe.toolwindow.node.server"));
         append("  " + serverNode.display(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        if (serverNode.contextFailure() != null) {
+          append("  " + HaxeBundle.message("haxe.toolwindow.server.context.failing"), SimpleTextAttributes.ERROR_ATTRIBUTES,
+                 new HaxeToolWindowNodes.ServerFailureLink(serverNode.containerId()));
+        }
       }
       case ActionsGroupNode actionsGroup -> {
         setIcon(AllIcons.Nodes.ConfigFolder);
@@ -157,7 +161,11 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
           append(" : " + libraryNode.displayVersion(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
         if (!libraryNode.installed()) {
-          append("  " + HaxeBundle.message("haxe.toolwindow.node.library.missing"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          // a resolved version means the library name IS installed - only the pinned version is absent
+          String message = libraryNode.resolvedVersion() != null
+                           ? HaxeBundle.message("haxe.toolwindow.node.library.version.missing")
+                           : HaxeBundle.message("haxe.toolwindow.node.library.missing");
+          append("  " + message, SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
       }
       case null, default -> {
@@ -172,9 +180,13 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     return switch (userObject) {
       case CompilationGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.compilation");
       case EnvCompileCommandNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.compile.command");
-      case CompilationServerNode serverNode ->
-        serverNode.connectEligible() ? HaxeBundle.message("haxe.toolwindow.tooltip.server")
-                                     : HaxeBundle.message("haxe.toolwindow.tooltip.server.not.connectable");
+      case CompilationServerNode serverNode -> {
+        if (serverNode.contextFailure() != null) {
+          yield HaxeBundle.message("haxe.toolwindow.tooltip.server.context.failing", serverNode.contextFailure());
+        }
+        yield serverNode.connectEligible() ? HaxeBundle.message("haxe.toolwindow.tooltip.server")
+                                           : HaxeBundle.message("haxe.toolwindow.tooltip.server.not.connectable");
+      }
       case EnvironmentNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment");
       case EnvSdkNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.sdk");
       case EnvLanguageLevelNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.language.level");
