@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.references;
 
 import com.intellij.codeInsight.completion.CompletionConfidence;
+import com.intellij.openapi.editor.Editor;
 import com.intellij.plugins.haxe.lang.psi.HaxeStringLiteralExpression;
 import com.intellij.plugins.haxe.util.HaxeQnameResolveUtil;
 import com.intellij.psi.PsiElement;
@@ -33,7 +34,10 @@ public class HaxeStringLinkCompletionConfidence extends CompletionConfidence {
   private static final Pattern QNAME_TWO_DOTS = Pattern.compile("[A-Za-z_]\\w*\\.\\w+\\.[\\w.]*");
 
   @Override
-  public @NotNull ThreeState shouldSkipAutopopup(@NotNull PsiElement contextElement, @NotNull PsiFile psiFile, int offset) {
+  public @NotNull ThreeState shouldSkipAutopopup(@NotNull Editor editor,
+                                                 @NotNull PsiElement contextElement,
+                                                 @NotNull PsiFile psiFile,
+                                                 int offset) {
     HaxeStringLiteralExpression literal = PsiTreeUtil.getParentOfType(contextElement, HaxeStringLiteralExpression.class, false);
     if (literal == null) return ThreeState.UNSURE;
     int caretInLiteral = offset - literal.getTextRange().getStartOffset();
