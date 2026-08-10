@@ -4,7 +4,6 @@ import com.intellij.codeInspection.*;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.ide.annotator.HaxeAnnotatingVisitor;
 import com.intellij.plugins.haxe.lang.psi.*;
-import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorSearchUtil;
 import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch;
 import com.intellij.psi.PsiFile;
@@ -15,11 +14,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.ide.inspections.HaxeUnusedDeclarationsFixes.*;
-import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.KEEP;
 
 public class HaxeUnusedFunctionInspection extends LocalInspectionTool {
     @NotNull

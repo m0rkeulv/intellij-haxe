@@ -23,5 +23,7 @@ public class HaxeComponentIndexData {
      */
     boolean isPublic;
     /** True for a bare {@code override} (no explicit public/private): the real visibility lives in the parent. */
+    // TODO: no query-side consumer yet — the parent-chain visibility resolve this
+    //  flag exists for is not wired; until then isPublic is read as-is.
     boolean visibilityInherited;
 }

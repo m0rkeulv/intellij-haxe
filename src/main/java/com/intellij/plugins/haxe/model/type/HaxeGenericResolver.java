@@ -120,7 +120,6 @@ public class HaxeGenericResolver {
       }
       // not using "collection.addAll" because there is extra logic in add() that we need to execute
       for (ResolverEntry resolver : parentResolver.resolvers) {
-        //this.add(resolver.typeParameter(), resolver.type(), resolver.index());
         this.addInternal(resolver);
       }
       for (ResolverEntry entry : parentResolver.constraints) {

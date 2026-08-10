@@ -11,27 +11,12 @@ import static org.junit.jupiter.api.Assertions.*;
 public class HaxelibPathParserTest {
 
   @Test
-  @DisplayName("bare lines are classpaths and flags are skipped")
-  public void bareLinesAreClasspathsAndFlagsAreSkipped() {
-    List<String> classpaths = HaxelibPathParser.parseClasspaths(List.of(
-      "C:/HaxeToolkit/haxe/lib/lime/8,0,2/",
-      "-D lime=8.0.2",
-      "C:/HaxeToolkit/haxe/lib/openfl/9,2,2/",
-      "-D openfl=9.2.2",
-      "-L lime"));
-
-    assertEquals(List.of("C:/HaxeToolkit/haxe/lib/lime/8,0,2/",
-                         "C:/HaxeToolkit/haxe/lib/openfl/9,2,2/"),
-                 classpaths);
-  }
-
-  @Test
-  @DisplayName("error output yields no classpaths")
-  public void errorOutputYieldsNoClasspaths() {
-    List<String> classpaths = HaxelibPathParser.parseClasspaths(List.of(
+  @DisplayName("error output yields no sections")
+  public void errorOutputYieldsNoSections() {
+    List<HaxelibPathParser.LibrarySection> sections = HaxelibPathParser.parseSections("nosuchlib", List.of(
       "Error: Library nosuchlib is not installed",
       ""));
-    assertTrue(classpaths.isEmpty());
+    assertTrue(sections.isEmpty());
   }
 
   @Test
@@ -68,19 +53,5 @@ public class HaxelibPathParserTest {
     assertEquals("mylib", sections.get(1).name());
     assertNull(sections.get(1).version());
     assertEquals(List.of("C:/dev/mylib/extra-src/"), sections.get(1).classpaths());
-  }
-
-  @Test
-  @DisplayName("version comes from the lib's own -D marker, not a dependency's")
-  public void versionComesFromTheLibsOwnDMarkerNotADependencys() {
-    List<String> output = List.of(
-      "C:/HaxeToolkit/haxe/lib/lime/8,0,2/",
-      "-D lime=8.0.2",
-      "C:/HaxeToolkit/haxe/lib/openfl/9,2,2/",
-      "-D openfl=9.2.2");
-
-    assertEquals("9.2.2", HaxelibPathParser.parseVersion("openfl", output));
-    assertEquals("8.0.2", HaxelibPathParser.parseVersion("lime", output));
-    assertNull(HaxelibPathParser.parseVersion("actuate", output));
   }
 }

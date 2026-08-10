@@ -18,7 +18,6 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.plugins.haxe.lang.psi.HaxeObjectLiteral;
 import com.intellij.plugins.haxe.lang.psi.HaxeObjectLiteralComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeObjectLiteralElement;
-import com.intellij.plugins.haxe.lang.psi.HaxeResolver;
 import com.intellij.plugins.haxe.model.HaxeBaseMemberModel;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;

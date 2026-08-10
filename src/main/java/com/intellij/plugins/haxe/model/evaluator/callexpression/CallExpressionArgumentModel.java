@@ -34,6 +34,10 @@ public class CallExpressionArgumentModel {
    * resolved twice) and still produce the right type - hiding errors on
    * this flag would mask real ones.
    */
+  // TODO: no consumer yet — the call-site down-pass for untyped parameter
+  //  inference is the intended reader; when wiring it, align the two
+  //  producers in HaxeCallExpressionUtil (the new-expression variant omits
+  //  the result.isUnknown() term the call-expression variant includes).
   boolean incomplete;
 
   public CallExpressionArgumentModel(PsiElement psiElement, SpecificTypeReference type, boolean canCache) {

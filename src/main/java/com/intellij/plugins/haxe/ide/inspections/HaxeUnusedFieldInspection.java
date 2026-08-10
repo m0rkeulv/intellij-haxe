@@ -6,7 +6,6 @@ import com.intellij.plugins.haxe.ide.annotator.HaxeAnnotatingVisitor;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeFieldDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
-import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch;
 import com.intellij.psi.PsiFile;
 import com.intellij.util.ArrayUtil;
@@ -15,7 +14,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.ide.inspections.HaxeUnusedDeclarationsFixes.createAddKeepMetaFix;
