@@ -12,6 +12,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.function.UnaryOperator;
 
 public class HaxeCallExpressionEvaluation {
 
@@ -85,6 +86,17 @@ public class HaxeCallExpressionEvaluation {
     }
 
 
+
+    /**
+     * Re-resolves every recorded parameter type through the caller-supplied
+     * resolve step. Mappings are recorded while the align+bind loop is still
+     * running, so an entry written BEFORE a later argument bound the call's
+     * type parameters (a hole, or any early argument) still carries the
+     * unresolved type parameter — the final bindings improve it.
+     */
+    public void reResolveParameterTypes(@NotNull UnaryOperator<SpecificTypeReference> resolve) {
+        parameterIndexToType.replaceAll((index, holder) -> resolve.apply(holder.getType()).createHolder());
+    }
 
     public @Nullable ResultHolder getParameterType(int index) {
         return parameterIndexToType.getOrDefault(index, null);

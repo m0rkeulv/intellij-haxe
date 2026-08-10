@@ -3,9 +3,9 @@ package com.intellij.plugins.haxe.model.evaluator;
 import com.intellij.openapi.util.RecursionGuard;
 import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.lang.psi.*;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxeTypeParameterDeclaration;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
-import com.intellij.plugins.haxe.model.type.HaxeGenericResolver;
-import com.intellij.plugins.haxe.model.type.ResultHolder;
+import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiReference;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -84,7 +84,33 @@ public final class HaxeUntypedParameterInference {
     HaxeMethod method = PsiTreeUtil.getParentOfType(parameter, HaxeMethod.class);
     if (method == null || method.getBody() == null) return null;
     ResultHolder holder = searchReferencesForType(parameter.getComponentName(), context, resolver, method.getBody());
-    return !holder.isUnknown() ? holder : null;
+    if (holder.isUnknown()) return null;
+    // a generic call the body feeds this parameter into can answer with the
+    // callee's own unbound type parameter; that name means nothing in this
+    // method's scope and must not shadow a call-site answer
+    if (!typeParametersVisibleFrom(method, holder)) return null;
+    return holder;
+  }
+
+  /** True when every type parameter the type carries is declared by the method itself or an enclosing class. */
+  private static boolean typeParametersVisibleFrom(@NotNull HaxeMethod method, @NotNull ResultHolder holder) {
+    SpecificTypeReference type = holder.getType();
+    if (type instanceof SpecificHaxeClassReference classReference) {
+      if (classReference.getHaxeClass() instanceof HaxeTypeParameterDeclaration typeParameter) {
+        HaxeNamedComponent owner = typeParameter.getOwner();
+        return owner != null && PsiTreeUtil.isAncestor(owner, method, false);
+      }
+      for (ResultHolder specific : classReference.getSpecifics()) {
+        if (!typeParametersVisibleFrom(method, specific)) return false;
+      }
+    }
+    if (type instanceof SpecificFunctionReference function) {
+      for (HaxeArgument argument : function.getArguments()) {
+        if (!typeParametersVisibleFrom(method, argument.getType())) return false;
+      }
+      return typeParametersVisibleFrom(method, function.getReturnType());
+    }
+    return true;
   }
 
   /**

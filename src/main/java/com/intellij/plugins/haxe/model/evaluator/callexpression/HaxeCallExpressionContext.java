@@ -63,6 +63,16 @@ public class HaxeCallExpressionContext {
     public boolean isMacroMemberMethod() {
         return isMacroMethod && !isStaticMethod;
     }
+
+    /**
+     * True when any argument's recorded type may be improvable — its evaluation
+     * was clipped by a recursion guard or came out Unknown (see
+     * {@link CallExpressionArgumentModel#isIncomplete()}). The evaluator cache
+     * stores such evaluations DIRTY so readers never treat them as final.
+     */
+    public boolean hasIncompleteArguments() {
+        return arguments.stream().anyMatch(CallExpressionArgumentModel::isIncomplete);
+    }
     /**
      *
      * @param argumentList  list of arguments passed to the function/method beeing called
@@ -344,6 +354,15 @@ public class HaxeCallExpressionContext {
         }
 
         if (aborted) return evaluation;
+
+        // holes and early arguments recorded their parameter type before later
+        // arguments bound the call's type parameters — re-resolve with the final
+        // bindings. Unknowns are dropped first: a scope-derived argument entry
+        // whose value never settled (e.g. Unknown captured from a clipped
+        // argument evaluation) outranks the resolver entry the loop just bound
+        // and would mask it.
+        HaxeGenericResolver finalBindings = combinedResolver.withoutUnknowns();
+        evaluation.reResolveParameterTypes(type -> tryResolve(finalBindings, type, null));
 
         // update callExpressionResolver with any new resolve values from argument-parameter types
         evaluation.callExpressionResolver.addAll(combinedResolver);

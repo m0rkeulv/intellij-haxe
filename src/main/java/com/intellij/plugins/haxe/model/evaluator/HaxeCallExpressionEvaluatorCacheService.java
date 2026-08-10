@@ -121,7 +121,8 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       HaxeCallExpressionContextContainer contextContainer = createContextForMethodCall(callExpression, method);
       HaxeCallExpressionEvaluation evaluate = contextContainer.evaluateContexts();
       if(evaluate == null) return null;
-      evaluate.setComputedWithGuardFired(isDirty(taintMark, evaluate));
+      HaxeCallExpressionContext context = contextContainer.getContext();
+      evaluate.setComputedWithGuardFired(isDirty(taintMark, evaluate, context));
 
       // Deliberately NOT gated on the platform's mayCacheNow(): this cache
       // is load-bearing for termination, not just speed. Resolving one
@@ -138,7 +139,6 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       // settle they are the ONLY entries, and refusing them means every
       // reference rebuilds the same call context on every pass.
       if(evaluate.isValid() && evaluate.isCompleted()) {
-        HaxeCallExpressionContext context = contextContainer.getContext();
         if(context != null && context.canCache) {
           cacheMap.put(key, evaluate);
         }
@@ -218,22 +218,27 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     HaxeCallExpressionContext context = container.getContext();
     boolean staticExtension = context != null && context.isStaticExtension;
     boolean canCache = context != null && context.canCache;
-    return new HoleEvaluation(evaluate, staticExtension, canCache, isDirty(taintMark, evaluate));
+    return new HoleEvaluation(evaluate, staticExtension, canCache, isDirty(taintMark, evaluate, context));
   }
 
   /** A hole-context evaluation; dirty entries are served with a taint, like the main cache's. */
   public record HoleEvaluation(HaxeCallExpressionEvaluation evaluation, boolean staticExtension, boolean canCache, boolean dirty) {}
 
   /**
-   * Dirty when the compute observed truncation OR the result carries unknown
-   * types anywhere. The content check covers what the taint bracket cannot
-   * see: an Unknown binding from an argument whose resolve was prevented
-   * inside the platform's ResolveCache. A dirty entry is still cached and
-   * served, but serving it taints the reader, so no caching boundary judges
-   * a failure "complete" on this data.
+   * Dirty when the compute observed truncation, an ARGUMENT's recorded type
+   * may be improvable (clipped by a recursion guard or Unknown — the context's
+   * incomplete flag), OR the result carries unknown types anywhere. The last
+   * two cover what the taint bracket cannot see: an Unknown binding from an
+   * argument whose resolve was prevented inside the platform's ResolveCache,
+   * and an Unknown argument that left no trace in the output because its
+   * parameter is not generic. A dirty entry is still cached and served, but
+   * serving it taints the reader, so no caching boundary judges a failure
+   * "complete" on this data.
    */
-  private static boolean isDirty(long taintMark, HaxeCallExpressionEvaluation evaluate) {
-    return HaxeEvaluationTaint.taintedSince(taintMark) || !noUnknownResolvedValues(evaluate);
+  private static boolean isDirty(long taintMark, HaxeCallExpressionEvaluation evaluate, @Nullable HaxeCallExpressionContext context) {
+    return HaxeEvaluationTaint.taintedSince(taintMark)
+        || (context != null && context.hasIncompleteArguments())
+        || !noUnknownResolvedValues(evaluate);
   }
 
   private static boolean noUnknownResolvedValues( HaxeCallExpressionEvaluation evaluate) {

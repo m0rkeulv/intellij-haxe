@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.ide.inlay;
 
 import com.intellij.codeInsight.hints.declarative.InlayHintsProvider;
 import com.intellij.plugins.haxe.ide.hint.types.HaxeInlayUntypedParameterHintsProvider;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -74,6 +75,34 @@ public class HaxeUntypedParameterInlayTest extends HaxeInlayTestBase {
   @Test
   @DisplayName("chained call site binding")
   public void testChainedCallSiteBinding() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  @Test
+  @DisplayName("lambda argument typed by bound type parameter")
+  public void testLambdaArgumentTypedByBoundTypeParameter() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  // TODO: red until incomplete-argument RE-EVALUATION exists — when the
+  //  in-flight budget clips an argument mid-tower, a bounded retry after the
+  //  tower unwinds is needed; see doc/code-review-branch/incomplete-retry-red-fixtures.md
+  @Test
+  @Disabled("needs the budget-clipped argument retry (task: call-site down-pass)")
+  @DisplayName("deep chain exhausts in flight budget")
+  public void testDeepChainExhaustsInFlightBudget() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  @Test
+  @DisplayName("hole evaluation recursion same argument twice")
+  public void testHoleEvaluationRecursionSameArgumentTwice() throws Exception {
+    doTest(hintsProvider);
+  }
+
+  @Test
+  @DisplayName("generic parameter binds hole from other argument")
+  public void testGenericParameterBindsHoleFromOtherArgument() throws Exception {
     doTest(hintsProvider);
   }
 }

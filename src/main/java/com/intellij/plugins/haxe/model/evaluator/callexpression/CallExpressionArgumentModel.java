@@ -33,11 +33,13 @@ public class CallExpressionArgumentModel {
    * are harmless (a typedef referring to itself, the same thing being
    * resolved twice) and still produce the right type - hiding errors on
    * this flag would mask real ones.
+   * <p>
+   * Consumed by the evaluator cache: an evaluation with an incomplete
+   * argument is stored DIRTY and served with a taint, so no caching
+   * boundary judges results built on it as final.
    */
-  // TODO: no consumer yet — the call-site down-pass for untyped parameter
-  //  inference is the intended reader; when wiring it, align the two
-  //  producers in HaxeCallExpressionUtil (the new-expression variant omits
-  //  the result.isUnknown() term the call-expression variant includes).
+  // TODO: the re-evaluation the flag anticipates — re-running an incomplete
+  //  argument once the call's type parameters are bound — is not wired yet.
   boolean incomplete;
 
   public CallExpressionArgumentModel(PsiElement psiElement, SpecificTypeReference type, boolean canCache) {

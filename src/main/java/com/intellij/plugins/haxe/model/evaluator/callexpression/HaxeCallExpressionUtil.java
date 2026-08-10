@@ -469,7 +469,8 @@ public class HaxeCallExpressionUtil {
           }
           long taintMark = HaxeEvaluationTaint.mark();
           ResultHolder result = HaxeExpressionEvaluator.evaluateWithRecursionGuard(expression).result;
-          boolean incomplete = HaxeEvaluationTaint.taintedSince(taintMark);
+          // same incomplete semantics as the call-expression variant above
+          boolean incomplete = HaxeEvaluationTaint.taintedSince(taintMark) || result.isUnknown();
           CallExpressionArgumentModel model = CallExpressionArgumentModel.create(expression, result.getType(), result.isCacheable(), incomplete);
           argumentList.add(model);
       }
