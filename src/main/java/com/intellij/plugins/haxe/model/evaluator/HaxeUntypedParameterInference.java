@@ -5,6 +5,7 @@ import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeTypeParameterDeclaration;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
+import com.intellij.plugins.haxe.model.HaxeParameterModel;
 import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiReference;
@@ -13,9 +14,13 @@ import org.apache.commons.lang3.mutable.MutableInt;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.*;
@@ -104,8 +109,7 @@ public final class HaxeUntypedParameterInference {
     SpecificTypeReference type = holder.getType();
     if (type instanceof SpecificHaxeClassReference classReference) {
       if (classReference.getHaxeClass() instanceof HaxeTypeParameterDeclaration typeParameter) {
-        HaxeNamedComponent owner = typeParameter.getOwner();
-        return owner != null && PsiTreeUtil.isAncestor(owner, method, false);
+        return isVisibleFrom(typeParameter, method);
       }
       for (ResultHolder specific : classReference.getSpecifics()) {
         if (!typeParametersVisibleFrom(method, specific)) return false;
@@ -118,6 +122,12 @@ public final class HaxeUntypedParameterInference {
       return typeParametersVisibleFrom(method, function.getReturnType());
     }
     return true;
+  }
+
+  /** True when the type parameter is declared by the method itself or an enclosing class. */
+  private static boolean isVisibleFrom(@NotNull HaxeTypeParameterDeclaration typeParameter, @NotNull HaxeMethod method) {
+    HaxeNamedComponent owner = typeParameter.getOwner();
+    return owner != null && PsiTreeUtil.isAncestor(owner, method, false);
   }
 
   /**
@@ -166,7 +176,7 @@ public final class HaxeUntypedParameterInference {
         MutableInt depth = probeChainDepth.get();
         depth.increment();
         try {
-          return probeCallSites(methodName, parameterIndex);
+          return probeCallSites(method, methodName, parameterIndex);
         } finally {
           depth.decrement();
         }
@@ -207,7 +217,7 @@ public final class HaxeUntypedParameterInference {
 
   private record ProbeOutcome(@Nullable ResultHolder binding, boolean bindingEvaluatedClean) {}
 
-  private static @NotNull ProbeOutcome probeCallSites(HaxeComponentName methodName, int parameterIndex) {
+  private static @NotNull ProbeOutcome probeCallSites(HaxeMethod method, HaxeComponentName methodName, int parameterIndex) {
     // self-recursive call sites are already filtered out by referenceSearch
     List<PsiReference> callSites = referenceSearch(methodName, (PsiElement)null);
     int probed = 0;
@@ -219,10 +229,158 @@ public final class HaxeUntypedParameterInference {
       probeWorkSpent.get().increment();
       long argumentMark = HaxeEvaluationTaint.mark();
       ResultHolder argumentType = evaluateWithRecursionGuard(argument).result;
-      boolean clean = !HaxeEvaluationTaint.taintedSince(argumentMark);
-      if (isInformative(argumentType)) return new ProbeOutcome(argumentType, clean);
+      if (isInformative(argumentType)) {
+        boolean clean = !HaxeEvaluationTaint.taintedSince(argumentMark);
+        return new ProbeOutcome(argumentType, clean);
+      }
+      ResultHolder translated = translatedToOwnTypeParameters(method, argument, parameterIndex, argumentType);
+      if (translated != null) {
+        boolean clean = !HaxeEvaluationTaint.taintedSince(argumentMark);
+        return new ProbeOutcome(translated, clean);
+      }
     }
     return new ProbeOutcome(null, false);
+  }
+
+  /// A call-site answer spelled in the CALLER's type parameters is still usable
+  /// when the call pairs the callee's own type parameters with those caller
+  /// parameters; that pairing rewrites the answer into the callee's vocabulary:
+  /// ```haxe
+  /// function outer<T>(a:Array<T>, f:T->Int) { inner(a, f); }
+  /// function inner<T>(a, f) {}   // a pairs the T's -> f : T->Int in inner's T
+  /// ```
+  /// An answer keeping any untranslatable foreign type parameter stays rejected -
+  /// freezing it into the signature is the order-dependent over-specialization
+  /// the informative rule protects against.
+  private static @Nullable ResultHolder translatedToOwnTypeParameters(HaxeMethod method,
+                                                                      HaxeExpression argument,
+                                                                      int argumentIndex,
+                                                                      @Nullable ResultHolder argumentType) {
+    boolean worthTranslating = argumentType != null
+      && !argumentType.isUnknown()
+      && argumentType.isOrContainsTypeParameters()
+      && argumentType.isCacheable();
+    if (!worthTranslating) return null;
+    HaxeCallExpression call = PsiTreeUtil.getParentOfType(argument, HaxeCallExpression.class);
+    if (call == null) return null;
+    Map<HaxeTypeParameterDeclaration, HaxeTypeParameterDeclaration> inverse = callerToOwnTypeParameters(method, call, argumentIndex);
+    ResultHolder translated = translateTypeParameters(argumentType, method, inverse);
+    if (translated == null || !translated.isCacheable()) return null;
+    return translated;
+  }
+
+  /// Derives caller-parameter -> callee-parameter from the call's OTHER
+  /// arguments: an argument whose evaluated type carries a caller type
+  /// parameter in a slot the callee's declared parameter type spells with one
+  /// of its own type parameters pairs the two (the caller's `T` with the
+  /// callee's `T` through a shared `Array<T>` slot). The call evaluation's
+  /// resolver cannot supply this pairing: it hint-resolves each argument
+  /// against the parameter type first, which substitutes the callee's own
+  /// parameter into the argument before binding and leaves only an identity
+  /// entry. A caller parameter paired with several different callee
+  /// parameters is dropped - either translation would be arbitrary.
+  private static Map<HaxeTypeParameterDeclaration, HaxeTypeParameterDeclaration> callerToOwnTypeParameters(HaxeMethod method,
+                                                                                                           HaxeCallExpression call,
+                                                                                                           int holeArgumentIndex) {
+    Map<HaxeTypeParameterDeclaration, HaxeTypeParameterDeclaration> inverse = new HashMap<>();
+    Set<HaxeTypeParameterDeclaration> ambiguous = new HashSet<>();
+    HaxeCallExpressionList expressionList = call.getExpressionList();
+    HaxeMethodModel model = method.getModel();
+    if (expressionList == null || model == null) return inverse;
+    List<HaxeExpression> arguments = expressionList.getExpressionList();
+    List<HaxeParameterModel> parameters = model.getParameters();
+    int pairCount = Math.min(arguments.size(), parameters.size());
+    for (int i = 0; i < pairCount; i++) {
+      if (i == holeArgumentIndex) continue;
+      HaxeParameterModel parameter = parameters.get(i);
+      HaxeTypeTag typeTag = parameter.getTypeTagPsi();
+      if (typeTag == null) continue;
+      ResultHolder declared = HaxeTypeResolver.getTypeFromTypeTag(typeTag, parameter.getParameterPsi());
+      if (!declared.isOrContainsTypeParameters()) continue;
+      probeWorkSpent.get().increment();
+      ResultHolder argumentType = evaluateWithRecursionGuard(arguments.get(i)).result;
+      collectTypeParameterPairs(declared, argumentType, method, inverse, ambiguous);
+    }
+    inverse.keySet().removeAll(ambiguous);
+    return inverse;
+  }
+
+  /** Walks the declared parameter type and the argument type in parallel, pairing a callee-owned type parameter with the caller type parameter in the same slot. */
+  private static void collectTypeParameterPairs(ResultHolder declared,
+                                                ResultHolder argument,
+                                                HaxeMethod method,
+                                                Map<HaxeTypeParameterDeclaration, HaxeTypeParameterDeclaration> inverse,
+                                                Set<HaxeTypeParameterDeclaration> ambiguous) {
+    SpecificTypeReference declaredType = declared.getType();
+    SpecificTypeReference argumentType = argument.getType();
+    if (declaredType instanceof SpecificHaxeClassReference declaredClass) {
+      if (!(argumentType instanceof SpecificHaxeClassReference argumentClass)) return;
+      if (declaredClass.getHaxeClass() instanceof HaxeTypeParameterDeclaration ownParameter) {
+        if (!isVisibleFrom(ownParameter, method)) return;
+        if (!(argumentClass.getHaxeClass() instanceof HaxeTypeParameterDeclaration callerParameter)) return;
+        // a parameter already in the callee's own vocabulary needs no pairing
+        if (isVisibleFrom(callerParameter, method)) return;
+        HaxeTypeParameterDeclaration existing = inverse.putIfAbsent(callerParameter, ownParameter);
+        if (existing != null && !existing.equals(ownParameter)) ambiguous.add(callerParameter);
+        return;
+      }
+      // same class on both sides makes the specifics positionally comparable
+      if (!declaredClass.getHaxeClassReference().refersToSameClass(argumentClass.getHaxeClassReference())) return;
+      ResultHolder[] declaredSpecifics = declaredClass.getSpecifics();
+      ResultHolder[] argumentSpecifics = argumentClass.getSpecifics();
+      int specificCount = Math.min(declaredSpecifics.length, argumentSpecifics.length);
+      for (int i = 0; i < specificCount; i++) {
+        collectTypeParameterPairs(declaredSpecifics[i], argumentSpecifics[i], method, inverse, ambiguous);
+      }
+      return;
+    }
+    if (declaredType instanceof SpecificFunctionReference declaredFunction
+        && argumentType instanceof SpecificFunctionReference argumentFunction) {
+      List<HaxeArgument> declaredArguments = declaredFunction.getArguments();
+      List<HaxeArgument> argumentArguments = argumentFunction.getArguments();
+      int argumentCount = Math.min(declaredArguments.size(), argumentArguments.size());
+      for (int i = 0; i < argumentCount; i++) {
+        collectTypeParameterPairs(declaredArguments.get(i).getType(), argumentArguments.get(i).getType(), method, inverse, ambiguous);
+      }
+      collectTypeParameterPairs(declaredFunction.getReturnType(), argumentFunction.getReturnType(), method, inverse, ambiguous);
+    }
+  }
+
+  /**
+   * Rewrites every type-parameter reference the type carries into the callee's
+   * own vocabulary: the callee's own parameters pass through, foreign ones go
+   * through the inverse binding. Null when any foreign parameter has no translation.
+   */
+  private static @Nullable ResultHolder translateTypeParameters(ResultHolder holder,
+                                                                HaxeMethod method,
+                                                                Map<HaxeTypeParameterDeclaration, HaxeTypeParameterDeclaration> inverse) {
+    SpecificTypeReference type = holder.getType();
+    if (type instanceof SpecificHaxeClassReference classReference) {
+      if (classReference.getHaxeClass() instanceof HaxeTypeParameterDeclaration typeParameter) {
+        if (isVisibleFrom(typeParameter, method)) return holder;
+        HaxeTypeParameterDeclaration ownParameter = inverse.get(typeParameter);
+        return ownParameter != null ? ownParameter.getModel().getInstanceType() : null;
+      }
+      ResultHolder[] specifics = classReference.getSpecifics();
+      ResultHolder[] translated = new ResultHolder[specifics.length];
+      for (int i = 0; i < specifics.length; i++) {
+        translated[i] = translateTypeParameters(specifics[i], method, inverse);
+        if (translated[i] == null) return null;
+      }
+      return SpecificHaxeClassReference.withGenerics(classReference.getHaxeClassReference(), translated).createHolder();
+    }
+    if (type instanceof SpecificFunctionReference function) {
+      List<HaxeArgument> arguments = new ArrayList<>();
+      for (HaxeArgument functionArgument : function.getArguments()) {
+        ResultHolder argumentType = translateTypeParameters(functionArgument.getType(), method, inverse);
+        if (argumentType == null) return null;
+        arguments.add(functionArgument.withType(argumentType));
+      }
+      ResultHolder returnType = translateTypeParameters(function.getReturnType(), method, inverse);
+      if (returnType == null) return null;
+      return function.withTypes(arguments, returnType).createHolder();
+    }
+    return holder;
   }
 
   /**
@@ -241,7 +399,7 @@ public final class HaxeUntypedParameterInference {
     return parameterIndex < arguments.size() ? arguments.get(parameterIndex) : null;
   }
 
-  /** A binding must be a settled concrete type: the caller's type parameters cannot name the callee's. */
+  /** A binding accepted as-is must be a settled concrete type; a type-parameter-carrying answer only counts after translation into the callee's own vocabulary. */
   private static boolean isInformative(@Nullable ResultHolder type) {
     return type != null
            && !type.isUnknown()

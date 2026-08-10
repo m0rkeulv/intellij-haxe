@@ -8,6 +8,6 @@ class Test {
         rec(a, cmp, 0, a.length);
     }
 
-    static function rec<T>(a:Array<T>, cmp/*<# :|T->T->Int #>*/, from:Int, to:Int):Void {
+    static function rec<T>(a:Array<T>, cmp/*<# :|(|T|, |T|)|->|Int #>*/, from:Int, to:Int):Void {
     }
 }
