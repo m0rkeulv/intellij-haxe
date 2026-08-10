@@ -32,12 +32,19 @@ public final class HaxeUntypedParameterInference {
   // rule as closely as IDE typing order allows)
   private static final int MAX_PROBED_CALL_SITES = 8;
 
-  // a probed argument can itself be an untyped parameter, whose own probe
+  // A probed argument can itself be an untyped parameter, whose own probe
   // continues the chain until some call site finally passes a concrete
-  // value; the cap bounds that chain when call graphs are deep or cyclic
-  private static final int MAX_PROBE_CHAIN_DEPTH = 8;
+  // value. The budget bounds the TOTAL argument evaluations one top-level
+  // query spends across that whole chain: a linear chain (one call site per
+  // hop) descends up to 64 hops, while a branching call graph is cut at the
+  // former worst case of 8 sites over 8 levels. A depth cap here instead
+  // clipped exactly the productive case - a deep linear chain whose only
+  // informative site sits at the far end. Cycles never reach the budget:
+  // callSiteProbeGuard cuts a re-entered parameter.
+  private static final int MAX_PROBE_WORK = 64;
 
   private static final ThreadLocal<MutableInt> probeChainDepth = ThreadLocal.withInitial(MutableInt::new);
+  private static final ThreadLocal<MutableInt> probeWorkSpent = ThreadLocal.withInitial(MutableInt::new);
 
   private static final RecursionGuard<PsiElement>
     callSiteProbeGuard = RecursionManager.createGuard("haxeUntypedParameterCallSiteProbe");
@@ -70,7 +77,7 @@ public final class HaxeUntypedParameterInference {
     ResultHolder bodyDerived = bodyDerivedType(parameter, context, resolver);
     if (bodyDerived != null) {
       if (!HaxeEvaluationTaint.taintedSince(taintMark) && isInformative(bodyDerived)) {
-        bindingCache.put(parameter, Optional.of(bodyDerived));
+        settleBinding(parameter, bodyDerived);
       }
       return bodyDerived;
     }
@@ -143,25 +150,31 @@ public final class HaxeUntypedParameterInference {
     // declaration) never have a call compute in flight and may probe. The
     // other exception is a probe running under ANOTHER probe: a probed
     // argument that is itself an untyped parameter continues the chain
-    // toward a concrete call site, bounded by the chain cap.
+    // toward a concrete call site, bounded by the probe work budget.
     int chainDepth = probeChainDepth.get().intValue();
     boolean insideProbeChain = chainDepth > 0;
     if ((HaxeCallExpressionEvaluatorCacheService.anyComputeInFlight() && !insideProbeChain)
-        || chainDepth >= MAX_PROBE_CHAIN_DEPTH) {
+        || probeWorkSpent.get().intValue() >= MAX_PROBE_WORK) {
       HaxeEvaluationTaint.taint();
       return null;
     }
 
     long probeMark = HaxeEvaluationTaint.mark();
-    ProbeOutcome outcome = HaxeEvaluationTaint.computeOrTaint(callSiteProbeGuard, parameter, false, () -> {
-      MutableInt depth = probeChainDepth.get();
-      depth.increment();
-      try {
-        return probeCallSites(methodName, parameterIndex);
-      } finally {
-        depth.decrement();
-      }
-    });
+    ProbeOutcome outcome;
+    try {
+      outcome = HaxeEvaluationTaint.computeOrTaint(callSiteProbeGuard, parameter, false, () -> {
+        MutableInt depth = probeChainDepth.get();
+        depth.increment();
+        try {
+          return probeCallSites(methodName, parameterIndex);
+        } finally {
+          depth.decrement();
+        }
+      });
+    } finally {
+      // the work budget spans one top-level query and everything it chains into
+      if (chainDepth == 0) probeWorkSpent.get().setValue(0);
+    }
     if (outcome == null) return null;
     // a binding is trusted when ITS argument evaluated clean; a MISS is only
     // trusted when the whole probe (search included) was clean - a truncated
@@ -170,9 +183,26 @@ public final class HaxeUntypedParameterInference {
                         ? outcome.bindingEvaluatedClean()
                         : !HaxeEvaluationTaint.taintedSince(probeMark);
     if (cacheable) {
-      bindingCache.put(parameter, Optional.ofNullable(outcome.binding()));
+      if (outcome.binding() != null) {
+        settleBinding(parameter, outcome.binding());
+      } else {
+        bindingCache.put(parameter, Optional.empty());
+      }
     }
     return outcome.binding();
+  }
+
+  /**
+   * A newly settled binding is new information: call-cache entries computed
+   * while this parameter's type was still open re-arm their dirty-entry
+   * refresh on the stamp advance. A clean MISS does not advance it - an
+   * entry embedding a genuinely untypable parameter cannot improve.
+   */
+  private static void settleBinding(HaxeParameter parameter, ResultHolder binding) {
+    Optional<ResultHolder> previous = bindingCache.put(parameter, Optional.of(binding));
+    if (previous == null || previous.isEmpty()) {
+      HaxeCallExpressionEvaluatorCacheService.informationSettled();
+    }
   }
 
   private record ProbeOutcome(@Nullable ResultHolder binding, boolean bindingEvaluatedClean) {}
@@ -186,6 +216,7 @@ public final class HaxeUntypedParameterInference {
       HaxeExpression argument = argumentAt(callSite, parameterIndex);
       if (argument == null) continue;
       probed++;
+      probeWorkSpent.get().increment();
       long argumentMark = HaxeEvaluationTaint.mark();
       ResultHolder argumentType = evaluateWithRecursionGuard(argument).result;
       boolean clean = !HaxeEvaluationTaint.taintedSince(argumentMark);

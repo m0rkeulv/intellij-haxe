@@ -14,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionUtil.createContextForMethodCall;
 
@@ -77,6 +78,32 @@ public class HaxeCallExpressionEvaluatorCacheService  {
   // per-thread (inside the ThreadLocal), so no atomicity is needed - just a mutable int
   private static final ThreadLocal<MutableInt> inFlightTotal = ThreadLocal.withInitial(MutableInt::new);
 
+  // DIRTY-ENTRY REFRESH: a dirty entry is served-with-taint, but at TOP
+  // LEVEL (no compute in flight, full budget free) a fresh compute may now
+  // succeed where the stored one was truncated. The thrash bound is the
+  // settled-information stamp: a dirty entry cannot improve unless new type
+  // information settled after it was computed, so storing a dirty entry (or
+  // attempting its refresh) records the current stamp and further top-level
+  // reads serve it unchanged until the stamp advances. The stamp advances
+  // when an untyped-parameter binding settles (HaxeUntypedParameterInference)
+  // and everything resets with the PSI-change cache clear.
+  private static final AtomicLong settledInfoStamp = new AtomicLong();
+  private final Map<Object, Long> refreshAttempts = new ConcurrentHashMap<>();
+
+  public static void informationSettled() {
+    settledInfoStamp.incrementAndGet();
+  }
+
+  /** Records the attempt: at most one refresh per entry per stamp value. */
+  private boolean refreshArmed(Object key) {
+    if (anyComputeInFlight()) return false;
+    long stamp = settledInfoStamp.longValue();
+    Long lastAttempt = refreshAttempts.get(key);
+    if (lastAttempt != null && lastAttempt == stamp) return false;
+    refreshAttempts.put(key, stamp);
+    return true;
+  }
+
 
   public static @Nullable HaxeCallExpressionEvaluation cachedHaxeCallExpressionEvaluation(HaxeMethod method, HaxeCallExpression callExpression) {
 
@@ -97,11 +124,40 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     HaxeCallExpressionEvaluation cached = cacheMap.get(key);
     if (cached != null) {
       if (cached.isComputedWithGuardFired()) {
+        HaxeCallExpressionEvaluation refreshed = refreshedCallEvaluation(key, method, callExpression);
+        if (refreshed != null) return refreshed;
         HaxeEvaluationTaint.taint();
       }
       return cached;
     }
 
+    ComputedCall computed = computeCallEvaluation(key, method, callExpression);
+    if (computed == null) return null;
+    // Deliberately NOT gated on the platform's mayCacheNow(): this cache
+    // is load-bearing for termination, not just speed. Resolving one
+    // reference can require evaluating a call, whose arguments resolve
+    // further references, which evaluate further calls - and anything
+    // that resolves many references in a row (refactorings, usage
+    // searches) sends such chains very deep. The cache hit - including an
+    // entry that was computed while a recursion guard had fired - is what
+    // stops a chain from growing; gating the writes on mayCacheNow()
+    // overflowed the stack. Staleness is bounded by the PSI-change
+    // listener clearing the cache. The DIRTY flag travels with each entry
+    // so consumers taint instead of trusting it as complete, and entries
+    // containing Unknown types are stored too: in files whose types never
+    // settle they are the ONLY entries, and refusing them means every
+    // reference rebuilds the same call context on every pass.
+    if (computed.storable()) {
+      storeCallEvaluation(key, computed.evaluation());
+    }
+    return computed.evaluation();
+  }
+
+  private record ComputedCall(HaxeCallExpressionEvaluation evaluation, boolean storable) {}
+
+  private @Nullable ComputedCall computeCallEvaluation(CallExpressionEvaluationKey key,
+                                                       HaxeMethod method,
+                                                       HaxeCallExpression callExpression) {
     Map<Object, Integer> inProgress = inFlight.get();
     MutableInt total = inFlightTotal.get();
     int depth = inProgress.merge(key, 1, Integer::sum);
@@ -120,35 +176,36 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       long taintMark = HaxeEvaluationTaint.mark();
       HaxeCallExpressionContextContainer contextContainer = createContextForMethodCall(callExpression, method);
       HaxeCallExpressionEvaluation evaluate = contextContainer.evaluateContexts();
-      if(evaluate == null) return null;
+      if (evaluate == null) return null;
       HaxeCallExpressionContext context = contextContainer.getContext();
       evaluate.setComputedWithGuardFired(isDirty(taintMark, evaluate, context));
-
-      // Deliberately NOT gated on the platform's mayCacheNow(): this cache
-      // is load-bearing for termination, not just speed. Resolving one
-      // reference can require evaluating a call, whose arguments resolve
-      // further references, which evaluate further calls - and anything
-      // that resolves many references in a row (refactorings, usage
-      // searches) sends such chains very deep. The cache hit - including an
-      // entry that was computed while a recursion guard had fired - is what
-      // stops a chain from growing; gating the writes on mayCacheNow()
-      // overflowed the stack. Staleness is bounded by the PSI-change
-      // listener clearing the cache. The DIRTY flag travels with each entry
-      // so consumers taint instead of trusting it as complete, and entries
-      // containing Unknown types are stored too: in files whose types never
-      // settle they are the ONLY entries, and refusing them means every
-      // reference rebuilds the same call context on every pass.
-      if(evaluate.isValid() && evaluate.isCompleted()) {
-        if(context != null && context.canCache) {
-          cacheMap.put(key, evaluate);
-        }
-      }
-
-      return evaluate;
+      boolean storable = evaluate.isValid() && evaluate.isCompleted() && context != null && context.canCache;
+      return new ComputedCall(evaluate, storable);
     } finally {
       releaseInFlight(inProgress, key);
       total.decrement();
     }
+  }
+
+  private void storeCallEvaluation(CallExpressionEvaluationKey key, HaxeCallExpressionEvaluation evaluation) {
+    cacheMap.put(key, evaluation);
+    if (evaluation.isComputedWithGuardFired()) {
+      refreshAttempts.put(key, settledInfoStamp.longValue());
+    } else {
+      refreshAttempts.remove(key);
+    }
+  }
+
+  /** Clean beats dirty; a still-dirty recompute keeps the cached entry. */
+  private @Nullable HaxeCallExpressionEvaluation refreshedCallEvaluation(CallExpressionEvaluationKey key,
+                                                                         HaxeMethod method,
+                                                                         HaxeCallExpression callExpression) {
+    if (!refreshArmed(key)) return null;
+    ComputedCall fresh = computeCallEvaluation(key, method, callExpression);
+    boolean clean = fresh != null && fresh.storable() && !fresh.evaluation().isComputedWithGuardFired();
+    if (!clean) return null;
+    storeCallEvaluation(key, fresh.evaluation());
+    return fresh.evaluation();
   }
 
   private static void releaseInFlight(Map<Object, Integer> inProgress, Object key) {
@@ -179,11 +236,24 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     HoleEvaluation cached = holeCacheMap.get(key);
     if (cached != null) {
       if (cached.dirty()) {
+        HoleEvaluation refreshed = refreshedHoleEvaluation(key, method, callExpression, holeArgumentIndex);
+        if (refreshed != null) return refreshed;
         HaxeEvaluationTaint.taint();
       }
       return cached;
     }
 
+    HoleEvaluation result = computeHoleEvaluationInFlight(key, method, callExpression, holeArgumentIndex);
+    if (result != null && holeStorable(result)) {
+      storeHoleEvaluation(key, result);
+    }
+    return result;
+  }
+
+  private @Nullable HoleEvaluation computeHoleEvaluationInFlight(CallExpressionHoleKey key,
+                                                                 HaxeMethod method,
+                                                                 HaxeCallExpression callExpression,
+                                                                 int holeArgumentIndex) {
     Map<Object, Integer> inProgress = inFlight.get();
     MutableInt total = inFlightTotal.get();
     int depth = inProgress.merge(key, 1, Integer::sum);
@@ -195,19 +265,39 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       return null;
     }
     try {
-      HoleEvaluation result = computeHoleEvaluation(method, callExpression, holeArgumentIndex);
-      boolean storable = result != null
-        && result.evaluation().isValid()
-        && result.evaluation().isCompleted()
-        && result.canCache();
-      if (storable) {
-        holeCacheMap.put(key, result);
-      }
-      return result;
+      return computeHoleEvaluation(method, callExpression, holeArgumentIndex);
     } finally {
       releaseInFlight(inProgress, key);
       total.decrement();
     }
+  }
+
+  private static boolean holeStorable(HoleEvaluation result) {
+    return result.evaluation().isValid()
+        && result.evaluation().isCompleted()
+        && result.canCache();
+  }
+
+  private void storeHoleEvaluation(CallExpressionHoleKey key, HoleEvaluation result) {
+    holeCacheMap.put(key, result);
+    if (result.dirty()) {
+      refreshAttempts.put(key, settledInfoStamp.longValue());
+    } else {
+      refreshAttempts.remove(key);
+    }
+  }
+
+  /** Clean beats dirty; a still-dirty recompute keeps the cached entry. */
+  private @Nullable HoleEvaluation refreshedHoleEvaluation(CallExpressionHoleKey key,
+                                                           HaxeMethod method,
+                                                           HaxeCallExpression callExpression,
+                                                           int holeArgumentIndex) {
+    if (!refreshArmed(key)) return null;
+    HoleEvaluation fresh = computeHoleEvaluationInFlight(key, method, callExpression, holeArgumentIndex);
+    boolean clean = fresh != null && !fresh.dirty() && holeStorable(fresh);
+    if (!clean) return null;
+    storeHoleEvaluation(key, fresh);
+    return fresh;
   }
 
   private static @Nullable HoleEvaluation computeHoleEvaluation(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
@@ -264,6 +354,7 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     synchronized(this) {
       holeCacheMap.clear();
       cacheMap.clear();
+      refreshAttempts.clear();
     }
   }
 }
