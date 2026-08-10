@@ -66,20 +66,14 @@ public class HaxeMethodStubFactory implements StubElementFactory<HaxeMethodStub,
 
   private static int buildKeywordFlags(@NotNull HaxeMethod psi) {
     int flags = 0;
-    if (psi.isStatic())       flags |= HaxeMethodStub.IS_STATIC;
-    if (psi.isPublic())       flags |= HaxeMethodStub.IS_PUBLIC;
-    if (psi.isOverride())     flags |= HaxeMethodStub.IS_OVERRIDE;
-    if (psi.isAbstract())     flags |= HaxeMethodStub.IS_ABSTRACT;
-    if (psi.isInline())       flags |= HaxeMethodStub.IS_INLINE;
-    if (psi.isOverload())     flags |= HaxeMethodStub.IS_OVERLOAD;
-    if (psi.isMacro())        flags |= HaxeMethodStub.IS_MACRO;
-    if (psi.isDynamic())      flags |= HaxeMethodStub.IS_DYNAMIC;
-    // overridden methods without public/private keywords inherit visibility from the overridden method
-    // we cannot read outside our own file when indexing, so we move some logic to normal runtime
-    // by setting a flag that tells us we must check parent method.
-    if (psi.getModel() instanceof HaxeMemberModel member && member.isVisibilityInheritedFromParent()) {
-      flags |= HaxeMethodStub.IS_VISIBILITY_INHERITED;
-    }
+    if (psi.isStatic())       flags |= HaxeMethodStub.KEYWORD_STATIC;
+    if (psi.isPublic())       flags |= HaxeMethodStub.KEYWORD_PUBLIC;
+    if (psi.isOverride())     flags |= HaxeMethodStub.KEYWORD_OVERRIDE;
+    if (psi.isAbstract())     flags |= HaxeMethodStub.KEYWORD_ABSTRACT;
+    if (psi.isInline())       flags |= HaxeMethodStub.KEYWORD_INLINE;
+    if (psi.isOverload())     flags |= HaxeMethodStub.KEYWORD_OVERLOAD;
+    if (psi.isMacro())        flags |= HaxeMethodStub.KEYWORD_MACRO;
+    if (psi.isDynamic())      flags |= HaxeMethodStub.KEYWORD_DYNAMIC;
     return flags;
   }
 
@@ -88,6 +82,12 @@ public class HaxeMethodStubFactory implements StubElementFactory<HaxeMethodStub,
     if (psi.isConstructor())  flags |= HaxeMethodStub.IS_CONSTRUCTOR;
     if (psi.hasParameters())  flags |= HaxeMethodStub.HAS_PARAMETERS;
     if (psi.isVarArgs())      flags |= HaxeMethodStub.HAS_VARARG_PARAMETERS;
+    // overridden methods without public/private keywords inherit visibility from the overridden
+    // method, which indexing cannot resolve (reading outside the indexed file is forbidden)
+    // the flag defers the parent-chain check to query time.
+    if (psi.getModel() instanceof HaxeMemberModel member && member.isVisibilityInheritedFromParent()) {
+      flags |= HaxeMethodStub.VISIBILITY_INHERITED;
+    }
     return flags;
   }
 }
