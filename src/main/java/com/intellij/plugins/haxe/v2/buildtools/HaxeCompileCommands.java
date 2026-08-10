@@ -69,6 +69,7 @@ public final class HaxeCompileCommands {
                                        @NotNull String buildFilePath,
                                        @NotNull String actionName,
                                        @NotNull String extraArguments) {
+
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null || !file.isValid()) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);

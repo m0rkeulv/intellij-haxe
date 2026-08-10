@@ -86,7 +86,9 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
     if (StringUtil.isEmptyOrSpaces(actionName)) {
       throw new RuntimeConfigurationError(HaxeBundle.message("haxe.action.config.no.action"));
     }
-    if (HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments) == null) {
+    HaxeCompileCommands.Resolved resolved =
+      ReadAction.computeBlocking(() -> HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments));
+    if (resolved == null) {
       throw new RuntimeConfigurationError(
         HaxeBundle.message("haxe.action.config.unresolvable", actionName, PathUtil.getFileName(buildFilePath)));
     }
