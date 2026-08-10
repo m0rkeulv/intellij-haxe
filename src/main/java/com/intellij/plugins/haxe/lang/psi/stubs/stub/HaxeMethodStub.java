@@ -26,6 +26,10 @@ public class HaxeMethodStub extends StubBase<HaxeMethod> implements StubWithMeta
   public static final int IS_MACRO        = 1 << 5;
   public static final int IS_OVERLOAD     = 1 << 6;
   public static final int IS_DYNAMIC      = 1 << 7;
+  // A bare `override` (no explicit public/private): IS_PUBLIC is only the
+  // declared guess — the real visibility lives in the overridden method,
+  // which stub building cannot resolve (stubs come from the file alone).
+  public static final int IS_VISIBILITY_INHERITED = 1 << 8;
 
   // Metadata-modifier flags (stored in `metaFlags`).
   public static final int META_ABSTRACT      = 1 << 0;  // @:abstract
@@ -108,6 +112,11 @@ public class HaxeMethodStub extends StubBase<HaxeMethod> implements StubWithMeta
 
   public boolean isDynamic() {
     return (keywordFlags & IS_DYNAMIC) != 0;
+  }
+
+  /** flag to let us know we must resolve the overridden method's visibility. */
+  public boolean isVisibilityInherited() {
+    return (keywordFlags & IS_VISIBILITY_INHERITED) != 0;
   }
 
   // properties

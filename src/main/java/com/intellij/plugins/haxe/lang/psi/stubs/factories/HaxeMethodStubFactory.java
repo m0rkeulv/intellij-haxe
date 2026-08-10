@@ -7,6 +7,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxePsiModifier;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeMethodStub;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
+import com.intellij.plugins.haxe.model.HaxeMemberModel;
 import com.intellij.psi.stubs.StubElement;
 import com.intellij.psi.stubs.StubElementFactory;
 import com.intellij.plugins.haxe.lang.lexer.HaxeElementType;
@@ -73,6 +74,12 @@ public class HaxeMethodStubFactory implements StubElementFactory<HaxeMethodStub,
     if (psi.isOverload())     flags |= HaxeMethodStub.IS_OVERLOAD;
     if (psi.isMacro())        flags |= HaxeMethodStub.IS_MACRO;
     if (psi.isDynamic())      flags |= HaxeMethodStub.IS_DYNAMIC;
+    // overridden methods without public/private keywords inherit visibility from the overridden method
+    // we cannot read outside our own file when indexing, so we move some logic to normal runtime
+    // by setting a flag that tells us we must check parent method.
+    if (psi.getModel() instanceof HaxeMemberModel member && member.isVisibilityInheritedFromParent()) {
+      flags |= HaxeMethodStub.IS_VISIBILITY_INHERITED;
+    }
     return flags;
   }
 

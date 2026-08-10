@@ -383,7 +383,8 @@ public abstract class HaxeMethodPsiMixinImpl extends HaxeStubBasedNamedComponent
       if (stub.isStatic()) {
         list.addModifier(HaxePsiModifier.STATIC);
       }
-      if (stub.isPublic()) {
+      //note: isPublic also checks the overridden method's visibility if necessary.
+      if (isPublic()) {
         list.addModifier(HaxePsiModifier.PUBLIC);
       } else {
         list.addModifier(HaxePsiModifier.PRIVATE);
