@@ -6,18 +6,16 @@ import com.intellij.ide.fileTemplates.FileTemplateGroupDescriptorFactory;
 import com.intellij.plugins.haxe.HaxeWizardBundle;
 import icons.HaxeIcons;
 
-/**
- * Surfaces the project-generator templates ({@code fileTemplates/j2ee/Haxe Project *.ft})
- * as the "Haxe project" group under Settings | Editor | File and Code
- * Templates | Other — users can customize what the Haxe Template generator
- * scaffolds.
- *
- * The {@code j2ee} directory name is the PLATFORM'S fixed location for
- * plugin template groups (the storage behind the "Other" tab) and, per the
- * platform docs, "historical and not specifically tied to J2EE technology" —
- * FileTemplateManager scans only its five fixed folders, so a
- * nicer-named directory would simply not load.
- */
+/// Surfaces the project-generator templates (`fileTemplates/j2ee/Haxe Project *.ft`)
+/// as the "Haxe project" group under Settings | Editor | File and Code
+/// Templates | Other — users can customize what the Haxe Template generator
+/// scaffolds.
+///
+/// The `j2ee` directory name is the PLATFORM'S fixed location for
+/// plugin template groups (the storage behind the "Other" tab) and, per the
+/// platform docs, "historical and not specifically tied to J2EE technology" —
+/// FileTemplateManager scans only its five fixed folders, so a
+/// nicer-named directory would simply not load.
 public class HaxeProjectTemplatesFactory implements FileTemplateGroupDescriptorFactory {
 
   private static final String[] TEMPLATES = {

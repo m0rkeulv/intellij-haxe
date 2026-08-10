@@ -36,21 +36,19 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Maps a build's compilation target to the run configuration able to launch its
- * output (the tool window's Build &amp; run): HL bytecode → HashLink Application,
- * browser JS → Browser. For hxml files the target comes from the file itself;
- * for lime/openfl/hxp files from the selected target's `lime display` hxml. The
- * configuration is created once with a "Run Haxe action" build step attached and
- * matched by that step's build file afterwards, so tree launches and the
- * run-configuration dropdown stay in sync.
- *
- * CPP is wired for lime-family and nmml files only (both tools name the
- * executable after {@code <app file>} regardless of -debug); for plain hxml a
- * -debug build renames the executable (Main-debug.exe), so run and debug launch
- * different artifacts — a single static executable path cannot serve both
- * executors yet.
- */
+/// Maps a build's compilation target to the run configuration able to launch its
+/// output (the tool window's Build & run): HL bytecode → HashLink Application,
+/// browser JS → Browser. For hxml files the target comes from the file itself;
+/// for lime/openfl/hxp files from the selected target's `lime display` hxml. The
+/// configuration is created once with a "Run Haxe action" build step attached and
+/// matched by that step's build file afterwards, so tree launches and the
+/// run-configuration dropdown stay in sync.
+///
+/// CPP is wired for lime-family and nmml files only (both tools name the
+/// executable after `<app file>` regardless of -debug); for plain hxml a
+/// -debug build renames the executable (Main-debug.exe), so run and debug launch
+/// different artifacts — a single static executable path cannot serve both
+/// executors yet.
 public final class HaxeProgramLaunches {
 
   private HaxeProgramLaunches() {
@@ -207,13 +205,11 @@ public final class HaxeProgramLaunches {
     return settings;
   }
 
-  /**
-   * lime packages an HL build into {@code <export>/hl/bin}: the obj bytecode
-   * becomes {@code bin/hlboot.dat}, next to a renamed copy of the hl runtime
-   * ({@code <app file>[.exe]}) carrying the game's .hdll libraries. The SDK's
-   * plain hl executable cannot run that game, so the configuration points at
-   * hlboot.dat and overrides the runtime with the bundled executable.
-   */
+  /// lime packages an HL build into `<export>/hl/bin`: the obj bytecode
+  /// becomes `bin/hlboot.dat`, next to a renamed copy of the hl runtime
+  /// (`<app file>[.exe]`) carrying the game's .hdll libraries. The SDK's
+  /// plain hl executable cannot run that game, so the configuration points at
+  /// hlboot.dat and overrides the runtime with the bundled executable.
   private static void configureLimeHashLink(@NotNull HashLinkRunConfiguration configuration,
                                             @NotNull HaxeBuildFile buildFile,
                                             @NotNull Path objOutput) {
@@ -229,14 +225,12 @@ public final class HaxeProgramLaunches {
     }
   }
 
-  /**
-   * An nmml target output is the executable path already and passes through.
-   * lime places the desktop executable at {@code <export>/<target>/bin/<app file>[.exe]};
-   * its display pipeline reports that path directly, but the legacy `lime display`
-   * fallback yields the C++ obj directory instead — derive bin from it the way
-   * the HL flavor does. Unresolvable (hxp, no app file): the visible
-   * configuration prompts for the executable.
-   */
+  /// An nmml target output is the executable path already and passes through.
+  /// lime places the desktop executable at `<export>/<target>/bin/<app file>[.exe]`;
+  /// its display pipeline reports that path directly, but the legacy `lime display`
+  /// fallback yields the C++ obj directory instead — derive bin from it the way
+  /// the HL flavor does. Unresolvable (hxp, no app file): the visible
+  /// configuration prompts for the executable.
   private static void configureHxcppExecutable(@NotNull HxcppIntellijRunConfiguration configuration,
                                                @NotNull HaxeBuildFile buildFile,
                                                @NotNull Path output) {
@@ -250,7 +244,7 @@ public final class HaxeProgramLaunches {
     configuration.setExecutablePath(output.toString());
   }
 
-  /** lime's runnable artifacts live in {@code <export>/<target>/bin}, beside the obj dir the legacy display path reports. */
+  /// lime's runnable artifacts live in `<export>/<target>/bin`, beside the obj dir the legacy display path reports.
   @Nullable
   private static Path binDirBesideObj(@Nullable Path objDir) {
     if (objDir == null || !"obj".equals(String.valueOf(objDir.getFileName()))) return objDir;
@@ -258,7 +252,7 @@ public final class HaxeProgramLaunches {
     return targetDir == null ? null : targetDir.resolve("bin");
   }
 
-  /** The {@code <app file>} name from the project xml; null for hxp (a script, not xml) or when undeclared. */
+  /// The `<app file>` name from the project xml; null for hxp (a script, not xml) or when undeclared.
   @Nullable
   private static String appFileName(@NotNull HaxeBuildFile buildFile) {
     if (buildFile.type() == HaxeBuildFileType.HXP_PROJECT) return null;

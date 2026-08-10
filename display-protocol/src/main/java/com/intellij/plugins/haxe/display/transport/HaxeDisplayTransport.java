@@ -10,15 +10,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The null-terminated request form of a {@code haxe --wait <port>} server:
- * connect, write every argument followed by {@code \n} and a single trailing
- * {@code \0}, read until the server closes, close.
- *
- * Strictly one socket per request, closed immediately: the server processes
- * one connection at a time and an idle open connection stalls every other
- * client (including builds) until a server-side read timeout. Never pool.
- */
+/// The null-terminated request form of a `haxe --wait <port>` server:
+/// connect, write every argument followed by `\n` and a single trailing
+/// `\0`, read until the server closes, close.
+///
+/// Strictly one socket per request, closed immediately: the server processes
+/// one connection at a time and an idle open connection stalls every other
+/// client (including builds) until a server-side read timeout. Never pool.
 public final class HaxeDisplayTransport {
 
   private static final int CONNECT_TIMEOUT_MS = 3_000;

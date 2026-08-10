@@ -24,10 +24,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Tree context menu on a missing library: runs {@code haxelib install <name> [version] --always}
- * in the background and refreshes the tree on success.
- */
+/// Tree context menu on a missing library: runs `haxelib install <name> [version] --always`
+/// in the background and refreshes the tree on success.
 public final class HaxeInstallLibraryAction extends DumbAwareAction {
 
   private static final String NOTIFICATION_GROUP = "haxe.command";

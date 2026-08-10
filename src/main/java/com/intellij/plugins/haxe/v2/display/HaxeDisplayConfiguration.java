@@ -39,7 +39,7 @@ public final class HaxeDisplayConfiguration {
   private HaxeDisplayConfiguration() {
   }
 
-  /** The container's overrides as arguments: SETs become {@code -D name[=value]}, REMOVEs name the defines to strip. */
+  /// The container's overrides as arguments: SETs become `-D name[=value]`, REMOVEs name the defines to strip.
   @NotNull
   public static DefineOverrides overridesFor(@NotNull Project project, @NotNull String containerId) {
     Set<String> removed = new LinkedHashSet<>();
@@ -56,13 +56,11 @@ public final class HaxeDisplayConfiguration {
     return removed.isEmpty() && set.isEmpty() ? DefineOverrides.EMPTY : new DefineOverrides(removed, set);
   }
 
-  /**
-   * Applies the overrides to the build's base arguments. SETs simply append —
-   * a later {@code -D} wins over an earlier value of the same define. A
-   * REMOVE has no CLI form, so it forces one-level hxml expansion (an hxml
-   * reference hides the {@code -D} lines to strip) and drops the matching
-   * define pairs.
-   */
+  /// Applies the overrides to the build's base arguments. SETs simply append —
+  /// a later `-D` wins over an earlier value of the same define. A
+  /// REMOVE has no CLI form, so it forces one-level hxml expansion (an hxml
+  /// reference hides the `-D` lines to strip) and drops the matching
+  /// define pairs.
   @NotNull
   public static List<String> applyOverrides(@NotNull List<String> baseArgs, @NotNull DefineOverrides overrides) {
     if (overrides.isEmpty()) return baseArgs;

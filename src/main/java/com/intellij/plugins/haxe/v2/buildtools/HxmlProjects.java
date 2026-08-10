@@ -7,10 +7,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * Facts about plain hxml builds: the direct {@code haxe <file>} compile and
- * its single default action. The lime counterpart is {@link LimeProjects}.
- */
+/// Facts about plain hxml builds: the direct `haxe <file>` compile and
+/// its single default action. The lime counterpart is [LimeProjects].
 public final class HxmlProjects {
 
   /** The hxml default action's name - doubles as its identifier in stored configurations. */
@@ -24,7 +22,7 @@ public final class HxmlProjects {
     return actionName.equals(BUILD_ACTION) || actionName.equals("compile");
   }
 
-  /** The direct compile: {@code haxe <file>}, run in the file's directory. */
+  /// The direct compile: `haxe <file>`, run in the file's directory.
   @NotNull
   public static List<String> buildCommand(@NotNull Project project,
                                           @Nullable String environmentSdk,
@@ -32,7 +30,7 @@ public final class HxmlProjects {
     return List.of(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk), file.getName());
   }
 
-  /** Whether the command invokes the haxe compiler directly (and so takes {@code --connect} right after the executable). */
+  /// Whether the command invokes the haxe compiler directly (and so takes `--connect` right after the executable).
   public static boolean isDirectHaxeCommand(@NotNull Project project,
                                             @Nullable String environmentSdk,
                                             @NotNull List<String> command) {

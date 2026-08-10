@@ -49,12 +49,10 @@ public final class NmeProjects {
     return HaxeTargetOptions.targetFlagsFor(HaxeBuildFileType.NMML, targetId);
   }
 
-  /**
-   * A {@code haxelib run nme …} invocation. These can compile through the
-   * server, but only as a single {@code "--connect <port>"} token - the tool's
-   * two-token forwarding is broken (see
-   * {@link HaxeCompileCommands#connectIfEnabled}).
-   */
+  /// A `haxelib run nme …` invocation. These can compile through the
+  /// server, but only as a single `"--connect <port>"` token - the tool's
+  /// two-token forwarding is broken (see
+  /// [HaxeCompileCommands#connectIfEnabled]).
   public static boolean isToolCommand(@NotNull List<String> command) {
     return command.size() >= 3 && "run".equals(command.get(1)) && "nme".equals(command.get(2));
   }
@@ -80,12 +78,10 @@ public final class NmeProjects {
   public record TargetArtifact(@NotNull HaxeTarget target, @NotNull String relativeOutput) {
   }
 
-  /**
-   * The raw nmml info completed with the selected target's haxe target and
-   * artifact path - the xml declares neither. Unchanged when the target's
-   * artifact is not mapped or the nmml has no {@code <app file>}.
-   * Call in a read action.
-   */
+  /// The raw nmml info completed with the selected target's haxe target and
+  /// artifact path - the xml declares neither. Unchanged when the target's
+  /// artifact is not mapped or the nmml has no `<app file>`.
+  /// Call in a read action.
   @NotNull
   public static HaxeBuildFileInfo withTargetArtifact(@NotNull Project project,
                                                      @NotNull VirtualFile file,
@@ -102,16 +98,14 @@ public final class NmeProjects {
     return new HaxeBuildFileInfo(artifact.target(), artifact.relativeOutput(), raw.defines(), raw.libraries(), raw.classpaths());
   }
 
-  /**
-   * Where the nme tool packages a target's runnable artifact, relative to the
-   * project file: {@code <output root>/<platform dir>/<app file>/...} (mac
-   * wraps an .app bundle instead of a plain directory). The output root is the
-   * nmml's {@code <app path>}, defaulting to {@code bin}. Platform dirs follow
-   * the tool's naming, which suffixes "64" for the 64-bit desktop builds every
-   * modern mac/linux host produces. "cpp" builds for the host desktop. Target
-   * flags without a launchable artifact mapping (android, ios, neko's
-   * bootstrapped executable, user-configured console targets...) return null.
-   */
+  /// Where the nme tool packages a target's runnable artifact, relative to the
+  /// project file: `<output root>/<platform dir>/<app file>/...` (mac
+  /// wraps an .app bundle instead of a plain directory). The output root is the
+  /// nmml's `<app path>`, defaulting to `bin`. Platform dirs follow
+  /// the tool's naming, which suffixes "64" for the 64-bit desktop builds every
+  /// modern mac/linux host produces. "cpp" builds for the host desktop. Target
+  /// flags without a launchable artifact mapping (android, ios, neko's
+  /// bootstrapped executable, user-configured console targets...) return null.
   @Nullable
   public static TargetArtifact targetArtifact(@NotNull String targetFlag, @NotNull String appFile, @NotNull String outputRoot) {
     return switch (targetFlag) {

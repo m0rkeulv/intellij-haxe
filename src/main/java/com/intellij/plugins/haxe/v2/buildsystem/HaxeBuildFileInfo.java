@@ -6,14 +6,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * What a Haxe build/project file declares: the compilation target (HXML only —
- * XML-based projects choose their target in the UI), the target's output argument
- * (e.g. {@code bin/app.hl}), the defines it sets, the haxelib dependencies it
- * pulls in and its class paths (relative ones resolve against the build file's
- * directory — for `lime display` output these are the fully evaluated dependency
- * roots, as the tool emits {@code -cp} instead of {@code -lib}).
- */
+/// What a Haxe build/project file declares: the compilation target (HXML only —
+/// XML-based projects choose their target in the UI), the target's output argument
+/// (e.g. `bin/app.hl`), the defines it sets, the haxelib dependencies it
+/// pulls in and its class paths (relative ones resolve against the build file's
+/// directory — for `lime display` output these are the fully evaluated dependency
+/// roots, as the tool emits `-cp` instead of `-lib`).
 public record HaxeBuildFileInfo(@Nullable HaxeTarget target,
                                 @Nullable String targetOutput,
                                 @NotNull List<HaxeDefine> defines,
@@ -22,7 +20,7 @@ public record HaxeBuildFileInfo(@Nullable HaxeTarget target,
 
   public static final HaxeBuildFileInfo EMPTY = new HaxeBuildFileInfo(null, null, List.of(), List.of(), List.of());
 
-  /** A {@code -D name=value} compiler define. */
+  /// A `-D name=value` compiler define.
   public record HaxeDefine(@NotNull String name, @Nullable String value) {
   }
 

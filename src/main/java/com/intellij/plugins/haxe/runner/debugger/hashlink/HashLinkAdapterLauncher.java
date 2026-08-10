@@ -33,7 +33,7 @@ public final class HashLinkAdapterLauncher {
   private HashLinkAdapterLauncher() {
   }
 
-  /** Starts {@code hl <adapter.hl> --port 0} and parses the announced port. */
+  /// Starts `hl <adapter.hl> --port 0` and parses the announced port.
   public static LaunchedAdapter launch(Path hlExecutable) throws ExecutionException {
     Path adapter = bundledAdapterPath();
     Process process;

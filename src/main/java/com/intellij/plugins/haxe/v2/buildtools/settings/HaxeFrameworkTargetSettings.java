@@ -34,12 +34,10 @@ public final class HaxeFrameworkTargetSettings implements PersistentStateCompone
   /** The build systems whose target list is configurable. */
   public enum Framework {LIME, OPENFL, NME}
 
-  /**
-   * One configured target: the display name (also the id target selections
-   * store), the haxe backend it compiles through (informational; null when
-   * unknown), and the tool's CLI flags — the FIRST flag is the target word
-   * ({@code lime build <flag>}), the rest ride along ({@code -64}).
-   */
+  /// One configured target: the display name (also the id target selections
+  /// store), the haxe backend it compiles through (informational; null when
+  /// unknown), and the tool's CLI flags — the FIRST flag is the target word
+  /// (`lime build <flag>`), the rest ride along (`-64`).
   public record TargetDefinition(@NotNull String name, @Nullable HaxeTarget target, @NotNull List<String> flags) {
     @NotNull
     public String primaryFlag() {

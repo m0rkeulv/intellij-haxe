@@ -54,12 +54,10 @@ public final class LimeProjects {
     return HaxeTargetOptions.targetFlagsFor(type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file));
   }
 
-  /**
-   * A {@code haxelib run lime|openfl …} invocation. The lime tool forwards a
-   * trailing {@code --connect <port>} pair into the haxe builds it generates
-   * (CommandLineTools.hx treats --connect as a haxeflag whose next argument is
-   * captured with it), so these commands can use the compilation server too.
-   */
+  /// A `haxelib run lime|openfl …` invocation. The lime tool forwards a
+  /// trailing `--connect <port>` pair into the haxe builds it generates
+  /// (CommandLineTools.hx treats --connect as a haxeflag whose next argument is
+  /// captured with it), so these commands can use the compilation server too.
   public static boolean isToolCommand(@NotNull List<String> command) {
     if (command.size() < 3 || !"run".equals(command.get(1))) return false;
     String tool = command.get(2);

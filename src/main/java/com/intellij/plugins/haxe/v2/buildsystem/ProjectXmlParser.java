@@ -48,21 +48,17 @@ public final class ProjectXmlParser {
     return new HaxeBuildFileInfo(null, null, List.copyOf(defines), List.copyOf(libraries), List.copyOf(classpaths));
   }
 
-  /**
-   * The {@code <app file="...">} attribute — the base name of the launcher
-   * executable lime produces (e.g. {@code NyanCat} → {@code NyanCat.exe} on
-   * Windows); null when the file declares none.
-   */
+  /// The `<app file="...">` attribute — the base name of the launcher
+  /// executable lime produces (e.g. `NyanCat` → `NyanCat.exe` on
+  /// Windows); null when the file declares none.
   @Nullable
   public static String parseAppFile(@NotNull String content) {
     return appAttribute(content, "file");
   }
 
-  /**
-   * The {@code <app path="...">} attribute — the output root the tool exports
-   * every target under (conventionally {@code Export}); null when the file
-   * declares none (the tools default to {@code bin}).
-   */
+  /// The `<app path="...">` attribute — the output root the tool exports
+  /// every target under (conventionally `Export`); null when the file
+  /// declares none (the tools default to `bin`).
   @Nullable
   public static String parseAppPath(@NotNull String content) {
     return appAttribute(content, "path");

@@ -281,14 +281,12 @@ public class HaxeFileModel implements HaxeExposableModel {
     return result;
   }
 
-  /**
-   * Import models for the type names {@linkplain HaxeExpressionCodeFragment#importClass
-   * added directly to an evaluate/debugger fragment} (empty for a normal file).
-   * Each stored name is turned into an ordinary {@link HaxeImportModel} by
-   * synthesizing an {@code import <fqn>;} statement, so it resolves through the
-   * same machinery as a written import — but the statement lives outside the
-   * fragment's text and thus never reaches the evaluated expression.
-   */
+  /// Import models for the type names [added directly to an evaluate/debugger
+  /// fragment][HaxeExpressionCodeFragment#importClass] (empty for a normal file).
+  /// Each stored name is turned into an ordinary [HaxeImportModel] by
+  /// synthesizing an `import <fqn>;` statement, so it resolves through the
+  /// same machinery as a written import — but the statement lives outside the
+  /// fragment's text and thus never reaches the evaluated expression.
   @NotNull
   private List<HaxeImportModel> getFragmentStoredImportModels() {
     if (!(file instanceof HaxeExpressionCodeFragment fragment)) {

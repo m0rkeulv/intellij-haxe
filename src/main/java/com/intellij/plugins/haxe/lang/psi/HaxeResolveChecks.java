@@ -275,13 +275,11 @@ public class HaxeResolveChecks {
   }
 
 
-  /**
-   * Determines the type that {@code expression} is expected to conform to from its surrounding
-   * context: a variable type tag, a return type, a call or constructor argument, or an enclosing
-   * array / object literal field. Nested arrays and object literals are unwrapped recursively, so
-   * e.g. the element type of {@code new Foo({items: [ {...} ]})} can be found from the inner literal.
-   * Returns {@code null} when no expected type can be determined.
-   */
+  /// Determines the type that `expression` is expected to conform to from its surrounding
+  /// context: a variable type tag, a return type, a call or constructor argument, or an enclosing
+  /// array / object literal field. Nested arrays and object literals are unwrapped recursively, so
+  /// e.g. the element type of `new Foo({items: [ {...} ]})` can be found from the inner literal.
+  /// Returns `null` when no expected type can be determined.
   @Nullable
   public static ResultHolder findExpectedType(@NotNull PsiElement expression) {
     return findParentAssignType(expression, true);
@@ -1990,16 +1988,14 @@ public class HaxeResolveChecks {
     return result;
   }
 
-  /**
-   * Walks up the scope from the reference, trying to find the named type.
-   * <p>
-   * For instance, it will find a type constraint from a subClass if the reference is a type parameter
-   * for a sub-class.  For example: {@code myType<K:constrainedType> extends superType<K> } will
-   * resolve to {@code constrainedType} if the reference being resolved is the second {@code K}.
-   *
-   * @param reference
-   * @return
-   */
+  /// Walks up the scope from the reference, trying to find the named type.
+  ///
+  /// For instance, it will find a type constraint from a subClass if the reference is a type parameter
+  /// for a sub-class.  For example: `myType<K:constrainedType> extends superType<K>` will
+  /// resolve to `constrainedType` if the reference being resolved is the second `K`.
+  ///
+  /// @param reference
+  /// @return
   static List<? extends PsiElement> checkByTreeWalk(HaxeReference reference,  @Nullable PsiElement maxScope) {
     boolean shouldCollectAll = reference.getParent() instanceof HaxeCallExpression;
 

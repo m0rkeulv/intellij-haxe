@@ -45,16 +45,14 @@ public class HaxeDebugProcess extends FlexDebugProcess {
     return new HaxeDebuggerEditorsProvider();
   }
 
-  /**
-   * fdb matches name-based breakpoint markers ({@code break Main.hx:6}) against
-   * ANY file with that name in the swf, and flex's out-of-scope breakpoint
-   * filter fails open for Haxe files (its ActionScript resolver cannot see
-   * them) — so a breakpoint in an unrelated module's Main.hx would land in the
-   * debugged module's Main.hx. For files outside the debugged module's scope
-   * the marker becomes the absolute path instead: it only matches when fdb
-   * truly knows that file, and is reported "not set" (breakpoint shown invalid
-   * for this session) otherwise — the correct outcome for foreign breakpoints.
-   */
+  /// fdb matches name-based breakpoint markers (`break Main.hx:6`) against
+  /// ANY file with that name in the swf, and flex's out-of-scope breakpoint
+  /// filter fails open for Haxe files (its ActionScript resolver cannot see
+  /// them) — so a breakpoint in an unrelated module's Main.hx would land in the
+  /// debugged module's Main.hx. For files outside the debugged module's scope
+  /// the marker becomes the absolute path instead: it only matches when fdb
+  /// truly knows that file, and is reported "not set" (breakpoint shown invalid
+  /// for this session) otherwise — the correct outcome for foreign breakpoints.
   @Override
   protected String resolveFileReference(VirtualFile file) {
     String reference = super.resolveFileReference(file);

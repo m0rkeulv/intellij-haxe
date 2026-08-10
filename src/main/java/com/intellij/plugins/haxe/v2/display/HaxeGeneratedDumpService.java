@@ -26,18 +26,16 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-/**
- * Produces {@code -D dump=pretty} typed-AST dumps of a build context — the
- * post-macro source of truth the generated-code preview renders. The dump is
- * a real generation pass through the compilation server (a {@code --no-output}
- * compile writes no dumps), with the build's output redirected into the same
- * IDE-owned directory so a preview build never touches the user's output or
- * project tree.
- *
- * One dump pass writes every module of the compilation, so the first
- * navigation pays for all later ones: results are cached per context and
- * reused until the next code change. Background threads only.
- */
+/// Produces `-D dump=pretty` typed-AST dumps of a build context — the
+/// post-macro source of truth the generated-code preview renders. The dump is
+/// a real generation pass through the compilation server (a `--no-output`
+/// compile writes no dumps), with the build's output redirected into the same
+/// IDE-owned directory so a preview build never touches the user's output or
+/// project tree.
+///
+/// One dump pass writes every module of the compilation, so the first
+/// navigation pays for all later ones: results are cached per context and
+/// reused until the next code change. Background threads only.
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeGeneratedDumpService {
@@ -212,16 +210,14 @@ public final class HaxeGeneratedDumpService {
     return Path.of(FileUtil.getTempDirectory(), "haxe-dump", hash);
   }
 
-  /**
-   * Args may carry an .hxml file REFERENCE instead of flags (an HXML build
-   * context is {@code ["--cwd", dir, "build.hxml"]} — the compiler expands
-   * the file server-side). Output redirection needs the real flags, so one
-   * level is expanded here, resolving against the preceding {@code --cwd}.
-   * A reference nested inside an expanded file stays as-is: its flags remain
-   * invisible, and a target hidden there makes {@link #dumpArgs} refuse.
-   * TODO: {@code --next} sections get the dump defines appended only after
-   *  the last section; multi-build hxml dumps only that section's modules.
-   */
+  /// Args may carry an .hxml file REFERENCE instead of flags (an HXML build
+  /// context is `["--cwd", dir, "build.hxml"]` — the compiler expands
+  /// the file server-side). Output redirection needs the real flags, so one
+  /// level is expanded here, resolving against the preceding `--cwd`.
+  /// A reference nested inside an expanded file stays as-is: its flags remain
+  /// invisible, and a target hidden there makes [#dumpArgs] refuse.
+  /// TODO: `--next` sections get the dump defines appended only after
+  ///  the last section; multi-build hxml dumps only that section's modules.
   @NotNull
   static List<String> expandHxmlReferences(@NotNull List<String> args) {
     List<String> expanded = new ArrayList<>(args.size() + 16);

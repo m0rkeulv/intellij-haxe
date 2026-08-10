@@ -26,19 +26,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Renders a {@code -D dump=pretty} module dump as a read-only Haxe preview:
- * the post-macro typed AST is close enough to Haxe that the normal parser,
- * highlighting and folding apply once the declaration headers are sanitized
- * (see doc/generated-code-preview.md). Preview files are marked with
- * {@link #PREVIEW_KEY} — the semantic annotators and the per-file
- * highlighting level keep error analysis off them while the color
- * annotators still paint.
- *
- * Split for threading: {@link #prepare} does all the work (file IO, parse,
- * offset lookup) and runs on a BACKGROUND thread; {@link #openPrepared} only
- * opens the editor and runs on the EDT.
- */
+/// Renders a `-D dump=pretty` module dump as a read-only Haxe preview:
+/// the post-macro typed AST is close enough to Haxe that the normal parser,
+/// highlighting and folding apply once the declaration headers are sanitized
+/// (see doc/generated-code-preview.md). Preview files are marked with
+/// [#PREVIEW_KEY] — the semantic annotators and the per-file
+/// highlighting level keep error analysis off them while the color
+/// annotators still paint.
+///
+/// Split for threading: [#prepare] does all the work (file IO, parse,
+/// offset lookup) and runs on a BACKGROUND thread; [#openPrepared] only
+/// opens the editor and runs on the EDT.
 @CustomLog
 public final class HaxeGeneratedCodePreview {
 

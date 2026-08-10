@@ -16,20 +16,18 @@ public final class HaxelibPathParser {
   private HaxelibPathParser() {
   }
 
-  /** One library of a {@code haxelib path} run: its own classpath roots only, not its dependencies'. */
+  /// One library of a `haxelib path` run: its own classpath roots only, not its dependencies'.
   public record LibrarySection(@NotNull String name, @Nullable String version, @NotNull List<String> classpaths) {
   }
 
-  /**
-   * Splits {@code haxelib path <lib>} output into per-library sections: each
-   * classpath line belongs to the {@code -D name=version} marker that FOLLOWS
-   * it (the requested lib prints first, dependencies after, each closing its
-   * own section). Attributing the whole output to the requested lib mounts
-   * dependency sources under the wrong External Libraries entry — and, with
-   * version skew between entries, duplicates type definitions.
-   * Trailing classpaths without a marker (extraParams.hxml additions) fall to
-   * {@code requestedLib} with no version.
-   */
+  /// Splits `haxelib path <lib>` output into per-library sections: each
+  /// classpath line belongs to the `-D name=version` marker that FOLLOWS
+  /// it (the requested lib prints first, dependencies after, each closing its
+  /// own section). Attributing the whole output to the requested lib mounts
+  /// dependency sources under the wrong External Libraries entry — and, with
+  /// version skew between entries, duplicates type definitions.
+  /// Trailing classpaths without a marker (extraParams.hxml additions) fall to
+  /// `requestedLib` with no version.
   @NotNull
   public static List<LibrarySection> parseSections(@NotNull String requestedLib, @NotNull List<String> outputLines) {
     List<LibrarySection> sections = new ArrayList<>();

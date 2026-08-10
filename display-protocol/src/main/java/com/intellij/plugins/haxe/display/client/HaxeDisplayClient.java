@@ -11,13 +11,11 @@ import java.util.List;
 import java.util.Map;
 import tools.jackson.databind.JsonNode;
 
-/**
- * Typed requests against one {@code haxe --wait <port>} server. Every call is
- * one connect-request-close exchange; {@code baseArgs} is the build's normal
- * argument list (the display request rides on it — it defines the cache
- * context the server answers from). Instances are cheap and stateless: create
- * one per server address.
- */
+/// Typed requests against one `haxe --wait <port>` server. Every call is
+/// one connect-request-close exchange; `baseArgs` is the build's normal
+/// argument list (the display request rides on it — it defines the cache
+/// context the server answers from). Instances are cheap and stateless: create
+/// one per server address.
 public class HaxeDisplayClient {
 
   /** Notified after every request round-trip — the IDE records per-server metrics from it. */

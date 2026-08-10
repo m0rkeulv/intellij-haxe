@@ -43,18 +43,16 @@ import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * IDE glue for the display protocol: resolves a haxe source file's build
- * context into display base args, keeps the compilation server running and
- * capability-gated, and exposes the requests the editor features need.
- *
- * HXML build files supply their args directly. Lime-family files (openfl,
- * lime, hxp) go through {@code haxelib run <tool> display <file> <target>}:
- * its hxml output IS the evaluated compiler argument set (macros, libs and
- * conditional sources included), cached per build-file stamp. NMML files use
- * the last landed `nme prepare` evaluation, whose generated hxml references
- * the evaluation's retained prepared directory.
- */
+/// IDE glue for the display protocol: resolves a haxe source file's build
+/// context into display base args, keeps the compilation server running and
+/// capability-gated, and exposes the requests the editor features need.
+///
+/// HXML build files supply their args directly. Lime-family files (openfl,
+/// lime, hxp) go through `haxelib run <tool> display <file> <target>`:
+/// its hxml output IS the evaluated compiler argument set (macros, libs and
+/// conditional sources included), cached per build-file stamp. NMML files use
+/// the last landed `nme prepare` evaluation, whose generated hxml references
+/// the evaluation's retained prepared directory.
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeCompilerDisplayService {

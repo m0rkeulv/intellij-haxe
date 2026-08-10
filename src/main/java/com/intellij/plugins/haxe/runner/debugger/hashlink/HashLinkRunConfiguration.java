@@ -25,12 +25,10 @@ import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * A HashLink run/debug configuration (experimental): a module (for the Haxe
- * SDK and source lookup) plus the compiled {@code .hl} to execute. When the
- * .hl path is left empty it is auto-detected from the module's build
- * ({@code -hl <out>.hl} in the hxml or compiler arguments).
- */
+/// A HashLink run/debug configuration (experimental): a module (for the Haxe
+/// SDK and source lookup) plus the compiled `.hl` to execute. When the
+/// .hl path is left empty it is auto-detected from the module's build
+/// (`-hl <out>.hl` in the hxml or compiler arguments).
 public class HashLinkRunConfiguration extends DapRunConfigurationBase {
   private static final String HL_FILE = "hlFile";
   private static final String WORKING_DIRECTORY = "workingDirectory";

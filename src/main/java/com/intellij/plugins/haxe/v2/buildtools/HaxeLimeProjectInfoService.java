@@ -245,10 +245,8 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     };
   }
 
-  /**
-   * The compile artifact per lime's export layout ({@code <app path>/<target>/...});
-   * only the targets Build &amp; run can launch need one.
-   */
+  /// The compile artifact per lime's export layout (`<app path>/<target>/...`);
+  /// only the targets Build & run can launch need one.
   @Nullable
   private static String targetOutputFor(@NotNull String targetFlag, @NotNull String appPath, @NotNull String appFile) {
     return switch (targetFlag) {

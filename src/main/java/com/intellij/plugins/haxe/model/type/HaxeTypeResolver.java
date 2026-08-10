@@ -554,19 +554,17 @@ public class HaxeTypeResolver {
     return SpecificHaxeClassReference.wrapInRest(restArgumentType, holder).createHolder();
   }
 
-  /**
-   * Resolves the type reference in HaxeType, including type parameters,
-   * WITHOUT generic parameters being fully resolved.
-   * See {@link SpecificHaxeClassReference#propagateGenericsToType(SpecificHaxeClassReference, HaxeGenericResolver)}
-   * to fully resolve generic parameters.
-   * <p>
-   * NOTE: If types were constrained in scope, (e.g. {@code subClass<T:Constraint> extends superClass<T>})the type
-   * parameter resolves to the constraint type because that's what {@link HaxeResolver#resolve} returns.
-   *
-   * @param type - Type reference.
-   * @return - resolved type with non-generic parameters resolved.
-   * (e.g. &lt;T&gt; will remain an unresolved reference to T.)
-   */
+  /// Resolves the type reference in HaxeType, including type parameters,
+  /// WITHOUT generic parameters being fully resolved.
+  /// See [SpecificHaxeClassReference#propagateGenericsToType(SpecificHaxeClassReference, HaxeGenericResolver)]
+  /// to fully resolve generic parameters.
+  ///
+  /// NOTE: If types were constrained in scope, (e.g. `subClass<T:Constraint> extends superClass<T>`)the type
+  /// parameter resolves to the constraint type because that's what [HaxeResolver#resolve] returns.
+  ///
+  /// @param type - Type reference.
+  /// @return - resolved type with non-generic parameters resolved.
+  /// (e.g. <T> will remain an unresolved reference to T.)
   @NotNull
   static public ResultHolder getTypeFromType(@NotNull HaxeType type) {
     return getTypeFromType(type, null);

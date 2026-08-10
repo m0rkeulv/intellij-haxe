@@ -131,12 +131,10 @@ public final class HaxeCompileCommands {
            || NmeProjects.isToolCommand(command);
   }
 
-  /**
-   * Adds {@code --connect <port>} when the compilation server is enabled and the
-   * container participates: right after the executable for a direct haxe compile,
-   * appended for a lime/openfl/nme build (the tools forward it to their haxe
-   * calls); otherwise returns the command unchanged.
-   */
+  /// Adds `--connect <port>` when the compilation server is enabled and the
+  /// container participates: right after the executable for a direct haxe compile,
+  /// appended for a lime/openfl/nme build (the tools forward it to their haxe
+  /// calls); otherwise returns the command unchanged.
   @NotNull
   public static List<String> connectIfEnabled(@NotNull Project project,
                                               @NotNull String containerId,

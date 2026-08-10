@@ -27,16 +27,14 @@ import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * The legacy HXCPP debugger configuration: launches a hxcpp-compiled
- * executable whose program was built with the old {@code debugger} haxelib
- * (the {@code hxcpp.DebugSocket} wire protocol). On Debug the IDE listens on
- * the configured port and appends
- * {@code -start_debugger -debugger_host=localhost:<port>} to the program
- * arguments so the debuggee connects back; a lime/openfl launch must end its
- * parameters with {@code -args} so those flags reach the program. Remote mode
- * only listens — the user starts the debuggee themselves.
- */
+/// The legacy HXCPP debugger configuration: launches a hxcpp-compiled
+/// executable whose program was built with the old `debugger` haxelib
+/// (the `hxcpp.DebugSocket` wire protocol). On Debug the IDE listens on
+/// the configured port and appends
+/// `-start_debugger -debugger_host=localhost:<port>` to the program
+/// arguments so the debuggee connects back; a lime/openfl launch must end its
+/// parameters with `-args` so those flags reach the program. Remote mode
+/// only listens — the user starts the debuggee themselves.
 public class LegacyHxcppRunConfiguration extends DapRunConfigurationBase {
   public static final int DEFAULT_PORT = 6972;
 
