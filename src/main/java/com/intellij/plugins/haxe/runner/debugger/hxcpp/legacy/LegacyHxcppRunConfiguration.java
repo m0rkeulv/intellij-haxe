@@ -21,7 +21,6 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningSt
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import com.intellij.util.execution.ParametersListUtil;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
@@ -155,20 +154,6 @@ public class LegacyHxcppRunConfiguration extends DapRunConfigurationBase {
   @Nullable
   private Path resolveExecutableOrNull() {
     return executablePath.isBlank() ? null : resolveAgainstProject(executablePath);
-  }
-
-  @Nullable
-  private Path resolveAgainstProject(String value) {
-    try {
-      Path path = Path.of(value);
-      if (path.isAbsolute()) {
-        return path;
-      }
-      String basePath = getProject().getBasePath();
-      return basePath != null ? Path.of(basePath).resolve(path) : path;
-    } catch (InvalidPathException e) {
-      return null;
-    }
   }
 
   // --- persistence ---

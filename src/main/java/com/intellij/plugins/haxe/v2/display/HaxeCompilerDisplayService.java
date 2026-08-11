@@ -23,6 +23,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
@@ -176,7 +177,7 @@ public final class HaxeCompilerDisplayService {
     if (evaluation == null) return null;
 
     List<String> args = new ArrayList<>(List.of("--cwd", directory));
-    args.addAll(parseHxmlLines(evaluation.hxmlContent().lines().toList()));
+    args.addAll(HxmlArguments.parseLines(evaluation.hxmlContent().lines().toList()));
     return new DisplayContext(List.copyOf(args), null, sdkName, overrides, containerId);
   }
 
@@ -320,7 +321,7 @@ public final class HaxeCompilerDisplayService {
         log.info("lime display failed for " + spec.fileName() + ": exit " + output.getExitCode());
         return null;
       }
-      List<String> args = parseHxmlLines(output.getStdoutLines());
+      List<String> args = HxmlArguments.parseLines(output.getStdoutLines());
       if (args.isEmpty()) return null;
       List<String> withCwd = new ArrayList<>(List.of("--cwd", spec.directory()));
       withCwd.addAll(args);
@@ -331,31 +332,6 @@ public final class HaxeCompilerDisplayService {
     }
   }
 
-  /**
-   * hxml semantics: one flag per line, everything after the first space is
-   * that flag's SINGLE argument (unquoted spaces included); bare lines are
-   * standalone arguments, {@code #} starts a comment.
-   */
-  @NotNull
-  static List<String> parseHxmlLines(@NotNull List<String> lines) {
-    List<String> args = new ArrayList<>();
-    for (String line : lines) {
-      String trimmed = line.trim();
-      if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
-      if (trimmed.startsWith("-")) {
-        int space = trimmed.indexOf(' ');
-        if (space < 0) {
-          args.add(trimmed);
-        } else {
-          args.add(trimmed.substring(0, space));
-          args.add(trimmed.substring(space + 1).trim());
-        }
-      } else {
-        args.add(trimmed);
-      }
-    }
-    return args;
-  }
 
   // --- server connection ---
 

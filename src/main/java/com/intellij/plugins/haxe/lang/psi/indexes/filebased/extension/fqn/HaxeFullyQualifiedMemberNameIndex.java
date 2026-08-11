@@ -79,46 +79,33 @@ public class HaxeFullyQualifiedMemberNameIndex extends HaxeComponentBaseIndex {
                 HaxeClassModel mainClass = moduleModel.getMainClass();
                 // check main class
                 if (mainClass != null) {
-                    HaxeBaseMemberModel member = mainClass.getMemberSelf(fqn.memberName, null);
-                    if (findAndAddMember(fqn, results, member)) continue;
-
-                    if (member instanceof HaxeMethodModel methodModel) {
-                        if (findAndAddParameter(fqn, results, methodModel)) continue;
-                    }
+                    addMemberOrParameter(mainClass.getMemberSelf(fqn.memberName, null), fqn, results);
                     // check module
                 } else {
-                    HaxeBaseMemberModel member = moduleModel.getMember(fqn.memberName, null);
-                    if (findAndAddMember( fqn, results,member)) continue;
-
-                    if(member instanceof HaxeMethodModel methodModel) {
-                        if(findAndAddParameter(fqn, results, methodModel)) continue;
-                    }
-
+                    addMemberOrParameter(moduleModel.getMember(fqn.memberName, null), fqn, results);
                 }
                 // find non-main class
             }else if(fqn.hasClassName()) {
                 HaxeClassModel classModel = moduleModel.getClass(fqn.className);
                 if (classModel != null) {
-                    HaxeBaseMemberModel member = classModel.getMemberSelf(fqn.memberName, null);
-                    if (findAndAddMember(fqn, results, member)) continue;
-
-                    if (member instanceof HaxeMethodModel methodModel) {
-                        if (findAndAddParameter(fqn, results, methodModel)) continue;
-                    }
+                    addMemberOrParameter(classModel.getMemberSelf(fqn.memberName, null), fqn, results);
                 }
                 // module-level member: the stored fqn carries no class segment
             }else {
-                HaxeBaseMemberModel member = moduleModel.getMember(fqn.memberName, null);
-                if (findAndAddMember(fqn, results, member)) continue;
-
-                if (member instanceof HaxeMethodModel methodModel) {
-                    if (findAndAddParameter(fqn, results, methodModel)) continue;
-                }
+                addMemberOrParameter(moduleModel.getMember(fqn.memberName, null), fqn, results);
             }
         }
         return results;
     }
 
+
+    private static boolean addMemberOrParameter(HaxeBaseMemberModel member, FullyQualifiedInfo fqn, List<PsiElement> results) {
+        if (findAndAddMember(fqn, results, member)) return true;
+        if (member instanceof HaxeMethodModel methodModel) {
+            return findAndAddParameter(fqn, results, methodModel);
+        }
+        return false;
+    }
 
     private static boolean findAndAddMember(FullyQualifiedInfo fqn, List<PsiElement> results, HaxeBaseMemberModel member) {
         if(member != null && !fqn.hasParameterName()) {

@@ -63,11 +63,12 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     project.getMessageBus()
       .connect(toolWindow.getDisposable())
       .subscribe(HaxeCompilationServerListener.TOPIC, () -> syncTabs(project, toolWindow));
+
     // context-health transitions arrive on background threads
     project.getMessageBus()
       .connect(toolWindow.getDisposable())
-      .subscribe(HaxeBuildConfigListener.TOPIC,
-                 () -> ApplicationManager.getApplication().invokeLater(() -> updateStatuses(project, toolWindow)));
+      .subscribe(HaxeBuildConfigListener.TOPIC, () -> ApplicationManager.getApplication().invokeLater(() -> updateStatuses(project, toolWindow)));
+
     // closing a tab means "done with that SDK's server": stop the process and
     // forget the instance (on project close the manager kills everything anyway,
     // so shutdown-time removals are harmless)
@@ -80,6 +81,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
         }
       }
     });
+
     syncTabs(project, toolWindow);
   }
 
@@ -117,12 +119,12 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
   /** Refreshes every tab's status view and its red/green tab icon. */
   private static void updateStatuses(@NotNull Project project, @NotNull ToolWindow toolWindow) {
     if (project.isDisposed()) return;
-    var serverInfos = HaxeCompilationServerManager.getInstance(project).getServers();
+    HaxeCompilationServerManager manager = HaxeCompilationServerManager.getInstance(project);
     for (Content content : toolWindow.getContentManager().getContents()) {
       String serverId = content.getUserData(SERVER_ID);
       HaxeServerStatusPanel status = content.getUserData(STATUS_PANEL);
       if (serverId == null || status == null) continue;
-      boolean running = serverInfos.stream().anyMatch(info -> info.id().equals(serverId) && info.running());
+      boolean running = manager.isRunning(serverId);
       if (!running) {
         status.clearFetchedStats();
       }
@@ -213,11 +215,6 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     return panel;
   }
 
-  private static boolean isTabServerRunning(@NotNull Project project, @NotNull String serverId) {
-    return HaxeCompilationServerManager.getInstance(project).getServers().stream()
-      .anyMatch(info -> info.id().equals(serverId) && info.running());
-  }
-
   private static final class StartDefaultServerAction extends DumbAwareAction {
     private final Project project;
 
@@ -268,7 +265,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      e.getPresentation().setEnabled(!isTabServerRunning(project, serverId));
+      e.getPresentation().setEnabled(!HaxeCompilationServerManager.getInstance(project).isRunning(serverId));
     }
 
     @Override
@@ -296,7 +293,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      e.getPresentation().setEnabled(isTabServerRunning(project, serverId));
+      e.getPresentation().setEnabled(HaxeCompilationServerManager.getInstance(project).isRunning(serverId));
     }
 
     @Override
@@ -322,7 +319,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      e.getPresentation().setEnabled(isTabServerRunning(project, serverId));
+      e.getPresentation().setEnabled(HaxeCompilationServerManager.getInstance(project).isRunning(serverId));
     }
 
     @Override

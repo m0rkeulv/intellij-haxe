@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.ide.references;
 
-import com.intellij.codeInsight.daemon.impl.HighlightInfo;
+import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -27,44 +28,6 @@ public class HaxeStringLiteralLinkTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/references/";
-  }
-
-  private HaxeStringLiteralExpression firstStringLiteral(PsiFile file) {
-    HaxeStringLiteralExpression literal = PsiTreeUtil.findChildOfType(file, HaxeStringLiteralExpression.class);
-    assertNotNull(literal, "test source must contain a string literal");
-    return literal;
-  }
-
-  @SuppressWarnings("unchecked")
-  private <T extends PsiReference> T singleReferenceOfType(PsiReference[] references, Class<T> type) {
-    T found = null;
-    for (PsiReference reference : references) {
-      if (type.isInstance(reference)) {
-        assertNull(found, "expected exactly one " + type.getSimpleName());
-        found = (T)reference;
-      }
-    }
-    assertNotNull(found, "expected a " + type.getSimpleName() + " on the literal");
-    return found;
-  }
-
-  private static boolean hasLinkReference(PsiReference[] references) {
-    for (PsiReference reference : references) {
-      boolean linkKind = reference instanceof HaxeStringFilePathReference
-                         || reference instanceof HaxeStringQnameReference
-                         || reference instanceof FileReference;
-      if (linkKind) return true;
-    }
-    return false;
-  }
-
-  /** What the path resolves to via the LAST segment reference, or null — mirrors the link-painting rule. */
-  private static PsiElement resolvedFileTarget(PsiReference[] references) {
-    FileReference last = null;
-    for (PsiReference reference : references) {
-      if (reference instanceof FileReference fileReference) last = fileReference;
-    }
-    return last != null ? last.resolve() : null;
   }
 
   @Test
@@ -137,9 +100,7 @@ public class HaxeStringLiteralLinkTest extends HaxeCodeInsightFixtureTestCase {
     // but nothing resolves - and the painting rule follows resolution
     PsiElement resolved = resolvedFileTarget(firstStringLiteral(myFixture.getFile()).getReferences());
     assertNull(resolved, "an unresolvable path must resolve to nothing");
-    List<HighlightInfo> infos = myFixture.doHighlighting();
-    boolean painted = infos.stream().anyMatch(info -> info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.STRING_FILE_LINK);
-    assertEquals(false, painted, "an unresolvable path must not paint as a link");
+    assertFalse(painted(HaxeSyntaxHighlighterColors.STRING_FILE_LINK), "an unresolvable path must not paint as a link");
   }
 
   @Test
@@ -155,7 +116,7 @@ public class HaxeStringLiteralLinkTest extends HaxeCodeInsightFixtureTestCase {
       if (!literal.getShortTemplateEntryList().isEmpty()) interpolated = literal;
     }
     assertNotNull(interpolated, "fixture must contain an interpolated literal");
-    assertEquals(false, hasLinkReference(interpolated.getReferences()), "interpolation has no constant value to link");
+    assertFalse(hasLinkReference(interpolated.getReferences()), "interpolation has no constant value to link");
   }
 
   @Test
@@ -170,11 +131,8 @@ public class HaxeStringLiteralLinkTest extends HaxeCodeInsightFixtureTestCase {
       class Main { static final P = "assets/data.txt"; static final T = "foo.Bar"; }
       """);
 
-    List<HighlightInfo> infos = myFixture.doHighlighting();
-    boolean fileLinkPainted = infos.stream().anyMatch(info -> info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.STRING_FILE_LINK);
-    boolean codeLinkPainted = infos.stream().anyMatch(info -> info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.STRING_CODE_LINK);
-    assertTrue(fileLinkPainted, "resolvable path must carry the String-file-link attributes");
-    assertTrue(codeLinkPainted, "resolvable qname must carry the String-code-link attributes");
+    assertTrue(painted(HaxeSyntaxHighlighterColors.STRING_FILE_LINK), "resolvable path must carry the String-file-link attributes");
+    assertTrue(painted(HaxeSyntaxHighlighterColors.STRING_CODE_LINK), "resolvable qname must carry the String-code-link attributes");
   }
 
   @Test
@@ -294,9 +252,7 @@ public class HaxeStringLiteralLinkTest extends HaxeCodeInsightFixtureTestCase {
       class Main { static final NAME = "assets"; }
       """);
 
-    List<HighlightInfo> infos = myFixture.doHighlighting();
-    boolean painted = infos.stream().anyMatch(info -> info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.STRING_FILE_LINK);
-    assertEquals(false, painted, "a bare word must not light up as a link even when it resolves");
+    assertFalse(painted(HaxeSyntaxHighlighterColors.STRING_FILE_LINK), "a bare word must not light up as a link even when it resolves");
   }
 
   @Test
@@ -309,9 +265,50 @@ public class HaxeStringLiteralLinkTest extends HaxeCodeInsightFixtureTestCase {
     // segment references attach even to prose (they carry explicit
     // completion) - but nothing resolves and nothing paints
     assertNull(resolvedFileTarget(firstStringLiteral(myFixture.getFile()).getReferences()), "prose must resolve to nothing");
-    List<HighlightInfo> infos = myFixture.doHighlighting();
-    boolean painted = infos.stream().anyMatch(info -> info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.STRING_FILE_LINK
-                                                      || info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.STRING_CODE_LINK);
-    assertEquals(false, painted, "prose must stay plain");
+    assertFalse(painted(HaxeSyntaxHighlighterColors.STRING_FILE_LINK), "prose must stay plain");
+    assertFalse(painted(HaxeSyntaxHighlighterColors.STRING_CODE_LINK), "prose must stay plain");
+  }
+
+  private HaxeStringLiteralExpression firstStringLiteral(PsiFile file) {
+    HaxeStringLiteralExpression literal = PsiTreeUtil.findChildOfType(file, HaxeStringLiteralExpression.class);
+    assertNotNull(literal, "test source must contain a string literal");
+    return literal;
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T extends PsiReference> T singleReferenceOfType(PsiReference[] references, Class<T> type) {
+    T found = null;
+    for (PsiReference reference : references) {
+      if (type.isInstance(reference)) {
+        assertNull(found, "expected exactly one " + type.getSimpleName());
+        found = (T)reference;
+      }
+    }
+    assertNotNull(found, "expected a " + type.getSimpleName() + " on the literal");
+    return found;
+  }
+
+  private static boolean hasLinkReference(PsiReference[] references) {
+    for (PsiReference reference : references) {
+      boolean linkKind = reference instanceof HaxeStringFilePathReference
+                         || reference instanceof HaxeStringQnameReference
+                         || reference instanceof FileReference;
+      if (linkKind) return true;
+    }
+    return false;
+  }
+
+  /** What the path resolves to via the LAST segment reference, or null — mirrors the link-painting rule. */
+  private static PsiElement resolvedFileTarget(PsiReference[] references) {
+    FileReference last = null;
+    for (PsiReference reference : references) {
+      if (reference instanceof FileReference fileReference) last = fileReference;
+    }
+    return last != null ? last.resolve() : null;
+  }
+
+  /** Whether the current highlighting pass paints any range with the given forced attributes. */
+  private boolean painted(TextAttributesKey key) {
+    return myFixture.doHighlighting().stream().anyMatch(info -> info.forcedTextAttributesKey == key);
   }
 }

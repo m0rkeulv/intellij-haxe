@@ -29,7 +29,10 @@ public final class HxmlFileParser {
   }
 
   private static final Map<String, HaxeTarget> TARGET_FLAGS = buildTargetFlagMap();
-  private static final Set<String> DEFINE_FLAGS = Set.of("-D", "--define");
+
+  /** The define flag's two spellings; the flag's value is {@code name} or {@code name=value}. */
+  public static final Set<String> DEFINE_FLAGS = Set.of("-D", "--define");
+
   private static final Set<String> LIBRARY_FLAGS = Set.of("-lib", "--library", "-L");
   private static final Set<String> CLASSPATH_FLAGS = Set.of("-cp", "-p", "--class-path");
 

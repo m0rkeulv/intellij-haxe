@@ -19,6 +19,7 @@ import com.intellij.plugins.haxe.util.HaxeStringUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -51,6 +52,7 @@ public class HaxelibSemVer {
   private static final String GIT_SCM = "git";
   private static final String MERCURIAL_SCM = "hg";
   private static final String DEV = "dev";
+
   public static final ConstantVer ANY_VERSION = new ConstantVer(0,0,0, "any");
   public static final ConstantVer DEVELOPMENT_VERSION = new ConstantVer(Integer.MAX_VALUE,Integer.MAX_VALUE,Integer.MAX_VALUE, DEV);
   public static final ConstantVer GIT_VERSION = new ConstantVer(Integer.MAX_VALUE,Integer.MAX_VALUE,Integer.MAX_VALUE, GIT_SCM);
@@ -65,21 +67,51 @@ public class HaxelibSemVer {
      return semVer == ANY_VERSION;
   }
 
+  // the semver.org 2.0.0 grammar (its suggested regex, as Java named groups):
+  // major.minor.patch, no leading zeros, optional -prerelease (dot-separated
+  // alphanumeric/hyphen identifiers) and optional +buildmetadata
+  private static final Pattern SEMVER_PATTERN = Pattern.compile(
+    "(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)"
+    + "(?:-(?<prerelease>(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?"
+    + "(?:\\+(?<buildmetadata>[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?");
+
+  /**
+   * Whether the string names one concrete release that haxelib commands accept
+   * as a version argument ({@code install}/{@code set}): a dot-form semver
+   * release ({@code 1.2.3}, {@code 9.2.0-rc.1}). False for null/blank,
+   * pseudo-versions (any/git/hg/dev), source specs and directory comma forms.
+   */
+  public static boolean isReleaseVersion(@Nullable String version) {
+    return version != null && SEMVER_PATTERN.matcher(version).matches();
+  }
+
 
 
   private int major;
   private int minor;
   private int patch;
+  @Nullable private String prerelease;
+  // per semver, build metadata is ignored for precedence/equality
+  @Nullable private String buildMetadata;
 
   private HaxelibSemVer(int major, int minor, int patch) {
+    this(major, minor, patch, null, null);
+  }
+
+  private HaxelibSemVer(int major, int minor, int patch, @Nullable String prerelease, @Nullable String buildMetadata) {
     this.major = major;
     this.minor = minor;
     this.patch = patch;
+    this.prerelease = prerelease;
+    this.buildMetadata = buildMetadata;
   }
 
   /**
    * Create a new semver based upon the string passed in.
-   * @param semver Semantic version string.  Either comma or dot separated are accepted.
+   * @param semver Semantic version string: {@code major.minor.patch} with optional
+   *               {@code -prerelease} and {@code +buildmetadata} parts. Comma
+   *               separators (haxelib's directory naming, {@code 1,0,0-rc,1})
+   *               normalize to dots before parsing.
    * @return A new instance for strings that match the semantic versioning pattern.
    *         Strings that do not match the semantic versioning pattern will return ZERO_VERSION
    *         if they are non-empty, and ANY_VERSION if semver is empty or null.
@@ -90,7 +122,7 @@ public class HaxelibSemVer {
       return ANY_VERSION;
     }
 
-    Matcher matcher = versionPattern.matcher(semver);
+    Matcher matcher = SEMVER_PATTERN.matcher(semver.replace(',', '.'));
     if (!matcher.matches()) {
       if (ANY_VERSION.name.equals(semver)) {
         return ANY_VERSION;
@@ -103,9 +135,11 @@ public class HaxelibSemVer {
       };
 
     }
-    return new HaxelibSemVer(Integer.parseInt(matcher.group(1)),
-                             Integer.parseInt(matcher.group(2)),
-                             Integer.parseInt(matcher.group(3)));
+    return new HaxelibSemVer(Integer.parseInt(matcher.group("major")),
+                             Integer.parseInt(matcher.group("minor")),
+                             Integer.parseInt(matcher.group("patch")),
+                             matcher.group("prerelease"),
+                             matcher.group("buildmetadata"));
 
   }
   @Nullable
@@ -145,14 +179,19 @@ public class HaxelibSemVer {
     return Float.valueOf(v.toString());
   }
 
+  /** Haxelib's on-disk directory name for this version: every dot becomes a comma ({@code 1,0,0-rc,1}). */
   @NotNull
   public String toDirString() {
-    return HaxeStringUtil.join(",", Integer.toString(major), Integer.toString(minor), Integer.toString(patch));
+    return toString().replace('.', ',');
   }
 
   @Override
   public String toString() {
-    return HaxeStringUtil.join(".", Integer.toString(major), Integer.toString(minor), Integer.toString(patch));
+    StringBuilder version = new StringBuilder();
+    version.append(major).append('.').append(minor).append('.').append(patch);
+    if (prerelease != null) version.append('-').append(prerelease);
+    if (buildMetadata != null) version.append('+').append(buildMetadata);
+    return version.toString();
   }
 
   @Override
@@ -164,7 +203,9 @@ public class HaxelibSemVer {
 
     if (major != ver.major) return false;
     if (minor != ver.minor) return false;
-    return patch == ver.patch;
+    if (patch != ver.patch) return false;
+    // build metadata excluded: semver ignores it for precedence
+    return Objects.equals(prerelease, ver.prerelease);
   }
 
 
@@ -174,6 +215,7 @@ public class HaxelibSemVer {
     int result = major;
     result = 31 * result + minor;
     result = 31 * result + patch;
+    result = 31 * result + Objects.hashCode(prerelease);
     return result;
   }
 }

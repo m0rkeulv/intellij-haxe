@@ -7,11 +7,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
-import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider.Task;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.components.JBCheckBox;
@@ -113,19 +109,6 @@ final class HaxeActionBeforeRunDialog extends DialogWrapper {
   }
 
   private void refillActionCombo(@Nullable String selectedAction) {
-    String previous = selectedAction != null ? selectedAction
-                                             : StringUtil.notNullize((String)actionCombo.getEditor().getItem());
-    DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(fileField.getText().trim());
-    if (file != null && file.isValid()) {
-      // type detection may sniff file content - EDT has no implicit read access
-      ReadAction.computeBlocking(() -> HaxeCompileCommands.availableActionNames(project, file))
-        .forEach(model::addElement);
-    }
-    if (!StringUtil.isEmptyOrSpaces(previous) && model.getIndexOf(previous) < 0) {
-      model.addElement(previous);
-    }
-    actionCombo.setModel(model);
-    actionCombo.setSelectedItem(StringUtil.isEmptyOrSpaces(previous) ? null : previous);
+    HaxeActionComboUtil.refillActionCombo(project, actionCombo, fileField.getText().trim(), selectedAction);
   }
 }

@@ -118,7 +118,7 @@ final class HaxeServerStatusPanel extends JPanel {
     Project currentProject = project;
     String currentServerId = serverId;
     if (currentProject == null || currentServerId == null) return;
-    int port = runningPort(currentProject, currentServerId);
+    int port = HaxeCompilationServerManager.getInstance(currentProject).runningPort(currentServerId);
     if (port <= 0) {
       serverStats = HaxeBundle.message("haxe.server.console.stats.unavailable");
       update(currentProject, currentServerId);
@@ -156,13 +156,5 @@ final class HaxeServerStatusPanel extends JPanel {
         .append(StringUtil.formatFileSize(context.size()));
     }
     return text.toString();
-  }
-
-  private static int runningPort(@NotNull Project project, @NotNull String serverId) {
-    return HaxeCompilationServerManager.getInstance(project).getServers().stream()
-      .filter(info -> info.id().equals(serverId) && info.running())
-      .mapToInt(HaxeCompilationServerManager.ServerInfo::port)
-      .findFirst()
-      .orElse(-1);
   }
 }

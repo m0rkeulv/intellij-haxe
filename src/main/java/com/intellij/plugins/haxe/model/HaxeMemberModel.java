@@ -57,16 +57,8 @@ abstract public class HaxeMemberModel extends HaxeBaseMemberModel {
 
   public boolean isPublic() {
     HaxeClassModel declaringClass = getDeclaringClass();
-    if(declaringClass == null) {
-      // Module member
-      return !hasModifier(PRIVATE);
-    }else {
-      return hasModifier(PUBLIC)
-             // Fields and methods of externs and interfaces are public by default, private modifier for them should be defined explicitly
-             || ((declaringClass.isInterface() || declaringClass.isExtern()) && !hasModifier(PRIVATE))
-             || declaringClass.hasCompileTimeMeta(HaxeMeta.PUBLIC_FIELDS)
-             || isOverriddenPublicMethod();
-    }
+    return ClassDeclaredOrDefaultPublic(declaringClass)
+           || (declaringClass != null && isOverriddenPublicMethod());
   }
 
   /**
@@ -80,13 +72,19 @@ abstract public class HaxeMemberModel extends HaxeBaseMemberModel {
    */
   public boolean isDeclaredPublic() {
     HaxeClassModel declaringClass = getDeclaringClass();
+    return ClassDeclaredOrDefaultPublic(declaringClass) || (declaringClass != null && hasModifier(OVERRIDE) && !hasModifier(PRIVATE));
+  }
+
+  /** The terms {@link #isPublic()} and {@link #isDeclaredPublic()} share — everything but their override term. */
+  private boolean ClassDeclaredOrDefaultPublic(@Nullable HaxeClassModel declaringClass) {
     if (declaringClass == null) {
+      // Module member
       return !hasModifier(PRIVATE);
     }
     return hasModifier(PUBLIC)
+           // Fields and methods of externs and interfaces are public by default, private modifier for them should be defined explicitly
            || ((declaringClass.isInterface() || declaringClass.isExtern()) && !hasModifier(PRIVATE))
-           || declaringClass.hasCompileTimeMeta(HaxeMeta.PUBLIC_FIELDS)
-           || (hasModifier(OVERRIDE) && !hasModifier(PRIVATE));
+           || declaringClass.hasCompileTimeMeta(HaxeMeta.PUBLIC_FIELDS);
   }
 
   /**

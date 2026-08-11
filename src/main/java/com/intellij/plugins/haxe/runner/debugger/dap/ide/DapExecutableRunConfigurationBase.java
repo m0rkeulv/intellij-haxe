@@ -98,19 +98,7 @@ public abstract class DapExecutableRunConfigurationBase extends DapRunConfigurat
   }
 
   private @Nullable Path resolveExecutableOrNull() {
-    if (executablePath.isBlank()) {
-      return null;
-    }
-    try {
-      Path path = Path.of(executablePath);
-      if (path.isAbsolute()) {
-        return path;
-      }
-      String basePath = getProject().getBasePath();
-      return basePath != null ? Path.of(basePath).resolve(path) : path;
-    } catch (InvalidPathException e) {
-      return null;
-    }
+    return executablePath.isBlank() ? null : resolveAgainstProject(executablePath);
   }
 
   /** The working directory: the explicit setting, else the executable's directory. */

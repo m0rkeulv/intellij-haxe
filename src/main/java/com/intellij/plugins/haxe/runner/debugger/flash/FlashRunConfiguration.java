@@ -20,7 +20,6 @@ import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
@@ -129,17 +128,7 @@ public class FlashRunConfiguration extends DapRunConfigurationBase {
 
   @Nullable
   private Path resolveSwfOrNull() {
-    if (swfFilePath.isBlank()) return null;
-    try {
-      Path path = Path.of(swfFilePath);
-      if (path.isAbsolute()) {
-        return path;
-      }
-      String basePath = getProject().getBasePath();
-      return basePath != null ? Path.of(basePath).resolve(path) : path;
-    } catch (InvalidPathException e) {
-      return null;
-    }
+    return swfFilePath.isBlank() ? null : resolveAgainstProject(swfFilePath);
   }
 
   // --- persistence ---

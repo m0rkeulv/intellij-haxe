@@ -22,9 +22,6 @@ import java.util.List;
  */
 public final class HaxeCompileCommands {
 
-  /** A plain hxp script's single default action: `haxelib run hxp <file>`. */
-  public static final String HXP_SCRIPT_BUILD_ACTION = "build";
-
   public record Resolved(@NotNull String containerId,
                          @NotNull List<String> command,
                          @Nullable String workDirectory,
@@ -52,7 +49,7 @@ public final class HaxeCompileCommands {
       base = actionCommand(project, environmentSdk, file, type, stored.actionName());
     }
     if (base == null) {
-      base = defaultCommand(project, environmentSdk, file, type);
+      base = HaxeBuildFileActions.defaultCommand(project, environmentSdk, file, type);
     }
     if (base == null || base.isEmpty()) return null;
 
@@ -87,17 +84,8 @@ public final class HaxeCompileCommands {
   public static List<String> availableActionNames(@NotNull Project project, @NotNull VirtualFile file) {
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     List<String> names = new ArrayList<>();
-    if (type == HaxeBuildFileType.HXML) {
-      names.add(HxmlProjects.BUILD_ACTION);
-    }
-    else if (LimeProjects.isLimeFamily(type)) {
-      names.addAll(LimeProjects.DEFAULT_ACTIONS);
-    }
-    else if (type == HaxeBuildFileType.NMML) {
-      names.addAll(NmeProjects.DEFAULT_ACTIONS);
-    }
-    else if (type == HaxeBuildFileType.HXP_SCRIPT) {
-      names.add(HXP_SCRIPT_BUILD_ACTION);
+    if (type != null) {
+      names.addAll(HaxeBuildFileActions.defaultActionNames(type));
     }
     for (HaxeCustomActionsStore.CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(file.getPath())) {
       if (!names.contains(custom.name())) {
@@ -168,28 +156,6 @@ public final class HaxeCompileCommands {
     return connected;
   }
 
-  @Nullable
-  private static List<String> defaultCommand(@NotNull Project project,
-                                             @Nullable String environmentSdk,
-                                             @NotNull VirtualFile file,
-                                             @NotNull HaxeBuildFileType type) {
-    return switch (type) {
-      case HXML -> HxmlProjects.buildCommand(project, environmentSdk, file);
-      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.actionCommand(project, environmentSdk, file, type, LimeProjects.BUILD_ACTION);
-      case HXP_SCRIPT -> hxpScriptCommand(project, environmentSdk, file);
-      case NMML -> NmeProjects.actionCommand(project, environmentSdk, file, NmeProjects.BUILD_ACTION);
-    };
-  }
-
-  /** The hxp tool runs the script itself - no lime, no target flag. */
-  @NotNull
-  public static List<String> hxpScriptCommand(@NotNull Project project,
-                                              @Nullable String environmentSdk,
-                                              @NotNull VirtualFile file) {
-    return List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
-                   "run", "hxp", file.getName());
-  }
-
   /** A named default action's command, or a custom action's; null when unknown. */
   @Nullable
   private static List<String> actionCommand(@NotNull Project project,
@@ -197,22 +163,14 @@ public final class HaxeCompileCommands {
                                             @NotNull VirtualFile file,
                                             @NotNull HaxeBuildFileType type,
                                             @NotNull String actionName) {
-    if (type == HaxeBuildFileType.HXML && HxmlProjects.isBuildAction(actionName)) {
-      return HxmlProjects.buildCommand(project, environmentSdk, file);
-    }
-    if (type == HaxeBuildFileType.HXP_SCRIPT && actionName.equals(HXP_SCRIPT_BUILD_ACTION)) {
-      return hxpScriptCommand(project, environmentSdk, file);
-    }
-    if (LimeProjects.isLimeFamily(type) && LimeProjects.DEFAULT_ACTIONS.contains(actionName)) {
-      return LimeProjects.actionCommand(project, environmentSdk, file, type, actionName);
-    }
-    if (type == HaxeBuildFileType.NMML && NmeProjects.DEFAULT_ACTIONS.contains(actionName)) {
-      return NmeProjects.actionCommand(project, environmentSdk, file, actionName);
-    }
+    List<String> defaultAction = HaxeBuildFileActions.defaultActionCommand(project, environmentSdk, file, type, actionName);
+    if (defaultAction != null) return defaultAction;
+
     return HaxeCustomActionsStore.getInstance(project).getActions(file.getPath()).stream()
       .filter(custom -> custom.name().equals(actionName))
       .findFirst()
-      .map(custom -> HaxeCustomCommands.parse(HaxeCustomCommands.expandVariables(project, file, type, custom.command())))
+      .map(custom -> HaxeCustomCommands.expandVariables(project, file, type, custom.command()))
+      .map(HaxeCustomCommands::parse)
       .orElse(null);
   }
 }

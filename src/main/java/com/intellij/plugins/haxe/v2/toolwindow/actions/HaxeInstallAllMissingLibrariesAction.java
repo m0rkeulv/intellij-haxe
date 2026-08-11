@@ -8,7 +8,9 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeLibrarySync;
+import com.intellij.plugins.haxe.v2.buildtools.HaxelibInstaller;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.LibraryNode;
 import org.jetbrains.annotations.NotNull;
@@ -56,25 +58,29 @@ public final class HaxeInstallAllMissingLibrariesAction extends DumbAwareAction 
         for (LibraryNode library : missing) {
           indicator.checkCanceled();
           indicator.setText(HaxeBundle.message("haxe.toolwindow.install.library.progress", library.name()));
-          String failure = HaxeInstallLibraryAction.installQuietly(project, library);
+
+          String failure = HaxelibInstaller.install(project, library.name(), library.version(), library.resolvedVersion());
+
           if (failure != null) {
             failed.add(library.name());
-            HaxeInstallLibraryAction.notifyUser(project,
-                                                HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name()),
-                                                failure, NotificationType.ERROR);
+            HaxeCommandNotifications.notify(project,
+                                            HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name()),
+                                            failure, NotificationType.ERROR);
           }
         }
         int installed = missing.size() - failed.size();
+
         if (installed > 0) {
-          HaxeInstallLibraryAction.notifyUser(project,
-                                              HaxeBundle.message("haxe.toolwindow.install.all.missing.success", installed),
-                                              "", NotificationType.INFORMATION);
+          HaxeCommandNotifications.notify(project,
+                                          HaxeBundle.message("haxe.toolwindow.install.all.missing.success", installed),
+                                          "", NotificationType.INFORMATION);
         }
         if (!failed.isEmpty()) {
-          HaxeInstallLibraryAction.notifyUser(project,
-                                              HaxeBundle.message("haxe.toolwindow.install.all.missing.failed", String.join(", ", failed)),
-                                              "", NotificationType.ERROR);
+          HaxeCommandNotifications.notify(project,
+                                          HaxeBundle.message("haxe.toolwindow.install.all.missing.failed", String.join(", ", failed)),
+                                          "", NotificationType.ERROR);
         }
+
         HaxeLibrarySync.sync(project, panel::refreshTree);
       }
     }.queue();

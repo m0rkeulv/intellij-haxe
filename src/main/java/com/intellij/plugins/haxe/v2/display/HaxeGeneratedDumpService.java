@@ -10,6 +10,7 @@ import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.DisplayResponse;
 import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.psi.util.PsiModificationTracker;
 import lombok.CustomLog;
@@ -82,7 +83,7 @@ public final class HaxeGeneratedDumpService {
     if (connected == null) return null;
 
     Path dumpRoot = dumpRootFor(contextKey);
-    DumpBuild dumpBuild = dumpArgs(expandHxmlReferences(connected.args()), dumpRoot);
+    DumpBuild dumpBuild = dumpArgs(HxmlArguments.expandReferences(connected.args()), dumpRoot);
     if (dumpBuild == null) {
       log.info("dump build unsupported for this argument shape: " + connected.args());
       return null;
@@ -210,47 +211,14 @@ public final class HaxeGeneratedDumpService {
     return Path.of(FileUtil.getTempDirectory(), "haxe-dump", hash);
   }
 
-  /// Args may carry an .hxml file REFERENCE instead of flags (an HXML build
-  /// context is `["--cwd", dir, "build.hxml"]` — the compiler expands
-  /// the file server-side). Output redirection needs the real flags, so one
-  /// level is expanded here, resolving against the preceding `--cwd`.
-  /// A reference nested inside an expanded file stays as-is: its flags remain
-  /// invisible, and a target hidden there makes [#dumpArgs] refuse.
+  /// The build's argument list rewritten for a side-effect-free dump pass:
+  /// output redirected into the dump root, native compilation and `-cmd`
+  /// post-build steps dropped, dump defines appended. Null when the argument
+  /// shape cannot be made safe (`-x`/`--run` execute the program) or no
+  /// target flag is visible — a target hidden inside a NESTED hxml reference
+  /// (one-level expansion leaves it) refuses too.
   /// TODO: `--next` sections get the dump defines appended only after
   ///  the last section; multi-build hxml dumps only that section's modules.
-  @NotNull
-  static List<String> expandHxmlReferences(@NotNull List<String> args) {
-    List<String> expanded = new ArrayList<>(args.size() + 16);
-    Path cwd = null;
-    for (int i = 0; i < args.size(); i++) {
-      String arg = args.get(i);
-      if (arg.equals("--cwd") && i + 1 < args.size()) {
-        cwd = Path.of(args.get(i + 1));
-        expanded.add(arg);
-        expanded.add(args.get(i + 1));
-        i++;
-        continue;
-      }
-      if (arg.endsWith(".hxml")) {
-        Path hxmlFile = cwd != null ? cwd.resolve(arg) : Path.of(arg);
-        try {
-          expanded.addAll(HaxeCompilerDisplayService.parseHxmlLines(Files.readAllLines(hxmlFile)));
-          continue;
-        } catch (IOException e) {
-          log.info("cannot expand hxml reference " + hxmlFile + ": " + e.getMessage());
-        }
-      }
-      expanded.add(arg);
-    }
-    return expanded;
-  }
-
-  /**
-   * The build's argument list rewritten for a side-effect-free dump pass:
-   * output redirected into the dump root, native compilation and {@code -cmd}
-   * post-build steps dropped, dump defines appended. Null when the argument
-   * shape cannot be made safe ({@code -x}/{@code --run} execute the program).
-   */
   @Nullable
   static DumpBuild dumpArgs(@NotNull List<String> buildArgs, @NotNull Path dumpRoot) {
     List<String> args = new ArrayList<>(buildArgs.size() + 6);

@@ -6,7 +6,6 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +32,7 @@ public final class HaxeCustomCommands {
                                        @NotNull HaxeBuildFileType type,
                                        @NotNull String command) {
     if (!command.contains("${target}")) return command;
-    String targetFlag = selectedTargetFlagOf(project, file, type);
+    String targetFlag = HaxeBuildFileActions.selectedTargetFlag(project, file, type);
     return targetFlag == null ? command : command.replace("${target}", targetFlag);
   }
 
@@ -50,18 +49,5 @@ public final class HaxeCustomCommands {
       parsed.set(0, PathEnvironmentVariableUtil.findExecutableInWindowsPath(parsed.get(0)));
     }
     return parsed;
-  }
-
-  @Nullable
-  private static String selectedTargetFlagOf(@NotNull Project project,
-                                             @NotNull VirtualFile file,
-                                             @NotNull HaxeBuildFileType type) {
-    if (LimeProjects.isLimeFamily(type)) {
-      return LimeProjects.selectedTargetFlag(project, type, file);
-    }
-    if (type == HaxeBuildFileType.NMML) {
-      return NmeProjects.selectedTargetFlag(project, file);
-    }
-    return null;
   }
 }

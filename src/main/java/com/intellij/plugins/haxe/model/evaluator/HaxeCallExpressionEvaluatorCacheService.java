@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import static com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionUtil.createContextForMethodCall;
 
@@ -131,7 +132,7 @@ public class HaxeCallExpressionEvaluatorCacheService  {
       return cached;
     }
 
-    ComputedCall computed = computeCallEvaluation(key, method, callExpression);
+    ComputedCall computed = computeCallEvaluationInFlight(key, method, callExpression);
     if (computed == null) return null;
     // Deliberately NOT gated on the platform's mayCacheNow(): this cache
     // is load-bearing for termination, not just speed. Resolving one
@@ -155,36 +156,61 @@ public class HaxeCallExpressionEvaluatorCacheService  {
 
   private record ComputedCall(HaxeCallExpressionEvaluation evaluation, boolean storable) {}
 
-  private @Nullable ComputedCall computeCallEvaluation(CallExpressionEvaluationKey key,
-                                                       HaxeMethod method,
-                                                       HaxeCallExpression callExpression) {
+  private @Nullable ComputedCall computeCallEvaluationInFlight(CallExpressionEvaluationKey key,
+                                                               HaxeMethod method,
+                                                               HaxeCallExpression callExpression) {
+    return computeWithinInFlightBudget(key, () -> computeCallEvaluation(method, callExpression));
+  }
+
+  private static @Nullable ComputedCall computeCallEvaluation(HaxeMethod method, HaxeCallExpression callExpression) {
+    // The mark answers "did anything this compute depends on come out truncated?"
+    // compare with HaxeEvaluationTaint.taintedSince when done.
+    //
+    // The platform's own freshness signal (RecursionManager's StackStamp via
+    // mayCacheNow()) cannot be used here, for two reasons:
+    //
+    // - recursion guards routinely fire inside this compute, and in test mode
+    //   (assertOnMissedCache) the stamp THROWS where it would return false;
+    //
+    // - the stamp only sees guards fired on this thread's stack, while this
+    //   cache also serves entries computed on OTHER stacks — serving a dirty
+    //   entry bumps the taint counter, so the mark inherits that dirtiness.
+    //
+    // see HaxeEvaluationTaint's javadoc for more details
+    //
+    long taintMark = HaxeEvaluationTaint.mark();
+    HaxeCallExpressionContextContainer contextContainer = createContextForMethodCall(callExpression, method);
+    HaxeCallExpressionEvaluation evaluate = contextContainer.evaluateContexts();
+    if (evaluate == null) return null;
+
+    HaxeCallExpressionContext context = contextContainer.getContext();
+    evaluate.setComputedWithGuardFired(isDirty(taintMark, evaluate, context));
+    boolean storable = evaluate.isValid() && evaluate.isCompleted() && context != null && context.canCache;
+    return new ComputedCall(evaluate, storable);
+  }
+
+  /** Owns the in-flight enter / two-limit check / release around one compute; refusal taints and returns null. */
+  private static <T> @Nullable T computeWithinInFlightBudget(Object key, Supplier<T> compute) {
     Map<Object, Integer> inProgress = inFlight.get();
     MutableInt total = inFlightTotal.get();
+
     int depth = inProgress.merge(key, 1, Integer::sum);
     total.increment();
+
     if (depth > MAX_IN_FLIGHT_PER_KEY || total.intValue() > MAX_IN_FLIGHT_TOTAL) {
       releaseInFlight(inProgress, key);
       total.decrement();
       HaxeEvaluationTaint.taint();
       return null;
     }
+
     try {
-      // Taint marks, not the platform stamp: mayCacheNow() throws under the
-      // test-mode assertOnMissedCache, and preventions routinely fire beneath
-      // this compute. The mark also inherits dirtiness from nested dirty cache
-      // hits, so the flag propagates transitively.
-      long taintMark = HaxeEvaluationTaint.mark();
-      HaxeCallExpressionContextContainer contextContainer = createContextForMethodCall(callExpression, method);
-      HaxeCallExpressionEvaluation evaluate = contextContainer.evaluateContexts();
-      if (evaluate == null) return null;
-      HaxeCallExpressionContext context = contextContainer.getContext();
-      evaluate.setComputedWithGuardFired(isDirty(taintMark, evaluate, context));
-      boolean storable = evaluate.isValid() && evaluate.isCompleted() && context != null && context.canCache;
-      return new ComputedCall(evaluate, storable);
+      return compute.get();
     } finally {
       releaseInFlight(inProgress, key);
       total.decrement();
     }
+
   }
 
   private void storeCallEvaluation(CallExpressionEvaluationKey key, HaxeCallExpressionEvaluation evaluation) {
@@ -201,7 +227,7 @@ public class HaxeCallExpressionEvaluatorCacheService  {
                                                                          HaxeMethod method,
                                                                          HaxeCallExpression callExpression) {
     if (!refreshArmed(key)) return null;
-    ComputedCall fresh = computeCallEvaluation(key, method, callExpression);
+    ComputedCall fresh = computeCallEvaluationInFlight(key, method, callExpression);
     boolean clean = fresh != null && fresh.storable() && !fresh.evaluation().isComputedWithGuardFired();
     if (!clean) return null;
     storeCallEvaluation(key, fresh.evaluation());
@@ -254,22 +280,9 @@ public class HaxeCallExpressionEvaluatorCacheService  {
                                                                  HaxeMethod method,
                                                                  HaxeCallExpression callExpression,
                                                                  int holeArgumentIndex) {
-    Map<Object, Integer> inProgress = inFlight.get();
-    MutableInt total = inFlightTotal.get();
-    int depth = inProgress.merge(key, 1, Integer::sum);
-    total.increment();
-    if (depth > MAX_IN_FLIGHT_PER_KEY || total.intValue() > MAX_IN_FLIGHT_TOTAL) {
-      releaseInFlight(inProgress, key);
-      total.decrement();
-      HaxeEvaluationTaint.taint();
-      return null;
-    }
-    try {
-      return computeHoleEvaluation(method, callExpression, holeArgumentIndex);
-    } finally {
-      releaseInFlight(inProgress, key);
-      total.decrement();
-    }
+
+    return computeWithinInFlightBudget(key, () -> computeHoleEvaluation(method, callExpression, holeArgumentIndex));
+
   }
 
   private static boolean holeStorable(HoleEvaluation result) {
@@ -293,18 +306,22 @@ public class HaxeCallExpressionEvaluatorCacheService  {
                                                            HaxeCallExpression callExpression,
                                                            int holeArgumentIndex) {
     if (!refreshArmed(key)) return null;
+
     HoleEvaluation fresh = computeHoleEvaluationInFlight(key, method, callExpression, holeArgumentIndex);
     boolean clean = fresh != null && !fresh.dirty() && holeStorable(fresh);
     if (!clean) return null;
+
     storeHoleEvaluation(key, fresh);
     return fresh;
   }
 
   private static @Nullable HoleEvaluation computeHoleEvaluation(HaxeMethod method, HaxeCallExpression callExpression, int holeArgumentIndex) {
+
     long taintMark = HaxeEvaluationTaint.mark();
     HaxeCallExpressionContextContainer container = createContextForMethodCall(callExpression, method, holeArgumentIndex);
     HaxeCallExpressionEvaluation evaluate = container.evaluateContexts();
     if (evaluate == null) return null;
+
     HaxeCallExpressionContext context = container.getContext();
     boolean staticExtension = context != null && context.isStaticExtension;
     boolean canCache = context != null && context.canCache;

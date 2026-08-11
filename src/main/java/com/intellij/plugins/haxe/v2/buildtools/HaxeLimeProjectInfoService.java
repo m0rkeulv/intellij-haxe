@@ -1,13 +1,12 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.SystemInfo;
@@ -18,9 +17,10 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Key;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Outcome;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
 import com.intellij.plugins.haxe.util.HaxePluginPaths;
-import com.intellij.util.concurrency.AppExecutorUtil;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -29,10 +29,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
+
+import static com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.firstErrorLine;
 
 /**
  * Resolves the effective compiler configuration of Lime/OpenFL/HXP project files.
@@ -54,31 +52,16 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   private static final int DISPLAY_TIMEOUT_MS = 60_000;
   private static final String PARSER_RELATIVE_PATH = "tools/LimeProjectParser.jar";
-
-  // failed/fallback evaluations retry this many times (per file revision) before
-  // the result is accepted as final - keeps transient tool failures from
-  // sticking without allowing refresh loops
-  private static final int MAX_ATTEMPTS = 3;
-
-  private record CacheKey(@NotNull String filePath, @NotNull String targetFlag, @NotNull String haxelibPath) {
-  }
-
-  /** {@code authoritative} = the parser tool succeeded, or no tool is bundled (legacy is the best available). */
-  private record CacheValue(long modificationStamp, @Nullable HaxeBuildFileInfo info, boolean authoritative, int attempts) {
-  }
+  // unknown members ignored so a newer bundled tool may add output fields freely
+  private static final ObjectMapper PARSER_OUTPUT_MAPPER = new ObjectMapper()
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
   private final Project project;
-  private final Map<CacheKey, CacheValue> cache = new ConcurrentHashMap<>();
-  private final Set<CacheKey> inFlight = ConcurrentHashMap.newKeySet();
-  // every caller waiting on an in-flight evaluation gets its callback fired -
-  // dropping later callers' callbacks left e.g. the tree unrefreshed whenever
-  // the define-context service happened to schedule the same evaluation first
-  private final Map<CacheKey, List<Runnable>> pendingCallbacks = new ConcurrentHashMap<>();
-  private final ExecutorService executor =
-    AppExecutorUtil.createBoundedApplicationPoolExecutor("Haxe lime display", 1);
+  private final HaxeProjectInfoCache<HaxeBuildFileInfo> cache;
 
   public HaxeLimeProjectInfoService(@NotNull Project project) {
     this.project = project;
+    this.cache = new HaxeProjectInfoCache<>(project, "Haxe lime display", null);
   }
 
   @NotNull
@@ -98,17 +81,17 @@ public final class HaxeLimeProjectInfoService implements Disposable {
                                                @NotNull Runnable onUpdated) {
     String haxelibPath = HaxeToolPathResolver.resolveHaxelibExecutable(project, preferredSdkName);
     String haxePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
-    CacheKey key = new CacheKey(buildFile.file().getPath(), targetFlag, haxelibPath);
+    Key key = new Key(buildFile.file().getPath(), targetFlag, haxelibPath);
     long stamp = buildFile.file().getModificationStamp();
 
-    CacheValue cached = cache.get(key);
-    boolean fresh = cached != null && cached.modificationStamp() == stamp;
-    if (fresh && (cached.authoritative() || cached.attempts() >= MAX_ATTEMPTS)) {
-      return cached.info();
-    }
-    schedule(key, buildFile, stamp, haxePath, fresh ? cached.attempts() : 0, onUpdated);
-    // serve the stale value while the refresh runs
-    return cached != null ? cached.info() : null;
+    //NOTE: ran here as the executor thread must not touch the VirtualFile
+    String tool = LimeProjects.toolFor(buildFile.type());
+    VirtualFile parent = buildFile.file().getParent();
+
+    String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
+    String fileName = buildFile.file().getName();
+
+    return cache.getCachedOrSchedule(key, stamp, () -> evaluate(key, haxePath, tool, fileName, workDirectory), onUpdated);
   }
 
   public void clearCache() {
@@ -117,111 +100,86 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   /** Drops every cached evaluation of one build file (all targets/toolchains), forcing a re-run on the next ask. */
   public void invalidate(@NotNull String filePath) {
-    cache.keySet().removeIf(key -> key.filePath().equals(filePath));
+    cache.invalidate(filePath);
   }
 
-  private void schedule(@NotNull CacheKey key,
-                        @NotNull HaxeBuildFile buildFile,
-                        long stamp,
-                        @NotNull String haxePath,
-                        int previousAttempts,
-                        @NotNull Runnable onUpdated) {
-    pendingCallbacks.computeIfAbsent(key, ignored -> new CopyOnWriteArrayList<>()).add(onUpdated);
-    if (!inFlight.add(key)) {
-      // an evaluation is already running; it fires the callback registered above
-      return;
+  /** {@code settled} = the parser tool succeeded, or no tool is bundled (legacy is the best available). */
+  @NotNull
+  private Outcome<HaxeBuildFileInfo> evaluate(@NotNull Key key,
+                                              @NotNull String haxePath,
+                                              @NotNull String tool,
+                                              @NotNull String fileName,
+                                              @Nullable String workDirectory) {
+    Path parserJar = bundledParserJar();
+    HaxeBuildFileInfo info = null;
+    boolean settled = parserJar == null;
+
+    if (parserJar != null) {
+      info = runParserTool(parserJar, key, workDirectory, haxePath);
+      settled = info != null;
     }
 
-    String tool = LimeProjects.toolFor(buildFile.type());
-    VirtualFile parent = buildFile.file().getParent();
-    String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
-    String filePath = buildFile.file().getPath();
-    String fileName = buildFile.file().getName();
+    if (info == null) {
+      // resilience over purity: a tool failure falls back to lime display
+      info = runDisplay(key, tool, fileName, workDirectory);
+    }
 
-    executor.execute(() -> {
-      List<Runnable> callbacks;
-      try {
-        Path parserJar = bundledParserJar();
-        HaxeBuildFileInfo info = null;
-        boolean authoritative = parserJar == null;
-        if (parserJar != null) {
-          info = runParserTool(parserJar, key, filePath, workDirectory, haxePath);
-          authoritative = info != null;
-        }
-        if (info == null) {
-          // resilience over purity: a tool failure falls back to lime display
-          info = runDisplay(key, tool, fileName, workDirectory);
-        }
-        cache.put(key, new CacheValue(stamp, info, authoritative, previousAttempts + 1));
-      }
-      finally {
-        // callbacks drained BEFORE the in-flight flag drops: an ask arriving in
-        // between re-registers and starts a fresh evaluation of its own
-        callbacks = pendingCallbacks.remove(key);
-        inFlight.remove(key);
-      }
-      List<Runnable> toRun = callbacks != null ? callbacks : List.of();
-      ApplicationManager.getApplication().invokeLater(() -> {
-        if (!project.isDisposed()) {
-          toRun.forEach(Runnable::run);
-        }
-      });
-    });
+    return new Outcome<>(info, settled);
   }
 
   // --- bundled parser tool path ---
 
   @Nullable
   private HaxeBuildFileInfo runParserTool(@NotNull Path parserJar,
-                                          @NotNull CacheKey key,
-                                          @NotNull String filePath,
+                                          @NotNull Key key,
                                           @Nullable String workDirectory,
                                           @NotNull String haxePath) {
     List<String> command = new ArrayList<>(List.of(
-      javaExecutable(), "-jar", parserJar.toString(),
-      filePath, "--target", key.targetFlag(), "--haxe", haxePath, "--haxelib", key.haxelibPath()));
+      javaExecutable(),
+      "-jar", parserJar.toString(),
+      key.filePath(),
+      "--target", key.targetFlag(),
+      "--haxe", haxePath,
+      "--haxelib", key.haxelibPath()));
+
     for (String seed : seedDefines(key.targetFlag())) {
       command.add("-D");
       command.add(seed);
     }
+
     GeneralCommandLine commandLine = new GeneralCommandLine(command).withWorkDirectory(workDirectory);
+
     try {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(DISPLAY_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {
-        log.warn("LimeProjectParser failed for " + filePath + " (" + key.targetFlag() + "): "
-                 + output.getStderr().lines().findFirst().orElse("exit code " + output.getExitCode()));
+        log.warn("LimeProjectParser failed for " + key.filePath() + " (" + key.targetFlag() + "): " + firstErrorLine(output));
         return null;
       }
+
       return parseToolOutput(output.getStdout(), key.targetFlag());
-    }
-    catch (ExecutionException e) {
-      log.warn("LimeProjectParser could not run for " + filePath + ": " + e.getMessage());
+
+    } catch (ExecutionException e) {
+      log.warn("LimeProjectParser could not run for " + key.filePath() + ": " + e.getMessage());
       return null;
     }
   }
 
   @Nullable
-  private static HaxeBuildFileInfo parseToolOutput(@NotNull String stdout, @NotNull String targetFlag) {
+  static HaxeBuildFileInfo parseToolOutput(@NotNull String stdout, @NotNull String targetFlag) {
     try {
-      JsonNode root = new ObjectMapper().readTree(StringUtil.trimTrailing(stdout));
+      LimeParserOutput parsed = PARSER_OUTPUT_MAPPER.readValue(StringUtil.trimTrailing(stdout), LimeParserOutput.class);
 
-      List<HaxeDefine> defines = new ArrayList<>();
-      root.path("defines").properties().forEach(
-        entry -> defines.add(new HaxeDefine(entry.getKey(), StringUtil.nullize(entry.getValue().asText()))));
+      List<HaxeDefine> defines = parsed.defines().entrySet().stream()
+        .map(entry -> new HaxeDefine(entry.getKey(), StringUtil.nullize(entry.getValue())))
+        .toList();
 
-      List<HaxeLibDependency> libraries = new ArrayList<>();
-      root.path("haxelibs").forEach(
-        library -> libraries.add(new HaxeLibDependency(library.path("name").asText(),
-                                                       StringUtil.nullize(library.path("version").asText()))));
+      List<HaxeLibDependency> libraries = parsed.haxelibs().stream()
+        .map(library -> new HaxeLibDependency(library.name(), StringUtil.nullize(library.version())))
+        .toList();
 
-      List<String> classpaths = new ArrayList<>();
-      root.path("sources").forEach(source -> classpaths.add(source.asText()));
-
-      String appPath = root.path("app").path("path").asText("Export");
-      String appFile = root.path("app").path("file").asText("");
-      return new HaxeBuildFileInfo(haxeTargetFor(targetFlag),
-                                   targetOutputFor(targetFlag, appPath, appFile),
-                                   List.copyOf(defines), List.copyOf(libraries), List.copyOf(classpaths));
+      HaxeTarget target = haxeTargetFor(targetFlag);
+      String targetOutputFor = targetOutputFor(targetFlag, parsed.app().path(), parsed.app().file());
+      return new HaxeBuildFileInfo(target, targetOutputFor, defines, libraries, List.copyOf(parsed.sources()));
     }
     catch (Exception e) {
       log.warn("LimeProjectParser output was not parseable: " + e.getMessage());
@@ -305,7 +263,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
   // --- legacy lime display fallback ---
 
   @Nullable
-  private HaxeBuildFileInfo runDisplay(@NotNull CacheKey key,
+  private HaxeBuildFileInfo runDisplay(@NotNull Key key,
                                        @NotNull String tool,
                                        @NotNull String fileName,
                                        @Nullable String workDirectory) {
@@ -315,8 +273,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     try {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(DISPLAY_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {
-        log.warn(tool + " display failed for " + fileName + " (" + key.targetFlag() + "): "
-                 + output.getStderr().lines().findFirst().orElse("exit code " + output.getExitCode()));
+        log.warn(tool + " display failed for " + fileName + " (" + key.targetFlag() + "): " + firstErrorLine(output));
         return null;
       }
       return HxmlFileParser.parse(output.getStdout(), path -> null);
@@ -329,7 +286,31 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   @Override
   public void dispose() {
-    executor.shutdownNow();
-    cache.clear();
+    cache.shutdown();
+  }
+
+  private record LimeParserOutput(Map<String, String> defines,
+                                  List<ParserHaxelib> haxelibs,
+                                  List<String> sources,
+                                  ParserApp app) {
+
+    private LimeParserOutput {
+      defines = defines != null ? defines : Map.of();
+      haxelibs = haxelibs != null ? haxelibs : List.of();
+      sources = sources != null ? sources : List.of();
+      app = app != null ? app : new ParserApp(null, null);
+    }
+
+  }
+
+  private record ParserHaxelib(String name, String version) {
+  }
+
+  /// `path` defaults to lime's export root "Export" when the project sets none.
+  private record ParserApp(String path, String file) {
+    private ParserApp {
+      path = path != null ? path : "Export";
+      file = file != null ? file : "";
+    }
   }
 }

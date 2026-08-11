@@ -6,7 +6,6 @@ import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.process.ProcessOutputType;
-import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
@@ -125,6 +124,17 @@ public final class HaxeCompilationServerManager implements Disposable {
 
   public synchronized boolean isRunning() {
     return servers.values().stream().anyMatch(ServerInstance::isAlive);
+  }
+
+  /** Whether the instance with the given id (the haxe executable path) currently runs. */
+  public synchronized boolean isRunning(@NotNull String id) {
+    return runningPort(id) > 0;
+  }
+
+  /** The given instance's port while it runs, or -1. */
+  public synchronized int runningPort(@NotNull String id) {
+    ServerInstance instance = servers.get(id);
+    return instance != null && instance.isAlive() ? instance.port : -1;
   }
 
   /** Known instances (running or stopped-with-history), in start order. */
@@ -323,10 +333,8 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   private void notifyStartFailed(@NotNull String detail) {
-    NotificationGroupManager.getInstance()
-      .getNotificationGroup("haxe.command")
-      .createNotification(HaxeBundle.message("haxe.compilation.server.start.failed"), detail, NotificationType.WARNING)
-      .notify(project);
+    String message = HaxeBundle.message("haxe.compilation.server.start.failed");
+    HaxeCommandNotifications.notify(project, message, detail, NotificationType.WARNING);
   }
 
   @Override

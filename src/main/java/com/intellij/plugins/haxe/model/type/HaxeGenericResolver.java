@@ -120,10 +120,10 @@ public class HaxeGenericResolver {
       }
       // not using "collection.addAll" because there is extra logic in add() that we need to execute
       for (ResolverEntry resolver : parentResolver.resolvers) {
-        this.addInternal(resolver);
+        addInternal(resolvers, resolver);
       }
       for (ResolverEntry entry : parentResolver.constraints) {
-        this.addConstraintInternal(entry);
+        addInternal(constraints, entry);
       }
       for (ResolverEntry entry : parentResolver.arguments) {
         this.addArgumentInternal(entry);
@@ -148,42 +148,18 @@ public class HaxeGenericResolver {
   }
 
 
-  // same as normal "add" but reuses calculated name and type for faster copy
-  private void addInternal(@NotNull ResolverEntry resolverEntry) {
-    String name = resolverEntry.name();
-    ResultHolder type = resolverEntry.type();
-    HaxeTypeParameterDeclaration typeParameter = resolverEntry.typeParameter();
-    HaxeTypeParameterScope scope = resolverEntry.scope();
-    int restIndex = resolverEntry.index();
-
-    resolvers.removeIf(entry -> isSameTypeParameter(typeParameter, entry, restIndex));
-    resolvers.add(new ResolverEntry(name, typeParameter, type, scope, restIndex));
+  // same as normal "add"/"addConstraint" but reuses the entry's calculated name and type for faster copy
+  private static void addInternal(@NotNull List<ResolverEntry> target, @NotNull ResolverEntry resolverEntry) {
+    target.removeIf(entry -> isSameTypeParameter(resolverEntry.typeParameter(), entry, resolverEntry.index()));
+    target.add(resolverEntry);
   }
 
-  // same as normal "add" but reuses calculated name and type for faster copy
-  private void addConstraintInternal(@NotNull ResolverEntry resolverEntry) {
-    String name = resolverEntry.name();
-    ResultHolder type = resolverEntry.type();
-    HaxeTypeParameterDeclaration typeParameter = resolverEntry.typeParameter();
-    HaxeTypeParameterScope scope = resolverEntry.scope();
-    int restIndex = resolverEntry.index();
-
-    constraints.removeIf(entry -> isSameTypeParameter(typeParameter, entry, restIndex));
-    constraints.add(new ResolverEntry(name, typeParameter, type, scope, restIndex));
-  }
-
-  // same as normal "add" but reuses calculated name and type for faster copy
+  // same as normal "addArgument" (matching on the type parameter alone) but reuses the entry's
+  // calculated name and type for faster copy
   private void addArgumentInternal(@NotNull ResolverEntry resolverEntry) {
-    String name = resolverEntry.name();
-    ResultHolder type = resolverEntry.type();
-    HaxeTypeParameterDeclaration typeParameter = resolverEntry.typeParameter();
-
-    arguments.removeIf(entry -> entry.typeParameter().equals(typeParameter));
-    arguments.add(new ResolverEntry(name,typeParameter,  type, null));
+    arguments.removeIf(entry -> entry.typeParameter().equals(resolverEntry.typeParameter()));
+    arguments.add(resolverEntry);
   }
-
-
-
 
   @Nullable
   public ResultHolder resolveArgument(@NotNull HaxeTypeParameterDeclaration typeParameter) {

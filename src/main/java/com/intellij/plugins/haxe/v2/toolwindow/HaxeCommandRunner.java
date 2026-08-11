@@ -9,11 +9,11 @@ import com.intellij.execution.process.ProcessTerminatedListener;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
-import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
@@ -28,8 +28,6 @@ import java.util.List;
  * on the EDT. Used by the tool window's execute button and the build file action rows.
  */
 public final class HaxeCommandRunner {
-
-  private static final String NOTIFICATION_GROUP = "haxe.command";
 
   private HaxeCommandRunner() {
   }
@@ -49,20 +47,17 @@ public final class HaxeCommandRunner {
       ConsoleView console = TextConsoleBuilderFactory.getInstance()
         .createBuilder(project)
         .getConsole();
+
       console.attachToProcess(processHandler);
 
-      RunContentDescriptor descriptor =
-        new RunContentDescriptor(console, processHandler, console.getComponent(), presentableName, HaxeIcons.HAXE_LOGO);
-      RunContentManager.getInstance(project)
-        .showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
+      RunContentDescriptor descriptor = new RunContentDescriptor(console, processHandler, console.getComponent(), presentableName, HaxeIcons.HAXE_LOGO);
+      RunContentManager.getInstance(project).showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
+
       processHandler.startNotify();
     }
     catch (ExecutionException e) {
-      NotificationGroupManager.getInstance()
-        .getNotificationGroup(NOTIFICATION_GROUP)
-        .createNotification(HaxeBundle.message("haxe.command.runner.failed", presentableName),
-                            StringUtil.notNullize(e.getMessage()), NotificationType.ERROR)
-        .notify(project);
+      String title = HaxeBundle.message("haxe.command.runner.failed", presentableName);
+      HaxeCommandNotifications.notify(project, title, StringUtil.notNullize(e.getMessage()), NotificationType.ERROR);
     }
   }
 }

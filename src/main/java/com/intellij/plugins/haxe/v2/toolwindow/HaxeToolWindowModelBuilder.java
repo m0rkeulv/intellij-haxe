@@ -307,9 +307,10 @@ final class HaxeToolWindowModelBuilder {
       }
       case HXP_SCRIPT -> {
         // a plain hxp script builds itself - the hxp tool runs it, no lime target
-        List<String> command = HaxeCompileCommands.hxpScriptCommand(project, environmentSdk, file);
+        List<String> command = HxpScriptProjects.buildCommand(project, environmentSdk, file);
+
         String presentable = "hxp " + file.getName();
-        ActionNode actionNode = new ActionNode(ownerId, HaxeCompileCommands.HXP_SCRIPT_BUILD_ACTION, command,
+        ActionNode actionNode = new ActionNode(ownerId, HxpScriptProjects.BUILD_ACTION, command,
                                       workDirectory, presentable, false);
         actions.add(actionNode);
       }
@@ -325,7 +326,7 @@ final class HaxeToolWindowModelBuilder {
   }
 
   /**
-   * The container's Compile command row: the chosen file's type-derived command (or a
+   * The container's Compile command row: the chosen file's default build action (or a
    * designated action of that file as override) plus extra arguments.
    */
   @NotNull
@@ -348,65 +349,42 @@ final class HaxeToolWindowModelBuilder {
     }
 
     HaxeBuildFile buildFile = chosen.buildFile();
-    ActionNode overrideAction = stored.actionName() == null ? null : chosen.actions().stream()
-      .filter(action -> action.name().equals(stored.actionName()))
-      .findFirst()
-      .orElse(null);
-
-    List<String> baseCommand;
-    String basePresentable;
-    if (overrideAction != null) {
-      baseCommand = overrideAction.command();
-      basePresentable = overrideAction.presentableCommand();
-    }
-    else {
-      baseCommand = defaultBuildCommand(containerId, buildFile);
-      basePresentable = presentableBuildCommand(containerId, buildFile);
-    }
-    if (baseCommand == null || baseCommand.isEmpty()) {
+    ActionNode overrideAction = stored.actionName() == null ? null
+                                                            : findAction(chosen.actions(), stored.actionName());
+    ActionNode baseAction = overrideAction != null
+      ? overrideAction
+      : findAction(chosen.actions(), defaultBuildActionName(buildFile.type()));
+    if (baseAction == null || baseAction.command().isEmpty()) {
       return new EnvCompileCommandNode(containerId,
                                        HaxeBundle.message("haxe.toolwindow.compile.command.unsupported", buildFile.file().getName()),
                                        null, null, candidatePaths, actionNamesByFile, false);
     }
 
-    List<String> command = new ArrayList<>(baseCommand);
+    List<String> command = new ArrayList<>(baseAction.command());
     command.addAll(ParametersListUtil.parse(stored.arguments()));
-    VirtualFile parent = buildFile.file().getParent();
-    String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
-    String display = StringUtil.trimTrailing(basePresentable + " " + stored.arguments());
+    String display = StringUtil.trimTrailing(baseAction.presentableCommand() + " " + stored.arguments());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     boolean connectEligible = HaxeCompileCommands.isConnectEligible(project, environmentSdk, command);
-    return new EnvCompileCommandNode(containerId, display, command, workDirectory, candidatePaths, actionNamesByFile,
-                                     connectEligible);
+    return new EnvCompileCommandNode(containerId, display, command, baseAction.workDirectory(), candidatePaths,
+                                     actionNamesByFile, connectEligible);
   }
 
-  /** The type-derived build command. */
   @Nullable
-  private List<String> defaultBuildCommand(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    VirtualFile file = buildFile.file();
-    return switch (buildFile.type()) {
-      case HXML -> HxmlProjects.buildCommand(project, environmentSdk, file);
-      case OPENFL, LIME, HXP_PROJECT ->
-        LimeProjects.actionCommand(project, environmentSdk, file, buildFile.type(), LimeProjects.BUILD_ACTION);
-      case HXP_SCRIPT -> HaxeCompileCommands.hxpScriptCommand(project, environmentSdk, file);
-      case NMML -> NmeProjects.actionCommand(project, environmentSdk, file, NmeProjects.BUILD_ACTION);
-    };
+  private static ActionNode findAction(@NotNull List<ActionNode> actions, @NotNull String name) {
+    return actions.stream()
+      .filter(action -> action.name().equals(name))
+      .findFirst()
+      .orElse(null);
   }
 
+  /** The name {@link #addDefaultActions} gives the type's build action. */
   @NotNull
-  private String presentableBuildCommand(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
-    VirtualFile file = buildFile.file();
-    return switch (buildFile.type()) {
-      case HXML -> "haxe " + file.getName();
-      case OPENFL, LIME, HXP_PROJECT -> {
-        String tool = LimeProjects.toolFor(buildFile.type());
-        String targetFlags = String.join(" ", LimeProjects.selectedTargetFlags(project, buildFile.type(), file));
-        yield tool + " build " + file.getName() + " " + targetFlags;
-      }
-      case HXP_SCRIPT -> "hxp " + file.getName();
-      case NMML -> "nme build " + file.getName() + " "
-                   + String.join(" ", NmeProjects.selectedTargetFlags(project, file));
+  private static String defaultBuildActionName(@NotNull HaxeBuildFileType type) {
+    return switch (type) {
+      case HXML -> HaxeBundle.message("haxe.toolwindow.action.build");
+      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.BUILD_ACTION;
+      case HXP_SCRIPT -> HxpScriptProjects.BUILD_ACTION;
+      case NMML -> NmeProjects.BUILD_ACTION;
     };
   }
 

@@ -1,11 +1,9 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
-import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
@@ -13,23 +11,21 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Key;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Outcome;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
-import com.intellij.util.concurrency.AppExecutorUtil;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
 import java.util.regex.Pattern;
+
+import static com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.firstErrorLine;
 
 /**
  * Resolves the effective compiler configuration of NME project files (nmml).
@@ -42,17 +38,16 @@ import java.util.regex.Pattern;
  * classpaths that point into the haxelib repository.
  *
  * Results are cached per (file, target, toolchain) and refreshed in the
- * background - callers get the cached value (possibly stale, possibly null on
- * first ask) immediately and a callback once a refresh lands. A failed run
- * retries a bounded number of times per file revision, so a broken toolchain
- * never causes refresh loops. Mirrors {@link HaxeLimeProjectInfoService}.
+ * background via {@link HaxeProjectInfoCache} - callers get the cached value
+ * (possibly stale, possibly null on first ask) immediately and a callback once
+ * a refresh lands. A failed run retries a bounded number of times per file
+ * revision, so a broken toolchain never causes refresh loops.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeNmeProjectInfoService implements Disposable {
 
   private static final int PREPARE_TIMEOUT_MS = 60_000;
-  private static final int MAX_ATTEMPTS = 3;
   private static final String BUILD_FILE_MARKER = "PREPARE BUILD_FILE=";
 
   // a haxelib-repo path segment naming an installed version: haxelib stores
@@ -70,26 +65,15 @@ public final class HaxeNmeProjectInfoService implements Disposable {
   public record Evaluation(@NotNull HaxeBuildFileInfo info, @NotNull String hxmlContent) {
   }
 
-  private record CacheKey(@NotNull String filePath, @NotNull String targetFlag, @NotNull String haxelibPath) {
-  }
-
-  private record CacheValue(long modificationStamp, @Nullable Evaluation evaluation, int attempts,
-                            @Nullable Path preparedDir) {
-  }
-
   private record PreparedRun(@NotNull Evaluation evaluation, @NotNull Path preparedDir) {
   }
 
   private final Project project;
-  private final Map<CacheKey, CacheValue> cache = new ConcurrentHashMap<>();
-  private final Set<CacheKey> inFlight = ConcurrentHashMap.newKeySet();
-  // every caller waiting on an in-flight evaluation gets its callback fired
-  private final Map<CacheKey, List<Runnable>> pendingCallbacks = new ConcurrentHashMap<>();
-  private final ExecutorService executor =
-    AppExecutorUtil.createBoundedApplicationPoolExecutor("Haxe nme prepare", 1);
+  private final HaxeProjectInfoCache<PreparedRun> cache;
 
   public HaxeNmeProjectInfoService(@NotNull Project project) {
     this.project = project;
+    this.cache = new HaxeProjectInfoCache<>(project, "Haxe nme prepare", HaxeNmeProjectInfoService::deletePreparedDir);
   }
 
   @NotNull
@@ -108,73 +92,30 @@ public final class HaxeNmeProjectInfoService implements Disposable {
                                         @Nullable String preferredSdkName,
                                         @NotNull Runnable onUpdated) {
     String haxelibPath = HaxeToolPathResolver.resolveHaxelibExecutable(project, preferredSdkName);
-    CacheKey key = new CacheKey(buildFile.file().getPath(), targetFlag, haxelibPath);
+    Key key = new Key(buildFile.file().getPath(), targetFlag, haxelibPath);
     long stamp = buildFile.file().getModificationStamp();
 
-    CacheValue cached = cache.get(key);
-    boolean fresh = cached != null && cached.modificationStamp() == stamp;
-    if (fresh && (cached.evaluation() != null || cached.attempts() >= MAX_ATTEMPTS)) {
-      return cached.evaluation();
-    }
-    schedule(key, buildFile, stamp, fresh ? cached.attempts() : 0, onUpdated);
-    // serve the stale value while the refresh runs
-    return cached != null ? cached.evaluation() : null;
+    // captured here - the executor thread must not touch the VirtualFile
+    VirtualFile parent = buildFile.file().getParent();
+    String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
+    String fileName = buildFile.file().getName();
+    PreparedRun run = cache.getCachedOrSchedule(key, stamp, () -> evaluate(key, fileName, workDirectory), onUpdated);
+    return run != null ? run.evaluation() : null;
   }
 
   public void clearCache() {
-    cache.values().forEach(HaxeNmeProjectInfoService::deletePreparedDir);
     cache.clear();
   }
 
   /** Drops every cached evaluation of one build file (all targets/toolchains), forcing a re-run on the next ask. */
   public void invalidate(@NotNull String filePath) {
-    cache.entrySet().removeIf(entry -> {
-      boolean matches = entry.getKey().filePath().equals(filePath);
-      if (matches) {
-        deletePreparedDir(entry.getValue());
-      }
-      return matches;
-    });
+    cache.invalidate(filePath);
   }
 
-  private void schedule(@NotNull CacheKey key,
-                        @NotNull HaxeBuildFile buildFile,
-                        long stamp,
-                        int previousAttempts,
-                        @NotNull Runnable onUpdated) {
-    pendingCallbacks.computeIfAbsent(key, ignored -> new CopyOnWriteArrayList<>()).add(onUpdated);
-    if (!inFlight.add(key)) {
-      // an evaluation is already running; it fires the callback registered above
-      return;
-    }
-
-    VirtualFile parent = buildFile.file().getParent();
-    String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
-    String fileName = buildFile.file().getName();
-
-    executor.execute(() -> {
-      List<Runnable> callbacks;
-      try {
-        PreparedRun run = runPrepare(key, fileName, workDirectory);
-        CacheValue replaced = cache.put(key, new CacheValue(stamp,
-                                                            run != null ? run.evaluation() : null,
-                                                            previousAttempts + 1,
-                                                            run != null ? run.preparedDir() : null));
-        deletePreparedDir(replaced);
-      }
-      finally {
-        // callbacks drained BEFORE the in-flight flag drops: an ask arriving in
-        // between re-registers and starts a fresh evaluation of its own
-        callbacks = pendingCallbacks.remove(key);
-        inFlight.remove(key);
-      }
-      List<Runnable> toRun = callbacks != null ? callbacks : List.of();
-      ApplicationManager.getApplication().invokeLater(() -> {
-        if (!project.isDisposed()) {
-          toRun.forEach(Runnable::run);
-        }
-      });
-    });
+  @NotNull
+  private Outcome<PreparedRun> evaluate(@NotNull Key key, @NotNull String fileName, @Nullable String workDirectory) {
+    PreparedRun run = runPrepare(key, fileName, workDirectory);
+    return new Outcome<>(run, run != null);
   }
 
   /**
@@ -185,7 +126,7 @@ public final class HaxeNmeProjectInfoService implements Disposable {
    * cleans up immediately.
    */
   @Nullable
-  private PreparedRun runPrepare(@NotNull CacheKey key,
+  private PreparedRun runPrepare(@NotNull Key key,
                                  @NotNull String fileName,
                                  @Nullable String workDirectory) {
     Path tempBin = null;
@@ -197,8 +138,7 @@ public final class HaxeNmeProjectInfoService implements Disposable {
       GeneralCommandLine commandLine = new GeneralCommandLine(command).withWorkDirectory(workDirectory);
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(PREPARE_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {
-        log.warn("nme prepare failed for " + fileName + " (" + key.targetFlag() + "): "
-                 + output.getStderr().lines().findFirst().orElse("exit code " + output.getExitCode()));
+        log.warn("nme prepare failed for " + fileName + " (" + key.targetFlag() + "): " + firstErrorLine(output));
         return null;
       }
       Evaluation evaluation = parsePreparedBuildFile(output.getStdout(), workDirectory, fileName);
@@ -244,10 +184,8 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     return new Evaluation(info, content);
   }
 
-  private static void deletePreparedDir(@Nullable CacheValue value) {
-    if (value != null && value.preparedDir() != null) {
-      FileUtil.delete(value.preparedDir().toFile());
-    }
+  private static void deletePreparedDir(@NotNull PreparedRun run) {
+    FileUtil.delete(run.preparedDir().toFile());
   }
 
   /** The hxml's explicit -lib entries plus the identities its haxelib-repo classpaths encode. */
@@ -281,7 +219,6 @@ public final class HaxeNmeProjectInfoService implements Disposable {
 
   @Override
   public void dispose() {
-    executor.shutdownNow();
-    clearCache();
+    cache.shutdown();
   }
 }

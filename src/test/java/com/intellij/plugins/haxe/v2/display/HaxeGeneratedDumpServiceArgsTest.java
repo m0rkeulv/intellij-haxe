@@ -2,10 +2,7 @@ package com.intellij.plugins.haxe.v2.display;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -73,31 +70,5 @@ public class HaxeGeneratedDumpServiceArgsTest {
   public void testTargetLessArgSetsAreRefused() {
     assertNull(HaxeGeneratedDumpService.dumpArgs(List.of("-main", "Main", "--interp"), DUMP_ROOT),
                "no generation pass means no dumps");
-  }
-
-  @Test
-  @DisplayName("hxml file references expand against the preceding cwd")
-  public void testHxmlFileReferencesExpandAgainstThePrecedingCwd(@TempDir Path projectDir) throws IOException {
-    Files.writeString(projectDir.resolve("build.hxml"), """
-      -cp src
-      -main Main
-      # output
-      -js build/out.js
-      """);
-
-    List<String> expanded = HaxeGeneratedDumpService.expandHxmlReferences(
-      List.of("--cwd", projectDir.toString(), "build.hxml"));
-
-    assertFalse(expanded.contains("build.hxml"), "the reference is replaced by the file's flags");
-    assertTrue(expanded.containsAll(List.of("-cp", "src", "-main", "Main", "-js", "build/out.js")),
-               "flags read out of the referenced file");
-    assertTrue(expanded.indexOf("--cwd") == 0, "the cwd pair stays in place");
-  }
-
-  @Test
-  @DisplayName("unreadable hxml reference is kept as-is")
-  public void testUnreadableHxmlReferenceIsKeptAsIs() {
-    List<String> expanded = HaxeGeneratedDumpService.expandHxmlReferences(List.of("missing.hxml", "-main", "Main"));
-    assertTrue(expanded.contains("missing.hxml"), "expansion failure leaves the argument untouched");
   }
 }

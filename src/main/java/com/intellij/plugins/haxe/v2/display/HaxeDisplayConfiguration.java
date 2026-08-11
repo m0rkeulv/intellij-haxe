@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
 import org.jetbrains.annotations.NotNull;
 
@@ -64,10 +66,11 @@ public final class HaxeDisplayConfiguration {
   @NotNull
   public static List<String> applyOverrides(@NotNull List<String> baseArgs, @NotNull DefineOverrides overrides) {
     if (overrides.isEmpty()) return baseArgs;
+
     List<String> args = overrides.removedNames().isEmpty()
                         ? new ArrayList<>(baseArgs)
-                        : withoutRemovedDefines(HaxeGeneratedDumpService.expandHxmlReferences(baseArgs),
-                                                overrides.removedNames());
+                        : withoutRemovedDefines(HxmlArguments.expandReferences(baseArgs), overrides.removedNames());
+
     args.addAll(overrides.setArgs());
     return args;
   }
@@ -77,8 +80,8 @@ public final class HaxeDisplayConfiguration {
     List<String> kept = new ArrayList<>(args.size());
     for (int i = 0; i < args.size(); i++) {
       String arg = args.get(i);
-      boolean defineFlag = arg.equals("-D") || arg.equals("--define");
-      if (defineFlag && i + 1 < args.size()) {
+      boolean containsArg = HxmlFileParser.DEFINE_FLAGS.contains(arg);
+      if (containsArg && i + 1 < args.size()) {
         String value = args.get(i + 1);
         // the define's name is everything before the optional =value
         int equals = value.indexOf('=');

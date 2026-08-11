@@ -10,7 +10,6 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeBuildFilesStore;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
@@ -114,23 +113,7 @@ public final class HaxeActionRunConfigurationEditor extends SettingsEditor<HaxeA
   }
 
   private void refillActionCombo(@Nullable String selectedAction) {
-    String previous = selectedAction != null ? selectedAction
-                                             : StringUtil.notNullize((String)actionCombo.getEditor().getItem());
-    DefaultComboBoxModel<String> actionModel = new DefaultComboBoxModel<>();
-    String selectedPath = (String)fileCombo.getSelectedItem();
-    if (selectedPath != null) {
-      VirtualFile file = LocalFileSystem.getInstance().findFileByPath(selectedPath);
-      if (file != null && file.isValid()) {
-        // type detection may sniff file content - EDT has no implicit read access
-        ReadAction.computeBlocking(() -> HaxeCompileCommands.availableActionNames(project, file))
-          .forEach(actionModel::addElement);
-      }
-    }
-    if (!StringUtil.isEmptyOrSpaces(previous) && actionModel.getIndexOf(previous) < 0) {
-      actionModel.addElement(previous);
-    }
-    actionCombo.setModel(actionModel);
-    actionCombo.setSelectedItem(StringUtil.isEmptyOrSpaces(previous) ? null : previous);
+    HaxeActionComboUtil.refillActionCombo(project, actionCombo, (String)fileCombo.getSelectedItem(), selectedAction);
   }
 
   /** The chosen module's build files (detected + manually added), or every known build file. */

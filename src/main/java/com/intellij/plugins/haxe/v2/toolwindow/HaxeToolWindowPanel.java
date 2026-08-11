@@ -8,7 +8,6 @@ import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.ide.CommonActionsManager;
 import com.intellij.ide.DefaultTreeExpander;
-import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
@@ -35,6 +34,7 @@ import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
@@ -597,10 +597,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   }
 
   private void notifyUser(@NotNull String message) {
-    NotificationGroupManager.getInstance()
-      .getNotificationGroup("haxe.command")
-      .createNotification(message, NotificationType.WARNING)
-      .notify(project);
+    HaxeCommandNotifications.notify(project, message, NotificationType.WARNING);
   }
 
   /** Toggles the container's server participation; while disabled project-wide, opens the settings page instead. */

@@ -17,7 +17,6 @@ import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.execution.process.ProcessOutputType;
 import com.intellij.execution.runners.ExecutionEnvironment;
-import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.application.ReadAction;
@@ -30,6 +29,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
@@ -298,9 +298,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   }
 
   private static void notifyFailure(@NotNull Project project, @NotNull String message) {
-    NotificationGroupManager.getInstance()
-      .getNotificationGroup("haxe.command")
-      .createNotification(HaxeDebuggerBundle.message("haxe.before.run.name"), message, NotificationType.ERROR)
-      .notify(project);
+    String title = HaxeDebuggerBundle.message("haxe.before.run.name");
+    HaxeCommandNotifications.notify(project, title, message, NotificationType.ERROR);
   }
 }
