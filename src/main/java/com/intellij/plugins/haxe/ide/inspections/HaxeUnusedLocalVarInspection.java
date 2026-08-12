@@ -50,9 +50,7 @@ public class HaxeUnusedLocalVarInspection extends LocalInspectionTool {
             @Override
             public void visitLocalVarDeclaration(@NotNull HaxeLocalVarDeclaration varDeclaration) {
                 SearchScope searchScope = HaxeExpressionEvaluatorSearchUtil.getSmallestPossibleSearchScope(varDeclaration, null);
-                // USED covers compiler-known usages too (generated code); UNKNOWN
-                // keeps the static verdict until the compiler answer lands
-                if (HaxeUsageSearch.usageState(varDeclaration, searchScope) != HaxeUsageSearch.UsageState.USED) {
+                if (!HaxeUsageSearch.isConsideredUsed(varDeclaration, searchScope)) {
                     unusedVarDeclarations.add(varDeclaration);
                 }
             }

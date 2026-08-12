@@ -39,11 +39,11 @@ public final class HaxeToolWindowNavigation {
   @Nullable
   public static Navigatable forSelection(@NotNull Project project, @Nullable Object userObject) {
     return switch (userObject) {
-      case BuildFileRow row -> fileDescriptor(project, row.buildFile().file(), 0);
-      case TargetNode targetNode -> fileDescriptor(project, targetNode.buildFile().file(), 0);
+      case BuildFileRow row -> fileDescriptor(project, row.buildFile().file());
+      case TargetNode targetNode -> fileDescriptor(project, targetNode.buildFile().file());
       case ActionsGroupNode actionsGroup -> pathDescriptor(project, actionsGroup.ownerId());
       case ActionNode actionNode -> pathDescriptor(project, actionNode.ownerId());
-      case ProgramNode programNode -> fileDescriptor(project, programNode.buildFile().file(), 0);
+      case ProgramNode programNode -> fileDescriptor(project, programNode.buildFile().file());
       case DefineNode defineNode -> new DefineNavigatable(project, defineNode);
       case LibraryNode libraryNode -> new LibraryNavigatable(project, libraryNode.name());
       case null, default -> null;
@@ -51,14 +51,14 @@ public final class HaxeToolWindowNavigation {
   }
 
   @Nullable
-  private static Navigatable fileDescriptor(@NotNull Project project, @NotNull VirtualFile file, int offset) {
-    return file.isValid() ? new OpenFileDescriptor(project, file, offset) : null;
+  private static Navigatable fileDescriptor(@NotNull Project project, @NotNull VirtualFile file) {
+    return file.isValid() ? new OpenFileDescriptor(project, file) : null;
   }
 
   @Nullable
   private static Navigatable pathDescriptor(@NotNull Project project, @NotNull String path) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    return file == null ? null : fileDescriptor(project, file, 0);
+    return file == null ? null : fileDescriptor(project, file);
   }
 
   /** Locates the define's declaration lazily, at navigation time. */

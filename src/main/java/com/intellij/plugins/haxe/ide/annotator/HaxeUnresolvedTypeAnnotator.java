@@ -52,8 +52,7 @@ public class HaxeUnresolvedTypeAnnotator extends HaxeVisitor implements Annotato
 
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    if (AnnotatorUtil.isInGeneratedPreview(element)) return;
-    if(!element.isValid()) return;
+    if (AnnotatorUtil.shouldSkip(element)) return;
 
     if (element instanceof HaxeType || element instanceof HaxeReferenceExpression) {
       assert myHolder == null;

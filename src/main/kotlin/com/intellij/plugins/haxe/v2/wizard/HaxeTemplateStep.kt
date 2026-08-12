@@ -133,16 +133,28 @@ private class HxmlTemplateStep(parent: NewProjectWizardStep) : AbstractNewProjec
     val contentRoot = HaxeTemplateScaffold.createModule(project, this) ?: return
     val target = targetProperty.get()
     val mainClass = mainClassProperty.get().ifBlank { "Main" }
+    // free-text stage fields: non-numeric input would render an hxml the
+    // compiler rejects, so fall back to the field defaults (LimeFamilyTemplateStep guards the same way)
     val swfHeader = if (target == HaxeTemplateFiles.HxmlTargetOption.FLASH) {
-      "${swfWidthProperty.get()}:${swfHeightProperty.get()}:${swfFpsProperty.get()}:${swfColorProperty.get()}"
+      val width = swfWidthProperty.get().toIntOrNull() ?: 960
+      val height = swfHeightProperty.get().toIntOrNull() ?: 640
+      val fps = swfFpsProperty.get().toIntOrNull() ?: 60
+      val colorText = swfColorProperty.get().trim()
+
+      // the stage color is an RGB hex sextet (ffffff); anything else gets the default
+      val color = if (colorText.matches(Regex("[0-9a-fA-F]{6}"))) colorText else "ffffff"
+      "$width:$height:$fps:$color"
     } else ""
+    // --swf-version takes a plain number (14 or 11.2); anything else drops the line
+    val swfVersion = swfVersionProperty.get().trim()
+      .takeIf { it.matches(Regex("\\d+(\\.\\d+)?")) } ?: ""
     val spec = HaxeTemplateFiles.HxmlSpec(
       target = target,
       mainClass = mainClass,
       output = outputProperty.get().ifBlank { target.defaultOutput },
       dce = dceProperty.get(),
       jsSourceMap = jsSourceMapProperty.get(),
-      swfVersion = swfVersionProperty.get(),
+      swfVersion = swfVersion,
       swfHeader = swfHeader)
 
     val files = mapOf(

@@ -48,9 +48,7 @@ public class HaxeUnusedFunctionInspection extends LocalInspectionTool {
             @Override
             public void visitLocalFunctionDeclaration(@NotNull HaxeLocalFunctionDeclaration functionDeclaration) {
                 SearchScope searchScope = HaxeExpressionEvaluatorSearchUtil.getSmallestPossibleSearchScope(functionDeclaration, null);
-                // USED covers compiler-known usages too (generated code); UNKNOWN
-                // keeps the static verdict until the compiler answer lands
-                if (HaxeUsageSearch.usageState(functionDeclaration, searchScope) != HaxeUsageSearch.UsageState.USED) {
+                if (!HaxeUsageSearch.isConsideredUsed(functionDeclaration, searchScope)) {
                     LocalFunctionDeclarations.add(functionDeclaration);
                 }
             }

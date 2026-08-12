@@ -42,9 +42,9 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   private volatile Snapshot snapshot;
 
   public HaxeDefineContextService(@NotNull Project project) {
+    this.project = project;
     // any build-settings mutation invalidates the derived define context
     project.getMessageBus().connect().subscribe(HaxeBuildSettingsListener.TOPIC, this);
-    this.project = project;
   }
 
   /**

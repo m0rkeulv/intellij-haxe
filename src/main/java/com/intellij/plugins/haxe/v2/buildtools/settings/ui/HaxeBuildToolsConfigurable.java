@@ -78,6 +78,12 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
     if (panel == null) return;
     HaxeBuildToolSettings settings = getSettings();
     boolean sdkChanged = !Objects.equals(panel.getSelectedSdkName(), settings.getSdkName());
+
+    boolean serverConfigChanged = sdkChanged
+      || panel.isServerEnabled() != settings.isCompilationServerEnabled()
+      || panel.getServerPort() != settings.getCompilationServerPort()
+      || !panel.getServerArguments().equals(settings.getCompilationServerArguments());
+
     settings.setSdkName(panel.getSelectedSdkName());
     if (sdkChanged) {
       // the default SDK is only real once it reaches the module entities -
@@ -91,8 +97,12 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
     settings.setCompilationServerEnabled(panel.isServerEnabled());
     settings.setCompilationServerPort(panel.getServerPort());
     settings.setCompilationServerArguments(panel.getServerArguments());
-    // config changes invalidate the running server; the next connected compile restarts it
-    HaxeCompilationServerManager.getInstance(project).stop();
+
+    if (serverConfigChanged) {
+      // these settings invalidate the running server; the next connected compile
+      // restarts it. Unrelated edits (haxelib/neko/hashlink paths) keep the warm caches.
+      HaxeCompilationServerManager.getInstance(project).stop();
+    }
   }
 
   /** Haxe modules without an Environment override follow the default SDK. */

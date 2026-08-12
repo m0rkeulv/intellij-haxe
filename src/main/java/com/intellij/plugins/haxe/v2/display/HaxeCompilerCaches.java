@@ -33,6 +33,8 @@ public final class HaxeCompilerCaches {
     HaxeCompilerUsageService.getInstance(project).clearCaches();
     HaxeGeneratedDumpService.getInstance(project).clearCaches();
 
+    HaxeGeneratedCodePreview.clearCaches();
+
     PsiManager.getInstance(project).dropPsiCaches();
     DaemonCodeAnalyzer.getInstance(project).restart(reason);
   }

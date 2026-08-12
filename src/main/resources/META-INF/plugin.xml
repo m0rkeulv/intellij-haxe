@@ -686,20 +686,20 @@
     <toolWindow id="Haxelib"
                 anchor="bottom"
                 canCloseContents="true"
-                icon="/icons/Haxe_logo_gray_13.svg"
+                icon="icons.HaxeIcons.HAXE_LOGO_GRAY_13"
                 factoryClass="com.intellij.plugins.haxe.ide.toolWindow.HaxelibConsoleWindowFactory"/>
 
     <!-- V2 build system: Gradle/Maven-style Haxe tool window -->
     <toolWindow id="Haxe"
                 anchor="right"
-                icon="/icons/Haxe_logo_gray_13.svg"
+                icon="icons.HaxeIcons.HAXE_LOGO_GRAY_13"
                 factoryClass="com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowFactory"/>
 
     <!-- V2 build system: compilation server stdio console -->
     <toolWindow id="Haxe Compilation Server"
                 anchor="bottom"
                 canCloseContents="true"
-                icon="/icons/Haxe_logo_gray_13.svg"
+                icon="icons.HaxeIcons.HAXE_LOGO_GRAY_13"
                 factoryClass="com.intellij.plugins.haxe.v2.toolwindow.HaxeServerConsoleWindowFactory"/>
 
     <!-- V2 build system: Build Project / Build Module delegates to configured build commands -->

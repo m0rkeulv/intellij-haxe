@@ -70,7 +70,7 @@ public class HaxeFullyQualifiedMemberNameIndex extends HaxeComponentBaseIndex {
                 continue;
             }
 
-            HaxeModuleModel  moduleModel =  resolveModule(INDEX, name, project, scope, fqn);
+            HaxeModuleModel moduleModel = resolveModule(INDEX, name, project, scope);
             if(moduleModel == null) {
                 continue;
             }

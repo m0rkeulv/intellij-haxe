@@ -5,6 +5,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
+import sys.thread.Thread;
 
 /**
 	Evaluates a .hxp project script - arbitrary Haxe code extending
@@ -62,8 +63,18 @@ class HxpEvaluator {
 		}
 
 		var process = new Process(haxeExecutable, args);
+
+		// Draining stdout to EOF before touching stderr deadlocks when the child
+		// fills the stderr pipe buffer and blocks writing while this process blocks
+		// reading stdout. A helper thread drains stderr concurrently; the blocking
+		// readMessage joins it before exitCode().
+		var main = Thread.current();
+		Thread.create(() -> {
+			var text = try process.stderr.readAll().toString() catch (e:Dynamic) "";
+			main.sendMessage(text);
+		});
 		var stdout = process.stdout.readAll().toString();
-		var stderr = process.stderr.readAll().toString();
+		var stderr:String = Thread.readMessage(true);
 
 		var exitCode = process.exitCode();
 		process.close();

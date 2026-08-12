@@ -19,6 +19,17 @@ import static java.util.function.Predicate.not;
 public class AnnotatorUtil {
 
   /**
+   * Common entry guard for semantic annotators: skips elements that are no
+   * longer valid and elements in generated-code preview files (see
+   * {@link #isInGeneratedPreview} for why the preview gets no semantic
+   * analysis). Validity is checked first — an invalidated element cannot be
+   * asked for its containing file.
+   */
+  public static boolean shouldSkip(@NotNull PsiElement element) {
+    return !element.isValid() || isInGeneratedPreview(element);
+  }
+
+  /**
    * Semantic annotators (errors/warnings) skip generated-code preview files:
    * the preview is a post-macro reconstruction where unresolvable names are
    * expected, so semantic analysis both wastes work and paints noise. The

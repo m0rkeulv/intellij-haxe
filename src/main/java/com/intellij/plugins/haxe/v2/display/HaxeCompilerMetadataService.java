@@ -35,7 +35,7 @@ import org.jetbrains.annotations.Nullable;
 @CustomLog
 public final class HaxeCompilerMetadataService {
 
-  private record Registry(int port, @NotNull List<MetadataEntry> entries, @NotNull Set<String> bareNames) {
+  private record Registry(@NotNull List<MetadataEntry> entries, @NotNull Set<String> bareNames) {
   }
 
   private final Project project;
@@ -101,7 +101,7 @@ public final class HaxeCompilerMetadataService {
         Set<String> bareNames = entries.stream()
           .map(MetadataEntry::bareName)
           .collect(Collectors.toUnmodifiableSet());
-        registries.put(connected.port(), new Registry(connected.port(), entries, bareNames));
+        registries.put(connected.port(), new Registry(entries, bareNames));
         log.info("haxe metadata registry loaded: " + entries.size() + " entries");
         restartHighlighting();
       } catch (DisplayRequestException e) {

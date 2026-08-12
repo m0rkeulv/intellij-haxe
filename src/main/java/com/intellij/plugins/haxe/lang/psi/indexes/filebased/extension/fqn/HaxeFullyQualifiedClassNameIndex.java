@@ -67,7 +67,7 @@ public class HaxeFullyQualifiedClassNameIndex extends HaxeComponentBaseIndex {
 
         for (HaxeComponentIndexData value : values) {
             FullyQualifiedInfo fqn = value.getFqn();
-            HaxeModuleModel moduleModel = resolveModule(INDEX, name, project, scope, fqn);
+            HaxeModuleModel moduleModel = resolveModule(INDEX, name, project, scope);
 
             if (moduleModel == null) continue;
 

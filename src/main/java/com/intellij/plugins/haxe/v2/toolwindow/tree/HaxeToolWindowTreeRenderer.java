@@ -206,7 +206,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
 
   /** Actions that only produce output get the build hammer; ones that run something keep the play icon. */
   private static boolean isBuildAction(@NotNull String name) {
-    return name.equalsIgnoreCase("build") || name.equals("compile") || name.equalsIgnoreCase("clean");
+    return name.equalsIgnoreCase("build") || name.equalsIgnoreCase("compile") || name.equalsIgnoreCase("clean");
   }
 
   @NotNull

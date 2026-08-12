@@ -28,10 +28,6 @@ public enum HaxeLanguageLevel {
     this.minor = minor;
   }
 
-  public int getMajor() {
-    return major;
-  }
-
   /** Stable identifier used for persistence, e.g. {@code "4.3"}. */
   @NotNull
   public String getVersionString() {
@@ -45,6 +41,16 @@ public enum HaxeLanguageLevel {
 
   public boolean isAtLeast(@NotNull HaxeLanguageLevel other) {
     return ordinal() >= other.ordinal();
+  }
+
+  /**
+   * The level immediately below this one. The oldest known level has nothing
+   * below it and returns itself, so callers always get a usable level.
+   */
+  @NotNull
+  public HaxeLanguageLevel previous() {
+    int ordinal = ordinal();
+    return ordinal == 0 ? this : values()[ordinal - 1];
   }
 
   @NotNull

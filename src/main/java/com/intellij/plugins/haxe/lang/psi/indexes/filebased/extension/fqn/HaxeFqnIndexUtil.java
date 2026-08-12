@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class HaxeFqnIndexUtil {
 
 
-    static HaxeModuleModel resolveModule(ID<String, HaxeComponentIndexData> index, @NotNull String qName, @NotNull Project project, @Nullable GlobalSearchScope scope, FullyQualifiedInfo fqn) {
+    static HaxeModuleModel resolveModule(ID<String, HaxeComponentIndexData> index, @NotNull String qName, @NotNull Project project, @Nullable GlobalSearchScope scope) {
         AtomicReference<HaxeModuleModel> reference = new AtomicReference<>();
         FileBasedIndex.getInstance().getFilesWithKey(index, Set.of(qName),
                 new Processor<VirtualFile>() {

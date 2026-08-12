@@ -60,6 +60,21 @@ public final class HaxeUsageSearch {
   }
 
   /**
+   * Whether "unused" reporting must stay quiet about the declaration.
+   * USED covers compiler-known usages too (generated code); UNKNOWN keeps the
+   * static verdict until the compiler answer lands, so it does NOT count as
+   * used and the caller's static conclusion stands for this pass.
+   */
+  public static boolean isConsideredUsed(@NotNull HaxeNamedComponent declaration) {
+    return usageState(declaration) == UsageState.USED;
+  }
+
+  /** As above with a caller-chosen static search scope. */
+  public static boolean isConsideredUsed(@NotNull HaxeNamedComponent declaration, @NotNull SearchScope scope) {
+    return usageState(declaration, scope) == UsageState.USED;
+  }
+
+  /**
    * Whether the declaration's metadata should exempt it from "unused"
    * warnings. Registry-known metadata (except {@code @:deprecated}) may be
    * consumed invisibly — even the compiler's reference search reports zero

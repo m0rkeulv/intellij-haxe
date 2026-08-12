@@ -75,9 +75,7 @@ public class HaxeUnusedMethodInspection extends LocalInspectionTool {
                     if (!references.isEmpty()) return;
                 }
 
-                // USED covers compiler-known usages too (generated code); UNKNOWN
-                // keeps the static verdict until the compiler answer lands
-                if (HaxeUsageSearch.usageState(methodDeclaration) != HaxeUsageSearch.UsageState.USED) {
+                if (!HaxeUsageSearch.isConsideredUsed(methodDeclaration)) {
                     unusedMethodDeclarations.add(methodDeclaration);
                 }
 

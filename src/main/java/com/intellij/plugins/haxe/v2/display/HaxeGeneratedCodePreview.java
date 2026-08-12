@@ -63,6 +63,11 @@ public final class HaxeGeneratedCodePreview {
   private HaxeGeneratedCodePreview() {
   }
 
+  /** Drops every cached preview file. Called from {@link HaxeCompilerCaches#clearAndRehighlight}. */
+  public static void clearCaches() {
+    previews.clear();
+  }
+
   /**
    * Renders the module dump and locates the named member of the named type
    * (falling back to the type declaration, then the file top). Involves file

@@ -17,8 +17,7 @@ public class HaxeLocalVarAnnotator implements Annotator {
 
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    if (AnnotatorUtil.isInGeneratedPreview(element)) return;
-    if(!element.isValid()) return;
+    if (AnnotatorUtil.shouldSkip(element)) return;
 
     if (element instanceof HaxeLocalVarDeclaration varDeclaration) {
       check(varDeclaration, holder);

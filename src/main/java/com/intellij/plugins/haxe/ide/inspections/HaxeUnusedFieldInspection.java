@@ -55,9 +55,7 @@ public class HaxeUnusedFieldInspection extends LocalInspectionTool {
                 // exempt - see HaxeUsageSearch.metadataKeepsAlive
                 if (HaxeUsageSearch.metadataKeepsAlive(fieldDeclaration)) return;
 
-                // USED covers compiler-known usages too (generated code); UNKNOWN
-                // keeps the static verdict until the compiler answer lands
-                if (HaxeUsageSearch.usageState(fieldDeclaration) != HaxeUsageSearch.UsageState.USED) {
+                if (!HaxeUsageSearch.isConsideredUsed(fieldDeclaration)) {
                     unusedFieldDeclarations.add(fieldDeclaration);
                 }
             }

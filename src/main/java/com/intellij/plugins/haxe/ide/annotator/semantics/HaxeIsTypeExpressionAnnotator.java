@@ -26,8 +26,7 @@ public class HaxeIsTypeExpressionAnnotator implements Annotator, DumbAware {
 
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    if (AnnotatorUtil.isInGeneratedPreview(element)) return;
-    if(!element.isValid()) return;
+    if (AnnotatorUtil.shouldSkip(element)) return;
 
     if (element instanceof HaxeIsTypeExpression typeExpression) {
         check(typeExpression, holder);

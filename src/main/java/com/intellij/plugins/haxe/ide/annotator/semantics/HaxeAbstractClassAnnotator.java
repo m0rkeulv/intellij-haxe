@@ -23,8 +23,7 @@ import java.util.List;
 public class HaxeAbstractClassAnnotator implements Annotator {
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    if (AnnotatorUtil.isInGeneratedPreview(element)) return;
-    if(!element.isValid()) return;
+    if (AnnotatorUtil.shouldSkip(element)) return;
 
     if (!(element instanceof HaxeClass) && !(element instanceof HaxeMethod)) return;
     // abstract classes exist only at 4.2+; below that the abstract MODIFIER is

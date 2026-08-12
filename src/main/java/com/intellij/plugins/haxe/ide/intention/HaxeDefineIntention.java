@@ -64,7 +64,8 @@ public class HaxeDefineIntention implements IntentionAction {
 
   @Override
   public boolean isAvailable(@NotNull Project project, Editor editor, PsiFile file) {
-    return true;
+    // invoke() edits the active container's define overrides. without an active container it would silently do nothing
+    return HaxeDefineContextService.getInstance(project).activeContainerId() != null;
   }
 
   @Override

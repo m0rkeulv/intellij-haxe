@@ -74,22 +74,6 @@ public class HaxeDisplayClient {
     return DisplayJson.decodeDiagnostics(rpc(baseArgs, DisplayMethods.DIAGNOSTICS, Map.of()));
   }
 
-  /** Diagnostics for several files at once (entries without contents read from disk). */
-  public List<FileDiagnostics> diagnostics(List<String> baseArgs, Map<String, String> fileContents)
-    throws DisplayRequestException {
-    List<Map<String, Object>> entries = new ArrayList<>();
-    fileContents.forEach((file, contents) -> {
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("file", file);
-      if (contents != null) {
-        entry.put("contents", contents);
-      }
-      entries.add(entry);
-    });
-    return DisplayJson.decodeDiagnostics(
-      rpc(baseArgs, DisplayMethods.DIAGNOSTICS, Map.of("fileContents", entries)));
-  }
-
   public HoverInfo hover(List<String> baseArgs, String file, int offset, String contents)
     throws DisplayRequestException {
     return DisplayJson.decodeHover(rpc(baseArgs, DisplayMethods.HOVER, positionParams(file, offset, contents)));

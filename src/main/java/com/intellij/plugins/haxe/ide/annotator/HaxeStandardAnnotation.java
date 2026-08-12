@@ -82,7 +82,7 @@ public class HaxeStandardAnnotation {
                                                                   @NotNull HaxeLanguageLevel removedIn,
                                                                   @NotNull String featureName) {
     HaxeLanguageLevel current = HaxeLanguageLevelUtil.getLanguageLevel(element);
-    HaxeLanguageLevel lastSupported = HaxeLanguageLevel.values()[removedIn.ordinal() - 1];
+    HaxeLanguageLevel lastSupported = removedIn.previous();
     String message = HaxeBundle.message("haxe.semantic.feature.removed.language.level",
                                         featureName, removedIn.getPresentableText(), current.getPresentableText());
     String fixText = HaxeBundle.message("haxe.quickfix.set.language.level", lastSupported.getPresentableText());

@@ -59,11 +59,6 @@ public interface HaxeCompilerSettings {
   @NotNull
   HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String moduleName);
 
-  @NotNull
-  default HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull Module module) {
-    return getEffectiveLanguageLevel(module.getName());
-  }
-
   /**
    * Whether editor problems come from the compilation server's
    * {@code display/diagnostics} (experimental) instead of only the plugin's
