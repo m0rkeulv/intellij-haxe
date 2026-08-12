@@ -19,7 +19,12 @@ class HxpRunner {
 	public static function main():Void {
 		var args = Sys.args();
 		var className = args[0];
-		var targetId = "windows";
+		// --target is always passed by HxpEvaluator; the fallback is the host platform
+		var targetId = switch (Sys.systemName()) {
+			case "Windows": "windows";
+			case "Mac": "mac";
+			default: "linux";
+		};
 		var userDefines = new Map<String, Dynamic>();
 
 		var i = 1;

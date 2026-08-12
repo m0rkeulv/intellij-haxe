@@ -37,6 +37,10 @@ tasks.register<Exec>("buildParser") {
     workingDir = projectDir
     commandLine = listOf("haxe", "build.hxml", "-lib", "hxjava:$hxjavaVersion")
     inputs.dir("src/main/haxe")
+    // build.hxml embeds src/main/resources (HxpRunner.hx) into the jar via
+    // -resource; without this input an edit there leaves the task UP-TO-DATE
+    // and ships a stale jar
+    inputs.dir("src/main/resources")
     inputs.file("build.hxml")
     outputs.file(parserJar)
 }
@@ -48,6 +52,8 @@ tasks.register<Exec>("testParser") {
     workingDir = projectDir
     commandLine = listOf("haxe", "test.hxml")
     inputs.dir("src/main/haxe")
+    // test.hxml embeds src/main/resources the same way buildParser does
+    inputs.dir("src/main/resources")
     inputs.dir("src/test/haxe")
     inputs.file("test.hxml")
     // --interp leaves no artifact; declare a marker so up-to-date checks work

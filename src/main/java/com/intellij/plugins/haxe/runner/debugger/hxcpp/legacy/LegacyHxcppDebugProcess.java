@@ -124,7 +124,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
         if (stopped) {
           return;
         }
-        SwingUtilities.invokeLater(() -> error("Debugging loop failed: " + t));
+        SwingUtilities.invokeLater(() -> error(HaxeDebuggerBundle.message("legacy.hxcpp.error.loop.failed", t)));
       }
     });
   }
@@ -234,7 +234,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
   private void expectOK(Command command) {
     enqueueCommand(command, (messageId, message) -> {
       if (messageId != JavaProtocol.IdOK) {
-        error("Debugger protocol error: expected OK, but got: " + JavaProtocol.messageToString(message));
+        error(HaxeDebuggerBundle.message("legacy.hxcpp.error.unexpected.message", "OK", JavaProtocol.messageToString(message)));
       }
     });
   }
@@ -242,7 +242,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
   private void where() {
     enqueueCommand(Command.WhereCurrentThread(false), (messageId, message) -> {
       if (messageId != JavaProtocol.IdThreadsWhere) {
-        error("Debugger protocol error: expected IdThreadsWhere, but got: " + JavaProtocol.messageToString(message));
+        error(HaxeDebuggerBundle.message("legacy.hxcpp.error.unexpected.message", "IdThreadsWhere", JavaProtocol.messageToString(message)));
         return;
       }
       getSession().positionReached(new SuspendContext(message));
@@ -263,15 +263,13 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
             JavaProtocol.writeCommand(os, command);
           }
           catch (RuntimeException e) {
-            error("Debugger protocol error: exception while writing command " +
-                  JavaProtocol.commandToString(command) + ": " + e);
+            error(HaxeDebuggerBundle.message("legacy.hxcpp.error.write.failed", JavaProtocol.commandToString(command), e));
           }
         });
       }
     }
     catch (IOException e) {
-      error("Debugger error: exception queueing write command " +
-            JavaProtocol.commandToString(command) + ": " + e);
+      error(HaxeDebuggerBundle.message("legacy.hxcpp.error.queue.failed", JavaProtocol.commandToString(command), e));
     }
   }
 
@@ -325,7 +323,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
         listener = listenerQueue.isEmpty() ? null : listenerQueue.removeFirst();
       }
       if (listener == null) {
-        error("Debugger protocol error: unsolicited response: " + JavaProtocol.messageToString(message));
+        error(HaxeDebuggerBundle.message("legacy.hxcpp.error.unsolicited", JavaProtocol.messageToString(message)));
         break;
       }
       listener.handleMessage(messageId, message);
@@ -348,7 +346,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
       }
       else {
         getSession().updateBreakpointPresentation(breakpoint, AllIcons.Debugger.Db_invalid_breakpoint, null);
-        warn("Cannot set breakpoint");
+        warn(HaxeDebuggerBundle.message("legacy.hxcpp.warn.breakpoint.not.set"));
       }
     });
   }
@@ -545,8 +543,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
           computeChildrenCurrentFrame(node);
         }
         else {
-          warn("Failed to set stack frame to " + frameNumber +
-               "; got message; " + JavaProtocol.messageToString(message));
+          warn(HaxeDebuggerBundle.message("legacy.hxcpp.warn.frame.not.set", frameNumber, JavaProtocol.messageToString(message)));
         }
       });
     }
@@ -574,7 +571,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
           node.addChildren(childrenList, true);
         }
         else {
-          warn("Failed to get variables; got message " + JavaProtocol.messageToString(message));
+          warn(HaxeDebuggerBundle.message("legacy.hxcpp.warn.variables.failed", JavaProtocol.messageToString(message)));
         }
       });
     }

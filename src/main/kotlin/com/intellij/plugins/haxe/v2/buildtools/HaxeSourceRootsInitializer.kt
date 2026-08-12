@@ -13,6 +13,8 @@ import com.intellij.platform.workspace.jps.entities.ModuleEntity
 import com.intellij.platform.workspace.jps.entities.SourceRootEntity
 import com.intellij.platform.workspace.jps.entities.SourceRootTypeId
 import com.intellij.platform.workspace.jps.entities.modifyContentRootEntity
+import com.intellij.platform.workspace.storage.MutableEntityStorage
+import com.intellij.platform.workspace.storage.url.VirtualFileUrlManager
 import com.intellij.plugins.haxe.v2.buildsystem.*
 import java.io.File
 
@@ -97,10 +99,10 @@ object HaxeSourceRootsInitializer {
   }
 
   private fun applyToContentRoot(
-    builder: com.intellij.platform.workspace.storage.MutableEntityStorage,
+    builder: MutableEntityStorage,
     contentRoot: ContentRootEntity,
     plan: RootsPlan,
-    urlManager: com.intellij.platform.workspace.storage.url.VirtualFileUrlManager,
+    urlManager: VirtualFileUrlManager,
   ) {
     val rootPath = contentRoot.url.url.removePrefix("file://")
     val existingSources = contentRoot.sourceRoots.map { it.url.url }.toSet()

@@ -6,8 +6,6 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.TextBrowseFolderListener;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.ui.JBColor;
-import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
@@ -37,20 +35,7 @@ public final class HaxeBuildToolsSettingsPanel {
   private final Set<String> knownSdkNames = new LinkedHashSet<>();
 
   public HaxeBuildToolsSettingsPanel() {
-    sdkCombo.setRenderer(new SimpleListCellRenderer<>() {
-      @Override
-      public void customize(@NotNull JList<? extends String> list, String value, int index, boolean selected, boolean hasFocus) {
-        if (value == null) {
-          setText(HaxeBundle.message("haxe.build.tools.no.sdk"));
-        }
-        else {
-          setText(value);
-          if (!knownSdkNames.contains(value)) {
-            setForeground(JBColor.RED);
-          }
-        }
-      }
-    });
+    sdkCombo.setRenderer(HaxeSdkComboRenderer.sdkComboRenderer(knownSdkNames));
 
     serverEnabledCheckBox.addActionListener(e -> updateServerFieldsEnabled());
 
