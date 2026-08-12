@@ -74,7 +74,7 @@ public class HaxeTemplateFilesTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("starter main class is named after the configured main class")
   public void testStarterMainClassIsNamedAfterTheConfiguredMainClass() {
-    String starter = HaxeTemplateFiles.INSTANCE.starterMainHx(project(), "App");
+    String starter = HaxeTemplateFiles.INSTANCE.starterMainHx(getProject(), "App");
     assertTrue(starter.contains("class App"), "class named after the main class, got:\n" + starter);
     assertTrue(starter.contains("static function main()"), "entry point expected, got:\n" + starter);
   }
@@ -82,7 +82,7 @@ public class HaxeTemplateFilesTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("lime project xml carries the configured values")
   public void testLimeProjectXmlCarriesTheConfiguredValues() {
-    String xml = HaxeTemplateFiles.INSTANCE.limeProjectXml(project(), "openfl", "My Game", "com.example.mygame", 800, 600, 30);
+    String xml = HaxeTemplateFiles.INSTANCE.limeProjectXml(getProject(), "openfl", "My Game", "com.example.mygame", 800, 600, 30);
     assertTrue(xml.contains("title=\"My Game\""), "title expected");
     assertTrue(xml.contains("package=\"com.example.mygame\""), "package expected");
     assertTrue(xml.contains("width=\"800\" height=\"600\" fps=\"30\""), "window settings expected");
@@ -94,14 +94,14 @@ public class HaxeTemplateFilesTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("xml special characters in titles are escaped")
   public void testXmlSpecialCharactersInTitlesAreEscaped() {
-    String xml = HaxeTemplateFiles.INSTANCE.limeProjectXml(project(), "lime", "Fish & Chips <deluxe>", "com.example.app", 1280, 720, 60);
+    String xml = HaxeTemplateFiles.INSTANCE.limeProjectXml(getProject(), "lime", "Fish & Chips <deluxe>", "com.example.app", 1280, 720, 60);
     assertTrue(xml.contains("title=\"Fish &amp; Chips &lt;deluxe&gt;\""), "title must be XML-escaped, got:\n" + xml);
   }
 
   @Test
   @DisplayName("nmml project file carries app and window settings")
   public void testNmmlProjectFileCarriesAppAndWindowSettings() {
-    String nmml = HaxeTemplateFiles.INSTANCE.nmmlProjectXml(project(), "Retro", "com.example.retro", 640, 480, 30);
+    String nmml = HaxeTemplateFiles.INSTANCE.nmmlProjectXml(getProject(), "Retro", "com.example.retro", 640, 480, 30);
     assertTrue(nmml.contains("title=\"Retro\""), "title expected");
     assertTrue(nmml.contains("main=\"Main\""), "main class expected");
     assertTrue(nmml.contains("width=\"640\" height=\"480\" fps=\"30\""), "window settings expected");
@@ -113,7 +113,7 @@ public class HaxeTemplateFilesTest extends HaxeCodeInsightFixtureTestCase {
   @DisplayName("haxelib json contains every schema-required field")
   public void testHaxelibJsonContainsEverySchemaRequiredField() {
     String json = HaxeTemplateFiles.INSTANCE.haxelibJson(
-      project(), "mylib", "MIT", "0.0.1", "A \"useful\" lib", "https://example.org",
+      getProject(), "mylib", "MIT", "0.0.1", "A \"useful\" lib", "https://example.org",
       List.of("utility", "cross"), List.of("someone"), "Initial release");
 
     assertTrue(json.contains("\"name\": \"mylib\""), "name required");
@@ -129,7 +129,7 @@ public class HaxeTemplateFilesTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("haxelib dev hxml compiles the starter class in the interpreter")
   public void testHaxelibDevHxmlCompilesTheStarterClassInTheInterpreter() {
-    String hxml = HaxeTemplateFiles.INSTANCE.haxelibDevHxml(project(), "Cooltool");
+    String hxml = HaxeTemplateFiles.INSTANCE.haxelibDevHxml(getProject(), "Cooltool");
     assertTrue(hxml.contains("-cp src"), "library classpath expected");
     assertTrue(hxml.contains("--interp"), "eval target: no artifacts, full std support");
     assertTrue(hxml.contains("\nCooltool\n"), "the starter class must be a compile root - libraries have no -main");
@@ -141,17 +141,13 @@ public class HaxeTemplateFilesTest extends HaxeCodeInsightFixtureTestCase {
   public void testHaxelibStarterClassNameIsSanitizedAndCapitalized() {
     assertEquals("Mylib", HaxeTemplateFiles.INSTANCE.haxelibClassNameOf("my-lib"));
     assertEquals("Lib", HaxeTemplateFiles.INSTANCE.haxelibClassNameOf("---"));
-    String content = HaxeTemplateFiles.INSTANCE.haxelibStarterClass(project(), "cooltool").getSecond();
+    String content = HaxeTemplateFiles.INSTANCE.haxelibStarterClass(getProject(), "cooltool").getSecond();
     assertTrue(content.contains("class Cooltool"), "class named after the lib");
     assertFalse(content.contains("--"), "no stray characters");
   }
 
-  private Project project() {
-    return myFixture.getProject();
-  }
-
   private String hxml(HaxeTemplateFiles.HxmlSpec spec) {
-    return HaxeTemplateFiles.INSTANCE.hxml(project(), spec);
+    return HaxeTemplateFiles.INSTANCE.hxml(getProject(), spec);
   }
 
   private static HaxeTemplateFiles.HxmlSpec spec(HaxeTemplateFiles.HxmlTargetOption target) {

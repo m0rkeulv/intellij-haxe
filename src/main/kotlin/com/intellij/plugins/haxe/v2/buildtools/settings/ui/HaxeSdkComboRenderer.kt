@@ -15,7 +15,8 @@ import javax.swing.ListCellRenderer
  */
 fun sdkComboRenderer(knownSdkNames: Set<String>): ListCellRenderer<String?> =
   listCellRenderer(HaxeBundle.message("haxe.build.tools.no.sdk")) {
-    text(value) {
-      if (value !in knownSdkNames) foreground = JBColor.RED
+    val sdkName = value
+    text(sdkName) {
+      if (sdkName !in knownSdkNames) foreground = JBColor.RED
     }
   }

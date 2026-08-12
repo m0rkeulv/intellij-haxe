@@ -1,5 +1,6 @@
 package limeparser;
 
+import haxe.Resource;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -47,7 +48,7 @@ class HxpEvaluator {
 		var name = className(hxpPath);
 
 		File.saveContent(Path.join([tempDirectory, name + ".hx"]), File.getContent(absolute));
-		File.saveContent(Path.join([tempDirectory, "HxpRunner.hx"]), haxe.Resource.getString("HxpRunner.hx"));
+		File.saveContent(Path.join([tempDirectory, "HxpRunner.hx"]), Resource.getString("HxpRunner.hx"));
 
 		var args = [name, "-lib", "lime", "-lib", "hxp", "-cp", tempDirectory];
 		for (line in compilerLines(absolute)) {

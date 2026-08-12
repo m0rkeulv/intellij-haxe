@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.InitializeResult;
+import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.DisplayResponse;
 import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
@@ -220,7 +221,7 @@ public final class HaxeCompilerDisplayService {
     List<String> compileArgs = new ArrayList<>(connected.args());
     compileArgs.add("--no-output");
     try {
-      DisplayResponse compiled = HaxeDisplayTransport.request("127.0.0.1", connected.port(), compileArgs, 120_000);
+      DisplayResponse compiled = HaxeDisplayTransport.request(HaxeCompilationServerManager.SERVER_HOST, connected.port(), compileArgs, 120_000);
       String errors = compiled.hasError() ? compiled.payload().strip() : "";
       return errors.isEmpty() ? message
                               : HaxeBundle.message("haxe.display.context.compile.failed", errors);
@@ -336,13 +337,24 @@ public final class HaxeCompilerDisplayService {
    * it supports {@code method}; null when any of that fails. Background
    * threads only.
    */
+  /**
+   * Memory statistics of the compilation server already RUNNING on {@code port}.
+   * Unlike the context-based requests, {@code server/memory} needs no build
+   * context - it reports per-context sizes for whatever the server has
+   * compiled. Performs a socket round-trip: call on a background thread.
+   */
+  @NotNull
+  public static ServerMemory fetchServerMemory(int port) throws DisplayRequestException {
+    return new HaxeDisplayClient(HaxeCompilationServerManager.SERVER_HOST, port).serverMemory(List.of());
+  }
+
   @Nullable
   Connected connectFor(@NotNull DisplayContext context, @NotNull String method) {
     List<String> args = resolveArgs(context);
     if (args == null) return null;
     int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(context.sdkName());
     if (port <= 0) return null;
-    HaxeDisplayClient client = new HaxeDisplayClient("127.0.0.1", port);
+    HaxeDisplayClient client = new HaxeDisplayClient(HaxeCompilationServerManager.SERVER_HOST, port);
     String serverId = HaxeToolPathResolver.resolveHaxeExecutable(project, context.sdkName());
     client.setObserver((requestMethod, millis, success) ->
                          HaxeServerMetrics.getInstance(project).record(serverId, millis, success));
@@ -395,7 +407,7 @@ public final class HaxeCompilerDisplayService {
     List<String> compileArgs = new ArrayList<>(connected.args());
     compileArgs.add("--no-output");
     try {
-      DisplayResponse compiled = HaxeDisplayTransport.request("127.0.0.1", connected.port(), compileArgs, 120_000);
+      DisplayResponse compiled = HaxeDisplayTransport.request(HaxeCompilationServerManager.SERVER_HOST, connected.port(), compileArgs, 120_000);
       if (compiled.hasError()) {
         log.info("context warm-up compile reported errors - will retry: " + compiled.payload());
         return false;

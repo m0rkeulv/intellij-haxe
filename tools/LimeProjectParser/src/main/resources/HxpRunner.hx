@@ -1,4 +1,5 @@
 // Haxelib lives in the hxp package (lime imports hxp.*); Platform in lime.tools
+import haxe.Json;
 import lime.tools.HXProject;
 import lime.tools.Platform;
 import hxp.Haxelib;
@@ -74,7 +75,7 @@ class HxpRunner {
 			}
 		}
 
-		Sys.println(haxe.Json.stringify({
+		Sys.println(Json.stringify({
 			defines: defines,
 			haxedefs: haxedefs,
 			haxelibs: haxelibs,

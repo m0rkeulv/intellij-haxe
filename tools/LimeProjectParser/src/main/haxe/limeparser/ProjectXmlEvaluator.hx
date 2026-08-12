@@ -1,5 +1,7 @@
 package limeparser;
 
+import haxe.io.Path;
+
 /**
 	Evaluates a lime/openfl project.xml the way lime's ProjectXMLParser does,
 	but collects only the build-configuration subset the IDE needs: defines,
@@ -145,7 +147,7 @@ class ProjectXmlEvaluator {
 						libraryHandlers.set(substitute(element.get("type")), substitute(element.get("handler")));
 					} else {
 						var type = element.exists("type") ? substitute(element.get("type"))
-							: element.exists("path") ? haxe.io.Path.extension(substitute(element.get("path"))).toLowerCase() : "";
+							: element.exists("path") ? Path.extension(substitute(element.get("path"))).toLowerCase() : "";
 						if (type != "" && !declaredAssetTypes.contains(type)) {
 							declaredAssetTypes.push(type);
 						}
@@ -216,8 +218,8 @@ class ProjectXmlEvaluator {
 	}
 
 	function rebase(path:String):String {
-		if (pathBase == "" || haxe.io.Path.isAbsolute(path)) return path;
-		return haxe.io.Path.join([pathBase, path]);
+		if (pathBase == "" || Path.isAbsolute(path)) return path;
+		return Path.join([pathBase, path]);
 	}
 
 	function parseInclude(element:Xml):Void {

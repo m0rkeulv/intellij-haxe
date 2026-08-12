@@ -5,8 +5,8 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
@@ -25,7 +25,6 @@ import javax.swing.JPanel;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -128,7 +127,7 @@ final class HaxeServerStatusPanel extends JPanel {
     AppExecutorUtil.getAppExecutorService().execute(() -> {
       String rendered;
       try {
-        ServerMemory memory = new HaxeDisplayClient("127.0.0.1", port).serverMemory(List.of());
+        ServerMemory memory = HaxeCompilerDisplayService.fetchServerMemory(port);
         rendered = renderMemory(memory);
       }
       catch (DisplayRequestException e) {

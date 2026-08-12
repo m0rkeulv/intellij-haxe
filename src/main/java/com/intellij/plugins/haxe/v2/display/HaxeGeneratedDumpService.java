@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.util.SystemInfo;
@@ -102,7 +103,7 @@ public final class HaxeGeneratedDumpService {
 
     Path hlScratch = prepareHlScratchDir(dumpBuild);
     try {
-      DisplayResponse response = HaxeDisplayTransport.request("127.0.0.1", connected.port(), dumpBuild.args(), DUMP_COMPILE_TIMEOUT_MS);
+      DisplayResponse response = HaxeDisplayTransport.request(HaxeCompilationServerManager.SERVER_HOST, connected.port(), dumpBuild.args(), DUMP_COMPILE_TIMEOUT_MS);
       if (response.hasError()) {
         log.info("dump build reported errors: " + response.payload());
         return null;

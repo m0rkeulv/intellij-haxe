@@ -41,24 +41,14 @@ public final class HxmlFileParser {
 
   @NotNull
   public static HaxeBuildFileInfo parse(@NotNull String content, @NotNull IncludeResolver includeResolver) {
-    List<HaxeDefine> defines = new ArrayList<>();
-    List<HaxeLibDependency> libraries = new ArrayList<>();
-    List<String> classpaths = new ArrayList<>();
-    HaxeTarget[] target = new HaxeTarget[1];
-    String[] targetOutput = new String[1];
-    parseInto(content, includeResolver, new HashSet<>(), defines, libraries, classpaths, target, targetOutput);
-    return new HaxeBuildFileInfo(target[0], targetOutput[0], List.copyOf(defines), List.copyOf(libraries),
-                                 List.copyOf(classpaths));
+    ParseAccumulator accumulator = new ParseAccumulator();
+    parseInto(content, includeResolver, accumulator);
+    return accumulator.toInfo();
   }
 
   private static void parseInto(@NotNull String content,
                                 @NotNull IncludeResolver includeResolver,
-                                @NotNull Set<String> visitedIncludes,
-                                @NotNull List<HaxeDefine> defines,
-                                @NotNull List<HaxeLibDependency> libraries,
-                                @NotNull List<String> classpaths,
-                                @NotNull HaxeTarget[] target,
-                                @NotNull String[] targetOutput) {
+                                @NotNull ParseAccumulator accumulator) {
     for (String rawLine : content.lines().toList()) {
       String line = rawLine.trim();
       if (line.isEmpty() || line.startsWith("#")) continue;
@@ -68,24 +58,24 @@ public final class HxmlFileParser {
       String value = tokens.length > 1 ? tokens[1].trim() : null;
 
       if (DEFINE_FLAGS.contains(flag) && value != null) {
-        defines.add(parseDefine(value));
+        accumulator.defines.add(parseDefine(value));
       }
       else if (LIBRARY_FLAGS.contains(flag) && value != null) {
-        libraries.add(parseLibrary(value));
+        accumulator.libraries.add(parseLibrary(value));
       }
       else if (CLASSPATH_FLAGS.contains(flag) && value != null) {
-        classpaths.add(value);
+        accumulator.classpaths.add(value);
       }
       else if (TARGET_FLAGS.containsKey(flag)) {
-        if (target[0] == null) {
-          target[0] = TARGET_FLAGS.get(flag);
-          targetOutput[0] = value;
+        if (accumulator.target == null) {
+          accumulator.target = TARGET_FLAGS.get(flag);
+          accumulator.targetOutput = value;
         }
       }
-      else if (isIncludeReference(flag) && visitedIncludes.add(flag)) {
+      else if (isIncludeReference(flag) && accumulator.visitedIncludes.add(flag)) {
         String included = includeResolver.resolveContent(flag);
         if (included != null) {
-          parseInto(included, includeResolver, visitedIncludes, defines, libraries, classpaths, target, targetOutput);
+          parseInto(included, includeResolver, accumulator);
         }
       }
     }
@@ -126,6 +116,26 @@ public final class HxmlFileParser {
     map.put("-jvm", HaxeTarget.JAVA);
     map.put("--jvm", HaxeTarget.JAVA);
     map.put("-as3", HaxeTarget.FLASH);
+
     return Map.copyOf(map);
+  }
+
+  /** One parse run's mutable state, shared across included files (first target flag wins). */
+  private static final class ParseAccumulator {
+    final Set<String> visitedIncludes = new HashSet<>();
+    final List<HaxeDefine> defines = new ArrayList<>();
+    final List<HaxeLibDependency> libraries = new ArrayList<>();
+    final List<String> classpaths = new ArrayList<>();
+
+    @Nullable HaxeTarget target;
+    @Nullable String targetOutput;
+
+    @NotNull
+    HaxeBuildFileInfo toInfo() {
+      return new HaxeBuildFileInfo(target, targetOutput,
+                                   List.copyOf(defines),
+                                   List.copyOf(libraries),
+                                   List.copyOf(classpaths));
+    }
   }
 }

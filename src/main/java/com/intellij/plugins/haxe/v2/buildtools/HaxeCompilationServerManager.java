@@ -47,6 +47,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @CustomLog
 public final class HaxeCompilationServerManager implements Disposable {
 
+  /** The managed server always runs on the local machine; every client connects to loopback. */
+  public static final String SERVER_HOST = "127.0.0.1";
+
   /** Receives one server's process output (and lifecycle lines) for the server console window. */
   public interface ServerOutputListener {
     void onOutput(@NotNull String text, @NotNull Key<?> outputType);

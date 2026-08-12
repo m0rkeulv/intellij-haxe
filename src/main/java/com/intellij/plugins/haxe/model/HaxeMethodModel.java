@@ -194,7 +194,7 @@ public class HaxeMethodModel extends HaxeMemberModel implements HaxeExposableMod
 
   public ResultHolder getReturnType(@Nullable HaxeGenericResolver resolver) {
     HaxeExpressionEvaluatorCacheService cacheService = haxeMethod.getProject().getService(HaxeExpressionEvaluatorCacheService.class);
-    ResultHolder result = cacheService.methodReturnType(haxeMethod, () -> getReturnTypeCacheProvider(haxeMethod));
+    ResultHolder result = cacheService.methodReturnType(haxeMethod, () -> HaxeTypeResolver.getFieldOrMethodReturnType(haxeMethod, null));
     if (resolver != null) {
       ResultHolder resolve = resolver.resolve(result);
       if(resolve != null && resolve.containsUnknownOrUnresolvedTypeParameters()){
@@ -221,10 +221,6 @@ public class HaxeMethodModel extends HaxeMemberModel implements HaxeExposableMod
     }
     return result;
 
-  }
-
-  private static ResultHolder getReturnTypeCacheProvider(HaxeMethod haxeMethod) {
-    return HaxeTypeResolver.getFieldOrMethodReturnType(haxeMethod, null);
   }
 
   public SpecificFunctionReference getFunctionType(@Nullable HaxeGenericResolver resolver) {
