@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.*;
 
@@ -54,18 +53,17 @@ public final class HaxeUntypedParameterInference {
   private static final RecursionGuard<PsiElement>
     callSiteProbeGuard = RecursionManager.createGuard("haxeUntypedParameterCallSiteProbe");
 
+  private HaxeUntypedParameterInference() {
+  }
+
   // Memo of probe outcomes, valid until the next code change, including clean misses: probing chains
   // into argument evaluations that can cycle across methods, and without the
   // memo every query re-runs the whole probe. Only UNTAINTED outcomes are
   // stored (certainty rule) - a result shaped by a cut or prevention must
-  // recompute until a clean one lands. Cleared with the evaluator caches.
-  private static final Map<HaxeParameter, Optional<ResultHolder>> bindingCache = new ConcurrentHashMap<>();
-
-  public static void clearCaches() {
-    bindingCache.clear();
-  }
-
-  private HaxeUntypedParameterInference() {
+  // recompute until a clean one lands. Project-scoped and cleared with the
+  // evaluator caches (HaxeUntypedParameterBindingCache).
+  private static Map<HaxeParameter, Optional<ResultHolder>> bindingCache(HaxeParameter parameter) {
+    return HaxeUntypedParameterBindingCache.getInstance(parameter.getProject()).bindings();
   }
 
   public static @Nullable ResultHolder inferMethodParameterType(@NotNull HaxeParameter parameter,
@@ -75,7 +73,7 @@ public final class HaxeUntypedParameterInference {
     // query since the last code change) answers directly; without it, a deep query would
     // re-run the body search inside guards where its own usage walk
     // truncates and return Unknown for a parameter the signature shows typed
-    Optional<ResultHolder> settled = bindingCache.get(parameter);
+    Optional<ResultHolder> settled = bindingCache(parameter).get(parameter);
     if (settled != null && settled.isPresent()) return settled.get();
 
     long taintMark = HaxeEvaluationTaint.mark();
@@ -149,7 +147,7 @@ public final class HaxeUntypedParameterInference {
     int parameterIndex = parameterIndex(parameter);
     if (parameterIndex < 0) return null;
 
-    Optional<ResultHolder> cached = bindingCache.get(parameter);
+    Optional<ResultHolder> cached = bindingCache(parameter).get(parameter);
     if (cached != null) return cached.orElse(null);
 
     // Probing must stay out of deep evaluation towers: inside a
@@ -196,7 +194,7 @@ public final class HaxeUntypedParameterInference {
       if (outcome.binding() != null) {
         settleBinding(parameter, outcome.binding());
       } else {
-        bindingCache.put(parameter, Optional.empty());
+        bindingCache(parameter).put(parameter, Optional.empty());
       }
     }
     return outcome.binding();
@@ -209,7 +207,7 @@ public final class HaxeUntypedParameterInference {
    * entry embedding a genuinely untypable parameter cannot improve.
    */
   private static void settleBinding(HaxeParameter parameter, ResultHolder binding) {
-    Optional<ResultHolder> previous = bindingCache.put(parameter, Optional.of(binding));
+    Optional<ResultHolder> previous = bindingCache(parameter).put(parameter, Optional.of(binding));
     if (previous == null || previous.isEmpty()) {
       HaxeCallExpressionEvaluatorCacheService.informationSettled();
     }

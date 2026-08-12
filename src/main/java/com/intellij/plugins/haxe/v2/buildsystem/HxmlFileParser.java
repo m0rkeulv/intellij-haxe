@@ -109,7 +109,6 @@ public final class HxmlFileParser {
     return !token.startsWith("-") && token.endsWith(".hxml");
   }
 
-  @NotNull
   /** The target a compiler flag selects ({@code -js}, {@code --jvm}, ...), or null for non-target flags. */
   @Nullable
   public static HaxeTarget targetForFlag(@NotNull String flag) {

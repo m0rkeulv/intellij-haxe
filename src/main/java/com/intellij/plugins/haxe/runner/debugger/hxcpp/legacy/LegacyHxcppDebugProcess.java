@@ -97,6 +97,9 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
   private final Map<XLineBreakpoint<XBreakpointProperties>, Integer> breakpointIds = new HashMap<>();
   private ServerSocket serverSocket;
   private Socket debugSocket;
+  // stop() closes the sockets, which makes the blocking accept()/readMessage in
+  // readLoop() throw; the flag lets start()'s catch tell that apart from a failure.
+  private volatile boolean stopped;
   private boolean stoppedOnce;
   private ExecutionResult executionResult;
 
@@ -118,6 +121,9 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
         readLoop();
       }
       catch (Throwable t) {
+        if (stopped) {
+          return;
+        }
         SwingUtilities.invokeLater(() -> error("Debugging loop failed: " + t));
       }
     });
@@ -173,6 +179,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
 
   @Override
   public void stop() {
+    stopped = true;
     synchronized (this) {
       if (serverSocket != null) {
         try {
@@ -434,7 +441,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
     @Override
     public void computeStackFrames(int firstFrameIndex, XStackFrameContainer container) {
       if (firstFrameIndex < stackFrames.size()) {
-        container.addStackFrames(stackFrames.subList(firstFrameIndex, stackFrames.size() - 1), true);
+        container.addStackFrames(stackFrames.subList(firstFrameIndex, stackFrames.size()), true);
       }
     }
   }

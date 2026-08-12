@@ -117,6 +117,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   /** Drops every stored setting of the container (a removed module leaves no stale state behind). */
   public void clearContainer(@NotNull String containerId) {
     state.environments.removeIf(environment -> containerId.equals(environment.containerId));
+    notifyChanged();
   }
 
   /** SDK name chosen for the container, or null to use the Build Tools default. */
@@ -189,12 +190,15 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   /** Adds or updates a SET define, keeping any other entries. */
   public void putDefine(@NotNull String containerId, @NotNull String name, @NotNull String value) {
-    ContainerEnvironment environment = getOrCreate(containerId);
-    environment.defines.removeIf(define -> name.equals(define.name));
     DefineState defineState = new DefineState();
     defineState.name = name;
     defineState.value = value;
+
+    ContainerEnvironment environment = getOrCreate(containerId);
+    environment.defines.removeIf(define -> name.equals(define.name));
     environment.defines.add(defineState);
+
+    notifyChanged();
   }
 
   public void removeDefine(@NotNull String containerId, @NotNull String name) {

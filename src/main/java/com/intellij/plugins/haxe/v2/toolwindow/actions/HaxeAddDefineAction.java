@@ -33,7 +33,6 @@ public final class HaxeAddDefineAction extends DumbAwareAction {
     DefinePrompt.DefineInput input = DefinePrompt.show(project, null);
     if (input != null) {
       HaxeEnvironmentStore.getInstance(project).putDefine(containerId, input.name(), input.value());
-      panel.refreshTree();
     }
   }
 

@@ -182,12 +182,19 @@ private class LimeFamilyTemplateStep(parent: NewProjectWizardStep, private val f
     LimeFlavor.LIME -> HaxeBuildFileType.LIME
   }
 
-  private val targetProperty: GraphProperty<TargetChoice> = propertyGraph.property(targets.first())
+  private val targetProperty: GraphProperty<TargetChoice> = propertyGraph.property(defaultTarget())
   private val titleProperty: GraphProperty<String> = propertyGraph.lazyProperty { baseData?.name ?: "App" }
   private val packageProperty: GraphProperty<String> = propertyGraph.lazyProperty { defaultPackage() }
   private val widthProperty: GraphProperty<String> = propertyGraph.property("1280")
   private val heightProperty: GraphProperty<String> = propertyGraph.property("720")
   private val fpsProperty: GraphProperty<String> = propertyGraph.property("60")
+
+
+  /** The framework's declared default target — reordering the configured list must not change it. */
+  private fun defaultTarget(): TargetChoice {
+    val default = HaxeTargetOptions.defaultChoice(buildFileType())
+    return targets.find { it.id == default.id } ?: targets.first()
+  }
 
   init {
     // follow the project name until the user overrides these fields

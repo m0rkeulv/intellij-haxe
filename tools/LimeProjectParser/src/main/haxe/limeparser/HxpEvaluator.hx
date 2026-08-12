@@ -21,42 +21,59 @@ import sys.io.Process;
 class HxpEvaluator {
 	public static function evaluate(hxpPath:String, target:String, defines:Map<String, String>,
 			haxeExecutable:String = "haxe"):Null<String> {
-		var absolute = FileSystem.absolutePath(hxpPath);
-		var name = className(hxpPath);
+		// Haxe has no finally: the temp directory holds copies of the user's
+		// script, so catch, delete it on both paths, then return.
 		var tempDirectory = createTempDirectory();
 
-		try {
-			File.saveContent(Path.join([tempDirectory, name + ".hx"]), File.getContent(absolute));
-			File.saveContent(Path.join([tempDirectory, "HxpRunner.hx"]), haxe.Resource.getString("HxpRunner.hx"));
-
-			var args = [name, "-lib", "lime", "-lib", "hxp", "-cp", tempDirectory];
-			for (line in compilerLines(absolute)) {
-				args = args.concat(line);
-			}
-			args = args.concat(["--run", "HxpRunner", name, "--target", target]);
-			for (define in defines.keys()) {
-				var value = defines.get(define);
-				args.push("-D");
-				args.push(value == "" ? define : define + "=" + value);
-			}
-
-			var process = new Process(haxeExecutable, args);
-			var stdout = process.stdout.readAll().toString();
-			var stderr = process.stderr.readAll().toString();
-			var exitCode = process.exitCode();
-			process.close();
-
-			if (exitCode != 0) {
-				Sys.stderr().writeString("hxp evaluation failed (exit " + exitCode + "):\n" + stderr);
-				return null;
-			}
-			// compiler chatter may precede the runner's output - the JSON is the last line
-			var lines = StringTools.trim(stdout).split("\n");
-			return StringTools.trim(lines[lines.length - 1]);
+		var result = try {
+			evaluateIn(tempDirectory, hxpPath, target, defines, haxeExecutable);
 		} catch (e:Dynamic) {
 			Sys.stderr().writeString("hxp evaluation failed: " + Std.string(e) + "\n");
+			null;
+		}
+
+		deleteDirectory(tempDirectory);
+		return result;
+	}
+
+	static function evaluateIn(tempDirectory:String,
+							   hxpPath:String,
+							   target:String,
+							   defines:Map<String, String>,
+							   haxeExecutable:String):Null<String>
+	{
+
+		var absolute = FileSystem.absolutePath(hxpPath);
+		var name = className(hxpPath);
+
+		File.saveContent(Path.join([tempDirectory, name + ".hx"]), File.getContent(absolute));
+		File.saveContent(Path.join([tempDirectory, "HxpRunner.hx"]), haxe.Resource.getString("HxpRunner.hx"));
+
+		var args = [name, "-lib", "lime", "-lib", "hxp", "-cp", tempDirectory];
+		for (line in compilerLines(absolute)) {
+			args = args.concat(line);
+		}
+		args = args.concat(["--run", "HxpRunner", name, "--target", target]);
+		for (define in defines.keys()) {
+			var value = defines.get(define);
+			args.push("-D");
+			args.push(value == "" ? define : define + "=" + value);
+		}
+
+		var process = new Process(haxeExecutable, args);
+		var stdout = process.stdout.readAll().toString();
+		var stderr = process.stderr.readAll().toString();
+
+		var exitCode = process.exitCode();
+		process.close();
+
+		if (exitCode != 0) {
+			Sys.stderr().writeString("hxp evaluation failed (exit " + exitCode + "):\n" + stderr);
 			return null;
 		}
+		// compiler chatter may precede the runner's output - the JSON is the last line
+		var lines = StringTools.trim(stdout).split("\n");
+		return StringTools.trim(lines[lines.length - 1]);
 	}
 
 	/** lime's naming rule: the class is the capitalized file name without extension. **/
@@ -87,5 +104,22 @@ class HxpEvaluator {
 		var directory = Path.join([base, "limeprojectparser-" + Std.string(Std.random(0x7FFFFFFF))]);
 		FileSystem.createDirectory(directory);
 		return directory;
+	}
+
+	/** Best-effort recursive delete; a cleanup failure must not mask the evaluation result. */
+	static function deleteDirectory(directory:String):Void {
+		try {
+			for (entry in FileSystem.readDirectory(directory)) {
+				var path = Path.join([directory, entry]);
+				if (FileSystem.isDirectory(path)) {
+					deleteDirectory(path);
+				} else {
+					FileSystem.deleteFile(path);
+				}
+			}
+			FileSystem.deleteDirectory(directory);
+		} catch (e:Dynamic) {
+			Sys.stderr().writeString("warning: could not delete temp directory " + directory + "\n");
+		}
 	}
 }

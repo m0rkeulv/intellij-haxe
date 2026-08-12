@@ -39,10 +39,10 @@ import javax.swing.*;
  * factories are the individual runner flavours, so the Edit Configurations
  * dialog shows them nested under a single Haxe node:
  * <ul>
+ *   <li>HXCPP Application (legacy) — the old hxcpp.DebugSocket debugger</li>
  *   <li>HashLink Application</li>
  *   <li>HXCPP Application (IntelliJ)</li>
  *   <li>HXCPP Application (vshaxe)</li>
- *   <li>HXCPP Application (legacy) — the old hxcpp.DebugSocket debugger</li>
  *   <li>Browser Application</li>
  *   <li>Haxe Flash Application</li>
  * </ul>
@@ -50,19 +50,21 @@ import javax.swing.*;
  * Compatibility: the type keeps the historical id
  * {@code HaxeApplicationRunConfiguration} and the legacy factory keeps its
  * historical id {@code Haxe Application}; saved configurations resolve by
- * that id (the platform always writes {@code factoryName}), so the array
- * order below is purely the display order of the Add New Configuration list.
+ * that id. A configuration saved without a {@code factoryName} attribute
+ * (pre-group plugin versions) resolves to the FIRST factory in the array,
+ * so the legacy factory must stay first; the rest of the order is only the
+ * display order of the Add New Configuration list.
  */
 public class HaxeRunConfigurationType implements ConfigurationType {
   private final ConfigurationFactory[] factories;
 
   public HaxeRunConfigurationType() {
     factories = new ConfigurationFactory[]{
+      new LegacyHxcppConfigurationFactory(this),
       new HaxeActionConfigurationFactory(this),
       new HashLinkConfigurationFactory(this),
       new HxcppIntellijConfigurationFactory(this),
       new HxcppVshaxeConfigurationFactory(this),
-      new LegacyHxcppConfigurationFactory(this),
       new InterpConfigurationFactory(this),
       new BrowserConfigurationFactory(this),
       new FlashConfigurationFactory(this),

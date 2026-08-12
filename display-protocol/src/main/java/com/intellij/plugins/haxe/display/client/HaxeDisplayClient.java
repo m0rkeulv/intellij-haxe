@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.display.client;
 import com.intellij.plugins.haxe.display.protocol.*;
 import com.intellij.plugins.haxe.display.protocol.server.*;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
+import com.intellij.plugins.haxe.display.transport.MalformedPayloadException;
 import com.intellij.plugins.haxe.display.transport.DisplayResponse;
 import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
 import java.util.ArrayList;
@@ -175,7 +176,7 @@ public class HaxeDisplayClient {
       if (response.payload().isEmpty()) {
         throw new DisplayRequestException("Display request '" + method + "' got no result: " + failureDetail(response));
       }
-      JsonNode result = DisplayJson.unwrap(response.payload());
+      JsonNode result = unwrapClassified(method, response);
       success = true;
       return result;
     }
@@ -187,16 +188,32 @@ public class HaxeDisplayClient {
   }
 
   /**
-   * An empty response usually means the build context itself failed to
-   * compile; the compiler explains WHY in its log lines (e.g. a define
-   * override making a library uncompilable) — surface their tail instead of
-   * a bare "empty response".
+   * A failed compile answers with the compiler's error text as the payload,
+   * not a JSON envelope: an unparseable payload plus the error flag is a
+   * compiler failure, not a malformed response.
+   */
+  private static JsonNode unwrapClassified(String method, DisplayResponse response) throws DisplayRequestException {
+    try {
+      return DisplayJson.unwrap(response.payload());
+    } catch (MalformedPayloadException e) {
+      if (!response.hasError()) throw e;
+      throw new DisplayRequestException("Display request '" + method + "' failed: " + failureDetail(response), e);
+    }
+  }
+
+  /**
+   * The compiler's explanation of a failure: usually its log lines (e.g. a
+   * define override making a library uncompilable) — surface their tail —
+   * and for a plain-text error report without logs, the payload itself.
    */
   private static String failureDetail(DisplayResponse response) {
     List<String> lines = response.logs().stream()
       .filter(line -> !line.isBlank())
       .toList();
     if (lines.isEmpty()) {
+      if (response.hasError() && !response.payload().isBlank()) {
+        return "compiler error: " + response.payload();
+      }
       return response.hasError() ? "compiler reported an error" : "empty response";
     }
     String tail = String.join(" | ", lines.subList(Math.max(0, lines.size() - 3), lines.size()));

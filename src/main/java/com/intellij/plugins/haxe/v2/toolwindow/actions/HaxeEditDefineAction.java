@@ -36,7 +36,6 @@ public final class HaxeEditDefineAction extends DumbAwareAction {
       store.removeDefine(define.containerId(), define.name());
     }
     store.putDefine(define.containerId(), input.name(), input.value());
-    panel.refreshTree();
   }
 
   @Override

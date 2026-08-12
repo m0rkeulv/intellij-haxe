@@ -3,6 +3,8 @@ package com.intellij.plugins.haxe.v2.wizard
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.openapi.application.WriteAction
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.roots.ProjectRootManager
@@ -28,19 +30,33 @@ class HaxeProjectSdkStep(parent: NewProjectWizardStep) : AbstractNewProjectWizar
   override fun setupUI(builder: Panel) {
     val project = context.project ?: ProjectManager.getInstance().defaultProject
     sdksModel.reset(project)
+
     val model = SdkComboBoxModel.createSdkComboBoxModel(project, sdksModel, { it is HaxeSdkType }, { it is HaxeSdkType })
     val combo = SdkComboBox(model)
     comboBox = combo
+
     builder.row(HaxeWizardBundle.message("haxe.wizard.sdk.label")) {
       cell(combo).align(AlignX.FILL)
     }
+
   }
 
   override fun setupProject(project: Project) {
     val selected = comboBox?.getSelectedSdk() ?: return
-    runCatching { sdksModel.apply() }
+    try {
+      // publishes SDKs added through the combo's "Add SDK..." affordance to the jdk table
+      sdksModel.apply()
+    }
+    catch (e: ConfigurationException) {
+      // the selected SDK never reached the jdk table - installing it as project
+      // SDK would yield a broken project; ensureSdk auto-detection still applies
+      LOG.warn("Applying the wizard's SDK model failed; project SDK left unset", e)
+      return
+    }
     WriteAction.runAndWait<RuntimeException> {
       ProjectRootManager.getInstance(project).projectSdk = selected
     }
   }
 }
+
+private val LOG = logger<HaxeProjectSdkStep>()

@@ -20,8 +20,9 @@ public class HaxeExpressionEvaluatorCacheChangeListener implements PsiModificati
   public void modificationCountChanged() {
     myProject.getService(HaxeExpressionEvaluatorCacheService.class).clearCaches();
     myProject.getService(HaxeCallExpressionEvaluatorCacheService.class).clearCaches();
+
     HaxeFilenameCandidateCache.getInstance(myProject).clearCaches();
-    HaxeUntypedParameterInference.clearCaches();
+    HaxeUntypedParameterBindingCache.getInstance(myProject).clearCaches();
   }
 }
 

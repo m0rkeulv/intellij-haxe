@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.display.client;
 import com.intellij.plugins.haxe.display.protocol.*;
 import com.intellij.plugins.haxe.display.protocol.server.*;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
+import com.intellij.plugins.haxe.display.transport.MalformedPayloadException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,22 +36,19 @@ public final class DisplayJson {
     return MAPPER.writeValueAsString(envelope);
   }
 
-  /**
-   * Unwraps the double envelope down to the data node. Throws when the
-   * JSON-RPC {@code error} member is present instead.
-   */
   public static JsonNode unwrap(String payload) throws DisplayRequestException {
     JsonNode root;
     try {
       root = MAPPER.readTree(payload);
     } catch (RuntimeException e) {
-      throw new DisplayRequestException("Malformed display response: " + abbreviate(payload), e);
+      throw new MalformedPayloadException("Malformed display response: " + abbreviate(payload), e);
     }
+
     JsonNode error = root.path("error");
     if (!error.isMissingNode()) {
-      throw new DisplayRequestException("Display request failed: "
-                                        + error.path("message").asString("unknown error")
-                                        + " (code " + error.path("code").asInt(0) + ")");
+      String errorMessage = error.path("message").asString("unknown error");
+      int errorCode = error.path("code").asInt(-1);
+      throw new DisplayRequestException("Display request failed: " + errorMessage + " (code " + errorCode + ")");
     }
     return root.path("result").path("result");
   }

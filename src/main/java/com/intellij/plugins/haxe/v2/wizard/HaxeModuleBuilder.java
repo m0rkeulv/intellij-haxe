@@ -8,6 +8,7 @@ import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ContentEntry;
 import com.intellij.openapi.roots.ModifiableRootModel;
+import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeWizardBundle;
@@ -58,12 +59,22 @@ public final class HaxeModuleBuilder extends ModuleBuilder {
   }
 
   private static void assignSdk(@NotNull ModifiableRootModel model) {
+    // HaxeProjectSdkStep has already installed the user's chosen SDK as the
+    // project SDK by the time commit runs; an explicit module SDK would
+    // override that choice. Fall back to the first Haxe SDK in the table
+    // only when no Haxe project SDK is set.
+    Sdk projectSdk = ProjectRootManager.getInstance(model.getProject()).getProjectSdk();
+    boolean projectSdkIsHaxe = projectSdk != null && projectSdk.getSdkType() instanceof HaxeSdkType;
+    if (projectSdkIsHaxe) {
+      model.inheritSdk();
+      return;
+    }
     List<Sdk> haxeSdks = ProjectJdkTable.getInstance().getSdksOfType(HaxeSdkType.getInstance());
     if (haxeSdks.isEmpty()) {
       model.inheritSdk();
     }
     else {
-      model.setSdk(haxeSdks.get(0));
+      model.setSdk(haxeSdks.getFirst());
     }
   }
 }

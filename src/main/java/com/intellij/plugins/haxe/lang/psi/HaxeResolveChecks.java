@@ -120,7 +120,7 @@ public class HaxeResolveChecks {
 
       if (target != null) {
         LogResolution(reference, "via import.");
-        return asList(target);
+        return asList(normalizeClassResult(target));
       }
     }
 

@@ -29,7 +29,7 @@ public final class HaxeIsReferenceToUtil {
            || declaration instanceof HaxeLocalVarDeclaration
            || declaration instanceof HaxeLocalFunctionDeclaration
            || declaration instanceof HaxeSwitchCaseCaptureVar
-           || declaration instanceof HaxeEnumExtractedValue
+           || declaration instanceof HaxeEnumExtractedValueReference
            || declaration instanceof HaxeTypeParameterDeclaration;
   }
 
