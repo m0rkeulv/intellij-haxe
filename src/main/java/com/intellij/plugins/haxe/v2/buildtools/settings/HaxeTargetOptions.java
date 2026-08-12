@@ -1,9 +1,8 @@
-package com.intellij.plugins.haxe.v2.toolwindow;
+package com.intellij.plugins.haxe.v2.buildtools.settings;
 
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeFrameworkTargetSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeFrameworkTargetSettings.Framework;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeFrameworkTargetSettings.TargetDefinition;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

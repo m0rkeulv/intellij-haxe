@@ -36,9 +36,9 @@ import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType
 import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -11,7 +11,7 @@ import com.intellij.plugins.haxe.lang.psi.indexes.unified.fqn.HaxeFullyQualified
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerTypeCatalogService.GeneratedType;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

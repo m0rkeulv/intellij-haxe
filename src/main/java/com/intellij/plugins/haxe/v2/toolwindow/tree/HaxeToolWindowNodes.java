@@ -1,8 +1,9 @@
 package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -318,7 +319,7 @@ public final class HaxeToolWindowNodes {
   public record EnvDefineNode(@NotNull String containerId,
                               @NotNull String name,
                               @NotNull String value,
-                              @NotNull HaxeEnvironmentStore.DefineEffect effect,
+                              @NotNull DefineEffect effect,
                               boolean inBuildFile) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {

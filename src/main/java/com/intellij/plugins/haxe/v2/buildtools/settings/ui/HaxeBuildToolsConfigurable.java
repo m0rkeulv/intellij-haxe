@@ -15,7 +15,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

@@ -4,12 +4,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.HaxeTarget;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
-import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

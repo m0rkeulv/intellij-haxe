@@ -1,7 +1,5 @@
-package com.intellij.plugins.haxe.v2.toolwindow;
+package com.intellij.plugins.haxe.v2.buildtools.settings;
 
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore.DefineEffect;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore.EnvironmentDefine;
 import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;
 import org.junit.jupiter.api.DisplayName;

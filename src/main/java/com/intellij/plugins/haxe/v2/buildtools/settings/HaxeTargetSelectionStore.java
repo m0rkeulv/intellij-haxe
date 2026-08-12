@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.toolwindow;
+package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;

@@ -1,5 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
@@ -10,14 +12,8 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.util.HaxeUtil;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -26,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeBuildSettingsListener;
 
 /**
  * The IDE's conditional-compilation define context, derived from the v2 build
@@ -160,7 +155,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     String containerId = HaxeContainers.containerIdFor(project, file);
     String targetId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file);
     String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    List<HaxeEnvironmentStore.EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
+    List<EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
     return file.getPath() + '|' + type + '|' + stamp + '|' + targetId + '|' + sdkName + '|' + overrides;
   }
 
@@ -169,8 +164,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     Map<String, String> defines = baseDefines(file, type);
 
     String containerId = HaxeContainers.containerIdFor(project, file);
-    for (HaxeEnvironmentStore.EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
-      if (override.effect() == HaxeEnvironmentStore.DefineEffect.REMOVE) {
+    for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
+      if (override.effect() == DefineEffect.REMOVE) {
         defines.remove(override.name());
       }
       else {

@@ -10,8 +10,8 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFilesProjectAware
 import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier
 import com.intellij.plugins.haxe.v2.buildtools.HaxeSourceRootsInitializer
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeActiveBuildFileStore
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner
 
 /**
  * Registers the v2 build file watcher so changed hxml/project.xml files show the

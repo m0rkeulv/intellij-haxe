@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

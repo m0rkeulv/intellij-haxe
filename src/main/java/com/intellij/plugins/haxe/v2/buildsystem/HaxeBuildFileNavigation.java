@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;

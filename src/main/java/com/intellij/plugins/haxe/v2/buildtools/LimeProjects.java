@@ -2,9 +2,9 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetSelectionStore;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

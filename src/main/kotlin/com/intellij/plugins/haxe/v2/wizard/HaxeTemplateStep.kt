@@ -9,8 +9,8 @@ import com.intellij.openapi.observable.properties.GraphProperty
 import com.intellij.openapi.observable.util.transform
 import com.intellij.openapi.project.Project
 import com.intellij.plugins.haxe.HaxeWizardBundle
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeTargetOptions
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected

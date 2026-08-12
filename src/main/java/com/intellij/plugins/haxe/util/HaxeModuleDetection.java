@@ -5,7 +5,7 @@ import com.intellij.openapi.module.ModuleType;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.psi.search.FileTypeIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;

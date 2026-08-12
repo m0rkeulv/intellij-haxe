@@ -20,15 +20,11 @@ import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfigurati
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijRunConfiguration;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
-import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
+import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

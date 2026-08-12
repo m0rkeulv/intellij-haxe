@@ -1,9 +1,11 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -46,8 +48,8 @@ public final class HaxeDisplayConfiguration {
   public static DefineOverrides overridesFor(@NotNull Project project, @NotNull String containerId) {
     Set<String> removed = new LinkedHashSet<>();
     List<String> set = new ArrayList<>();
-    for (HaxeEnvironmentStore.EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
-      if (override.effect() == HaxeEnvironmentStore.DefineEffect.REMOVE) {
+    for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
+      if (override.effect() == DefineEffect.REMOVE) {
         removed.add(override.name());
       }
       else {

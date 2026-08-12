@@ -1,9 +1,9 @@
 package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.icons.AllIcons;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -138,7 +138,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       }
       case EnvDefineNode defineNode -> {
         setIcon(AllIcons.Nodes.Property);
-        if (defineNode.effect() == HaxeEnvironmentStore.DefineEffect.REMOVE) {
+        if (defineNode.effect() == DefineEffect.REMOVE) {
           append(defineNode.name(), STRIKEOUT_ATTRIBUTES);
           append("  " + HaxeBundle.message("haxe.environment.effect.remove"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }

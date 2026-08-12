@@ -12,9 +12,9 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeBuildFilesStore;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashSet;

@@ -13,7 +13,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDepende
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Key;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Outcome;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

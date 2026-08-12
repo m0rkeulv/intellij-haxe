@@ -13,10 +13,7 @@ import com.intellij.platform.workspace.jps.entities.ModuleEntity
 import com.intellij.platform.workspace.jps.entities.SourceRootEntity
 import com.intellij.platform.workspace.jps.entities.SourceRootTypeId
 import com.intellij.platform.workspace.jps.entities.modifyContentRootEntity
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector
-import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileScanner
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType
+import com.intellij.plugins.haxe.v2.buildsystem.*
 import java.io.File
 
 /**

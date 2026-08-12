@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.toolwindow.tree;
+package com.intellij.plugins.haxe.v2.buildsystem;
 
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;

@@ -1,6 +1,6 @@
-package com.intellij.plugins.haxe.v2.toolwindow;
+package com.intellij.plugins.haxe.v2.buildtools.settings;
 
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeCustomActionsStore.CustomAction;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;
 import org.junit.jupiter.api.DisplayName;

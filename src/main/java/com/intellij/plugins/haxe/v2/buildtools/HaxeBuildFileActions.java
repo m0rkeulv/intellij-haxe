@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -12,8 +12,10 @@ import java.util.List;
 /// [HaxeBuildFileType] offers, the command a named built-in action runs, and
 /// the file's selected target flag. One exhaustive switch per concern - a new
 /// build-file type extends this class only, not every caller.
-/// TODO: fold these methods into HaxeBuildFileType once it moves out of
-///  `v2/toolwindow` - on the enum today they would cycle toolwindow <-> buildtools.
+/// The dispatch lives beside the tools rather than on [HaxeBuildFileType]:
+/// the actions map types to build-tool facts (lime/nme/hxml commands), and
+/// putting them on the enum would make `buildsystem` import `buildtools` -
+/// `buildsystem` stays tool-agnostic.
 public final class HaxeBuildFileActions {
 
   private HaxeBuildFileActions() {

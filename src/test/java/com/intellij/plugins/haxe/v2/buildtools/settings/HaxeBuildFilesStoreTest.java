@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.toolwindow;
+package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;

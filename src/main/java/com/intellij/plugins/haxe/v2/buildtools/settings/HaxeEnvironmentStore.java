@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.toolwindow;
+package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
@@ -40,11 +40,6 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     }
   }
 
-
-  public enum DefineEffect {SET, REMOVE}
-
-  public record EnvironmentDefine(@NotNull String name, @NotNull String value, @NotNull DefineEffect effect) {
-  }
 
   public static final class State {
     public List<ContainerEnvironment> environments = new ArrayList<>();
