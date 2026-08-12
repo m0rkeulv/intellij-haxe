@@ -20,6 +20,7 @@ import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
+import com.intellij.psi.util.PsiModificationTracker;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -102,7 +103,9 @@ public class HaxeStdPackageModel extends HaxePackageModel {
    * (String, Array, Map) and the primitives declared inside StdTypes.hx
    * (Int, Bool, Void, Float, Dynamic) - the latter can never be found by a
    * file-name probe. Anchored on the root directory, so modules sharing an
-   * SDK share the map and it rebuilds only when a std file changes.
+   * SDK share the map. Invalidates on ANY PSI change (global modification
+   * count) - a PsiDirectory has no per-directory timestamp, so finer
+   * dependencies cannot exist.
    */
   @Nullable
   private Map<String, HaxeClassModel> getStdRootTypes() {
@@ -113,14 +116,11 @@ public class HaxeStdPackageModel extends HaxePackageModel {
 
   private static CachedValueProvider.Result<Map<String, HaxeClassModel>> stdRootTypesResult(PsiDirectory directory) {
     Map<String, HaxeClassModel> byName = new HashMap<>();
-    List<Object> dependencies = new ArrayList<>();
-    dependencies.add(directory);
     for (PsiFile file : directory.getFiles()) {
       if (!(file instanceof HaxeFile haxeFile)) continue;
-      dependencies.add(file);
       collectDeclaredTypes(haxeFile, byName);
     }
-    return CachedValueProvider.Result.create(byName, dependencies.toArray());
+    return CachedValueProvider.Result.create(byName, PsiModificationTracker.MODIFICATION_COUNT);
   }
 
   private static void collectDeclaredTypes(HaxeFile file, Map<String, HaxeClassModel> byName) {

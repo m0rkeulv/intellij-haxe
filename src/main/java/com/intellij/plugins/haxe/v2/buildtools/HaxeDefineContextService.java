@@ -74,9 +74,16 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
                            @Nullable Map<String, String> defines) {
   }
 
+  /**
+   * Sentinel for {@link #lastComputed}: no consumer has been handed a define
+   * context yet, so nothing was parsed against one and no reparse is owed.
+   * Identity-compared, never handed out.
+   */
+  private static final Map<String, String> NEVER_HANDED_OUT = new LinkedHashMap<>();
+
   private volatile FastState fastState;
   /** The defines most recently handed to a consumer — what current PSI state was parsed against. */
-  private volatile Map<String, String> lastComputed;
+  private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
 
   private static long contentStamp(@NotNull VirtualFile file) {
     Document document = FileDocumentManager.getInstance().getCachedDocument(file);
@@ -91,7 +98,12 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   @Nullable
   public Map<String, String> getActiveDefines() {
     String path = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
-    if (StringUtil.isEmptyOrSpaces(path)) return null;
+    if (StringUtil.isEmptyOrSpaces(path)) {
+      // record the null handout: files parsed now use the LEGACY define
+      // context, and activating a build file later must trigger a reparse
+      lastComputed = null;
+      return null;
+    }
 
     FastState fast = fastState;
     boolean fastHit = fast != null
@@ -103,7 +115,10 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     }
 
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    if (file == null || !file.isValid()) return null;
+    if (file == null || !file.isValid()) {
+      lastComputed = null;
+      return null;
+    }
 
     Map<String, String> result = ReadAction.computeBlocking(() -> {
       HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
@@ -133,13 +148,16 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       if (project.isDisposed()) return;
       // compare against the defines last handed to consumers, NOT the snapshot
       // cache: the invalidation topic clears the snapshot synchronously before
-      // this runs, and a null-vs-null comparison used to swallow the change
+      // this runs. The sentinel keeps project open cheap (nothing was handed
+      // out, nothing to reparse) while a recorded null handout still reparses
+      // on the null -> non-null transition (build file activated after files
+      // were parsed against the legacy context).
       Map<String, String> before = lastComputed;
       snapshot = null;
       fastState = null;
       Map<String, String> after = getActiveDefines();
       lastComputed = after;
-      boolean changed = before != null && !Objects.equals(before, after);
+      boolean changed = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
       if (changed) {
         // false = do not mark the LEGACY auto-import dirty; v2 has its own tracker
         HaxeUtil.reparseProjectFiles(project, false);

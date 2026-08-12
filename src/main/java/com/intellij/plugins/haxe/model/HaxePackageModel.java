@@ -25,6 +25,7 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
+import com.intellij.psi.util.PsiModificationTracker;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -148,6 +149,14 @@ public class HaxePackageModel implements HaxeExposableModel {
    * this root - then any project root, since some libs share package names -
    * by relative path. Replaces a findSubdirectory walk per package segment
    * per source root, which dominated resolve time in import-heavy files.
+   * <p>
+   * An empty candidate set is a definitive miss: every root the models serve
+   * is an order-entry root (module source roots and library classes roots via
+   * OrderEnumerator, SDK source roots for std - see HaxeProjectModel's
+   * RootsCache), and the platform indexes all of those under allScope. The
+   * only in-scope-but-unindexed states are indexes not yet built (dumb mode,
+   * handled by the IndexNotReadyException fallback in {@link #getFile}) and
+   * user-excluded subtrees, which platform resolve ignores everywhere.
    */
   @Nullable
   private HaxeFile findFileByIndex(String fname, String accessPath) {
@@ -250,8 +259,10 @@ public class HaxePackageModel implements HaxeExposableModel {
    * The main class of every module in this package. Cached on the package
    * directory: the same-package check runs this for every reference that no
    * earlier check resolved, and re-enumerating the directory per reference
-   * dominated resolve time in editing profiles. Rebuilds only when a file in
-   * the directory changes.
+   * dominated resolve time in editing profiles. Invalidates on ANY PSI change
+   * (global modification count) - a PsiDirectory has no per-directory
+   * timestamp, so finer dependencies cannot exist; the global count also
+   * covers files added to or removed from the directory.
    */
   @NotNull
   public List<HaxeModel> getModulesMainClass() {
@@ -262,17 +273,14 @@ public class HaxePackageModel implements HaxeExposableModel {
 
   private static CachedValueProvider.Result<List<HaxeModel>> modulesMainClassResult(PsiDirectory directory) {
     List<HaxeModel> result = new ArrayList<>();
-    List<Object> dependencies = new ArrayList<>();
-    dependencies.add(directory);
     for (PsiFile file : directory.getFiles()) {
       if (!(file instanceof HaxeFile haxeFile)) continue;
-      dependencies.add(haxeFile);
       HaxeFileModel fileModel = HaxeFileModel.fromElement(haxeFile);
       if (fileModel == null) continue;
       HaxeClassModel mainClassModel = fileModel.getMainClassModel();
       if (mainClassModel != null) result.add(mainClassModel);
     }
-    return CachedValueProvider.Result.create(result, dependencies.toArray());
+    return CachedValueProvider.Result.create(result, PsiModificationTracker.MODIFICATION_COUNT);
   }
 
   @Override

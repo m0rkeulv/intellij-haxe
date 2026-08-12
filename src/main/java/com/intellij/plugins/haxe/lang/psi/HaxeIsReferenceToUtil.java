@@ -56,6 +56,10 @@ public final class HaxeIsReferenceToUtil {
     if (result == null) result = checkIsSwitchVar(reference);
     if (result == null) result = checkCaptureVarReference(reference);
     if (result == null) result = checkByTreeWalk(reference, scope);
+    // Safe for bare switch-case identifiers (even one shadowing an enum value of the switched type)
+    // this fast path only answers for local-scoped targets, every full-pipeline check skipped here
+    // resolves only to non-local elements, and both pipelines run the same tree walk first,
+    // so a local target gets the same answer either way.
     if (result == null) result = checkCaptureVar(reference);
 
     if (result == null || result.isEmpty()) return Boolean.FALSE;
