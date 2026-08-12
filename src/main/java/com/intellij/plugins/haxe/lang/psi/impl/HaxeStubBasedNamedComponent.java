@@ -221,6 +221,14 @@ public abstract class HaxeStubBasedNamedComponent<T extends StubElement<?>> exte
     // Try stub data first — avoids PSI tree traversal for modifier keywords
     T stub = getGreenStub();
     if (stub instanceof HaxeMethodStub methodStub) {
+      // if only the `override` keyword is provided, then it inherits the overridden method's visibility.
+      // the stub only holds values for keywords that are part of the current declaration (public/private)
+      if (methodStub.isVisibilityInherited()) {
+        HaxeBaseMemberModel model = HaxeBaseMemberModel.fromPsi(this);
+        if(model instanceof HaxeMemberModel member) {
+          return member.isPublic(); // will also check isOverriddenPublicMethod
+        }
+      }
       return methodStub.isPublic();
     }
     if (stub instanceof HaxeFieldStub fieldStub) {
@@ -236,6 +244,11 @@ public abstract class HaxeStubBasedNamedComponent<T extends StubElement<?>> exte
     );
     if (parentClass != null) {
       return true;
+    }
+
+    HaxeBaseMemberModel model = HaxeBaseMemberModel.fromPsi(this);
+    if (model instanceof HaxeMethodModel methodModel && methodModel.isVisibilityInheritedFromParent()) {
+      return methodModel.isPublic();
     }
 
     final PsiElement parent = getParent();

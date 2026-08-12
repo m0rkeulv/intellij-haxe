@@ -32,6 +32,7 @@ import com.intellij.plugins.haxe.lang.psi.stubs.index.HaxeClassNameStubIndex;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
+import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -76,9 +77,9 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixture
   @Override
   public void setTestStyleSettings() {
     Project project = getProject();
-    CodeStyleSettings currSettings = CodeStyleSettingsManager.getSettings(project);
+    CodeStyleSettings currSettings = CodeStyle.getSettings(project);
     assertNotNull(currSettings);
-    CodeStyleSettings tempSettings = currSettings.clone();
+    CodeStyleSettings tempSettings = CodeStyleSettingsManager.getInstance(project).cloneSettings(currSettings);
     CodeStyleSettings.IndentOptions indentOptions = tempSettings.getIndentOptions(HaxeFileType.INSTANCE);
     assertNotNull(indentOptions);
     defineStyleSettings(tempSettings);

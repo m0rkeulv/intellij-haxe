@@ -20,7 +20,7 @@ public class HaxeMetadataAnnotator implements Annotator, DumbAware {
 
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    if(!element.isValid()) return;
+    if (AnnotatorUtil.shouldSkip(element)) return;
 
     if (element instanceof HaxeMeta meta) {
       check(meta, holder);

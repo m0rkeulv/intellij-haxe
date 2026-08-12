@@ -21,6 +21,9 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.model.evaluator.assign.AssignExplanation;
+import com.intellij.plugins.haxe.model.fixer.HaxeFixer;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 
@@ -41,6 +44,51 @@ public class HaxeStandardAnnotation {
 
     String message = HaxeBundle.message("haxe.semantic.method.parameter.type.not.found", missingType);
     holder.newAnnotation(HighlightSeverity.WEAK_WARNING, message).range(incompatibleElement).create();
+  }
+
+  /**
+   * "«feature» requires Haxe X" error for a construct below the module's
+   * language level, carrying the "set language level" quickfix. Callers may
+   * append their own fixes (removing the construct) and must {@code create()}.
+   */
+  public static @NotNull AnnotationBuilder requiresLanguageLevel(@NotNull AnnotationHolder holder,
+                                                                 @NotNull PsiElement element,
+                                                                 @NotNull HaxeLanguageLevel required,
+                                                                 @NotNull String featureName) {
+    return requiresLanguageLevel(holder, element, required, featureName, HighlightSeverity.ERROR);
+  }
+
+  public static @NotNull AnnotationBuilder requiresLanguageLevel(@NotNull AnnotationHolder holder,
+                                                                 @NotNull PsiElement element,
+                                                                 @NotNull HaxeLanguageLevel required,
+                                                                 @NotNull String featureName,
+                                                                 @NotNull HighlightSeverity severity) {
+    HaxeLanguageLevel current = HaxeLanguageLevelUtil.getLanguageLevel(element);
+    String message = HaxeBundle.message("haxe.semantic.feature.requires.language.level",
+                                        featureName, required.getPresentableText(), current.getPresentableText());
+    String fixText = HaxeBundle.message("haxe.quickfix.set.language.level", required.getPresentableText());
+    return holder.newAnnotation(severity, message)
+      .range(element)
+      .withFix(HaxeFixer.create(fixText, () -> HaxeLanguageLevelUtil.setLanguageLevel(element, required)));
+  }
+
+  /**
+   * "«construct» were removed in Haxe X" error for constructs valid only
+   * below the module's language level. The quickfix lowers the level to the
+   * last one still supporting the construct. Callers must {@code create()}.
+   */
+  public static @NotNull AnnotationBuilder removedAtLanguageLevel(@NotNull AnnotationHolder holder,
+                                                                  @NotNull PsiElement element,
+                                                                  @NotNull HaxeLanguageLevel removedIn,
+                                                                  @NotNull String featureName) {
+    HaxeLanguageLevel current = HaxeLanguageLevelUtil.getLanguageLevel(element);
+    HaxeLanguageLevel lastSupported = removedIn.previous();
+    String message = HaxeBundle.message("haxe.semantic.feature.removed.language.level",
+                                        featureName, removedIn.getPresentableText(), current.getPresentableText());
+    String fixText = HaxeBundle.message("haxe.quickfix.set.language.level", lastSupported.getPresentableText());
+    return holder.newAnnotation(HighlightSeverity.ERROR, message)
+      .range(element)
+      .withFix(HaxeFixer.create(fixText, () -> HaxeLanguageLevelUtil.setLanguageLevel(element, lastSupported)));
   }
 
   public static @NotNull AnnotationBuilder typeMismatch(@NotNull AnnotationHolder holder,

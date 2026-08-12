@@ -13,6 +13,7 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import com.intellij.plugins.haxe.lang.psi.HaxeResolveChecks;
 
 
 public class HaxeInlayCaptureVariableHintsProvider implements InlayHintsProvider {
@@ -55,7 +56,7 @@ public class HaxeInlayCaptureVariableHintsProvider implements InlayHintsProvider
     private static void handleCaptureVarDeclarationHints(@NotNull PsiElement element,
                                                          @NotNull InlayTreeSink sink,
                                                          HaxeSwitchCaseExpr switchCaseExpr) {
-      if(switchCaseExpr.getFirstChild() instanceof HaxeReference reference && HaxeResolver.isCaptureVariable(switchCaseExpr)) {
+      if(switchCaseExpr.getFirstChild() instanceof HaxeReference reference && HaxeResolveChecks.isCaptureVariable(switchCaseExpr)) {
           ResultHolder result = HaxeExpressionEvaluator.evaluate(reference, new HaxeExpressionEvaluatorContext(element), null).result;
 
           if (!result.isUnknown() && !result.getType().isInvalid()) {

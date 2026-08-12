@@ -15,7 +15,6 @@ import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import lombok.Getter;
 import org.jdom.Element;
@@ -154,19 +153,7 @@ public class BrowserRunConfiguration extends DapRunConfigurationBase {
 
   /** The content directory: the setting, project-relative when not absolute. */
   public @Nullable Path resolveContentRootOrNull() {
-    if (contentRoot.isBlank()) {
-      return null;
-    }
-    try {
-      Path path = Path.of(contentRoot);
-      if (path.isAbsolute()) {
-        return path;
-      }
-      String basePath = getProject().getBasePath();
-      return basePath != null ? Path.of(basePath).resolve(path) : path;
-    } catch (InvalidPathException e) {
-      return null;
-    }
+    return contentRoot.isBlank() ? null : resolveAgainstProject(contentRoot);
   }
 
   // The platform builds this state BEFORE any runner acts — for BOTH

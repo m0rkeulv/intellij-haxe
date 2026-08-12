@@ -18,14 +18,14 @@ import org.jetbrains.annotations.Nullable;
 public class HaxeMethodStub extends StubBase<HaxeMethod> implements StubWithMetaAndModifiers, StubWithName {
 
   // Keyword-modifier flags (stored in `flags`)
-  public static final int IS_STATIC       = 1 << 0;
-  public static final int IS_PUBLIC       = 1 << 1;
-  public static final int IS_OVERRIDE     = 1 << 2;
-  public static final int IS_ABSTRACT     = 1 << 3;
-  public static final int IS_INLINE       = 1 << 4;
-  public static final int IS_MACRO        = 1 << 5;
-  public static final int IS_OVERLOAD     = 1 << 6;
-  public static final int IS_DYNAMIC      = 1 << 7;
+  public static final int KEYWORD_STATIC       = 1 << 0;
+  public static final int KEYWORD_PUBLIC       = 1 << 1;
+  public static final int KEYWORD_OVERRIDE     = 1 << 2;
+  public static final int KEYWORD_ABSTRACT     = 1 << 3;
+  public static final int KEYWORD_INLINE       = 1 << 4;
+  public static final int KEYWORD_MACRO        = 1 << 5;
+  public static final int KEYWORD_OVERLOAD     = 1 << 6;
+  public static final int KEYWORD_DYNAMIC      = 1 << 7;
 
   // Metadata-modifier flags (stored in `metaFlags`).
   public static final int META_ABSTRACT      = 1 << 0;  // @:abstract
@@ -47,6 +47,10 @@ public class HaxeMethodStub extends StubBase<HaxeMethod> implements StubWithMeta
   public static final int IS_CONSTRUCTOR        = 1 << 0;
   public static final int HAS_PARAMETERS        = 1 << 1;
   public static final int HAS_VARARG_PARAMETERS = 1 << 2;
+  // A bare `override` (no explicit public/private): KEYWORD_PUBLIC is only the
+  // declared guess — the real visibility lives in the overridden method,
+  // which stub building cannot resolve (stubs come from the file alone).
+  public static final int VISIBILITY_INHERITED  = 1 << 3;
 
 
   private final String name;
@@ -79,35 +83,40 @@ public class HaxeMethodStub extends StubBase<HaxeMethod> implements StubWithMeta
 
 
   public boolean isStatic() {
-    return (keywordFlags & IS_STATIC) != 0;
+    return (keywordFlags & KEYWORD_STATIC) != 0;
   }
 
   public boolean isPublic() {
-    return (keywordFlags & IS_PUBLIC) != 0;
+    return (keywordFlags & KEYWORD_PUBLIC) != 0;
   }
 
   public boolean isOverride() {
-    return (keywordFlags & IS_OVERRIDE) != 0;
+    return (keywordFlags & KEYWORD_OVERRIDE) != 0;
   }
 
   public boolean isAbstract() {
-    return (keywordFlags & IS_ABSTRACT) != 0;
+    return (keywordFlags & KEYWORD_ABSTRACT) != 0;
   }
 
   public boolean isInline() {
-    return (keywordFlags & IS_INLINE) != 0;
+    return (keywordFlags & KEYWORD_INLINE) != 0;
   }
 
   public boolean isOverload() {
-    return (keywordFlags & IS_OVERLOAD) != 0;
+    return (keywordFlags & KEYWORD_OVERLOAD) != 0;
   }
 
   public boolean isMacro() {
-    return (keywordFlags & IS_MACRO) != 0;
+    return (keywordFlags & KEYWORD_MACRO) != 0;
   }
 
   public boolean isDynamic() {
-    return (keywordFlags & IS_DYNAMIC) != 0;
+    return (keywordFlags & KEYWORD_DYNAMIC) != 0;
+  }
+
+  /** flag to let us know we must resolve the overridden method's visibility. */
+  public boolean isVisibilityInherited() {
+    return (propertyFlags & VISIBILITY_INHERITED) != 0;
   }
 
   // properties
@@ -146,14 +155,14 @@ public class HaxeMethodStub extends StubBase<HaxeMethod> implements StubWithMeta
   @Nullable
   public Boolean hasKeyword(@HaxePsiModifier.KeywordConstant String modifier) {
     return switch (modifier) {
-      case HaxePsiModifier.ABSTRACT     -> (keywordFlags & IS_ABSTRACT) != 0;
-      case HaxePsiModifier.PUBLIC       -> (keywordFlags & IS_PUBLIC)   != 0;
-      case HaxePsiModifier.STATIC       -> (keywordFlags & IS_STATIC)   != 0;
-      case HaxePsiModifier.INLINE       -> (keywordFlags & IS_INLINE)   != 0;
-      case HaxePsiModifier.OVERRIDE     -> (keywordFlags & IS_OVERRIDE) != 0;
-      case HaxePsiModifier.OVERLOAD     -> (keywordFlags & IS_OVERLOAD) != 0;
-      case HaxePsiModifier.MACRO        -> (keywordFlags & IS_MACRO)    != 0;
-      case HaxePsiModifier.DYNAMIC      -> (keywordFlags & IS_DYNAMIC)  != 0;
+      case HaxePsiModifier.ABSTRACT     -> (keywordFlags & KEYWORD_ABSTRACT) != 0;
+      case HaxePsiModifier.PUBLIC       -> (keywordFlags & KEYWORD_PUBLIC)   != 0;
+      case HaxePsiModifier.STATIC       -> (keywordFlags & KEYWORD_STATIC)   != 0;
+      case HaxePsiModifier.INLINE       -> (keywordFlags & KEYWORD_INLINE)   != 0;
+      case HaxePsiModifier.OVERRIDE     -> (keywordFlags & KEYWORD_OVERRIDE) != 0;
+      case HaxePsiModifier.OVERLOAD     -> (keywordFlags & KEYWORD_OVERLOAD) != 0;
+      case HaxePsiModifier.MACRO        -> (keywordFlags & KEYWORD_MACRO)    != 0;
+      case HaxePsiModifier.DYNAMIC      -> (keywordFlags & KEYWORD_DYNAMIC)  != 0;
       default -> null;
     };
   }

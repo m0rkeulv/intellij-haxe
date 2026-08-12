@@ -4,9 +4,9 @@ import com.intellij.codeInspection.*;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.ide.annotator.HaxeAnnotatingVisitor;
 import com.intellij.plugins.haxe.lang.psi.*;
-import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
+import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.SearchScope;
@@ -22,8 +22,6 @@ import java.util.List;
 
 import static com.intellij.plugins.haxe.ide.inspections.HaxeUnusedDeclarationsFixes.createAddKeepMetaFix;
 import static com.intellij.plugins.haxe.ide.inspections.HaxeUnusedDeclarationsFixes.createRemoveMethodFix;
-import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.KEEP;
-import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.OP;
 
 public class HaxeUnusedMethodInspection extends LocalInspectionTool {
     @NotNull
@@ -52,12 +50,13 @@ public class HaxeUnusedMethodInspection extends LocalInspectionTool {
 
             @Override
             public void visitMethodDeclaration(@NotNull HaxeMethodDeclaration methodDeclaration) {
-                //TODO
                 if (methodDeclaration.isPublic()) return;
                 if (methodDeclaration.isOverride()) return;
                 if (implementsAbstractParentMethod(methodDeclaration)) return;
-                if (methodDeclaration.hasMetadata(OP, HaxeMetadataCompileTimeMeta.class)) return;
-                if (methodDeclaration.hasMetadata(KEEP, HaxeMetadataCompileTimeMeta.class)) return;
+                // registry-known metadata may be consumed invisibly (subsumes the
+                // old @:keep/@:op checks); unknown names are likely typos and do
+                // not exempt - see HaxeUsageSearch.metadataKeepsAlive
+                if (HaxeUsageSearch.metadataKeepsAlive(methodDeclaration)) return;
                 if (isGetterOrSetter(methodDeclaration)) return;
                 Collection<PsiReference> references;
                 //  if constructor also check new expressions
@@ -76,9 +75,7 @@ public class HaxeUnusedMethodInspection extends LocalInspectionTool {
                     if (!references.isEmpty()) return;
                 }
 
-                SearchScope searchScope = GlobalSearchScope.projectScope(methodDeclaration.getProject());
-                references = ReferencesSearch.search(methodDeclaration, searchScope, false).findAll();
-                if (references.isEmpty()) {
+                if (!HaxeUsageSearch.isConsideredUsed(methodDeclaration)) {
                     unusedMethodDeclarations.add(methodDeclaration);
                 }
 

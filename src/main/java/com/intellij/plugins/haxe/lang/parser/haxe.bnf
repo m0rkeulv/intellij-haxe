@@ -162,6 +162,7 @@
       kCATCH="catch"
       tWILDCARD=".*"
       MACRO_ID="regexp:\$[:alpha:]+"
+      UNBOUND_ID="regexp:`[:alpha:]+"
       id="regexp:[:alpha:]+"
       space="regexp:\s+"
     ]
@@ -264,6 +265,13 @@ superExpression ::= 'super'
 {mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxeReference"}
 //Haxe 4.3+
 abstractExpression ::= 'abstract'
+{mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxeReference"}
+
+// A compiler-internal unbound identifier (a typed-AST TIdent bound to no
+// declaration), printed by -D dump=pretty with a backtick prefix no source
+// identifier can contain (e.g. `trace). Only appears in dump previews of
+// generated code - the compiler rejects it in real source.
+unboundIdentifierExpression ::= UNBOUND_ID
 {mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxeReference"}
 
 
@@ -1245,7 +1253,7 @@ left arrayAccessExpression ::= '[' expression ']'
 identifierOrReferenceAllowedKeyword ::= identifier | 'new'
 {extends= identifier}
 
-private thisSuperAbstractOrReferenceExpression ::= referenceExpression | thisExpression | superExpression | abstractExpression
+private thisSuperAbstractOrReferenceExpression ::= referenceExpression | thisExpression | superExpression | abstractExpression | unboundIdentifierExpression
 
 referenceExpression ::= identifier
 {

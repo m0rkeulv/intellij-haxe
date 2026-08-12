@@ -65,6 +65,13 @@ public class HaxeSyntaxHighlighterColors {
   public static final TextAttributesKey CONDITIONALLY_NOT_COMPILED = createTextAttributesKey("HAXE_CONDITIONALLY_NOT_COMPILED");
   public static final TextAttributesKey UNPARSEABLE_DATA = createTextAttributesKey(HAXE_UNPARSEABLE_DATA);
 
+  // string-literal navigation links (file paths / qualified names); both
+  // inherit the platform's Highlighted-reference styling until customized
+  public static final TextAttributesKey STRING_FILE_LINK =
+    createTextAttributesKey("HAXE_STRING_FILE_LINK", DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE);
+  public static final TextAttributesKey STRING_CODE_LINK =
+    createTextAttributesKey("HAXE_STRING_CODE_LINK", DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE);
+
   public static final TextAttributesKey METADATA =
     createTextAttributesKey("HAXE_METADATA", DefaultLanguageHighlighterColors.METADATA);
 
