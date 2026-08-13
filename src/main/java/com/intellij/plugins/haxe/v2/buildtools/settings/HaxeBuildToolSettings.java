@@ -52,4 +52,14 @@ public interface HaxeBuildToolSettings {
   String getCompilationServerArguments();
 
   void setCompilationServerArguments(@NotNull String arguments);
+
+  /**
+   * Whether test compiles inject the live utest reporter (a {@code --macro}
+   * patching utest's Runner), streaming per-test events instead of waiting for
+   * the end-of-run batch. Injection degrades to the batch reporter on any
+   * incompatibility; this switch turns it off entirely.
+   */
+  boolean isLiveTestReporting();
+
+  void setLiveTestReporting(boolean enabled);
 }

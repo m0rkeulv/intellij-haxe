@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import com.intellij.util.ui.UIUtil;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 
@@ -137,15 +136,4 @@ public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestC
     catalog.fillNowForTests();
   }
 
-  private static boolean haxeAvailable() {
-    try {
-      Process process = new ProcessBuilder("haxe", "--version")
-        .redirectErrorStream(true)
-        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-        .start();
-      return process.waitFor() == 0;
-    } catch (IOException | InterruptedException e) {
-      return false;
-    }
-  }
 }

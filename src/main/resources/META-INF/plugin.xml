@@ -149,6 +149,7 @@
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.interp.InterpRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.interp.InterpDebugRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.runner.neko.NekoRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.browser.BrowserDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.runner.debugger.flash.FlashRunner"/>
@@ -350,6 +351,9 @@
     <weigher key="completion" implementationClass="com.intellij.plugins.haxe.ide.completion.weigher.HaxeLookupCompletionWeigher" id="Haxe"  />
 
     <configurationType implementation="com.intellij.plugins.haxe.runner.HaxeRunConfigurationType"/>
+    <configurationType implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurationType"/>
+    <programRunner implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunner"/>
+    <programRunner implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestDebugRunner"/>
 
     <moduleService serviceImplementation="com.intellij.plugins.haxe.ide.module.HaxeModuleSettings"/>
 
@@ -465,7 +469,9 @@
     <projectService serviceInterface="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings"
                     serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolProjectSettings"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeSectionSelectionStore"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore"/>
@@ -737,6 +743,8 @@
               topic="com.intellij.psi.util.PsiModificationTracker$Listener"/>
     <listener class="com.intellij.plugins.haxe.v2.display.HaxeDisplayCacheInvalidator"
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener"/>
+    <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
+              topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
 <!--    <listener class="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"-->
 <!--              topic="com.intellij.openapi.vfs.VirtualFileListener"/>-->
 <!--    <listener class="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"-->
@@ -754,6 +762,10 @@
     <action id="Haxe.NewNMMLFile" class="com.intellij.plugins.haxe.ide.actions.CreateNMMLFileAction"
             text="NMML file" description="Create new NMML file">
       <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFromTemplate"/>
+    </action>
+    <action id="Haxe.RegisterBuildFile" class="com.intellij.plugins.haxe.v2.buildtools.HaxeRegisterBuildFileAction"
+            text="Add as Haxe Build File" description="Register this file as a Haxe build file of a module">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </action>
     <action id="Generate.Constructor.Haxe" class="com.intellij.plugins.haxe.ide.generation.HaxeGenerateConstructorAction"
             text="Constructor">

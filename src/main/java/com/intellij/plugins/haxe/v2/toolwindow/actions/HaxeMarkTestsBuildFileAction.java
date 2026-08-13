@@ -1,0 +1,56 @@
+package com.intellij.plugins.haxe.v2.toolwindow.actions;
+
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeLibrarySync;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
+import org.jetbrains.annotations.NotNull;
+
+/**
+ * Tree context menu: marks the selected build file as its container's tests build
+ * file (or unmarks the current one). Test runs compile and launch the marked file,
+ * so it supplies the libs, defines and target of every test build.
+ */
+public final class HaxeMarkTestsBuildFileAction extends DumbAwareAction {
+
+  private final HaxeToolWindowPanel panel;
+
+  public HaxeMarkTestsBuildFileAction(@NotNull HaxeToolWindowPanel panel) {
+    super(HaxeBundle.message("haxe.toolwindow.mark.tests.build.file"));
+    this.panel = panel;
+  }
+
+  @Override
+  public void actionPerformed(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    if (project != null && panel.getSelectedUserObject() instanceof BuildFileRow row) {
+      String newPath = row.testsFile() ? null : row.buildFile().file().getPath();
+      HaxeTestsBuildFileStore.getInstance(project).setTestsFile(row.containerId(), newPath);
+      // the tests build's libraries feed the module's resolve scope - re-sync
+      HaxeLibrarySync.sync(project, panel::refreshTree);
+    }
+  }
+
+  @Override
+  public void update(@NotNull AnActionEvent e) {
+    if (panel.getSelectedUserObject() instanceof BuildFileRow row) {
+      String key = row.testsFile() ? "haxe.toolwindow.unmark.tests.build.file"
+                                   : "haxe.toolwindow.mark.tests.build.file";
+      e.getPresentation().setText(HaxeBundle.message(key));
+      e.getPresentation().setEnabledAndVisible(true);
+    }
+    else {
+      e.getPresentation().setEnabledAndVisible(false);
+    }
+  }
+
+  @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.EDT;
+  }
+}

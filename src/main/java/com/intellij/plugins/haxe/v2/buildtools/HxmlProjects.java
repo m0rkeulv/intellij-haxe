@@ -2,9 +2,13 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /// Facts about plain hxml builds: the direct `haxe <file>` compile and
@@ -35,5 +39,32 @@ public final class HxmlProjects {
                                             @Nullable String environmentSdk,
                                             @NotNull List<String> command) {
     return command.get(0).equals(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk));
+  }
+
+  // TODO: --next chains: a "Build (section)" action beside the whole-file Build
+  //  (which compiles every section) - this scoping method is the building block
+  /// A multi-section hxml compile scoped to the SELECTED `--next` section: the
+  /// file token is replaced by that section's lines as compiler arguments.
+  /// haxe applies trailing CLI arguments to the LAST section of a chained
+  /// file, so flags appended after the file (test reporting, debug additions)
+  /// would miss every other section; compiling just the one section makes the
+  /// trailing flags its own — and skips the unrelated sibling builds.
+  /// Single-section files, and commands not carrying the file token, come
+  /// back unchanged. Call in a read action.
+  @NotNull
+  public static List<String> scopeToSelectedSection(@NotNull Project project,
+                                                    @NotNull VirtualFile file,
+                                                    @NotNull List<String> command) {
+    int fileToken = command.indexOf(file.getName());
+    if (fileToken < 0) return command;
+    List<String> sections = HaxeBuildFileInspector.sectionContents(project, file);
+    if (sections.size() < 2) return command;
+
+    int index = HaxeBuildSections.selectedIndex(project, file, sections);
+    List<String> sectionArguments = HxmlArguments.parseLines(sections.get(index).lines().toList());
+    List<String> scoped = new ArrayList<>(command.subList(0, fileToken));
+    scoped.addAll(sectionArguments);
+    scoped.addAll(command.subList(fileToken + 1, command.size()));
+    return scoped;
   }
 }

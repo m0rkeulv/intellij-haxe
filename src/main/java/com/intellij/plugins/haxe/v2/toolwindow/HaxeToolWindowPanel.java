@@ -57,6 +57,7 @@ import com.intellij.plugins.haxe.runner.HaxeRunConfigurationType;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionConfigurationFactory;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionRunConfiguration;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
+import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
 import com.intellij.plugins.haxe.v2.toolwindow.ui.HaxeCompileCommandDialog;
 import com.intellij.pom.Navigatable;
 import com.intellij.util.PathUtil;
@@ -84,6 +85,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -108,6 +110,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   private final Tree tree = new Tree(treeModel);
   private final HaxeToolWindowModelBuilder modelBuilder;
   private boolean initialExpansionDone;
+  // last scan's tests build file per container (EDT only), for the container-row unit-test action
+  private final Map<String, String> testsPathByContainer = new HashMap<>();
+  private @Nullable String projectRootContainerId;
 
   public HaxeToolWindowPanel(@NotNull Project project) {
     super(true, true);
@@ -179,15 +184,19 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeRunActionNodeAction(this));
     group.add(new HaxeRunProgramAction(this, false));
     group.add(new HaxeRunProgramAction(this, true));
+    group.add(new HaxeRunUnitTestsAction(this));
+    group.add(new HaxeDebugUnitTestsAction(this));
     group.add(new HaxeSetAsCompileCommandAction(this));
     group.add(new HaxeAddCustomActionAction(this));
     group.add(new HaxeEditCustomActionAction(this));
     group.add(new HaxeRemoveCustomActionAction(this));
     group.add(new HaxeSetActiveBuildFileAction(this));
+    group.add(new HaxeMarkTestsBuildFileAction(this));
     group.add(new HaxeReloadBuildFileAction(this));
     group.add(new HaxeAddBuildFileAction(this));
     group.add(new HaxeRemoveBuildFileAction(this));
     group.add(new HaxeSelectTargetAction(this));
+    group.add(new HaxeSelectSectionAction(this));
     group.add(new HaxeInstallLibraryAction(this));
     group.add(new HaxeInstallAllMissingLibrariesAction(this));
     group.add(new HaxeConfigureEnvironmentAction(this));
@@ -231,8 +240,43 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     DefaultMutableTreeNode root = buildTreeRoot(scan, installed);
     ApplicationManager.getApplication().invokeLater(() -> {
       if (project.isDisposed()) return;
+      rememberTestsPaths(scan);
       applyTreeUpdate(root);
     });
+  }
+
+  /** Keeps the scan's per-container tests build file, so container-row actions resolve it without re-scanning. */
+  private void rememberTestsPaths(@NotNull List<ContainerEntry> scan) {
+    testsPathByContainer.clear();
+    for (ContainerEntry container : scan) {
+      if (container.testsPath() != null) {
+        testsPathByContainer.put(container.id(), container.testsPath());
+      }
+      if (container.projectRoot()) {
+        projectRootContainerId = container.id();
+      }
+    }
+  }
+
+  /** The container's tests build file (marked or convention-suggested) from the last scan, or null. */
+  @Nullable
+  public String testsPathFor(@NotNull String containerId) {
+    return testsPathByContainer.get(containerId);
+  }
+
+  /** The container id behind the project row (the root module, or the synthetic project-root container). */
+  @Nullable
+  public String getProjectRootContainerId() {
+    return projectRootContainerId;
+  }
+
+  /** Runs the build file as unit tests through the test run configuration (SM console). */
+  public void runUnitTests(@NotNull String buildFilePath) {
+    HaxeTestRunConfigurations.run(project, buildFilePath, null);
+  }
+
+  public void debugUnitTests(@NotNull String buildFilePath) {
+    HaxeTestRunConfigurations.debug(project, buildFilePath, null);
   }
 
   /** Gradle-style structure: one project root node containing root-level build files and the modules. */
@@ -275,6 +319,15 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       actionsNode.add(new DefaultMutableTreeNode(program));
     }
     return actionsNode;
+  }
+
+  /** The tests build file's own category, keeping test runs out of the crowded Actions group. */
+  @NotNull
+  private static DefaultMutableTreeNode buildTestsGroupNode(@NotNull FileEntry entry) {
+    String path = entry.buildFile().file().getPath();
+    DefaultMutableTreeNode testsNode = new DefaultMutableTreeNode(new TestsGroupNode(path, 1));
+    testsNode.add(new DefaultMutableTreeNode(new TestRunNode(path)));
+    return testsNode;
   }
 
   @NotNull
@@ -321,22 +374,29 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
                                  @NotNull ContainerEntry container,
                                  @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     for (FileEntry fileEntry : container.files()) {
-      boolean active = fileEntry.buildFile().file().getPath().equals(container.activePath());
-      parentNode.add(buildFileNode(fileEntry, container.id(), active, fileEntry.manual(), installedLibraries));
+      String path = fileEntry.buildFile().file().getPath();
+      boolean active = path.equals(container.activePath());
+      boolean tests = path.equals(container.testsPath());
+      BuildFileRow row = new BuildFileRow(fileEntry.buildFile(), container.id(), active, fileEntry.manual(), tests);
+      parentNode.add(buildFileNode(fileEntry, row, installedLibraries));
     }
   }
 
   @NotNull
   private DefaultMutableTreeNode buildFileNode(@NotNull FileEntry entry,
-                                               @NotNull String containerId,
-                                               boolean active,
-                                               boolean manual,
+                                               @NotNull BuildFileRow row,
                                                @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
     HaxeBuildFile buildFile = entry.buildFile();
-    DefaultMutableTreeNode fileNode = new DefaultMutableTreeNode(new BuildFileRow(buildFile, containerId, active, manual));
+    DefaultMutableTreeNode fileNode = new DefaultMutableTreeNode(row);
     // a plain hxp script decides its own targets in code - no target row
     if (buildFile.type() != HaxeBuildFileType.HXP_SCRIPT) {
       fileNode.add(new DefaultMutableTreeNode(buildTargetNode(entry)));
+    }
+    // multi-section hxml (--next chain): the row picking which compilation the tree follows
+    if (!entry.sectionLabels().isEmpty()) {
+      SectionNode sectionNode =
+        new SectionNode(buildFile, entry.sectionIds(), entry.sectionLabels(), entry.selectedSection());
+      fileNode.add(new DefaultMutableTreeNode(sectionNode));
     }
 
 
@@ -364,6 +424,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     }
     fileNode.add(librariesNode);
     fileNode.add(buildActionsGroupNode(entry));
+    if (row.testsFile()) {
+      fileNode.add(buildTestsGroupNode(entry));
+    }
     return fileNode;
   }
 
@@ -389,6 +452,21 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .setRenderer(BuilderKt.textListCellRenderer("", HaxeTargetOptions.TargetChoice::displayName))
       .setItemChosenCallback(choice -> {
         HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(targetNode.buildFile().file(), choice.id());
+        refreshTree();
+      })
+      .createPopup()
+      .show(point);
+  }
+
+  /** Shows the {@code --next} section dropdown for a multi-section hxml, anchored at the given point. */
+  public void showSectionPopup(@NotNull SectionNode sectionNode, @NotNull RelativePoint point) {
+    JBPopupFactory.getInstance()
+      .createPopupChooserBuilder(sectionNode.labels())
+      .setTitle(HaxeBundle.message("haxe.toolwindow.select.section.title"))
+      .setRenderer(BuilderKt.textListCellRenderer("", label -> label))
+      .setItemChosenCallback(label -> {
+        String sectionId = sectionNode.ids().get(sectionNode.labels().indexOf(label));
+        HaxeSectionSelectionStore.getInstance(project).setSelectedSection(sectionNode.buildFile().file(), sectionId);
         refreshTree();
       })
       .createPopup()
@@ -742,6 +820,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     private void handleSingleClick(@Nullable Object userObject, @NotNull RelativePoint point, @Nullable Object fragmentTag) {
       switch (userObject) {
         case TargetNode targetNode when targetNode.selectable() -> showTargetPopup(targetNode, point);
+        case SectionNode sectionNode -> showSectionPopup(sectionNode, point);
         case EnvSdkNode sdkNode -> showEnvironmentSdkPopup(sdkNode, point);
         case EnvLanguageLevelNode levelNode -> showLanguageLevelPopup(levelNode, point);
         case EnvCompileCommandNode buildCommand -> configureCompileCommand(buildCommand);
@@ -772,6 +851,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
           new OpenFileDescriptor(project, row.buildFile().file()).navigate(true);
         case ActionNode actionNode -> runAction(actionNode);
         case ProgramNode programNode -> executeProgram(programNode, false);
+        case TestRunNode testRunNode -> runUnitTests(testRunNode.buildFilePath());
         case null, default -> { }
       }
     }

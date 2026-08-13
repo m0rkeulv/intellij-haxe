@@ -21,9 +21,10 @@ import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationF
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
-import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
+import com.intellij.plugins.haxe.runner.neko.NekoConfigurationFactory;
+import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
-import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -59,6 +60,7 @@ public final class HaxeProgramLaunches {
   private static final LaunchSpec BROWSER_APP = new LaunchSpec(BrowserRunConfiguration.class, BrowserConfigurationFactory.class);
   private static final LaunchSpec FLASH_APP = new LaunchSpec(FlashRunConfiguration.class, FlashConfigurationFactory.class);
   private static final LaunchSpec HXCPP_APP = new LaunchSpec(HxcppIntellijRunConfiguration.class, HxcppIntellijConfigurationFactory.class);
+  private static final LaunchSpec NEKO_APP = new LaunchSpec(NekoRunConfiguration.class, NekoConfigurationFactory.class);
 
   /** The single authority on which run configuration launches which target output. */
   @Nullable
@@ -72,6 +74,8 @@ public final class HaxeProgramLaunches {
       case JAVA_SCRIPT -> output.endsWith(".js") ? BROWSER_APP : null;
       case FLASH -> output.endsWith(".swf") ? FLASH_APP : null;
       case CPP -> type != HaxeBuildFileType.HXML ? HXCPP_APP : null;
+      // hxml runs the .n through the neko runtime; lime/nme package a launcher
+      case NEKO -> type != HaxeBuildFileType.HXML || output.endsWith(".n") ? NEKO_APP : null;
       default -> null;
     };
   }
@@ -103,8 +107,14 @@ public final class HaxeProgramLaunches {
       .filter(candidate -> matches(candidate, spec.configurationClass(), file.getPath()))
       .findFirst()
       .orElse(null);
-    
-    if (existing != null) return existing;
+
+    if (existing != null) {
+      // the DERIVED fields (artifact/launcher paths) follow the build file's
+      // current layout - a reused configuration must not keep values baked
+      // when the export layout was different
+      reconfigure(existing, buildFile, targetOutput);
+      return existing;
+    }
 
     RunnerAndConfigurationSettings settings = createFor(project, buildFile, target, targetOutput);
     DapRunConfigurationBase configuration = (DapRunConfigurationBase)settings.getConfiguration();
@@ -112,7 +122,7 @@ public final class HaxeProgramLaunches {
 
     HaxeActionBeforeRunTaskProvider.Task buildTask = new HaxeActionBeforeRunTaskProvider.Task();
     buildTask.setBuildFilePath(file.getPath());
-    buildTask.setActionName(buildActionFor(buildFile.type()));
+    buildTask.setActionName(HaxeBuildFileActions.defaultBuildActionName(buildFile.type()));
     configuration.setBeforeRunTasks(List.of(buildTask));
 
     RunManager.getInstance(project).addConfiguration(settings);
@@ -129,9 +139,52 @@ public final class HaxeProgramLaunches {
       case JAVA_SCRIPT -> createBrowser(project, buildFile, targetOutput);
       case FLASH -> createFlash(project, buildFile, targetOutput);
       case CPP -> createHxcppIntellij(project, buildFile, targetOutput);
+      case NEKO -> createNeko(project, buildFile, targetOutput);
       // unreachable: specFor gates every other target to null
       default -> throw new IllegalStateException("no launch configuration for target " + target);
     };
+  }
+
+  /**
+   * hxml: the neko runtime executes the {@code .n} bytecode (the configured
+   * Build Tools neko, else the bare name from PATH). lime and nme both wrap
+   * the bytecode in a launcher executable, which runs directly - lime's
+   * target output points inside obj with the launcher in bin beside it
+   * (same layout the hxcpp and HL configs navigate); nme's target output IS
+   * the launcher.
+   */
+  @NotNull
+  private static RunnerAndConfigurationSettings createNeko(@NotNull Project project,
+                                                           @NotNull HaxeBuildFile buildFile,
+                                                           @NotNull String targetOutput) {
+    String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.neko", buildFile.file().getName());
+    RunnerAndConfigurationSettings settings = createSettings(project, name, NekoConfigurationFactory.class);
+    configureNeko((NekoRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
+    return settings;
+  }
+
+  private static void configureNeko(@NotNull NekoRunConfiguration configuration,
+                                    @NotNull HaxeBuildFile buildFile,
+                                    @NotNull String targetOutput) {
+    Path output = resolvedOutput(buildFile.file(), targetOutput);
+    if (buildFile.type() == HaxeBuildFileType.HXML) {
+      // empty executable = the neko RUNTIME, resolved at launch (settings/SDK/PATH)
+      configuration.setExecutablePath("");
+      configuration.setProgramArguments(output.toString());
+      configuration.setWorkingDirectory(String.valueOf(output.getParent()));
+      return;
+    }
+
+    Path launcher = output;
+    if (LimeProjects.isLimeFamily(buildFile.type())) {
+      // lime's target output points inside obj; the launcher is bin/<app file> beside it
+      Path binDir = binDirBesideObj(output.getParent());
+      String appFile = appFileName(buildFile);
+      if (binDir != null && appFile != null) {
+        launcher = binDir.resolve(HaxeSdkUtilBase.getExecutableName(appFile));
+      }
+    }
+    configuration.setExecutablePath(launcher.toString());
   }
 
   @NotNull
@@ -142,21 +195,41 @@ public final class HaxeProgramLaunches {
       .createConfiguration(name, HaxeRunConfigurationType.getInstance().getFactory(factoryClass));
   }
 
+  /** Re-applies the derived fields onto a reused configuration; user-owned fields (SDK, browser choice...) stay. */
+  private static void reconfigure(@NotNull RunnerAndConfigurationSettings settings,
+                                  @NotNull HaxeBuildFile buildFile,
+                                  @NotNull String targetOutput) {
+    switch (settings.getConfiguration()) {
+      case HashLinkRunConfiguration configuration -> configureHashLink(configuration, buildFile, targetOutput);
+      case BrowserRunConfiguration configuration -> configureBrowser(configuration, buildFile, targetOutput);
+      case FlashRunConfiguration configuration -> configureFlash(configuration, buildFile, targetOutput);
+      case HxcppIntellijRunConfiguration configuration ->
+        configureHxcppExecutable(configuration, buildFile, resolvedOutput(buildFile.file(), targetOutput));
+      case NekoRunConfiguration configuration -> configureNeko(configuration, buildFile, targetOutput);
+      default -> { }
+    }
+  }
+
   @NotNull
   private static RunnerAndConfigurationSettings createHashLink(@NotNull Project project,
                                                                @NotNull HaxeBuildFile buildFile,
                                                                @NotNull String targetOutput) {
-    VirtualFile file = buildFile.file();
-    String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.hashlink", file.getName());
+    String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.hashlink", buildFile.file().getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, HashLinkConfigurationFactory.class);
-    HashLinkRunConfiguration configuration = (HashLinkRunConfiguration)settings.getConfiguration();
+    configureHashLink((HashLinkRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
+    return settings;
+  }
+
+  private static void configureHashLink(@NotNull HashLinkRunConfiguration configuration,
+                                        @NotNull HaxeBuildFile buildFile,
+                                        @NotNull String targetOutput) {
+    Path output = resolvedOutput(buildFile.file(), targetOutput);
     if (buildFile.type() == HaxeBuildFileType.HXML) {
-      configuration.setHlFilePath(resolvedOutput(file, targetOutput).toString());
+      configuration.setHlFilePath(output.toString());
     }
     else {
-      configureLimeHashLink(configuration, buildFile, resolvedOutput(file, targetOutput));
+      configureLimeHashLink(configuration, buildFile, output);
     }
-    return settings;
   }
 
   @NotNull
@@ -167,26 +240,36 @@ public final class HaxeProgramLaunches {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.browser", file.getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, BrowserConfigurationFactory.class);
     BrowserRunConfiguration configuration = (BrowserRunConfiguration)settings.getConfiguration();
+    configureBrowser(configuration, buildFile, targetOutput);
+    return settings;
+  }
+
+  private static void configureBrowser(@NotNull BrowserRunConfiguration configuration,
+                                       @NotNull HaxeBuildFile buildFile,
+                                       @NotNull String targetOutput) {
     // serve mode hosts the directory containing the compiled .js (plus its
     // source map and index.html); the browser is picked in the editor
-    Path outputDirectory = resolvedOutput(file, targetOutput).getParent();
+    Path outputDirectory = resolvedOutput(buildFile.file(), targetOutput).getParent();
     if (outputDirectory != null) {
       configuration.setContentRoot(outputDirectory.toString());
     }
-    return settings;
   }
 
   @NotNull
   private static RunnerAndConfigurationSettings createFlash(@NotNull Project project,
                                                             @NotNull HaxeBuildFile buildFile,
                                                             @NotNull String targetOutput) {
-    VirtualFile file = buildFile.file();
-    String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.flash", file.getName());
+    String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.flash", buildFile.file().getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, FlashConfigurationFactory.class);
-    FlashRunConfiguration configuration = (FlashRunConfiguration)settings.getConfiguration();
-    configuration.setSwfFilePath(resolvedOutput(file, targetOutput).toString());
-    // the flex SDK and player cannot be guessed - the visible config prompts for them
+    configureFlash((FlashRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
     return settings;
+  }
+
+  private static void configureFlash(@NotNull FlashRunConfiguration configuration,
+                                     @NotNull HaxeBuildFile buildFile,
+                                     @NotNull String targetOutput) {
+    configuration.setSwfFilePath(resolvedOutput(buildFile.file(), targetOutput).toString());
+    // the flex SDK and player cannot be guessed - the visible config prompts for them
   }
 
   @NotNull
@@ -265,16 +348,6 @@ public final class HaxeProgramLaunches {
     return Path.of(buildFile.getParent().getPath())
       .resolve(targetOutput)
       .normalize();
-  }
-
-  /** The default build action of the file's type - what the attached build step runs. */
-  @NotNull
-  private static String buildActionFor(@NotNull HaxeBuildFileType type) {
-    return switch (type) {
-      case HXML -> HxmlProjects.BUILD_ACTION;
-      case NMML -> NmeProjects.BUILD_ACTION;
-      default -> LimeProjects.BUILD_ACTION;
-    };
   }
 
   private static boolean matches(@NotNull RunnerAndConfigurationSettings candidate,

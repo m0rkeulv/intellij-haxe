@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
+import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
@@ -156,8 +157,15 @@ public class DapDebugProcess extends XDebugProcess {
   // The default XDebugProcess.createConsole() builds a console but never
   // attaches it to the process handler (unlike CommandLineState, which does) —
   // without this override the debuggee's stdout/stderr go nowhere.
+  // A debugged TEST run gets an SM test console instead: the teamcity messages
+  // on the debuggee's stdout drive the test tree while breakpoints work.
   @Override
   public @NotNull ExecutionConsole createConsole() {
+    ExecutionConsole testConsole = DapTestConsoles.createTestConsole(
+      getSession().getRunProfile(), DefaultDebugExecutor.getDebugExecutorInstance(), processHandler);
+    if (testConsole != null) {
+      return testConsole;
+    }
     ConsoleView console = TextConsoleBuilderFactory.getInstance()
       .createBuilder(getSession().getProject())
       .getConsole();

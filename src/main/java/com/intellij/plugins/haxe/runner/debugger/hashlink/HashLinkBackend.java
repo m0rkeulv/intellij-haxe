@@ -52,7 +52,7 @@ public class HashLinkBackend implements DapBackend {
     this.debugPort = debugPort;
   }
 
-  int getDebugPort() {
+  public int getDebugPort() {
     return debugPort;
   }
 

@@ -44,8 +44,9 @@ class ProjectXmlEvaluator {
 	public final haxedefs:Map<String, String> = [];
 	public final haxelibs:Array<{name:String, version:String}> = [];
 	public final sources:Array<String> = [];
-	// <app> attributes drive the export layout (path) and the executable name (file)
-	public var appPath:String = "Export";
+	// <app> attributes drive the export layout (path) and the executable name (file);
+	// lime's default export root is "bin" ("Export" is only a template convention)
+	public var appPath:String = "bin";
 	public var appFile:String = "";
 
 	final environment:Map<String, String>;

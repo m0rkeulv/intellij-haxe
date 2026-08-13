@@ -1,0 +1,77 @@
+package com.intellij.plugins.haxe.v2.toolwindow.actions;
+
+import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ModuleNode;
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ProjectNode;
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.TestRunNode;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+/**
+ * Tree context menu: debugs the selection's unit tests, shown beside Run
+ * wherever it applies and enabled when the tests build's target has a debug
+ * lane; an unsupported target's row explains which targets do.
+ */
+public final class HaxeDebugUnitTestsAction extends DumbAwareAction {
+
+  private final HaxeToolWindowPanel panel;
+
+  public HaxeDebugUnitTestsAction(@NotNull HaxeToolWindowPanel panel) {
+    super(HaxeBundle.message("haxe.toolwindow.node.debug.unit.tests"), null, AllIcons.Actions.StartDebugger);
+    this.panel = panel;
+  }
+
+  @Override
+  public void actionPerformed(@NotNull AnActionEvent e) {
+    String buildFilePath = resolveTestsPath(panel.getSelectedUserObject());
+    if (buildFilePath != null) {
+      panel.debugUnitTests(buildFilePath);
+    }
+  }
+
+  @Override
+  public void update(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    Object selection = panel.getSelectedUserObject();
+    boolean relevant = selection instanceof TestRunNode
+      || selection instanceof ModuleNode
+      || selection instanceof ProjectNode;
+    String buildFilePath = relevant ? resolveTestsPath(selection) : null;
+    if (project == null || buildFilePath == null) {
+      e.getPresentation().setEnabledAndVisible(false);
+      return;
+    }
+    boolean debuggable = HaxeTestRunConfigurations.isDebugSupported(project, buildFilePath);
+    e.getPresentation().setVisible(true);
+    e.getPresentation().setEnabled(debuggable);
+    if (!debuggable) {
+      e.getPresentation().setDescription(HaxeBundle.message("haxe.test.debug.unsupported.target"));
+    }
+  }
+
+  /** The selection's tests build file: the row's own file, or the container's marked/suggested one from the last scan. */
+  @Nullable
+  private String resolveTestsPath(@Nullable Object selection) {
+    return switch (selection) {
+      case TestRunNode node -> node.buildFilePath();
+      case ModuleNode module -> panel.testsPathFor(module.name());
+      case ProjectNode ignored -> {
+        String containerId = panel.getProjectRootContainerId();
+        yield containerId == null ? null : panel.testsPathFor(containerId);
+      }
+      case null, default -> null;
+    };
+  }
+
+  @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.EDT;
+  }
+}

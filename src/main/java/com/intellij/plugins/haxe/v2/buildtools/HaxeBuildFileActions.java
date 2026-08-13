@@ -21,6 +21,17 @@ public final class HaxeBuildFileActions {
   private HaxeBuildFileActions() {
   }
 
+  /** The type's default build action NAME - the stored identifier a resolve-by-name uses (not the localized label). */
+  @NotNull
+  public static String defaultBuildActionName(@NotNull HaxeBuildFileType type) {
+    return switch (type) {
+      case HXML -> HxmlProjects.BUILD_ACTION;
+      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.BUILD_ACTION;
+      case NMML -> NmeProjects.BUILD_ACTION;
+      case HXP_SCRIPT -> HxpScriptProjects.BUILD_ACTION;
+    };
+  }
+
   /** The type's built-in action names, in menu order (custom actions come on top of these). */
   @NotNull
   public static List<String> defaultActionNames(@NotNull HaxeBuildFileType type) {

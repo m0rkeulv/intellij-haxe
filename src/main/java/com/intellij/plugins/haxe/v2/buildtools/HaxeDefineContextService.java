@@ -97,7 +97,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    */
   @Nullable
   public Map<String, String> getActiveDefines() {
-    String path = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
+    String path = HaxeKnownBuildFiles.effectiveActivePath(project);
     if (StringUtil.isEmptyOrSpaces(path)) {
       // record the null handout: files parsed now use the LEGACY define
       // context, and activating a build file later must trigger a reparse
@@ -218,7 +218,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    * entry. False when no v2 active build file is configured.
    */
   public boolean isDefinedWithoutOverrides(@NotNull String name) {
-    String path = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
+    String path = HaxeKnownBuildFiles.effectiveActivePath(project);
     if (StringUtil.isEmptyOrSpaces(path)) return false;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return false;
@@ -232,7 +232,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   /** The container owning the ACTIVE build file, or null without one — where define overrides belong. */
   @Nullable
   public String activeContainerId() {
-    String path = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
+    String path = HaxeKnownBuildFiles.effectiveActivePath(project);
     if (StringUtil.isEmptyOrSpaces(path)) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return null;
@@ -246,7 +246,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    */
   @NotNull
   private HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile) {
-    HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
+    HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
     HaxeBuildFileType type = buildFile.type();
     if (!LimeProjects.isLimeFamily(type)) return raw;
 

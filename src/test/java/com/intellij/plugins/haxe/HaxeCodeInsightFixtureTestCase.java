@@ -49,6 +49,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -270,6 +271,29 @@ abstract public class HaxeCodeInsightFixtureTestCase {
 
   public CodeInsightTestFixture getFixture() {
     return myFixture;
+  }
+
+  /** Whether a haxe compiler is on the PATH - the gate live tests check via assumeTrue before compiling anything. */
+  public static boolean haxeAvailable() {
+    return toolAvailable("haxe", "--version");
+  }
+
+  /** Whether the utest haxelib is installed - the gate for live tests compiling against real utest. */
+  public static boolean utestAvailable() {
+    return toolAvailable("haxelib", "path", "utest");
+  }
+
+  private static boolean toolAvailable(String... command) {
+    try {
+      Process process = new ProcessBuilder(command)
+        .redirectErrorStream(true)
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        .start();
+      return process.waitFor() == 0;
+    }
+    catch (IOException | InterruptedException e) {
+      return false;
+    }
   }
 
   public static class MyHaxeModuleFixtureBuilderImpl extends ModuleFixtureBuilderImpl {

@@ -177,7 +177,7 @@ public final class HaxeNmeProjectInfoService implements Disposable {
       hxml = Path.of(workDirectory).resolve(hxml);
     }
     String content = Files.readString(hxml);
-    HaxeBuildFileInfo parsed = HxmlFileParser.parse(content, path -> null);
+    HaxeBuildFileInfo parsed = HxmlFileParser.parse(content);
     List<HaxeLibDependency> libraries = withDerivedLibraries(parsed.libraries(), parsed.classpaths());
     HaxeBuildFileInfo info = new HaxeBuildFileInfo(parsed.target(), parsed.targetOutput(), parsed.defines(), libraries,
                                                    parsed.classpaths());

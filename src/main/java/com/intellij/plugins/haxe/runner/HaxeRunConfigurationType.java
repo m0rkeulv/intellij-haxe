@@ -27,6 +27,7 @@ import com.intellij.plugins.haxe.runner.debugger.hxcpp.legacy.LegacyHxcppConfigu
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.vshaxe.HxcppVshaxeConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpConfigurationFactory;
+import com.intellij.plugins.haxe.runner.neko.NekoConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserConfigurationFactory;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionConfigurationFactory;
 import com.intellij.util.containers.ContainerUtil;
@@ -68,6 +69,7 @@ public class HaxeRunConfigurationType implements ConfigurationType {
       new InterpConfigurationFactory(this),
       new BrowserConfigurationFactory(this),
       new FlashConfigurationFactory(this),
+      new NekoConfigurationFactory(this),
     };
   }
 

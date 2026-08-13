@@ -66,14 +66,15 @@ public class HaxeMethodStubFactory implements StubElementFactory<HaxeMethodStub,
 
   private static int buildKeywordFlags(@NotNull HaxeMethod psi) {
     int flags = 0;
-    if (psi.isStatic())       flags |= HaxeMethodStub.KEYWORD_STATIC;
-    if (psi.isPublic())       flags |= HaxeMethodStub.KEYWORD_PUBLIC;
-    if (psi.isOverride())     flags |= HaxeMethodStub.KEYWORD_OVERRIDE;
-    if (psi.isAbstract())     flags |= HaxeMethodStub.KEYWORD_ABSTRACT;
-    if (psi.isInline())       flags |= HaxeMethodStub.KEYWORD_INLINE;
-    if (psi.isOverload())     flags |= HaxeMethodStub.KEYWORD_OVERLOAD;
-    if (psi.isMacro())        flags |= HaxeMethodStub.KEYWORD_MACRO;
-    if (psi.isDynamic())      flags |= HaxeMethodStub.KEYWORD_DYNAMIC;
+    if (psi.isStatic())         flags |= HaxeMethodStub.KEYWORD_STATIC;
+    //Note: we can only check if declared as we can not access any other files while indexing.
+    if (psi.isDeclaredPublic()) flags |= HaxeMethodStub.KEYWORD_PUBLIC;
+    if (psi.isOverride())       flags |= HaxeMethodStub.KEYWORD_OVERRIDE;
+    if (psi.isAbstract())       flags |= HaxeMethodStub.KEYWORD_ABSTRACT;
+    if (psi.isInline())         flags |= HaxeMethodStub.KEYWORD_INLINE;
+    if (psi.isOverload())       flags |= HaxeMethodStub.KEYWORD_OVERLOAD;
+    if (psi.isMacro())          flags |= HaxeMethodStub.KEYWORD_MACRO;
+    if (psi.isDynamic())        flags |= HaxeMethodStub.KEYWORD_DYNAMIC;
     return flags;
   }
 

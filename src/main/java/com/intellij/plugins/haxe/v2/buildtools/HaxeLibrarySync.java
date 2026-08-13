@@ -14,8 +14,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCommandUtils;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -78,12 +78,11 @@ public final class HaxeLibrarySync {
   }
 
   @NotNull
-  private static Map<Module, List<HaxeBuildFileInfo.HaxeLibDependency>> collectDependencies(@NotNull Project project) {
+  static Map<Module, List<HaxeBuildFileInfo.HaxeLibDependency>> collectDependencies(@NotNull Project project) {
     Map<Module, List<HaxeBuildFileInfo.HaxeLibDependency>> dependencies = new LinkedHashMap<>();
     for (Module module : ModuleManager.getInstance(project).getModules()) {
-      List<HaxeBuildFile> buildFiles = HaxeBuildFileScanner.scan(module);
-      HaxeBuildFile current = currentBuildFile(project, module, buildFiles);
-      List<HaxeBuildFile> sources = current != null ? List.of(current) : buildFiles;
+      List<HaxeBuildFile> buildFiles = HaxeKnownBuildFiles.forModule(project, module);
+      List<HaxeBuildFile> sources = dependencySources(project, module, buildFiles);
 
       List<HaxeBuildFileInfo.HaxeLibDependency> moduleDependencies = new ArrayList<>();
       for (HaxeBuildFile buildFile : sources) {
@@ -131,7 +130,7 @@ public final class HaxeLibrarySync {
   private static List<HaxeBuildFileInfo.HaxeLibDependency> effectiveLibraries(@NotNull Project project,
                                                                               @NotNull Module module,
                                                                               @NotNull HaxeBuildFile buildFile) {
-    HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
+    HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
     HaxeBuildFileType type = buildFile.type();
     if (!LimeProjects.isLimeFamily(type)) return raw.libraries();
 
@@ -143,15 +142,34 @@ public final class HaxeLibrarySync {
   }
 
   /**
-   * The build file whose library set the module exposes: the project's active
-   * file when this module owns it, else the module's Build command file. Null
-   * when neither is configured — the union of all build files applies then.
+   * The build files whose library sets the module exposes: its CURRENT build
+   * file (the project's effective active file when this module owns it, else
+   * the module's Build command file), plus its tests build file — the module's
+   * source roots hold the test sources too, so the tests build's libraries
+   * must resolve alongside the main build's. Without a current file the union
+   * of all known build files applies.
    */
+  @NotNull
+  private static List<HaxeBuildFile> dependencySources(@NotNull Project project,
+                                                       @NotNull Module module,
+                                                       @NotNull List<HaxeBuildFile> buildFiles) {
+    HaxeBuildFile current = currentBuildFile(project, module, buildFiles);
+    List<HaxeBuildFile> sources = new ArrayList<>(current != null ? List.of(current) : buildFiles);
+
+    HaxeBuildFile tests = testsBuildFile(project, module, buildFiles);
+    boolean testsKnown = tests == null || sources.stream()
+      .anyMatch(source -> source.file().getPath().equals(tests.file().getPath()));
+    if (!testsKnown) {
+      sources.add(tests);
+    }
+    return sources;
+  }
+
   @Nullable
   private static HaxeBuildFile currentBuildFile(@NotNull Project project,
                                                @NotNull Module module,
                                                @NotNull List<HaxeBuildFile> scanned) {
-    String activePath = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
+    String activePath = HaxeKnownBuildFiles.effectiveActivePath(project);
     HaxeBuildFile active = byPath(project, scanned, activePath);
     if (active != null && ownedBy(project, active, module)) {
       return active;
@@ -164,6 +182,19 @@ public final class HaxeLibrarySync {
       }
     }
     return null;
+  }
+
+  /** The container's marked (or convention-suggested) tests build file, when this module owns it. */
+  @Nullable
+  private static HaxeBuildFile testsBuildFile(@NotNull Project project,
+                                              @NotNull Module module,
+                                              @NotNull List<HaxeBuildFile> buildFiles) {
+    List<String> candidatePaths = buildFiles.stream()
+      .map(buildFile -> buildFile.file().getPath())
+      .toList();
+    String testsPath = HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggest(module.getName(), candidatePaths);
+    HaxeBuildFile tests = byPath(project, buildFiles, testsPath);
+    return tests != null && ownedBy(project, tests, module) ? tests : null;
   }
 
   /** Finds the path among the scanned files, or loads it directly (manually added files live outside the scan). */

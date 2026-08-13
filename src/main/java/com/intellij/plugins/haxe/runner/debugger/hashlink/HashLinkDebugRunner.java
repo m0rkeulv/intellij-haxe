@@ -68,7 +68,7 @@ public class HashLinkDebugRunner extends DapDebugRunnerBase<HashLinkRunConfigura
       .withWorkDirectory(workDir != null ? workDir.toString() : null);
   }
 
-  private static int findFreePort() throws ExecutionException {
+  public static int findFreePort() throws ExecutionException {
     // unavoidable race between closing here and the VM binding it; in practice
     // hl binds immediately at startup and a collision just fails the session
     try (ServerSocket socket = new ServerSocket(0)) {

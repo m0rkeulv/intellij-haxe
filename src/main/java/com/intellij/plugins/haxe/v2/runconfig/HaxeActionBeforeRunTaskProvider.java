@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.runconfig;
 import com.intellij.build.BuildDescriptor;
 import com.intellij.build.BuildViewManager;
 import com.intellij.build.DefaultBuildDescriptor;
+import com.intellij.build.process.BuildProcessHandler;
 import com.intellij.build.progress.BuildProgress;
 import com.intellij.build.progress.BuildProgressDescriptor;
 import com.intellij.execution.BeforeRunTask;
@@ -28,12 +29,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
-import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects;
-import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
-import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.util.PathUtil;
 import icons.HaxeIcons;
 import org.jdom.Element;
@@ -43,6 +39,7 @@ import org.jetbrains.concurrency.Promise;
 import org.jetbrains.concurrency.Promises;
 
 import javax.swing.*;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -61,12 +58,17 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     private static final String ACTION = "action";
     private static final String ARGUMENTS = "arguments";
     private static final String INJECT_DEBUG = "injectDebugArguments";
+    private static final String SECTION_SCOPED = "sectionScoped";
 
     private String buildFilePath = "";
     private String actionName = HxmlProjects.BUILD_ACTION;
     private String extraArguments = "";
     // opt-out for projects whose build files already carry the debug flags/lib
     private boolean injectDebugArguments = true;
+    // test compiles set this: a multi-section hxml compiles only its selected
+    // --next section, so the extra arguments reach that section (they would
+    // otherwise land in the LAST one - haxe's trailing-argument rule)
+    private boolean sectionScoped = false;
 
     public Task() {
       super(ID);
@@ -104,6 +106,14 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       injectDebugArguments = inject;
     }
 
+    public boolean isSectionScoped() {
+      return sectionScoped;
+    }
+
+    public void setSectionScoped(boolean scoped) {
+      sectionScoped = scoped;
+    }
+
     @Override
     public void writeExternal(@NotNull Element element) {
       super.writeExternal(element);
@@ -111,6 +121,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       JDOMExternalizerUtil.writeField(element, ACTION, actionName);
       JDOMExternalizerUtil.writeField(element, ARGUMENTS, extraArguments);
       JDOMExternalizerUtil.writeField(element, INJECT_DEBUG, String.valueOf(injectDebugArguments));
+      JDOMExternalizerUtil.writeField(element, SECTION_SCOPED, String.valueOf(sectionScoped));
     }
 
     @Override
@@ -122,6 +133,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       extraArguments = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, ARGUMENTS));
       // absent in configurations saved before the option existed - keep injecting
       injectDebugArguments = !"false".equals(JDOMExternalizerUtil.readField(element, INJECT_DEBUG));
+      sectionScoped = "true".equals(JDOMExternalizerUtil.readField(element, SECTION_SCOPED));
     }
   }
 
@@ -183,7 +195,10 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       return false;
     }
 
-    List<String> command = new ArrayList<>(resolved.command());
+    List<String> base = task.isSectionScoped()
+      ? ReadAction.computeBlocking(() -> sectionScopedCommand(project, task.getBuildFilePath(), resolved.command()))
+      : resolved.command();
+    List<String> command = new ArrayList<>(base);
     if (debug && task.isInjectDebugArguments()) {
       List<String> additions = debugAdditions(project, task.getBuildFilePath());
       if (additions != null) {
@@ -198,38 +213,88 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     String title = HaxeDebuggerBundle.message("haxe.before.run.build.title",
                                               task.getActionName(), PathUtil.getFileName(task.getBuildFilePath()));
     String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
+
+    CapturingProcessHandler handler;
+    try {
+      GeneralCommandLine commandLine = new GeneralCommandLine(command).withWorkDirectory(resolved.workDirectory());
+      handler = new CapturingProcessHandler(commandLine);
+    }
+    catch (ExecutionException e) {
+      notifyFailure(project, StringUtil.notNullize(e.getMessage()));
+      return false;
+    }
+
     BuildProgress<BuildProgressDescriptor> progress = BuildViewManager.createBuildProgress(project);
     // the root progress takes its id FROM the descriptor - progress.getId()
     // asserts before start(), so the build id must be our own object
     DefaultBuildDescriptor buildDescriptor =
       new DefaultBuildDescriptor(new Object(), title, workDirectory, System.currentTimeMillis());
     buildDescriptor.setActivateToolWindowWhenAdded(true);
+    // surfacing the compile as the build's process handler enables the Build
+    // view's Stop action - the escape hatch when a compile hangs (e.g. on a
+    // wedged compilation server connection)
+    buildDescriptor.withProcessHandler(new CompileProcessHandler(handler, title), null);
     progress.start(descriptorFor(title, buildDescriptor));
 
-    try {
-      GeneralCommandLine commandLine = new GeneralCommandLine(command).withWorkDirectory(resolved.workDirectory());
-      // the process handler announces the command line as its first output -
-      // printing it manually doubles the line
-      CapturingProcessHandler handler = new CapturingProcessHandler(commandLine);
-      handler.addProcessListener(new ProcessListener() {
+    // the process handler announces the command line as its first output -
+    // printing it manually doubles the line
+    handler.addProcessListener(new ProcessListener() {
+      @Override
+      public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
+        progress.output(event.getText(),
+                        outputType instanceof ProcessOutputType type ? type : ProcessOutputType.STDOUT);
+      }
+    });
+    ProcessOutput output = handler.runProcess();
+    if (output.getExitCode() != 0) {
+      progress.fail(System.currentTimeMillis(),
+                    HaxeDebuggerBundle.message("haxe.before.run.failed", String.valueOf(output.getExitCode())));
+      return false;
+    }
+    progress.finish();
+    return true;
+  }
+
+  /** Adapts the compiler process to the Build view: its Stop action destroys the underlying process. */
+  private static final class CompileProcessHandler extends BuildProcessHandler {
+    private final CapturingProcessHandler delegate;
+    private final String executionName;
+
+    CompileProcessHandler(@NotNull CapturingProcessHandler delegate, @NotNull String executionName) {
+      this.delegate = delegate;
+      this.executionName = executionName;
+      delegate.addProcessListener(new ProcessListener() {
         @Override
-        public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
-          progress.output(event.getText(),
-                          outputType instanceof ProcessOutputType type ? type : ProcessOutputType.STDOUT);
+        public void processTerminated(@NotNull ProcessEvent event) {
+          notifyProcessTerminated(event.getExitCode());
         }
       });
-      ProcessOutput output = handler.runProcess();
-      if (output.getExitCode() != 0) {
-        progress.fail(System.currentTimeMillis(),
-                      HaxeDebuggerBundle.message("haxe.before.run.failed", String.valueOf(output.getExitCode())));
-        return false;
-      }
-      progress.finish();
-      return true;
     }
-    catch (ExecutionException e) {
-      progress.fail(System.currentTimeMillis(), StringUtil.notNullize(e.getMessage()));
+
+    @Override
+    public String getExecutionName() {
+      return executionName;
+    }
+
+    @Override
+    protected void destroyProcessImpl() {
+      delegate.destroyProcess();
+    }
+
+    @Override
+    protected void detachProcessImpl() {
+      delegate.detachProcess();
+      notifyProcessDetached();
+    }
+
+    @Override
+    public boolean detachIsDefault() {
       return false;
+    }
+
+    @Override
+    public @Nullable OutputStream getProcessInput() {
+      return null;
     }
   }
 
@@ -249,6 +314,16 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     };
   }
 
+  /** The resolved command scoped to the hxml's selected {@code --next} section; unchanged for non-hxml files. */
+  @NotNull
+  private static List<String> sectionScopedCommand(@NotNull Project project,
+                                                   @NotNull String buildFilePath,
+                                                   @NotNull List<String> command) {
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    if (file == null || HaxeBuildFileScanner.detectType(project, file) != HaxeBuildFileType.HXML) return command;
+    return HxmlProjects.scopeToSelectedSection(project, file, command);
+  }
+
   /** Target ids compiled through hxcpp whose output the HXCPP (IntelliJ) debugger can attach to ("cpp" is nme's host-desktop word; lime and nme share the rest). */
   private static final List<String> DESKTOP_CPP_TARGETS = List.of("windows", "linux", "mac", "cpp");
 
@@ -260,7 +335,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     if (type == HaxeBuildFileType.HXML) {
       HaxeBuildFileInfo info = ReadAction.computeBlocking(
-        () -> HaxeBuildFileInspector.inspect(new HaxeBuildFile(file, HaxeBuildFileType.HXML)));
+        () -> HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML)));
       return info.target() != null ? HaxeDebugAdditions.forTarget(info.target()) : null;
     }
     if (LimeProjects.isLimeFamily(type)) {

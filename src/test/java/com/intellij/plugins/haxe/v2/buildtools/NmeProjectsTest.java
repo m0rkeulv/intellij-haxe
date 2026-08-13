@@ -6,7 +6,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Build tools: NME projects")
 public class NmeProjectsTest {
@@ -54,9 +56,18 @@ public class NmeProjectsTest {
   }
 
   @Test
+  @DisplayName("neko packages a host suffixed launcher")
+  public void testNekoPackagesAHostSuffixedLauncher() {
+    NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact("neko", "MyGame", "bin");
+    assertNotNull(artifact);
+    assertEquals(HaxeTarget.NEKO, artifact.target());
+    assertTrue(artifact.relativeOutput().matches("bin/(windows|mac64|linux64)-neko/MyGame/MyGame(\\.exe)?"),
+               artifact.relativeOutput());
+  }
+
+  @Test
   @DisplayName("target flags without a launchable artifact report none")
   public void testTargetFlagsWithoutALaunchableArtifactReportNone() {
-    assertNull(NmeProjects.targetArtifact("neko", "MyGame", "bin"));
     assertNull(NmeProjects.targetArtifact("html5", "MyGame", "bin"));
     assertNull(NmeProjects.targetArtifact("android", "MyGame", "bin"));
     assertNull(NmeProjects.targetArtifact("ps4", "MyGame", "bin"));

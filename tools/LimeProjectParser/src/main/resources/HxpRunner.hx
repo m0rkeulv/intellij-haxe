@@ -81,7 +81,7 @@ class HxpRunner {
 			haxelibs: haxelibs,
 			sources: project.sources,
 			app: {
-				path: project.app.path == null ? "Export" : project.app.path,
+				path: project.app.path == null ? "bin" : project.app.path,
 				file: project.app.file == null ? "" : project.app.file
 			},
 		}));

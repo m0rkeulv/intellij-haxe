@@ -52,12 +52,15 @@ final class HaxeToolWindowModelBuilder {
     this.onEvaluationReady = onEvaluationReady;
   }
 
-  record FileEntry(HaxeBuildFile buildFile, HaxeBuildFileInfo info, boolean manual, List<ActionNode> actions) {
+  /** {@code sectionIds}/{@code sectionLabels} list a multi-section hxml's {@code --next} compilations (empty otherwise); {@code selectedSection} indexes into them. */
+  record FileEntry(HaxeBuildFile buildFile, HaxeBuildFileInfo info, boolean manual, List<ActionNode> actions,
+                   List<String> sectionIds, List<String> sectionLabels, int selectedSection) {
   }
 
   /** A build-file container: a module, or the project root for files outside every module. */
   record ContainerEntry(String id, String displayName, boolean projectRoot,
                         List<FileEntry> files, @Nullable String activePath,
+                        @Nullable String testsPath,
                         EnvironmentData environment,
                         EnvCompileCommandNode compileCommand,
                         CompilationServerNode server) {
@@ -101,11 +104,21 @@ final class HaxeToolWindowModelBuilder {
       EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files());
       EnvironmentData environment = buildEnvironmentData(raw.id(), activeDefines);
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
+      String testsPath = resolveTestsPath(raw);
       ContainerEntry container = new ContainerEntry(raw.id(), raw.displayName(), raw.projectRoot(), raw.files(),
-                                                    activePath, environment, compileCommand, server);
+                                                    activePath, testsPath, environment, compileCommand, server);
       containers.add(container);
     }
     return containers;
+  }
+
+  /** The container's tests build file: the marked one, or the store's convention-based suggestion. */
+  @Nullable
+  private String resolveTestsPath(@NotNull RawContainer raw) {
+    List<String> candidatePaths = raw.files().stream()
+      .map(entry -> entry.buildFile().file().getPath())
+      .toList();
+    return HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggest(raw.id(), candidatePaths);
   }
 
   /** One installed haxelib: the selected version (null when none is set) and every installed version. */
@@ -169,30 +182,53 @@ final class HaxeToolWindowModelBuilder {
   /** Combines auto-detected files with manual additions, drops hidden ones, and parses each file. */
   @NotNull
   private List<FileEntry> mergeAndInspect(@NotNull String containerId, @NotNull List<HaxeBuildFile> detected) {
-    HaxeBuildFilesStore filesStore = HaxeBuildFilesStore.getInstance(project);
-    Set<String> manualPaths = new LinkedHashSet<>(filesStore.getAddedPaths(containerId));
+    Set<String> manualPaths = new LinkedHashSet<>(HaxeBuildFilesStore.getInstance(project).getAddedPaths(containerId));
 
-    Map<String, HaxeBuildFile> byPath = new LinkedHashMap<>();
-    for (HaxeBuildFile buildFile : detected) {
-      byPath.putIfAbsent(buildFile.file().getPath(), buildFile);
-    }
-    for (String path : manualPaths) {
-      if (byPath.containsKey(path)) continue;
-      VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-      if (file == null || !file.isValid()) continue;
-      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-      if (type != null) {
-        byPath.put(path, new HaxeBuildFile(file, type));
-      }
-    }
-    filesStore.getHiddenPaths(containerId).forEach(byPath::remove);
-
-    return byPath.values().stream()
+    return HaxeKnownBuildFiles.mergeWithStore(project, containerId, detected).stream()
       .sorted(Comparator.comparing(buildFile -> buildFile.file().getName(), String.CASE_INSENSITIVE_ORDER))
-      .map(buildFile -> new FileEntry(buildFile, effectiveInfo(containerId, buildFile),
-                                      manualPaths.contains(buildFile.file().getPath()),
-                                      buildFileActions(containerId, buildFile)))
+      .map(buildFile -> fileEntry(containerId, buildFile, manualPaths))
       .toList();
+  }
+
+  @NotNull
+  private FileEntry fileEntry(@NotNull String containerId, @NotNull HaxeBuildFile buildFile,
+                              @NotNull Set<String> manualPaths) {
+    List<String> sectionIds = sectionIds(buildFile);
+    List<String> sectionLabels = sectionLabels(sectionIds);
+    int selectedSection = sectionIds.isEmpty() ? 0
+      : HaxeSectionSelectionStore.getInstance(project).getSelectedSection(buildFile.file(), sectionIds);
+    return new FileEntry(buildFile, effectiveInfo(containerId, buildFile),
+                         manualPaths.contains(buildFile.file().getPath()),
+                         buildFileActions(containerId, buildFile),
+                         sectionIds, sectionLabels, selectedSection);
+  }
+
+  /** One identity per {@code --next} section of a multi-section hxml; empty for everything else. */
+  @NotNull
+  private List<String> sectionIds(@NotNull HaxeBuildFile buildFile) {
+    if (buildFile.type() != HaxeBuildFileType.HXML) return List.of();
+    List<String> sections = HaxeBuildFileInspector.sectionContents(project, buildFile.file());
+    if (sections.size() < 2) return List.of();
+    return HxmlFileParser.sectionIds(buildFile.file().getName(), sections);
+  }
+
+  /**
+   * Section labels are FILENAMES, never targets: the file the section's
+   * content came from, the build file's own name for inline sections, and a
+   * counter when one file chains several builds internally
+   * ("1: compile-cs.hxml", "2: compile-cs.hxml (2)").
+   */
+  @NotNull
+  private static List<String> sectionLabels(@NotNull List<String> sectionIds) {
+    List<String> labels = new ArrayList<>();
+    for (int i = 0; i < sectionIds.size(); i++) {
+      String id = sectionIds.get(i);
+      // the identity's "#n" occurrence suffix reads better as " (n)"
+      int hash = id.lastIndexOf('#');
+      String name = hash < 0 ? id : id.substring(0, hash) + " (" + id.substring(hash + 1) + ")";
+      labels.add((i + 1) + ": " + name);
+    }
+    return labels;
   }
 
   /**
@@ -206,7 +242,7 @@ final class HaxeToolWindowModelBuilder {
    */
   @NotNull
   private HaxeBuildFileInfo effectiveInfo(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
-    HaxeBuildFileInfo raw = HaxeBuildFileInspector.inspect(buildFile);
+    HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
     HaxeBuildFileType type = buildFile.type();
     if (type == HaxeBuildFileType.NMML) {
       return nmeEffectiveInfo(containerId, buildFile, raw);

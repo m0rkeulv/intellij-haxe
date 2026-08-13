@@ -20,16 +20,8 @@ import com.intellij.plugins.haxe.display.transport.DisplayResponse;
 import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeServerMetrics;
-import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
-import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
+import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.util.PsiErrorElementUtil;
 import java.util.ArrayList;
@@ -143,7 +135,7 @@ public final class HaxeCompilerDisplayService {
     HaxeDisplayConfiguration.DefineOverrides overrides = HaxeDisplayConfiguration.overridesFor(project, containerId);
 
     if (type == HaxeBuildFileType.HXML) {
-      return new DisplayContext(List.of("--cwd", directory, buildFile.getName()), null, sdkName, overrides, containerId);
+      return new DisplayContext(hxmlContextArgs(buildFile, directory), null, sdkName, overrides, containerId);
     }
     if (type == HaxeBuildFileType.NMML) {
       return nmeContext(buildFile, directory, sdkName, overrides, containerId);
@@ -153,6 +145,28 @@ public final class HaxeCompilerDisplayService {
     LimeDisplaySpec lime =
       new LimeDisplaySpec(directory, buildFile.getName(), tool, targetFlag, buildFile.getModificationStamp());
     return new DisplayContext(null, lime, sdkName, overrides, containerId);
+  }
+
+  /**
+   * HXML context args. A single-section file rides as the file reference the
+   * server expands itself; a {@code --next} chain is scoped to the SELECTED
+   * section, synthesized as compiler arguments. Passing the chained file
+   * would make every server request carry ALL sections — each context compile
+   * (module-cache warm-up, failure probes, per-request processing) then
+   * grinds through every target sequentially and stalls later {@code
+   * --connect} builds behind it, and diagnostics would answer for the first
+   * section instead of the one the tool window follows.
+   */
+  @NotNull
+  private List<String> hxmlContextArgs(@NotNull VirtualFile buildFile, @NotNull String directory) {
+    List<String> sections = HaxeBuildFileInspector.sectionContents(project, buildFile);
+    if (sections.size() < 2) {
+      return List.of("--cwd", directory, buildFile.getName());
+    }
+    int index = HaxeBuildSections.selectedIndex(project, buildFile, sections);
+    List<String> args = new ArrayList<>(List.of("--cwd", directory));
+    args.addAll(HxmlArguments.parseLines(sections.get(index).lines().toList()));
+    return List.copyOf(args);
   }
 
   /**
@@ -433,7 +447,7 @@ public final class HaxeCompilerDisplayService {
    */
   @Nullable
   private VirtualFile currentBuildFile(@NotNull Module module) {
-    VirtualFile active = fileIfOwned(HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath(), module);
+    VirtualFile active = fileIfOwned(HaxeKnownBuildFiles.effectiveActivePath(project), module);
     if (active != null) return active;
     HaxeEnvironmentStore.CompileCommand command =
       HaxeEnvironmentStore.getInstance(project).getCompileCommand(module.getName());

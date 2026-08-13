@@ -30,6 +30,8 @@ public final class HaxeBuildToolsSettingsPanel {
   private final JBCheckBox serverEnabledCheckBox = new JBCheckBox(HaxeBundle.message("haxe.build.tools.server.enabled"));
   private final JBTextField serverPortField = new JBTextField();
   private final JBTextField serverArgumentsField = new JBTextField();
+  private final JBCheckBox liveTestReportingCheckBox =
+    new JBCheckBox(HaxeBundle.message("haxe.build.tools.live.test.reporting"));
   private final JPanel mainPanel;
 
   private final Set<String> knownSdkNames = new LinkedHashSet<>();
@@ -51,6 +53,9 @@ public final class HaxeBuildToolsSettingsPanel {
       .addLabeledComponent(HaxeBundle.message("haxe.build.tools.server.port"), serverPortField)
       .addLabeledComponent(HaxeBundle.message("haxe.build.tools.server.arguments"), serverArgumentsField)
       .addTooltip(HaxeBundle.message("haxe.build.tools.server.hint"))
+      .addSeparator(8)
+      .addComponent(liveTestReportingCheckBox)
+      .addTooltip(HaxeBundle.message("haxe.build.tools.live.test.reporting.hint"))
       .getPanel();
   }
 
@@ -69,6 +74,14 @@ public final class HaxeBuildToolsSettingsPanel {
     serverPortField.setText(port > 0 ? String.valueOf(port) : "");
     serverArgumentsField.setText(arguments);
     updateServerFieldsEnabled();
+  }
+
+  public void resetLiveTestReporting(boolean enabled) {
+    liveTestReportingCheckBox.setSelected(enabled);
+  }
+
+  public boolean isLiveTestReporting() {
+    return liveTestReportingCheckBox.isSelected();
   }
 
   public boolean isServerEnabled() {

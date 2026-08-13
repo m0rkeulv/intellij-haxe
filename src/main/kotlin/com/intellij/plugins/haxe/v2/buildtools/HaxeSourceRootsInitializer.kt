@@ -32,10 +32,14 @@ object HaxeSourceRootsInitializer {
 
   suspend fun initialize(project: Project) {
     val plans = smartReadAction(project) { plan(project) }
+    applyPlans(project, plans)
+  }
+
+  internal suspend fun applyPlans(project: Project, plans: List<RootsPlan>) {
     if (plans.isEmpty()) return
     val workspaceModel = WorkspaceModel.getInstance(project)
     val urlManager = workspaceModel.getVirtualFileUrlManager()
-    workspaceModel.update("Haxe initial source roots") { builder ->
+    workspaceModel.update("Haxe source roots from build files") { builder ->
       for (plan in plans) {
         val module = builder.entities(ModuleEntity::class.java).firstOrNull { it.name == plan.moduleName } ?: continue
         for (contentRoot in module.contentRoots) {
@@ -45,45 +49,59 @@ object HaxeSourceRootsInitializer {
     }
   }
 
-  private data class RootsPlan(val moduleName: String, val sourceDirs: List<String>, val excludeDirs: List<String>)
+  internal data class RootsPlan(val moduleName: String, val sourceDirs: List<String>, val excludeDirs: List<String>)
+
+  /** Whether the module still has no source roots — the state the first-open setup (and the add-file offer) applies to. */
+  fun moduleHasNoSourceRoots(project: Project, moduleName: String): Boolean {
+    val snapshot = WorkspaceModel.getInstance(project).currentSnapshot
+    val entity = snapshot.entities(ModuleEntity::class.java).firstOrNull { it.name == moduleName } ?: return false
+    return entity.contentRoots.none { it.sourceRoots.isNotEmpty() }
+  }
 
   private fun plan(project: Project): List<RootsPlan> {
     val plans = mutableListOf<RootsPlan>()
     for (module in ModuleManager.getInstance(project).modules) {
-      val snapshot = WorkspaceModel.getInstance(project).currentSnapshot
-      val entity = snapshot.entities(ModuleEntity::class.java).firstOrNull { it.name == module.name } ?: continue
-      if (entity.contentRoots.any { it.sourceRoots.isNotEmpty() }) continue
+      if (!moduleHasNoSourceRoots(project, module.name)) continue
 
       val buildFiles = HaxeBuildFileScanner.scan(module)
       if (buildFiles.isEmpty()) continue
 
-      val sourceDirs = linkedSetOf<String>()
-      val excludeDirs = linkedSetOf<String>()
-      for (buildFile in buildFiles) {
-        val directory = buildFile.file().parent ?: continue
-        val info = HaxeBuildFileInspector.inspect(buildFile)
+      planFor(project, module.name, buildFiles)?.let { plans += it }
+    }
+    return plans
+  }
+
+  /** The build files' roots contribution: existing classpath dirs as sources, output locations as excludes. */
+  internal fun planFor(project: Project, moduleName: String, buildFiles: List<HaxeBuildFile>): RootsPlan? {
+    val sourceDirs = linkedSetOf<String>()
+    val excludeDirs = linkedSetOf<String>()
+    for (buildFile in buildFiles) {
+      val directory = buildFile.file().parent ?: continue
+      // every --next section contributes: the module holds all sections' sources
+      // and outputs, whichever section the tool window currently follows
+      val sections = HaxeBuildFileInspector.inspectSections(project, buildFile)
+      for (info in sections) {
         for (classpath in info.classpaths()) {
           resolveDirectory(directory, classpath)?.let { sourceDirs += it }
         }
-        when (buildFile.type()) {
-          HaxeBuildFileType.HXML ->
-            info.targetOutput()?.let { output ->
-              // the output FILE's directory, whether or not it exists yet
-              val parent = File(FileUtil.toSystemIndependentName(output)).parent
-              excludeDirs += resolvePath(directory, parent ?: output)
-            }
-          HaxeBuildFileType.OPENFL, HaxeBuildFileType.LIME, HaxeBuildFileType.NMML ->
-            ProjectXmlParser.parseAppPath(VfsUtilCore.loadText(buildFile.file()))?.let {
-              excludeDirs += resolvePath(directory, it)
-            }
-          else -> {}
+        if (buildFile.type() == HaxeBuildFileType.HXML) {
+          info.targetOutput()?.let { output ->
+            // the output FILE's directory, whether or not it exists yet
+            val parent = File(FileUtil.toSystemIndependentName(output)).parent
+            excludeDirs += resolvePath(directory, parent ?: output)
+          }
         }
       }
-      if (sourceDirs.isNotEmpty() || excludeDirs.isNotEmpty()) {
-        plans += RootsPlan(module.name, sourceDirs.toList(), excludeDirs.toList())
+      when (buildFile.type()) {
+        HaxeBuildFileType.OPENFL, HaxeBuildFileType.LIME, HaxeBuildFileType.NMML ->
+          ProjectXmlParser.parseAppPath(VfsUtilCore.loadText(buildFile.file()))?.let {
+            excludeDirs += resolvePath(directory, it)
+          }
+        else -> {}
       }
     }
-    return plans
+    if (sourceDirs.isEmpty() && excludeDirs.isEmpty()) return null
+    return RootsPlan(moduleName, sourceDirs.toList(), excludeDirs.toList())
   }
 
   /** An existing directory resolved against the build file's directory, or null. */

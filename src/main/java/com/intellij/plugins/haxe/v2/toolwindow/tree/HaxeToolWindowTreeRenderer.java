@@ -52,6 +52,10 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         else {
           append(fileRow.buildFile().file().getName());
         }
+        if (fileRow.testsFile()) {
+          append("  " + HaxeBundle.message("haxe.toolwindow.node.build.file.tests"),
+                 SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        }
       }
       case TargetNode targetNode -> {
         setIcon(AllIcons.RunConfigurations.Application);
@@ -60,6 +64,12 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         if (targetNode.selectable()) {
           append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
+      }
+      case SectionNode sectionNode -> {
+        setIcon(AllIcons.RunConfigurations.Compound);
+        append(HaxeBundle.message("haxe.toolwindow.node.section"));
+        append("  " + sectionNode.displayName(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
       case GroupNode groupNode -> {
         setIcon(groupNode.kind() == GroupKind.LIBRARIES ? AllIcons.Nodes.PpLibFolder : AllIcons.Nodes.Folder);
@@ -102,6 +112,11 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         append(HaxeBundle.message("haxe.toolwindow.node.actions"));
         append(" (" + actionsGroup.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
+      case TestsGroupNode testsGroup -> {
+        setIcon(AllIcons.Nodes.TestSourceFolder);
+        append(HaxeBundle.message("haxe.toolwindow.node.tests.group"));
+        append(" (" + testsGroup.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      }
       case ActionNode actionNode -> {
         setIcon(isBuildAction(actionNode.name()) ? AllIcons.Actions.Compile : AllIcons.Actions.Execute);
         append(actionNode.name());
@@ -111,6 +126,10 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         setIcon(AllIcons.Actions.Execute);
         append(HaxeBundle.message("haxe.toolwindow.node.program"));
         append("  " + programNode.kind(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      }
+      case TestRunNode ignored -> {
+        setIcon(AllIcons.RunConfigurations.TestState.Run);
+        append(HaxeBundle.message("haxe.toolwindow.node.run.unit.tests"));
       }
       case EnvSdkNode sdkNode -> {
         setIcon(AllIcons.Nodes.PpJdk);
@@ -199,7 +218,10 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         HaxeBundle.message(groupNode.kind() == GroupKind.LIBRARIES ? "haxe.toolwindow.tooltip.libraries"
                                                                    : "haxe.toolwindow.tooltip.defines");
       case ActionsGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.actions");
+      case TestsGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.tests.group");
+      case SectionNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.section");
       case ProgramNode programNode -> HaxeBundle.message("haxe.toolwindow.tooltip.program", programNode.kind());
+      case TestRunNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.run.unit.tests");
       case null, default -> null;
     };
   }

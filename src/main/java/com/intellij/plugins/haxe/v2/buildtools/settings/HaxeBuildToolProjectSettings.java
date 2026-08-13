@@ -23,6 +23,7 @@ public final class HaxeBuildToolProjectSettings implements HaxeBuildToolSettings
     public boolean compilationServerEnabled = true;
     public int compilationServerPort;
     public String compilationServerArguments = "";
+    public boolean liveTestReporting = true;
   }
 
   private State state = new State();
@@ -105,5 +106,15 @@ public final class HaxeBuildToolProjectSettings implements HaxeBuildToolSettings
   @Override
   public void setCompilationServerArguments(@NotNull String arguments) {
     state.compilationServerArguments = arguments;
+  }
+
+  @Override
+  public boolean isLiveTestReporting() {
+    return state.liveTestReporting;
+  }
+
+  @Override
+  public void setLiveTestReporting(boolean enabled) {
+    state.liveTestReporting = enabled;
   }
 }

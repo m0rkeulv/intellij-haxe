@@ -16,6 +16,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -70,7 +71,8 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
            || !panel.getHashlinkPath().equals(settings.getHashlinkPath())
            || panel.isServerEnabled() != settings.isCompilationServerEnabled()
            || panel.getServerPort() != settings.getCompilationServerPort()
-           || !panel.getServerArguments().equals(settings.getCompilationServerArguments());
+           || !panel.getServerArguments().equals(settings.getCompilationServerArguments())
+           || panel.isLiveTestReporting() != settings.isLiveTestReporting();
   }
 
   @Override
@@ -97,6 +99,15 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
     settings.setCompilationServerEnabled(panel.isServerEnabled());
     settings.setCompilationServerPort(panel.getServerPort());
     settings.setCompilationServerArguments(panel.getServerArguments());
+
+    boolean liveTestReportingChanged = panel.isLiveTestReporting() != settings.isLiveTestReporting();
+    settings.setLiveTestReporting(panel.isLiveTestReporting());
+    if (liveTestReportingChanged) {
+      // artifact-target test configurations persist their compile arguments in
+      // the before-run step - resync, or the toggle only applies after a
+      // configuration edit
+      HaxeTestRunConfigurations.resyncCompileSteps(project);
+    }
 
     if (serverConfigChanged) {
       // these settings invalidate the running server; the next connected compile
@@ -139,6 +150,7 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
     panel.resetServerFields(settings.isCompilationServerEnabled(),
                             settings.getCompilationServerPort(),
                             settings.getCompilationServerArguments());
+    panel.resetLiveTestReporting(settings.isLiveTestReporting());
   }
 
   @Override

@@ -100,9 +100,10 @@ public final class NmeProjects {
   /// wraps an .app bundle instead of a plain directory). The output root is the
   /// nmml's `<app path>`, defaulting to `bin`. Platform dirs follow
   /// the tool's naming, which suffixes "64" for the 64-bit desktop builds every
-  /// modern mac/linux host produces. "cpp" builds for the host desktop. Target
-  /// flags without a launchable artifact mapping (android, ios, neko's
-  /// bootstrapped executable, user-configured console targets...) return null.
+  /// modern mac/linux host produces; a neko build lands in a host-suffixed
+  /// `-neko` dir wrapping the bytecode in a launcher executable. "cpp" builds
+  /// for the host desktop. Target flags without a launchable artifact mapping
+  /// (android, ios, user-configured console targets...) return null.
   @Nullable
   public static TargetArtifact targetArtifact(@NotNull String targetFlag, @NotNull String appFile, @NotNull String outputRoot) {
     return switch (targetFlag) {
@@ -110,9 +111,18 @@ public final class NmeProjects {
       case "windows" -> windowsArtifact(appFile, outputRoot);
       case "linux" -> linuxArtifact(appFile, outputRoot);
       case "mac" -> macArtifact(appFile, outputRoot);
+      case "neko" -> nekoArtifact(appFile, outputRoot);
       case "flash" -> new TargetArtifact(HaxeTarget.FLASH, outputRoot + "/flash/" + appFile + "/" + appFile + ".swf");
       default -> null;
     };
+  }
+
+  @NotNull
+  private static TargetArtifact nekoArtifact(@NotNull String appFile, @NotNull String outputRoot) {
+    String platformDir = SystemInfo.isWindows ? "windows-neko"
+                                              : SystemInfo.isMac ? "mac64-neko" : "linux64-neko";
+    String launcher = SystemInfo.isWindows ? appFile + ".exe" : appFile;
+    return new TargetArtifact(HaxeTarget.NEKO, outputRoot + "/" + platformDir + "/" + appFile + "/" + launcher);
   }
 
   @NotNull

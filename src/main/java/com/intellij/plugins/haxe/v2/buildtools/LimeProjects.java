@@ -1,15 +1,21 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Facts about lime-family projects (lime/openfl xml and lime HXP scripts):
@@ -75,5 +81,38 @@ public final class LimeProjects {
                                                    "run", toolFor(type), actionName, file.getName()));
     command.addAll(selectedTargetFlags(project, type, file));
     return command;
+  }
+
+  /** The target flags whose packaged app is a host-launchable binary (see {@link #packagedBinary}). */
+  public static final Set<String> HOST_LAUNCHABLE_TARGETS = Set.of("neko", "hl", "cpp", "windows", "linux", "mac");
+
+  /**
+   * The launchable binary a lime build packages for a host target:
+   * {@code <app path>/<target dir>/bin/<app file>[.exe]}, relative to the
+   * project file. Neko output is wrapped in a launcher executable and an HL
+   * build ships a renamed copy of the hl runtime beside its hlboot.dat — for
+   * all host targets the packaged binary itself is what runs. Null when the
+   * project xml declares no app file/path or the target is not host-launchable.
+   */
+  @Nullable
+  public static Path packagedBinary(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
+    if (!HOST_LAUNCHABLE_TARGETS.contains(targetFlag)) return null;
+    String appFile = ProjectXmlParser.parseAppFile(content);
+    String appPath = StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin");
+    if (appFile == null) return null;
+    return Path.of(projectFile.getParent().getPath())
+      .resolve(appPath)
+      .resolve(targetDirectory(targetFlag))
+      .resolve("bin")
+      .resolve(HaxeSdkUtilBase.getExecutableName(appFile))
+      .normalize();
+  }
+
+  /** The export subdirectory a target builds into; "cpp" is the tool's alias for the host platform. */
+  @NotNull
+  private static String targetDirectory(@NotNull String targetFlag) {
+    if (!targetFlag.equals("cpp")) return targetFlag;
+    if (SystemInfo.isWindows) return "windows";
+    return SystemInfo.isMac ? "mac" : "linux";
   }
 }

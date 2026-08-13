@@ -1,8 +1,10 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.plugins.haxe.config.sdk.HaxeSdkData;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
@@ -10,6 +12,9 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -61,6 +66,39 @@ public final class HaxeToolPathResolver {
       }
     }
     return HaxeSdkUtilBase.getExecutableName("haxelib");
+  }
+
+  /**
+   * Absolute path to the neko runtime: the Build Tools setting when set, else
+   * the SDK's configured runtime, else a PATH lookup — the bare name only as
+   * the last resort (run configurations validate the file exists, so a bare
+   * name must have been genuinely unresolvable).
+   */
+  @NotNull
+  public static String resolveNekoExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
+    String configured = HaxeBuildToolSettings.getInstance(project).getNekoPath();
+    if (!configured.isEmpty()) {
+      return configured;
+    }
+    Sdk sdk = findSdk(project, preferredSdkName);
+    if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
+      Path fromSdk = executableOrInDirectory(data.getNekoBinPath(), "neko");
+      if (fromSdk != null) {
+        return fromSdk.toString();
+      }
+    }
+    File onPath = PathEnvironmentVariableUtil.findInPath(HaxeSdkUtilBase.getExecutableName("neko"));
+    return onPath != null ? onPath.getAbsolutePath() : HaxeSdkUtilBase.getExecutableName("neko");
+  }
+
+  /** The configured value may point at the executable itself or its directory. */
+  @Nullable
+  private static Path executableOrInDirectory(@Nullable String configuredPath, @NotNull String executableName) {
+    if (configuredPath == null || configuredPath.isBlank()) return null;
+    Path candidate = Path.of(configuredPath);
+    if (Files.isRegularFile(candidate)) return candidate;
+    Path inDirectory = candidate.resolve(HaxeSdkUtilBase.getExecutableName(executableName));
+    return Files.isRegularFile(inDirectory) ? inDirectory : null;
   }
 
   @Nullable

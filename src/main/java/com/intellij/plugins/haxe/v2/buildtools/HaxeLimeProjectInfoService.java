@@ -215,6 +215,9 @@ public final class HaxeLimeProjectInfoService implements Disposable {
       // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
       case "windows" -> appFile.isEmpty() ? null : appPath + "/windows/bin/" + appFile + ".exe";
       case "linux" -> appFile.isEmpty() ? null : appPath + "/linux/bin/" + appFile;
+      // neko is wrapped in a launcher executable named after the app, host-suffixed
+      case "neko" -> appFile.isEmpty() ? null
+                                       : appPath + "/neko/bin/" + (SystemInfo.isWindows ? appFile + ".exe" : appFile);
       // TODO mac: the artifact is a .app bundle (Contents/MacOS/<app file>) - needs bundle-aware launch
       default -> null;
     };
@@ -276,7 +279,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
         log.warn(tool + " display failed for " + fileName + " (" + key.targetFlag() + "): " + firstErrorLine(output));
         return null;
       }
-      return HxmlFileParser.parse(output.getStdout(), path -> null);
+      return HxmlFileParser.parse(output.getStdout());
     }
     catch (ExecutionException e) {
       log.warn(tool + " display could not run for " + fileName + ": " + e.getMessage());
@@ -306,10 +309,11 @@ public final class HaxeLimeProjectInfoService implements Disposable {
   private record ParserHaxelib(String name, String version) {
   }
 
-  /// `path` defaults to lime's export root "Export" when the project sets none.
+  /// `path` defaults to lime's export root "bin" when the project sets none
+  /// ("Export" is only an openfl-template convention, not the tool default).
   private record ParserApp(String path, String file) {
     private ParserApp {
-      path = path != null ? path : "Export";
+      path = path != null ? path : "bin";
       file = file != null ? file : "";
     }
   }

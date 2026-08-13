@@ -23,7 +23,10 @@ public final class HaxeDebugAdditions {
       // HL: debug info in the bytecode; JS: -debug emits the .js.map the
       // browser adapters need; FLASH: -debug embeds the fdb line tables
       case HL, JAVA_SCRIPT, FLASH -> List.of("-debug");
-      // remaining targets follow in phase C (hxcpp: debug server lib + port, eval)
+      // hxcpp: line tables plus the in-debuggee DAP server compiled in - it
+      // connects out at startup guided by the HXCPP_DEBUG_HOST/PORT env vars
+      case CPP -> List.of("-debug", "-lib", "intellij-hxcpp-debug-server");
+      // remaining targets follow in phase C (eval)
       default -> null;
     };
   }

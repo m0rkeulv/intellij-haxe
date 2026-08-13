@@ -62,9 +62,11 @@ public final class HaxeToolWindowNodes {
   /**
    * A build file row; at most one per container is active (its configuration drives
    * the build). Manual rows were added by hand and can be removed; auto-detected
-   * rows can only be hidden.
+   * rows can only be hidden. {@code testsFile} marks the container's tests build
+   * file - the one test runs compile and launch.
    */
-  public record BuildFileRow(@NotNull HaxeBuildFile buildFile, @NotNull String containerId, boolean active, boolean manual)
+  public record BuildFileRow(@NotNull HaxeBuildFile buildFile, @NotNull String containerId, boolean active,
+                             boolean manual, boolean testsFile)
     implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
@@ -100,6 +102,19 @@ public final class HaxeToolWindowNodes {
     @Override
     public String speedSearchText() {
       return HaxeBundle.message("haxe.toolwindow.node.actions");
+    }
+  }
+
+  /** "Tests" grouping row under the container's marked tests build file, holding the test-run entries. */
+  public record TestsGroupNode(@NotNull String ownerId, int count) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "tests";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.tests.group");
     }
   }
 
@@ -149,6 +164,24 @@ public final class HaxeToolWindowNodes {
     }
   }
 
+  /**
+   * "Run Unit Tests" row under the container's marked tests build file: launches
+   * the tests through the unit-test run configuration (SM test console), with the
+   * compile attached as a before-launch step. Deliberately NOT named after lime's
+   * unrelated default {@code test} action (build-and-launch).
+   */
+  public record TestRunNode(@NotNull String buildFilePath) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "unittests";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.run.unit.tests");
+    }
+  }
+
   /** Target row under a build file; selectable for XML/HXP projects, static for HXML. */
   public record TargetNode(@NotNull HaxeBuildFile buildFile, @NotNull String displayName, boolean selectable)
     implements HaxeToolWindowNode {
@@ -160,6 +193,31 @@ public final class HaxeToolWindowNodes {
     @Override
     public String speedSearchText() {
       return displayName;
+    }
+  }
+
+  /**
+   * Section row under a multi-section hxml (a {@code --next} chain): which
+   * compilation the tree's defines/libraries/target and test runs follow.
+   * Carries every section's identity and label so the chooser popup needs no
+   * re-parse; selections are stored by identity, index-aligned with labels.
+   */
+  public record SectionNode(@NotNull HaxeBuildFile buildFile,
+                            @NotNull List<String> ids,
+                            @NotNull List<String> labels,
+                            int selected) implements HaxeToolWindowNode {
+    public String displayName() {
+      return labels.get(selected);
+    }
+
+    @Override
+    public String expansionKey() {
+      return "section:" + buildFile.file().getPath();
+    }
+
+    @Override
+    public String speedSearchText() {
+      return displayName();
     }
   }
 
