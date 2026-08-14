@@ -208,6 +208,18 @@ flowchart TD
     D --> E["main: park until configurationDone"]
 ```
 
+The opt-in is PER THREAD and only a thread can enable ITSELF
+(`mCanStop` starts false in every `DebuggerContext`; there is no
+enable-other-thread API). Threads spawned after startup therefore self-enable
+from the event handler: `THREAD_CREATED` is delivered ON the attaching
+thread, where `enableCurrentThreadDebugging(true)` is legal. Without this,
+any code running off the boot thread verifies breakpoints (the tables and
+line table are global) but never hits them — nme apps run their WHOLE
+application loop, and thus every test, on such a thread. A `pause` still
+stops those threads (`breakNow` ignores the opt-in), and hxcpp flips
+`mCanStop` to true after any stop, so a session "healed" by a manual pause
+is the telltale of a thread that missed the opt-in.
+
 Stop notifications run ON the thread that stopped, while it is genuinely
 suspended. `getThreadInfo(threadNumber, false)` must be read THERE, in the
 handler — it delivers the status and hit-breakpoint number. Reading it later

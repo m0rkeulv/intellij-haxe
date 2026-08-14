@@ -29,6 +29,14 @@ class NativeDebuggerApi implements DebuggerApi {
 				// returns RUNNING. Then hand off and return; hxcpp blocks the
 				// thread in DoBreak until continueThreads.
 				if (event == Debugger.THREAD_CREATED) {
+					// Runs ON the newly attached thread. hxcpp debugs a thread only
+					// after it opts in, and only a thread can opt ITSELF in - without
+					// this, code on threads spawned after startup (nme runs its whole
+					// application loop on one, user workers too) verifies breakpoints
+					// but never hits them. The server thread never reaches this
+					// branch: it attaches before this handler is registered, and
+					// excludes itself right after registering it.
+					Debugger.enableCurrentThreadDebugging(true);
 					handler(ThreadCreated(threadNumber));
 				} else if (event == Debugger.THREAD_TERMINATED) {
 					handler(ThreadTerminated(threadNumber));
