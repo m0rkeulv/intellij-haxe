@@ -240,6 +240,7 @@ public class DapDebugProcess extends XDebugProcess {
   /** Breakpoints, exception filters and settings, then configurationDone. */
   private void sendStartupConfiguration() throws IOException, InterruptedException {
     breakpoints.flushAll();
+    printSystem("[debug] " + breakpoints.armedDescription() + "\n");
     // Exception filters go IN-PHASE (before configurationDone), built by
     // reading the breakpoint manager: a breakpoint already enabled from a
     // previous IDE run arms here — the registerBreakpoint callbacks alone

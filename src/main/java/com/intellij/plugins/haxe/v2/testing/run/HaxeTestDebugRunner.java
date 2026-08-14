@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.testing.run;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -17,6 +18,7 @@ import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkDebugRunner;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijBackend;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpDapBackend;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -81,8 +83,9 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
       return switch (plan.target()) {
         case HL -> new HashLinkBackend(hlRuntime(configuration, plan),
                                        hlProgram(plan),
-                                       HashLinkDebugRunner.findFreePort());
-        case CPP -> new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS);
+                                       HashLinkDebugRunner.findFreePort(),
+                                       sourceDirectories(configuration));
+        case CPP -> new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS, sourceDirectories(configuration));
         default -> new InterpDapBackend(VM_CONNECT_TIMEOUT_MILLIS);
       };
     } catch (IOException e) {
@@ -172,5 +175,14 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
     String buildFilePath = configuration.getBuildFilePath();
     VirtualFile file = buildFilePath == null ? null : LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     return file == null ? null : ModuleUtilCore.findModuleForFile(file, configuration.getProject());
+  }
+
+  /** The tests build's classpath roots, scoping breakpoint binding and frame resolution to THIS build's files. */
+  @NotNull
+  private static List<String> sourceDirectories(HaxeTestRunConfiguration configuration) {
+    String buildFilePath = configuration.getBuildFilePath();
+    if (StringUtil.isEmptyOrSpaces(buildFilePath)) return List.of();
+    return ReadAction.computeBlocking(
+      () -> HaxeBuildClasspaths.sourceDirectories(configuration.getProject(), buildFilePath));
   }
 }

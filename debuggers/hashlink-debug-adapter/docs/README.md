@@ -22,8 +22,8 @@ connects to the printed port, and speaks DAP over TCP. The adapter serves one
 client session and exits on disconnect. Two ways to reach the debuggee:
 
 - **Launch** (default): the adapter spawns
-  `hl --debug <port> --debug-wait <program.hl>` (the `.hl` must be compiled
-  with `-debug`), drains the VM's handshake from the debug socket, and
+  `hl --debug <port> --debug-wait <program.hl>`, drains the VM's handshake
+  from the debug socket, and
   attaches via the OS debug API. The adapter owns the child's stdio and
   forwards it as DAP `output` events.
 - **Attach** (`attachPid` + `debugPort` in the launch arguments): the CLIENT
@@ -311,6 +311,11 @@ A breakpoint resolves `file:line` against the bytecode debug tables
 (`resolveLine`, exact line — see Decisions), maps opcode → machine address
 through the jit table (`JitInfo.addressOf`), saves the original byte and
 patches `0xCC` (INT3).
+
+The HL target emits the file/line debug tables unconditionally (verified on
+haxe 4.3.7: a plain compile's bytecode carries the hasdebug flag and binds
+and hits breakpoints exactly like a `-debug` build) — `-debug` enriches the
+bytecode (larger output) but breakpoint binding does not depend on it.
 
 **Continuing past a breakpoint** restores the original byte, sets the CPU
 trap flag (`EFlags` bit `0x100`) to single-step over that one instruction,
