@@ -29,8 +29,14 @@ public final class HaxeMarkTestsBuildFileAction extends DumbAwareAction {
   public void actionPerformed(@NotNull AnActionEvent e) {
     Project project = e.getProject();
     if (project != null && panel.getSelectedUserObject() instanceof BuildFileRow row) {
-      String newPath = row.testsFile() ? null : row.buildFile().file().getPath();
-      HaxeTestsBuildFileStore.getInstance(project).setTestsFile(row.containerId(), newPath);
+      HaxeTestsBuildFileStore store = HaxeTestsBuildFileStore.getInstance(project);
+      String path = row.buildFile().file().getPath();
+      if (row.testsFile()) {
+        store.unmarkTestsFile(row.containerId(), path);
+      }
+      else {
+        store.markTestsFile(row.containerId(), path);
+      }
       // the tests build's libraries feed the module's resolve scope - re-sync
       HaxeLibrarySync.sync(project, panel::refreshTree);
     }

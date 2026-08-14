@@ -13,10 +13,12 @@ import org.jetbrains.annotations.TestOnly;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
- * Per-container (module / project root) "tests build file": the build file that
- * supplies libs, defines, target and classpaths for the container's test runs.
+ * Per-container (module / project root) "tests build files": the build files
+ * that supply libs, defines, target and classpaths for the container's test
+ * runs. A container may hold SEVERAL — one per sub-project or framework.
  * Shares {@code .idea/haxeBuildConfig.xml} with the other build-settings stores.
  */
 @State(name = "HaxeTestsBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
@@ -70,20 +72,21 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     notifyChanged();
   }
 
-  /** The container's marked tests build file path, or null when none is marked. */
-  @Nullable
-  public String getTestsFilePath(@NotNull String containerId) {
+  /** The container's marked tests build file paths (possibly none). */
+  @NotNull
+  public List<String> getTestsFilePaths(@NotNull String containerId) {
     return state.testsFiles.stream()
       .filter(entry -> containerId.equals(entry.containerId))
-      .findFirst()
       .map(entry -> StringUtil.nullize(entry.filePath))
-      .orElse(null);
+      .filter(Objects::nonNull)
+      .toList();
   }
 
-  /** Marks the container's tests build file; null clears the marking. */
-  public void setTestsFile(@NotNull String containerId, @Nullable String filePath) {
-    state.testsFiles.removeIf(entry -> containerId.equals(entry.containerId));
-    if (filePath != null) {
+  /** Marks a tests build file in the container; already-marked files stay marked once. */
+  public void markTestsFile(@NotNull String containerId, @NotNull String filePath) {
+    boolean marked = state.testsFiles.stream()
+      .anyMatch(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    if (!marked) {
       ContainerTestsFile entry = new ContainerTestsFile();
       entry.containerId = containerId;
       entry.filePath = filePath;
@@ -92,27 +95,29 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     notifyChanged();
   }
 
+  /** Unmarks one of the container's tests build files. */
+  public void unmarkTestsFile(@NotNull String containerId, @NotNull String filePath) {
+    state.testsFiles.removeIf(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    notifyChanged();
+  }
+
   /**
-   * The container's tests build file among its known build files: the stored choice
-   * when it still exists, otherwise the conventional candidate - a file named
-   * {@code test.hxml}/{@code tests.hxml}, else the first build file living under a
+   * The container's tests build files among its known build files: the stored
+   * choices that still exist, otherwise EVERY conventional candidate - files
+   * named {@code test.hxml}/{@code tests.hxml} plus build files living under a
    * {@code tests/} directory (candidates arrive in the tree's name order).
    */
-  @Nullable
-  public String resolveOrSuggest(@NotNull String containerId, @NotNull List<String> candidatePaths) {
-    String stored = getTestsFilePath(containerId);
-    if (stored != null && candidatePaths.contains(stored)) {
+  @NotNull
+  public List<String> resolveOrSuggestAll(@NotNull String containerId, @NotNull List<String> candidatePaths) {
+    List<String> stored = getTestsFilePaths(containerId).stream()
+      .filter(candidatePaths::contains)
+      .toList();
+    if (!stored.isEmpty()) {
       return stored;
     }
-    for (String candidate : candidatePaths) {
-      if (isConventionalTestsFileName(candidate)) {
-        return candidate;
-      }
-    }
     return candidatePaths.stream()
-      .filter(HaxeTestsBuildFileStore::isUnderTestsDirectory)
-      .findFirst()
-      .orElse(null);
+      .filter(candidate -> isConventionalTestsFileName(candidate) || isUnderTestsDirectory(candidate))
+      .toList();
   }
 
   private static boolean isConventionalTestsFileName(@NotNull String path) {

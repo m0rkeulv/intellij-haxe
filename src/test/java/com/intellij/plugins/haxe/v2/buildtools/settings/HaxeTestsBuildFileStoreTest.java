@@ -19,84 +19,84 @@ public class HaxeTestsBuildFileStoreTest {
   @DisplayName("defaults are empty")
   public void defaultsAreEmpty() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    assertNull(store.getTestsFilePath(MODULE));
+    assertTrue(store.getTestsFilePaths(MODULE).isEmpty());
   }
 
   @Test
-  @DisplayName("tests file can be set and cleared")
-  public void testsFileCanBeSetAndCleared() {
+  @DisplayName("tests files can be marked and unmarked")
+  public void testsFilesCanBeMarkedAndUnmarked() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    store.setTestsFile(MODULE, "/p/tests.hxml");
-    assertEquals("/p/tests.hxml", store.getTestsFilePath(MODULE));
+    store.markTestsFile(MODULE, "/p/tests.hxml");
+    store.markTestsFile(MODULE, "/p/tests.hxml");
+    assertEquals(List.of("/p/tests.hxml"), store.getTestsFilePaths(MODULE));
 
-    store.setTestsFile(MODULE, null);
-    assertNull(store.getTestsFilePath(MODULE));
+    store.unmarkTestsFile(MODULE, "/p/tests.hxml");
+    assertTrue(store.getTestsFilePaths(MODULE).isEmpty());
+  }
+
+  @Test
+  @DisplayName("a container may hold several tests files")
+  public void aContainerMayHoldSeveralTestsFiles() {
+    HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
+    store.markTestsFile(MODULE, "/p/utest/test.hxml");
+    store.markTestsFile(MODULE, "/p/nme/tests/tests.nmml");
+    assertEquals(List.of("/p/utest/test.hxml", "/p/nme/tests/tests.nmml"), store.getTestsFilePaths(MODULE));
   }
 
   @Test
   @DisplayName("containers are independent")
   public void containersAreIndependent() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    store.setTestsFile("app", "/app/test.hxml");
-    store.setTestsFile("lib", "/lib/tests.hxml");
+    store.markTestsFile("app", "/app/test.hxml");
+    store.markTestsFile("lib", "/lib/tests.hxml");
 
-    assertEquals("/app/test.hxml", store.getTestsFilePath("app"));
-    assertEquals("/lib/tests.hxml", store.getTestsFilePath("lib"));
+    assertEquals(List.of("/app/test.hxml"), store.getTestsFilePaths("app"));
+    assertEquals(List.of("/lib/tests.hxml"), store.getTestsFilePaths("lib"));
   }
 
   @Test
-  @DisplayName("stored choice wins when still present")
-  public void storedChoiceWinsWhenStillPresent() {
+  @DisplayName("stored choices win when still present")
+  public void storedChoicesWinWhenStillPresent() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    store.setTestsFile(MODULE, "/p/project.xml");
-    assertEquals("/p/project.xml", store.resolveOrSuggest(MODULE, PLAIN_FILES));
+    store.markTestsFile(MODULE, "/p/project.xml");
+    assertEquals(List.of("/p/project.xml"), store.resolveOrSuggestAll(MODULE, PLAIN_FILES));
   }
 
   @Test
-  @DisplayName("stale stored path falls back to convention")
-  public void staleStoredPathFallsBackToConvention() {
+  @DisplayName("stale stored paths fall back to convention")
+  public void staleStoredPathsFallBackToConvention() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    store.setTestsFile(MODULE, "/p/deleted.hxml");
-    assertNull(store.resolveOrSuggest(MODULE, PLAIN_FILES));
-    assertEquals("/p/test.hxml", store.resolveOrSuggest(MODULE, List.of("/p/build.hxml", "/p/test.hxml")));
+    store.markTestsFile(MODULE, "/p/deleted.hxml");
+    assertTrue(store.resolveOrSuggestAll(MODULE, PLAIN_FILES).isEmpty());
+    assertEquals(List.of("/p/test.hxml"),
+                 store.resolveOrSuggestAll(MODULE, List.of("/p/build.hxml", "/p/test.hxml")));
   }
 
   @Test
-  @DisplayName("conventional file name is suggested")
-  public void conventionalFileNameIsSuggested() {
+  @DisplayName("every conventional candidate is suggested")
+  public void everyConventionalCandidateIsSuggested() {
+    // a container holding several sub-projects gets each of their tests
+    // builds suggested - name matches and tests-directory residents alike
+    List<String> candidates = List.of("/p/build.hxml", "/p/test.hxml",
+                                      "/p/nme/tests/tests.nmml", "/p/openfl/tests/project.xml");
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    assertEquals("/p/test.hxml", store.resolveOrSuggest(MODULE, List.of("/p/build.hxml", "/p/test.hxml")));
-    assertEquals("/p/tests.hxml", store.resolveOrSuggest(MODULE, List.of("/p/build.hxml", "/p/tests.hxml")));
-  }
-
-  @Test
-  @DisplayName("conventional name beats tests directory")
-  public void conventionalNameBeatsTestsDirectory() {
-    List<String> candidates = List.of("/p/tests/compile-hl.hxml", "/p/test.hxml");
-    HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    assertEquals("/p/test.hxml", store.resolveOrSuggest(MODULE, candidates));
-  }
-
-  @Test
-  @DisplayName("build file under tests directory is suggested")
-  public void buildFileUnderTestsDirectoryIsSuggested() {
-    List<String> candidates = List.of("/p/build.hxml", "/p/tests/project.xml");
-    HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    assertEquals("/p/tests/project.xml", store.resolveOrSuggest(MODULE, candidates));
+    assertEquals(List.of("/p/test.hxml", "/p/nme/tests/tests.nmml", "/p/openfl/tests/project.xml"),
+                 store.resolveOrSuggestAll(MODULE, candidates));
   }
 
   @Test
   @DisplayName("no conventional candidate yields none")
   public void noConventionalCandidateYieldsNone() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    assertNull(store.resolveOrSuggest(MODULE, PLAIN_FILES));
+    assertTrue(store.resolveOrSuggestAll(MODULE, PLAIN_FILES).isEmpty());
   }
 
   @Test
   @DisplayName("state survives xml serialization round trip")
   public void stateSurvivesXmlSerializationRoundTrip() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    store.setTestsFile(MODULE, "/p/tests/compile-hl.hxml");
+    store.markTestsFile(MODULE, "/p/tests/compile-hl.hxml");
+    store.markTestsFile(MODULE, "/p/test.hxml");
 
     Element serialized = XmlSerializer.serialize(store.getState());
     HaxeTestsBuildFileStore.State deserialized =
@@ -104,6 +104,6 @@ public class HaxeTestsBuildFileStoreTest {
 
     HaxeTestsBuildFileStore reloaded = new HaxeTestsBuildFileStore();
     reloaded.loadState(deserialized);
-    assertEquals("/p/tests/compile-hl.hxml", reloaded.getTestsFilePath(MODULE));
+    assertEquals(List.of("/p/tests/compile-hl.hxml", "/p/test.hxml"), reloaded.getTestsFilePaths(MODULE));
   }
 }

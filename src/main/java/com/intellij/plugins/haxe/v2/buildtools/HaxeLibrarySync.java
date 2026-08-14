@@ -144,8 +144,8 @@ public final class HaxeLibrarySync {
   /**
    * The build files whose library sets the module exposes: its CURRENT build
    * file (the project's effective active file when this module owns it, else
-   * the module's Build command file), plus its tests build file — the module's
-   * source roots hold the test sources too, so the tests build's libraries
+   * the module's Build command file), plus its tests build files — the module's
+   * source roots hold the test sources too, so every tests build's libraries
    * must resolve alongside the main build's. Without a current file the union
    * of all known build files applies.
    */
@@ -156,11 +156,12 @@ public final class HaxeLibrarySync {
     HaxeBuildFile current = currentBuildFile(project, module, buildFiles);
     List<HaxeBuildFile> sources = new ArrayList<>(current != null ? List.of(current) : buildFiles);
 
-    HaxeBuildFile tests = testsBuildFile(project, module, buildFiles);
-    boolean testsKnown = tests == null || sources.stream()
-      .anyMatch(source -> source.file().getPath().equals(tests.file().getPath()));
-    if (!testsKnown) {
-      sources.add(tests);
+    for (HaxeBuildFile tests : testsBuildFiles(project, module, buildFiles)) {
+      boolean known = sources.stream()
+        .anyMatch(source -> source.file().getPath().equals(tests.file().getPath()));
+      if (!known) {
+        sources.add(tests);
+      }
     }
     return sources;
   }
@@ -184,17 +185,23 @@ public final class HaxeLibrarySync {
     return null;
   }
 
-  /** The container's marked (or convention-suggested) tests build file, when this module owns it. */
-  @Nullable
-  private static HaxeBuildFile testsBuildFile(@NotNull Project project,
-                                              @NotNull Module module,
-                                              @NotNull List<HaxeBuildFile> buildFiles) {
+  /** The container's marked (or convention-suggested) tests build files that this module owns. */
+  @NotNull
+  private static List<HaxeBuildFile> testsBuildFiles(@NotNull Project project,
+                                                     @NotNull Module module,
+                                                     @NotNull List<HaxeBuildFile> buildFiles) {
     List<String> candidatePaths = buildFiles.stream()
       .map(buildFile -> buildFile.file().getPath())
       .toList();
-    String testsPath = HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggest(module.getName(), candidatePaths);
-    HaxeBuildFile tests = byPath(project, buildFiles, testsPath);
-    return tests != null && ownedBy(project, tests, module) ? tests : null;
+    List<String> testsPaths = HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggestAll(module.getName(), candidatePaths);
+    List<HaxeBuildFile> owned = new ArrayList<>();
+    for (String testsPath : testsPaths) {
+      HaxeBuildFile tests = byPath(project, buildFiles, testsPath);
+      if (tests != null && ownedBy(project, tests, module)) {
+        owned.add(tests);
+      }
+    }
+    return owned;
   }
 
   /** Finds the path among the scanned files, or loads it directly (manually added files live outside the scan). */

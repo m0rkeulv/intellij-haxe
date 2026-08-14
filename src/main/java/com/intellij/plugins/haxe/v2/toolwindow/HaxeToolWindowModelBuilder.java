@@ -60,7 +60,7 @@ final class HaxeToolWindowModelBuilder {
   /** A build-file container: a module, or the project root for files outside every module. */
   record ContainerEntry(String id, String displayName, boolean projectRoot,
                         List<FileEntry> files, @Nullable String activePath,
-                        @Nullable String testsPath,
+                        List<String> testsPaths,
                         EnvironmentData environment,
                         EnvCompileCommandNode compileCommand,
                         CompilationServerNode server) {
@@ -104,21 +104,21 @@ final class HaxeToolWindowModelBuilder {
       EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files());
       EnvironmentData environment = buildEnvironmentData(raw.id(), activeDefines);
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
-      String testsPath = resolveTestsPath(raw);
+      List<String> testsPaths = resolveTestsPaths(raw);
       ContainerEntry container = new ContainerEntry(raw.id(), raw.displayName(), raw.projectRoot(), raw.files(),
-                                                    activePath, testsPath, environment, compileCommand, server);
+                                                    activePath, testsPaths, environment, compileCommand, server);
       containers.add(container);
     }
     return containers;
   }
 
-  /** The container's tests build file: the marked one, or the store's convention-based suggestion. */
-  @Nullable
-  private String resolveTestsPath(@NotNull RawContainer raw) {
+  /** The container's tests build files: the marked ones, or the store's convention-based suggestions. */
+  @NotNull
+  private List<String> resolveTestsPaths(@NotNull RawContainer raw) {
     List<String> candidatePaths = raw.files().stream()
       .map(entry -> entry.buildFile().file().getPath())
       .toList();
-    return HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggest(raw.id(), candidatePaths);
+    return HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggestAll(raw.id(), candidatePaths);
   }
 
   /** One installed haxelib: the selected version (null when none is set) and every installed version. */

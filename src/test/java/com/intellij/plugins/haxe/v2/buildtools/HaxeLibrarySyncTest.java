@@ -73,7 +73,7 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile testsBuild = registerCryptoShapedTestsBuild();
 
     HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(mainBuild.getPath());
-    HaxeTestsBuildFileStore.getInstance(getProject()).setTestsFile(myFixture.getModule().getName(), testsBuild.getPath());
+    HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile(myFixture.getModule().getName(), testsBuild.getPath());
 
     assertUtestCollected("the module holds the test sources too - the tests build's libraries must resolve");
   }
