@@ -171,7 +171,10 @@ The server is a protocol layer over a debug engine hxcpp already ships:
   `deleteBreakpoint` — a complete, thread-safe engine (copy-on-write lists,
   quick-reject hash, so idle breakpoints are nearly free). Class-function
   breakpoints fire at function ENTRY (`frame->lineNumber == firstLineNumber`),
-  which is what smart step into is built on. `getFilesFullPath()` and
+  which is what smart step into is built on. A line with nested calls stops
+  MULTIPLE times on resume: every call on it is its own instrumentation point
+  tagged with the same line number. Not deduplicable — "same line again" is
+  indistinguishable from a loop legitimately coming back around. `getFilesFullPath()` and
   `getFiles()` are index-aligned parallel arrays — the basis of the suffix
   file matching.
 - **Run control**: `stepThread(thread, INTO/OVER/OUT, count)`,
