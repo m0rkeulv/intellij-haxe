@@ -98,18 +98,22 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
   private final Map<String, StringBuilder> pendingOutput = new HashMap<>();
   private final HaxeTestOutputAttributor attributor;
 
+  // the run's tests build file; name-based location hints carry it so
+  // same-named classes in sibling projects resolve to THIS build's sources
+  private final @Nullable String testsBuildFilePath;
+
   public HaxeTestEventsConverter(@NotNull String testFrameworkName, @NotNull TestConsoleProperties consoleProperties) {
     super(testFrameworkName, consoleProperties);
-    this.attributor = new HaxeTestOutputAttributor(consoleProperties.getProject(), workDirectory(consoleProperties));
+    this.testsBuildFilePath = buildFilePath(consoleProperties);
+    // trace position prefixes are relative to where the compile ran: the tests build file's directory
+    String workDirectory = testsBuildFilePath == null ? null : PathUtil.getParentPath(testsBuildFilePath);
+    this.attributor = new HaxeTestOutputAttributor(consoleProperties.getProject(), workDirectory);
   }
 
-  /** Trace position prefixes are relative to where the compile ran: the tests build file's directory. */
   @Nullable
-  private static String workDirectory(@NotNull TestConsoleProperties consoleProperties) {
+  private static String buildFilePath(@NotNull TestConsoleProperties consoleProperties) {
     if (!(consoleProperties.getConfiguration() instanceof HaxeTestRunConfiguration configuration)) return null;
-    String buildFilePath = configuration.getBuildFilePath();
-    if (StringUtil.isEmptyOrSpaces(buildFilePath)) return null;
-    return PathUtil.getParentPath(buildFilePath);
+    return StringUtil.nullize(configuration.getBuildFilePath(), true);
   }
 
   @Override
@@ -163,7 +167,8 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
       flushPendingOutput(event.name(), outputType, visitor);
     }
 
-    boolean result = super.processServiceMessages(injectLocationHint(rewriteWarningOnlyMessage(text)), outputType, visitor);
+    boolean result =
+      super.processServiceMessages(injectLocationHint(rewriteWarningOnlyMessage(text), testsBuildFilePath), outputType, visitor);
 
     if (normalizedName != null) {
       // the batch arrives after ALL output - each test's buffered lines
@@ -253,20 +258,38 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
     return "##teamcity[testFailed name='" + name + "' message='" + warningText + "']";
   }
 
-  /**
-   * Appends {@code locationHint='haxe:test://<name>'} to a started event lacking
-   * one. The name value is already TC-escaped and is reused verbatim, so the new
-   * attribute stays correctly escaped. Non-matching text passes through untouched.
-   */
   @NotNull
   static String injectLocationHint(@NotNull String text) {
+    return injectLocationHint(text, null);
+  }
+
+  /**
+   * Appends {@code locationHint='haxe:test://<name>[?build=<path>]'} to a
+   * started event lacking one. The name value is already TC-escaped and is
+   * reused verbatim, so the new attribute stays correctly escaped; the tests
+   * build file rides along so a name shared by classes in sibling projects
+   * resolves to THIS build's sources. Non-matching text passes through
+   * untouched — reporter-emitted hints (buddy, tink) carry their own files.
+   */
+  @NotNull
+  static String injectLocationHint(@NotNull String text, @Nullable String buildFilePath) {
     String trimmed = text.trim();
     TcEvent event = parseEvent(trimmed);
     boolean started = event != null && (event.is("testStarted") || event.is("testSuiteStarted"));
     if (!started || event.name() == null || event.attributes().containsKey("locationHint")) {
       return text;
     }
+    String buildSuffix = buildFilePath == null ? "" : "?build=" + escapeAttribute(buildFilePath);
     String beforeClosingBracket = trimmed.substring(0, trimmed.length() - 1);
-    return beforeClosingBracket + " locationHint='" + HaxeTestLocator.PROTOCOL + "://" + event.name() + "']";
+    return beforeClosingBracket + " locationHint='" + HaxeTestLocator.PROTOCOL + "://" + event.name() + buildSuffix + "']";
+  }
+
+  // TeamCity attribute-value escaping for the appended path (the platform unescapes on parse)
+  @NotNull
+  private static String escapeAttribute(@NotNull String value) {
+    return value.replace("|", "||")
+      .replace("'", "|'")
+      .replace("[", "|[")
+      .replace("]", "|]");
   }
 }

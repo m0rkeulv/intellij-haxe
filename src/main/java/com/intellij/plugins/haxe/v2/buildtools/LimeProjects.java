@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
@@ -85,6 +86,22 @@ public final class LimeProjects {
 
   /** The target flags whose packaged app is a host-launchable binary (see {@link #packagedBinary}). */
   public static final Set<String> HOST_LAUNCHABLE_TARGETS = Set.of("neko", "hl", "cpp", "windows", "linux", "mac");
+
+  /** The haxe compilation target behind a lime CLI target id, or null for an unknown id. */
+  @Nullable
+  public static HaxeTarget targetFor(@NotNull String targetFlag) {
+    return switch (targetFlag) {
+      case "hl" -> HaxeTarget.HL;
+      case "html5" -> HaxeTarget.JAVA_SCRIPT;
+      case "flash", "air" -> HaxeTarget.FLASH;
+      case "neko" -> HaxeTarget.NEKO;
+      case "java" -> HaxeTarget.JAVA;
+      case "cppia" -> HaxeTarget.CPPIA;
+      case "cs" -> HaxeTarget.CSHARP;
+      case "cpp", "windows", "mac", "linux", "android", "ios" -> HaxeTarget.CPP;
+      default -> null;
+    };
+  }
 
   /**
    * The launchable binary a lime build packages for a host target:

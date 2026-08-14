@@ -16,47 +16,70 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Extracts the shipped live-reporter Haxe sources (see
- * {@code resources/testing/utestLiveReporter/README.md}) into the IDE system
- * directory, so test compiles can add them via {@code -cp} and inject the
- * reporter with {@code --macro intellij_utest.Macro.init()}. The target
- * directory is keyed by a content hash: a plugin update with changed sources
- * lands in a fresh directory, and an unchanged one reuses the previous
- * extraction.
+ * Extracts the shipped live-reporter Haxe sources (see the READMEs under
+ * {@code resources/testing/}) into the IDE system directory, so test compiles
+ * can add them via {@code -cp} and inject the framework's reporter with its
+ * {@code --macro} entry point. The target directory is keyed by a content
+ * hash: a plugin update with changed sources lands in a fresh directory, and
+ * an unchanged one reuses the previous extraction.
  */
 @CustomLog
 final class HaxeTestReporterFiles {
 
-  private static final String RESOURCE_ROOT = "/testing/utestLiveReporter/";
-  private static final List<String> SOURCE_FILES = List.of(
-    "intellij_utest/Macro.hx",
-    "intellij_utest/LiveReporter.hx");
-
   private HaxeTestReporterFiles() {
   }
 
-  /** The extracted classpath root, or empty when extraction fails (the run then uses utest's batch reporter only). */
+  /** The utest reporter's classpath root, or empty when extraction fails (the run then uses utest's batch reporter only). */
   @NotNull
-  static Optional<String> classpath() {
+  static Optional<String> utestClasspath() {
+    return extract("/testing/utestLiveReporter/", "utest-live-reporter",
+                   List.of("intellij_utest/Macro.hx", "intellij_utest/LiveReporter.hx"));
+  }
+
+  /** The munit reporter's classpath root, or empty when extraction fails (the run then reports to the console only). */
+  @NotNull
+  static Optional<String> munitClasspath() {
+    return extract("/testing/munitLiveReporter/", "munit-live-reporter",
+                   List.of("intellij_munit/Macro.hx", "intellij_munit/LiveClient.hx"));
+  }
+
+  /** The buddy reporter's classpath root, or empty when extraction fails (the run then reports to the console only). */
+  @NotNull
+  static Optional<String> buddyClasspath() {
+    return extract("/testing/buddyLiveReporter/", "buddy-live-reporter",
+                   List.of("intellij_buddy/TcReporter.hx", "intellij_buddy/SuiteName.hx"));
+  }
+
+  /** The tink reporter's classpath root, or empty when extraction fails (the run then reports to the console only). */
+  @NotNull
+  static Optional<String> tinkClasspath() {
+    return extract("/testing/tinkLiveReporter/", "tink-live-reporter",
+                   List.of("intellij_tink/Macro.hx", "intellij_tink/TcReporter.hx"));
+  }
+
+  @NotNull
+  private static Optional<String> extract(@NotNull String resourceRoot,
+                                          @NotNull String directoryName,
+                                          @NotNull List<String> sourceFiles) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      for (String file : SOURCE_FILES) {
-        digest.update(readResource(file));
+      for (String file : sourceFiles) {
+        digest.update(readResource(resourceRoot, file));
       }
       String contentHash = HexFormat.of().formatHex(digest.digest()).substring(0, 16);
 
-      Path root = Path.of(PathManager.getSystemPath(), "haxe", "utest-live-reporter", contentHash);
-      for (String file : SOURCE_FILES) {
+      Path root = Path.of(PathManager.getSystemPath(), "haxe", directoryName, contentHash);
+      for (String file : sourceFiles) {
         Path target = root.resolve(file);
         if (!Files.exists(target)) {
           Files.createDirectories(target.getParent());
-          Files.write(target, readResource(file));
+          Files.write(target, readResource(resourceRoot, file));
         }
       }
       return Optional.of(root.toString());
     }
     catch (IOException | RuntimeException e) {
-      log.warn("live test reporter extraction failed; runs fall back to utest's batch reporter", e);
+      log.warn("test reporter extraction failed for " + resourceRoot, e);
       return Optional.empty();
     }
     catch (NoSuchAlgorithmException e) {
@@ -65,10 +88,10 @@ final class HaxeTestReporterFiles {
   }
 
   @NotNull
-  private static byte[] readResource(@NotNull String relativePath) throws IOException {
-    try (InputStream stream = HaxeTestReporterFiles.class.getResourceAsStream(RESOURCE_ROOT + relativePath)) {
+  private static byte[] readResource(@NotNull String resourceRoot, @NotNull String relativePath) throws IOException {
+    try (InputStream stream = HaxeTestReporterFiles.class.getResourceAsStream(resourceRoot + relativePath)) {
       if (stream == null) {
-        throw new IOException("missing resource " + RESOURCE_ROOT + relativePath);
+        throw new IOException("missing resource " + resourceRoot + relativePath);
       }
       return StreamUtil.readBytes(stream);
     }

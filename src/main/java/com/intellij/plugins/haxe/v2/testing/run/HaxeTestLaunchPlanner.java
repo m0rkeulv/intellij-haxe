@@ -13,9 +13,10 @@ import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
-import com.intellij.plugins.haxe.v2.testing.UtestFramework;
+import com.intellij.plugins.haxe.v2.testing.*;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -39,8 +40,23 @@ import java.util.Set;
 /// else raises a bundle-keyed [ExecutionException]. Call inside a read action.
 final class HaxeTestLaunchPlanner {
 
-  // TODO: pick the framework from the tests build's -libs once more than utest exists (Phase 4)
-  static final UtestFramework FRAMEWORK = new UtestFramework();
+  /** The tests build's framework, from the SELECTED section's -lib declarations. Call inside a read action. */
+  @NotNull
+  static HaxeTestFramework frameworkFor(@NotNull Project project, @NotNull String buildFilePath) {
+    List<HaxeTestFramework> frameworks = HaxeTestFrameworks.ALL;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
+    if (type == null) return frameworks.get(frameworks.size() - 1);
+
+    List<HaxeBuildFileInfo.HaxeLibDependency> libraries =
+      HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, type)).libraries();
+    for (HaxeTestFramework framework : frameworks) {
+      boolean declared = libraries.stream()
+        .anyMatch(library -> library.name().equalsIgnoreCase(framework.libraryName()));
+      if (declared) return framework;
+    }
+    return frameworks.get(frameworks.size() - 1);
+  }
 
   /** The command to spawn, where to spawn it, the build's target, and an optional advisory shown to the user. */
   record Plan(@NotNull List<String> command,
@@ -74,28 +90,20 @@ final class HaxeTestLaunchPlanner {
       return nmeCompileArguments(project, file, filterPattern);
     }
 
-    List<String> arguments = new ArrayList<>(FRAMEWORK.activationArgs());
-    arguments.addAll(FRAMEWORK.filterArgs(StringUtil.nullize(filterPattern, true)));
-    // utest's reporter derives its root suite name from a target #if chain
-    // that lacks several targets (an HL run reads "Target: Undefined") - the
-    // teamcity_suite_name define overrides it with the build's real target
     String suiteName = rootSuiteName(project, buildFilePath);
-    if (suiteName != null) {
-      arguments.add("-D");
-      arguments.add("teamcity_suite_name=" + suiteName);
-    }
-    // per-test event streaming: a --macro patches utest's Runner to attach the
-    // shipped LiveReporter; utest's batch report stays as the fallback and the
-    // events converter deduplicates it (see resources/testing/utestLiveReporter)
-    if (HaxeBuildToolSettings.getInstance(project).isLiveTestReporting()) {
-      HaxeTestReporterFiles.classpath().ifPresent(path -> {
-        arguments.add("-cp");
-        arguments.add(path);
-        arguments.add("--macro");
-        arguments.add("intellij_utest.Macro.init()");
-      });
-    }
-    return ParametersListUtil.join(arguments);
+    return ParametersListUtil.join(frameworkArguments(project, buildFilePath, suiteName, filterPattern));
+  }
+
+  /** The framework's extracted shipped-reporter root, or null for one that has no shipped reporter (or extraction failed). */
+  @Nullable
+  private static String reporterClasspath(@NotNull HaxeTestFramework framework) {
+    return switch (framework.libraryName()) {
+      case "utest" -> HaxeTestReporterFiles.utestClasspath().orElse(null);
+      case "munit" -> HaxeTestReporterFiles.munitClasspath().orElse(null);
+      case "buddy" -> HaxeTestReporterFiles.buddyClasspath().orElse(null);
+      case "tink_unittest" -> HaxeTestReporterFiles.tinkClasspath().orElse(null);
+      default -> null;
+    };
   }
 
   @NotNull
@@ -103,59 +111,94 @@ final class HaxeTestLaunchPlanner {
                                              @NotNull VirtualFile file,
                                              @NotNull HaxeBuildFileType type,
                                              @Nullable String filterPattern) {
-    List<String> arguments = new ArrayList<>();
-    arguments.add("-Dteamcity");
-    String filter = StringUtil.nullize(filterPattern, true);
-    if (filter != null) {
-      arguments.add("-DUTEST_PATTERN=" + filter);
-    }
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
-    arguments.add("-Dteamcity_suite_name=Target: " + limeTarget(targetFlag));
-    if (HaxeBuildToolSettings.getInstance(project).isLiveTestReporting()) {
-      HaxeTestReporterFiles.classpath().ifPresent(path -> {
-        arguments.add("--source=" + path);
-        arguments.add("--haxeflag=--macro intellij_utest.Macro.init()");
-      });
-    }
-    return ParametersListUtil.join(arguments);
-  }
-
-  /** The plan-level target a lime target flag compiles through; desktop platform words all mean hxcpp. */
-  @NotNull
-  private static HaxeTarget limeTarget(@NotNull String targetFlag) {
-    return switch (targetFlag) {
-      case "neko" -> HaxeTarget.NEKO;
-      case "hl" -> HaxeTarget.HL;
-      default -> HaxeTarget.CPP;
-    };
+    String suiteName = "Target: " + limeTarget(targetFlag);
+    List<String> plain = frameworkArguments(project, file.getPath(), suiteName, filterPattern);
+    return ParametersListUtil.join(limeSpelling(plain));
   }
 
   /**
-   * The nme tool forwards ATTACHED defines and any double-dash token verbatim
-   * into its generated build.hxml (single-dash haxe flags like {@code -cp} are
+   * The tests build's framework arguments in plain hxml spelling — the
+   * reporting set plus the filter. The tool-specific paths respell them (see
+   * {@link #limeSpelling}/{@link #nmeSpelling}).
+   *
+   * buddy's packaged (lime/nme) tests only report when the app's OWN main
+   * honors the injected {@code -D reporter} define — a lime/nme main is the
+   * Sprite, not buddy's generated main, so buddy's built-in handling of that
+   * define never runs. The conditional to copy into such a TestMain lives in
+   * the testProjects buddy samples; without it the run stays console-only.
+   */
+  @NotNull
+  private static List<String> frameworkArguments(@NotNull Project project,
+                                                 @NotNull String buildFilePath,
+                                                 @Nullable String suiteName,
+                                                 @Nullable String filterPattern) {
+    HaxeTestFramework framework = frameworkFor(project, buildFilePath);
+    boolean liveReporting = HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    List<String> arguments =
+      new ArrayList<>(framework.reportingArgs(suiteName, reporterClasspath(framework), liveReporting));
+    arguments.addAll(framework.filterArgs(StringUtil.nullize(filterPattern, true)));
+    return arguments;
+  }
+
+  /**
+   * Respells plain hxml arguments into the lime tool's forwarding forms:
+   * ATTACHED defines ({@code -Dname=value}: the two-word spelling trips a
+   * lime bug duplicating the value), {@code --source=} for classpaths and
+   * {@code --haxeflag=} for macros (all verified against lime 8.3.2).
+   */
+  @NotNull
+  private static List<String> limeSpelling(@NotNull List<String> plainArguments) {
+    List<String> spelled = new ArrayList<>();
+    for (int i = 0; i < plainArguments.size(); i++) {
+      String argument = plainArguments.get(i);
+      switch (argument) {
+        case "-D" -> spelled.add("-D" + plainArguments.get(++i));
+        case "-cp" -> spelled.add("--source=" + plainArguments.get(++i));
+        case "--macro" -> spelled.add("--haxeflag=--macro " + plainArguments.get(++i));
+        default -> spelled.add(argument);
+      }
+    }
+    return spelled;
+  }
+
+  /**
+   * Respells plain hxml arguments into the nme tool's forwarding forms: the
+   * tool forwards ATTACHED defines and any double-dash token verbatim into
+   * its generated build.hxml (single-dash haxe flags like {@code -cp} are
    * swallowed - the classpath rides the {@code --class-path} spelling; all
    * verified against nme 7.0.64).
    */
   @NotNull
+  private static List<String> nmeSpelling(@NotNull List<String> plainArguments) {
+    List<String> spelled = new ArrayList<>();
+    for (int i = 0; i < plainArguments.size(); i++) {
+      String argument = plainArguments.get(i);
+      switch (argument) {
+        case "-D" -> spelled.add("-D" + plainArguments.get(++i));
+        case "-cp" -> spelled.add("--class-path " + plainArguments.get(++i));
+        case "--macro" -> spelled.add("--macro " + plainArguments.get(++i));
+        default -> spelled.add(argument);
+      }
+    }
+    return spelled;
+  }
+
+  /** The plan-level target a lime target flag compiles through; unknown ids fall to hxcpp, the desktop default. */
+  @NotNull
+  private static HaxeTarget limeTarget(@NotNull String targetFlag) {
+    HaxeTarget target = LimeProjects.targetFor(targetFlag);
+    return target != null ? target : HaxeTarget.CPP;
+  }
+
+  @NotNull
   private static String nmeCompileArguments(@NotNull Project project,
                                             @NotNull VirtualFile file,
                                             @Nullable String filterPattern) {
-    List<String> arguments = new ArrayList<>();
-    arguments.add("-Dteamcity");
-    String filter = StringUtil.nullize(filterPattern, true);
-    if (filter != null) {
-      arguments.add("-DUTEST_PATTERN=" + filter);
-    }
     String targetFlag = NmeProjects.selectedTargetFlag(project, file);
     HaxeTarget target = targetFlag.equals("neko") ? HaxeTarget.NEKO : HaxeTarget.CPP;
-    arguments.add("-Dteamcity_suite_name=Target: " + target);
-    if (HaxeBuildToolSettings.getInstance(project).isLiveTestReporting()) {
-      HaxeTestReporterFiles.classpath().ifPresent(path -> {
-        arguments.add("--class-path " + path);
-        arguments.add("--macro intellij_utest.Macro.init()");
-      });
-    }
-    return ParametersListUtil.join(arguments);
+    List<String> plain = frameworkArguments(project, file.getPath(), "Target: " + target, filterPattern);
+    return ParametersListUtil.join(nmeSpelling(plain));
   }
 
   /** The tree's root suite label, from the tests build's target. Null when the file cannot be inspected. */
@@ -185,28 +228,16 @@ final class HaxeTestLaunchPlanner {
     return info.target() == null || info.target() == HaxeTarget.INTERP;
   }
 
-  /** The targets {@link HaxeTestDebugRunner} has a lane for. */
-  private static final Set<HaxeTarget> DEBUGGABLE_TARGETS = Set.of(HaxeTarget.INTERP, HaxeTarget.HL, HaxeTarget.CPP);
-
   /** Whether the tests build's target can be debugged. Call inside a read action. */
   static boolean isDebuggableTarget(@NotNull Project project, @NotNull String buildFilePath) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null || !file.isValid()) return false;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (LimeProjects.isLimeFamily(type)) {
-      // desktop builds debug through the hxcpp lane (the debug additions
-      // inject the server haxelib through lime's --haxelib override); the HL
-      // package debugs through its own bundled runtime
-      HaxeTarget target = limeTarget(LimeProjects.selectedTargetFlag(project, type, file));
-      return target == HaxeTarget.CPP || target == HaxeTarget.HL;
-    }
-    // TODO Phase 3 remainder: nme desktop-cpp tests should debug the same way
-    //  (its debug additions inject the server lib too) - enable after a sandbox
-    //  verification on a real nme project
-    if (type != HaxeBuildFileType.HXML) return false;
-    HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
-    HaxeTarget target = info.target() != null ? info.target() : HaxeTarget.INTERP;
-    return DEBUGGABLE_TARGETS.contains(target);
+    if (type == null) return false;
+    HaxeTarget target = HaxeBuildSystem.of(type).launchTarget(project, new HaxeBuildFile(file, type));
+    // an hxml without a target flag compiles-and-runs on the interpreter
+    if (target == null && type == HaxeBuildFileType.HXML) target = HaxeTarget.INTERP;
+    return HaxeDebugSupport.supportsTestDebug(target);
   }
 
   /** The lime HL package's bytecode ({@code hlboot.dat} beside the bundled runtime); null for any other plan shape. */
@@ -272,6 +303,11 @@ final class HaxeTestLaunchPlanner {
 
     HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
     if (info.target() == null || info.target() == HaxeTarget.INTERP) {
+      HaxeTestFramework framework = frameworkFor(project, file.getPath());
+      if (!framework.supportsInterp()) {
+        throw new ExecutionException(
+          HaxeBundle.message("haxe.test.config.framework.no.interp", framework.libraryName()));
+      }
       return singleStagePlan(project, file, filterPattern);
     }
     return artifactPlan(project, file, info, nodeOnPath, debugLaunch);

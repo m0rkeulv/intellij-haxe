@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.runconfig;
+package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import org.jetbrains.annotations.NotNull;

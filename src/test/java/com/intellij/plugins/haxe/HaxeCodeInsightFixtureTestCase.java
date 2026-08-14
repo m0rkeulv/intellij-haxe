@@ -283,6 +283,26 @@ abstract public class HaxeCodeInsightFixtureTestCase {
     return toolAvailable("haxelib", "path", "utest");
   }
 
+  /** Whether the munit haxelib is installed - the gate for live tests compiling against real munit. */
+  public static boolean munitAvailable() {
+    return toolAvailable("haxelib", "path", "munit");
+  }
+
+  /** Whether the buddy haxelib is installed - the gate for live tests compiling against real buddy. */
+  public static boolean buddyAvailable() {
+    return toolAvailable("haxelib", "path", "buddy");
+  }
+
+  /** Whether the tink_unittest haxelib is installed - the gate for live tests compiling against real tink. */
+  public static boolean tinkAvailable() {
+    return toolAvailable("haxelib", "path", "tink_unittest");
+  }
+
+  /** Whether a neko runtime is on the PATH - the gate for live tests launching neko artifacts. */
+  public static boolean nekoAvailable() {
+    return toolAvailable("neko", "-version");
+  }
+
   private static boolean toolAvailable(String... command) {
     try {
       Process process = new ProcessBuilder(command)

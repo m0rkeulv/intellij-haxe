@@ -24,17 +24,15 @@ import java.util.Set;
  */
 public final class UtestFramework implements HaxeTestFramework {
 
-  private static final String ITEST_QUALIFIED_NAME = "utest.ITest";
+  private static final Set<String> ITEST_MARKER = Set.of("utest.ITest");
   private static final List<String> TEST_METHOD_PREFIXES = List.of("test", "spec");
-  // pathological inheritance chains (macro-built, cyclic through typedefs) stay bounded
-  private static final int MAX_SUPERTYPE_DEPTH = 32;
 
   @Override
   public boolean isTestClass(@NotNull HaxeClass haxeClass) {
     if (DumbService.isDumb(haxeClass.getProject())) return false;
     try {
       HaxeClassModel model = haxeClass.getModel();
-      return model.isClass() && inheritsITest(model, new HashSet<>(), 0);
+      return model.isClass() && HaxeTestSupertypes.inheritsAny(model, ITEST_MARKER);
     }
     catch (IndexNotReadyException e) {
       // dumb mode can begin mid-walk; detection degrades to "not a test" rather than throwing
@@ -58,13 +56,40 @@ public final class UtestFramework implements HaxeTestFramework {
   }
 
   @Override
-  public @NotNull ResultChannel resultChannel() {
-    return ResultChannel.STDOUT_TEAMCITY;
+  public @NotNull String libraryName() {
+    return "utest";
   }
 
   @Override
-  public @NotNull List<String> activationArgs() {
-    return List.of("-D", "teamcity");
+  public boolean supportsInterp() {
+    return true;
+  }
+
+  /**
+   * utest ships its own TeamCity batch reporter ({@code -D teamcity}); the
+   * shipped live reporter streams per-test events on top and the converter
+   * deduplicates the batch replay, so the live half is an optional
+   * enhancement the toggle controls.
+   */
+  @Override
+  public @NotNull List<String> reportingArgs(@Nullable String suiteName,
+                                             @Nullable String reporterClasspath,
+                                             boolean liveReporting) {
+    List<String> arguments = new ArrayList<>(List.of("-D", "teamcity"));
+    // utest's reporter derives its root suite name from a target #if chain
+    // that lacks several targets (an HL run reads "Target: Undefined") - the
+    // teamcity_suite_name define overrides it with the build's real target
+    if (suiteName != null) {
+      arguments.add("-D");
+      arguments.add("teamcity_suite_name=" + suiteName);
+    }
+    if (liveReporting && reporterClasspath != null) {
+      arguments.add("-cp");
+      arguments.add(reporterClasspath);
+      arguments.add("--macro");
+      arguments.add("intellij_utest.Macro.init()");
+    }
+    return arguments;
   }
 
   @Override
@@ -74,22 +99,5 @@ public final class UtestFramework implements HaxeTestFramework {
 
   private static boolean hasTestMethodPrefix(@NotNull String name) {
     return TEST_METHOD_PREFIXES.stream().anyMatch(name::startsWith);
-  }
-
-  /** Walks extends + implements transitively; visited qualified names stop diamond/cyclic chains. */
-  private static boolean inheritsITest(@NotNull HaxeClassModel model, @NotNull Set<String> visited, int depth) {
-    if (depth > MAX_SUPERTYPE_DEPTH) return false;
-
-    List<HaxeClassReferenceModel> supers = new ArrayList<>(model.getExtendingTypes());
-    supers.addAll(model.getImplementingInterfaces());
-    for (HaxeClassReferenceModel superReference : supers) {
-      HaxeClassModel superModel = superReference.getHaxeClassModel();
-      if (superModel == null) continue;
-      String qualifiedName = superModel.haxeClass.getQualifiedName();
-      if (qualifiedName == null || !visited.add(qualifiedName)) continue;
-      if (ITEST_QUALIFIED_NAME.equals(qualifiedName)) return true;
-      if (inheritsITest(superModel, visited, depth + 1)) return true;
-    }
-    return false;
   }
 }

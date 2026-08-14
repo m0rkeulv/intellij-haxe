@@ -23,6 +23,16 @@ public class HaxeTestEventsConverterTest {
   }
 
   @Test
+  @DisplayName("build path rides the injected hint")
+  public void testBuildPathRidesTheInjectedHint() {
+    // the path is TC-escaped in the attribute; the platform unescapes it on parse
+    assertEquals("##teamcity[testStarted name='A.testX'" +
+                 " locationHint='haxe:test://A.testX?build=C:/p/tests |[x|].hxml']",
+                 HaxeTestEventsConverter.injectLocationHint("##teamcity[testStarted name='A.testX']",
+                                                            "C:/p/tests [x].hxml"));
+  }
+
+  @Test
   @DisplayName("suite started gains a location hint")
   public void testSuiteStartedGainsALocationHint() {
     assertEquals("##teamcity[testSuiteStarted name='cases.SampleTest'" +

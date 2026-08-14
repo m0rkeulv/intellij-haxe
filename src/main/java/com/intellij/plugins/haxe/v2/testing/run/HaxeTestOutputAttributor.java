@@ -10,6 +10,7 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestNameLocation;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.PsiMethod;
@@ -83,7 +84,7 @@ final class HaxeTestOutputAttributor {
 
     List<MethodSpan> spans = new ArrayList<>();
     for (HaxeClass haxeClass : haxeFile.getClassList()) {
-      String className = HaxeTestLocator.teamcityNameOf(haxeClass.getQualifiedName());
+      String className = HaxeTestNameLocation.teamcityNameOf(haxeClass.getQualifiedName());
       if (className == null || className.isEmpty()) continue;
       for (PsiMethod method : haxeClass.getMethods()) {
         TextRange range = method.getTextRange();

@@ -90,18 +90,20 @@ public class UtestDetectionTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("activation and filter args follow utest defines")
-  public void testActivationAndFilterArgsFollowUtestDefines() {
-    assertEquals(List.of("-D", "teamcity"), framework.activationArgs());
+  @DisplayName("reporting and filter args follow utest defines")
+  public void testReportingAndFilterArgsFollowUtestDefines() {
+    assertEquals(List.of("-D", "teamcity"), framework.reportingArgs(null, null, false));
+    assertEquals(List.of("-D", "teamcity",
+                         "-D", "teamcity_suite_name=Target: Neko",
+                         "-cp", "reporter-root",
+                         "--macro", "intellij_utest.Macro.init()"),
+                 framework.reportingArgs("Target: Neko", "reporter-root", true));
+    assertEquals(List.of("-D", "teamcity"),
+                 framework.reportingArgs(null, "reporter-root", false),
+                 "the live-reporting toggle drops the optional injection, batch reporting stays");
     assertEquals(List.of("-D", "UTEST_PATTERN=MathTest.testAddition"),
                  framework.filterArgs("MathTest.testAddition"));
     assertTrue(framework.filterArgs(null).isEmpty());
-  }
-
-  @Test
-  @DisplayName("result channel is stdout teamcity")
-  public void testResultChannelIsStdoutTeamcity() {
-    assertEquals(HaxeTestFramework.ResultChannel.STDOUT_TEAMCITY, framework.resultChannel());
   }
 
   private HaxeClass classByQName(String qName) {

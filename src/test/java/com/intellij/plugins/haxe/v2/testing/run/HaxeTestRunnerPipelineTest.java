@@ -15,6 +15,9 @@ import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -74,9 +77,10 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     // utest emits no testFinished after a failure - the converter synthesizes it
     assertTrue(recorder.finishedTests.contains("cases.SampleTest.testFails"),
                "the failed test must still finish, got: " + recorder.finishedTests);
-    assertEquals("haxe:test://cases.SampleTest.testPasses",
-                 recorder.locationsByTest.get("cases.SampleTest.testPasses"),
-                 "the converter must have injected the location hint");
+    String location = recorder.locationsByTest.get("cases.SampleTest.testPasses");
+    assertNotNull(location, "the converter must have injected the location hint");
+    assertTrue(location.startsWith("haxe:test://cases.SampleTest.testPasses?build="),
+               "the hint carries the name and the run's tests build file: " + location);
   }
 
   @Test
@@ -113,6 +117,124 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
                "warnings-only test fails, as in the VSCode adapter");
     assertFalse(recorder.failedTests.contains("LiveCase.testPasses"),
                 "the silent passing test must stay green");
+  }
+
+  @Test
+  @Timeout(120)
+  @DisplayName("munit run streams events through the injected client")
+  public void testMunitRunStreamsEventsThroughTheInjectedClient() throws Exception {
+    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping real-munit pipeline test");
+    assumeTrue(munitAvailable(), "munit haxelib not installed - skipping real-munit pipeline test");
+    assumeTrue(nekoAvailable(), "neko not on PATH - skipping real-munit pipeline test");
+
+    myFixture.copyDirectoryToProject("munit", "munit");
+    VirtualFile buildFile = myFixture.findFileInTempDir("munit/test.hxml");
+    assertNotNull(buildFile, "the munit fixture must be copied");
+
+    assertEquals("munit", HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFile.getPath()).libraryName());
+    compileTestsBuild(buildFile);
+
+    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    // munit's classic TestMain exits 0 even on failures (its delayed
+    // completion handler misses the process end) - verdicts are events-only
+    RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 0);
+
+    assertTrue(recorder.startedSuites.contains("cases.MunitCase"),
+               "class suite expected, got: " + recorder.startedSuites);
+    boolean allFinishedOnce = recorder.finishedTests.containsAll(
+      List.of("cases.MunitCase.testPasses", "cases.MunitCase.testFails", "cases.MunitCase.testIgnored"))
+      && recorder.finishedTests.size() == 3;
+    assertTrue(allFinishedOnce, "each test finishes exactly once, got: " + recorder.finishedTests);
+    assertTrue(recorder.failedTests.contains("cases.MunitCase.testFails"),
+               "failing test event missing, got: " + recorder.failedTests);
+    assertFalse(recorder.failedTests.contains("cases.MunitCase.testPasses"), "the passing test must stay green");
+    String location = recorder.locationsByTest.get("cases.MunitCase.testPasses");
+    assertNotNull(location, "the converter must have injected the location hint");
+    assertTrue(location.startsWith("haxe:test://cases.MunitCase.testPasses?build="),
+               "the hint carries the name and the run's tests build file: " + location);
+  }
+
+  @Test
+  @Timeout(120)
+  @DisplayName("buddy run reports the nested tree with attributed traces")
+  public void testBuddyRunReportsTheNestedTreeWithAttributedTraces() throws Exception {
+    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping real-buddy pipeline test");
+    assumeTrue(buddyAvailable(), "buddy haxelib not installed - skipping real-buddy pipeline test");
+
+    myFixture.copyDirectoryToProject("buddy", "buddy");
+    VirtualFile buildFile = myFixture.findFileInTempDir("buddy/test.hxml");
+    assertNotNull(buildFile, "the buddy fixture must be copied");
+
+    assertEquals("buddy", HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFile.getPath()).libraryName());
+    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    // buddy's generated main exits 1 on a failing spec - verified live
+    RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
+
+    assertTrue(recorder.startedSuites.contains("A calculator"),
+               "describe suite expected, got: " + recorder.startedSuites);
+    assertTrue(recorder.startedSuites.contains("nested memory bank"),
+               "nested describe suite expected, got: " + recorder.startedSuites);
+    assertTrue(recorder.finishedTests.containsAll(List.of("adds numbers", "fails sometimes", "stores values")),
+               "specs must finish, got: " + recorder.finishedTests);
+    assertTrue(recorder.failedTests.contains("fails sometimes"),
+               "failing spec event missing, got: " + recorder.failedTests);
+    assertFalse(recorder.failedTests.contains("adds numbers"), "the passing spec must stay green");
+
+    // buddy captures a spec's traces itself; the reporter replays them as
+    // that spec's testStdOut - attribution without any stdout parsing
+    String tracedOutput = recorder.outputByTest.get("traces while working");
+    assertNotNull(tracedOutput, "trace must be attributed to its spec, got: " + recorder.outputByTest);
+    assertTrue(tracedOutput.contains("a trace from buddy"), "trace text expected, got: " + tracedOutput);
+
+    // the reporter's hints carry the it() call site's file and the description
+    String specLocation = recorder.locationsByTest.get("adds numbers");
+    assertNotNull(specLocation, "spec location hint expected, got: " + recorder.locationsByTest);
+    assertTrue(specLocation.startsWith("haxe:buddy://") && specLocation.endsWith("::adds numbers"),
+               "file-plus-description hint expected: " + specLocation);
+  }
+
+  @Test
+  @Timeout(120)
+  @DisplayName("tink run streams events through the default reporter patch")
+  public void testTinkRunStreamsEventsThroughTheDefaultReporterPatch() throws Exception {
+    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping real-tink pipeline test");
+    assumeTrue(tinkAvailable(), "tink_unittest haxelib not installed - skipping real-tink pipeline test");
+
+    myFixture.copyDirectoryToProject("tink", "tink");
+    VirtualFile buildFile = myFixture.findFileInTempDir("tink/test.hxml");
+    assertNotNull(buildFile, "the tink fixture must be copied");
+
+    assertEquals("tink_unittest", HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFile.getPath()).libraryName());
+    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    // Runner.exit reports the failure count as the exit code - verified live
+    RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
+
+    assertTrue(recorder.startedSuites.contains("TinkCase"), "case suite expected, got: " + recorder.startedSuites);
+    boolean allFinishedOnce = recorder.finishedTests.containsAll(List.of("passes", "fails"))
+                              && recorder.finishedTests.size() == 2;
+    assertTrue(allFinishedOnce, "each test finishes exactly once, got: " + recorder.finishedTests);
+    assertTrue(recorder.failedTests.contains("fails"), "failing test event missing, got: " + recorder.failedTests);
+    assertFalse(recorder.failedTests.contains("passes"), "the passing test must stay green");
+    String caseLocation = recorder.locationsByTest.get("passes");
+    assertNotNull(caseLocation, "case location hint expected, got: " + recorder.locationsByTest);
+    assertTrue(caseLocation.startsWith("haxe:tink://") && caseLocation.endsWith("::TinkCase.passes"),
+               "file-plus-name hint from the case's PosInfos expected: " + caseLocation);
+  }
+
+  /** The artifact compile the before-run step would perform: the tests build with the framework's reporting args. */
+  private void compileTestsBuild(@NotNull VirtualFile buildFile) throws ExecutionException {
+    String reportingArguments =
+      HaxeTestLaunchPlanner.compileArguments(getProject(), buildFile.getPath(), null);
+    HaxeCompileCommands.Resolved resolved = HaxeCompileCommands.resolveAction(
+      getProject(), buildFile.getPath(), HaxeBuildFileActions.defaultBuildActionName(HaxeBuildFileType.HXML),
+      reportingArguments);
+    assertNotNull(resolved, "the tests build must resolve to a compile command");
+
+    GeneralCommandLine commandLine = new GeneralCommandLine(resolved.command())
+      .withWorkDirectory(resolved.workDirectory());
+    ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(90_000);
+    assertFalse(output.isTimeout(), "the tests compile must finish");
+    assertEquals(0, output.getExitCode(), "tests compile failed:\n" + output.getStdout() + output.getStderr());
   }
 
   @NotNull

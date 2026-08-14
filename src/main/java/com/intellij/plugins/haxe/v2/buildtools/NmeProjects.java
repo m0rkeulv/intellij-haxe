@@ -103,6 +103,19 @@ public final class NmeProjects {
   /// modern mac/linux host produces; a neko build lands in a host-suffixed
   /// `-neko` dir wrapping the bytecode in a launcher executable. "cpp" builds
   /// for the host desktop. Target flags without a launchable artifact mapping
+  /** The haxe compilation target behind an nme CLI target id ("cpp" is nme's host-desktop word), or null for an unknown id. */
+  @Nullable
+  public static HaxeTarget targetFor(@NotNull String targetFlag) {
+    return switch (targetFlag) {
+      case "neko" -> HaxeTarget.NEKO;
+      case "cpp", "windows", "mac", "linux", "android", "ios" -> HaxeTarget.CPP;
+      case "flash", "air" -> HaxeTarget.FLASH;
+      case "html5", "js" -> HaxeTarget.JAVA_SCRIPT;
+      case "jsprime" -> HaxeTarget.JAVA_SCRIPT;
+      default -> null;
+    };
+  }
+
   /// (android, ios, user-configured console targets...) return null.
   @Nullable
   public static TargetArtifact targetArtifact(@NotNull String targetFlag, @NotNull String appFile, @NotNull String outputRoot) {

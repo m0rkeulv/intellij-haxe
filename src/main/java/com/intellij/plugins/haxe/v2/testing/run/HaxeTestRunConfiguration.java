@@ -100,13 +100,23 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     HaxeActionBeforeRunTaskProvider.Task compileTask = new HaxeActionBeforeRunTaskProvider.Task();
     compileTask.setBuildFilePath(buildFilePath);
     compileTask.setActionName(ReadAction.computeBlocking(this::buildActionName));
-    String compileArguments = ReadAction.computeBlocking(
-      () -> HaxeTestLaunchPlanner.compileArguments(getProject(), buildFilePath, filterPattern));
-    compileTask.setExtraArguments(compileArguments);
+    compileTask.setExtraArguments(currentCompileArguments());
     // a multi-section hxml compiles only its selected --next section, so the
     // reporting arguments reach that section instead of the chain's last one
     compileTask.setSectionScoped(true);
     setBeforeRunTasks(List.of(compileTask));
+  }
+
+  /**
+   * The compile arguments for the CURRENT framework/reporter wiring. The
+   * before-run task recomputes these at launch — its stored snapshot goes
+   * stale whenever the wiring evolves (a plugin update changing the injection
+   * would otherwise keep compiling with the old arguments forever).
+   */
+  @NotNull
+  public String currentCompileArguments() {
+    return ReadAction.computeBlocking(
+      () -> HaxeTestLaunchPlanner.compileArguments(getProject(), buildFilePath, filterPattern));
   }
 
   @NotNull

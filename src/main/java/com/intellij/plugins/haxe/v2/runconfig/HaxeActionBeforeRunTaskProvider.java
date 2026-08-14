@@ -30,6 +30,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfiguration;
 import com.intellij.util.PathUtil;
 import icons.HaxeIcons;
 import org.jdom.Element;
@@ -188,8 +189,13 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     boolean debug = DefaultDebugExecutor.EXECUTOR_ID.equals(environment.getExecutor().getId());
 
     HaxeUnsavedDocuments.saveAll();
+    // test compiles derive their arguments at LAUNCH - the task's stored
+    // snapshot goes stale when the framework/reporter wiring evolves
+    String extraArguments = configuration instanceof HaxeTestRunConfiguration testConfiguration
+                            ? testConfiguration.currentCompileArguments()
+                            : task.getExtraArguments();
     HaxeCompileCommands.Resolved resolved = ReadAction.computeBlocking(
-      () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), task.getExtraArguments()));
+      () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), extraArguments));
     if (resolved == null) {
       notifyFailure(project, HaxeDebuggerBundle.message("haxe.before.run.unresolvable", task.getBuildFilePath()));
       return false;
@@ -324,48 +330,33 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     return HxmlProjects.scopeToSelectedSection(project, file, command);
   }
 
-  /** Target ids compiled through hxcpp whose output the HXCPP (IntelliJ) debugger can attach to ("cpp" is nme's host-desktop word; lime and nme share the rest). */
-  private static final List<String> DESKTOP_CPP_TARGETS = List.of("windows", "linux", "mac", "cpp");
+  /**
+   * The build's classpath roots from the configuration's Haxe build step, or
+   * empty without one — debug runners scope breakpoint binding and frame
+   * resolution with them (the configuration itself only knows the artifact).
+   */
+  @NotNull
+  public static List<String> buildStepSourceDirectories(@NotNull RunConfiguration configuration) {
+    String buildFilePath = configuration.getBeforeRunTasks().stream()
+      .filter(Task.class::isInstance)
+      .map(task -> ((Task)task).getBuildFilePath())
+      .filter(path -> !path.isBlank())
+      .findFirst()
+      .orElse(null);
+    if (buildFilePath == null) return List.of();
+    return ReadAction.computeBlocking(
+      () -> HaxeBuildClasspaths.sourceDirectories(configuration.getProject(), buildFilePath));
+  }
 
-  /** The target's debug compile additions, or null when the file/target has none. Call in a read action. */
+  /** The build system's debug compile additions for the file's current selection, or null when it has none. */
   @Nullable
   static List<String> debugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type == HaxeBuildFileType.HXML) {
-      HaxeBuildFileInfo info = ReadAction.computeBlocking(
-        () -> HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML)));
-      return info.target() != null ? HaxeDebugAdditions.forTarget(info.target()) : null;
-    }
-    if (LimeProjects.isLimeFamily(type)) {
-      // the lime tool takes -debug itself and forwards it into the haxe build it
-      // generates - one flag covers every lime target
-      List<String> additions = new ArrayList<>();
-      additions.add("-debug");
-      String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
-      // hxcpp debugging needs the in-debuggee DAP server compiled in; lime's
-      // --haxelib override merges the lib exactly like a project <haxelib>
-      // entry (include.xml and extraParams included), so no project.xml edit.
-      // Run builds never get this: additions apply only under the Debug executor.
-      if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
-        additions.add("--haxelib=intellij-hxcpp-debug-server");
-      }
-      return additions;
-    }
-    if (type == HaxeBuildFileType.NMML) {
-      List<String> additions = new ArrayList<>();
-      additions.add("-debug");
-      String targetFlag = NmeProjects.selectedTargetFlag(project, file);
-      // nme has no lime-style --haxelib override; a single-token "--library
-      // <lib>" haxeflag becomes one line of the generated build.hxml, and
-      // haxe pulls the lib with its extraParams (the server-injection macro).
-      if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
-        additions.add("--library intellij-hxcpp-debug-server");
-      }
-      return additions;
-    }
-    return null;
+    if (type == null) return null;
+    return ReadAction.computeBlocking(
+      () -> HaxeBuildSystem.of(type).debugCompileAdditions(project, new HaxeBuildFile(file, type)));
   }
 
   private static void notifyFailure(@NotNull Project project, @NotNull String message) {

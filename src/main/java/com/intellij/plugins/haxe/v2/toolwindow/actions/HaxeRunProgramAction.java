@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ProgramNode;
 import org.jetbrains.annotations.NotNull;
@@ -37,7 +38,11 @@ public final class HaxeRunProgramAction extends DumbAwareAction {
 
   @Override
   public void update(@NotNull AnActionEvent e) {
-    e.getPresentation().setEnabledAndVisible(panel.getSelectedUserObject() instanceof ProgramNode);
+    // the Debug variant shows only for targets a debugger lane exists for -
+    // neko, for one, runs but cannot be debugged
+    boolean applicable = panel.getSelectedUserObject() instanceof ProgramNode programNode
+                         && (!debug || HaxeDebugSupport.supportsProgramDebug(programNode.target()));
+    e.getPresentation().setEnabledAndVisible(applicable);
   }
 
   @Override

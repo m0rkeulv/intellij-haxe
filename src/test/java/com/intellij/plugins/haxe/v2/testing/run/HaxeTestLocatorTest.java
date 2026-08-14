@@ -76,6 +76,30 @@ public class HaxeTestLocatorTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("build suffix breaks same name ties between sibling projects")
+  public void testBuildSuffixBreaksSameNameTiesBetweenSiblingProjects() {
+    // one module can hold several sub-projects declaring the SAME
+    // default-package class - the run's tests build file picks its own
+    myFixture.addFileToProject("alpha/test/CalculatorTest.hx",
+                               "class CalculatorTest {\n  public function testAdd():Void {}\n}\n");
+    myFixture.addFileToProject("beta/test/CalculatorTest.hx",
+                               "class CalculatorTest {\n  public function testAdd():Void {}\n}\n");
+    String alphaBuild = myFixture.addFileToProject("alpha/test.hxml", "-cp test\n--main TestMain\n--interp\n")
+      .getVirtualFile().getPath();
+    String betaBuild = myFixture.addFileToProject("beta/test.hxml", "-cp test\n--main TestMain\n--interp\n")
+      .getVirtualFile().getPath();
+
+    PsiElement alpha = locate("CalculatorTest.testAdd?build=" + alphaBuild);
+    assertInstanceOf(HaxeMethod.class, alpha);
+    assertTrue(alpha.getContainingFile().getVirtualFile().getPath().contains("/alpha/"),
+               "the alpha build resolves its own class, got: " + alpha.getContainingFile().getVirtualFile().getPath());
+
+    PsiElement beta = locate("CalculatorTest.testAdd?build=" + betaBuild);
+    assertTrue(beta.getContainingFile().getVirtualFile().getPath().contains("/beta/"),
+               "the beta build resolves its own class, got: " + beta.getContainingFile().getVirtualFile().getPath());
+  }
+
+  @Test
   @DisplayName("unknown names and foreign protocols yield nothing")
   public void testUnknownNamesAndForeignProtocolsYieldNothing() {
     configureFixtureProject();

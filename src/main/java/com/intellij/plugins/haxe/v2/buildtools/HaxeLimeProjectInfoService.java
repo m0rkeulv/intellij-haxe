@@ -177,7 +177,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
         .map(library -> new HaxeLibDependency(library.name(), StringUtil.nullize(library.version())))
         .toList();
 
-      HaxeTarget target = haxeTargetFor(targetFlag);
+      HaxeTarget target = LimeProjects.targetFor(targetFlag);
       String targetOutputFor = targetOutputFor(targetFlag, parsed.app().path(), parsed.app().file());
       return new HaxeBuildFileInfo(target, targetOutputFor, defines, libraries, List.copyOf(parsed.sources()));
     }
@@ -187,21 +187,6 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     }
   }
 
-  /** The haxe compilation target behind a lime CLI target id. */
-  @Nullable
-  private static HaxeTarget haxeTargetFor(@NotNull String targetFlag) {
-    return switch (targetFlag) {
-      case "hl" -> HaxeTarget.HL;
-      case "html5" -> HaxeTarget.JAVA_SCRIPT;
-      case "flash", "air" -> HaxeTarget.FLASH;
-      case "neko" -> HaxeTarget.NEKO;
-      case "java" -> HaxeTarget.JAVA;
-      case "cppia" -> HaxeTarget.CPPIA;
-      case "cs" -> HaxeTarget.CSHARP;
-      case "windows", "mac", "linux", "android", "ios" -> HaxeTarget.CPP;
-      default -> null;
-    };
-  }
 
   /// The compile artifact per lime's export layout (`<app path>/<target>/...`);
   /// only the targets Build & run can launch need one.
