@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.ExecutionException;
-import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
@@ -242,32 +241,34 @@ final class HaxeTestLaunchPlanner {
   static Plan plan(@NotNull Project project,
                    @NotNull String buildFilePath,
                    @Nullable String filterPattern) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, null, nodeOnPath(), false);
+    return plan(project, buildFilePath, filterPattern, null, nodeExecutable(project), false);
   }
 
   /** The configuration's plan, single-run narrowing included. */
   @NotNull
   static Plan planFor(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
     return plan(configuration.getProject(), configuration.getBuildFilePath(), configuration.getFilterPattern(),
-                configuration.singleRun(), nodeOnPath(), false);
+                configuration.singleRun(), nodeExecutable(configuration.getProject()), false);
   }
 
   @NotNull
   static Plan planForDebug(@NotNull Project project,
                            @NotNull String buildFilePath,
                            @Nullable String filterPattern) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, null, nodeOnPath(), true);
+    return plan(project, buildFilePath, filterPattern, null, nodeExecutable(project), true);
   }
 
   /** The debug executor's plan: its before-run compile injects the debug additions, which for hxcpp rename the binary. */
   @NotNull
   static Plan planForDebug(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
     return plan(configuration.getProject(), configuration.getBuildFilePath(), configuration.getFilterPattern(),
-                configuration.singleRun(), nodeOnPath(), true);
+                configuration.singleRun(), nodeExecutable(configuration.getProject()), true);
   }
 
-  private static boolean nodeOnPath() {
-    return PathEnvironmentVariableUtil.findInPath(HaxeSdkUtilBase.getExecutableName("node")) != null;
+  /** The js runs' node runtime: SDK-configured, else PATH; null reports as a missing runtime. */
+  @Nullable
+  private static String nodeExecutable(@NotNull Project project) {
+    return HaxeToolPathResolver.resolveNodeExecutable(project, null);
   }
 
   @NotNull
@@ -275,7 +276,7 @@ final class HaxeTestLaunchPlanner {
                    @NotNull String buildFilePath,
                    @Nullable String filterPattern,
                    boolean nodeOnPath) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, null, nodeOnPath, false);
+    return plan(project, buildFilePath, filterPattern, null, bareNode(nodeOnPath), false);
   }
 
   @NotNull
@@ -283,7 +284,12 @@ final class HaxeTestLaunchPlanner {
                          @NotNull String buildFilePath,
                          @NotNull HaxeTestSingleRuns.SingleRun singleRun,
                          boolean nodeOnPath) throws ExecutionException {
-    return plan(project, buildFilePath, null, singleRun, nodeOnPath, false);
+    return plan(project, buildFilePath, null, singleRun, bareNode(nodeOnPath), false);
+  }
+
+  @Nullable
+  private static String bareNode(boolean nodeOnPath) {
+    return nodeOnPath ? HaxeSdkUtilBase.getExecutableName("node") : null;
   }
 
   @NotNull
@@ -291,7 +297,7 @@ final class HaxeTestLaunchPlanner {
                            @NotNull String buildFilePath,
                            @Nullable String filterPattern,
                            @Nullable HaxeTestSingleRuns.SingleRun singleRun,
-                           boolean nodeOnPath,
+                           @Nullable String nodeExecutable,
                            boolean debugLaunch) throws ExecutionException {
     if (StringUtil.isEmptyOrSpaces(buildFilePath)) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.build.file"));
@@ -318,7 +324,7 @@ final class HaxeTestLaunchPlanner {
 
     HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
     if (singleRun != null) {
-      return singleRunPlan(project, file, info, singleRun, nodeOnPath, debugLaunch);
+      return singleRunPlan(project, file, info, singleRun, nodeExecutable, debugLaunch);
     }
     if (info.target() == null || info.target() == HaxeTarget.INTERP) {
       HaxeTestFramework framework = frameworkFor(project, file.getPath());
@@ -328,7 +334,7 @@ final class HaxeTestLaunchPlanner {
       }
       return singleStagePlan(project, file, filterPattern);
     }
-    return artifactPlan(project, file, info, nodeOnPath, debugLaunch);
+    return artifactPlan(project, file, info, nodeExecutable, debugLaunch);
   }
 
   /**
@@ -342,7 +348,7 @@ final class HaxeTestLaunchPlanner {
                                     @NotNull VirtualFile file,
                                     @NotNull HaxeBuildFileInfo info,
                                     @NotNull HaxeTestSingleRuns.SingleRun singleRun,
-                                    boolean nodeOnPath,
+                                    @Nullable String nodeExecutable,
                                     boolean debugLaunch) throws ExecutionException {
     HaxeTestFramework framework = frameworkFor(project, file.getPath());
     if (framework.singleRunTemplate(singleRun.singleTest()) == null) {
@@ -371,7 +377,7 @@ final class HaxeTestLaunchPlanner {
       case HL -> hlCommand(project, file, artifact, target);
       case NEKO -> List.of(nekoExecutable(project), artifact.toString());
       case JAVA -> jvmCommand(artifact, target);
-      case JAVA_SCRIPT -> nodeCommand(artifact, nodeOnPath);
+      case JAVA_SCRIPT -> nodeCommand(artifact, nodeExecutable);
       case CPP -> List.of(singleRunCppBinary(project, file, artifact, debugLaunch).toString());
       default -> throw unrunnableTarget(target);
     };
@@ -492,7 +498,7 @@ final class HaxeTestLaunchPlanner {
   private static Plan artifactPlan(@NotNull Project project,
                                    @NotNull VirtualFile file,
                                    @NotNull HaxeBuildFileInfo info,
-                                   boolean nodeOnPath,
+                                   @Nullable String nodeExecutable,
                                    boolean debugLaunch) throws ExecutionException {
     HaxeTarget target = info.target();
     if (info.targetOutput() == null) {
@@ -508,7 +514,7 @@ final class HaxeTestLaunchPlanner {
       case HL -> hlCommand(project, file, artifact, target);
       case NEKO -> List.of(nekoExecutable(project), artifact.toString());
       case JAVA -> jvmCommand(artifact, target);
-      case JAVA_SCRIPT -> nodeCommand(artifact, nodeOnPath);
+      case JAVA_SCRIPT -> nodeCommand(artifact, nodeExecutable);
       case CPP -> List.of(cppExecutable(project, file, artifact, debugLaunch).toString());
       default -> throw unrunnableTarget(target);
     };
@@ -559,11 +565,11 @@ final class HaxeTestLaunchPlanner {
   }
 
   @NotNull
-  private static List<String> nodeCommand(@NotNull Path artifact, boolean nodeOnPath) throws ExecutionException {
-    if (!nodeOnPath) {
+  private static List<String> nodeCommand(@NotNull Path artifact, @Nullable String nodeExecutable) throws ExecutionException {
+    if (nodeExecutable == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.node"));
     }
-    return List.of(HaxeSdkUtilBase.getExecutableName("node"), artifact.toString());
+    return List.of(nodeExecutable, artifact.toString());
   }
 
   /**

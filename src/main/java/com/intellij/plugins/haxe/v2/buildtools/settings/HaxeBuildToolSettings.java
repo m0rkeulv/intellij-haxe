@@ -37,6 +37,23 @@ public interface HaxeBuildToolSettings {
 
   void setHaxelibPath(@NotNull String path);
 
+  @NotNull
+  String getNodePath();
+
+  void setNodePath(@NotNull String path);
+
+  /** Standalone Flash player (projector) overriding the Haxe SDK's runtimes entry; empty = no override. */
+  @NotNull
+  String getFlashPlayerPath();
+
+  void setFlashPlayerPath(@NotNull String path);
+
+  /** Name of a Flex/AIR SDK entry in the SDK table overriding the Haxe SDK's runtimes entry; empty = no override. */
+  @NotNull
+  String getFlexSdkName();
+
+  void setFlexSdkName(@NotNull String name);
+
   /** Whether the project keeps a haxe compilation server (`haxe --wait`) for faster compiles. */
   boolean isCompilationServerEnabled();
 

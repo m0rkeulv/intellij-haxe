@@ -14,6 +14,7 @@ import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import lombok.Getter;
@@ -79,6 +80,16 @@ public class BrowserRunConfiguration extends DapRunConfigurationBase {
 
   public void setNodePath(@Nullable String value) {
     nodePath = value == null ? "" : value;
+  }
+
+  /** The node the adapter runs on: this configuration's override, else the Haxe SDK's runtimes entry; empty leaves the PATH lookup to the locator. */
+  @NotNull
+  public String effectiveNodePath() {
+    if (!nodePath.isBlank()) {
+      return nodePath;
+    }
+    String fromSdk = HaxeToolPathResolver.resolveNodeExecutable(getProject(), null);
+    return fromSdk != null ? fromSdk : "";
   }
 
   /** The pinned DAP adapter driving the given family. */

@@ -56,9 +56,15 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
   public @Nullable JComponent createComponent() {
     if (panel == null) {
       panel = new HaxeBuildToolsSettingsPanel();
+      panel.addSdkSelectionListener(this::updateInheritedDefaults);
     }
     reset();
     return panel.getComponent();
+  }
+
+  /** The grayed defaults the empty overrides inherit, recomputed for the SDK currently selected in the panel. */
+  private void updateInheritedDefaults() {
+    panel.setInheritedDefaults(HaxeToolPathResolver.inheritedRuntimeDefaults(panel.getSelectedSdkName()));
   }
 
   @Override
@@ -69,6 +75,9 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
            || !panel.getHaxelibPath().equals(settings.getHaxelibPath())
            || !panel.getNekoPath().equals(settings.getNekoPath())
            || !panel.getHashlinkPath().equals(settings.getHashlinkPath())
+           || !panel.getNodePath().equals(settings.getNodePath())
+           || !panel.getFlashPlayerPath().equals(settings.getFlashPlayerPath())
+           || !panel.getFlexSdkName().equals(settings.getFlexSdkName())
            || panel.isServerEnabled() != settings.isCompilationServerEnabled()
            || panel.getServerPort() != settings.getCompilationServerPort()
            || !panel.getServerArguments().equals(settings.getCompilationServerArguments())
@@ -95,6 +104,9 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
     settings.setHaxelibPath(panel.getHaxelibPath());
     settings.setNekoPath(panel.getNekoPath());
     settings.setHashlinkPath(panel.getHashlinkPath());
+    settings.setNodePath(panel.getNodePath());
+    settings.setFlashPlayerPath(panel.getFlashPlayerPath());
+    settings.setFlexSdkName(panel.getFlexSdkName());
 
     settings.setCompilationServerEnabled(panel.isServerEnabled());
     settings.setCompilationServerPort(panel.getServerPort());
@@ -142,15 +154,17 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
   public void reset() {
     if (panel == null) return;
     HaxeBuildToolSettings settings = getSettings();
-    panel.reset(getHaxeSdkNames(),
-                settings.getSdkName(),
-                settings.getHaxelibPath(),
-                settings.getNekoPath(),
-                settings.getHashlinkPath());
+    panel.reset(getHaxeSdkNames(), settings.getSdkName(), settings.getHaxelibPath());
+    panel.resetRuntimeOverrides(settings.getNekoPath(),
+                                settings.getHashlinkPath(),
+                                settings.getNodePath(),
+                                settings.getFlashPlayerPath(),
+                                settings.getFlexSdkName());
     panel.resetServerFields(settings.isCompilationServerEnabled(),
                             settings.getCompilationServerPort(),
                             settings.getCompilationServerArguments());
     panel.resetLiveTestReporting(settings.isLiveTestReporting());
+    updateInheritedDefaults();
   }
 
   @Override

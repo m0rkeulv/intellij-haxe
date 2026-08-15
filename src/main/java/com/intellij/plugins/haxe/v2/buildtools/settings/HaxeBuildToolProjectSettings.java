@@ -18,6 +18,9 @@ public final class HaxeBuildToolProjectSettings implements HaxeBuildToolSettings
     public String nekoPath = "";
     public String hashlinkPath = "";
     public String haxelibPath = "";
+    public String nodePath = "";
+    public String flashPlayerPath = "";
+    public String flexSdkName = "";
     // on by default: compiler-backed features (diagnostics, generated-member
     // resolve) all need the server, and it only starts on the first compile
     public boolean compilationServerEnabled = true;
@@ -76,6 +79,36 @@ public final class HaxeBuildToolProjectSettings implements HaxeBuildToolSettings
   @Override
   public void setHaxelibPath(@NotNull String path) {
     state.haxelibPath = path;
+  }
+
+  @Override
+  public @NotNull String getNodePath() {
+    return StringUtil.notNullize(state.nodePath);
+  }
+
+  @Override
+  public void setNodePath(@NotNull String path) {
+    state.nodePath = path;
+  }
+
+  @Override
+  public @NotNull String getFlashPlayerPath() {
+    return StringUtil.notNullize(state.flashPlayerPath);
+  }
+
+  @Override
+  public void setFlashPlayerPath(@NotNull String path) {
+    state.flashPlayerPath = path;
+  }
+
+  @Override
+  public @NotNull String getFlexSdkName() {
+    return StringUtil.notNullize(state.flexSdkName);
+  }
+
+  @Override
+  public void setFlexSdkName(@NotNull String name) {
+    state.flexSdkName = name;
   }
 
   @Override

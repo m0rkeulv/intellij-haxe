@@ -33,6 +33,18 @@ public interface HaxeSdkAdditionalDataBase {
 
   void setHlBinPath(String hlBinPath);
 
+  String getNodeBinPath();
+
+  void setNodeBinPath(String nodeBinPath);
+
+  String getFlashPlayerPath();
+
+  void setFlashPlayerPath(String flashPlayerPath);
+
+  String getFlexSdkName();
+
+  void setFlexSdkName(String flexSdkName);
+
   String getHaxelibPath();
 
   void setHaxelibPath(String haxelibPath);

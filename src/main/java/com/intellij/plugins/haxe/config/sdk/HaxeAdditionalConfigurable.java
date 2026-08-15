@@ -24,6 +24,8 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.projectRoots.SdkModificator;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.config.sdk.ui.HaxeAdditionalConfigurablePanel;
+import com.intellij.plugins.haxe.config.sdk.ui.HaxeRuntimeSettingsControls;
+import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
@@ -57,7 +59,9 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
            !myHaxeAdditionalConfigurablePanel.getNekoBinPath().equals(haxeSdkData.getNekoBinPath()) ||
            !myHaxeAdditionalConfigurablePanel.getHlBinPath().equals(haxeSdkData.getHlBinPath()) ||
            !myHaxeAdditionalConfigurablePanel.getHaxelibPath().equals(haxeSdkData.getHaxelibPath()) ||
-           myHaxeAdditionalConfigurablePanel.getUseCompilerCompletionFlag() ^ haxeSdkData.getUseCompilerCompletionFlag() ||
+           !myHaxeAdditionalConfigurablePanel.getNodeBinPath().equals(haxeSdkData.getNodeBinPath()) ||
+           !myHaxeAdditionalConfigurablePanel.getFlashPlayerPath().equals(haxeSdkData.getFlashPlayerPath()) ||
+           !myHaxeAdditionalConfigurablePanel.getFlexSdkName().equals(haxeSdkData.getFlexSdkName()) ||
            myHaxeAdditionalConfigurablePanel.getRemoveCompletionDuplicatesFlag() ^ haxeSdkData.getRemoveCompletionDuplicatesFlag();
   }
 
@@ -75,7 +79,11 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
     newData.setNekoBinPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getNekoBinPath()));
     newData.setHlBinPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getHlBinPath()));
     newData.setHaxelibPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getHaxelibPath()));
-    newData.setUseCompilerCompletionFlag(myHaxeAdditionalConfigurablePanel.getUseCompilerCompletionFlag());
+    newData.setNodeBinPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getNodeBinPath()));
+    newData.setFlashPlayerPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getFlashPlayerPath()));
+    newData.setFlexSdkName(myHaxeAdditionalConfigurablePanel.getFlexSdkName());
+    // no UI: the v1 compiler-completion feature the flag toggled is gone; carried over so old settings survive
+    newData.setUseCompilerCompletionFlag(haxeSdkData != null && haxeSdkData.getUseCompilerCompletionFlag());
     newData.setRemoveCompletionDuplicatesFlag(myHaxeAdditionalConfigurablePanel.getRemoveCompletionDuplicatesFlag());
 
     final SdkModificator modificator = mySdk.getSdkModificator();
@@ -94,6 +102,15 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
 
   @Override
   public void reset() {
+    String bundledHaxelib = mySdk.getHomePath() != null
+                            ? HaxeSdkUtilBase.getHaxelibPathByFolderPath(mySdk.getHomePath())
+                            : null;
+    myHaxeAdditionalConfigurablePanel.setInheritedDefaults(
+      bundledHaxelib != null ? bundledHaxelib : HaxeRuntimeSettingsControls.pathDetectedExecutable("haxelib"),
+      HaxeRuntimeSettingsControls.pathDetectedExecutable("neko"),
+      HaxeRuntimeSettingsControls.pathDetectedExecutable("hl"),
+      HaxeRuntimeSettingsControls.pathDetectedExecutable("node"));
+
     final HaxeSdkData haxeSdkData = getHaxeSdkData();
     if (haxeSdkData != null) {
       final String nekoBinPath = haxeSdkData.getNekoBinPath();
@@ -105,8 +122,9 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
       final String haxelibPath = haxeSdkData.getHaxelibPath();
       myHaxeAdditionalConfigurablePanel.setHaxelibPath(toSystemDependentName(haxelibPath));
 
-      final boolean bUseCompilerCompletion = haxeSdkData.getUseCompilerCompletionFlag();
-      myHaxeAdditionalConfigurablePanel.setUseCompilerCompletionFlag(bUseCompilerCompletion);
+      myHaxeAdditionalConfigurablePanel.setNodeBinPath(toSystemDependentName(haxeSdkData.getNodeBinPath()));
+      myHaxeAdditionalConfigurablePanel.setFlashPlayerPath(toSystemDependentName(haxeSdkData.getFlashPlayerPath()));
+      myHaxeAdditionalConfigurablePanel.setFlexSdkName(haxeSdkData.getFlexSdkName());
 
       final boolean bRemoveDuplicates = haxeSdkData.getRemoveCompletionDuplicatesFlag();
       myHaxeAdditionalConfigurablePanel.setRemoveCompletionDuplicatesFlag(bRemoveDuplicates);

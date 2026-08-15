@@ -87,8 +87,123 @@ public final class HaxeToolPathResolver {
         return fromSdk.toString();
       }
     }
-    File onPath = PathEnvironmentVariableUtil.findInPath(HaxeSdkUtilBase.getExecutableName("neko"));
-    return onPath != null ? onPath.getAbsolutePath() : HaxeSdkUtilBase.getExecutableName("neko");
+    String onPath = pathHit("neko");
+    return onPath != null ? onPath : HaxeSdkUtilBase.getExecutableName("neko");
+  }
+
+  /**
+   * Absolute path to the node runtime for js-target runs: the Build Tools
+   * override when set, else the SDK's configured NodeJS, else a PATH lookup;
+   * null when nothing resolves (a js run then reports the missing runtime
+   * instead of failing on a bare name).
+   */
+  @Nullable
+  public static String resolveNodeExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
+    Path configured = executableOrInDirectory(HaxeBuildToolSettings.getInstance(project).getNodePath(), "node");
+    if (configured != null) {
+      return configured.toString();
+    }
+    Sdk sdk = findSdk(project, preferredSdkName);
+    if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
+      Path fromSdk = executableOrInDirectory(data.getNodeBinPath(), "node");
+      if (fromSdk != null) {
+        return fromSdk.toString();
+      }
+    }
+    return pathHit("node");
+  }
+
+  /**
+   * Absolute path to the standalone Flash player (projector) launching plain
+   * swf runs and debug sessions: the Build Tools override when set, else the
+   * SDK's configured player; null when neither resolves. The projector has
+   * no canonical executable name, so there is no PATH fallback.
+   */
+  @Nullable
+  public static String resolveFlashPlayerExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
+    String configured = HaxeBuildToolSettings.getInstance(project).getFlashPlayerPath();
+    if (!configured.isEmpty()) {
+      return configured;
+    }
+    Sdk sdk = findSdk(project, preferredSdkName);
+    if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data && !data.getFlashPlayerPath().isBlank()) {
+      return data.getFlashPlayerPath();
+    }
+    return null;
+  }
+
+  /**
+   * The Flex/AIR SDK name the flash-family lanes use: the Build Tools
+   * override when set, else the Haxe SDK's runtimes reference, or null when
+   * neither is set. The name points at an entry of the IDE's SDK table
+   * (owned by the optional Flash plugin); callers resolve it there and
+   * handle a vanished entry themselves.
+   */
+  @Nullable
+  public static String resolveFlexSdkName(@NotNull Project project, @Nullable String preferredSdkName) {
+    String configured = HaxeBuildToolSettings.getInstance(project).getFlexSdkName();
+    if (!configured.isEmpty()) {
+      return configured;
+    }
+    Sdk sdk = findSdk(project, preferredSdkName);
+    if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data && !data.getFlexSdkName().isEmpty()) {
+      return data.getFlexSdkName();
+    }
+    return null;
+  }
+
+  /** What empty Build Tools overrides inherit, for display as grayed defaults. Null members mean nothing resolves. */
+  public record InheritedRuntimeDefaults(@Nullable String haxelib,
+                                         @Nullable String neko,
+                                         @Nullable String hashlink,
+                                         @Nullable String node,
+                                         @Nullable String flashPlayer,
+                                         @Nullable String flexSdkName) {
+  }
+
+  /**
+   * The values empty Build Tools overrides would inherit from the named SDK
+   * (or, with no name, the first registered Haxe SDK - the same fallback the
+   * resolve methods use), with executables falling back to a PATH lookup.
+   * Display-only: computed against the panel's CURRENT selection, which may
+   * not be applied yet.
+   */
+  @NotNull
+  public static InheritedRuntimeDefaults inheritedRuntimeDefaults(@Nullable String sdkName) {
+    Sdk sdk = sdkName != null ? ProjectJdkTable.getInstance().findJdk(sdkName) : null;
+    if (sdk == null) {
+      List<Sdk> haxeSdks = ProjectJdkTable.getInstance().getSdksOfType(HaxeSdkType.getInstance());
+      sdk = haxeSdks.isEmpty() ? null : haxeSdks.get(0);
+    }
+    HaxeSdkData data = sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData sdkData ? sdkData : null;
+
+    String haxelib = sdk != null && sdk.getHomePath() != null
+                     ? HaxeSdkUtilBase.getHaxelibPathByFolderPath(sdk.getHomePath())
+                     : null;
+    if (haxelib == null) {
+      haxelib = pathHit("haxelib");
+    }
+    String flashPlayer = data == null || data.getFlashPlayerPath().isBlank() ? null : data.getFlashPlayerPath();
+    String flexSdkName = data == null || data.getFlexSdkName().isEmpty() ? null : data.getFlexSdkName();
+    return new InheritedRuntimeDefaults(
+      haxelib,
+      inheritedExecutable(data == null ? null : data.getNekoBinPath(), "neko"),
+      inheritedExecutable(data == null ? null : data.getHlBinPath(), "hl"),
+      inheritedExecutable(data == null ? null : data.getNodeBinPath(), "node"),
+      flashPlayer,
+      flexSdkName);
+  }
+
+  @Nullable
+  private static String inheritedExecutable(@Nullable String sdkConfiguredPath, @NotNull String executableName) {
+    Path fromSdk = executableOrInDirectory(sdkConfiguredPath, executableName);
+    return fromSdk != null ? fromSdk.toString() : pathHit(executableName);
+  }
+
+  @Nullable
+  private static String pathHit(@NotNull String executableName) {
+    File onPath = PathEnvironmentVariableUtil.findInPath(HaxeSdkUtilBase.getExecutableName(executableName));
+    return onPath != null ? onPath.getAbsolutePath() : null;
   }
 
   /** The configured value may point at the executable itself or its directory. */
