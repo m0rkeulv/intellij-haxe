@@ -98,7 +98,9 @@ public final class HaxeProjectTaskRunner extends ProjectTaskRunner {
       console.print("[" + containerId + "] " + String.join(" ", command) + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
 
       try {
-        GeneralCommandLine commandLine = new GeneralCommandLine(command).withWorkDirectory(resolved.workDirectory());
+        GeneralCommandLine commandLine = new GeneralCommandLine(command)
+          .withWorkDirectory(resolved.workDirectory())
+          .withEnvironment(LimeProjects.commandEnvironment(command));
         ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess();
         if (!output.getStdout().isEmpty()) {
           console.print(output.getStdout(), ConsoleViewContentType.NORMAL_OUTPUT);

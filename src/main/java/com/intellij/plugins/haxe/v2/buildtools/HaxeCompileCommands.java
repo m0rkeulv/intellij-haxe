@@ -6,6 +6,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.util.execution.ParametersListUtil;
@@ -106,8 +108,30 @@ public final class HaxeCompileCommands {
     command.addAll(ParametersListUtil.parse(extraArguments));
     VirtualFile parent = file.getParent();
     String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
-    boolean connectEligible = isConnectEligible(project, environmentSdk, command);
+    boolean connectEligible = isConnectEligible(project, environmentSdk, command) && !producesSwf(project, file);
     return new Resolved(containerId, command, workDirectory, String.join(" ", command), connectEligible);
+  }
+
+  /**
+   * Whether the build emits a swf. The compilation server produces a CORRUPT
+   * swf on the second compile of the same build (VerifyError #1053 at load;
+   * identical arguments, warm server - live-verified against haxe 4.3.7), so
+   * swf-emitting compiles never ride {@code --connect}. Display/diagnostic
+   * requests are unaffected - the corruption is in swf generation only.
+   */
+  public static boolean producesSwf(@NotNull Project project, @NotNull VirtualFile file) {
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+    if (type == null) return false;
+    if (LimeProjects.isLimeFamily(type)) {
+      return LimeProjects.FLASH_FAMILY_TARGETS.contains(LimeProjects.selectedTargetFlag(project, type, file));
+    }
+    if (type == HaxeBuildFileType.NMML) {
+      return "flash".equals(NmeProjects.selectedTargetFlag(project, file));
+    }
+    if (type == HaxeBuildFileType.HXML) {
+      return HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, type)).target() == HaxeTarget.FLASH;
+    }
+    return false;
   }
 
   /** True when the command can compile through the server: a direct haxe compile or a lime/openfl/nme build. */

@@ -28,6 +28,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.RecursionManager;
+import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
@@ -50,6 +51,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -301,6 +304,14 @@ abstract public class HaxeCodeInsightFixtureTestCase {
   /** Whether a neko runtime is on the PATH - the gate for live tests launching neko artifacts. */
   public static boolean nekoAvailable() {
     return toolAvailable("neko", "-version");
+  }
+
+  /** Whether the AIR_SDK environment variable points at an SDK with adl - the gate for live flash-family test runs. */
+  public static boolean adlAvailable() {
+    String airSdk = System.getenv("AIR_SDK");
+    if (airSdk == null || airSdk.isBlank()) return false;
+    String adl = SystemInfo.isWindows ? "adl.exe" : "adl";
+    return Files.isRegularFile(Path.of(airSdk, "bin", adl));
   }
 
   private static boolean toolAvailable(String... command) {

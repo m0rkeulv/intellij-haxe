@@ -77,6 +77,11 @@ class LiveClient implements ITestResultClient {
 		// the runner waits for every client's completion callback before it
 		// reports the run finished - not calling it would hang the process
 		if (handler != null) handler(this);
+		// nothing on flash ends the process by itself; every service message
+		// is already flushed - only the runner's cosmetic summary is cut off
+		#if flash
+		FlashSupport.exit(0);
+		#end
 		return null;
 	}
 
@@ -126,9 +131,13 @@ class LiveClient implements ITestResultClient {
 
 	static function printLine(line:String):Void {
 		// the leading break closes PrintClient's unfinished glyph line; a
-		// service message must start at a line start to be parsed
+		// service message must start at a line start to be parsed.
+		// flash: NATIVE trace, bypassing the haxe.Log hijack above - the
+		// buffered replay must not re-enter the buffer
 		#if sys
 		Sys.print("\n" + line + "\n");
+		#elseif flash
+		flash.Lib.trace(line);
 		#else
 		trace(line);
 		#end

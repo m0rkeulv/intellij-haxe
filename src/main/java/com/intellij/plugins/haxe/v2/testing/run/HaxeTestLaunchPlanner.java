@@ -78,7 +78,16 @@ final class HaxeTestLaunchPlanner {
     }
 
     String suiteName = rootSuiteName(project, buildFilePath);
-    return ParametersListUtil.join(frameworkArguments(project, buildFilePath, suiteName, filterPattern));
+    return ParametersListUtil.join(
+      frameworkArguments(project, buildFilePath, suiteName, filterPattern, isFlashHxml(project, buildFilePath)));
+  }
+
+  /** Whether the hxml tests build compiles for flash - the adl-hosted lane needs the injected reporter (exit + stdout). */
+  private static boolean isFlashHxml(@NotNull Project project, @NotNull String buildFilePath) {
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    if (file == null || !file.isValid()) return false;
+    HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
+    return info.target() == HaxeTarget.FLASH;
   }
 
   /** The framework's extracted shipped-reporter root, or null for one that has no shipped reporter (or extraction failed). */
@@ -100,8 +109,29 @@ final class HaxeTestLaunchPlanner {
                                              @Nullable String filterPattern) {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
     String suiteName = "Target: " + limeTarget(targetFlag);
-    List<String> plain = frameworkArguments(project, file.getPath(), suiteName, filterPattern);
-    return ParametersListUtil.join(limeSpelling(plain));
+    boolean flashTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag);
+    List<String> plain = frameworkArguments(project, file.getPath(), suiteName, filterPattern, flashTests);
+    List<String> spelled = new ArrayList<>(limeSpelling(plain));
+    if ("air".equals(targetFlag)) {
+      spelled.addAll(airSwfVersionFlag(project));
+    }
+    return ParametersListUtil.join(spelled);
+  }
+
+  /**
+   * lime's air builds default to {@code -swf-version 17}, whose openfl AIR
+   * extern overrides trip VerifyError #1053 under a modern AIR runtime. The
+   * tests swf targets the hosting SDK's own version instead (a trailing CLI
+   * flag overrides the default). No flag when no AIR SDK resolves - the run
+   * would already stop at the missing adl.
+   */
+  @NotNull
+  private static List<String> airSwfVersionFlag(@NotNull Project project) {
+    String adl = HaxeToolPathResolver.resolveAdlExecutable(project);
+    if (adl == null) return List.of();
+    // namespaceVersion is "major.minor" (e.g. 31.0); -swf-version takes the major
+    String major = AirTestHost.namespaceVersion(Path.of(adl)).split("\\.")[0];
+    return List.of("--haxeflag=-swf-version " + major);
   }
 
   /**
@@ -119,9 +149,13 @@ final class HaxeTestLaunchPlanner {
   private static List<String> frameworkArguments(@NotNull Project project,
                                                  @NotNull String buildFilePath,
                                                  @Nullable String suiteName,
-                                                 @Nullable String filterPattern) {
+                                                 @Nullable String filterPattern,
+                                                 boolean flashTests) {
     HaxeTestFramework framework = frameworkFor(project, buildFilePath);
-    boolean liveReporting = HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    // the adl-hosted flash lane depends on the injected reporter for its
+    // stdout output AND the exit call - the live-reporting toggle cannot
+    // opt a flash build out of it
+    boolean liveReporting = flashTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
     List<String> arguments =
       new ArrayList<>(framework.reportingArgs(suiteName, reporterClasspath(framework), liveReporting));
     arguments.addAll(framework.filterArgs(StringUtil.nullize(filterPattern, true)));
@@ -183,8 +217,13 @@ final class HaxeTestLaunchPlanner {
                                             @NotNull VirtualFile file,
                                             @Nullable String filterPattern) {
     String targetFlag = NmeProjects.selectedTargetFlag(project, file);
-    HaxeTarget target = targetFlag.equals("neko") ? HaxeTarget.NEKO : HaxeTarget.CPP;
-    List<String> plain = frameworkArguments(project, file.getPath(), "Target: " + target, filterPattern);
+    HaxeTarget target = switch (targetFlag) {
+      case "neko" -> HaxeTarget.NEKO;
+      case "flash" -> HaxeTarget.FLASH;
+      default -> HaxeTarget.CPP;
+    };
+    List<String> plain =
+      frameworkArguments(project, file.getPath(), "Target: " + target, filterPattern, target == HaxeTarget.FLASH);
     return ParametersListUtil.join(nmeSpelling(plain));
   }
 
@@ -379,6 +418,7 @@ final class HaxeTestLaunchPlanner {
       case JAVA -> jvmCommand(artifact, target);
       case JAVA_SCRIPT -> nodeCommand(artifact, nodeExecutable);
       case CPP -> List.of(singleRunCppBinary(project, file, artifact, debugLaunch).toString());
+      case FLASH -> adlCommand(project, artifact);
       default -> throw unrunnableTarget(target);
     };
     String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
@@ -403,7 +443,9 @@ final class HaxeTestLaunchPlanner {
                                                   @NotNull String buildFilePath,
                                                   @NotNull HaxeTestFramework framework,
                                                   @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
-    boolean liveReporting = HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    // single runs are hxml-only; the flash force mirrors frameworkArguments
+    boolean liveReporting = isFlashHxml(project, buildFilePath)
+                            || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
     List<String> arguments = new ArrayList<>(
       framework.reportingArgs(rootSuiteName(project, buildFilePath), reporterClasspath(framework), liveReporting));
     if (singleRun.singleTest()) {
@@ -436,6 +478,13 @@ final class HaxeTestLaunchPlanner {
                                @NotNull HaxeBuildFileType type) throws ExecutionException {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
     String content = HaxeBuildFileInspector.loadText(file);
+    if (LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag)) {
+      Path swf = content == null ? null : LimeProjects.packagedSwf(file, content, targetFlag);
+      if (swf == null) {
+        throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.app.file", file.getName()));
+      }
+      return new Plan(flashCommand(project, file, swf), swf.getParent().toString(), false, HaxeTarget.FLASH, null);
+    }
     Path binary = content == null ? null : LimeProjects.packagedBinary(file, content, targetFlag);
     if (binary == null) {
       boolean unrunnableTarget = !LimeProjects.HOST_LAUNCHABLE_TARGETS.contains(targetFlag);
@@ -461,13 +510,15 @@ final class HaxeTestLaunchPlanner {
     String appPath = content == null ? null : ProjectXmlParser.parseAppPath(content);
     String outputRoot = appPath != null ? appPath : "bin";
     NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact(targetFlag, appFile, outputRoot);
-    boolean hostLaunchable = artifact != null && artifact.target() != HaxeTarget.FLASH;
-    if (!hostLaunchable) {
+    if (artifact == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.unrunnable.target", targetFlag));
     }
     Path binary = Path.of(file.getParent().getPath())
       .resolve(artifact.relativeOutput())
       .normalize();
+    if (artifact.target() == HaxeTarget.FLASH) {
+      return new Plan(flashCommand(project, file, binary), binary.getParent().toString(), false, HaxeTarget.FLASH, null);
+    }
     return new Plan(List.of(binary.toString()), binary.getParent().toString(), false, artifact.target(), null);
   }
 
@@ -516,6 +567,7 @@ final class HaxeTestLaunchPlanner {
       case JAVA -> jvmCommand(artifact, target);
       case JAVA_SCRIPT -> nodeCommand(artifact, nodeExecutable);
       case CPP -> List.of(cppExecutable(project, file, artifact, debugLaunch).toString());
+      case FLASH -> flashCommand(project, file, artifact);
       default -> throw unrunnableTarget(target);
     };
     String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
@@ -598,6 +650,39 @@ final class HaxeTestLaunchPlanner {
     boolean hasLib = info.libraries().stream()
       .anyMatch(library -> library.name().equalsIgnoreCase("hxnodejs"));
     return hasLib || info.defines().stream().anyMatch(define -> define.name().equals("nodejs"));
+  }
+
+  /** The whole-build flash launch: {@link #adlCommand} behind the framework's flash-support gate. */
+  @NotNull
+  private static List<String> flashCommand(@NotNull Project project,
+                                           @NotNull VirtualFile file,
+                                           @NotNull Path artifact) throws ExecutionException {
+    HaxeTestFramework framework = frameworkFor(project, file.getPath());
+    if (!framework.supportsFlash()) {
+      throw new ExecutionException(
+        HaxeBundle.message("haxe.test.config.framework.no.flash", framework.libraryName()));
+    }
+    return adlCommand(project, artifact);
+  }
+
+  /**
+   * Flash-family tests run under {@code adl -nodebug} (see {@link AirTestHost}):
+   * native trace reaches stdout and the injected reporter exits the app.
+   * Requires a Flex/AIR SDK (the runtimes chain) or an AIR_SDK environment
+   * variable pointing at one.
+   */
+  @NotNull
+  private static List<String> adlCommand(@NotNull Project project, @NotNull Path artifact) throws ExecutionException {
+    if (!artifact.toString().toLowerCase(Locale.ROOT).endsWith(".swf")) {
+      throw unrunnableTarget(HaxeTarget.FLASH);
+    }
+    String adl = HaxeToolPathResolver.resolveAdlExecutable(project);
+    if (adl == null) {
+      throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.adl"));
+    }
+    Path descriptor = AirTestHost.descriptorFor(artifact, AirTestHost.namespaceVersion(Path.of(adl)));
+    Path contentRoot = artifact.getParent() != null ? artifact.getParent() : artifact;
+    return AirTestHost.command(adl, descriptor, contentRoot);
   }
 
   @NotNull

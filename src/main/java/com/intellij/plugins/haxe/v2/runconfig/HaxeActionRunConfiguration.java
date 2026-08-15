@@ -22,6 +22,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.util.PathUtil;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
@@ -115,7 +116,8 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
         List<String> command = HaxeCompileCommands.connectIfEnabled(
           getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
         GeneralCommandLine commandLine = new GeneralCommandLine(command)
-          .withWorkDirectory(resolved.workDirectory());
+          .withWorkDirectory(resolved.workDirectory())
+          .withEnvironment(LimeProjects.commandEnvironment(command));
         KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine);
         ProcessTerminatedListener.attach(processHandler);
         return processHandler;

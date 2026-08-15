@@ -40,6 +40,10 @@ public final class HaxeDebugSupport {
     return target != null && PROGRAM_TARGETS.contains(target);
   }
 
+  // TODO flash test debug lane: fdb can host it (adl WITHOUT -nodebug routes
+  //  the swf to the debugger), but in that mode the TeamCity output arrives on
+  //  fdb's console instead of the run's stdout - the SM console needs to parse
+  //  the debug session's output before FLASH can join TEST_TARGETS
   public static boolean supportsTestDebug(@Nullable HaxeTarget target) {
     return target != null && TEST_TARGETS.contains(target);
   }

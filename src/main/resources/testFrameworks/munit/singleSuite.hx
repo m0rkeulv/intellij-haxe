@@ -17,7 +17,11 @@ class IjSingleSuite extends massive.munit.TestSuite {
 
 class IjSingleRun {
 	static function main() {
-		var runner = new massive.munit.TestRunner(new massive.munit.client.PrintClient());
+		// munit's PrintClient on flash is browser-bridged (ExternalInterface)
+		// and throws under the IDE's adl host; the summary client is wire-free
+		var client:massive.munit.ITestResultClient =
+			#if flash new massive.munit.client.SummaryReportClient() #else new massive.munit.client.PrintClient() #end;
+		var runner = new massive.munit.TestRunner(client);
 		runner.run([IjSingleSuite]);
 	}
 }

@@ -45,6 +45,12 @@ public final class BuddyFramework implements HaxeTestFramework {
   }
 
   @Override
+  public boolean supportsFlash() {
+    // buddy's reporter has no flash shims - nothing would end the adl host
+    return false;
+  }
+
+  @Override
   public boolean isTestClass(@NotNull HaxeClass haxeClass) {
     if (DumbService.isDumb(haxeClass.getProject())) return false;
     try {

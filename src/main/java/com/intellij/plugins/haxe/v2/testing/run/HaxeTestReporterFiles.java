@@ -33,14 +33,14 @@ final class HaxeTestReporterFiles {
   @NotNull
   static Optional<String> utestClasspath() {
     return extract("/testing/utestLiveReporter/", "utest-live-reporter",
-                   List.of("intellij_utest/Macro.hx", "intellij_utest/LiveReporter.hx"));
+                   List.of("intellij_utest/Macro.hx", "intellij_utest/LiveReporter.hx", "intellij_utest/FlashSupport.hx"));
   }
 
   /** The munit reporter's classpath root, or empty when extraction fails (the run then reports to the console only). */
   @NotNull
   static Optional<String> munitClasspath() {
     return extract("/testing/munitLiveReporter/", "munit-live-reporter",
-                   List.of("intellij_munit/Macro.hx", "intellij_munit/LiveClient.hx"));
+                   List.of("intellij_munit/Macro.hx", "intellij_munit/LiveClient.hx", "intellij_munit/FlashSupport.hx"));
   }
 
   /** The buddy reporter's classpath root, or empty when extraction fails (the run then reports to the console only). */
@@ -54,7 +54,7 @@ final class HaxeTestReporterFiles {
   @NotNull
   static Optional<String> tinkClasspath() {
     return extract("/testing/tinkLiveReporter/", "tink-live-reporter",
-                   List.of("intellij_tink/Macro.hx", "intellij_tink/TcReporter.hx"));
+                   List.of("intellij_tink/Macro.hx", "intellij_tink/TcReporter.hx", "intellij_tink/FlashSupport.hx"));
   }
 
   @NotNull

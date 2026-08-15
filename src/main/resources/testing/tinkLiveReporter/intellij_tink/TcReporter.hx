@@ -19,6 +19,9 @@ class TcReporter implements Reporter {
 
 	public function new(rootSuite:String) {
 		this.rootSuite = rootSuite;
+		#if flash
+		FlashSupport.hookTrace();
+		#end
 	}
 
 	public function report(type:ReportType):Future<Noise> {
@@ -41,6 +44,11 @@ class TcReporter implements Reporter {
 					printLine("##teamcity[testSuiteFinished name='" + escape(rootSuite) + "']");
 					rootOpen = false;
 				}
+				// nothing on flash ends the process by itself; every line
+				// above is already flushed
+				#if flash
+				FlashSupport.exit(0);
+				#end
 		}
 		return Future.NOISE;
 	}
@@ -87,6 +95,8 @@ class TcReporter implements Reporter {
 	static function printLine(line:String):Void {
 		#if sys
 		Sys.println(line);
+		#elseif flash
+		flash.Lib.trace(line);
 		#else
 		trace(line);
 		#end

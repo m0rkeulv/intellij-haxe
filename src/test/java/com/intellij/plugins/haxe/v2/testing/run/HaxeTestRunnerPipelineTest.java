@@ -121,6 +121,37 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
 
   @Test
   @Timeout(120)
+  @DisplayName("flash run streams events through adl")
+  public void testFlashRunStreamsEventsThroughAdl() throws Exception {
+    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping flash pipeline test");
+    assumeTrue(utestAvailable(), "utest haxelib not installed - skipping flash pipeline test");
+    assumeTrue(adlAvailable(), "AIR_SDK not set (or has no adl) - skipping flash pipeline test");
+
+    myFixture.copyDirectoryToProject("utest", "utest");
+    VirtualFile buildFile = myFixture.findFileInTempDir("utest/swf.hxml");
+    assertNotNull(buildFile, "the swf fixture must be copied");
+
+    compileTestsBuild(buildFile);
+
+    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    assertEquals("-nodebug", plan.command().get(1), "adl's default debug-launch mode swallows trace output");
+    // the injected reporter's completion handler runs FIRST (attached in
+    // Runner's constructor) and exits with 0 - the batch replay never prints
+    RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 0);
+
+    assertTrue(recorder.startedSuites.contains("LiveCase"), "class suite expected, got: " + recorder.startedSuites);
+    assertEquals(List.of("LiveCase.testTraces", "LiveCase.testPasses", "LiveCase.testNoAsserts"),
+                 recorder.finishedTests,
+                 "each live-reported test finishes exactly once, got: " + recorder.finishedTests);
+    // trace() rides the hooked native trace, so adl forwards it and the
+    // converter attributes it between the test's started/finished events
+    String tracedOutput = recorder.outputByTest.get("LiveCase.testTraces");
+    assertNotNull(tracedOutput, "trace must be attributed to testTraces, got: " + recorder.outputByTest);
+    assertTrue(tracedOutput.contains("hello from the traced test"), "trace text expected, got: " + tracedOutput);
+  }
+
+  @Test
+  @Timeout(120)
   @DisplayName("munit run streams events through the injected client")
   public void testMunitRunStreamsEventsThroughTheInjectedClient() throws Exception {
     assumeTrue(haxeAvailable(), "haxe not on PATH - skipping real-munit pipeline test");

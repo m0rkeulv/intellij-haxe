@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -105,8 +106,44 @@ public final class LimeProjects {
     return List.of("-DAIR_SDK=" + sdk.getHomePath());
   }
 
+  /**
+   * Environment additions a resolved tool command needs when spawned: lime
+   * 8.3.2's air packaging GUARDS on the AIR_SDK define but READS the value
+   * from project.environment - only a real environment variable lands in
+   * both maps, so the CLI define alone crashes the packaging step on a null
+   * path. The injected define (see {@link #airSdkDefine}) is mirrored into
+   * the process environment; commands without it get no additions.
+   */
+  @NotNull
+  public static Map<String, String> commandEnvironment(@NotNull List<String> command) {
+    for (String argument : command) {
+      if (argument.startsWith("-DAIR_SDK=")) {
+        return Map.of("AIR_SDK", argument.substring("-DAIR_SDK=".length()));
+      }
+    }
+    return Map.of();
+  }
+
   /** The target flags whose packaged app is a host-launchable binary (see {@link #packagedBinary}). */
   public static final Set<String> HOST_LAUNCHABLE_TARGETS = Set.of("neko", "hl", "cpp", "windows", "linux", "mac");
+
+  /** The target flags whose packaged artifact is a swf, hosted under adl for test runs. */
+  public static final Set<String> FLASH_FAMILY_TARGETS = Set.of("flash", "air");
+
+  /** The packaged swf a flash/air build exports ({@code <app path>/<target>/bin/<app file>.swf}), or null without an app file. */
+  @Nullable
+  public static Path packagedSwf(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
+    if (!FLASH_FAMILY_TARGETS.contains(targetFlag)) return null;
+    String appFile = ProjectXmlParser.parseAppFile(content);
+    String appPath = StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin");
+    if (appFile == null) return null;
+    return Path.of(projectFile.getParent().getPath())
+      .resolve(appPath)
+      .resolve(targetFlag)
+      .resolve("bin")
+      .resolve(appFile + ".swf")
+      .normalize();
+  }
 
   /** The haxe compilation target behind a lime CLI target id, or null for an unknown id. */
   @Nullable

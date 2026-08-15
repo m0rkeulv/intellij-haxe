@@ -206,6 +206,32 @@ public final class HaxeToolPathResolver {
     return onPath != null ? onPath.getAbsolutePath() : null;
   }
 
+  /**
+   * Absolute path to the Flex/AIR SDK's adl (the AIR debug launcher hosting
+   * flash-family test runs): from the resolved Flex/AIR SDK entry's bin,
+   * else an AIR_SDK environment variable's bin (the same variable the lime
+   * air builds consume); null when neither yields an existing executable.
+   */
+  @Nullable
+  public static String resolveAdlExecutable(@NotNull Project project) {
+    String flexSdkName = resolveFlexSdkName(project, null);
+    Sdk sdk = flexSdkName == null ? null : ProjectJdkTable.getInstance().findJdk(flexSdkName);
+    if (sdk != null && sdk.getHomePath() != null) {
+      Path adl = Path.of(sdk.getHomePath(), "bin", HaxeSdkUtilBase.getExecutableName("adl"));
+      if (Files.isRegularFile(adl)) {
+        return adl.toString();
+      }
+    }
+    String airSdkHome = System.getenv("AIR_SDK");
+    if (airSdkHome != null && !airSdkHome.isBlank()) {
+      Path adl = Path.of(airSdkHome, "bin", HaxeSdkUtilBase.getExecutableName("adl"));
+      if (Files.isRegularFile(adl)) {
+        return adl.toString();
+      }
+    }
+    return null;
+  }
+
   /** The configured value may point at the executable itself or its directory. */
   @Nullable
   private static Path executableOrInDirectory(@Nullable String configuredPath, @NotNull String executableName) {

@@ -202,8 +202,48 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("non host runnable target is refused")
   public void testNonHostRunnableTargetIsRefused() {
-    String path = fixturePath("targets/swf.hxml");
+    String path = fixturePath("targets/cs.hxml");
     assertThrows(ExecutionException.class, () -> HaxeTestLaunchPlanner.plan(getProject(), path, null, false));
+  }
+
+  @Test
+  @DisplayName("swf runs under adl when an air sdk resolves and is refused otherwise")
+  public void testSwfRunsUnderAdlWhenAnAirSdkResolvesAndIsRefusedOtherwise() throws ExecutionException {
+    String path = fixturePath("targets/swf.hxml");
+    // the AIR_SDK env fallback is the only adl source in the test fixture
+    // (no Flex/AIR SDK entry exists in its SDK table)
+    String airSdk = System.getenv("AIR_SDK");
+    boolean adlAvailable = airSdk != null
+                           && Files.isRegularFile(Path.of(airSdk, "bin", HaxeSdkUtilBase.getExecutableName("adl")));
+    if (!adlAvailable) {
+      assertThrows(ExecutionException.class, () -> HaxeTestLaunchPlanner.plan(getProject(), path, null, false));
+      return;
+    }
+
+    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
+    assertEquals(HaxeTarget.FLASH, plan.target());
+    assertTrue(plan.command().get(0).endsWith(HaxeSdkUtilBase.getExecutableName("adl")),
+               "adl hosts the swf: " + plan.command());
+    assertEquals("-nodebug", plan.command().get(1), "the default debug-launch mode swallows trace output");
+    assertTrue(plan.command().get(2).endsWith("application.xml"), "generated descriptor expected: " + plan.command());
+    assertTrue(plan.command().get(3).replace('\\', '/').endsWith("/bin"),
+               "the content root is the swf's directory: " + plan.command());
+  }
+
+  @Test
+  @DisplayName("flash build forces the live reporter into the compile")
+  public void testFlashBuildForcesTheLiveReporterIntoTheCompile() {
+    HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(getProject());
+    boolean before = settings.isLiveTestReporting();
+    settings.setLiveTestReporting(false);
+    try {
+      // the adl-hosted lane needs the injected reporter for stdout output and the exit call
+      String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("targets/swf.hxml"), null);
+      assertTrue(arguments.contains("intellij_utest.Macro.init()"), "reporter injection missing: " + arguments);
+    }
+    finally {
+      settings.setLiveTestReporting(before);
+    }
   }
 
   @Test

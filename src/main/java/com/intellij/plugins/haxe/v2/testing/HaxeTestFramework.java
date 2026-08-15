@@ -28,6 +28,16 @@ public interface HaxeTestFramework {
   /** Whether the framework runs on the eval interpreter — munit predates it and hangs there. */
   boolean supportsInterp();
 
+  /**
+   * Whether the framework runs on the flash target under the IDE's adl host.
+   * Needs the shipped reporter's flash shims (native-trace output plus the
+   * exit call ending the adl process) — a framework without them hangs the
+   * run instead of finishing.
+   */
+  default boolean supportsFlash() {
+    return true;
+  }
+
   /** Whether the class is a runnable test case of this framework. Detection only - false in dumb mode. */
   boolean isTestClass(@NotNull HaxeClass haxeClass);
 

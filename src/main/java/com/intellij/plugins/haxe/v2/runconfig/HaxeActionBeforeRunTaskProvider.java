@@ -233,7 +233,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
     CapturingProcessHandler handler;
     try {
-      GeneralCommandLine commandLine = new GeneralCommandLine(command).withWorkDirectory(resolved.workDirectory());
+      GeneralCommandLine commandLine = new GeneralCommandLine(command)
+        .withWorkDirectory(resolved.workDirectory())
+        .withEnvironment(LimeProjects.commandEnvironment(command));
       handler = new CapturingProcessHandler(commandLine);
     }
     catch (ExecutionException e) {

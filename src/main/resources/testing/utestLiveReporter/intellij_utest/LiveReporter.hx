@@ -27,6 +27,9 @@ class LiveReporter {
 	var testStartTime:Float = 0;
 
 	public static function attach(runner:Runner, rootSuite:String):Void {
+		#if flash
+		FlashSupport.hookTrace();
+		#end
 		var reporter = new LiveReporter(rootSuite);
 		runner.onTestStart.add(reporter.testStart);
 		runner.onTestComplete.add(reporter.testComplete);
@@ -99,6 +102,11 @@ class LiveReporter {
 			printLine("##teamcity[testSuiteFinished name='" + escape(rootSuite) + "']");
 			rootOpen = false;
 		}
+		// nothing on flash ends the process by itself; every line above is
+		// already flushed (adl forwards traces synchronously)
+		#if flash
+		FlashSupport.exit(0);
+		#end
 	}
 
 	function closeSuite():Void {
@@ -124,6 +132,8 @@ class LiveReporter {
 	static function printLine(line:String):Void {
 		#if sys
 		Sys.println(line);
+		#elseif flash
+		flash.Lib.trace(line);
 		#else
 		trace(line);
 		#end
