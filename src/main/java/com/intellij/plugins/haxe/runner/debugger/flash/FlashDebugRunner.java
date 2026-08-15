@@ -11,6 +11,8 @@ import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.HaxeFlashDebuggingUtil;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -50,6 +52,7 @@ public class FlashDebugRunner extends GenericProgramRunner<RunnerSettings> {
 
     String swfPath = configuration.resolveSwf().toString();
     String playerPath = configuration.effectiveFlashPlayerPath();
-    return HaxeFlashDebuggingUtil.getDescriptor(module, environment, swfPath, flexSdkName, playerPath);
+    List<String> sourceDirectories = HaxeActionBeforeRunTaskProvider.buildStepSourceDirectories(configuration);
+    return HaxeFlashDebuggingUtil.getDescriptor(module, environment, swfPath, flexSdkName, playerPath, sourceDirectories);
   }
 }

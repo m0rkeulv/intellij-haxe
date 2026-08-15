@@ -24,9 +24,11 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.util.execution.ParametersListUtil;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -136,24 +138,35 @@ public class AirRunConfiguration extends DapRunConfigurationBase {
   @Override
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
     requireModule();
-    return new DapCommandLineRunningState(env, getProject(), this::createAdlCommandLine);
+    return new DapCommandLineRunningState(env, getProject(), () -> createAdlCommandLine(false));
   }
 
   /**
-   * {@code adl [options] <descriptor> <content-root> [-- args]}, with adl from
-   * the effective Flex/AIR SDK's bin directory. The SDK entry is read from the
-   * plain SDK table, so plain Run works without the Flash plugin.
+   * {@code adl [options] [-nodebug] <descriptor> <content-root> [-- args]},
+   * with adl from the effective Flex/AIR SDK's bin directory. The SDK entry is
+   * read from the plain SDK table, so plain Run works without the Flash plugin.
+   * Plain Run passes {@code -nodebug}: adl's default debug-launch mode swallows
+   * trace output; a debug launch must NOT pass it, or the swf never connects
+   * to fdb. With multiple instances allowed, each launch runs a descriptor
+   * COPY carrying a unique app id (see {@link #uniqueIdDescriptor}).
    */
   @NotNull
-  public GeneralCommandLine createAdlCommandLine() throws ExecutionException {
+  public GeneralCommandLine createAdlCommandLine(boolean debugLaunch) throws ExecutionException {
     Path descriptor = resolveDescriptor();
+    Path contentRoot = resolveContentRoot(descriptor);
+    if (isAllowRunningInParallel()) {
+      descriptor = uniqueIdDescriptor(descriptor);
+    }
 
     GeneralCommandLine commandLine = new GeneralCommandLine()
       .withExePath(resolveAdl().toString())
-      .withWorkDirectory(descriptor.getParent() != null ? descriptor.getParent().toString() : null);
+      .withWorkDirectory(contentRoot.toString());
     commandLine.addParameters(ParametersListUtil.parse(adlOptions));
+    if (!debugLaunch) {
+      commandLine.addParameter("-nodebug");
+    }
     commandLine.addParameter(descriptor.toString());
-    commandLine.addParameter(resolveContentRoot(descriptor).toString());
+    commandLine.addParameter(contentRoot.toString());
 
     List<String> programArguments = ParametersListUtil.parse(programParameters);
     if (!programArguments.isEmpty()) {
@@ -161,6 +174,33 @@ public class AirRunConfiguration extends DapRunConfigurationBase {
       commandLine.addParameters(programArguments);
     }
     return commandLine;
+  }
+
+  /**
+   * AIR is single-instance per application id (a second same-id launch just
+   * forwards to the first and exits; {@code -pubid} is rejected for post-1.5.3
+   * namespaces), so a parallel launch runs a COPY of the descriptor whose id
+   * carries a unique suffix. The content root still points at the original
+   * content; the suffixed id also gives the instance its own application
+   * storage.
+   */
+  @NotNull
+  private static Path uniqueIdDescriptor(@NotNull Path descriptor) throws ExecutionException {
+    try {
+      String content = Files.readString(descriptor);
+      String suffix = ".ij" + UUID.randomUUID().toString().substring(0, 8);
+      // the first <id>...</id> element is the application id; the suffix lands inside it
+      String modified = content.replaceFirst("(<id>[^<]*)</id>", "$1" + suffix + "</id>");
+      if (modified.equals(content)) {
+        throw new ExecutionException(HaxeDebuggerBundle.message("air.runner.descriptor.no.id", descriptor.toString()));
+      }
+      Path copy = Files.createTempDirectory("haxe-air-run").resolve(descriptor.getFileName());
+      Files.writeString(copy, modified);
+      return copy;
+    }
+    catch (IOException e) {
+      throw new ExecutionException(HaxeDebuggerBundle.message("air.runner.descriptor.copy.failed", e.getMessage()));
+    }
   }
 
   // --- resolution ---

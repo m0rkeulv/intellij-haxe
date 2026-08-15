@@ -24,6 +24,7 @@ import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
+import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.lang.javascript.flex.projectStructure.model.FlexBuildConfiguration;
 import com.intellij.lang.javascript.flex.run.BCBasedRunnerParameters;
@@ -32,7 +33,9 @@ import com.intellij.lang.javascript.flex.run.LauncherParameters;
 import com.intellij.lang.javascript.flex.sdk.FlexSdkUtils;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.util.Key;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugProcessStarter;
 import com.intellij.xdebugger.XDebugSession;
@@ -43,6 +46,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Debug-session entry points for the flash family, built on the Flex plugin's
@@ -60,7 +64,8 @@ public class HaxeFlashDebuggingUtil {
                                                    ExecutionEnvironment env,
                                                    String urlToLaunch,
                                                    String flexSdkName,
-                                                   @Nullable String flashPlayerPath) throws ExecutionException {
+                                                   @Nullable String flashPlayerPath,
+                                                   @NotNull List<String> sourceDirectories) throws ExecutionException {
     final Sdk flexSdk = FlexSdkUtils.findFlexOrFlexmojosSdk(flexSdkName);
     if (flexSdk == null) {
       throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", flexSdkName));
@@ -82,7 +87,7 @@ public class HaxeFlashDebuggingUtil {
             playerLauncher.setPlayerPath(flashPlayerPath);
             params.setLauncherParameters(playerLauncher);
           }
-          return new HaxeDebugProcess(session, bc, params);
+          return new HaxeDebugProcess(session, bc, params, sourceDirectories);
         }
         catch (IOException e) {
           throw new ExecutionException(e.getMessage(), e);
@@ -114,7 +119,8 @@ public class HaxeFlashDebuggingUtil {
   public static RunContentDescriptor getAirDescriptor(final Module module,
                                                       ExecutionEnvironment env,
                                                       String flexSdkName,
-                                                      @NotNull GeneralCommandLine adlCommandLine) throws ExecutionException {
+                                                      @NotNull GeneralCommandLine adlCommandLine,
+                                                      @NotNull List<String> sourceDirectories) throws ExecutionException {
     final Sdk flexSdk = FlexSdkUtils.findFlexOrFlexmojosSdk(flexSdkName);
     if (flexSdk == null) {
       throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", flexSdkName));
@@ -128,7 +134,7 @@ public class HaxeFlashDebuggingUtil {
         try {
           BCBasedRunnerParameters params = new BCBasedRunnerParameters();
           params.setModuleName(module.getName());
-          return new HaxeDebugProcess(session, bc, params);
+          return new HaxeDebugProcess(session, bc, params, sourceDirectories);
         }
         catch (IOException e) {
           throw new ExecutionException(e.getMessage(), e);
@@ -145,11 +151,33 @@ public class HaxeFlashDebuggingUtil {
     return started.getRunContentDescriptor();
   }
 
-  /** The app closing ends the session; the session stopping kills the app. */
+  /**
+   * The app closing ends the session; the session stopping kills the app.
+   * adl's own output surfaces in the session console - without it an instant
+   * adl exit (e.g. AIR's "invocation forwarded to primary instance" when a
+   * stray same-id instance survives) silently ends the session with no clue.
+   */
   private static void tieTogether(@NotNull XDebugSession debugSession, @NotNull OSProcessHandler adlHandler) {
     adlHandler.addProcessListener(new ProcessListener() {
+      // AIR forwards a same-app-id launch to the running instance and exits;
+      // an IDE-owned instance triggers the platform's stop-and-rerun dialog
+      // instead, so this only fires for a stray instance the IDE never knew
+      private boolean forwardedToRunningInstance;
+
+      @Override
+      public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
+        if (event.getText().contains("invocation forwarded")) {
+          forwardedToRunningInstance = true;
+        }
+        printToSessionConsole(debugSession, event.getText());
+      }
+
       @Override
       public void processTerminated(@NotNull ProcessEvent event) {
+        printToSessionConsole(debugSession, "adl exited with code " + event.getExitCode() + "\n");
+        if (forwardedToRunningInstance) {
+          printToSessionConsole(debugSession, HaxeDebuggerBundle.message("air.runner.instance.hint") + "\n");
+        }
         debugSession.stop();
       }
     });
@@ -161,5 +189,11 @@ public class HaxeFlashDebuggingUtil {
         }
       }
     });
+  }
+
+  private static void printToSessionConsole(@NotNull XDebugSession debugSession, @NotNull String text) {
+    if (debugSession.getConsoleView() != null) {
+      debugSession.getConsoleView().print(text, ConsoleViewContentType.NORMAL_OUTPUT);
+    }
   }
 }

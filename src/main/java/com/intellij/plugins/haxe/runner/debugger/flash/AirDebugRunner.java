@@ -12,6 +12,8 @@ import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.HaxeFlashDebuggingUtil;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -50,7 +52,8 @@ public class AirDebugRunner extends GenericProgramRunner<RunnerSettings> {
       throw new ExecutionException(HaxeDebuggerBundle.message("air.runner.no.flex.sdk"));
     }
 
-    GeneralCommandLine adlCommandLine = configuration.createAdlCommandLine();
-    return HaxeFlashDebuggingUtil.getAirDescriptor(module, environment, flexSdkName, adlCommandLine);
+    GeneralCommandLine adlCommandLine = configuration.createAdlCommandLine(true);
+    List<String> sourceDirectories = HaxeActionBeforeRunTaskProvider.buildStepSourceDirectories(configuration);
+    return HaxeFlashDebuggingUtil.getAirDescriptor(module, environment, flexSdkName, adlCommandLine, sourceDirectories);
   }
 }
