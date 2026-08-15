@@ -66,7 +66,7 @@ public final class HaxeToolWindowNodes {
    * file - the one test runs compile and launch.
    */
   public record BuildFileRow(@NotNull HaxeBuildFile buildFile, @NotNull String containerId, boolean active,
-                             boolean manual, boolean testsFile)
+                             boolean manual, boolean testsFile, boolean frameworkDetected)
     implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {

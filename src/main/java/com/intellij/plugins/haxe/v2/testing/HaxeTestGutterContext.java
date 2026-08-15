@@ -67,8 +67,10 @@ public final class HaxeTestGutterContext {
         .anyMatch(directory -> virtualFile.getPath().startsWith(directory + "/"));
       if (!owns) continue;
 
-      HaxeTestFramework framework = HaxeTestFrameworks.forBuildFile(project, testsPath);
-      if (framework.singleRunTemplate(false) == null) continue;
+      // a build declaring no framework lib offers no markers - the detection
+      // default must not turn an application build into a utest run
+      HaxeTestFramework framework = HaxeTestFrameworks.detectedFrameworkFor(project, testsPath);
+      if (framework == null || framework.singleRunTemplate(false) == null) continue;
       return new TestContext(framework, testsPath);
     }
     return null;

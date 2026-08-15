@@ -12,6 +12,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
@@ -112,10 +113,16 @@ final class HaxeToolWindowModelBuilder {
     return containers;
   }
 
-  /** The container's tests build files: the marked ones, or the store's convention-based suggestions. */
+  /**
+   * The container's tests build files: the marked ones, or the store's
+   * convention-based suggestions - in both cases only builds DECLARING a
+   * known test framework lib, so a plain application build (even a marked
+   * one) never presents a test run it cannot deliver.
+   */
   @NotNull
   private List<String> resolveTestsPaths(@NotNull RawContainer raw) {
     List<String> candidatePaths = raw.files().stream()
+      .filter(entry -> HaxeTestFrameworks.detectedFramework(entry.info().libraries()) != null)
       .map(entry -> entry.buildFile().file().getPath())
       .toList();
     return HaxeTestsBuildFileStore.getInstance(project).resolveTestsFiles(raw.id(), candidatePaths);
@@ -399,7 +406,8 @@ final class HaxeToolWindowModelBuilder {
     command.addAll(ParametersListUtil.parse(stored.arguments()));
     String display = StringUtil.trimTrailing(baseAction.presentableCommand() + " " + stored.arguments());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    boolean connectEligible = HaxeCompileCommands.isConnectEligible(project, environmentSdk, command);
+    boolean connectEligible = HaxeCompileCommands.isConnectEligible(project, environmentSdk, command)
+                              && !HaxeCompileCommands.producesSwf(project, buildFile.file());
     return new EnvCompileCommandNode(containerId, display, command, baseAction.workDirectory(), candidatePaths,
                                      actionNamesByFile, connectEligible);
   }

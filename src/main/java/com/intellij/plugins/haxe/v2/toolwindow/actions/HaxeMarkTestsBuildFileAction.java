@@ -50,7 +50,10 @@ public final class HaxeMarkTestsBuildFileAction extends DumbAwareAction {
       String key = row.testsFile() ? "haxe.toolwindow.unmark.tests.build.file"
                                    : "haxe.toolwindow.mark.tests.build.file";
       e.getPresentation().setText(HaxeBundle.message(key));
-      e.getPresentation().setEnabledAndVisible(true);
+      // marking is only offered for builds declaring a test framework lib -
+      // a marked file without one still shows unmark, so a stale mark (the
+      // lib was removed) can be cleaned up
+      e.getPresentation().setEnabledAndVisible(row.frameworkDetected() || row.testsFile());
     }
     else {
       e.getPresentation().setEnabledAndVisible(false);

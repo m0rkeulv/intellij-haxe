@@ -27,7 +27,7 @@ public class HaxeTestRunLineMarkerContributorTest extends HaxeCodeInsightFixture
   private PsiFile configureOwnedTestClass() {
     myFixture.addFileToProject("proj/utest/ITest.hx", "package utest;\ninterface ITest {}\n");
     myFixture.addFileToProject("proj/utest/Test.hx", "package utest;\nclass Test implements ITest {}\n");
-    myFixture.addFileToProject("proj/test.hxml", "-cp .\n--main CalcTest\n--interp\n");
+    myFixture.addFileToProject("proj/test.hxml", "-cp .\n-lib utest\n--main CalcTest\n--interp\n");
     return myFixture.addFileToProject("proj/CalcTest.hx", """
       class CalcTest extends utest.Test {
       	public function testAdd() {}

@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.BeforeRunTask;
 import com.intellij.execution.Executor;
-import com.intellij.execution.ProgramRunnerUtil;
+import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.executors.DefaultDebugExecutor;
@@ -108,7 +108,9 @@ public final class HaxeTestRunConfigurations {
                              @NotNull Executor executor) {
     RunnerAndConfigurationSettings settings = findOrCreate(project, buildFilePath, filterPattern, testClass, testMethod);
     RunManager.getInstance(project).setSelectedConfiguration(settings);
-    ProgramRunnerUtil.executeConfiguration(settings, executor);
+    // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,
+    // which enforces single-instance configurations with the stop-and-rerun dialog
+    ExecutionUtil.runConfiguration(settings, executor);
   }
 
   /** Whether the tests build's target has a debug lane (interp, HL, desktop C++ - see {@code HaxeTestDebugRunner}). */

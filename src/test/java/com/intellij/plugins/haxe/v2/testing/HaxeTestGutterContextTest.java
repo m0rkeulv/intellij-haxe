@@ -29,7 +29,7 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("file under the marked builds classpaths gets its framework")
   public void testFileUnderTheMarkedBuildsClasspathsGetsItsFramework() {
-    VirtualFile buildFile = myFixture.copyFileToProject("test.hxml", "sub/checks.hxml");
+    VirtualFile buildFile = myFixture.copyFileToProject("utest/test.hxml", "sub/checks.hxml");
     VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "sub/src/TestMain.hx");
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
 
@@ -42,7 +42,7 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("file outside every marked build has no context")
   public void testFileOutsideEveryMarkedBuildHasNoContext() {
-    VirtualFile buildFile = myFixture.copyFileToProject("test.hxml", "sub/checks.hxml");
+    VirtualFile buildFile = myFixture.copyFileToProject("utest/test.hxml", "sub/checks.hxml");
     VirtualFile outside = myFixture.copyFileToProject("src/TestMain.hx", "elsewhere/TestMain.hx");
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
 
@@ -53,7 +53,7 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("unmarking the build drops the context")
   public void testUnmarkingTheBuildDropsTheContext() {
-    VirtualFile buildFile = myFixture.copyFileToProject("test.hxml", "sub/checks.hxml");
+    VirtualFile buildFile = myFixture.copyFileToProject("utest/test.hxml", "sub/checks.hxml");
     VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "sub/src/TestMain.hx");
     HaxeTestsBuildFileStore store = HaxeTestsBuildFileStore.getInstance(getProject());
 

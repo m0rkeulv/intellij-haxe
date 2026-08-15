@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
 import com.intellij.execution.Executor;
-import com.intellij.execution.ProgramRunnerUtil;
+import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.executors.DefaultDebugExecutor;
@@ -37,6 +37,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
@@ -387,7 +388,10 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       String path = fileEntry.buildFile().file().getPath();
       boolean active = path.equals(container.activePath());
       boolean tests = container.testsPaths().contains(path);
-      BuildFileRow row = new BuildFileRow(fileEntry.buildFile(), container.id(), active, fileEntry.manual(), tests);
+      // pure list scan over the prepared model - safe on the EDT
+      boolean frameworkDetected = HaxeTestFrameworks.detectedFramework(fileEntry.info().libraries()) != null;
+      BuildFileRow row =
+        new BuildFileRow(fileEntry.buildFile(), container.id(), active, fileEntry.manual(), tests, frameworkDetected);
       parentNode.add(buildFileNode(fileEntry, row, installedLibraries));
     }
   }
@@ -657,7 +661,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       runManager.addConfiguration(settings);
     }
     runManager.setSelectedConfiguration(settings);
-    ProgramRunnerUtil.executeConfiguration(settings, executor);
+    // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,
+    // which enforces single-instance configurations with the stop-and-rerun dialog
+    ExecutionUtil.runConfiguration(settings, executor);
   }
 
   /**
@@ -684,7 +690,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     RunManager.getInstance(project).setSelectedConfiguration(settings);
     Executor executor = debug ? DefaultDebugExecutor.getDebugExecutorInstance()
                               : DefaultRunExecutor.getRunExecutorInstance();
-    ProgramRunnerUtil.executeConfiguration(settings, executor);
+    // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,
+    // which enforces single-instance configurations with the stop-and-rerun dialog
+    ExecutionUtil.runConfiguration(settings, executor);
   }
 
   private void notifyUser(@NotNull String message) {
