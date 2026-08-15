@@ -21,6 +21,7 @@ package com.intellij.plugins.haxe.runner;
 import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.configurations.ConfigurationType;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.runner.debugger.flash.AirConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.flash.FlashConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.legacy.LegacyHxcppConfigurationFactory;
@@ -69,6 +70,7 @@ public class HaxeRunConfigurationType implements ConfigurationType {
       new InterpConfigurationFactory(this),
       new BrowserConfigurationFactory(this),
       new FlashConfigurationFactory(this),
+      new AirConfigurationFactory(this),
       new NekoConfigurationFactory(this),
     };
   }

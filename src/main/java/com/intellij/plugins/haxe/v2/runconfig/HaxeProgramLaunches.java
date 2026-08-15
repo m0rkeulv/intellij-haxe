@@ -14,8 +14,7 @@ import com.intellij.plugins.haxe.runner.HaxeRunConfigurationType;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
-import com.intellij.plugins.haxe.runner.debugger.flash.FlashRunConfiguration;
-import com.intellij.plugins.haxe.runner.debugger.flash.FlashConfigurationFactory;
+import com.intellij.plugins.haxe.runner.debugger.flash.*;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijConfigurationFactory;
@@ -59,6 +58,7 @@ public final class HaxeProgramLaunches {
   private static final LaunchSpec HASHLINK_APP = new LaunchSpec(HashLinkRunConfiguration.class, HashLinkConfigurationFactory.class);
   private static final LaunchSpec BROWSER_APP = new LaunchSpec(BrowserRunConfiguration.class, BrowserConfigurationFactory.class);
   private static final LaunchSpec FLASH_APP = new LaunchSpec(FlashRunConfiguration.class, FlashConfigurationFactory.class);
+  private static final LaunchSpec AIR_APP = new LaunchSpec(AirRunConfiguration.class, AirConfigurationFactory.class);
   private static final LaunchSpec HXCPP_APP = new LaunchSpec(HxcppIntellijRunConfiguration.class, HxcppIntellijConfigurationFactory.class);
   private static final LaunchSpec NEKO_APP = new LaunchSpec(NekoRunConfiguration.class, NekoConfigurationFactory.class);
 
@@ -72,7 +72,7 @@ public final class HaxeProgramLaunches {
       // HL/C output (-hl out/main.c) is a source directory, not runnable bytecode
       case HL -> output.endsWith(".hl") ? HASHLINK_APP : null;
       case JAVA_SCRIPT -> output.endsWith(".js") ? BROWSER_APP : null;
-      case FLASH -> output.endsWith(".swf") ? FLASH_APP : null;
+      case FLASH -> !output.endsWith(".swf") ? null : isAirOutput(output) ? AIR_APP : FLASH_APP;
       case CPP -> type != HaxeBuildFileType.HXML ? HXCPP_APP : null;
       // hxml runs the .n through the neko runtime; lime/nme package a launcher
       case NEKO -> type != HaxeBuildFileType.HXML || output.endsWith(".n") ? NEKO_APP : null;
@@ -137,7 +137,9 @@ public final class HaxeProgramLaunches {
     return switch (target) {
       case HL -> createHashLink(project, buildFile, targetOutput);
       case JAVA_SCRIPT -> createBrowser(project, buildFile, targetOutput);
-      case FLASH -> createFlash(project, buildFile, targetOutput);
+      case FLASH -> isAirOutput(targetOutput.toLowerCase(Locale.ROOT))
+                    ? createAir(project, buildFile, targetOutput)
+                    : createFlash(project, buildFile, targetOutput);
       case CPP -> createHxcppIntellij(project, buildFile, targetOutput);
       case NEKO -> createNeko(project, buildFile, targetOutput);
       // unreachable: specFor gates every other target to null
@@ -203,6 +205,7 @@ public final class HaxeProgramLaunches {
       case HashLinkRunConfiguration configuration -> configureHashLink(configuration, buildFile, targetOutput);
       case BrowserRunConfiguration configuration -> configureBrowser(configuration, buildFile, targetOutput);
       case FlashRunConfiguration configuration -> configureFlash(configuration, buildFile, targetOutput);
+      case AirRunConfiguration configuration -> configureAir(configuration, buildFile, targetOutput);
       case HxcppIntellijRunConfiguration configuration ->
         configureHxcppExecutable(configuration, buildFile, resolvedOutput(buildFile.file(), targetOutput));
       case NekoRunConfiguration configuration -> configureNeko(configuration, buildFile, targetOutput);
@@ -270,6 +273,37 @@ public final class HaxeProgramLaunches {
                                      @NotNull String targetOutput) {
     configuration.setSwfFilePath(resolvedOutput(buildFile.file(), targetOutput).toString());
     // the flex SDK and player cannot be guessed - the visible config prompts for them
+  }
+
+  /**
+   * lime's air target exports into {@code <app path>/air/}: the descriptor
+   * (application.xml) at the export root, the content (swf) in {@code bin/}
+   * beside it. A plain flash swf never lives in that layout.
+   * TODO honor a custom air.output-directory from project.xml (the "air"
+   *  segment is that setting's default)
+   */
+  private static boolean isAirOutput(@NotNull String lowerCaseOutput) {
+    return lowerCaseOutput.replace('\\', '/').contains("/air/bin/");
+  }
+
+  @NotNull
+  private static RunnerAndConfigurationSettings createAir(@NotNull Project project,
+                                                          @NotNull HaxeBuildFile buildFile,
+                                                          @NotNull String targetOutput) {
+    String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.air", buildFile.file().getName());
+    RunnerAndConfigurationSettings settings = createSettings(project, name, AirConfigurationFactory.class);
+    configureAir((AirRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
+    return settings;
+  }
+
+  private static void configureAir(@NotNull AirRunConfiguration configuration,
+                                   @NotNull HaxeBuildFile buildFile,
+                                   @NotNull String targetOutput) {
+    Path binDir = resolvedOutput(buildFile.file(), targetOutput).getParent();
+    if (binDir == null || binDir.getParent() == null) return;
+    configuration.setDescriptorPath(binDir.getParent().resolve("application.xml").toString());
+    configuration.setContentRootPath(binDir.toString());
+    // the flex/AIR SDK cannot be guessed - the visible config prompts for it
   }
 
   @NotNull

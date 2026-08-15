@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.ProjectJdkTable;
+import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -80,8 +82,27 @@ public final class LimeProjects {
                                            @NotNull String actionName) {
     List<String> command = new ArrayList<>(List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
                                                    "run", toolFor(type), actionName, file.getName()));
-    command.addAll(selectedTargetFlags(project, type, file));
+    List<String> targetFlags = selectedTargetFlags(project, type, file);
+    command.addAll(targetFlags);
+    command.addAll(airSdkDefine(project, targetFlags));
     return command;
+  }
+
+  /**
+   * The air target's packaging and launch tools live in the AIR SDK, which
+   * the lime tool locates through the AIR_SDK define - without it every air
+   * action fails with "You must define AIR_SDK". The configured Flex/AIR SDK
+   * entry's home supplies it; a CLI define lands after the project xml's, so
+   * the IDE's SDK selection wins over a value hardcoded there. Attached -D
+   * spelling: the two-word form trips a lime bug duplicating the value.
+   */
+  @NotNull
+  private static List<String> airSdkDefine(@NotNull Project project, @NotNull List<String> targetFlags) {
+    if (!targetFlags.contains("air")) return List.of();
+    String flexSdkName = HaxeToolPathResolver.resolveFlexSdkName(project, null);
+    Sdk sdk = flexSdkName == null ? null : ProjectJdkTable.getInstance().findJdk(flexSdkName);
+    if (sdk == null || sdk.getHomePath() == null) return List.of();
+    return List.of("-DAIR_SDK=" + sdk.getHomePath());
   }
 
   /** The target flags whose packaged app is a host-launchable binary (see {@link #packagedBinary}). */

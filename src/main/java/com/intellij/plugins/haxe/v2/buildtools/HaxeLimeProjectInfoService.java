@@ -196,6 +196,8 @@ public final class HaxeLimeProjectInfoService implements Disposable {
       case "hl" -> appPath + "/hl/obj/ApplicationMain.hl";
       case "html5" -> appPath + "/html5/bin/" + (appFile.isEmpty() ? "index" : appFile) + ".js";
       case "flash" -> appPath + "/flash/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
+      // air: the descriptor (application.xml) sits at <app path>/air with the content swf in bin beside it
+      case "air" -> appPath + "/air/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
       // desktop cpp: lime copies the built executable into bin, named after
       // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
       case "windows" -> appFile.isEmpty() ? null : appPath + "/windows/bin/" + appFile + ".exe";
