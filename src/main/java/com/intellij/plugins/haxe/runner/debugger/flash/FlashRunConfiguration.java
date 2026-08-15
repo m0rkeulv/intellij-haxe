@@ -19,6 +19,7 @@ import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.jdom.Element;
@@ -71,6 +72,26 @@ public class FlashRunConfiguration extends DapRunConfigurationBase {
     flashPlayerPath = orEmpty(path);
   }
 
+  /** The Flex SDK the debug session uses: this configuration's own selection, else the Haxe SDK's runtimes entry. */
+  @NotNull
+  public String effectiveFlexSdkName() {
+    if (!flexSdkName.isBlank()) {
+      return flexSdkName;
+    }
+    String fromSdk = HaxeToolPathResolver.resolveFlexSdkName(getProject(), null);
+    return fromSdk != null ? fromSdk : "";
+  }
+
+  /** The standalone player launching the swf: this configuration's own path, else the Build Tools/SDK runtimes chain. */
+  @NotNull
+  public String effectiveFlashPlayerPath() {
+    if (!flashPlayerPath.isBlank()) {
+      return flashPlayerPath;
+    }
+    String fromRuntimes = HaxeToolPathResolver.resolveFlashPlayerExecutable(getProject(), null);
+    return fromRuntimes != null ? fromRuntimes : "";
+  }
+
   @Override
   public @NotNull SettingsEditor<? extends RunConfiguration> getConfigurationEditor() {
     return new FlashRunConfigurationEditor(getProject());
@@ -88,7 +109,7 @@ public class FlashRunConfiguration extends DapRunConfigurationBase {
     if (swf != null && !Files.isRegularFile(swf)) {
       throw new RuntimeConfigurationWarning(HaxeDebuggerBundle.message("flash.runner.swf.missing", swfFilePath));
     }
-    if (flexSdkName.isBlank()) {
+    if (effectiveFlexSdkName().isBlank()) {
       throw new RuntimeConfigurationWarning(HaxeDebuggerBundle.message("flash.runner.no.flex.sdk"));
     }
   }
@@ -103,12 +124,13 @@ public class FlashRunConfiguration extends DapRunConfigurationBase {
   }
 
   private GeneralCommandLine createRunCommandLine() throws ExecutionException {
-    if (flashPlayerPath.isBlank()) {
+    String player = effectiveFlashPlayerPath();
+    if (player.isBlank()) {
       throw new ExecutionException(HaxeDebuggerBundle.message("flash.runner.no.player"));
     }
     Path swf = resolveSwf();
     return new GeneralCommandLine()
-      .withExePath(flashPlayerPath)
+      .withExePath(player)
       .withParameters(swf.toString())
       .withWorkDirectory(swf.getParent() != null ? swf.getParent().toString() : null);
   }
