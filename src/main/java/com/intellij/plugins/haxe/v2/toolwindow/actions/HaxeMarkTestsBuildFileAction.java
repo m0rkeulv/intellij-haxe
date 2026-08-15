@@ -31,6 +31,8 @@ public final class HaxeMarkTestsBuildFileAction extends DumbAwareAction {
     if (project != null && panel.getSelectedUserObject() instanceof BuildFileRow row) {
       HaxeTestsBuildFileStore store = HaxeTestsBuildFileStore.getInstance(project);
       String path = row.buildFile().file().getPath();
+      // each file's (Tests) tag is an independent toggle: unmark records an
+      // exclusion, so a conventionally-named file stays out too
       if (row.testsFile()) {
         store.unmarkTestsFile(row.containerId(), path);
       }

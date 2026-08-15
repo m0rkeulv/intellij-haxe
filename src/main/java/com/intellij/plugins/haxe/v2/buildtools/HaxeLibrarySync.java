@@ -193,7 +193,7 @@ public final class HaxeLibrarySync {
     List<String> candidatePaths = buildFiles.stream()
       .map(buildFile -> buildFile.file().getPath())
       .toList();
-    List<String> testsPaths = HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggestAll(module.getName(), candidatePaths);
+    List<String> testsPaths = HaxeTestsBuildFileStore.getInstance(project).resolveTestsFiles(module.getName(), candidatePaths);
     List<HaxeBuildFile> owned = new ArrayList<>();
     for (String testsPath : testsPaths) {
       HaxeBuildFile tests = byPath(project, buildFiles, testsPath);

@@ -4,6 +4,8 @@ import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.ModificationTracker;
+import com.intellij.openapi.util.SimpleModificationTracker;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.PathUtil;
 import org.jetbrains.annotations.NotNull;
@@ -35,15 +37,27 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     this.project = null;
   }
 
+  // cached consumers (the gutter marker context) key on this; bumped on
+  // every mutation and on state load
+  private final SimpleModificationTracker modificationTracker = new SimpleModificationTracker();
+
   private void notifyChanged() {
+    modificationTracker.incModificationCount();
     if (project != null) {
       project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
     }
   }
 
+  /** Bumped on every marked-set change - cache dependencies use it. */
+  @NotNull
+  public ModificationTracker getModificationTracker() {
+    return modificationTracker;
+  }
+
 
   public static final class State {
     public List<ContainerTestsFile> testsFiles = new ArrayList<>();
+    public List<ContainerTestsFile> excludedFiles = new ArrayList<>();
   }
 
   public static final class ContainerTestsFile {
@@ -68,6 +82,9 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     if (state.testsFiles == null) {
       state.testsFiles = new ArrayList<>();
     }
+    if (state.excludedFiles == null) {
+      state.excludedFiles = new ArrayList<>();
+    }
     this.state = state;
     notifyChanged();
   }
@@ -82,7 +99,17 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
       .toList();
   }
 
-  /** Marks a tests build file in the container; already-marked files stay marked once. */
+  /** Every marked tests build file across all containers - the gutter markers resolve a source file's owner from these. */
+  @NotNull
+  public List<String> getAllTestsFilePaths() {
+    return state.testsFiles.stream()
+      .map(entry -> StringUtil.nullize(entry.filePath))
+      .filter(Objects::nonNull)
+      .distinct()
+      .toList();
+  }
+
+  /** Marks a tests build file in the container (clearing any exclusion); already-marked files stay marked once. */
   public void markTestsFile(@NotNull String containerId, @NotNull String filePath) {
     boolean marked = state.testsFiles.stream()
       .anyMatch(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
@@ -92,32 +119,61 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
       entry.filePath = filePath;
       state.testsFiles.add(entry);
     }
-    notifyChanged();
-  }
-
-  /** Unmarks one of the container's tests build files. */
-  public void unmarkTestsFile(@NotNull String containerId, @NotNull String filePath) {
-    state.testsFiles.removeIf(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    state.excludedFiles.removeIf(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
     notifyChanged();
   }
 
   /**
-   * The container's tests build files among its known build files: the stored
-   * choices that still exist, otherwise EVERY conventional candidate - files
-   * named {@code test.hxml}/{@code tests.hxml} plus build files living under a
-   * {@code tests/} directory (candidates arrive in the tree's name order).
+   * Takes the file out of the container's tests set: the mark is removed AND
+   * an exclusion is recorded, so a conventionally-named file (test.hxml)
+   * stays out instead of reappearing as a suggestion.
+   */
+  public void unmarkTestsFile(@NotNull String containerId, @NotNull String filePath) {
+    state.testsFiles.removeIf(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    boolean excluded = state.excludedFiles.stream()
+      .anyMatch(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    if (!excluded) {
+      ContainerTestsFile entry = new ContainerTestsFile();
+      entry.containerId = containerId;
+      entry.filePath = filePath;
+      state.excludedFiles.add(entry);
+    }
+    notifyChanged();
+  }
+
+  /** Every excluded path across all containers - the gutter markers skip these. */
+  @NotNull
+  public List<String> getAllExcludedFilePaths() {
+    return state.excludedFiles.stream()
+      .map(entry -> StringUtil.nullize(entry.filePath))
+      .filter(Objects::nonNull)
+      .distinct()
+      .toList();
+  }
+
+  /**
+   * The container's tests build files among its known build files, each file
+   * an independent toggle: explicitly MARKED files plus the CONVENTIONAL
+   * candidates (test.hxml/tests.hxml names, files under a tests/ directory)
+   * minus explicit EXCLUSIONS - what unmarking a conventional file records.
+   * Candidate order is preserved.
    */
   @NotNull
-  public List<String> resolveOrSuggestAll(@NotNull String containerId, @NotNull List<String> candidatePaths) {
-    List<String> stored = getTestsFilePaths(containerId).stream()
-      .filter(candidatePaths::contains)
+  public List<String> resolveTestsFiles(@NotNull String containerId, @NotNull List<String> candidatePaths) {
+    List<String> marked = getTestsFilePaths(containerId);
+    List<String> excluded = state.excludedFiles.stream()
+      .filter(entry -> containerId.equals(entry.containerId))
+      .map(entry -> entry.filePath)
       .toList();
-    if (!stored.isEmpty()) {
-      return stored;
-    }
     return candidatePaths.stream()
-      .filter(candidate -> isConventionalTestsFileName(candidate) || isUnderTestsDirectory(candidate))
+      .filter(candidate -> marked.contains(candidate)
+                           || (isConventionalTestsPath(candidate) && !excluded.contains(candidate)))
       .toList();
+  }
+
+  /** Whether the path is a tests build by CONVENTION - a test.hxml/tests.hxml name, or any build file under a tests/ directory. */
+  public static boolean isConventionalTestsPath(@NotNull String path) {
+    return isConventionalTestsFileName(path) || isUnderTestsDirectory(path);
   }
 
   private static boolean isConventionalTestsFileName(@NotNull String path) {

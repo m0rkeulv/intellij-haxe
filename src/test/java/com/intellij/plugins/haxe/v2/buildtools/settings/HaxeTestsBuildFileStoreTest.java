@@ -55,21 +55,38 @@ public class HaxeTestsBuildFileStoreTest {
   }
 
   @Test
-  @DisplayName("stored choices win when still present")
-  public void storedChoicesWinWhenStillPresent() {
+  @DisplayName("marked files join the conventional candidates")
+  public void markedFilesJoinTheConventionalCandidates() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
     store.markTestsFile(MODULE, "/p/project.xml");
-    assertEquals(List.of("/p/project.xml"), store.resolveOrSuggestAll(MODULE, PLAIN_FILES));
+    assertEquals(List.of("/p/project.xml"), store.resolveTestsFiles(MODULE, PLAIN_FILES));
+    assertEquals(List.of("/p/test.hxml", "/p/project.xml"),
+                 store.resolveTestsFiles(MODULE, List.of("/p/test.hxml", "/p/project.xml")),
+                 "a mark does not hide the sibling conventional candidate");
   }
 
   @Test
-  @DisplayName("stale stored paths fall back to convention")
-  public void staleStoredPathsFallBackToConvention() {
+  @DisplayName("stale marked paths drop out")
+  public void staleMarkedPathsDropOut() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
     store.markTestsFile(MODULE, "/p/deleted.hxml");
-    assertTrue(store.resolveOrSuggestAll(MODULE, PLAIN_FILES).isEmpty());
+    assertTrue(store.resolveTestsFiles(MODULE, PLAIN_FILES).isEmpty());
     assertEquals(List.of("/p/test.hxml"),
-                 store.resolveOrSuggestAll(MODULE, List.of("/p/build.hxml", "/p/test.hxml")));
+                 store.resolveTestsFiles(MODULE, List.of("/p/build.hxml", "/p/test.hxml")));
+  }
+
+  @Test
+  @DisplayName("unmarking a conventional file excludes it")
+  public void unmarkingAConventionalFileExcludesIt() {
+    HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
+    List<String> candidates = List.of("/p/build.hxml", "/p/test.hxml", "/p/other/test.hxml");
+    store.unmarkTestsFile(MODULE, "/p/test.hxml");
+    assertEquals(List.of("/p/other/test.hxml"), store.resolveTestsFiles(MODULE, candidates),
+                 "the exclusion holds against the conventional name; siblings stay");
+
+    store.markTestsFile(MODULE, "/p/test.hxml");
+    assertEquals(List.of("/p/test.hxml", "/p/other/test.hxml"), store.resolveTestsFiles(MODULE, candidates),
+                 "re-marking clears the exclusion");
   }
 
   @Test
@@ -81,14 +98,14 @@ public class HaxeTestsBuildFileStoreTest {
                                       "/p/nme/tests/tests.nmml", "/p/openfl/tests/project.xml");
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
     assertEquals(List.of("/p/test.hxml", "/p/nme/tests/tests.nmml", "/p/openfl/tests/project.xml"),
-                 store.resolveOrSuggestAll(MODULE, candidates));
+                 store.resolveTestsFiles(MODULE, candidates));
   }
 
   @Test
   @DisplayName("no conventional candidate yields none")
   public void noConventionalCandidateYieldsNone() {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
-    assertTrue(store.resolveOrSuggestAll(MODULE, PLAIN_FILES).isEmpty());
+    assertTrue(store.resolveTestsFiles(MODULE, PLAIN_FILES).isEmpty());
   }
 
   @Test
@@ -97,6 +114,7 @@ public class HaxeTestsBuildFileStoreTest {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
     store.markTestsFile(MODULE, "/p/tests/compile-hl.hxml");
     store.markTestsFile(MODULE, "/p/test.hxml");
+    store.unmarkTestsFile(MODULE, "/p/sub/test.hxml");
 
     Element serialized = XmlSerializer.serialize(store.getState());
     HaxeTestsBuildFileStore.State deserialized =
@@ -105,5 +123,6 @@ public class HaxeTestsBuildFileStoreTest {
     HaxeTestsBuildFileStore reloaded = new HaxeTestsBuildFileStore();
     reloaded.loadState(deserialized);
     assertEquals(List.of("/p/tests/compile-hl.hxml", "/p/test.hxml"), reloaded.getTestsFilePaths(MODULE));
+    assertEquals(List.of("/p/sub/test.hxml"), reloaded.getAllExcludedFilePaths(), "exclusions survive the round trip");
   }
 }

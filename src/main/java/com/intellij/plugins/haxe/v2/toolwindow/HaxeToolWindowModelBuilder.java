@@ -118,7 +118,7 @@ final class HaxeToolWindowModelBuilder {
     List<String> candidatePaths = raw.files().stream()
       .map(entry -> entry.buildFile().file().getPath())
       .toList();
-    return HaxeTestsBuildFileStore.getInstance(project).resolveOrSuggestAll(raw.id(), candidatePaths);
+    return HaxeTestsBuildFileStore.getInstance(project).resolveTestsFiles(raw.id(), candidatePaths);
   }
 
   /** One installed haxelib: the selected version (null when none is set) and every installed version. */
