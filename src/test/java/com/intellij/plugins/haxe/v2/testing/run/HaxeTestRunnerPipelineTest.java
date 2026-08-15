@@ -148,6 +148,11 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     assertTrue(recorder.failedTests.contains("cases.MunitCase.testFails"),
                "failing test event missing, got: " + recorder.failedTests);
     assertFalse(recorder.failedTests.contains("cases.MunitCase.testPasses"), "the passing test must stay green");
+    // munit clients hear about a test AFTER it ran; the live client buffers
+    // the hijacked traces and replays them as the reported test's own output
+    String tracedOutput = recorder.outputByTest.get("cases.MunitCase.testPasses");
+    assertNotNull(tracedOutput, "trace must be attributed to the test, got: " + recorder.outputByTest);
+    assertTrue(tracedOutput.contains("hello from the passing test"), "trace text expected, got: " + tracedOutput);
     String location = recorder.locationsByTest.get("cases.MunitCase.testPasses");
     assertNotNull(location, "the converter must have injected the location hint");
     assertTrue(location.startsWith("haxe:test://cases.MunitCase.testPasses?build="),
@@ -219,6 +224,87 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     assertNotNull(caseLocation, "case location hint expected, got: " + recorder.locationsByTest);
     assertTrue(caseLocation.startsWith("haxe:tink://") && caseLocation.endsWith("::TinkCase.passes"),
                "file-plus-name hint from the case's PosInfos expected: " + caseLocation);
+  }
+
+  @Test
+  @Timeout(120)
+  @DisplayName("gutter single test narrows munit through the patched collection")
+  public void testGutterSingleTestNarrowsMunitThroughThePatchedCollection() throws Exception {
+    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping single-run pipeline test");
+    assumeTrue(munitAvailable(), "munit haxelib not installed - skipping single-run pipeline test");
+    assumeTrue(nekoAvailable(), "neko not on PATH - skipping single-run pipeline test");
+
+    myFixture.copyDirectoryToProject("munit", "munit");
+    VirtualFile buildFile = myFixture.findFileInTempDir("munit/test.hxml");
+    assertNotNull(buildFile, "the munit fixture must be copied");
+
+    HaxeTestRunConfiguration configuration = newConfiguration(buildFile.getPath());
+    configuration.setSingleRun("cases.MunitCase", "testPasses");
+    compileSingleRun(configuration);
+
+    Plan plan = HaxeTestLaunchPlanner.planFor(configuration);
+    RecordingEventsProcessor recorder = runThroughConverter(configuration, plan, 0);
+    assertEquals(List.of("cases.MunitCase.testPasses"), recorder.finishedTests,
+                 "only the selected method registers (the macro guards addTest)");
+    assertTrue(recorder.failedTests.isEmpty(), "the failing sibling must not run: " + recorder.failedTests);
+  }
+
+  /** The single-run compile the before-run step would perform: the generated template main over the build's classpaths. */
+  private void compileSingleRun(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
+    HaxeCompileCommands.Resolved resolved = configuration.resolveSingleRunCompile();
+    assertNotNull(resolved, "the single-run compile must resolve");
+    GeneralCommandLine commandLine = new GeneralCommandLine(resolved.command())
+      .withWorkDirectory(resolved.workDirectory());
+    ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(90_000);
+    assertFalse(output.isTimeout(), "the single-run compile must finish");
+    assertEquals(0, output.getExitCode(), "single-run compile failed:\n" + output.getStdout() + output.getStderr());
+  }
+
+  @Test
+  @Timeout(120)
+  @DisplayName("gutter single test compiles the template and runs only the selected utest method")
+  public void testGutterSingleTestCompilesTheTemplateAndRunsOnlyTheSelectedUtestMethod() throws Exception {
+    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping single-run pipeline test");
+    assumeTrue(utestAvailable(), "utest haxelib not installed - skipping single-run pipeline test");
+
+    myFixture.copyDirectoryToProject("utest", "utest");
+    VirtualFile buildFile = myFixture.findFileInTempDir("utest/test.hxml");
+    assertNotNull(buildFile, "the utest fixture must be copied");
+
+    HaxeTestRunConfiguration configuration = newConfiguration(buildFile.getPath());
+    // LiveCase is a secondary type of the UtestMain module - the module rides the reference
+    configuration.setSingleRun("UtestMain.LiveCase", "testPasses");
+    Plan plan = HaxeTestLaunchPlanner.planFor(configuration);
+    assertTrue(plan.singleStage(), "the interp single run compiles-and-runs as one process");
+
+    RecordingEventsProcessor recorder = runThroughConverter(configuration, plan, 0);
+    assertEquals(List.of("LiveCase.testPasses"), recorder.finishedTests,
+                 "only the selected method runs (UTEST_PATTERN narrows the generated suite)");
+    assertTrue(recorder.failedTests.isEmpty(), "the selected test passes, got: " + recorder.failedTests);
+  }
+
+  @Test
+  @Timeout(120)
+  @DisplayName("gutter single test excludes the other tink cases")
+  public void testGutterSingleTestExcludesTheOtherTinkCases() throws Exception {
+    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping single-run pipeline test");
+    assumeTrue(tinkAvailable(), "tink_unittest haxelib not installed - skipping single-run pipeline test");
+
+    myFixture.copyDirectoryToProject("tink", "tink");
+    VirtualFile buildFile = myFixture.findFileInTempDir("tink/test.hxml");
+    assertNotNull(buildFile, "the tink fixture must be copied");
+
+    HaxeTestRunConfiguration configuration = newConfiguration(buildFile.getPath());
+    configuration.setSingleRun("TinkCase", "passes");
+    Plan plan = HaxeTestLaunchPlanner.planFor(configuration);
+
+    // exit 0: only the passing case executes; the failing one is excluded by
+    // the template's include-mode flip and stays out of the tree entirely
+    RecordingEventsProcessor recorder = runThroughConverter(configuration, plan, 0);
+    assertEquals(List.of("passes"), recorder.finishedTests,
+                 "only the selected case appears - excluded ones are not reported");
+    assertTrue(recorder.failedTests.isEmpty(),
+               "the failing case must be excluded, not run: " + recorder.failedTests);
   }
 
   /** The artifact compile the before-run step would perform: the tests build with the framework's reporting args. */

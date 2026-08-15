@@ -127,8 +127,7 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
    */
   @NotNull
   private static Plan debuggablePlan(HaxeTestRunConfiguration configuration) throws ExecutionException {
-    Plan plan = ReadAction.computeBlocking(() -> HaxeTestLaunchPlanner.planForDebug(
-      configuration.getProject(), configuration.getBuildFilePath(), configuration.getFilterPattern()));
+    Plan plan = ReadAction.computeBlocking(() -> HaxeTestLaunchPlanner.planForDebug(configuration));
     boolean debuggable = plan.singleStage()
       || plan.target() == HaxeTarget.CPP
       || HaxeTestLaunchPlanner.hlArtifact(plan) != null

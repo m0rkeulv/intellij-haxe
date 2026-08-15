@@ -190,19 +190,30 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
     HaxeUnsavedDocuments.saveAll();
     // test compiles derive their arguments at LAUNCH - the task's stored
-    // snapshot goes stale when the framework/reporter wiring evolves
-    String extraArguments = configuration instanceof HaxeTestRunConfiguration testConfiguration
-                            ? testConfiguration.currentCompileArguments()
-                            : task.getExtraArguments();
-    HaxeCompileCommands.Resolved resolved = ReadAction.computeBlocking(
-      () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), extraArguments));
+    // snapshot goes stale when the framework/reporter wiring evolves. A
+    // single-run (gutter) compile arrives fully formed: its generated main
+    // replaces the build's own, so the action-plus-file resolution and the
+    // section scoping below must not touch it.
+    boolean singleRun = configuration instanceof HaxeTestRunConfiguration testConfiguration
+                        && testConfiguration.hasSingleRun();
+    HaxeCompileCommands.Resolved resolved;
+    if (singleRun) {
+      resolved = ((HaxeTestRunConfiguration)configuration).resolveSingleRunCompile();
+    } else {
+      String extraArguments = configuration instanceof HaxeTestRunConfiguration testConfiguration
+                              ? testConfiguration.currentCompileArguments()
+                              : task.getExtraArguments();
+      resolved = ReadAction.computeBlocking(
+        () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), extraArguments));
+    }
     if (resolved == null) {
       notifyFailure(project, HaxeDebuggerBundle.message("haxe.before.run.unresolvable", task.getBuildFilePath()));
       return false;
     }
+    HaxeCompileCommands.Resolved resolvedCompile = resolved;
 
-    List<String> base = task.isSectionScoped()
-      ? ReadAction.computeBlocking(() -> sectionScopedCommand(project, task.getBuildFilePath(), resolved.command()))
+    List<String> base = !singleRun && task.isSectionScoped()
+      ? ReadAction.computeBlocking(() -> sectionScopedCommand(project, task.getBuildFilePath(), resolvedCompile.command()))
       : resolved.command();
     List<String> command = new ArrayList<>(base);
     if (debug && task.isInjectDebugArguments()) {

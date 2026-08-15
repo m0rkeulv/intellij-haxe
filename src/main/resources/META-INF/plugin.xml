@@ -354,6 +354,8 @@
     <configurationType implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurationType"/>
     <programRunner implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestDebugRunner"/>
+    <runLineMarkerContributor language="Haxe"
+                              implementationClass="com.intellij.plugins.haxe.v2.testing.HaxeTestRunLineMarkerContributor"/>
 
     <moduleService serviceImplementation="com.intellij.plugins.haxe.ide.module.HaxeModuleSettings"/>
 

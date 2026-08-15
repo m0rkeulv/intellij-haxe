@@ -73,9 +73,24 @@ public final class MunitFramework implements HaxeTestFramework {
 
   @Override
   public @NotNull List<String> filterArgs(@Nullable String pattern) {
-    // TODO Phase 2: munit has no filter define - single-test runs need a
-    //  generated TestSuite narrowing the run to the selected class/method
+    // munit has no filter mechanism at all - single runs narrow through the
+    // generated TestSuite template instead
     return List.of();
+  }
+
+  @Override
+  public @Nullable String singleRunTemplate(boolean singleTest) {
+    // both granularities ride the generated TestSuite; the method narrows
+    // via the intellij_munit macro's TestClassHelper patch (see
+    // singleRunFilterArgs)
+    return "singleSuite.hx";
+  }
+
+  @Override
+  public @NotNull List<String> singleRunFilterArgs(@NotNull String methodName) {
+    // read by intellij_munit.Macro: patches munit's runtime test collection
+    // to register only this method
+    return List.of("-D", "intellij_munit_test=" + methodName);
   }
 
   private static boolean hasTestMetadata(@NotNull HaxeMethod method) {

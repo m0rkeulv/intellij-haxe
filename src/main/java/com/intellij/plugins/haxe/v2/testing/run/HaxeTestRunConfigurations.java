@@ -7,8 +7,7 @@ import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.util.PathUtil;
+import com.intellij.openapi.util.text.StringUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -24,27 +23,43 @@ public final class HaxeTestRunConfigurations {
   private HaxeTestRunConfigurations() {
   }
 
-  /** Finds the build file's test configuration (matched by file path) or registers a new one; syncs filter and compile step. */
+  /** Finds the build file's whole-run test configuration (matched by file path) or registers a new one; syncs filter and compile step. */
   @NotNull
   public static RunnerAndConfigurationSettings findOrCreate(@NotNull Project project,
                                                             @NotNull String buildFilePath,
                                                             @Nullable String filterPattern) {
+    return findOrCreate(project, buildFilePath, filterPattern, null, null);
+  }
+
+  @NotNull
+  private static RunnerAndConfigurationSettings findOrCreate(@NotNull Project project,
+                                                             @NotNull String buildFilePath,
+                                                             @Nullable String filterPattern,
+                                                             @Nullable String testClass,
+                                                             @Nullable String testMethod) {
     RunManager runManager = RunManager.getInstance(project);
+    String wantedClass = StringUtil.notNullize(testClass);
+    String wantedMethod = StringUtil.notNullize(testMethod);
     RunnerAndConfigurationSettings settings = runManager.getAllSettings().stream()
       .filter(candidate -> candidate.getConfiguration() instanceof HaxeTestRunConfiguration configuration
-                           && configuration.getBuildFilePath().equals(buildFilePath))
+                           && configuration.getBuildFilePath().equals(buildFilePath)
+                           && configuration.getTestClass().equals(wantedClass)
+                           && configuration.getTestMethod().equals(wantedMethod))
       .findFirst()
       .orElse(null);
 
     boolean created = settings == null;
     if (created) {
       HaxeTestConfigurationFactory factory = HaxeTestRunConfigurationType.getInstance().getFactory();
-      String name = HaxeBundle.message("haxe.test.config.suggested.name", PathUtil.getFileName(buildFilePath));
-      settings = runManager.createConfiguration(name, factory);
+      settings = runManager.createConfiguration("haxe-tests", factory);
     }
     HaxeTestRunConfiguration configuration = (HaxeTestRunConfiguration)settings.getConfiguration();
     configuration.setBuildFilePath(buildFilePath);
     configuration.setFilterPattern(filterPattern);
+    configuration.setSingleRun(testClass, testMethod);
+    if (created) {
+      settings.setName(StringUtil.notNullize(configuration.suggestedName(), settings.getName()));
+    }
     configuration.syncCompileStep();
     if (created) {
       runManager.addConfiguration(settings);
@@ -54,19 +69,37 @@ public final class HaxeTestRunConfigurations {
 
   /** Runs the build file's tests under the Run executor, selecting the configuration in the dropdown. */
   public static void run(@NotNull Project project, @NotNull String buildFilePath, @Nullable String filterPattern) {
-    launch(project, buildFilePath, filterPattern, DefaultRunExecutor.getRunExecutorInstance());
+    launch(project, buildFilePath, filterPattern, null, null, DefaultRunExecutor.getRunExecutorInstance());
   }
 
   /** Runs the build file's tests under the Debug executor - only meaningful when {@link #isDebugSupported}. */
   public static void debug(@NotNull Project project, @NotNull String buildFilePath, @Nullable String filterPattern) {
-    launch(project, buildFilePath, filterPattern, DefaultDebugExecutor.getDebugExecutorInstance());
+    launch(project, buildFilePath, filterPattern, null, null, DefaultDebugExecutor.getDebugExecutorInstance());
+  }
+
+  /** Runs one suite class (or one of its tests, when {@code testMethod} is set) from a gutter marker. */
+  public static void runSingle(@NotNull Project project,
+                               @NotNull String buildFilePath,
+                               @NotNull String testClass,
+                               @Nullable String testMethod) {
+    launch(project, buildFilePath, null, testClass, testMethod, DefaultRunExecutor.getRunExecutorInstance());
+  }
+
+  /** Debugs one suite class (or one of its tests) from a gutter marker - only meaningful when {@link #isDebugSupported}. */
+  public static void debugSingle(@NotNull Project project,
+                                 @NotNull String buildFilePath,
+                                 @NotNull String testClass,
+                                 @Nullable String testMethod) {
+    launch(project, buildFilePath, null, testClass, testMethod, DefaultDebugExecutor.getDebugExecutorInstance());
   }
 
   private static void launch(@NotNull Project project,
                              @NotNull String buildFilePath,
                              @Nullable String filterPattern,
+                             @Nullable String testClass,
+                             @Nullable String testMethod,
                              @NotNull Executor executor) {
-    RunnerAndConfigurationSettings settings = findOrCreate(project, buildFilePath, filterPattern);
+    RunnerAndConfigurationSettings settings = findOrCreate(project, buildFilePath, filterPattern, testClass, testMethod);
     RunManager.getInstance(project).setSelectedConfiguration(settings);
     ProgramRunnerUtil.executeConfiguration(settings, executor);
   }

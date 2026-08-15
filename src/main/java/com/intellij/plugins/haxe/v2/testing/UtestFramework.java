@@ -46,7 +46,9 @@ public final class UtestFramework implements HaxeTestFramework {
     if (DumbService.isDumb(method.getProject())) return false;
     try {
       HaxeMethodModel model = method.getModel();
-      if (model.isConstructor() || model.isStatic() || !model.isPublic()) return false;
+      // visibility is irrelevant: utest's TestBuilder collects every
+      // non-static function whose name carries a test prefix
+      if (model.isConstructor() || model.isStatic()) return false;
       HaxeClassModel declaringClass = model.getDeclaringClass();
       return declaringClass != null && isTestClass(declaringClass.haxeClass);
     }
@@ -95,6 +97,20 @@ public final class UtestFramework implements HaxeTestFramework {
   @Override
   public @NotNull List<String> filterArgs(@Nullable String pattern) {
     return pattern == null ? List.of() : List.of("-D", "UTEST_PATTERN=" + pattern);
+  }
+
+  @Override
+  public @Nullable String singleRunTemplate(boolean singleTest) {
+    // one template serves both: the method narrows via UTEST_PATTERN
+    return "singleSuite.hx";
+  }
+
+  @Override
+  public @NotNull List<String> singleRunFilterArgs(@NotNull String methodName) {
+    // the runner matches the pattern against "ClassName.methodName" - the
+    // dot-prefixed end anchor selects exactly the method within the
+    // template's single suite
+    return filterArgs("\\." + methodName + "$");
   }
 
   private static boolean hasTestMethodPrefix(@NotNull String name) {

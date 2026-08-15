@@ -43,19 +43,7 @@ final class HaxeTestLaunchPlanner {
   /** The tests build's framework, from the SELECTED section's -lib declarations. Call inside a read action. */
   @NotNull
   static HaxeTestFramework frameworkFor(@NotNull Project project, @NotNull String buildFilePath) {
-    List<HaxeTestFramework> frameworks = HaxeTestFrameworks.ALL;
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return frameworks.get(frameworks.size() - 1);
-
-    List<HaxeBuildFileInfo.HaxeLibDependency> libraries =
-      HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, type)).libraries();
-    for (HaxeTestFramework framework : frameworks) {
-      boolean declared = libraries.stream()
-        .anyMatch(library -> library.name().equalsIgnoreCase(framework.libraryName()));
-      if (declared) return framework;
-    }
-    return frameworks.get(frameworks.size() - 1);
+    return HaxeTestFrameworks.forBuildFile(project, buildFilePath);
   }
 
   /** The command to spawn, where to spawn it, the build's target, and an optional advisory shown to the user. */
@@ -254,15 +242,28 @@ final class HaxeTestLaunchPlanner {
   static Plan plan(@NotNull Project project,
                    @NotNull String buildFilePath,
                    @Nullable String filterPattern) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, nodeOnPath(), false);
+    return plan(project, buildFilePath, filterPattern, null, nodeOnPath(), false);
   }
 
-  /** The debug executor's plan: its before-run compile injects the debug additions, which for hxcpp rename the binary. */
+  /** The configuration's plan, single-run narrowing included. */
+  @NotNull
+  static Plan planFor(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
+    return plan(configuration.getProject(), configuration.getBuildFilePath(), configuration.getFilterPattern(),
+                configuration.singleRun(), nodeOnPath(), false);
+  }
+
   @NotNull
   static Plan planForDebug(@NotNull Project project,
                            @NotNull String buildFilePath,
                            @Nullable String filterPattern) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, nodeOnPath(), true);
+    return plan(project, buildFilePath, filterPattern, null, nodeOnPath(), true);
+  }
+
+  /** The debug executor's plan: its before-run compile injects the debug additions, which for hxcpp rename the binary. */
+  @NotNull
+  static Plan planForDebug(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
+    return plan(configuration.getProject(), configuration.getBuildFilePath(), configuration.getFilterPattern(),
+                configuration.singleRun(), nodeOnPath(), true);
   }
 
   private static boolean nodeOnPath() {
@@ -274,13 +275,22 @@ final class HaxeTestLaunchPlanner {
                    @NotNull String buildFilePath,
                    @Nullable String filterPattern,
                    boolean nodeOnPath) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, nodeOnPath, false);
+    return plan(project, buildFilePath, filterPattern, null, nodeOnPath, false);
+  }
+
+  @NotNull
+  static Plan planSingle(@NotNull Project project,
+                         @NotNull String buildFilePath,
+                         @NotNull HaxeTestSingleRuns.SingleRun singleRun,
+                         boolean nodeOnPath) throws ExecutionException {
+    return plan(project, buildFilePath, null, singleRun, nodeOnPath, false);
   }
 
   @NotNull
   private static Plan plan(@NotNull Project project,
                            @NotNull String buildFilePath,
                            @Nullable String filterPattern,
+                           @Nullable HaxeTestSingleRuns.SingleRun singleRun,
                            boolean nodeOnPath,
                            boolean debugLaunch) throws ExecutionException {
     if (StringUtil.isEmptyOrSpaces(buildFilePath)) {
@@ -291,6 +301,11 @@ final class HaxeTestLaunchPlanner {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", buildFilePath));
     }
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+    if (singleRun != null && type != HaxeBuildFileType.HXML) {
+      // TODO gutter runs for lime/nme tests builds: the template compile
+      //  needs the tool's effective hxml turned into a plain-haxe compile
+      throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported.type", file.getName()));
+    }
     if (LimeProjects.isLimeFamily(type)) {
       return limePlan(project, file, type);
     }
@@ -302,6 +317,9 @@ final class HaxeTestLaunchPlanner {
     }
 
     HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
+    if (singleRun != null) {
+      return singleRunPlan(project, file, info, singleRun, nodeOnPath, debugLaunch);
+    }
     if (info.target() == null || info.target() == HaxeTarget.INTERP) {
       HaxeTestFramework framework = frameworkFor(project, file.getPath());
       if (!framework.supportsInterp()) {
@@ -311,6 +329,92 @@ final class HaxeTestLaunchPlanner {
       return singleStagePlan(project, file, filterPattern);
     }
     return artifactPlan(project, file, info, nodeOnPath, debugLaunch);
+  }
+
+  /**
+   * A gutter-started run: the template compile (see {@link HaxeTestSingleRuns})
+   * either IS the run (interp) or produces the redirected artifact the plan
+   * launches. Mirrors the whole-build shapes, with the generated main naming
+   * the hxcpp binary.
+   */
+  @NotNull
+  private static Plan singleRunPlan(@NotNull Project project,
+                                    @NotNull VirtualFile file,
+                                    @NotNull HaxeBuildFileInfo info,
+                                    @NotNull HaxeTestSingleRuns.SingleRun singleRun,
+                                    boolean nodeOnPath,
+                                    boolean debugLaunch) throws ExecutionException {
+    HaxeTestFramework framework = frameworkFor(project, file.getPath());
+    if (framework.singleRunTemplate(singleRun.singleTest()) == null) {
+      throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported", framework.libraryName()));
+    }
+    HaxeTarget target = info.target() != null ? info.target() : HaxeTarget.INTERP;
+
+    if (target == HaxeTarget.INTERP) {
+      if (!framework.supportsInterp()) {
+        throw new ExecutionException(
+          HaxeBundle.message("haxe.test.config.framework.no.interp", framework.libraryName()));
+      }
+      HaxeCompileCommands.Resolved resolved = singleRunCompile(project, file, framework, singleRun);
+      if (resolved == null) {
+        throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
+      }
+      return new Plan(resolved.command(), resolved.workDirectory(), true, HaxeTarget.INTERP, null);
+    }
+
+    Path artifact = HaxeTestSingleRuns.artifact(file, framework, singleRun, target);
+    if (artifact == null) {
+      throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
+    }
+    String workDirectory = file.getParent().getPath();
+    List<String> command = switch (target) {
+      case HL -> hlCommand(project, file, artifact, target);
+      case NEKO -> List.of(nekoExecutable(project), artifact.toString());
+      case JAVA -> jvmCommand(artifact, target);
+      case JAVA_SCRIPT -> nodeCommand(artifact, nodeOnPath);
+      case CPP -> List.of(singleRunCppBinary(project, file, artifact, debugLaunch).toString());
+      default -> throw unrunnableTarget(target);
+    };
+    String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
+                  ? HaxeBundle.message("haxe.test.config.hxnodejs.hint")
+                  : null;
+    return new Plan(command, workDirectory, false, target, hint);
+  }
+
+  /** The single-run compile for the before-run step; null when unresolvable. Call in a read action. */
+  @Nullable
+  static HaxeCompileCommands.Resolved singleRunCompile(@NotNull Project project,
+                                                       @NotNull VirtualFile file,
+                                                       @NotNull HaxeTestFramework framework,
+                                                       @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
+    return HaxeTestSingleRuns.resolveCompile(
+      project, file, framework, singleRunCompileArguments(project, file.getPath(), framework, singleRun), singleRun);
+  }
+
+  /** The framework arguments a single run compiles with: the reporting set plus the method narrowing. */
+  @NotNull
+  private static String singleRunCompileArguments(@NotNull Project project,
+                                                  @NotNull String buildFilePath,
+                                                  @NotNull HaxeTestFramework framework,
+                                                  @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
+    boolean liveReporting = HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    List<String> arguments = new ArrayList<>(
+      framework.reportingArgs(rootSuiteName(project, buildFilePath), reporterClasspath(framework), liveReporting));
+    if (singleRun.singleTest()) {
+      arguments.addAll(framework.singleRunFilterArgs(singleRun.testMethod()));
+    }
+    return ParametersListUtil.join(arguments);
+  }
+
+  /** The generated main's hxcpp binary inside the redirected output directory. */
+  @NotNull
+  private static Path singleRunCppBinary(@NotNull Project project,
+                                         @NotNull VirtualFile file,
+                                         @NotNull Path outputDirectory,
+                                         boolean debugLaunch) {
+    String effective = HaxeBuildSections.selectedSectionContent(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
+    boolean debugBuild = debugLaunch || (effective != null && HxmlFileParser.hasDebugFlag(effective));
+    return HxcppBinaries.binary(outputDirectory, HaxeTestSingleRuns.MAIN_CLASS, debugBuild);
   }
 
   /**

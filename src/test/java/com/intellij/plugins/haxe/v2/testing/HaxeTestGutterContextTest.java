@@ -1,0 +1,73 @@
+package com.intellij.plugins.haxe.v2.testing;
+
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Ownership resolution behind the gutter markers, over an explicitly MARKED
+ * build with a deliberately NON-conventional name (checks.hxml) so the mark
+ * itself is load-bearing: the context appears with the mark, follows the
+ * classpaths, and drops on unmark (the store's modification tracker
+ * invalidates the cache). The conventional-name path is covered by the
+ * line-marker test.
+ */
+@DisplayName("Test runner: gutter context")
+public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
+
+  @Override
+  protected String getBasePath() {
+    return "/testing/runner/";
+  }
+
+  @Test
+  @DisplayName("file under the marked builds classpaths gets its framework")
+  public void testFileUnderTheMarkedBuildsClasspathsGetsItsFramework() {
+    VirtualFile buildFile = myFixture.copyFileToProject("test.hxml", "sub/checks.hxml");
+    VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "sub/src/TestMain.hx");
+    HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
+
+    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(psiFile(source));
+    assertNotNull(context, "the marked build's classpaths contain the file");
+    assertEquals("utest", context.framework().libraryName(), "no -lib in the build falls to the utest default");
+    assertEquals(buildFile.getPath(), context.testsBuildPath());
+  }
+
+  @Test
+  @DisplayName("file outside every marked build has no context")
+  public void testFileOutsideEveryMarkedBuildHasNoContext() {
+    VirtualFile buildFile = myFixture.copyFileToProject("test.hxml", "sub/checks.hxml");
+    VirtualFile outside = myFixture.copyFileToProject("src/TestMain.hx", "elsewhere/TestMain.hx");
+    HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
+
+    assertNull(HaxeTestGutterContext.contextFor(psiFile(outside)),
+               "a file no marked tests build claims gets no markers");
+  }
+
+  @Test
+  @DisplayName("unmarking the build drops the context")
+  public void testUnmarkingTheBuildDropsTheContext() {
+    VirtualFile buildFile = myFixture.copyFileToProject("test.hxml", "sub/checks.hxml");
+    VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "sub/src/TestMain.hx");
+    HaxeTestsBuildFileStore store = HaxeTestsBuildFileStore.getInstance(getProject());
+
+    store.markTestsFile("container", buildFile.getPath());
+    assertNotNull(HaxeTestGutterContext.contextFor(psiFile(source)));
+
+    store.unmarkTestsFile("container", buildFile.getPath());
+    assertNull(HaxeTestGutterContext.contextFor(psiFile(source)),
+               "the store change must invalidate the cached context");
+  }
+
+  private PsiFile psiFile(VirtualFile file) {
+    PsiFile psiFile = PsiManager.getInstance(getProject()).findFile(file);
+    assertNotNull(psiFile);
+    return psiFile;
+  }
+}

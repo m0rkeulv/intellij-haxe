@@ -7,6 +7,7 @@ class MunitCase {
 
   @Test
   public function testPasses():Void {
+    trace("hello from the passing test");
     Assert.isTrue(true);
   }
 

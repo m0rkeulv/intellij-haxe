@@ -19,8 +19,6 @@ import java.util.List;
  * One implementation per framework; a tests build's framework is picked from
  * its {@code -lib} declarations by {@link #libraryName}.
  */
-// TODO: wire into the gutter run-line markers (detection); the run
-//       configuration consumes the argument seam already.
 public interface HaxeTestFramework {
 
   /** The haxelib whose presence in the tests build declares this framework. */
@@ -54,6 +52,27 @@ public interface HaxeTestFramework {
    */
   @NotNull
   List<String> filterArgs(@Nullable String pattern);
+
+  /**
+   * The template resource (under {@code resources/testFrameworks/<lib>/})
+   * whose generated main runs one suite class ({@code singleTest} false) or
+   * one test method (true) — what the gutter run markers compile in place of
+   * the build's own main. Null = that granularity has no gutter support:
+   * class markers need the suite template, method markers the test one.
+   * utest serves both from the suite template (the method rides
+   * {@link #singleRunFilterArgs}); buddy has none — its specs are strings,
+   * not classes/methods.
+   */
+  @Nullable
+  default String singleRunTemplate(boolean singleTest) {
+    return null;
+  }
+
+  /** Extra compiler arguments a single-TEST run adds beyond its template (utest's UTEST_PATTERN); empty by default. */
+  @NotNull
+  default List<String> singleRunFilterArgs(@NotNull String methodName) {
+    return List.of();
+  }
 
   /**
    * Resolves a location URL this framework's reporting emitted to the PSI

@@ -32,9 +32,19 @@ class LiveClient implements ITestResultClient {
 	final rootSuite:String;
 	var rootOpen:Bool = false;
 	var openSuite:Null<String> = null;
+	var traceBuffer:Array<String> = [];
 
 	public function new(rootSuite:String) {
 		this.rootSuite = rootSuite;
+		// munit's PrintClient hijacks haxe.Log.trace and prints immediately -
+		// BEFORE this client's after-the-fact started/finished pair, so the
+		// IDE would attribute the text to the class instead of the test. This
+		// client (attached last) re-hijacks: traces buffer here and replay as
+		// the reported test's own output; the immediate print is swallowed so
+		// the text appears exactly once, on the right node.
+		haxe.Log.trace = function(value:Dynamic, ?info:haxe.PosInfos) {
+			traceBuffer.push(haxe.Log.formatOutput(value, info));
+		};
 	}
 
 	public function addPass(result:TestResult):Void {
@@ -86,6 +96,10 @@ class LiveClient implements ITestResultClient {
 		var name = suite + "." + result.name;
 		var durationMs = Std.int(result.executionTime * 1000);
 		printLine("##teamcity[testStarted name='" + escape(name) + "' captureStandardOutput='true']");
+		for (line in traceBuffer) {
+			printLine("##teamcity[testStdOut name='" + escape(name) + "' out='" + escape(line + "\n") + "']");
+		}
+		traceBuffer = [];
 		if (ignoreReason != null) {
 			printLine("##teamcity[testIgnored name='" + escape(name) + "' message='" + escape(ignoreReason) + "']");
 		} else if (failureMessage != null) {

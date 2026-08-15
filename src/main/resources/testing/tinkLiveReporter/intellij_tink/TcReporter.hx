@@ -46,6 +46,14 @@ class TcReporter implements Reporter {
 	}
 
 	function reportCase(result:CaseResult):Void {
+		switch (result.result) {
+			case Excluded:
+				// a case outside the run (the include-mode skip of single-test
+				// runs, or @:exclude): kept out of the tree entirely instead of
+				// shown as ignored noise
+				return;
+			default:
+		}
 		var name = result.info.name;
 		// the case's PosInfos carries the real method name plus the source
 		// FILE - tink's builder loses the class's package (a known FIXME in
@@ -71,8 +79,7 @@ class TcReporter implements Reporter {
 				}
 			case Failed(e):
 				printLine("##teamcity[testFailed name='" + escape(name) + "' message='" + escape(Std.string(e)) + "']");
-			case Excluded:
-				printLine("##teamcity[testIgnored name='" + escape(name) + "' message='excluded']");
+			default: // Excluded returned above
 		}
 		printLine("##teamcity[testFinished name='" + escape(name) + "']");
 	}

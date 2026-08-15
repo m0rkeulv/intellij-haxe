@@ -6,13 +6,16 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeSectionSelectionStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -53,6 +56,78 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, "SampleTest.testPasses", false);
     assertTrue(plan.command().contains("UTEST_PATTERN=SampleTest.testPasses"),
                "filter define missing: " + plan.command());
+  }
+
+  @Test
+  @DisplayName("single suite run swaps the entry point for the generated main")
+  public void testSingleSuiteRunSwapsTheEntryPointForTheGeneratedMain() throws Exception {
+    String path = fixturePath("test.hxml");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("cases.SampleTest", null);
+    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
+    List<String> command = plan.command();
+
+    assertTrue(plan.singleStage(), "the interp single run compiles-and-runs as one process");
+    assertFalse(command.contains("test.hxml"), "the build file reference is replaced by its expanded section");
+    assertFalse(command.contains("TestMain"), "the build's own main is stripped: " + command);
+    int mainFlag = command.indexOf("--main");
+    assertEquals(HaxeTestSingleRuns.MAIN_CLASS, command.get(mainFlag + 1), "the generated main takes over");
+    assertEquals(mainFlag, command.lastIndexOf("--main"), "exactly one main flag survives");
+
+    String generatedRoot = command.get(command.indexOf("--main") - 1);
+    Path generatedMain = Path.of(generatedRoot, HaxeTestSingleRuns.MAIN_CLASS + ".hx");
+    assertTrue(Files.isRegularFile(generatedMain), "generated main written: " + generatedMain);
+    String source = Files.readString(generatedMain);
+    assertTrue(source.contains("new cases.SampleTest()"), "the suite class is substituted: " + source);
+  }
+
+  @Test
+  @DisplayName("single test run adds the anchored utest pattern")
+  public void testSingleTestRunAddsTheAnchoredUtestPattern() throws ExecutionException {
+    String path = fixturePath("test.hxml");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("cases.SampleTest", "testPasses");
+    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
+    assertTrue(plan.command().contains("UTEST_PATTERN=\\.testPasses$"),
+               "anchored method pattern expected: " + plan.command());
+  }
+
+  @Test
+  @DisplayName("single run redirects the artifact away from the tests output")
+  public void testSingleRunRedirectsTheArtifactAwayFromTheTestsOutput() throws ExecutionException {
+    String path = fixturePath("targets/hl.hxml");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("cases.SampleTest", null);
+    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
+    assertFalse(plan.singleStage(), "artifact targets keep the compile in the before-run step");
+    assertTrue(plan.command().get(1).endsWith("single.hl"),
+               "the run must launch the redirected artifact: " + plan.command());
+    assertFalse(plan.command().get(1).endsWith("tests.hl"),
+                "the real tests artifact must not be touched: " + plan.command());
+  }
+
+  @Test
+  @DisplayName("munit single method narrows through the macro define")
+  public void testMunitSingleMethodNarrowsThroughTheMacroDefine() throws ExecutionException {
+    String path = fixturePath("targets/munit-neko.hxml");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", "testAdd");
+    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
+    assertTrue(plan.command().get(1).endsWith("single.n"),
+               "the run launches the redirected artifact: " + plan.command());
+
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    assertNotNull(file);
+    HaxeCompileCommands.Resolved compile = HaxeTestLaunchPlanner.singleRunCompile(
+      getProject(), file, HaxeTestFrameworks.forBuildFile(getProject(), path), singleRun);
+    assertNotNull(compile, "the single-run compile must resolve");
+    assertTrue(compile.command().contains("intellij_munit_test=testAdd"),
+               "the macro's narrowing define must ride the compile: " + compile.command());
+  }
+
+  @Test
+  @DisplayName("single runs on lime builds are refused")
+  public void testSingleRunsOnLimeBuildsAreRefused() {
+    String path = fixturePath("targets/lime-project.xml");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
+    assertThrows(ExecutionException.class,
+                 () -> HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false));
   }
 
   @Test

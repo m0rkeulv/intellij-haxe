@@ -33,7 +33,9 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.PathUtil;
@@ -60,9 +62,13 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
 
   private static final String BUILD_FILE = "buildFile";
   private static final String FILTER_PATTERN = "filterPattern";
+  private static final String TEST_CLASS = "testClass";
+  private static final String TEST_METHOD = "testMethod";
 
   private String buildFilePath = "";
   private String filterPattern = "";
+  private String testClass = "";
+  private String testMethod = "";
 
   public HaxeTestRunConfiguration(@NotNull Project project, @NotNull ConfigurationFactory factory, @Nullable String name) {
     super(project, factory, name);
@@ -82,6 +88,50 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
 
   public void setFilterPattern(@Nullable String pattern) {
     filterPattern = StringUtil.notNullize(pattern);
+  }
+
+  /** Narrows the run to one suite class (gutter class marker) or one of its tests (method marker). */
+  public void setSingleRun(@Nullable String testClassName, @Nullable String testMethodName) {
+    testClass = StringUtil.notNullize(testClassName);
+    testMethod = StringUtil.notNullize(testMethodName);
+  }
+
+  public String getTestClass() {
+    return testClass;
+  }
+
+  public String getTestMethod() {
+    return testMethod;
+  }
+
+  /** Whether this configuration runs a gutter-selected single suite/test instead of the whole tests build. */
+  public boolean hasSingleRun() {
+    return !testClass.isEmpty();
+  }
+
+  /** The gutter selection, or null for a whole-build run. */
+  @Nullable
+  HaxeTestSingleRuns.SingleRun singleRun() {
+    if (testClass.isEmpty()) return null;
+    return new HaxeTestSingleRuns.SingleRun(testClass, StringUtil.nullize(testMethod));
+  }
+
+  /**
+   * The single-run compile the before-run step performs — the whole command,
+   * not extra arguments: the template main replaces the build's own, so the
+   * normal action-plus-file resolution cannot be reused. Null when this is a
+   * whole-build configuration or the compile cannot be resolved.
+   */
+  @Nullable
+  public HaxeCompileCommands.Resolved resolveSingleRunCompile() {
+    HaxeTestSingleRuns.SingleRun run = singleRun();
+    if (run == null) return null;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    if (file == null || !file.isValid()) return null;
+    HaxeTestFramework framework = ReadAction.computeBlocking(
+      () -> HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFilePath));
+    return ReadAction.computeBlocking(
+      () -> HaxeTestLaunchPlanner.singleRunCompile(getProject(), file, framework, run));
   }
 
   /**
@@ -134,7 +184,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   @Override
   public void checkConfiguration() throws RuntimeConfigurationException {
     try {
-      ReadAction.computeBlocking(() -> HaxeTestLaunchPlanner.plan(getProject(), buildFilePath, filterPattern));
+      ReadAction.computeBlocking(() -> HaxeTestLaunchPlanner.planFor(this));
     }
     catch (ExecutionException e) {
       throw new RuntimeConfigurationError(e.getMessage());
@@ -144,6 +194,11 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   @Override
   public @Nullable String suggestedName() {
     if (StringUtil.isEmptyOrSpaces(buildFilePath)) return null;
+    if (hasSingleRun()) {
+      String test = testMethod.isEmpty() ? StringUtil.getShortName(testClass)
+                                         : StringUtil.getShortName(testClass) + "." + testMethod;
+      return HaxeBundle.message("haxe.test.config.suggested.single.name", test, PathUtil.getFileName(buildFilePath));
+    }
     return HaxeBundle.message("haxe.test.config.suggested.name", PathUtil.getFileName(buildFilePath));
   }
 
@@ -162,6 +217,8 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     super.readExternal(element);
     buildFilePath = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, BUILD_FILE));
     filterPattern = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, FILTER_PATTERN));
+    testClass = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, TEST_CLASS));
+    testMethod = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, TEST_METHOD));
   }
 
   @Override
@@ -169,6 +226,8 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     super.writeExternal(element);
     JDOMExternalizerUtil.writeField(element, BUILD_FILE, buildFilePath);
     JDOMExternalizerUtil.writeField(element, FILTER_PATTERN, filterPattern);
+    JDOMExternalizerUtil.writeField(element, TEST_CLASS, testClass);
+    JDOMExternalizerUtil.writeField(element, TEST_METHOD, testMethod);
   }
 
   private final class TestCommandLineState extends CommandLineState {
@@ -191,7 +250,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     protected @NotNull ProcessHandler startProcess() throws ExecutionException {
       HaxeUnsavedDocuments.saveAll();
       HaxeTestLaunchPlanner.Plan plan = ReadAction.computeBlocking(
-        () -> HaxeTestLaunchPlanner.plan(getProject(), buildFilePath, filterPattern));
+        () -> HaxeTestLaunchPlanner.planFor(HaxeTestRunConfiguration.this));
       if (plan.hint() != null) {
         HaxeCommandNotifications.notify(getProject(), plan.hint(), NotificationType.INFORMATION);
       }

@@ -216,6 +216,11 @@ public final class HxmlFileParser {
 
   private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
 
+  /** Whether the flag declares the build's main class ({@code -main}/{@code --main}/{@code -m}). */
+  public static boolean isMainFlag(@NotNull String flag) {
+    return MAIN_FLAGS.contains(flag);
+  }
+
   /**
    * The build's {@code --main} class from effective (include-merged) content
    * (first declaration wins), or null when none is declared. Hxcpp names the

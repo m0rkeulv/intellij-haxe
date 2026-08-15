@@ -73,12 +73,14 @@ public class UtestDetectionTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("helper private and static methods are not detected")
-  public void testHelperPrivateAndStaticMethodsAreNotDetected() {
+  @DisplayName("helper and static methods are not detected")
+  public void testHelperAndStaticMethodsAreNotDetected() {
     configureFixtureProject();
     HaxeClass mathTest = classByQName("cases.MathTest");
     assertFalse(framework.isTestMethod(methodOf(mathTest, "helperCompute")), "no test/spec prefix");
-    assertFalse(framework.isTestMethod(methodOf(mathTest, "testPrivateSetup")), "not public");
+    // visibility is irrelevant: utest's TestBuilder collects every
+    // non-static function whose name carries a test prefix
+    assertTrue(framework.isTestMethod(methodOf(mathTest, "testPrivateSetup")), "private prefixed methods ARE tests");
     assertFalse(framework.isTestMethod(methodOf(mathTest, "testStaticFactory")), "not an instance method");
   }
 

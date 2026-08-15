@@ -76,9 +76,16 @@ public final class TinkFramework implements HaxeTestFramework {
 
   @Override
   public @NotNull List<String> filterArgs(@Nullable String pattern) {
-    // TODO Phase 2: tink filters via @:include/@:exclude metadata in code,
-    //  not a define - single-test runs need a source-level strategy
+    // whole-build filtering has no tink mechanism (include/exclude are
+    // per-case runtime flags); single runs go through the templates instead
     return List.of();
+  }
+
+  @Override
+  public @Nullable String singleRunTemplate(boolean singleTest) {
+    // the test template flips the matching case's include flag, which puts
+    // the runner into include mode - everything else is skipped
+    return singleTest ? "singleTest.hx" : "singleSuite.hx";
   }
 
   /**

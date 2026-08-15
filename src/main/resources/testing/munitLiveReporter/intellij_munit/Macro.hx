@@ -22,6 +22,35 @@ import haxe.macro.Expr;
 class Macro {
 	public static function init():Void {
 		Compiler.addGlobalMetadata("massive.munit.TestRunner", "@:build(intellij_munit.Macro.buildRunner())", false, true, false);
+		// single-test gutter runs: munit's runtime collects @Test methods by
+		// reflection with no filter hook, so the collection itself is patched
+		// to register only the selected method
+		if (Context.definedValue("intellij_munit_test") != null) {
+			Compiler.addGlobalMetadata("massive.munit.TestClassHelper", "@:build(intellij_munit.Macro.buildClassHelper())", false, true, false);
+		}
+	}
+
+	public static function buildClassHelper():Array<Field> {
+		var fields = Context.getBuildFields();
+		var selected = Context.definedValue("intellij_munit_test");
+		for (field in fields) {
+			if (field.name != "addTest") continue;
+			switch (field.kind) {
+				case FFun(fn) if (fn.expr != null && fn.args.length > 0):
+					// addTest(field, ...) is the one choke point every test
+					// registers through; guarding it narrows the run exactly
+					var nameArg = fn.args[0].name;
+					fn.expr = macro {
+						if ($i{nameArg} != $v{selected}) return;
+						${fn.expr};
+					};
+					return fields;
+				default:
+			}
+		}
+		Context.warning("IDE single-test run could not patch massive.munit.TestClassHelper.addTest - the whole class runs",
+			Context.currentPos());
+		return fields;
 	}
 
 	public static function buildRunner():Array<Field> {
