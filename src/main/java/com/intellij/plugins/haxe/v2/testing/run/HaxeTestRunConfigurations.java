@@ -1,15 +1,22 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
+import com.intellij.execution.BeforeRunTask;
 import com.intellij.execution.Executor;
 import com.intellij.execution.ProgramRunnerUtil;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The single dispatch every unit-test entry point (tool window tree, container
@@ -114,12 +121,22 @@ public final class HaxeTestRunConfigurations {
    * targets persist their compile arguments in that step, so a settings change
    * feeding into them (the live-reporter injection) must resync explicitly -
    * otherwise it only applies after the configuration is next edited.
+   * The computation parses build files (PSI/VFS), so it runs in the
+   * background; only the configuration mutation lands on the EDT.
    */
   public static void resyncCompileSteps(@NotNull Project project) {
-    for (RunnerAndConfigurationSettings settings : RunManager.getInstance(project).getAllSettings()) {
-      if (settings.getConfiguration() instanceof HaxeTestRunConfiguration configuration) {
-        configuration.syncCompileStep();
-      }
-    }
+    ReadAction.nonBlocking(() -> {
+        List<Runnable> applications = new ArrayList<>();
+        for (RunnerAndConfigurationSettings settings : RunManager.getInstance(project).getAllSettings()) {
+          if (settings.getConfiguration() instanceof HaxeTestRunConfiguration configuration) {
+            List<BeforeRunTask<?>> tasks = configuration.computedCompileStep();
+            applications.add(() -> configuration.setBeforeRunTasks(tasks));
+          }
+        }
+        return applications;
+      })
+      .expireWith(project)
+      .finishOnUiThread(ModalityState.defaultModalityState(), applications -> applications.forEach(Runnable::run))
+      .submit(AppExecutorUtil.getAppExecutorService());
   }
 }

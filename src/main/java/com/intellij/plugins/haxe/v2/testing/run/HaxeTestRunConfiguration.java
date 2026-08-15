@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
+import com.intellij.execution.BeforeRunTask;
 import com.intellij.execution.DefaultExecutionResult;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionResult;
@@ -141,11 +142,16 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
    * none. Call after mutating the build file or filter.
    */
   public void syncCompileStep() {
+    setBeforeRunTasks(computedCompileStep());
+  }
+
+  /** The before-run tasks {@link #syncCompileStep} would set, computed without mutating (parses build files). */
+  @NotNull
+  List<BeforeRunTask<?>> computedCompileStep() {
     boolean singleStage = ReadAction.computeBlocking(
       () -> HaxeTestLaunchPlanner.isSingleStage(getProject(), buildFilePath));
     if (singleStage) {
-      setBeforeRunTasks(List.of());
-      return;
+      return List.of();
     }
     HaxeActionBeforeRunTaskProvider.Task compileTask = new HaxeActionBeforeRunTaskProvider.Task();
     compileTask.setBuildFilePath(buildFilePath);
@@ -154,7 +160,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     // a multi-section hxml compiles only its selected --next section, so the
     // reporting arguments reach that section instead of the chain's last one
     compileTask.setSectionScoped(true);
-    setBeforeRunTasks(List.of(compileTask));
+    return List.of(compileTask);
   }
 
   /**

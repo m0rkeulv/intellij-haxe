@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import org.jetbrains.annotations.NotNull;
@@ -22,11 +21,9 @@ public final class HaxeTestCompileStepResync implements HaxeBuildConfigListener 
 
   @Override
   public void buildConfigurationChanged() {
-    // delivered on the publisher's thread - run-configuration mutation belongs on the EDT
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (!project.isDisposed()) {
-        HaxeTestRunConfigurations.resyncCompileSteps(project);
-      }
-    });
+    // resyncCompileSteps schedules its own background compute + EDT apply
+    if (!project.isDisposed()) {
+      HaxeTestRunConfigurations.resyncCompileSteps(project);
+    }
   }
 }
