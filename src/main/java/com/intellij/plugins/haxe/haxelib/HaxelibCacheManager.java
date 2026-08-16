@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.haxelib;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.Sdk;
@@ -8,34 +9,32 @@ import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * A cache manager for library information retrieved from haxelib
+ * Per-module cache over haxelib's answers: the installed index (scoped to the
+ * module's repository — a local {@code .haxelib} when one exists), the full
+ * online catalog (one match-all search), and per-library {@code haxelib info}
+ * metadata. Everything server-fetched stays cached for the session;
+ * {@link #forceReload()} and {@link #refreshLibraryInfo} are the explicit
+ * invalidations. Fetches run external processes — call off the EDT.
  */
 @CustomLog
 public class HaxelibCacheManager implements Disposable {
 
-  // current version of haxelib shows versions as date + version + description
-  private static Pattern HAXELIB_VERSION_LINE =
-    Pattern.compile("(?<date>\\d{4}-\\d{2}-\\d{2}\s\\d{2}:\\d{2}:\\d{2})\s(?<version>.*?)\s:\s?(?<description>.*)");
-
-  private static Map<Module, HaxelibCacheManager> instances = new HashMap<>();
+  private static final Map<Module, HaxelibCacheManager> instances = new ConcurrentHashMap<>();
 
   public static Collection<HaxelibCacheManager> getAllInstances() {
     return instances.values();
   }
 
   public static HaxelibCacheManager getInstance(@NotNull Module module) {
-    if (!instances.containsKey(module)) {
-      instances.put(module, new HaxelibCacheManager(module));
-    }
-    return instances.get(module);
+    return instances.computeIfAbsent(module, HaxelibCacheManager::new);
   }
 
   public static void removeInstance(@NotNull Module module) {
@@ -45,6 +44,8 @@ public class HaxelibCacheManager implements Disposable {
 
   private final Map<String, Set<String>> installedLibraries = new HashMap<>();
   private final Map<String, Set<String>> availableLibraries = new HashMap<>();
+  private final Map<String, HaxelibLibraryInfo> libraryInfos = new ConcurrentHashMap<>();
+  private volatile HaxelibInstalledIndex installedIndex = HaxelibInstalledIndex.EMPTY;
 
   private Module module;
 
@@ -57,12 +58,25 @@ public class HaxelibCacheManager implements Disposable {
   public void clear() {
     installedLibraries.clear();
     availableLibraries.clear();
+    libraryInfos.clear();
+    installedIndex = HaxelibInstalledIndex.EMPTY;
   }
 
   public void reload() {
     clear();
     getInstalledLibraries();
     getAvailableLibraries();
+  }
+
+  /** The explicit force-update: drops every cached answer (catalog, infos, installed) and refetches the lists. */
+  public void forceReload() {
+    reload();
+  }
+
+  /** Drops only the installed picture; the next read refetches. Cheap enough to run after every install/remove. */
+  public void refreshInstalled() {
+    installedLibraries.clear();
+    installedIndex = HaxelibInstalledIndex.EMPTY;
   }
 
 
@@ -73,6 +87,12 @@ public class HaxelibCacheManager implements Disposable {
     return new HashMap<>(installedLibraries);
   }
 
+  /** The installed index behind {@link #getInstalledLibraries} — selected versions included. */
+  @NotNull
+  public HaxelibInstalledIndex getInstalledIndex() {
+    getInstalledLibraries();
+    return installedIndex;
+  }
 
   public Map<String, Set<String>> getAvailableLibraries() {
     if (availableLibraries.isEmpty()) {
@@ -81,24 +101,78 @@ public class HaxelibCacheManager implements Disposable {
     return new HashMap<>(availableLibraries);
   }
 
+  /**
+   * The library's server metadata, from cache or one {@code haxelib info}
+   * call; null when the library is unknown to the server or the call failed
+   * (failures are NOT cached — the next ask retries).
+   */
+  @Nullable
+  public HaxelibLibraryInfo getLibraryInfo(@NotNull String name) {
+    HaxelibLibraryInfo cached = libraryInfos.get(name);
+    if (cached != null) return cached;
+    HaxelibLibraryInfo fetched = fetchLibraryInfo(name);
+    if (fetched != null) {
+      libraryInfos.put(name, fetched);
+    }
+    return fetched;
+  }
+
+  /** The cached metadata only — null means "not fetched yet", never triggers a fetch. */
+  @Nullable
+  public HaxelibLibraryInfo getCachedLibraryInfo(@NotNull String name) {
+    return libraryInfos.get(name);
+  }
+
+  /** Drops one library's cached metadata; the next {@link #getLibraryInfo} refetches. */
+  public void refreshLibraryInfo(@NotNull String name) {
+    libraryInfos.remove(name);
+  }
+
   private void fetchInstalledLibraryData() {
-    Sdk sdk = HaxelibSdkUtils.lookupSdk(module);
-    if(!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
+    SdkContext context = sdkContext();
+    if (context == null) {
       log.warn("Unable to fetchInstalledLibraryData, invalid SDK paths");
       return;
     }
-    installedLibraries.putAll(readInstalledLibraries(sdk));
+    HaxelibInstalledIndex index = HaxelibInstalledIndex.fetchFromHaxelib(context.sdk(), context.moduleDir());
+    installedIndex = index;
+    installedLibraries.putAll(index.getInstalledLibrariesAndVersions());
   }
 
   private void fetchAvailableForDownload() {
-    Sdk sdk = HaxelibSdkUtils.lookupSdk(module);
-    if(!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
+    SdkContext context = sdkContext();
+    if (context == null) {
       log.warn("Unable to fetchAvailableForDownload, invalid SDK paths");
       return;
     }
-    availableLibraries.putAll(readAvailableOnline(sdk));
+    availableLibraries.putAll(readAvailableOnline(context.sdk()));
   }
 
+  @Nullable
+  private HaxelibLibraryInfo fetchLibraryInfo(@NotNull String name) {
+    SdkContext context = sdkContext();
+    if (context == null) {
+      log.warn("Unable to fetch library info, invalid SDK paths");
+      return null;
+    }
+    return HaxelibLibraryInfo.parse(
+      HaxelibCommandUtils.issueHaxelibCommand(context.sdk(), context.moduleDir(), "info", name));
+  }
+
+  private record SdkContext(@NotNull Sdk sdk, @Nullable VirtualFile moduleDir) {
+  }
+
+  /** The module's SDK and directory; SDK/module lookups read the project model, so pooled callers take the read lock here. */
+  @Nullable
+  private SdkContext sdkContext() {
+    return ReadAction.computeBlocking(() -> {
+      Sdk sdk = HaxelibSdkUtils.lookupSdk(module);
+      if (!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
+        return null;
+      }
+      return new SdkContext(sdk, ProjectUtil.guessModuleDir(module));
+    });
+  }
 
   private static Map<String, Set<String>> readAvailableOnline(Sdk sdk) {
     // "Empty" string means all of them. (whitespace needed for argument not to be dropped)
@@ -108,45 +182,26 @@ public class HaxelibCacheManager implements Disposable {
     return libMap;
   }
 
-  private Map<String, Set<String>> readInstalledLibraries(@NotNull Sdk sdk) {
-    VirtualFile file = ProjectUtil.guessModuleDir(module);
-    HaxelibInstalledIndex index = HaxelibInstalledIndex.fetchFromHaxelib(sdk, file);
-    return index.getInstalledLibrariesAndVersions();
-
-  }
-
   public Set<String> fetchAvailableVersions(String name) {
     if (getAvailableLibraries().getOrDefault(name, Set.of()).isEmpty()) {
-      Sdk sdk = HaxelibSdkUtils.lookupSdk(module);
-      if(!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
-        log.warn("Unable to fetch Available Versions, invalid SDK paths");
-        return Set.of();
-      }
-      VirtualFile file = ProjectUtil.guessModuleDir(module);
-      List<String> list = HaxelibCommandUtils.issueHaxelibCommand(sdk, file,"info", name);
-      // filter to find version numbers
-
-      Set<String> versions = list.stream()
-        .map(String::trim)
-        .map(HaxelibCacheManager::extractVersion)
-        .filter(Objects::nonNull)
-        .collect(Collectors.toSet());
+      HaxelibLibraryInfo info = getLibraryInfo(name);
+      Set<String> versions = info == null
+                             ? Set.of()
+                             : info.releases().stream()
+                               .map(HaxelibLibraryInfo.Release::version)
+                               .collect(Collectors.toSet());
       availableLibraries.put(name, new ConcurrentSkipListSet<>(versions));
     }
     return new HashSet<>(availableLibraries.get(name));
   }
 
-  private static String extractVersion(String line) {
-    Matcher matcher = HAXELIB_VERSION_LINE.matcher(line);
-    if (matcher.matches()) {
-      return matcher.group("version").trim();
-    }
-    return null;
-  }
-
   @Override
   public void dispose() {
-    instances.clear();
+    // only this module's entry - clearing the whole map would orphan every
+    // other module's cache on the first project close
+    if (module != null) {
+      instances.remove(module);
+    }
     module = null;
   }
 }

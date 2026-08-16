@@ -33,19 +33,39 @@ public final class HaxelibInstaller {
   @Nullable
   public static String install(@NotNull Project project, @NotNull String name,
                                @Nullable String version, @Nullable String resolvedVersion) {
+    String failure = run(project, installParameters(name, version));
+    if (failure == null) {
+      restoreSelectedVersion(project, name, version, resolvedVersion);
+    }
+    return failure;
+  }
 
-    GeneralCommandLine commandLine = haxelibCommand(project, installParameters(name, version));
+  /** Runs {@code haxelib remove <name> [version]}; null on success, else the failure detail. */
+  @Nullable
+  public static String remove(@NotNull Project project, @NotNull String name, @Nullable String version) {
+    var parameters = new ArrayList<>(List.of("remove", name));
+    if (version != null && !version.isBlank()) {
+      parameters.add(version);
+    }
+    return run(project, parameters);
+  }
 
+  /** Runs {@code haxelib set <name> <version> --always}; null on success, else the failure detail. */
+  @Nullable
+  public static String setCurrent(@NotNull Project project, @NotNull String name, @NotNull String version) {
+    return run(project, List.of("set", name, version, "--always"));
+  }
+
+  @Nullable
+  private static String run(@NotNull Project project, @NotNull List<String> parameters) {
+    GeneralCommandLine commandLine = haxelibCommand(project, parameters);
     try {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
       if (output.getExitCode() != 0 || output.isTimeout()) {
         return StringUtil.trimTrailing(output.getStdout() + "\n" + output.getStderr());
       }
-
-      restoreSelectedVersion(project, name, version, resolvedVersion);
       return null;
     }
-
     catch (ExecutionException e) {
       return StringUtil.notNullize(e.getMessage());
     }
