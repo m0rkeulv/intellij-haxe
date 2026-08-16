@@ -412,6 +412,8 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
                "flash-family builds debug through the fdb lane");
     assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("targets/swf.hxml")),
                "an hxml -swf build debugs through the fdb lane");
+    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("targets/js-node.hxml")),
+               "an hxml -js build debugs node-hosted through the js-debug lane");
 
     String nmePath = fixturePath("targets/tests.nmml");
     VirtualFile nmeFile = LocalFileSystem.getInstance().findFileByPath(nmePath);

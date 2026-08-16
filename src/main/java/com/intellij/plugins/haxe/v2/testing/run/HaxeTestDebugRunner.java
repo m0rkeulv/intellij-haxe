@@ -16,6 +16,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkBackend;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkDebugRunner;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
+import com.intellij.plugins.haxe.runner.debugger.browser.NodeTestDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijBackend;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpDapBackend;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
@@ -36,7 +37,9 @@ import org.jetbrains.annotations.Nullable;
  * in-process adapter, which holds execution until breakpoints are installed);
  * a desktop C++ binary debugs through its embedded intellij-hxcpp-debug-server
  * (compiled in by the before-run step's debug additions, connecting out via
- * the HXCPP_DEBUG_HOST/PORT env vars). Either way {@code DapDebugProcess}
+ * the HXCPP_DEBUG_HOST/PORT env vars); a js artifact runs under
+ * {@code node --inspect-brk} with the pinned vscode-js-debug adapter attached
+ * to the inspector port. Either way {@code DapDebugProcess}
  * makes the session console an SM test console (see {@code DapTestConsoles})
  * — the TeamCity messages on the debuggee's stdout drive the test tree while
  * breakpoints work. For artifact targets, the before-run compile step attached
@@ -45,10 +48,11 @@ import org.jetbrains.annotations.Nullable;
  */
 // Flash tests debug through HaxeTestFlashDebugRunner (fdb, not DAP), which is
 // registered ahead of this runner and claims the flash-family configurations.
-// TODO: js test debugging — the browser adapters route program output through
-//  the CDP connection instead of process stdout, so they need debugger output
-//  events replayed into the process handler before the SM console can see the
-//  TeamCity stream (see doc/test-runner-phase1-notes.md).
+// TODO: BROWSER-hosted js test debugging (lime html5) — the browser adapters
+//  route program output through the CDP connection instead of process stdout,
+//  so they need debugger output events replayed into the process handler
+//  before the SM console can see the TeamCity stream; node-hosted js tests
+//  debug here already (see doc/test-runner-phase1-notes.md).
 public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfiguration, DapBackend> {
   public static final String RUNNER_ID = "HaxeTestDebugRunner";
 
@@ -88,6 +92,9 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
                                        HashLinkDebugRunner.findFreePort(),
                                        sourceDirectories(configuration));
         case CPP -> new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS, sourceDirectories(configuration));
+        case JAVA_SCRIPT -> new NodeTestDebugBackend(Path.of(plan.command().get(0)),
+                                                     HashLinkDebugRunner.findFreePort(),
+                                                     plan.workDirectory());
         default -> new InterpDapBackend(VM_CONNECT_TIMEOUT_MILLIS);
       };
     } catch (IOException e) {
@@ -114,6 +121,14 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
         .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_HOST, hxcpp.getHost())
         .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_PORT, Integer.toString(hxcpp.getPort()));
     }
+    if (backend instanceof NodeTestDebugBackend node) {
+      // the plan's [node, artifact] with the inspector hold inserted; the
+      // adapter attaches to the port and releases the hold once configured
+      return new GeneralCommandLine()
+        .withExePath(plan.command().get(0))
+        .withParameters("--inspect-brk=" + node.getInspectorPort(), plan.command().get(1))
+        .withWorkDirectory(plan.workDirectory());
+    }
     // interp: the plan's compile command (framework defines included) IS the
     // debuggee - the eval VM inside it connects out to the adapter's port
     InterpDapBackend interp = (InterpDapBackend)backend;
@@ -125,13 +140,17 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
 
   /**
    * The launch plan, required to be a debuggable shape: an HL artifact or lime
-   * HL package, a desktop C++ binary, or a single-stage interp build.
+   * HL package, a desktop C++ binary, a node-hosted js artifact, or a
+   * single-stage interp build.
    */
   @NotNull
   private static Plan debuggablePlan(HaxeTestRunConfiguration configuration) throws ExecutionException {
     Plan plan = ReadAction.computeBlocking(() -> HaxeTestLaunchPlanner.planForDebug(configuration));
+    // every js tests plan that materializes is node-hosted ([node, artifact]);
+    // browser-hosted html5 builds are refused at PLAN time with their own message
     boolean debuggable = plan.singleStage()
       || plan.target() == HaxeTarget.CPP
+      || plan.target() == HaxeTarget.JAVA_SCRIPT
       || HaxeTestLaunchPlanner.hlArtifact(plan) != null
       || HaxeTestLaunchPlanner.packagedHlBoot(plan) != null;
     if (!debuggable) {

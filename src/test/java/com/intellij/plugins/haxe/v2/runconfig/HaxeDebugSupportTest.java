@@ -27,16 +27,16 @@ public class HaxeDebugSupportTest {
   }
 
   @Test
-  @DisplayName("test sessions add interp and flash and defer js")
-  public void testSessionsAddInterpAndFlashAndDeferJs() {
+  @DisplayName("test sessions add interp flash and node js")
+  public void testSessionsAddInterpFlashAndNodeJs() {
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.INTERP));
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.HL));
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.CPP));
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.FLASH),
                "fdb hosts flash tests and the test console parses its relayed traces");
+    assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.JAVA_SCRIPT),
+               "js tests run under node with the js-debug adapter attached");
     assertFalse(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.INTERP), "programs have no interp lane");
-    assertFalse(HaxeDebugSupport.supportsTestDebug(HaxeTarget.JAVA_SCRIPT),
-                "js tests route output through the debug connection - deferred");
   }
 
   @Test

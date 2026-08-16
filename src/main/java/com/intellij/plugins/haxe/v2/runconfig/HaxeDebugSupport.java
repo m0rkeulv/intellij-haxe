@@ -25,14 +25,16 @@ public final class HaxeDebugSupport {
 
   /**
    * Targets a TEST debug session has a lane for. Tests additionally debug the
-   * interpreter (the compile IS the debuggee — the eval lane) and flash (fdb
+   * interpreter (the compile IS the debuggee — the eval lane), flash (fdb
    * hosts the swf under adl; the test console parses the trace lines fdb
-   * relays — see {@code HaxeTestFlashDebugRunner}). js tests stay deferred:
-   * the browser adapters route program output through the CDP connection and
-   * the test console cannot parse their results yet.
+   * relays — see {@code HaxeTestFlashDebugRunner}) and js under NODE
+   * ({@code node --inspect-brk} with the vscode-js-debug adapter attached).
+   * Every runnable js tests plan launches through node today; BROWSER-hosted
+   * html5 builds are refused at plan time, so the coarse per-target answer
+   * stays accurate.
    */
   private static final Set<HaxeTarget> TEST_TARGETS =
-    Set.of(HaxeTarget.INTERP, HaxeTarget.HL, HaxeTarget.CPP, HaxeTarget.FLASH);
+    Set.of(HaxeTarget.INTERP, HaxeTarget.HL, HaxeTarget.CPP, HaxeTarget.FLASH, HaxeTarget.JAVA_SCRIPT);
 
   private HaxeDebugSupport() {
   }

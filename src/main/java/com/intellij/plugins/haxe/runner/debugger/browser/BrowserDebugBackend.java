@@ -130,13 +130,16 @@ public class BrowserDebugBackend implements DapBackend {
    * adapter is already a validation error — this guard only covers a session
    * forced past the configuration warning.
    */
-  private Path installedAdapterEntry(AdapterStore store, AdapterPin pin) throws IOException {
+  static Path installedAdapterEntry(AdapterStore store, AdapterPin pin, String displayName) throws IOException {
     if (!store.isInstalled(pin)) {
       throw new IOException(HaxeDebuggerBundle.message(
-        "browser.runner.adapter.missing",
-        BrowserRunConfiguration.adapterDisplayName(family) + " " + pin.version()));
+        "browser.runner.adapter.missing", displayName + " " + pin.version()));
     }
     return store.resolveEntry(pin, null); // already installed: no network
+  }
+
+  private Path installedAdapterEntry(AdapterStore store, AdapterPin pin) throws IOException {
+    return installedAdapterEntry(store, pin, BrowserRunConfiguration.adapterDisplayName(family));
   }
 
   private DapClient connectFirefox(Path node, AdapterStore store, String targetUrl) throws IOException {
@@ -187,7 +190,7 @@ public class BrowserDebugBackend implements DapBackend {
     parentClient = parent;
     Map<String, Object> childConfig;
     try {
-      childConfig = runParentHandshake(parent, targetUrl);
+      childConfig = runParentHandshake(parent, "chrome", parentLaunchConfig(targetUrl));
     } catch (IOException e) {
       throw new IOException("The js-debug parent session failed: " + e.getMessage(), e);
     } catch (InterruptedException e) {
@@ -204,19 +207,20 @@ public class BrowserDebugBackend implements DapBackend {
   }
 
   /**
-   * Drives the parent session to the child hand-over: initialize,
+   * Drives a js-debug parent session to the child hand-over: initialize,
    * fire-and-forget launch (the response is deferred past configurationDone),
    * configurationDone on the initialized event, then the startDebugging
    * reverse request carries the child configuration (__pendingTargetId).
+   * Shared with the node test backend, whose parent config is an attach.
    */
-  private Map<String, Object> runParentHandshake(DapClient parent, String targetUrl)
+  static Map<String, Object> runParentHandshake(DapClient parent, String adapterId, Map<String, Object> parentConfig)
     throws IOException, InterruptedException {
-    InitializeRequest initialize = InitializeRequest.standard("chrome", true);
+    InitializeRequest initialize = InitializeRequest.standard(adapterId, true);
     initialize.getArguments().setClientName("IntelliJ Haxe");
     if (!parent.sendRequest(initialize, CONNECT_TIMEOUT_MILLIS).isSuccess()) {
       throw new IOException("initialize was rejected");
     }
-    parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentLaunchConfig(targetUrl)));
+    parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
 
     long deadline = System.currentTimeMillis() + PARENT_HANDSHAKE_TIMEOUT_MILLIS;
     while (System.currentTimeMillis() < deadline) {
@@ -260,7 +264,7 @@ public class BrowserDebugBackend implements DapBackend {
 
   // The adapters announce their port slightly BEFORE the listener accepts;
   // retry inside a short window instead of failing the session.
-  private static DapClient connectWithRetry(int port) throws IOException {
+  static DapClient connectWithRetry(int port) throws IOException {
     return DapClient.connectWithRetry("127.0.0.1", port, CONNECT_TIMEOUT_MILLIS, CONNECT_RETRY_WINDOW_MILLIS);
   }
 
