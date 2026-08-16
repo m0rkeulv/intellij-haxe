@@ -24,7 +24,7 @@ import org.jetbrains.annotations.NotNull;
  */
 final class HaxelibExplorerFilters {
 
-  enum Filter {INSTALLED, NOT_INSTALLED, DEV, GIT, ONLY_UPDATES}
+  enum Filter {INSTALLED, NOT_INSTALLED, DEV, GIT, ONLY_UPDATES, BEHIND_LATEST}
 
   private final Set<Filter> active =
     EnumSet.of(Filter.INSTALLED, Filter.NOT_INSTALLED, Filter.DEV, Filter.GIT);
@@ -57,6 +57,9 @@ final class HaxelibExplorerFilters {
     group.add(toggle(Filter.ONLY_UPDATES,
                      () -> HaxeBundle.message("haxelib.explorer.filter.only.updates"),
                      AllIcons.General.ArrowUp));
+    group.add(toggle(Filter.BEHIND_LATEST,
+                     () -> HaxeBundle.message("haxelib.explorer.filter.behind.latest"),
+                     AllIcons.Vcs.History));
     return group;
   }
 

@@ -35,6 +35,7 @@ final class HaxelibExplorerActions {
   @NotNull
   static DefaultActionGroup createGroup(@NotNull HaxelibExplorerPanel panel) {
     DefaultActionGroup group = new DefaultActionGroup();
+    group.add(new InstallAndSetCurrent(panel));
     group.add(new InstallVersion(panel));
     group.add(new SetCurrent(panel));
     group.add(new RemoveVersion(panel));
@@ -83,6 +84,28 @@ final class HaxelibExplorerActions {
           }
         }
       }.queue();
+    }
+  }
+
+  private static final class InstallAndSetCurrent extends ExplorerAction {
+    private InstallAndSetCurrent(@NotNull HaxelibExplorerPanel panel) {
+      super(panel, () -> HaxeBundle.message("haxelib.explorer.action.install.set.current"));
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      VersionEntry entry = selectedVersion();
+      e.getPresentation().setEnabledAndVisible(entry != null && !entry.installed());
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      VersionEntry entry = selectedVersion();
+      if (entry == null) return;
+      // haxelib install SELECTS the installed version as a side effect;
+      // passing no version to restore keeps that selection in place
+      mutate(HaxeBundle.message("haxelib.explorer.action.install.progress", entry.library(), entry.version()),
+             () -> HaxelibInstaller.install(panel.getProject(), entry.library(), entry.version(), null));
     }
   }
 

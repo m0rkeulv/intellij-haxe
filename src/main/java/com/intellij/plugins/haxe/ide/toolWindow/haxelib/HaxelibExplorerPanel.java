@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.ide.toolWindow.haxelib;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.CommonActionsManager;
+import com.intellij.ide.DefaultTreeExpander;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
@@ -27,10 +29,12 @@ import com.intellij.plugins.haxe.ide.documentation.HaxeDocumentationRenderer;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.DocumentAdapter;
+import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -42,11 +46,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.JComponent;
 import javax.swing.JTree;
@@ -116,6 +123,14 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   private final HaxeDocumentationRenderer markdownRenderer;
 
   private volatile List<LibraryRow> allRows = List.of();
+  // name -> latest release from already-cached info; rebuilt on every
+  // refilter, feeds the behind-latest filter and the orange suffix
+  private Map<String, String> latestVersions = Map.of();
+  // libraries whose haxelib info fetch is already queued or running
+  private final Set<String> infoHydrationPending = ConcurrentHashMap.newKeySet();
+  private final AtomicBoolean refilterQueued = new AtomicBoolean();
+  private ShownSelection lastShownSelection;
+  private boolean restoringTree;
   // separate guards: a selection click must not discard an in-flight catalog
   // load's second stage (one shared counter did exactly that)
   private final AtomicInteger loadGeneration = new AtomicInteger();
@@ -129,8 +144,17 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     tree.setRootVisible(false);
     tree.setShowsRootHandles(true);
     tree.setCellRenderer(new NodeRenderer());
-    tree.addTreeSelectionListener(e -> showSelection());
+    tree.addTreeSelectionListener(e -> {
+      // rebuilds clear the selection before restoring it; reacting to the
+      // transient events would restart the details render on every rebuild
+      if (!restoringTree) {
+        showSelection();
+      }
+    });
     tree.addTreeWillExpandListener(new LazyVersionLoader());
+    // type-to-highlight while the tree is focused; no auto-expand - that
+    // would fire a lazy info fetch per library the search passes over
+    TreeSpeedSearch.installOn(tree, false, HaxelibExplorerPanel::speedSearchText);
     PopupHandler.installPopupMenu(tree, HaxelibExplorerActions.createGroup(this), "HaxelibExplorerPopup");
 
     searchField.addDocumentListener(new DocumentAdapter() {
@@ -157,6 +181,8 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   private BorderLayoutPanel createToolbarRow() {
     DefaultActionGroup actions = new DefaultActionGroup();
     actions.add(new RefreshAction());
+    DefaultTreeExpander treeExpander = new DefaultTreeExpander(() -> tree);
+    actions.add(CommonActionsManager.getInstance().createCollapseAllAction(treeExpander, tree));
     ActionToolbar toolbar = ActionManager.getInstance()
       .createActionToolbar("HaxelibExplorer", actions, true);
     toolbar.setTargetComponent(this);
@@ -180,6 +206,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   /** Loads installed (fast, repo-scoped) then the online catalog, updating the tree after each stage. */
   private void reload(boolean force) {
     int expected = loadGeneration.incrementAndGet();
+    lastShownSelection = null;
     details.showMessage(HaxeBundle.message("haxelib.explorer.loading"));
     AppExecutorUtil.getAppExecutorService().execute(() -> {
       HaxelibCacheManager manager = cacheManager();
@@ -192,9 +219,64 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
       }
       HaxelibInstalledIndex installed = manager.getInstalledIndex();
       onUi(loadGeneration, expected, () -> setRows(buildRows(installed, Map.of())));
+      hydrateLibraryInfo(manager, installed.getInstalledLibraries());
 
       Map<String, Set<String>> catalog = manager.getAvailableLibraries();
       onUi(loadGeneration, expected, () -> setRows(buildRows(installed, catalog)));
+    });
+  }
+
+  /**
+   * Fetches missing haxelib info for installed libraries in the background:
+   * the latest-version filters and the orange suffix can only answer from
+   * cached info, and without this a library the user never expanded would
+   * silently fail their conditions. Each answer refreshes the tree, so rows
+   * appear while the sweep is still running.
+   */
+  private void hydrateLibraryInfo(@NotNull HaxelibCacheManager manager, @NotNull Set<String> names) {
+    List<String> missing = names.stream()
+      .filter(name -> manager.getCachedLibraryInfo(name) == null && infoHydrationPending.add(name))
+      .toList();
+    if (missing.isEmpty()) return;
+    AppExecutorUtil.getAppExecutorService().execute(() -> {
+      for (String name : missing) {
+        if (disposed) return;
+        manager.getLibraryInfo(name);
+        infoHydrationPending.remove(name);
+        onInfoHydrated();
+      }
+    });
+  }
+
+  /**
+   * A hydration answer changes which rows SHOW only under the
+   * latest-version narrowing filters; plain browsing just refreshes the
+   * suffix colouring with a repaint, leaving the user's tree expansion and
+   * scroll position untouched.
+   */
+  private void onInfoHydrated() {
+    boolean filtersOnInfo = filters.isActive(HaxelibExplorerFilters.Filter.ONLY_UPDATES)
+                            || filters.isActive(HaxelibExplorerFilters.Filter.BEHIND_LATEST);
+    if (filtersOnInfo) {
+      scheduleRefilter();
+      return;
+    }
+    ApplicationManager.getApplication().invokeLater(() -> {
+      if (!disposed) {
+        latestVersions = collectLatestVersions(cacheManager());
+        tree.repaint();
+      }
+    });
+  }
+
+  /** Coalesces background-triggered refilters into one queued EDT pass. */
+  private void scheduleRefilter() {
+    if (!refilterQueued.compareAndSet(false, true)) return;
+    ApplicationManager.getApplication().invokeLater(() -> {
+      refilterQueued.set(false);
+      if (!disposed) {
+        refilter();
+      }
     });
   }
 
@@ -237,18 +319,26 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     String query = searchField.getText().trim().toLowerCase(Locale.ROOT);
     // resolved once - the row loop must not repeat the module/SDK lookup
     HaxelibCacheManager manager = cacheManager();
-    root.removeAllChildren();
-    for (LibraryRow row : allRows) {
-      if (accepted(row, query, manager)) {
-        DefaultMutableTreeNode libraryNode = new DefaultMutableTreeNode(row);
-        // a placeholder gives the node its expand handle; real children
-        // materialize on expand (the release list needs one info fetch)
-        libraryNode.add(new DefaultMutableTreeNode(LOADING_PLACEHOLDER));
-        root.add(libraryNode);
+    latestVersions = collectLatestVersions(manager);
+    restoringTree = true;
+    try {
+      root.removeAllChildren();
+      for (LibraryRow row : allRows) {
+        if (accepted(row, query, manager)) {
+          DefaultMutableTreeNode libraryNode = new DefaultMutableTreeNode(row);
+          // a placeholder gives the node its expand handle; real children
+          // materialize on expand (the release list needs one info fetch)
+          libraryNode.add(new DefaultMutableTreeNode(LOADING_PLACEHOLDER));
+          root.add(libraryNode);
+        }
       }
+      treeModel.reload();
+      restoreTreeState(expandedLibraries, selectedKey);
     }
-    treeModel.reload();
-    restoreTreeState(expandedLibraries, selectedKey);
+    finally {
+      restoringTree = false;
+    }
+    showSelection();
   }
 
   // ------------------------------------------------- expansion preservation
@@ -314,6 +404,14 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     return null;
   }
 
+  @NotNull
+  private static String speedSearchText(@NotNull TreePath path) {
+    Object userObject = ((DefaultMutableTreeNode)path.getLastPathComponent()).getUserObject();
+    if (userObject instanceof LibraryRow row) return row.name();
+    if (userObject instanceof VersionEntry entry) return entry.version();
+    return String.valueOf(userObject);
+  }
+
   /** A library node stays while ANY of its versions would be visible under the version filter. */
   private boolean accepted(@NotNull LibraryRow row, @NotNull String query, @Nullable HaxelibCacheManager manager) {
     boolean anyVersionShown =
@@ -322,7 +420,8 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
       || (filters.isActive(HaxelibExplorerFilters.Filter.DEV) && row.dev())
       || (filters.isActive(HaxelibExplorerFilters.Filter.GIT) && row.git());
     if (!anyVersionShown) return false;
-    if (filters.isActive(HaxelibExplorerFilters.Filter.ONLY_UPDATES) && !hasKnownUpdate(row, manager)) return false;
+    if (filters.isActive(HaxelibExplorerFilters.Filter.ONLY_UPDATES) && !hasKnownUpdate(row)) return false;
+    if (filters.isActive(HaxelibExplorerFilters.Filter.BEHIND_LATEST) && !behindLatest(row)) return false;
     return query.isEmpty() || row.name().toLowerCase(Locale.ROOT).contains(query);
   }
 
@@ -342,13 +441,34 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     return info.releases().stream().anyMatch(release -> !row.installedVersions().contains(release.version()));
   }
 
-  // only answerable from already-cached info: the filter never triggers a
-  // server sweep over the whole catalog
-  private boolean hasKnownUpdate(@NotNull LibraryRow row, @Nullable HaxelibCacheManager manager) {
+  /** Whether a newer release exists than anything installed (answered from cached info only). */
+  private boolean hasKnownUpdate(@NotNull LibraryRow row) {
     if (!row.installed() || row.dev() || row.git()) return false;
-    HaxelibLibraryInfo info = manager == null ? null : manager.getCachedLibraryInfo(row.name());
-    return info != null && !info.latestVersion().isEmpty()
-           && !row.installedVersions().contains(info.latestVersion());
+    String latest = latestVersions.get(row.name());
+    return latest != null && !row.installedVersions().contains(latest);
+  }
+
+  /** Whether the CURRENT selection is a release older than the latest — the forgotten-pin case. */
+  private boolean behindLatest(@NotNull LibraryRow row) {
+    String selected = row.selectedVersion();
+    if (selected == null || "dev".equals(selected) || "git".equals(selected)) return false;
+    String latest = latestVersions.get(row.name());
+    return latest != null && !latest.equals(selected);
+  }
+
+  // the filters and suffix colouring never trigger a server sweep over the
+  // whole catalog: only libraries whose info is already cached contribute
+  @NotNull
+  private Map<String, String> collectLatestVersions(@Nullable HaxelibCacheManager manager) {
+    if (manager == null) return Map.of();
+    Map<String, String> latest = new HashMap<>();
+    for (LibraryRow row : allRows) {
+      HaxelibLibraryInfo info = manager.getCachedLibraryInfo(row.name());
+      if (info != null && !info.latestVersion().isEmpty()) {
+        latest.put(row.name(), info.latestVersion());
+      }
+    }
+    return latest;
   }
 
   // ----------------------------------------------------- version children
@@ -365,24 +485,43 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
       }
       HaxelibCacheManager manager = cacheManager();
       if (manager == null) return;
+      // children swap in AFTER the expand gesture: reloading the node's
+      // model inside treeWillExpand collapses it mid-gesture, which
+      // intermittently left restored nodes collapsed
       HaxelibLibraryInfo cached = manager.getCachedLibraryInfo(row.name());
       if (cached != null) {
-        setVersionChildren(node, row, cached);
+        ApplicationManager.getApplication().invokeLater(() -> populateVersions(row.name(), cached));
         return;
       }
       AppExecutorUtil.getAppExecutorService().execute(() -> {
         HaxelibLibraryInfo info = manager.getLibraryInfo(row.name());
-        ApplicationManager.getApplication().invokeLater(() -> {
-          if (!disposed && isPlaceholderOnly(node)) {
-            setVersionChildren(node, row, info);
-          }
-        });
+        ApplicationManager.getApplication().invokeLater(() -> populateVersions(row.name(), info));
       });
     }
 
     @Override
     public void treeWillCollapse(TreeExpansionEvent event) {
     }
+  }
+
+  /** Fills the library's CURRENT node - a rebuild may have replaced the node the expand fired on. */
+  private void populateVersions(@NotNull String name, @Nullable HaxelibLibraryInfo info) {
+    if (disposed) return;
+    DefaultMutableTreeNode node = libraryNode(name);
+    if (node != null && node.getUserObject() instanceof LibraryRow row && isPlaceholderOnly(node)) {
+      setVersionChildren(node, row, info);
+    }
+  }
+
+  @Nullable
+  private DefaultMutableTreeNode libraryNode(@NotNull String name) {
+    for (int i = 0; i < root.getChildCount(); i++) {
+      DefaultMutableTreeNode child = (DefaultMutableTreeNode)root.getChildAt(i);
+      if (child.getUserObject() instanceof LibraryRow row && name.equals(row.name())) {
+        return child;
+      }
+    }
+    return null;
   }
 
   private static boolean isPlaceholderOnly(@NotNull DefaultMutableTreeNode node) {
@@ -438,18 +577,33 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
 
   // ------------------------------------------------------------ selection
 
+  /** The render inputs the details pane shows or is loading: library state plus the version whose docs are up. */
+  private record ShownSelection(@NotNull LibraryRow row, @Nullable String docsVersion) {
+  }
+
   private void showSelection() {
-    int expected = selectionGeneration.incrementAndGet();
     LibraryRow row = selectedLibraryRow();
     if (row == null) {
+      selectionGeneration.incrementAndGet();
+      lastShownSelection = null;
       details.showMessage(HaxeBundle.message("haxelib.explorer.no.selection"));
       return;
     }
+    // keyed on the RENDER INPUTS, not the clicked node, and recorded at
+    // REQUEST time: an equal selection - a rebuild re-firing the same node,
+    // a click landing on the same library state and docs - must neither
+    // flash the loading state nor bump the generation (that would discard
+    // a render still in flight and restart it, looping while background
+    // info hydration keeps rebuilding the tree)
+    String docsVersion = docsVersionFor(row);
+    ShownSelection selection = new ShownSelection(row, docsVersion);
+    if (selection.equals(lastShownSelection)) return;
+    lastShownSelection = selection;
+    int expected = selectionGeneration.incrementAndGet();
     // one loading state, then ONE render with everything ready - an
     // intermediate overview-only render would steal the tab selection from
     // the readme
     details.showMessage(HaxeBundle.message("haxelib.explorer.loading.details"));
-    String docsVersion = docsVersionFor(row);
     HaxelibCacheManager manager = cacheManager();
     AppExecutorUtil.getAppExecutorService().execute(() -> {
       HaxelibLibraryInfo info = manager == null ? null : manager.getLibraryInfo(row.name());
@@ -592,7 +746,12 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
 
   // ------------------------------------------------------------ rendering
 
-  private static final class NodeRenderer extends ColoredTreeCellRenderer {
+  // an orange current-version suffix marks a selection pinned behind the
+  // latest release, spottable while scrolling with every filter off
+  private static final SimpleTextAttributes BEHIND_LATEST_ATTRIBUTES =
+    new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, JBColor.ORANGE);
+
+  private final class NodeRenderer extends ColoredTreeCellRenderer {
     @Override
     public void customizeCellRenderer(@NotNull JTree tree, Object value, boolean selected, boolean expanded,
                                       boolean leaf, int row, boolean hasFocus) {
@@ -601,7 +760,9 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
         setIcon(library.installed() ? AllIcons.Nodes.PpLib : AllIcons.Nodes.PpLibFolder);
         append(library.name());
         if (library.selectedVersion() != null) {
-          append("  " + library.selectedVersion(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          SimpleTextAttributes suffix = behindLatest(library) ? BEHIND_LATEST_ATTRIBUTES
+                                                              : SimpleTextAttributes.GRAYED_ATTRIBUTES;
+          append("  " + library.selectedVersion(), suffix);
         }
       }
       else if (userObject instanceof VersionEntry entry) {
