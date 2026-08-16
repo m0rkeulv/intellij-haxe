@@ -28,6 +28,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
+import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfiguration;
@@ -217,7 +218,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       : resolved.command();
     List<String> command = new ArrayList<>(base);
     if (debug && task.isInjectDebugArguments()) {
-      List<String> additions = debugAdditions(project, task.getBuildFilePath());
+      // a single-run compile is a DIRECT haxe compile whatever the build
+      // system, so its additions use the haxe spelling - the tool spellings
+      // (lime's --haxelib=) are unknown options to haxe itself
+      List<String> additions = singleRun
+                               ? singleRunDebugAdditions(project, task.getBuildFilePath())
+                               : debugAdditions(project, task.getBuildFilePath());
       if (additions != null) {
         command.addAll(additions);
       }
@@ -370,6 +376,19 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     if (type == null) return null;
     return ReadAction.computeBlocking(
       () -> HaxeBuildSystem.of(type).debugCompileAdditions(project, new HaxeBuildFile(file, type)));
+  }
+
+  /** Debug additions for a single-run compile: always the plain haxe spelling for the selected target (see the call site). */
+  @Nullable
+  private static List<String> singleRunDebugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    if (file == null) return null;
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+    if (type == null) return null;
+    return ReadAction.computeBlocking(() -> {
+      HaxeTarget target = HaxeBuildSystem.of(type).launchTarget(project, new HaxeBuildFile(file, type));
+      return target != null ? HaxeDebugAdditions.forTarget(target) : null;
+    });
   }
 
   private static void notifyFailure(@NotNull Project project, @NotNull String message) {

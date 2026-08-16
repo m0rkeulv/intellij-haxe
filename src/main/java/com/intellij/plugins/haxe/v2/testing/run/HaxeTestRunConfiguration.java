@@ -33,8 +33,12 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -131,8 +135,44 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     if (file == null || !file.isValid()) return null;
     HaxeTestFramework framework = ReadAction.computeBlocking(
       () -> HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFilePath));
+    HaxeBuildFileType type = ReadAction.computeBlocking(
+      () -> HaxeBuildFileScanner.detectType(getProject(), file));
+    if (LimeProjects.isLimeFamily(type)) {
+      return resolveLimeSingleRunCompile(file, type, framework, run);
+    }
     return ReadAction.computeBlocking(
       () -> HaxeTestLaunchPlanner.singleRunCompile(getProject(), file, framework, run));
+  }
+
+  /** The inputs of a lime display invocation, captured under the read lock. */
+  private record LimeDisplayInputs(String haxelibExecutable, String tool, String directory,
+                                   String fileName, String targetFlag) {
+  }
+
+  private static final int LIME_DISPLAY_TIMEOUT_MS = 60_000;
+
+  /** The lime flavor: the tool's display mode SPAWNS a process, so it runs between the read actions, never inside one. */
+  @Nullable
+  private HaxeCompileCommands.Resolved resolveLimeSingleRunCompile(@NotNull VirtualFile file,
+                                                                   @NotNull HaxeBuildFileType type,
+                                                                   @NotNull HaxeTestFramework framework,
+                                                                   @NotNull HaxeTestSingleRuns.SingleRun run) {
+    LimeDisplayInputs inputs = ReadAction.computeBlocking(() -> {
+      String containerId = HaxeContainers.containerIdFor(getProject(), file);
+      String environmentSdk = HaxeEnvironmentStore.getInstance(getProject()).getSdkName(containerId);
+      return new LimeDisplayInputs(
+        HaxeToolPathResolver.resolveHaxelibExecutable(getProject(), environmentSdk),
+        LimeProjects.toolFor(type),
+        file.getParent().getPath(),
+        file.getName(),
+        LimeProjects.selectedTargetFlag(getProject(), type, file));
+    });
+    List<String> effectiveArguments = LimeProjects.displayArguments(
+      inputs.haxelibExecutable(), inputs.tool(), inputs.directory(),
+      inputs.fileName(), inputs.targetFlag(), LIME_DISPLAY_TIMEOUT_MS);
+    if (effectiveArguments == null) return null;
+    return ReadAction.computeBlocking(
+      () -> HaxeTestLaunchPlanner.singleRunLimeCompile(getProject(), file, framework, run, effectiveArguments));
   }
 
   /**

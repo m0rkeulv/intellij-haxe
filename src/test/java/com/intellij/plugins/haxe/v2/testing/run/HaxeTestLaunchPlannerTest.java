@@ -122,9 +122,68 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("single runs on lime builds are refused")
-  public void testSingleRunsOnLimeBuildsAreRefused() {
+  @DisplayName("lime single run launches the redirected artifact for the selected target")
+  public void testLimeSingleRunLaunchesTheRedirectedArtifactForTheSelectedTarget() throws ExecutionException {
     String path = fixturePath("targets/lime-project.xml");
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
+    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
+    assertFalse(plan.singleStage(), "the compile stays in the before-run step");
+    assertEquals(HaxeTarget.NEKO, plan.target());
+    assertTrue(plan.command().get(1).endsWith("single.n"),
+               "the run must launch the redirected artifact: " + plan.command());
+  }
+
+  @Test
+  @DisplayName("lime single run compile swaps the entry point over the display arguments")
+  public void testLimeSingleRunCompileSwapsTheEntryPointOverTheDisplayArguments() {
+    String path = fixturePath("targets/lime-project.xml");
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    assertNotNull(file);
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Flash");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
+    // what the tool's display mode prints: the build's entry point, its target
+    // output, an ECHO of a reporter macro and a --connect pair injected into
+    // earlier builds (the tool persists CLI extras in its export state), and
+    // the typing-run suppressors some targets carry (--no-output, hl)
+    List<String> effectiveArguments = List.of(
+      "-main", "TestMain",
+      "-cp", "src",
+      "-D", "no-compilation",
+      "-D", "lime-cffi",
+      "-swf", "export/flash/bin/LimeTests.swf",
+      "--macro", "intellij_utest.Macro.init()",
+      "--connect", "51433",
+      "--no-output");
+
+    HaxeCompileCommands.Resolved compile = HaxeTestLaunchPlanner.singleRunLimeCompile(
+      getProject(), file, HaxeTestFrameworks.forBuildFile(getProject(), path), singleRun, effectiveArguments);
+    assertNotNull(compile, "the lime single-run compile must resolve");
+    List<String> command = compile.command();
+
+    assertFalse(command.contains("TestMain"), "the build's own main is stripped: " + command);
+    int mainFlag = command.indexOf("--main");
+    assertEquals(HaxeTestSingleRuns.MAIN_CLASS, command.get(mainFlag + 1), "the generated main takes over");
+    assertTrue(command.get(command.indexOf("-swf") + 1).endsWith("single.swf"),
+               "the swf output is redirected away from the tests artifact: " + command);
+    int reporterMacro = command.indexOf("intellij_utest.Macro.init()");
+    assertTrue(reporterMacro > 0, "the flash lane forces the live reporter macro: " + command);
+    assertEquals(reporterMacro, command.lastIndexOf("intellij_utest.Macro.init()"),
+                 "the echoed macro must not attach twice: " + command);
+    assertEquals(file.getParent().getPath(), compile.workDirectory());
+    assertFalse(compile.connectEligible(), "swf output through the compilation server corrupts");
+    assertFalse(command.contains("--no-output"), "the typing-run suppressor must go: " + command);
+    assertFalse(command.contains("no-compilation"), "hxcpp's skip define must go: " + command);
+    assertFalse(command.contains("lime-cffi"), "the lime runtime hook define must go: " + command);
+    assertFalse(command.contains("--connect"), "the echoed server pair must go: " + command);
+    assertFalse(command.contains("51433"), "the echoed server port goes with its flag: " + command);
+  }
+
+  @Test
+  @DisplayName("single runs on nmml builds are refused")
+  public void testSingleRunsOnNmmlBuildsAreRefused() {
+    String path = fixturePath("targets/tests.nmml");
     HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
     assertThrows(ExecutionException.class,
                  () -> HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false));

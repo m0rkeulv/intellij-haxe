@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
-import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.HaxeTarget;
@@ -11,7 +10,11 @@ import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
+import com.intellij.util.execution.ParametersListUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -30,8 +34,9 @@ import org.jetbrains.annotations.Nullable;
  * The compile behind a gutter-started single-suite/-test run: the tests
  * build's SELECTED section with its entry point swapped for a generated
  * template main — the original {@code --main}/{@code -x} stripped, the
- * target's output redirected into a per-run directory under the IDE system
- * dir (the real tests artifact must not be overwritten), and the generated
+ * target's output redirected into a per-run directory under a short temp
+ * root (the real tests artifact must not be overwritten; see
+ * {@link #generatedDirectory} for why short), and the generated
  * main's classpath appended. Templates live under
  * {@code resources/testFrameworks/<framework>/}; {@code ${TEST_CLASS}} /
  * {@code ${TEST_METHOD}} are substituted at generation time.
@@ -91,6 +96,105 @@ final class HaxeTestSingleRuns {
     command.add(MAIN_CLASS);
     return new HaxeCompileCommands.Resolved(
       resolved.containerId(), command, resolved.workDirectory(), resolved.presentable(), resolved.connectEligible());
+  }
+
+  /**
+   * The lime-family flavor of {@link #resolveCompile}: a DIRECT haxe compile
+   * over the tool's effective display arguments — the tool itself cannot
+   * compile a substitute main. Entry point swapped and output redirected as
+   * in the hxml path. The display output ECHOES arguments injected into
+   * earlier builds (the tool persists CLI extras in its export state), so
+   * appended pairs already present verbatim are skipped — the reporter
+   * macro attached twice would stream every event twice. Call in a read
+   * action; the caller fetches the display arguments OUTSIDE it.
+   */
+  @Nullable
+  static HaxeCompileCommands.Resolved resolveLimeCompile(@NotNull Project project,
+                                                         @NotNull VirtualFile buildFile,
+                                                         @NotNull HaxeTestFramework framework,
+                                                         @NotNull String extraArguments,
+                                                         @NotNull SingleRun singleRun,
+                                                         @NotNull List<String> effectiveArguments) {
+    Path generated = generatedDirectory(buildFile.getPath(), framework, singleRun);
+    if (generated == null) return null;
+
+    String containerId = HaxeContainers.containerIdFor(project, buildFile);
+    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
+    List<String> command = new ArrayList<>();
+    command.add(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk));
+    command.addAll(swapEntryPoint(sanitizedDisplayArguments(effectiveArguments), generated));
+    appendSkippingDuplicates(command, ParametersListUtil.parse(extraArguments));
+    command.add("-cp");
+    command.add(generated.toString());
+    command.add("--main");
+    command.add(MAIN_CLASS);
+
+    VirtualFile parent = buildFile.getParent();
+    String workDirectory = parent != null ? parent.getPath() : null;
+    // never server-connected: the run must own its artifact, and swf output through the server corrupts
+    return new HaxeCompileCommands.Resolved(containerId, command, workDirectory, String.join(" ", command), false);
+  }
+
+  // no-compilation: the display output describes a TYPING run - it suppresses
+  //   hxcpp's native step and pairs with --no-output (dropped below), which
+  //   suppresses generation entirely; both must go to produce an artifact.
+  // lime-cffi: lime ships a SHADOWING haxe/Timer.hx whose lime_cffi branch
+  //   swaps haxe.Timer for lime's event-loop timer - the frameworks use
+  //   Timer, so the define drags the whole lime runtime into the headless
+  //   single-run binary and its machinery keeps the process alive after the
+  //   tests (no exit on hl). Without it the std-like branch compiles and
+  //   lime/openfl classes fall to their stub backends.
+  private static final Set<String> DROPPED_DEFINES = Set.of("no-compilation", "lime-cffi");
+
+  /**
+   * Display output repurposed as a compilable argument list: drops
+   * {@code --no-output}, the {@link #DROPPED_DEFINES} and any echoed
+   * {@code --connect} pair (persisted from an earlier server build) — the
+   * single-run compile owns its artifact and never rides the compilation
+   * server.
+   */
+  @NotNull
+  private static List<String> sanitizedDisplayArguments(@NotNull List<String> arguments) {
+    List<String> sanitized = new ArrayList<>(arguments.size());
+    for (int i = 0; i < arguments.size(); i++) {
+      String argument = arguments.get(i);
+      boolean hasValue = i + 1 < arguments.size();
+      if (argument.equals("--no-output")) continue;
+      if (argument.equals("--connect") && hasValue) {
+        i++;
+        continue;
+      }
+      boolean droppedDefine = HxmlFileParser.DEFINE_FLAGS.contains(argument)
+                              && hasValue && DROPPED_DEFINES.contains(arguments.get(i + 1));
+      if (droppedDefine) {
+        i++;
+        continue;
+      }
+      sanitized.add(argument);
+    }
+    return sanitized;
+  }
+
+  /** Appends flag/value pairs, skipping pairs the command already carries verbatim (see {@link #resolveLimeCompile}). */
+  private static void appendSkippingDuplicates(@NotNull List<String> command, @NotNull List<String> pairs) {
+    for (int i = 0; i + 1 < pairs.size(); i += 2) {
+      String flag = pairs.get(i);
+      String value = pairs.get(i + 1);
+      boolean present = false;
+      for (int j = 0; j + 1 < command.size(); j++) {
+        if (command.get(j).equals(flag) && command.get(j + 1).equals(value)) {
+          present = true;
+          break;
+        }
+      }
+      if (!present) {
+        command.add(flag);
+        command.add(value);
+      }
+    }
+    if (pairs.size() % 2 == 1) {
+      command.add(pairs.get(pairs.size() - 1));
+    }
   }
 
   /**
@@ -174,7 +278,12 @@ final class HaxeTestSingleRuns {
       digest.update(source.getBytes(StandardCharsets.UTF_8));
       String contentHash = HexFormat.of().formatHex(digest.digest()).substring(0, 16);
 
-      Path root = Path.of(PathManager.getSystemPath(), "haxe", "single-run", contentHash);
+      // the system TEMP dir, not the IDE system dir: hxcpp nests deep type
+      // paths under out/ (src/... plus obj/<toolchain>/..., with generic
+      // instantiation names running 30+ characters) and its msvc toolchain
+      // still lives with MAX_PATH - the IDE system dir alone can eat 150+
+      // characters and haxe then silently fails to write the longest files
+      Path root = Path.of(System.getProperty("java.io.tmpdir"), "haxe-single-run-" + contentHash);
       Path main = root.resolve(MAIN_CLASS + ".hx");
       if (!Files.exists(main)) {
         Files.createDirectories(root);

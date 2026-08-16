@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.testing;
 
+import com.intellij.ide.highlighter.XmlFileType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
@@ -7,6 +8,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.FileTypeIndex;
@@ -57,10 +59,12 @@ public final class HaxeTestGutterContext {
     for (String testsPath : candidateTestsPaths(project, store)) {
       VirtualFile testsFile = LocalFileSystem.getInstance().findFileByPath(testsPath);
       if (testsFile == null || !testsFile.isValid()) continue;
-      // TODO gutter runs for lime/nme tests builds: their inspection shells
-      //  out to the tool (cache-only + background hydration needed) and the
-      //  template compile needs the effective hxml as a plain-haxe build
-      if (HaxeBuildFileScanner.detectType(project, testsFile) != HaxeBuildFileType.HXML) continue;
+      // lime-family ownership/detection reads the project xml's DECLARED
+      // sources and haxelibs (no tool run) - precise enough to claim a file
+      // TODO gutter runs for nmml tests builds: nme's display mode is unverified
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, testsFile);
+      boolean supported = type == HaxeBuildFileType.HXML || LimeProjects.isLimeFamily(type);
+      if (!supported) continue;
 
       List<String> sourceDirectories = HaxeBuildClasspaths.sourceDirectories(project, testsPath);
       boolean owns = sourceDirectories.stream()
@@ -78,23 +82,35 @@ public final class HaxeTestGutterContext {
 
   /**
    * The tests builds a file can belong to: the explicitly MARKED ones first,
-   * then the CONVENTIONAL candidates among the project's hxml files
-   * (test.hxml/tests.hxml names, files under a tests/ directory) minus the
-   * explicitly EXCLUDED ones — the same per-file toggle rule the tool
-   * window's Tests rows follow, so a project that never explicitly marked
-   * anything still gets markers.
+   * then the CONVENTIONAL candidates among the project's hxml and
+   * lime-family project files (test.hxml/tests.hxml names, files under a
+   * tests/ directory) minus the explicitly EXCLUDED ones — the same per-file
+   * toggle rule the tool window's Tests rows follow, so a project that never
+   * explicitly marked anything still gets markers.
    */
   @NotNull
   private static List<String> candidateTestsPaths(@NotNull Project project, @NotNull HaxeTestsBuildFileStore store) {
     List<String> candidates = new ArrayList<>(store.getAllTestsFilePaths());
     List<String> excluded = store.getAllExcludedFilePaths();
     for (VirtualFile hxml : FileTypeIndex.getFiles(HXMLFileType.INSTANCE, GlobalSearchScope.projectScope(project))) {
-      String path = hxml.getPath();
-      boolean conventional = HaxeTestsBuildFileStore.isConventionalTestsPath(path) && !excluded.contains(path);
-      if (conventional && !candidates.contains(path)) {
-        candidates.add(path);
+      addConventional(candidates, excluded, hxml.getPath());
+    }
+    for (VirtualFile xml : FileTypeIndex.getFiles(XmlFileType.INSTANCE, GlobalSearchScope.projectScope(project))) {
+      // the cheap path check gates the per-file type detection
+      if (HaxeTestsBuildFileStore.isConventionalTestsPath(xml.getPath())
+          && LimeProjects.isLimeFamily(HaxeBuildFileScanner.detectType(project, xml))) {
+        addConventional(candidates, excluded, xml.getPath());
       }
     }
     return candidates;
+  }
+
+  private static void addConventional(@NotNull List<String> candidates,
+                                      @NotNull List<String> excluded,
+                                      @NotNull String path) {
+    boolean conventional = HaxeTestsBuildFileStore.isConventionalTestsPath(path) && !excluded.contains(path);
+    if (conventional && !candidates.contains(path)) {
+      candidates.add(path);
+    }
   }
 }

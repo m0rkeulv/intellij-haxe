@@ -65,6 +65,30 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
                "the store change must invalidate the cached context");
   }
 
+  @Test
+  @DisplayName("lime tests build claims files by its declared sources")
+  public void testLimeTestsBuildClaimsFilesByItsDeclaredSources() {
+    VirtualFile buildFile = myFixture.copyFileToProject("targets/lime-project.xml", "limeproj/project.xml");
+    VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "limeproj/src/TestMain.hx");
+    HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
+
+    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(psiFile(source));
+    assertNotNull(context, "the lime build's declared sources contain the file");
+    assertEquals("utest", context.framework().libraryName(), "the declared utest haxelib drives the framework");
+    assertEquals(buildFile.getPath(), context.testsBuildPath());
+  }
+
+  @Test
+  @DisplayName("conventional lime project under a tests directory needs no mark")
+  public void testConventionalLimeProjectUnderATestsDirectoryNeedsNoMark() {
+    VirtualFile buildFile = myFixture.copyFileToProject("targets/lime-project.xml", "limeproj/tests/project.xml");
+    VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "limeproj/tests/src/TestMain.hx");
+
+    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(psiFile(source));
+    assertNotNull(context, "a lime project under a tests directory is a conventional candidate");
+    assertEquals(buildFile.getPath(), context.testsBuildPath());
+  }
+
   private PsiFile psiFile(VirtualFile file) {
     PsiFile psiFile = PsiManager.getInstance(getProject()).findFile(file);
     assertNotNull(psiFile);

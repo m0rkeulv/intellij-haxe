@@ -1,9 +1,5 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.execution.ExecutionException;
-import com.intellij.execution.configurations.GeneralCommandLine;
-import com.intellij.execution.process.CapturingProcessHandler;
-import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -322,25 +318,13 @@ public final class HaxeCompilerDisplayService {
 
   @Nullable
   private List<String> runLimeDisplay(@NotNull LimeDisplaySpec spec, @Nullable String sdkName) {
-    GeneralCommandLine commandLine = new GeneralCommandLine()
-      .withExePath(HaxeToolPathResolver.resolveHaxelibExecutable(project, sdkName))
-      .withParameters("run", spec.tool(), "display", spec.fileName(), spec.targetFlag())
-      .withWorkDirectory(spec.directory());
-    try {
-      ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(LIME_DISPLAY_TIMEOUT_MS);
-      if (output.isTimeout() || output.getExitCode() != 0) {
-        log.info("lime display failed for " + spec.fileName() + ": exit " + output.getExitCode());
-        return null;
-      }
-      List<String> args = HxmlArguments.parseLines(output.getStdoutLines());
-      if (args.isEmpty()) return null;
-      List<String> withCwd = new ArrayList<>(List.of("--cwd", spec.directory()));
-      withCwd.addAll(args);
-      return List.copyOf(withCwd);
-    } catch (ExecutionException e) {
-      log.info("lime display failed for " + spec.fileName() + ": " + e.getMessage());
-      return null;
+    String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, sdkName);
+    List<String> args = LimeProjects.displayArguments(
+      haxelib, spec.tool(), spec.directory(), spec.fileName(), spec.targetFlag(), LIME_DISPLAY_TIMEOUT_MS);
+    if (args == null) {
+      log.info("lime display failed for " + spec.fileName());
     }
+    return args;
   }
 
 

@@ -1,5 +1,9 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.execution.ExecutionException;
+import com.intellij.execution.configurations.GeneralCommandLine;
+import com.intellij.execution.process.CapturingProcessHandler;
+import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
@@ -9,6 +13,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
@@ -104,6 +109,40 @@ public final class LimeProjects {
     Sdk sdk = flexSdkName == null ? null : ProjectJdkTable.getInstance().findJdk(flexSdkName);
     if (sdk == null || sdk.getHomePath() == null) return List.of();
     return List.of("-DAIR_SDK=" + sdk.getHomePath());
+  }
+
+  /**
+   * The file's effective haxe arguments from the tool's display mode
+   * ({@code haxelib run lime|openfl display <file> <target>}), prefixed with
+   * {@code --cwd <project dir>} so relative paths resolve against the
+   * project. Null when the tool fails. Spawns a process - never call under
+   * the read lock. The output can ECHO arguments injected into earlier
+   * builds (the tool persists CLI extras in its export state) - consumers
+   * appending their own arguments must skip verbatim duplicates.
+   */
+  @Nullable
+  public static List<String> displayArguments(@NotNull String haxelibExecutable,
+                                              @NotNull String tool,
+                                              @NotNull String directory,
+                                              @NotNull String fileName,
+                                              @NotNull String targetFlag,
+                                              int timeoutMs) {
+    GeneralCommandLine commandLine = new GeneralCommandLine()
+      .withExePath(haxelibExecutable)
+      .withParameters("run", tool, "display", fileName, targetFlag)
+      .withWorkDirectory(directory);
+    try {
+      ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(timeoutMs);
+      if (output.isTimeout() || output.getExitCode() != 0) return null;
+      List<String> arguments = HxmlArguments.parseLines(output.getStdoutLines());
+      if (arguments.isEmpty()) return null;
+      List<String> withCwd = new ArrayList<>(List.of("--cwd", directory));
+      withCwd.addAll(arguments);
+      return List.copyOf(withCwd);
+    }
+    catch (ExecutionException e) {
+      return null;
+    }
   }
 
   /**

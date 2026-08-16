@@ -346,9 +346,11 @@ final class HaxeTestLaunchPlanner {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", buildFilePath));
     }
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+    if (singleRun != null && LimeProjects.isLimeFamily(type)) {
+      return limeSingleRunPlan(project, file, type, singleRun, nodeExecutable, debugLaunch);
+    }
     if (singleRun != null && type != HaxeBuildFileType.HXML) {
-      // TODO gutter runs for lime/nme tests builds: the template compile
-      //  needs the tool's effective hxml turned into a plain-haxe compile
+      // TODO gutter runs for nmml tests builds: nme's display mode is unverified
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported.type", file.getName()));
     }
     if (LimeProjects.isLimeFamily(type)) {
@@ -412,7 +414,53 @@ final class HaxeTestLaunchPlanner {
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
     }
     String workDirectory = file.getParent().getPath();
-    List<String> command = switch (target) {
+    List<String> command = singleRunCommand(project, file, artifact, target, nodeExecutable, debugLaunch);
+    String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
+                  ? HaxeBundle.message("haxe.test.config.hxnodejs.hint")
+                  : null;
+    return new Plan(command, workDirectory, false, target, hint);
+  }
+
+  /**
+   * A gutter run on a lime-family tests build. The compile (the before-run
+   * step, see {@link HaxeTestSingleRuns#resolveLimeCompile}) is a direct haxe
+   * compile over the tool's effective arguments; its redirected artifact
+   * launches through the same lanes as an hxml single run.
+   */
+  @NotNull
+  private static Plan limeSingleRunPlan(@NotNull Project project,
+                                        @NotNull VirtualFile file,
+                                        @NotNull HaxeBuildFileType type,
+                                        @NotNull HaxeTestSingleRuns.SingleRun singleRun,
+                                        @Nullable String nodeExecutable,
+                                        boolean debugLaunch) throws ExecutionException {
+    HaxeTestFramework framework = frameworkFor(project, file.getPath());
+    if (framework.singleRunTemplate(singleRun.singleTest()) == null) {
+      throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported", framework.libraryName()));
+    }
+    String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
+    if (LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag) && !framework.supportsFlash()) {
+      throw new ExecutionException(
+        HaxeBundle.message("haxe.test.config.framework.no.flash", framework.libraryName()));
+    }
+    HaxeTarget target = limeTarget(targetFlag);
+    Path artifact = HaxeTestSingleRuns.artifact(file, framework, singleRun, target);
+    if (artifact == null) {
+      throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
+    }
+    List<String> command = singleRunCommand(project, file, artifact, target, nodeExecutable, debugLaunch);
+    return new Plan(command, file.getParent().getPath(), false, target, null);
+  }
+
+  /** The launch command over a single run's redirected artifact - shared by the hxml and lime shapes. */
+  @NotNull
+  private static List<String> singleRunCommand(@NotNull Project project,
+                                               @NotNull VirtualFile file,
+                                               @NotNull Path artifact,
+                                               @NotNull HaxeTarget target,
+                                               @Nullable String nodeExecutable,
+                                               boolean debugLaunch) throws ExecutionException {
+    return switch (target) {
       case HL -> hlCommand(project, file, artifact, target);
       case NEKO -> List.of(nekoExecutable(project), artifact.toString());
       case JAVA -> jvmCommand(artifact, target);
@@ -421,10 +469,6 @@ final class HaxeTestLaunchPlanner {
       case FLASH -> adlCommand(project, artifact);
       default -> throw unrunnableTarget(target);
     };
-    String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
-                  ? HaxeBundle.message("haxe.test.config.hxnodejs.hint")
-                  : null;
-    return new Plan(command, workDirectory, false, target, hint);
   }
 
   /** The single-run compile for the before-run step; null when unresolvable. Call in a read action. */
@@ -443,15 +487,42 @@ final class HaxeTestLaunchPlanner {
                                                   @NotNull String buildFilePath,
                                                   @NotNull HaxeTestFramework framework,
                                                   @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
-    // single runs are hxml-only; the flash force mirrors frameworkArguments
-    boolean liveReporting = isFlashHxml(project, buildFilePath)
-                            || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
+    String suiteName;
+    boolean flashTests;
+    if (LimeProjects.isLimeFamily(type)) {
+      String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
+      suiteName = "Target: " + limeTarget(targetFlag);
+      flashTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag);
+    }
+    else {
+      suiteName = rootSuiteName(project, buildFilePath);
+      flashTests = isFlashHxml(project, buildFilePath);
+    }
+    // the adl-hosted flash lane needs the injected reporter (exit + stdout)
+    boolean liveReporting = flashTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
     List<String> arguments = new ArrayList<>(
-      framework.reportingArgs(rootSuiteName(project, buildFilePath), reporterClasspath(framework), liveReporting));
+      framework.reportingArgs(suiteName, reporterClasspath(framework), liveReporting));
     if (singleRun.singleTest()) {
       arguments.addAll(framework.singleRunFilterArgs(singleRun.testMethod()));
     }
     return ParametersListUtil.join(arguments);
+  }
+
+  /**
+   * The lime-family single-run compile over pre-fetched display arguments
+   * (fetched OUTSIDE the read lock - the display mode spawns the tool); null
+   * when unresolvable. Call in a read action.
+   */
+  @Nullable
+  static HaxeCompileCommands.Resolved singleRunLimeCompile(@NotNull Project project,
+                                                           @NotNull VirtualFile file,
+                                                           @NotNull HaxeTestFramework framework,
+                                                           @NotNull HaxeTestSingleRuns.SingleRun singleRun,
+                                                           @NotNull List<String> effectiveArguments) {
+    String extraArguments = singleRunCompileArguments(project, file.getPath(), framework, singleRun);
+    return HaxeTestSingleRuns.resolveLimeCompile(project, file, framework, extraArguments, singleRun, effectiveArguments);
   }
 
   /** The generated main's hxcpp binary inside the redirected output directory. */
