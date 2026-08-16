@@ -77,4 +77,80 @@ public final class HaxelibLocalDocs {
     String fileName = file.getFileName().toString().toLowerCase(Locale.ROOT);
     return fileName.equals(base) || fileName.equals(base + ".md") || fileName.equals(base + ".txt");
   }
+
+  // ------------------------------------------------- dev/git pseudo-versions
+
+  /** The checkout state of a git pseudo-version; either part may be missing. */
+  public record GitCheckout(@Nullable String branch, @Nullable String commit) {
+  }
+
+  /** Where the library's dev pseudo-version points (the {@code .dev} file's directory), or null. */
+  @Nullable
+  public static String devPath(@NotNull Path repoRoot, @NotNull String name) {
+    Path directory = devDirectory(repoRoot.resolve(name));
+    return directory == null ? null : directory.toString();
+  }
+
+  /**
+   * The git pseudo-version's checkout state, read from the clone's own
+   * metadata ({@code .git/HEAD} plus loose/packed refs) — never by running
+   * git, so it works without a git installation and executes nothing.
+   */
+  @Nullable
+  public static GitCheckout gitCheckout(@NotNull Path repoRoot, @NotNull String name) {
+    Path gitDir = gitMetadataDirectory(repoRoot.resolve(name).resolve("git"));
+    if (gitDir == null) return null;
+    String head = readTrimmed(gitDir.resolve("HEAD"));
+    if (head == null) return null;
+
+    if (!head.startsWith("ref: ")) {
+      // detached checkout: HEAD is the commit itself
+      return new GitCheckout(null, head);
+    }
+    String ref = head.substring("ref: ".length()).trim();
+    // the branch is the ref's last segment (refs/heads/main -> main)
+    String branch = ref.substring(ref.lastIndexOf('/') + 1);
+    String commit = readTrimmed(gitDir.resolve(ref));
+    if (commit == null) {
+      commit = packedRefCommit(gitDir, ref);
+    }
+    return new GitCheckout(branch, commit);
+  }
+
+  /** {@code .git} is a directory in a plain clone, but a pointer FILE ({@code gitdir: <path>}) in worktrees. */
+  @Nullable
+  private static Path gitMetadataDirectory(@NotNull Path checkoutDir) {
+    Path dotGit = checkoutDir.resolve(".git");
+    if (Files.isDirectory(dotGit)) return dotGit;
+    String pointer = readTrimmed(dotGit);
+    if (pointer == null || !pointer.startsWith("gitdir:")) return null;
+    Path resolved = checkoutDir.resolve(pointer.substring("gitdir:".length()).trim()).normalize();
+    return Files.isDirectory(resolved) ? resolved : null;
+  }
+
+  @Nullable
+  private static String packedRefCommit(@NotNull Path gitDir, @NotNull String ref) {
+    try {
+      // packed-refs lines are "<hash> <ref>" (peeled "^<hash>" lines excluded by the space match)
+      return Files.readAllLines(gitDir.resolve("packed-refs")).stream()
+        .filter(line -> line.endsWith(" " + ref))
+        .map(line -> line.substring(0, line.indexOf(' ')))
+        .findFirst()
+        .orElse(null);
+    }
+    catch (IOException | RuntimeException e) {
+      return null;
+    }
+  }
+
+  @Nullable
+  private static String readTrimmed(@NotNull Path file) {
+    try {
+      String content = Files.readString(file).trim();
+      return content.isEmpty() ? null : content;
+    }
+    catch (IOException | RuntimeException e) {
+      return null;
+    }
+  }
 }

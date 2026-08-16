@@ -5,6 +5,8 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import lombok.CustomLog;
@@ -162,16 +164,25 @@ public class HaxelibCacheManager implements Disposable {
   private record SdkContext(@NotNull Sdk sdk, @Nullable VirtualFile moduleDir) {
   }
 
-  /** The module's SDK and directory; SDK/module lookups read the project model, so pooled callers take the read lock here. */
+  /**
+   * The module's SDK and directory. Model lookups take the read lock; the
+   * default-SDK fallback probes {@code haxe -help} (a process) and therefore
+   * runs OUTSIDE it.
+   */
   @Nullable
   private SdkContext sdkContext() {
-    return ReadAction.computeBlocking(() -> {
-      Sdk sdk = HaxelibSdkUtils.lookupSdk(module);
-      if (!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
-        return null;
-      }
-      return new SdkContext(sdk, ProjectUtil.guessModuleDir(module));
+    Sdk moduleSdk = ReadAction.computeBlocking(() -> {
+      ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
+      return rootManager == null ? null : rootManager.getSdk();
     });
+    Sdk sdk = moduleSdk != null
+              ? moduleSdk
+              : HaxelibSdkUtils.getDefaultSDK(HaxeBundle.message("haxe.haxelib.invalid.sdk.for.module", module.getName()));
+    if (!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
+      return null;
+    }
+    VirtualFile moduleDir = ReadAction.computeBlocking(() -> ProjectUtil.guessModuleDir(module));
+    return new SdkContext(sdk, moduleDir);
   }
 
   private static Map<String, Set<String>> readAvailableOnline(Sdk sdk) {

@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.ide.toolWindow.haxelib;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibLibraryInfo;
+import com.intellij.plugins.haxe.haxelib.HaxelibLocalDocs.GitCheckout;
 import java.util.List;
 import java.util.Set;
 import org.jetbrains.annotations.Nls;
@@ -32,6 +33,8 @@ final class HaxelibOverviewHtml {
   static String render(@NotNull String name,
                        @NotNull Set<String> installedVersions,
                        @Nullable String selectedVersion,
+                       @Nullable String devPath,
+                       @Nullable GitCheckout gitCheckout,
                        @Nullable HaxelibLibraryInfo info) {
     StringBuilder html = new StringBuilder("<html><body>");
     html.append("<h2>").append(StringUtil.escapeXmlEntities(name)).append("</h2>");
@@ -40,7 +43,7 @@ final class HaxelibOverviewHtml {
       html.append("<p>").append(StringUtil.escapeXmlEntities(info.description())).append("</p>");
     }
     appendFacts(html, info);
-    appendInstalled(html, installedVersions, selectedVersion);
+    appendInstalled(html, installedVersions, selectedVersion, devPath, gitCheckout);
     if (info != null) {
       appendReleases(html, info.releases());
     }
@@ -73,7 +76,9 @@ final class HaxelibOverviewHtml {
 
   private static void appendInstalled(@NotNull StringBuilder html,
                                       @NotNull Set<String> installedVersions,
-                                      @Nullable String selectedVersion) {
+                                      @Nullable String selectedVersion,
+                                      @Nullable String devPath,
+                                      @Nullable GitCheckout gitCheckout) {
     if (installedVersions.isEmpty()) return;
     html.append("<h3>").append(HaxeBundle.message("haxelib.explorer.installed.versions")).append("</h3><p>");
     boolean first = true;
@@ -86,6 +91,30 @@ final class HaxelibOverviewHtml {
       if (selected) html.append("</b>");
     }
     html.append("</p>");
+    appendPseudoVersions(html, devPath, gitCheckout);
+  }
+
+  /** What the dev/git pseudo-versions point at: the dev directory, the git branch/commit. */
+  private static void appendPseudoVersions(@NotNull StringBuilder html,
+                                           @Nullable String devPath,
+                                           @Nullable GitCheckout gitCheckout) {
+    if (devPath == null && gitCheckout == null) return;
+    html.append("<table>");
+    if (devPath != null) {
+      appendFact(html, HaxeBundle.message("haxelib.explorer.dev.path"), devPath);
+    }
+    if (gitCheckout != null) {
+      appendFact(html, HaxeBundle.message("haxelib.explorer.git.checkout"), gitCheckoutDisplay(gitCheckout));
+    }
+    html.append("</table>");
+  }
+
+  @NotNull
+  private static String gitCheckoutDisplay(@NotNull GitCheckout checkout) {
+    String commit = checkout.commit() == null ? null : StringUtil.first(checkout.commit(), 10, false);
+    if (checkout.branch() == null) return StringUtil.notNullize(commit);
+    if (commit == null) return checkout.branch();
+    return checkout.branch() + " @ " + commit;
   }
 
   private static void appendReleases(@NotNull StringBuilder html, @NotNull List<HaxelibLibraryInfo.Release> releases) {

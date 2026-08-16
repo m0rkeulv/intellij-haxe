@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.toolWindow.haxelib;
 
 import com.intellij.plugins.haxe.haxelib.HaxelibLibraryInfo;
+import com.intellij.plugins.haxe.haxelib.HaxelibLocalDocs.GitCheckout;
 import com.intellij.ui.BrowserHyperlinkListener;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
@@ -51,13 +52,16 @@ final class HaxelibDetailsPane {
   void showLibrary(@NotNull String name,
                    @NotNull Set<String> installedVersions,
                    @Nullable String selectedVersion,
+                   @Nullable String devPath,
+                   @Nullable GitCheckout gitCheckout,
                    @Nullable HaxelibLibraryInfo info,
                    @NotNull List<DocTab> docs) {
     tabs.removeAll();
     for (DocTab doc : docs) {
       tabs.addTab(doc.title(), htmlPane(doc.html(), doc.base()));
     }
-    String overviewHtml = HaxelibOverviewHtml.render(name, installedVersions, selectedVersion, info);
+    String overviewHtml =
+      HaxelibOverviewHtml.render(name, installedVersions, selectedVersion, devPath, gitCheckout, info);
     tabs.addTab(overviewTitle, htmlPane(overviewHtml, null));
     tabs.setSelectedIndex(0);
   }

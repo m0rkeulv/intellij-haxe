@@ -17,6 +17,7 @@ import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCacheManager;
@@ -607,9 +608,15 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     HaxelibCacheManager manager = cacheManager();
     AppExecutorUtil.getAppExecutorService().execute(() -> {
       HaxelibLibraryInfo info = manager == null ? null : manager.getLibraryInfo(row.name());
-      List<HaxelibDetailsPane.DocTab> docs = docsVersion == null ? List.of() : loadDocs(row.name(), docsVersion);
+      Path repoRoot = repositoryRoot();
+      List<HaxelibDetailsPane.DocTab> docs =
+        docsVersion == null || repoRoot == null ? List.of() : loadDocs(repoRoot, row.name(), docsVersion);
+      String devPath = row.dev() && repoRoot != null ? HaxelibLocalDocs.devPath(repoRoot, row.name()) : null;
+      HaxelibLocalDocs.GitCheckout gitCheckout =
+        row.git() && repoRoot != null ? HaxelibLocalDocs.gitCheckout(repoRoot, row.name()) : null;
       onUi(selectionGeneration, expected,
-           () -> details.showLibrary(row.name(), row.installedVersions(), row.selectedVersion(), info, docs));
+           () -> details.showLibrary(row.name(), row.installedVersions(), row.selectedVersion(),
+                                     devPath, gitCheckout, info, docs));
     });
   }
 
@@ -623,9 +630,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   }
 
   @NotNull
-  private List<HaxelibDetailsPane.DocTab> loadDocs(@NotNull String name, @NotNull String version) {
-    Path repoRoot = repositoryRoot();
-    if (repoRoot == null) return List.of();
+  private List<HaxelibDetailsPane.DocTab> loadDocs(@NotNull Path repoRoot, @NotNull String name, @NotNull String version) {
     Path directory = HaxelibLocalDocs.versionDirectory(repoRoot, name, version);
     if (directory == null) return List.of();
     List<HaxelibDetailsPane.DocTab> docs = new ArrayList<>();
@@ -678,7 +683,9 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     return ReadAction.nonBlocking(() -> {
       Module module = haxeModule();
       if (module == null) return null;
-      Sdk sdk = HaxelibSdkUtils.lookupSdk(module);
+      // haxeModule() guarantees a configured SDK; lookupSdk's fallback would probe a process
+      Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+      if (sdk == null) return null;
       VirtualFile moduleDir = ProjectUtil.guessModuleDir(module);
       VirtualFile root = HaxelibUtil.getLibraryBasePath(sdk, moduleDir);
       return root == null ? null : Path.of(root.getPath());
@@ -720,10 +727,12 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
 
   @Nullable
   private Module haxeModule() {
-    // module and SDK lookups read the project model - pooled callers need the read lock
+    // pure model reads under the lock; lookupSdk's default-SDK fallback
+    // probes `haxe -help` (a process) and must never run in here
     return ReadAction.computeBlocking(() -> {
       for (Module module : ModuleManager.getInstance(project).getModules()) {
-        if (HaxelibSdkUtils.isValidHaxeSdk(HaxelibSdkUtils.lookupSdk(module))) {
+        Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+        if (sdk != null && HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
           return module;
         }
       }
