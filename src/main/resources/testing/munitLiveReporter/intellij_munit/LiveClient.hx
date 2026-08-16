@@ -77,12 +77,22 @@ class LiveClient implements ITestResultClient {
 		// the runner waits for every client's completion callback before it
 		// reports the run finished - not calling it would hang the process
 		if (handler != null) handler(this);
+		announceHostedRunFinished(failCount + errorCount > 0);
 		// nothing on flash ends the process by itself; every service message
 		// is already flushed - only the runner's cosmetic summary is cut off
 		#if flash
 		FlashSupport.exit(0);
 		#end
 		return null;
+	}
+
+	// A BROWSER-hosted page has no process exit; the IDE ends the run when
+	// this line arrives (node/sys runs exit by themselves, flash through adl).
+	static function announceHostedRunFinished(failed:Bool):Void {
+		#if js
+		var proc:Dynamic = js.Syntax.code("typeof process !== 'undefined' ? process : null");
+		if (proc == null) printLine("##intellij-haxe[testRunFinished exit='" + (failed ? 1 : 0) + "']");
+		#end
 	}
 
 	function reportTest(result:TestResult, failureMessage:Null<String>, failureDetails:Null<String>,

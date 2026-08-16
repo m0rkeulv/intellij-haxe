@@ -25,6 +25,7 @@ class LiveReporter {
 	var rootOpen:Bool = false;
 	var openSuite:Null<String> = null;
 	var testStartTime:Float = 0;
+	var anyFailed:Bool = false;
 
 	public static function attach(runner:Runner, rootSuite:String):Void {
 		#if flash
@@ -88,9 +89,11 @@ class LiveReporter {
 			var reason = ignoreReason != null && ignoreReason != "" ? ignoreReason : "ignored";
 			printLine("##teamcity[testIgnored name='" + escape(name) + "' message='" + escape(reason) + "']");
 		} else if (failure != null) {
+			anyFailed = true;
 			printLine("##teamcity[testFailed name='" + escape(name) + "' message='" + escape(failure)
 				+ "' details='" + escape(failureDetails) + "']");
 		} else if (warning != null) {
+			anyFailed = true;
 			printLine("##teamcity[testFailed name='" + escape(name) + "' message='" + escape(warning) + "']");
 		}
 		printLine("##teamcity[testFinished name='" + escape(name) + "' duration='" + durationMs + "']");
@@ -102,10 +105,20 @@ class LiveReporter {
 			printLine("##teamcity[testSuiteFinished name='" + escape(rootSuite) + "']");
 			rootOpen = false;
 		}
+		announceHostedRunFinished(anyFailed);
 		// nothing on flash ends the process by itself; every line above is
 		// already flushed (adl forwards traces synchronously)
 		#if flash
 		FlashSupport.exit(0);
+		#end
+	}
+
+	// A BROWSER-hosted page has no process exit; the IDE ends the run when
+	// this line arrives (node/sys runs exit by themselves, flash through adl).
+	static function announceHostedRunFinished(failed:Bool):Void {
+		#if js
+		var proc:Dynamic = js.Syntax.code("typeof process !== 'undefined' ? process : null");
+		if (proc == null) printLine("##intellij-haxe[testRunFinished exit='" + (failed ? 1 : 0) + "']");
 		#end
 	}
 

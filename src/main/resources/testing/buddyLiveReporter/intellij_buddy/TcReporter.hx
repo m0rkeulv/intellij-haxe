@@ -36,7 +36,17 @@ class TcReporter implements buddy.reporting.Reporter {
 		if (rootSuite != "") printLine("##teamcity[testSuiteStarted name='" + escape(rootSuite) + "']");
 		for (suite in suites) reportSuite(suite);
 		if (rootSuite != "") printLine("##teamcity[testSuiteFinished name='" + escape(rootSuite) + "']");
+		announceHostedRunFinished(!status);
 		return resolveImmediately(suites);
+	}
+
+	// A BROWSER-hosted page has no process exit; the IDE ends the run when
+	// this line arrives (node/sys runs exit by themselves, flash through adl).
+	static function announceHostedRunFinished(failed:Bool):Void {
+		#if js
+		var proc:Dynamic = js.Syntax.code("typeof process !== 'undefined' ? process : null");
+		if (proc == null) printLine("##intellij-haxe[testRunFinished exit='" + (failed ? 1 : 0) + "']");
+		#end
 	}
 
 	function reportSuite(suite:Suite):Void {

@@ -39,6 +39,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.runner.debugger.browser.HaxeBrowserTestSupport;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -299,6 +300,11 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
         () -> HaxeTestLaunchPlanner.planFor(HaxeTestRunConfiguration.this));
       if (plan.hint() != null) {
         HaxeCommandNotifications.notify(getProject(), plan.hint(), NotificationType.INFORMATION);
+      }
+      if (plan.browserHosted()) {
+        // no debuggee process: the tests run in a served page whose console
+        // the host replays; the run ends on the reporter's completion sentinel
+        return HaxeBrowserTestSupport.createRunHost(getProject(), HaxeTestLaunchPlanner.browserWebRoot(plan));
       }
       GeneralCommandLine commandLine = new GeneralCommandLine(plan.command())
         .withWorkDirectory(plan.workDirectory());

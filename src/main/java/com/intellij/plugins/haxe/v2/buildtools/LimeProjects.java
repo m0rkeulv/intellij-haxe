@@ -169,6 +169,24 @@ public final class LimeProjects {
   /** The target flags whose packaged artifact is a swf, hosted under adl for test runs. */
   public static final Set<String> FLASH_FAMILY_TARGETS = Set.of("flash", "air");
 
+  /** The target flags whose packaged app runs in a BROWSER page, served and console-captured for test runs. */
+  public static final Set<String> BROWSER_TARGETS = Set.of("html5");
+
+  /**
+   * The html5 build's packaged web root ({@code <app path>/html5/bin}, lime's
+   * own index.html inside), or null for other targets or without an app path.
+   */
+  @Nullable
+  public static Path packagedWebRoot(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
+    if (!BROWSER_TARGETS.contains(targetFlag)) return null;
+    String appPath = StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin");
+    return Path.of(projectFile.getParent().getPath())
+      .resolve(appPath)
+      .resolve(targetFlag)
+      .resolve("bin")
+      .normalize();
+  }
+
   /** The packaged swf a flash/air build exports ({@code <app path>/<target>/bin/<app file>.swf}), or null without an app file. */
   @Nullable
   public static Path packagedSwf(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {

@@ -39,11 +39,12 @@ class TcReporter implements Reporter {
 				reportCase(result);
 			case SuiteFinish(result):
 				printLine("##teamcity[testSuiteFinished name='" + escape(result.info.name) + "']");
-			case BatchFinish(_):
+			case BatchFinish(result):
 				if (rootOpen) {
 					printLine("##teamcity[testSuiteFinished name='" + escape(rootSuite) + "']");
 					rootOpen = false;
 				}
+				announceHostedRunFinished(result.summary().failures.length > 0);
 				// nothing on flash ends the process by itself; every line
 				// above is already flushed
 				#if flash
@@ -103,6 +104,15 @@ class TcReporter implements Reporter {
 		untyped console.log(line);
 		#else
 		trace(line);
+		#end
+	}
+
+	// A BROWSER-hosted page has no process exit; the IDE ends the run when
+	// this line arrives (node/sys runs exit by themselves, flash through adl).
+	static function announceHostedRunFinished(failed:Bool):Void {
+		#if js
+		var proc:Dynamic = js.Syntax.code("typeof process !== 'undefined' ? process : null");
+		if (proc == null) printLine("##intellij-haxe[testRunFinished exit='" + (failed ? 1 : 0) + "']");
 		#end
 	}
 

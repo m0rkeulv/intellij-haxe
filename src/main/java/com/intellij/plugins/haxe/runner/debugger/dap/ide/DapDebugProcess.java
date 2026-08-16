@@ -443,9 +443,23 @@ public class DapDebugProcess extends XDebugProcess {
 
   private void handleOutput(OutputEvent output) {
     String text = output.getBody().getOutput();
-    if (text != null) {
-      print(text, "stderr".equals(output.getBody().getCategory()));
+    if (text == null) {
+      return;
     }
+    boolean stderr = "stderr".equals(output.getBody().getCategory());
+    if (backend.programOutputViaAdapter()) {
+      // the debuggee's real output rides the debug connection (a browser
+      // page's console): replaying it through the process handler lets the
+      // attached SM test console parse it - print() would bypass the
+      // converter. The hosted-run completion sentinel is control flow for
+      // the RUN lane; a debug session just drops it.
+      String replayed = HostedTestRunSentinel.strip(text);
+      if (!replayed.isEmpty()) {
+        processHandler.notifyTextAvailable(replayed, stderr ? ProcessOutputTypes.STDERR : ProcessOutputTypes.STDOUT);
+      }
+      return;
+    }
+    print(text, stderr);
   }
 
   /** Grey system-output line (e.g. an external adapter's own chatter). */

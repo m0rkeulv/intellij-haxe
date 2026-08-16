@@ -16,6 +16,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkBackend;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkDebugRunner;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
+import com.intellij.plugins.haxe.runner.debugger.browser.BrowserDebugBackend;
+import com.intellij.plugins.haxe.runner.debugger.browser.HaxeBrowserTestSupport;
 import com.intellij.plugins.haxe.runner.debugger.browser.NodeTestDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijBackend;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpDapBackend;
@@ -92,9 +94,12 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
                                        HashLinkDebugRunner.findFreePort(),
                                        sourceDirectories(configuration));
         case CPP -> new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS, sourceDirectories(configuration));
-        case JAVA_SCRIPT -> new NodeTestDebugBackend(Path.of(plan.command().get(0)),
-                                                     HashLinkDebugRunner.findFreePort(),
-                                                     plan.workDirectory());
+        case JAVA_SCRIPT -> plan.browserHosted()
+                            ? HaxeBrowserTestSupport.createBackend(configuration.getProject(),
+                                                                   HaxeTestLaunchPlanner.browserWebRoot(plan))
+                            : new NodeTestDebugBackend(Path.of(plan.command().get(0)),
+                                                       HashLinkDebugRunner.findFreePort(),
+                                                       plan.workDirectory());
         default -> new InterpDapBackend(VM_CONNECT_TIMEOUT_MILLIS);
       };
     } catch (IOException e) {
@@ -106,6 +111,10 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
   protected GeneralCommandLine createCommandLine(HaxeTestRunConfiguration configuration, DapBackend backend)
     throws ExecutionException {
     Plan plan = debuggablePlan(configuration);
+    if (backend instanceof BrowserDebugBackend) {
+      // the adapter launches the browser itself; nothing is spawned here
+      return null;
+    }
     if (backend instanceof HashLinkBackend hashLink) {
       return new GeneralCommandLine()
         .withExePath(hlRuntime(configuration, plan).toString())

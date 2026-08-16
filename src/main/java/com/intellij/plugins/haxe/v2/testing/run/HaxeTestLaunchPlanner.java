@@ -20,6 +20,7 @@ import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,7 +51,22 @@ final class HaxeTestLaunchPlanner {
               @Nullable String workDirectory,
               boolean singleStage,
               @NotNull HaxeTarget target,
-              @Nullable String hint) {
+              @Nullable String hint,
+              boolean browserHosted) {
+    /** The usual process-launching plan; a BROWSER-hosted plan (served page, no process) uses the canonical constructor. */
+    Plan(@NotNull List<String> command,
+         @Nullable String workDirectory,
+         boolean singleStage,
+         @NotNull HaxeTarget target,
+         @Nullable String hint) {
+      this(command, workDirectory, singleStage, target, hint, false);
+    }
+  }
+
+  /** A browser-hosted plan's served directory (its command's only element; index.html inside is the page). */
+  @NotNull
+  static Path browserWebRoot(@NotNull Plan plan) {
+    return Path.of(plan.command().get(0));
   }
 
   private HaxeTestLaunchPlanner() {
@@ -109,8 +125,9 @@ final class HaxeTestLaunchPlanner {
                                              @Nullable String filterPattern) {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
     String suiteName = "Target: " + limeTarget(targetFlag);
-    boolean flashTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag);
-    List<String> plain = frameworkArguments(project, file.getPath(), suiteName, filterPattern, flashTests);
+    boolean hostedTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag)
+                          || LimeProjects.BROWSER_TARGETS.contains(targetFlag);
+    List<String> plain = frameworkArguments(project, file.getPath(), suiteName, filterPattern, hostedTests);
     List<String> spelled = new ArrayList<>(limeSpelling(plain));
     if ("air".equals(targetFlag)) {
       spelled.addAll(airSwfVersionFlag(project));
@@ -150,12 +167,13 @@ final class HaxeTestLaunchPlanner {
                                                  @NotNull String buildFilePath,
                                                  @Nullable String suiteName,
                                                  @Nullable String filterPattern,
-                                                 boolean flashTests) {
+                                                 boolean hostedTests) {
     HaxeTestFramework framework = frameworkFor(project, buildFilePath);
-    // the adl-hosted flash lane depends on the injected reporter for its
-    // stdout output AND the exit call - the live-reporting toggle cannot
-    // opt a flash build out of it
-    boolean liveReporting = flashTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    // the hosted lanes depend on the injected reporter: adl-hosted flash for
+    // its stdout output AND the exit call, browser-hosted html5 for the
+    // console transport and the completion sentinel - the live-reporting
+    // toggle cannot opt a hosted build out of it
+    boolean liveReporting = hostedTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
     List<String> arguments =
       new ArrayList<>(framework.reportingArgs(suiteName, reporterClasspath(framework), liveReporting));
     arguments.addAll(framework.filterArgs(StringUtil.nullize(filterPattern, true)));
@@ -454,6 +472,16 @@ final class HaxeTestLaunchPlanner {
     if (artifact == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
     }
+    if (LimeProjects.BROWSER_TARGETS.contains(targetFlag)) {
+      // the single-run js runs in a browser page like the whole build (the
+      // openfl/lime code it carries expects the DOM, which node lacks); the
+      // generated harness beside the artifact is the served page
+      Path webRoot = HaxeTestSingleRuns.browserHarnessRoot(artifact);
+      if (webRoot == null) {
+        throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
+      }
+      return new Plan(List.of(webRoot.toString()), webRoot.toString(), false, HaxeTarget.JAVA_SCRIPT, null, true);
+    }
     List<String> command = singleRunCommand(project, file, artifact, target, nodeExecutable, debugLaunch);
     return new Plan(command, file.getParent().getPath(), false, target, null);
   }
@@ -496,18 +524,21 @@ final class HaxeTestLaunchPlanner {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
     String suiteName;
-    boolean flashTests;
+    boolean hostedTests;
     if (LimeProjects.isLimeFamily(type)) {
       String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
       suiteName = "Target: " + limeTarget(targetFlag);
-      flashTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag);
+      hostedTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag)
+                    || LimeProjects.BROWSER_TARGETS.contains(targetFlag);
     }
     else {
       suiteName = rootSuiteName(project, buildFilePath);
-      flashTests = isFlashHxml(project, buildFilePath);
+      hostedTests = isFlashHxml(project, buildFilePath);
     }
-    // the adl-hosted flash lane needs the injected reporter (exit + stdout)
-    boolean liveReporting = flashTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    // the hosted lanes need the injected reporter: adl-hosted flash for the
+    // exit call and stdout traces, browser-hosted html5 for the console
+    // transport and the completion sentinel
+    boolean liveReporting = hostedTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
     List<String> arguments = new ArrayList<>(
       framework.reportingArgs(suiteName, reporterClasspath(framework), liveReporting));
     if (singleRun.singleTest()) {
@@ -564,11 +595,21 @@ final class HaxeTestLaunchPlanner {
       List<String> command = flashCommand(project, file, swf, debugLaunch);
       return new Plan(command, swf.getParent().toString(), false, HaxeTarget.FLASH, null);
     }
+    if (LimeProjects.BROWSER_TARGETS.contains(targetFlag)) {
+      // the packaged output (lime's own index.html inside) is served and
+      // console-captured through the browser backend. Existence is NOT
+      // checked here: plans also answer configuration validation, which runs
+      // before the before-run compile ever produced the directory
+      Path webRoot = content == null ? null : LimeProjects.packagedWebRoot(file, content, targetFlag);
+      if (webRoot == null) {
+        throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", file.getName()));
+      }
+      return new Plan(List.of(webRoot.toString()), webRoot.toString(), false, HaxeTarget.JAVA_SCRIPT, null, true);
+    }
     Path binary = content == null ? null : LimeProjects.packagedBinary(file, content, targetFlag);
     if (binary == null) {
       boolean unrunnableTarget = !LimeProjects.HOST_LAUNCHABLE_TARGETS.contains(targetFlag);
       if (unrunnableTarget) {
-        // TODO Phase 3 remainder: html5 tests through the browser backend's CDP console capture
         throw new ExecutionException(HaxeBundle.message("haxe.test.config.unrunnable.target", targetFlag));
       }
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.app.file", file.getName()));

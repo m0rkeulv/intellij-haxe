@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.AdapterTargetsSmartStepHandler;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
@@ -277,6 +278,17 @@ public class BrowserDebugBackend implements DapBackend {
 
   @Override
   public void onConnected(DapDebugProcess process) {
+    startBackgroundOutput(line -> process.printSystem(line + "\n"));
+  }
+
+  /**
+   * Drains the adapter's buffered stdout (the launch reader must be consumed
+   * or the adapter can block on a full pipe) and routes the mux's attach/exit
+   * notes into [sink] — tagged {@code [adapter]}/{@code [js-debug]} lines.
+   * Called once after {@link #connect()}, by the debug process or the test
+   * run host.
+   */
+  public void startBackgroundOutput(Consumer<String> sink) {
     BufferedReader reader = adapterStdout;
     adapterStdout = null;
     if (reader != null) {
@@ -284,7 +296,7 @@ public class BrowserDebugBackend implements DapBackend {
         try (BufferedReader stdout = reader) {
           String line;
           while ((line = stdout.readLine()) != null) {
-            process.printSystem("[adapter] " + line + "\n");
+            sink.accept("[adapter] " + line);
           }
         } catch (IOException ignored) {
           // adapter ended
@@ -295,14 +307,20 @@ public class BrowserDebugBackend implements DapBackend {
     }
     JsDebugSessionMux mux = sessionMux;
     if (mux != null) {
-      // the mux owns the parent pumping and worker attachment; its
-      // attach/exit notes land in the console as grey system output
-      mux.setLogSink(line -> process.printSystem("[js-debug] " + line + "\n"));
+      // the mux owns the parent pumping and worker attachment
+      mux.setLogSink(line -> sink.accept("[js-debug] " + line));
     }
   }
 
   @Override
   public boolean requiresLaunchRequest() {
+    return true;
+  }
+
+  // a page's console has no process stdout: program output arrives as DAP
+  // output events and is replayed through the session's process handler
+  @Override
+  public boolean programOutputViaAdapter() {
     return true;
   }
 

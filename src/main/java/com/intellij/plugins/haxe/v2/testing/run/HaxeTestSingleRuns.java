@@ -211,6 +211,29 @@ final class HaxeTestSingleRuns {
     return generated == null ? null : outputFor(generated, target);
   }
 
+  /**
+   * Writes the one-page host for a BROWSER-hosted single run beside the js
+   * artifact and returns its directory (the served web root); null when the
+   * write fails. Lime's whole-build html5 output ships its own index.html —
+   * only the direct-haxe single-run compile needs this harness.
+   */
+  @Nullable
+  static Path browserHarnessRoot(@NotNull Path jsArtifact) {
+    Path directory = jsArtifact.getParent();
+    if (directory == null) return null;
+    String page = """
+      <!DOCTYPE html><html><head><meta charset="utf-8"></head>\
+      <body><script src="%s"></script></body></html>""".formatted(jsArtifact.getFileName());
+    try {
+      Files.createDirectories(directory);
+      Files.writeString(directory.resolve("index.html"), page);
+      return directory;
+    } catch (IOException e) {
+      log.warn("cannot write the browser test harness: " + e.getMessage());
+      return null;
+    }
+  }
+
   // Strips the section's entry point (--main/-x) and redirects its target
   // flag's output into the generated directory; everything else (classpaths,
   // defines, libs) passes through untouched.

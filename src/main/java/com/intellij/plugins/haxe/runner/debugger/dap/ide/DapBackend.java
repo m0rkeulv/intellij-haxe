@@ -267,6 +267,17 @@ public interface DapBackend extends Closeable {
     return false;
   }
 
+  /**
+   * Whether the debuggee's PROGRAM output rides the debug connection as DAP
+   * output events instead of a process's stdout (the browser targets: the
+   * page's console has no process). The debug process then replays those
+   * events through the session's process handler — an attached SM test
+   * console parses them — rather than printing them past the parser.
+   */
+  default boolean programOutputViaAdapter() {
+    return false;
+  }
+
   /** Appended to the "program exited before the debugger could attach" failure. */
   String startupHint();
 }

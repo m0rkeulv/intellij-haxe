@@ -1,0 +1,244 @@
+package com.intellij.plugins.haxe.runner.debugger.browser;
+
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeRoot;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.probe;
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.OutputEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+/**
+ * Wire probe for the BROWSER-hosted test lane: a REAL utest run with the
+ * IDE-injected live reporter, compiled to plain js and executed in a headless
+ * chromium page through js-debug — no breakpoints, console capture only.
+ * Pins what {@code BrowserTestRunHost} relies on:
+ *
+ * <ul>
+ *   <li>the reporter's {@code console.log} lines arrive as DAP output events
+ *       with the service messages intact at line starts;</li>
+ *   <li>the completion sentinel ({@code ##intellij-haxe[testRunFinished ...]})
+ *       arrives after the tree — the run-ending signal a page's missing exit
+ *       code is replaced by.</li>
+ * </ul>
+ *
+ * Skips when node/adapter/chromium/haxe (with the utest haxelib) are missing.
+ */
+@DisplayName("Browser debugger: browser test console capture (live)")
+public class BrowserTestCaptureLiveProbe {
+  private static final long TIMEOUT = 15_000;
+
+  private static final String CASE_HX = """
+    class ProbeCase extends utest.Test {
+    	function testPasses() {
+    		utest.Assert.isTrue(true);
+    	}
+    }
+    """;
+  private static final String MAIN_HX = """
+    class ProbeMain {
+    	static function main() {
+    		utest.UTest.run([new ProbeCase()]);
+    	}
+    }
+    """;
+
+  private Process adapter;
+  private int adapterPort;
+  private DapClient parent;
+
+  private static Path dapServerJs() {
+    return nodeRoot().resolve("adapters/js-debug-1.117.0/js-debug/src/dapDebugServer.js");
+  }
+
+  /** The repo's utest live reporter sources, compiled into the fixture exactly as the planner injects them. */
+  private static Path utestReporterRoot() {
+    return Path.of("../../src/main/resources/testing/utestLiveReporter").toAbsolutePath().normalize();
+  }
+
+  private static Path chromiumExe() {
+    String env = System.getenv("WEB_DEBUG_CHROMIUM_EXE");
+    if (env != null && !env.isBlank()) {
+      Path fromEnv = Path.of(env);
+      return Files.isRegularFile(fromEnv) ? fromEnv : null;
+    }
+    List<Path> candidates = new ArrayList<>();
+    String localAppData = System.getenv("LOCALAPPDATA");
+    if (localAppData != null && !localAppData.isBlank()) {
+      candidates.add(Path.of(localAppData, "Chromium/Application/chrome.exe"));
+      candidates.add(Path.of(localAppData, "Google/Chrome/Application/chrome.exe"));
+    }
+    candidates.add(Path.of("C:/Program Files/Google/Chrome/Application/chrome.exe"));
+    candidates.add(Path.of("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"));
+    candidates.add(Path.of("/usr/bin/chromium"));
+    candidates.add(Path.of("/usr/bin/google-chrome"));
+    for (Path path : candidates) {
+      if (Files.isRegularFile(path)) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  @BeforeEach
+  public void spawnAdapter() throws IOException {
+    Assumptions.assumeTrue(Files.isRegularFile(nodeExe()), "portable node not provisioned - skipping");
+    Assumptions.assumeTrue(Files.isRegularFile(dapServerJs()), "js-debug adapter not provisioned - skipping");
+    Assumptions.assumeTrue(chromiumExe() != null, "no chromium-family browser found - skipping");
+    Assumptions.assumeTrue(Files.isDirectory(utestReporterRoot()), "reporter sources not found - skipping");
+
+    adapterPort = LiveProbeUtil.freePort();
+    adapter = new ProcessBuilder(nodeExe().toString(), dapServerJs().toString(),
+                                 String.valueOf(adapterPort), "127.0.0.1")
+      .directory(dapServerJs().getParent().toFile())
+      .redirectErrorStream(true)
+      .start();
+
+    BufferedReader stdout = new BufferedReader(
+      new InputStreamReader(adapter.getInputStream(), StandardCharsets.UTF_8));
+    String line = stdout.readLine();
+    probe("[adapter] " + line);
+    assertNotNull(line, "adapter announced nothing (died?)");
+    assertTrue(line.contains("Debug server listening"), "unexpected announcement: " + line);
+
+    parent = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT);
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    if (parent != null) {
+      try {
+        parent.close();
+      } catch (IOException ignored) {
+      }
+    }
+    if (adapter != null) {
+      LiveProbeUtil.killTree(adapter);
+    }
+  }
+
+  @Test
+  @Timeout(120)
+  @DisplayName("utest reporter streams the protocol and the completion sentinel through the page console")
+  public void utestReporterStreamsTheProtocolAndTheCompletionSentinelThroughThePageConsole() throws Exception {
+    Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
+    Path fixture = Files.createTempDirectory("haxe-browser-tests");
+    Files.writeString(fixture.resolve("ProbeCase.hx"), CASE_HX);
+    Files.writeString(fixture.resolve("ProbeMain.hx"), MAIN_HX);
+    Files.writeString(fixture.resolve("index.html"), LiveProbeUtil.INDEX_HTML);
+    compileWithReporter(fixture);
+
+    String captured = driveAndCapture(fixture);
+    assertTrue(captured.contains("##teamcity[testStarted"),
+               "the reporter's service messages must reach the console capture: " + captured);
+    assertTrue(captured.contains("##intellij-haxe[testRunFinished exit='0']"),
+               "the completion sentinel must arrive after the tree: " + captured);
+  }
+
+  /** The planner's utest reporting set: teamcity defines + the reporter classpath + the runner patch. */
+  private static void compileWithReporter(Path fixture) throws Exception {
+    Process haxe = new ProcessBuilder(
+      "haxe", "-cp", fixture.toString(), "-lib", "utest",
+      "-cp", utestReporterRoot().toString(),
+      "-D", "teamcity", "-D", "teamcity_suite_name=Probe",
+      "--macro", "intellij_utest.Macro.init()",
+      "-main", "ProbeMain", "-js", fixture.resolve("app.js").toString(), "-debug")
+      .redirectErrorStream(true)
+      .start();
+    String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    if (!haxe.waitFor(60, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
+      throw new AssertionError("fixture compile failed:\n" + output);
+    }
+  }
+
+  /** Parent handshake, child session, configurationDone, then output capture until the sentinel (or timeout). */
+  private String driveAndCapture(Path fixture) throws Exception {
+    try (ContentHttpServer content = new ContentHttpServer(fixture)) {
+      assertTrue(parent.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "parent initialize");
+
+      Map<String, Object> launchConfig = new LinkedHashMap<>();
+      launchConfig.put("type", "pwa-chrome");
+      launchConfig.put("request", "launch");
+      launchConfig.put("name", "probe");
+      launchConfig.put("url", content.getBaseUrl());
+      launchConfig.put("webRoot", fixture.toString());
+      launchConfig.put("runtimeExecutable", chromiumExe().toString());
+      launchConfig.put("runtimeArgs", List.of("--headless=new"));
+      parent.sendRequestNoWait(ConfiguredLaunchRequest.of(launchConfig));
+
+      StartDebuggingRequest startDebugging = awaitStartDebugging(20_000);
+      assertNotNull(startDebugging, "no startDebugging reverse request");
+
+      try (DapClient child = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT)) {
+        assertTrue(child.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "child initialize");
+        child.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
+
+        StringBuilder captured = new StringBuilder();
+        long deadline = System.currentTimeMillis() + 60_000;
+        boolean configured = false;
+        while (System.currentTimeMillis() < deadline) {
+          Event event = child.pollEvent(100);
+          if (event instanceof InitializedEvent && !configured) {
+            configured = true;
+            child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
+          }
+          if (event instanceof OutputEvent output && output.getBody() != null
+              && output.getBody().getOutput() != null) {
+            captured.append(output.getBody().getOutput());
+            if (captured.toString().contains("##intellij-haxe[testRunFinished")) {
+              break;
+            }
+          }
+        }
+        return captured.toString();
+      }
+    }
+  }
+
+  private static InitializeRequest initializeRequest() {
+    InitializeRequest initialize = InitializeRequest.standard("chrome", true);
+    initialize.getArguments().setClientName("IntelliJ Haxe");
+    return initialize;
+  }
+
+  /** Answers reverse requests until startDebugging arrives; configurationDone on initialized. */
+  private StartDebuggingRequest awaitStartDebugging(long millis) throws Exception {
+    long deadline = System.currentTimeMillis() + millis;
+    while (System.currentTimeMillis() < deadline) {
+      Event event = parent.pollEvent(100);
+      if (event instanceof InitializedEvent) {
+        parent.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
+      }
+      Request incoming = parent.pollIncomingRequest(50);
+      if (incoming != null) {
+        parent.respond(incoming, true);
+        if (incoming instanceof StartDebuggingRequest start) {
+          return start;
+        }
+      }
+    }
+    return null;
+  }
+}

@@ -181,6 +181,37 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("lime html5 build plans a browser hosted run over the packaged web root")
+  public void testLimeHtml5BuildPlansABrowserHostedRunOverThePackagedWebRoot() throws ExecutionException {
+    String path = fixturePath("targets/lime-project.xml");
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "HTML5");
+    myFixture.addFileToProject("targets/export/html5/bin/index.html", "<html></html>");
+
+    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
+    assertTrue(plan.browserHosted(), "html5 tests run in a served browser page");
+    assertEquals(HaxeTarget.JAVA_SCRIPT, plan.target());
+    assertTrue(plan.command().get(0).replace('\\', '/').endsWith("export/html5/bin"),
+               "the packaged web root is what gets served: " + plan.command());
+  }
+
+  @Test
+  @DisplayName("html5 single run serves a generated harness beside the artifact")
+  public void testHtml5SingleRunServesAGeneratedHarnessBesideTheArtifact() throws Exception {
+    String path = fixturePath("targets/lime-project.xml");
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "HTML5");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
+
+    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
+    assertTrue(plan.browserHosted(), "the single-run js carries DOM-expecting lime code - browser-hosted");
+    Path harness = HaxeTestLaunchPlanner.browserWebRoot(plan).resolve("index.html");
+    assertTrue(Files.isRegularFile(harness), "generated harness expected: " + harness);
+    assertTrue(Files.readString(harness).contains("single.js"),
+               "the harness loads the redirected artifact");
+  }
+
+  @Test
   @DisplayName("single runs on nmml builds are refused")
   public void testSingleRunsOnNmmlBuildsAreRefused() {
     String path = fixturePath("targets/tests.nmml");
@@ -505,10 +536,10 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   public void testNonHostLimeTargetsAreRejected() {
     String path = fixturePath("targets/lime-project.xml");
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "HTML5");
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Android");
 
     assertThrows(ExecutionException.class, () -> HaxeTestLaunchPlanner.plan(getProject(), path, null, false),
-                 "html5 tests arrive with the browser/CDP work - until then the target is rejected");
+                 "mobile targets have no host to run tests on");
   }
 
   @Test
