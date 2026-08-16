@@ -287,6 +287,12 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     assertTrue(plan.command().get(2).endsWith("application.xml"), "generated descriptor expected: " + plan.command());
     assertTrue(plan.command().get(3).replace('\\', '/').endsWith("/bin"),
                "the content root is the swf's directory: " + plan.command());
+
+    Plan debug = HaxeTestLaunchPlanner.planForDebug(getProject(), path, null);
+    assertFalse(debug.command().contains("-nodebug"),
+                "a debug launch keeps adl's default mode - the -debug swf dials the waiting fdb: " + debug.command());
+    assertTrue(debug.command().get(1).endsWith("application.xml"),
+               "the descriptor follows adl directly in the debug shape: " + debug.command());
   }
 
   @Test
@@ -401,6 +407,11 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(limeFile, "Windows");
     assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), limePath),
                "lime desktop builds debug through the hxcpp lane");
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(limeFile, "Flash");
+    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), limePath),
+               "flash-family builds debug through the fdb lane");
+    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("targets/swf.hxml")),
+               "an hxml -swf build debugs through the fdb lane");
 
     String nmePath = fixturePath("targets/tests.nmml");
     VirtualFile nmeFile = LocalFileSystem.getInstance().findFileByPath(nmePath);

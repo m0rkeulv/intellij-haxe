@@ -12,14 +12,14 @@ import com.intellij.plugins.haxe.HaxeBundle;
  * and below), or a flex-less IDE throws NoClassDefFoundError instead of the
  * readable message.
  */
-final class FlexPluginGate {
+public final class FlexPluginGate {
 
   private static final PluginId FLEX_PLUGIN_ID = PluginId.getId("com.intellij.flex");
 
   private FlexPluginGate() {
   }
 
-  static void requireFlexPlugin() throws ExecutionException {
+  public static void requireFlexPlugin() throws ExecutionException {
     if (!PluginManagerCore.isLoaded(FLEX_PLUGIN_ID)) {
       throw new ExecutionException(HaxeBundle.message(
         PluginManagerCore.isDisabled(FLEX_PLUGIN_ID) ? "enable.flex.plugin" : "install.flex.plugin"));

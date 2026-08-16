@@ -43,10 +43,12 @@ import org.jetbrains.annotations.Nullable;
  * by {@code HaxeTestRunConfiguration.syncCompileStep()} builds with the
  * framework defines (plus the debug additions) before the session starts.
  */
-// TODO: js/flash test debugging — both route program output through the debug
-//  connection instead of process stdout (browser CDP console, flash fdb), so they
-//  need DAP/debugger output events replayed into the process handler before the
-//  SM console can see the TeamCity stream (see doc/test-runner-phase1-notes.md).
+// Flash tests debug through HaxeTestFlashDebugRunner (fdb, not DAP), which is
+// registered ahead of this runner and claims the flash-family configurations.
+// TODO: js test debugging — the browser adapters route program output through
+//  the CDP connection instead of process stdout, so they need debugger output
+//  events replayed into the process handler before the SM console can see the
+//  TeamCity stream (see doc/test-runner-phase1-notes.md).
 public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfiguration, DapBackend> {
   public static final String RUNNER_ID = "HaxeTestDebugRunner";
 

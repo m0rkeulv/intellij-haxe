@@ -22,16 +22,23 @@ import java.util.regex.Pattern;
 /// host with both. A plain `haxe -swf` artifact runs as AIR content
 /// unmodified; all it needs is the minimal generated application descriptor.
 /// adl's DEFAULT (debug-launch) mode swallows trace output, so `-nodebug` is
-/// required for a run whose stdout is the test protocol.
+/// required for a run whose stdout is the test protocol. A DEBUG launch
+/// keeps the default mode: the `-debug` swf dials the waiting fdb, which
+/// then carries the traces on ITS console instead of adl's stdout.
 final class AirTestHost {
 
   private AirTestHost() {
   }
 
-  /** {@code adl -nodebug <descriptor> <content root>} — the content root is the swf's own directory. */
+  /** {@code adl [-nodebug] <descriptor> <content root>} — the content root is the swf's own directory (see class doc for the modes). */
   @NotNull
-  static List<String> command(@NotNull String adlExecutable, @NotNull Path descriptor, @NotNull Path contentRoot) {
-    return List.of(adlExecutable, "-nodebug", descriptor.toString(), contentRoot.toString());
+  static List<String> command(@NotNull String adlExecutable,
+                              @NotNull Path descriptor,
+                              @NotNull Path contentRoot,
+                              boolean debugLaunch) {
+    return debugLaunch
+           ? List.of(adlExecutable, descriptor.toString(), contentRoot.toString())
+           : List.of(adlExecutable, "-nodebug", descriptor.toString(), contentRoot.toString());
   }
 
   /**

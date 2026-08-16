@@ -25,13 +25,14 @@ public final class HaxeDebugSupport {
 
   /**
    * Targets a TEST debug session has a lane for. Tests additionally debug the
-   * interpreter (the compile IS the debuggee — the eval lane), while js and
-   * flash tests stay deferred: both route program output through the DEBUG
-   * connection instead of process stdout, so the test console cannot parse
-   * their results yet.
+   * interpreter (the compile IS the debuggee — the eval lane) and flash (fdb
+   * hosts the swf under adl; the test console parses the trace lines fdb
+   * relays — see {@code HaxeTestFlashDebugRunner}). js tests stay deferred:
+   * the browser adapters route program output through the CDP connection and
+   * the test console cannot parse their results yet.
    */
   private static final Set<HaxeTarget> TEST_TARGETS =
-    Set.of(HaxeTarget.INTERP, HaxeTarget.HL, HaxeTarget.CPP);
+    Set.of(HaxeTarget.INTERP, HaxeTarget.HL, HaxeTarget.CPP, HaxeTarget.FLASH);
 
   private HaxeDebugSupport() {
   }
@@ -40,10 +41,6 @@ public final class HaxeDebugSupport {
     return target != null && PROGRAM_TARGETS.contains(target);
   }
 
-  // TODO flash test debug lane: fdb can host it (adl WITHOUT -nodebug routes
-  //  the swf to the debugger), but in that mode the TeamCity output arrives on
-  //  fdb's console instead of the run's stdout - the SM console needs to parse
-  //  the debug session's output before FLASH can join TEST_TARGETS
   public static boolean supportsTestDebug(@Nullable HaxeTarget target) {
     return target != null && TEST_TARGETS.contains(target);
   }

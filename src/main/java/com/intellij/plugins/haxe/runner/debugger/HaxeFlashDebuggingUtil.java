@@ -22,9 +22,12 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
+import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
+import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.lang.javascript.flex.projectStructure.model.FlexBuildConfiguration;
 import com.intellij.lang.javascript.flex.run.BCBasedRunnerParameters;
@@ -142,6 +145,68 @@ public class HaxeFlashDebuggingUtil {
       }
     };
     XSessionStartedResult started = startSession(module, env, starter);
+
+    // fdb is up and waiting; the -debug swf connects to it as the app starts
+    OSProcessHandler adlHandler = new OSProcessHandler(adlCommandLine);
+    tieTogether(started.getSession(), adlHandler);
+    adlHandler.startNotify();
+
+    return started.getRunContentDescriptor();
+  }
+
+  /**
+   * A flash-family TEST debug session: the AIR shape ({@link #getAirDescriptor}
+   * — fdb waits, adl launches the -debug tests swf) with the session console
+   * replaced by a bridge into the given SM test console. fdb relays the app's
+   * traces — the TeamCity protocol among them — onto the session console, and
+   * the bridge feeds every printed line into the sink the SM view parses (see
+   * {@link FdbTestConsoleBridge}). The sink terminates with the session, which
+   * finalizes the test tree.
+   */
+  public static RunContentDescriptor getAirTestDescriptor(final Module module,
+                                                          ExecutionEnvironment env,
+                                                          String flexSdkName,
+                                                          @NotNull GeneralCommandLine adlCommandLine,
+                                                          @NotNull List<String> sourceDirectories,
+                                                          @NotNull ConsoleView testConsole,
+                                                          @NotNull ProcessHandler testOutputSink) throws ExecutionException {
+    final Sdk flexSdk = FlexSdkUtils.findFlexOrFlexmojosSdk(flexSdkName);
+    if (flexSdk == null) {
+      throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", flexSdkName));
+    }
+
+    final FlexBuildConfiguration bc = new FakeFlexBuildConfiguration(flexSdk, adlCommandLine.getExePath());
+    final FdbTestConsoleBridge bridge = new FdbTestConsoleBridge(testConsole, testOutputSink);
+
+    XDebugProcessStarter starter = new XDebugProcessStarter() {
+      @NotNull
+      public XDebugProcess start(@NotNull final XDebugSession session) throws ExecutionException {
+        try {
+          BCBasedRunnerParameters params = new BCBasedRunnerParameters();
+          params.setModuleName(module.getName());
+          return new HaxeDebugProcess(session, bc, params, sourceDirectories) {
+            @Override
+            @NotNull
+            public ExecutionConsole createConsole() {
+              return bridge;
+            }
+          };
+        }
+        catch (IOException e) {
+          throw new ExecutionException(e.getMessage(), e);
+        }
+      }
+    };
+    XSessionStartedResult started = startSession(module, env, starter);
+    started.getSession().addSessionListener(new XDebugSessionListener() {
+      @Override
+      public void sessionStopped() {
+        // ends the synthetic test process so the SM tree finalizes
+        if (!testOutputSink.isProcessTerminated()) {
+          testOutputSink.destroyProcess();
+        }
+      }
+    });
 
     // fdb is up and waiting; the -debug swf connects to it as the app starts
     OSProcessHandler adlHandler = new OSProcessHandler(adlCommandLine);

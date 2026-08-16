@@ -256,14 +256,20 @@ final class HaxeTestLaunchPlanner {
 
   /** Whether the tests build's target can be debugged. Call inside a read action. */
   static boolean isDebuggableTarget(@NotNull Project project, @NotNull String buildFilePath) {
+    return HaxeDebugSupport.supportsTestDebug(launchTarget(project, buildFilePath));
+  }
+
+  /** The haxe target the tests build's current selection launches, or null when unresolvable. Call inside a read action. */
+  @Nullable
+  static HaxeTarget launchTarget(@NotNull Project project, @NotNull String buildFilePath) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null || !file.isValid()) return false;
+    if (file == null || !file.isValid()) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return false;
+    if (type == null) return null;
     HaxeTarget target = HaxeBuildSystem.of(type).launchTarget(project, new HaxeBuildFile(file, type));
     // an hxml without a target flag compiles-and-runs on the interpreter
-    if (target == null && type == HaxeBuildFileType.HXML) target = HaxeTarget.INTERP;
-    return HaxeDebugSupport.supportsTestDebug(target);
+    if (target == null && type == HaxeBuildFileType.HXML) return HaxeTarget.INTERP;
+    return target;
   }
 
   /** The lime HL package's bytecode ({@code hlboot.dat} beside the bundled runtime); null for any other plan shape. */
@@ -354,10 +360,10 @@ final class HaxeTestLaunchPlanner {
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported.type", file.getName()));
     }
     if (LimeProjects.isLimeFamily(type)) {
-      return limePlan(project, file, type);
+      return limePlan(project, file, type, debugLaunch);
     }
     if (type == HaxeBuildFileType.NMML) {
-      return nmePlan(project, file);
+      return nmePlan(project, file, debugLaunch);
     }
     if (type != HaxeBuildFileType.HXML) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.unsupported.type", file.getName()));
@@ -466,7 +472,7 @@ final class HaxeTestLaunchPlanner {
       case JAVA -> jvmCommand(artifact, target);
       case JAVA_SCRIPT -> nodeCommand(artifact, nodeExecutable);
       case CPP -> List.of(singleRunCppBinary(project, file, artifact, debugLaunch).toString());
-      case FLASH -> adlCommand(project, artifact);
+      case FLASH -> adlCommand(project, artifact, debugLaunch);
       default -> throw unrunnableTarget(target);
     };
   }
@@ -546,7 +552,8 @@ final class HaxeTestLaunchPlanner {
   @NotNull
   private static Plan limePlan(@NotNull Project project,
                                @NotNull VirtualFile file,
-                               @NotNull HaxeBuildFileType type) throws ExecutionException {
+                               @NotNull HaxeBuildFileType type,
+                               boolean debugLaunch) throws ExecutionException {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
     String content = HaxeBuildFileInspector.loadText(file);
     if (LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag)) {
@@ -554,7 +561,8 @@ final class HaxeTestLaunchPlanner {
       if (swf == null) {
         throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.app.file", file.getName()));
       }
-      return new Plan(flashCommand(project, file, swf), swf.getParent().toString(), false, HaxeTarget.FLASH, null);
+      List<String> command = flashCommand(project, file, swf, debugLaunch);
+      return new Plan(command, swf.getParent().toString(), false, HaxeTarget.FLASH, null);
     }
     Path binary = content == null ? null : LimeProjects.packagedBinary(file, content, targetFlag);
     if (binary == null) {
@@ -571,7 +579,9 @@ final class HaxeTestLaunchPlanner {
 
   /** An nmml tests build: compile through the nme tool, launch the packaged desktop/neko artifact. */
   @NotNull
-  private static Plan nmePlan(@NotNull Project project, @NotNull VirtualFile file) throws ExecutionException {
+  private static Plan nmePlan(@NotNull Project project,
+                              @NotNull VirtualFile file,
+                              boolean debugLaunch) throws ExecutionException {
     String targetFlag = NmeProjects.selectedTargetFlag(project, file);
     String content = HaxeBuildFileInspector.loadText(file);
     String appFile = content == null ? null : ProjectXmlParser.parseAppFile(content);
@@ -588,7 +598,8 @@ final class HaxeTestLaunchPlanner {
       .resolve(artifact.relativeOutput())
       .normalize();
     if (artifact.target() == HaxeTarget.FLASH) {
-      return new Plan(flashCommand(project, file, binary), binary.getParent().toString(), false, HaxeTarget.FLASH, null);
+      List<String> command = flashCommand(project, file, binary, debugLaunch);
+      return new Plan(command, binary.getParent().toString(), false, HaxeTarget.FLASH, null);
     }
     return new Plan(List.of(binary.toString()), binary.getParent().toString(), false, artifact.target(), null);
   }
@@ -638,7 +649,7 @@ final class HaxeTestLaunchPlanner {
       case JAVA -> jvmCommand(artifact, target);
       case JAVA_SCRIPT -> nodeCommand(artifact, nodeExecutable);
       case CPP -> List.of(cppExecutable(project, file, artifact, debugLaunch).toString());
-      case FLASH -> flashCommand(project, file, artifact);
+      case FLASH -> flashCommand(project, file, artifact, debugLaunch);
       default -> throw unrunnableTarget(target);
     };
     String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
@@ -727,23 +738,28 @@ final class HaxeTestLaunchPlanner {
   @NotNull
   private static List<String> flashCommand(@NotNull Project project,
                                            @NotNull VirtualFile file,
-                                           @NotNull Path artifact) throws ExecutionException {
+                                           @NotNull Path artifact,
+                                           boolean debugLaunch) throws ExecutionException {
     HaxeTestFramework framework = frameworkFor(project, file.getPath());
     if (!framework.supportsFlash()) {
       throw new ExecutionException(
         HaxeBundle.message("haxe.test.config.framework.no.flash", framework.libraryName()));
     }
-    return adlCommand(project, artifact);
+    return adlCommand(project, artifact, debugLaunch);
   }
 
   /**
    * Flash-family tests run under {@code adl -nodebug} (see {@link AirTestHost}):
-   * native trace reaches stdout and the injected reporter exits the app.
-   * Requires a Flex/AIR SDK (the runtimes chain) or an AIR_SDK environment
-   * variable pointing at one.
+   * native trace reaches stdout and the injected reporter exits the app. A
+   * DEBUG launch keeps adl's default mode instead - the {@code -debug} swf
+   * dials the waiting fdb, and the traces arrive on fdb's console. Requires
+   * a Flex/AIR SDK (the runtimes chain) or an AIR_SDK environment variable
+   * pointing at one.
    */
   @NotNull
-  private static List<String> adlCommand(@NotNull Project project, @NotNull Path artifact) throws ExecutionException {
+  private static List<String> adlCommand(@NotNull Project project,
+                                         @NotNull Path artifact,
+                                         boolean debugLaunch) throws ExecutionException {
     if (!artifact.toString().toLowerCase(Locale.ROOT).endsWith(".swf")) {
       throw unrunnableTarget(HaxeTarget.FLASH);
     }
@@ -753,7 +769,7 @@ final class HaxeTestLaunchPlanner {
     }
     Path descriptor = AirTestHost.descriptorFor(artifact, AirTestHost.namespaceVersion(Path.of(adl)));
     Path contentRoot = artifact.getParent() != null ? artifact.getParent() : artifact;
-    return AirTestHost.command(adl, descriptor, contentRoot);
+    return AirTestHost.command(adl, descriptor, contentRoot, debugLaunch);
   }
 
   @NotNull
