@@ -14,6 +14,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
@@ -36,6 +37,10 @@ public final class HaxeCommandRunner {
                          @NotNull String presentableName,
                          @NotNull List<String> command,
                          @Nullable String workDirectory) {
+    // the command comes from the project's build configuration - project code
+    if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.execute.command"))) {
+      return;
+    }
     HaxeUnsavedDocuments.saveAll();
     GeneralCommandLine commandLine = new GeneralCommandLine(command)
       .withWorkDirectory(workDirectory != null ? workDirectory : project.getBasePath());

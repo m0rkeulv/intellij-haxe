@@ -189,6 +189,15 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     Project project = configuration.getProject();
     boolean debug = DefaultDebugExecutor.EXECUTOR_ID.equals(environment.getExecutor().getId());
 
+    // safe mode blocks run configurations platform-side; this is the backstop
+    // for any launch path that slips through - no dialog off the EDT
+    if (!HaxeProjectTrust.isTrusted(project)) {
+      HaxeCommandNotifications.notify(project, getName(),
+                                      HaxeDebuggerBundle.message("haxe.before.run.untrusted"),
+                                      NotificationType.ERROR);
+      return false;
+    }
+
     HaxeUnsavedDocuments.saveAll();
     // test compiles derive their arguments at LAUNCH - the task's stored
     // snapshot goes stale when the framework/reporter wiring evolves. A

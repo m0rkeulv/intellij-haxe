@@ -91,6 +91,11 @@ public final class HaxeNmeProjectInfoService implements Disposable {
                                         @NotNull String targetFlag,
                                         @Nullable String preferredSdkName,
                                         @NotNull Runnable onUpdated) {
+    // prepare runs the nme tool from the project's local .haxelib and
+    // evaluates the project build description - project code
+    if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
+      return null;
+    }
     String haxelibPath = HaxeToolPathResolver.resolveHaxelibExecutable(project, preferredSdkName);
     Key key = new Key(buildFile.file().getPath(), targetFlag, haxelibPath);
     long stamp = buildFile.file().getModificationStamp();

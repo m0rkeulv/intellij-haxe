@@ -9,6 +9,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeReferenceExpression;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -101,6 +102,10 @@ public class HaxeGeneratedPreviewGotoHandler implements GotoDeclarationHandler {
     @Override
     public void navigate(boolean requestFocus) {
       Project project = blueprintMember.getProject();
+      // the dump is a full compile - macros run
+      if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.generated.preview"))) {
+        return;
+      }
       String title = HaxeBundle.message("haxe.generated.preview.progress.title");
       Task.Backgroundable dumpTask = new Task.Backgroundable(project, title, true) {
         @Override

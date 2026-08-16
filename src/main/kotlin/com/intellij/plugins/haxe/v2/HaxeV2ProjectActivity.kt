@@ -8,10 +8,13 @@ import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.plugins.haxe.util.HaxeModuleDetection
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFilesProjectAware
 import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectSync
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust
 import com.intellij.plugins.haxe.v2.buildtools.HaxeSourceRootsInitializer
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches
 
 /**
  * Registers the v2 build file watcher so changed hxml/project.xml files show the
@@ -31,6 +34,21 @@ class HaxeV2ProjectActivity : ProjectActivity {
     HaxeSourceRootsInitializer.initialize(project)
     initializeActiveBuildFile(project)
     applyEffectiveSdks(project)
+    rehydrateWhenTrusted(project)
+  }
+
+  /**
+   * An untrusted project opens with every project-code-executing evaluation
+   * skipped (see HaxeProjectTrust); granting trust re-runs the same
+   * re-hydration the reload icon does, so the project springs to life
+   * without a reopen.
+   */
+  private fun rehydrateWhenTrusted(project: Project) {
+    HaxeProjectTrust.whenTrusted(project) {
+      HaxeProjectSync.sync(project) {
+        HaxeCompilerCaches.clearAndRehighlight(project, "haxe: project trusted")
+      }
+    }
   }
 
   /**

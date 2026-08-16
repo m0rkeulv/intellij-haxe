@@ -71,6 +71,12 @@ public final class HaxeProjectTaskRunner extends ProjectTaskRunner {
         promise.setResult(TaskRunnerResults.ABORTED);
         return;
       }
+      // the build commands come from the project's configuration and the
+      // compile runs macros - project code
+      if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.build"))) {
+        promise.setResult(TaskRunnerResults.ABORTED);
+        return;
+      }
       ConsoleView console = TextConsoleBuilderFactory.getInstance()
         .createBuilder(project)
         .getConsole();

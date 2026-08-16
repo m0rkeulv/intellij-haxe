@@ -106,6 +106,11 @@ public final class HaxeCompilationServerManager implements Disposable {
     if (!settings.isCompilationServerEnabled()) {
       return -1;
     }
+    // every compile against the server runs project macros; an untrusted
+    // project gets no server (clients then behave as if it were disabled)
+    if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
+      return -1;
+    }
     String exePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
     ServerInstance instance = servers.get(exePath);
     if (instance == null) {
@@ -194,6 +199,11 @@ public final class HaxeCompilationServerManager implements Disposable {
     }
     stopInstanceLocked(instance);
     clearServerDerivedState(id);
+    // backstop for callers bypassing ensureRunning - the console actions ask
+    // for trust on the EDT before reaching here
+    if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
+      return;
+    }
     startLocked(instance);
   }
 

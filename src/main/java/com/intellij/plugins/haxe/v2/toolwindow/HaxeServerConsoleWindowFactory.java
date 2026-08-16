@@ -26,6 +26,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager.ServerInfo;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager.ServerOutputListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
 import com.intellij.ui.JBSplitter;
@@ -230,6 +231,9 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
         ShowSettingsUtil.getInstance().showSettingsDialog(project, HaxeBuildToolsConfigurable.class);
         return;
       }
+      if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.server.start"))) {
+        return;
+      }
       // process creation must stay off the EDT
       AppExecutorUtil.getAppExecutorService()
         .execute(() -> HaxeCompilationServerManager.getInstance(project).ensureRunning(null));
@@ -258,6 +262,9 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
+      if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.server.start"))) {
+        return;
+      }
       // restartServer on a dead instance is a plain start; process creation must stay off the EDT
       AppExecutorUtil.getAppExecutorService()
         .execute(() -> HaxeCompilationServerManager.getInstance(project).restartServer(serverId));
@@ -286,6 +293,9 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
+      if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.server.start"))) {
+        return;
+      }
       // process creation must stay off the EDT
       AppExecutorUtil.getAppExecutorService()
         .execute(() -> HaxeCompilationServerManager.getInstance(project).restartServer(serverId));

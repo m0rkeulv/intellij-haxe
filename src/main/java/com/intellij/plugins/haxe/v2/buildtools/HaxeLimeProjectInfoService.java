@@ -79,6 +79,12 @@ public final class HaxeLimeProjectInfoService implements Disposable {
                                                @NotNull String targetFlag,
                                                @Nullable String preferredSdkName,
                                                @NotNull Runnable onUpdated) {
+    // evaluation executes project code: hxp scripts run via haxe --run, and
+    // the lime/openfl display fallback runs the tool from the project's
+    // local .haxelib - consumers fall back to declared XML values
+    if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
+      return null;
+    }
     String haxelibPath = HaxeToolPathResolver.resolveHaxelibExecutable(project, preferredSdkName);
     String haxePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
     Key key = new Key(buildFile.file().getPath(), targetFlag, haxelibPath);

@@ -474,7 +474,10 @@ final class HaxeToolWindowModelBuilder {
     boolean running = port > 0;
 
     String display;
-    if (!projectEnabled) {
+    if (!HaxeProjectTrust.isTrusted(project)) {
+      display = HaxeBundle.message("haxe.trust.toolwindow.hint");
+    }
+    else if (!projectEnabled) {
       display = HaxeBundle.message("haxe.toolwindow.server.disabled.project");
     }
     else if (!moduleUses) {
