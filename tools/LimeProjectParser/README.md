@@ -57,11 +57,15 @@ Pseudo-targets that are not platforms of their own (`hl`, `neko`, `cppia`,
 `java`, `cs`) map to the host platform with a target flag set — the same
 mapping lime's CommandLineTools applies.
 
+## Plugin integration
+
+`HaxeLimeProjectInfoService` invokes the bundled jar as its PRIMARY path
+(`--target/--haxe/--haxelib` plus seed defines), falling back to
+`haxelib run lime|openfl display` when the jar is missing or fails; the root
+build bundles the jar into the plugin distribution.
+
 ## Planned
 
-- Plugin integration: `HaxeLimeProjectInfoService` invoking the jar (with a
-  seed-define builder for target/platform/tool-version defines) instead of
-  `haxelib run lime display`.
 - Validation lane in the compat matrix comparing this tool's output against
   real `lime display` across lime versions, so semantic drift turns into a red
   lane instead of a user bug report.
