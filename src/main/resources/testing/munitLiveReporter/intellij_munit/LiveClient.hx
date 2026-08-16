@@ -138,6 +138,11 @@ class LiveClient implements ITestResultClient {
 		Sys.print("\n" + line + "\n");
 		#elseif flash
 		flash.Lib.trace(line);
+		#elseif js
+		// console.log reaches node's stdout and the browser console alike
+		// (each call is its own line, so no unfinished glyph line to close);
+		// the trace fallback would prefix every line with its own position
+		untyped console.log(line);
 		#else
 		trace(line);
 		#end

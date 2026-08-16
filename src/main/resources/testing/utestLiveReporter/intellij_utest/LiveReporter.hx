@@ -134,6 +134,10 @@ class LiveReporter {
 		Sys.println(line);
 		#elseif flash
 		flash.Lib.trace(line);
+		#elseif js
+		// console.log reaches node's stdout and the browser console alike;
+		// the trace fallback would prefix every line with its own position
+		untyped console.log(line);
 		#else
 		trace(line);
 		#end

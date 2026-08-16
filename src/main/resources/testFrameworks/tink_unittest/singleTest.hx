@@ -10,6 +10,21 @@ class IjSingleRun {
 			for (caze in suite.cases)
 				if (caze.info.pos.methodName == "${TEST_METHOD}")
 					caze.include = true;
-		tink.testrunner.Runner.run(batch).handle(tink.testrunner.Runner.exit);
+		tink.testrunner.Runner.run(batch).handle(exitHost);
+	}
+
+	// tink's own Runner.exit throws "not supported" on plain js (its exit
+	// helper only knows the travix/nodejs/phantom hosts); a node-hosted
+	// plain-js build reaches the runtime through the process global instead
+	static function exitHost(result:tink.testrunner.Result.BatchResult):Void {
+		var code:Int = result.summary().failures.length;
+		#if (sys || nodejs)
+		Sys.exit(code);
+		#elseif js
+		var proc:Dynamic = js.Syntax.code("typeof process !== 'undefined' ? process : null");
+		if (proc != null) proc.exit(code);
+		#else
+		tink.testrunner.Runner.exit(result);
+		#end
 	}
 }
