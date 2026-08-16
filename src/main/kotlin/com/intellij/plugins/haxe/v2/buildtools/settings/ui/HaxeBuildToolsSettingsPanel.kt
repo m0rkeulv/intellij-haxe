@@ -2,10 +2,8 @@ package com.intellij.plugins.haxe.v2.buildtools.settings.ui
 
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.plugins.haxe.HaxeBundle
+import com.intellij.plugins.haxe.config.sdk.ui.FlexSdkSelector
 import com.intellij.plugins.haxe.config.sdk.ui.executableField
-import com.intellij.plugins.haxe.config.sdk.ui.flexSdkCombo
-import com.intellij.plugins.haxe.config.sdk.ui.selectFlexSdk
-import com.intellij.plugins.haxe.config.sdk.ui.selectedFlexSdk
 import com.intellij.plugins.haxe.config.sdk.ui.setInheritedDefault
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver.InheritedRuntimeDefaults
 import com.intellij.ui.components.JBCheckBox
@@ -13,7 +11,6 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.CollapsibleRow
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JComponent
 
@@ -32,7 +29,7 @@ class HaxeBuildToolsSettingsPanel {
   private val hashlinkField = executableField(HaxeBundle.message("haxe.build.tools.hashlink.chooser.title"))
   private val nodeField = executableField(HaxeBundle.message("haxe.build.tools.node.chooser.title"))
   private val flashPlayerField = executableField(HaxeBundle.message("haxe.build.tools.flash.player.chooser.title"))
-  private val flexSdkComboBox = flexSdkCombo(HaxeBundle.message("haxe.build.tools.flex.sdk.auto"))
+  private val flexSdkSelector = FlexSdkSelector(HaxeBundle.message("haxe.build.tools.flex.sdk.auto"))
   private val serverEnabledCheckBox = JBCheckBox(HaxeBundle.message("haxe.build.tools.server.enabled"))
   private val serverPortField = JBTextField()
   private val serverArgumentsField = JBTextField()
@@ -69,7 +66,7 @@ class HaxeBuildToolsSettingsPanel {
           cell(flashPlayerField).align(AlignX.FILL)
         }
         row(HaxeBundle.message("haxe.build.tools.flex.sdk")) {
-          cell(flexSdkComboBox)
+          cell(flexSdkSelector.getComponent())
         }
         row {
           comment(HaxeBundle.message("haxe.build.tools.runtime.overrides.hint"))
@@ -120,7 +117,7 @@ class HaxeBuildToolsSettingsPanel {
     val emptyText = defaults.flexSdkName
                       ?.let { HaxeBundle.message("haxe.build.tools.flex.sdk.inherited", it) }
                     ?: HaxeBundle.message("haxe.build.tools.flex.sdk.auto")
-    flexSdkComboBox.renderer = textListCellRenderer(emptyText) { it }
+    flexSdkSelector.setEmptyText(emptyText)
   }
 
   fun reset(availableSdkNames: Set<String>, selectedSdkName: String?, haxelibPath: String) {
@@ -149,7 +146,7 @@ class HaxeBuildToolsSettingsPanel {
     hashlinkField.text = hashlinkPath
     nodeField.text = nodePath
     flashPlayerField.text = flashPlayerPath
-    selectFlexSdk(flexSdkComboBox, flexSdkName)
+    flexSdkSelector.setSelectedName(flexSdkName)
 
     val anyOverride = nekoPath.isNotBlank() || hashlinkPath.isNotBlank() || nodePath.isNotBlank()
                       || flashPlayerPath.isNotBlank() || flexSdkName.isNotBlank()
@@ -189,5 +186,5 @@ class HaxeBuildToolsSettingsPanel {
 
   fun getFlashPlayerPath(): String = flashPlayerField.text.trim()
 
-  fun getFlexSdkName(): String = selectedFlexSdk(flexSdkComboBox)
+  fun getFlexSdkName(): String = flexSdkSelector.getSelectedName()
 }

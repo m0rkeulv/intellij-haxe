@@ -5,11 +5,10 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
-import com.intellij.plugins.haxe.config.sdk.ui.HaxeRuntimeSettingsControls;
+import com.intellij.plugins.haxe.config.sdk.ui.FlexSdkSelector;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import javax.swing.JComponent;
@@ -25,7 +24,7 @@ public final class AirRunConfigurationEditor extends SettingsEditor<AirRunConfig
   private final ModulesComboBox moduleCombo = new ModulesComboBox();
   private final TextFieldWithBrowseButton descriptorField = new TextFieldWithBrowseButton();
   private final TextFieldWithBrowseButton contentRootField = new TextFieldWithBrowseButton();
-  private final ComboBox<String> flexSdkCombo;
+  private final FlexSdkSelector flexSdkSelector;
   private final JBTextField adlOptionsField = new JBTextField();
   private final JBTextField programParametersField = new JBTextField();
 
@@ -38,7 +37,7 @@ public final class AirRunConfigurationEditor extends SettingsEditor<AirRunConfig
       .withTitle(HaxeDebuggerBundle.message("air.runner.editor.content.root.chooser")));
 
     String fromRuntimes = HaxeDebuggerBundle.message("flash.runner.editor.flex.sdk.from.haxe.sdk");
-    flexSdkCombo = HaxeRuntimeSettingsControls.flexSdkCombo(fromRuntimes);
+    flexSdkSelector = new FlexSdkSelector(fromRuntimes);
   }
 
   @Override
@@ -47,7 +46,7 @@ public final class AirRunConfigurationEditor extends SettingsEditor<AirRunConfig
     moduleCombo.setSelectedModule(configuration.getConfigurationModule().getModule());
     descriptorField.setText(configuration.getDescriptorPath());
     contentRootField.setText(configuration.getContentRootPath());
-    HaxeRuntimeSettingsControls.selectFlexSdk(flexSdkCombo, configuration.getFlexSdkName());
+    flexSdkSelector.setSelectedName(configuration.getFlexSdkName());
     adlOptionsField.setText(configuration.getAdlOptions());
     programParametersField.setText(configuration.getProgramParameters());
   }
@@ -57,7 +56,7 @@ public final class AirRunConfigurationEditor extends SettingsEditor<AirRunConfig
     configuration.setModule(moduleCombo.getSelectedModule());
     configuration.setDescriptorPath(descriptorField.getText().trim());
     configuration.setContentRootPath(contentRootField.getText().trim());
-    configuration.setFlexSdkName(HaxeRuntimeSettingsControls.selectedFlexSdk(flexSdkCombo));
+    configuration.setFlexSdkName(flexSdkSelector.getSelectedName());
     configuration.setAdlOptions(adlOptionsField.getText().trim());
     configuration.setProgramParameters(programParametersField.getText().trim());
   }
@@ -69,7 +68,7 @@ public final class AirRunConfigurationEditor extends SettingsEditor<AirRunConfig
       .addLabeledComponent(HaxeDebuggerBundle.message("air.runner.editor.descriptor"), descriptorField)
       .addLabeledComponent(HaxeDebuggerBundle.message("air.runner.editor.content.root"), contentRootField)
       .addTooltip(HaxeDebuggerBundle.message("air.runner.editor.content.root.hint"))
-      .addLabeledComponent(HaxeDebuggerBundle.message("air.runner.editor.flex.sdk"), flexSdkCombo)
+      .addLabeledComponent(HaxeDebuggerBundle.message("air.runner.editor.flex.sdk"), flexSdkSelector.getComponent())
       .addLabeledComponent(HaxeDebuggerBundle.message("air.runner.editor.adl.options"), adlOptionsField)
       .addLabeledComponent(HaxeDebuggerBundle.message("air.runner.editor.program.parameters"), programParametersField)
       .getPanel();

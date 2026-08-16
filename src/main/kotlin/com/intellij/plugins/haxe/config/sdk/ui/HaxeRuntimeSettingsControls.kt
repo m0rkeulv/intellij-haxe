@@ -4,15 +4,20 @@ package com.intellij.plugins.haxe.config.sdk.ui
 
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.projectRoots.ProjectJdkTable
+import com.intellij.openapi.projectRoots.SdkType
+import com.intellij.openapi.projectRoots.ui.ProjectJdksEditor
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.ui.ComponentWithBrowseButton
 import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.plugins.haxe.HaxeBundle
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.fields.ExtendableTextField
-import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
+import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import java.util.Locale
 import javax.swing.DefaultComboBoxModel
 import org.jetbrains.annotations.Nls
@@ -42,39 +47,78 @@ fun pathDetectedExecutable(executableName: String): String? =
 
 /**
  * A Flex/AIR SDK selector: entries come from the IDE's SDK table, matched by
- * type name so callers never depend on the (optional) Flash plugin's classes.
- * The null first item means "not set" and renders as [emptyText]; without any
+ * type name so this control never depends on the (optional) Flash plugin's
+ * classes. Entries render with their SDK type's icon; a stored name whose
+ * entry is gone stays visible in RED instead of being silently dropped. The
+ * null first item means "not set" and renders as [emptyText]; without any
  * matching entry the combo is disabled with a tooltip explaining where the
- * entries come from.
+ * entries come from. The browse button opens the platform SDK editor, so an
+ * entry can be added or fixed in place — the list reloads when it closes.
  */
-fun flexSdkCombo(@Nls emptyText: String): ComboBox<String?> {
-  val combo = ComboBox<String?>()
-  combo.renderer = textListCellRenderer(emptyText) { it }
+class FlexSdkSelector(@Nls emptyText: String) {
+  private val combo = ComboBox<String?>()
+  private val component = ComponentWithBrowseButton(combo, null)
 
-  val model = DefaultComboBoxModel<String?>()
-  model.addElement(null)
-  for (sdk in ProjectJdkTable.getInstance().allJdks) {
-    if (sdk.sdkType.name.lowercase(Locale.ROOT).contains("flex")) {
-      model.addElement(sdk.name)
+  init {
+    setEmptyText(emptyText)
+    reload(null)
+    component.addActionListener { openSdkEditor() }
+  }
+
+  fun getComponent(): ComponentWithBrowseButton<ComboBox<String?>> = component
+
+  /** What the "not set" item reads as (panels showing an inherited value update it live). */
+  fun setEmptyText(@Nls emptyText: String) {
+    combo.renderer = listCellRenderer(emptyText) {
+      val name = value
+      if (name != null) {
+        val sdk = ProjectJdkTable.getInstance().findJdk(name)
+        if (sdk == null) {
+          text(name) { foreground = JBColor.RED }
+        } else {
+          (sdk.sdkType as? SdkType)?.icon?.let { icon(it) }
+          text(name)
+        }
+      }
     }
   }
-  combo.model = model
-  if (model.size == 1) {
-    combo.isEnabled = false
-    combo.toolTipText = HaxeBundle.message("flex.sdk.none")
-  }
-  return combo
-}
 
-/** Selects the stored name, keeping a name whose SDK entry is gone visible instead of silently dropping it. */
-fun selectFlexSdk(combo: ComboBox<String?>, name: String) {
-  val value = name.ifEmpty { null }
-  val model = combo.model as DefaultComboBoxModel<String?>
-  if (value != null && model.getIndexOf(value) < 0) {
-    model.addElement(value)
-    combo.isEnabled = true
+  /** Selects the stored name (reloading the entries first, so late-added SDKs appear); empty means "not set". */
+  fun setSelectedName(name: String) {
+    reload(name.ifEmpty { null })
   }
-  combo.selectedItem = value
-}
 
-fun selectedFlexSdk(combo: ComboBox<String?>): String = (combo.selectedItem as String?) ?: ""
+  fun getSelectedName(): String = (combo.selectedItem as String?) ?: ""
+
+  private fun reload(select: String?) {
+    val model = DefaultComboBoxModel<String?>()
+    model.addElement(null)
+    for (sdk in flexSdks()) {
+      model.addElement(sdk.name)
+    }
+    if (select != null && model.getIndexOf(select) < 0) {
+      model.addElement(select) // renders red: the entry is gone
+    }
+    combo.model = model
+    combo.selectedItem = select
+    val hasEntries = model.size > 1
+    combo.isEnabled = hasEntries
+    combo.toolTipText = if (hasEntries) null else HaxeBundle.message("flex.sdk.none")
+  }
+
+  private fun flexSdks() = ProjectJdkTable.getInstance().allJdks
+    .filter { it.sdkType.name.lowercase(Locale.ROOT).contains("flex") }
+
+  private fun openSdkEditor() {
+    // any project serves as the editor's context - the SDK table is
+    // application-level; the default project covers the welcome screen
+    val project = ProjectManager.getInstance().openProjects.firstOrNull()
+                  ?: ProjectManager.getInstance().defaultProject
+    val current = getSelectedName().ifEmpty { null }?.let { ProjectJdkTable.getInstance().findJdk(it) }
+    val editor = ProjectJdksEditor(current, project, component)
+    if (editor.showAndGet()) {
+      val chosen = editor.selectedJdk?.takeIf { it.sdkType.name.lowercase(Locale.ROOT).contains("flex") }
+      reload(chosen?.name ?: getSelectedName().ifEmpty { null })
+    }
+  }
+}

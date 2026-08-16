@@ -5,11 +5,10 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
-import com.intellij.plugins.haxe.config.sdk.ui.HaxeRuntimeSettingsControls;
+import com.intellij.plugins.haxe.config.sdk.ui.FlexSdkSelector;
 import com.intellij.util.ui.FormBuilder;
 import javax.swing.JComponent;
 import org.jetbrains.annotations.NotNull;
@@ -22,7 +21,7 @@ public final class FlashRunConfigurationEditor extends SettingsEditor<FlashRunCo
 
   private final ModulesComboBox moduleCombo = new ModulesComboBox();
   private final TextFieldWithBrowseButton swfField = new TextFieldWithBrowseButton();
-  private final ComboBox<String> flexSdkCombo;
+  private final FlexSdkSelector flexSdkSelector;
   private final TextFieldWithBrowseButton playerField = new TextFieldWithBrowseButton();
 
   public FlashRunConfigurationEditor(@NotNull Project project) {
@@ -34,7 +33,7 @@ public final class FlashRunConfigurationEditor extends SettingsEditor<FlashRunCo
       .withTitle(HaxeDebuggerBundle.message("flash.runner.editor.player.chooser")));
 
     String fromRuntimes = HaxeDebuggerBundle.message("flash.runner.editor.flex.sdk.from.haxe.sdk");
-    flexSdkCombo = HaxeRuntimeSettingsControls.flexSdkCombo(fromRuntimes);
+    flexSdkSelector = new FlexSdkSelector(fromRuntimes);
   }
 
   @Override
@@ -43,14 +42,14 @@ public final class FlashRunConfigurationEditor extends SettingsEditor<FlashRunCo
     moduleCombo.setSelectedModule(configuration.getConfigurationModule().getModule());
     swfField.setText(configuration.getSwfFilePath());
     playerField.setText(configuration.getFlashPlayerPath());
-    HaxeRuntimeSettingsControls.selectFlexSdk(flexSdkCombo, configuration.getFlexSdkName());
+    flexSdkSelector.setSelectedName(configuration.getFlexSdkName());
   }
 
   @Override
   protected void applyEditorTo(@NotNull FlashRunConfiguration configuration) {
     configuration.setModule(moduleCombo.getSelectedModule());
     configuration.setSwfFilePath(swfField.getText().trim());
-    configuration.setFlexSdkName(HaxeRuntimeSettingsControls.selectedFlexSdk(flexSdkCombo));
+    configuration.setFlexSdkName(flexSdkSelector.getSelectedName());
     configuration.setFlashPlayerPath(playerField.getText().trim());
   }
 
@@ -59,7 +58,7 @@ public final class FlashRunConfigurationEditor extends SettingsEditor<FlashRunCo
     return FormBuilder.createFormBuilder()
       .addLabeledComponent(HaxeDebuggerBundle.message("flash.runner.editor.module"), moduleCombo)
       .addLabeledComponent(HaxeDebuggerBundle.message("flash.runner.editor.swf"), swfField)
-      .addLabeledComponent(HaxeDebuggerBundle.message("flash.runner.editor.flex.sdk"), flexSdkCombo)
+      .addLabeledComponent(HaxeDebuggerBundle.message("flash.runner.editor.flex.sdk"), flexSdkSelector.getComponent())
       .addLabeledComponent(HaxeDebuggerBundle.message("flash.runner.editor.player"), playerField)
       .getPanel();
   }

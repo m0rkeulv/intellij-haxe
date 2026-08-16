@@ -21,7 +21,7 @@ class HaxeAdditionalConfigurablePanel {
   private val hlField = executableField(HaxeBundle.message("haxe.build.tools.hashlink.chooser.title"))
   private val nodeField = executableField(HaxeBundle.message("haxe.build.tools.node.chooser.title"))
   private val flashPlayerField = executableField(HaxeBundle.message("haxe.build.tools.flash.player.chooser.title"))
-  private val flexSdkComboBox = flexSdkCombo("")
+  private val flexSdkSelector = FlexSdkSelector("")
   private val removeDuplicatesCheckBox = JBCheckBox(HaxeBundle.message("sdk.completion.remove.duplicates"))
 
   private val mainPanel = panel {
@@ -42,7 +42,7 @@ class HaxeAdditionalConfigurablePanel {
         cell(flashPlayerField).align(AlignX.FILL)
       }
       row(HaxeBundle.message("flex.sdk")) {
-        cell(flexSdkComboBox)
+        cell(flexSdkSelector.getComponent())
       }
     }
     group(HaxeBundle.message("sdk.completion.section")) {
@@ -93,9 +93,9 @@ class HaxeAdditionalConfigurablePanel {
 
   fun getFlashPlayerPath(): String = FileUtil.toSystemIndependentName(flashPlayerField.text.trim())
 
-  fun setFlexSdkName(name: String) = selectFlexSdk(flexSdkComboBox, name)
+  fun setFlexSdkName(name: String) = flexSdkSelector.setSelectedName(name)
 
-  fun getFlexSdkName(): String = selectedFlexSdk(flexSdkComboBox)
+  fun getFlexSdkName(): String = flexSdkSelector.getSelectedName()
 
   fun setRemoveCompletionDuplicatesFlag(state: Boolean) {
     removeDuplicatesCheckBox.isSelected = state
