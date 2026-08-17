@@ -2,47 +2,38 @@ package com.intellij.plugins.haxe.v2.runconfig;
 
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /** The one shared answer to "does a debugger lane exist" - program and test actions both gate on it. */
 @DisplayName("Run configurations: debug support")
 public class HaxeDebugSupportTest {
 
-  @Test
-  @DisplayName("program sessions debug hl cpp js and flash")
-  public void testProgramSessionsDebugHlCppJsAndFlash() {
-    assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.HL));
-    assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.CPP));
-    assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.JAVA_SCRIPT));
-    assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.FLASH));
-    assertFalse(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.INTERP), "programs have no interp lane");
-  }
+  /** (target, program-session lane exists, test-session lane exists). */
+  static final List<Arguments> DEBUG_LANES = List.of(
+    arguments(HaxeTarget.HL, true, true),
+    arguments(HaxeTarget.CPP, true, true),
+    // js tests run under node with the js-debug adapter attached
+    arguments(HaxeTarget.JAVA_SCRIPT, true, true),
+    // fdb hosts flash tests and the test console parses its relayed traces
+    arguments(HaxeTarget.FLASH, true, true),
+    // programs have no interp lane; the eval adapter serves tests
+    arguments(HaxeTarget.INTERP, false, true),
+    arguments(HaxeTarget.NEKO, false, false),
+    // no target resolved: never debuggable
+    arguments(null, false, false));
 
-  @Test
-  @DisplayName("neko has no debugger in either session kind")
-  public void testNekoHasNoDebuggerInEitherSessionKind() {
-    assertFalse(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.NEKO));
-    assertFalse(HaxeDebugSupport.supportsTestDebug(HaxeTarget.NEKO));
-  }
-
-  @Test
-  @DisplayName("test sessions add interp flash and node js")
-  public void testTestSessionsAddInterpFlashAndNodeJs() {
-    assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.INTERP));
-    assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.HL));
-    assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.CPP));
-    assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.FLASH),
-               "fdb hosts flash tests and the test console parses its relayed traces");
-    assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.JAVA_SCRIPT),
-               "js tests run under node with the js-debug adapter attached");
-  }
-
-  @Test
-  @DisplayName("null target is never debuggable")
-  public void testNullTargetIsNeverDebuggable() {
-    assertFalse(HaxeDebugSupport.supportsProgramDebug(null));
-    assertFalse(HaxeDebugSupport.supportsTestDebug(null));
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("DEBUG_LANES")
+  @DisplayName("debug lanes per target and session kind")
+  public void testDebugLanesPerTargetAndSessionKind(HaxeTarget target, boolean programDebug, boolean testDebug) {
+    assertEquals(programDebug, HaxeDebugSupport.supportsProgramDebug(target), "program session");
+    assertEquals(testDebug, HaxeDebugSupport.supportsTestDebug(target), "test session");
   }
 }

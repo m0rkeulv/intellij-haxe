@@ -28,14 +28,22 @@ public class HaxeGeneratedCodePreviewSanitizeTest {
     String sanitized = HaxeGeneratedCodePreview.sanitize("""
       @:used
       class Main {
-      	@:keep
+      }
+      """);
+    assertFalse(sanitized.contains("package "), "no package for a root-package module");
+  }
+
+  @Test
+  @DisplayName("backtick identifiers pass through untouched")
+  public void testBacktickIdentifiersPassThroughUntouched() {
+    String sanitized = HaxeGeneratedCodePreview.sanitize("""
+      class Main {
       	static function main() {
       		`trace("hello", {fileName : "Main.hx"});
       	}
       }
       """);
-    assertFalse(sanitized.contains("package "), "no package for a root-package module");
-    assertTrue(sanitized.contains("`trace"), "backtick identifiers pass through untouched - the grammar parses them");
+    assertTrue(sanitized.contains("`trace"), "the grammar parses backtick identifiers - the sanitizer must not touch them");
   }
 
   @Test

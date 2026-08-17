@@ -346,17 +346,11 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("flash build forces the live reporter into the compile")
   public void testFlashBuildForcesTheLiveReporterIntoTheCompile() {
-    HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(getProject());
-    boolean before = settings.isLiveTestReporting();
-    settings.setLiveTestReporting(false);
-    try {
+    withLiveReportingDisabled(() -> {
       // the adl-hosted lane needs the injected reporter for stdout output and the exit call
       String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("targets/swf.hxml"), null);
       assertTrue(arguments.contains("intellij_utest.Macro.init()"), "reporter injection missing: " + arguments);
-    }
-    finally {
-      settings.setLiveTestReporting(before);
-    }
+    });
   }
 
   @Test
@@ -602,13 +596,20 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("disabling live test reporting drops the injection")
   public void testDisablingLiveTestReportingDropsTheInjection() {
+    withLiveReportingDisabled(() ->
+      assertEquals("-D teamcity -D \"teamcity_suite_name=Target: Interpretation\"",
+                   HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("test.hxml"), null)));
+  }
+
+  /** Runs the body with live test reporting OFF, restoring the setting after. */
+  private void withLiveReportingDisabled(Runnable body) {
     HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(getProject());
     boolean before = settings.isLiveTestReporting();
     settings.setLiveTestReporting(false);
     try {
-      assertEquals("-D teamcity -D \"teamcity_suite_name=Target: Interpretation\"",
-                   HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("test.hxml"), null));
-    } finally {
+      body.run();
+    }
+    finally {
       settings.setLiveTestReporting(before);
     }
   }

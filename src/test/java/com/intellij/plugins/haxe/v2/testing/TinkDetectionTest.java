@@ -29,6 +29,12 @@ public class TinkDetectionTest extends HaxeTestFrameworkDetectionTestBase {
   public void testAssertsClassIsDetected() {
     configureFixtureProject();
     assertTrue(framework.isTestClass(classByQName("cases.TinkStyleTest")));
+  }
+
+  @Test
+  @DisplayName("plain class is not detected")
+  public void testPlainClassIsNotDetected() {
+    configureFixtureProject();
     assertFalse(framework.isTestClass(classByQName("cases.NotATest")));
   }
 

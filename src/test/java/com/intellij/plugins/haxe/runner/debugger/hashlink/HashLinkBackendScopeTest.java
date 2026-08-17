@@ -30,7 +30,12 @@ public class HashLinkBackendScopeTest {
   public void testRejectsSameNamedFilesFromSiblingProjects() {
     HashLinkBackend backend = backend(List.of("C:/projects/buddy/hxml/src"));
     assertFalse(backend.acceptsBreakpointFile("C:/projects/munit/openfl/src/Calculator.hx"));
-    // a PREFIX of a directory name is not that directory
+  }
+
+  @Test
+  @DisplayName("a directory name prefix is not that directory")
+  public void testADirectoryNamePrefixIsNotThatDirectory() {
+    HashLinkBackend backend = backend(List.of("C:/projects/buddy/hxml/src"));
     assertFalse(backend.acceptsBreakpointFile("C:/projects/buddy/hxml/src2/Calculator.hx"));
   }
 
