@@ -61,8 +61,10 @@ public class NmeProjectsTest {
     NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact("neko", "MyGame", "bin");
     assertNotNull(artifact);
     assertEquals(HaxeTarget.NEKO, artifact.target());
-    assertTrue(artifact.relativeOutput().matches("bin/(windows|mac64|linux64)-neko/MyGame/MyGame(\\.exe)?"),
-               artifact.relativeOutput());
+    // bin/<host>-neko/<app>/<app>[.exe] - nme names the folder after the BUILD host
+    boolean hostSuffixedLauncher =
+      artifact.relativeOutput().matches("bin/(windows|mac64|linux64)-neko/MyGame/MyGame(\\.exe)?");
+    assertTrue(hostSuffixedLauncher, artifact.relativeOutput());
   }
 
   @Test

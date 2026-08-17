@@ -91,12 +91,13 @@ public class HaxeTestLocatorTest extends HaxeCodeInsightFixtureTestCase {
 
     PsiElement alpha = locate("CalculatorTest.testAdd?build=" + alphaBuild);
     assertInstanceOf(HaxeMethod.class, alpha);
-    assertTrue(alpha.getContainingFile().getVirtualFile().getPath().contains("/alpha/"),
-               "the alpha build resolves its own class, got: " + alpha.getContainingFile().getVirtualFile().getPath());
+    String alphaPath = alpha.getContainingFile().getVirtualFile().getPath();
+    assertTrue(alphaPath.contains("/alpha/"), "the alpha build resolves its own class, got: " + alphaPath);
 
     PsiElement beta = locate("CalculatorTest.testAdd?build=" + betaBuild);
-    assertTrue(beta.getContainingFile().getVirtualFile().getPath().contains("/beta/"),
-               "the beta build resolves its own class, got: " + beta.getContainingFile().getVirtualFile().getPath());
+    assertInstanceOf(HaxeMethod.class, beta);
+    String betaPath = beta.getContainingFile().getVirtualFile().getPath();
+    assertTrue(betaPath.contains("/beta/"), "the beta build resolves its own class, got: " + betaPath);
   }
 
   @Test

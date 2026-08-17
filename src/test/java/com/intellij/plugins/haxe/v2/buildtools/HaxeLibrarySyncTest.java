@@ -26,11 +26,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Build tools: library sync")
 public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
 
-  @Override
-  protected String getBasePath() {
-    return "/testing/runner/";
-  }
-
   private static final String TESTS_HXML = """
     -cp src
     -cp ../src
@@ -46,6 +41,11 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
     -p ../src
     -lib utest
     """;
+
+  @Override
+  protected String getBasePath() {
+    return "/testing/runner/";
+  }
 
   @Test
   @DisplayName("manually added active build file in a subfolder feeds the module dependencies")

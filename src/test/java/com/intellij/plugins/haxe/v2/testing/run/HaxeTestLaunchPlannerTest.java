@@ -229,8 +229,8 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     // HlExecutableResolver may find a full path (env/PATH-dependent) or fall
     // back to the bare name - either way the launched binary is hl
     String executableName = Path.of(plan.command().get(0)).getFileName().toString();
-    assertTrue(executableName.equals("hl") || executableName.equals("hl.exe"),
-               "hl launcher expected: " + plan.command());
+    boolean hlLauncher = executableName.equals("hl") || executableName.equals("hl.exe");
+    assertTrue(hlLauncher, "hl launcher expected: " + plan.command());
     assertTrue(plan.command().get(1).endsWith("tests.hl"), "artifact path expected: " + plan.command());
   }
 
@@ -594,12 +594,13 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   @DisplayName("disabling live test reporting drops the injection")
   public void testDisablingLiveTestReportingDropsTheInjection() {
     HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(getProject());
+    boolean before = settings.isLiveTestReporting();
     settings.setLiveTestReporting(false);
     try {
       assertEquals("-D teamcity -D \"teamcity_suite_name=Target: Interpretation\"",
                    HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("test.hxml"), null));
     } finally {
-      settings.setLiveTestReporting(true);
+      settings.setLiveTestReporting(before);
     }
   }
 }

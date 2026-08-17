@@ -24,10 +24,6 @@ public class HaxeBuildFileSectionsTest extends HaxeCodeInsightFixtureTestCase {
     return "";
   }
 
-  private VirtualFile addHxml(String relativePath, String content) {
-    return myFixture.addFileToProject(relativePath, content).getVirtualFile();
-  }
-
   @Test
   @DisplayName("splits on root next and applies the each block")
   public void testSplitsOnRootNextAndAppliesTheEachBlock() {
@@ -67,8 +63,8 @@ public class HaxeBuildFileSectionsTest extends HaxeCodeInsightFixtureTestCase {
     List<String> sections = HaxeBuildFileInspector.sectionContents(getProject(), root);
     assertEquals(2, sections.size());
     for (String section : sections) {
-      assertEquals(1, HxmlFileParser.parse(section).libraries().size(),
-                   "the shared include must reach every section: " + section);
+      int libraryCount = HxmlFileParser.parse(section).libraries().size();
+      assertEquals(1, libraryCount, "the shared include must reach every section: " + section);
     }
     assertEquals(HaxeTarget.NEKO, HxmlFileParser.parse(sections.get(0)).target());
     assertEquals(HaxeTarget.JAVA_SCRIPT, HxmlFileParser.parse(sections.get(1)).target());
@@ -114,5 +110,9 @@ public class HaxeBuildFileSectionsTest extends HaxeCodeInsightFixtureTestCase {
 
     List<String> sections = HaxeBuildFileInspector.sectionContents(getProject(), root);
     assertEquals(1, sections.size(), "a single real build means a single section");
+  }
+
+  private VirtualFile addHxml(String relativePath, String content) {
+    return myFixture.addFileToProject(relativePath, content).getVirtualFile();
   }
 }

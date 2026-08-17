@@ -55,6 +55,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -319,7 +320,13 @@ abstract public class HaxeCodeInsightFixtureTestCase {
         .redirectErrorStream(true)
         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
         .start();
-      return process.waitFor() == 0;
+      // haxelib can stop on an interactive prompt with nobody on its stdin
+      // pipe; a hung probe must read as "not available", not hang the suite
+      if (!process.waitFor(10, TimeUnit.SECONDS)) {
+        process.destroyForcibly();
+        return false;
+      }
+      return process.exitValue() == 0;
     }
     catch (IOException | InterruptedException e) {
       return false;

@@ -17,10 +17,6 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Debugger: hashlink backend scope")
 public class HashLinkBackendScopeTest {
 
-  private static HashLinkBackend backend(List<String> sourceDirectories) {
-    return new HashLinkBackend(Path.of("hl"), Path.of("tests.hl"), 6112, sourceDirectories);
-  }
-
   @Test
   @DisplayName("accepts files under a source directory")
   public void testAcceptsFilesUnderASourceDirectory() {
@@ -43,5 +39,9 @@ public class HashLinkBackendScopeTest {
   public void testWithoutDirectoriesEveryFileIsAccepted() {
     HashLinkBackend backend = backend(List.of());
     assertTrue(backend.acceptsBreakpointFile("C:/anywhere/Calculator.hx"));
+  }
+
+  private static HashLinkBackend backend(List<String> sourceDirectories) {
+    return new HashLinkBackend(Path.of("hl"), Path.of("tests.hl"), 6112, sourceDirectories);
   }
 }

@@ -69,8 +69,8 @@ public class TinkDetectionTest extends HaxeTestFrameworkDetectionTestBase {
     PsiElement resolved = framework.resolveTestLocation(getProject(), GlobalSearchScope.allScope(getProject()),
                                                         "haxe:tink", "cases/TinkStyleTest.hx::TinkStyleTest.addsNumbers");
     assertNotNull(resolved, "the case's file, class and method must resolve");
-    assertTrue(resolved instanceof HaxeMethod method && "addsNumbers".equals(method.getName()),
-               "navigation lands on the test method, got: " + resolved);
+    HaxeMethod method = assertInstanceOf(HaxeMethod.class, resolved, "navigation lands on the test method");
+    assertEquals("addsNumbers", method.getName());
 
     PsiElement byFullName = framework.resolveTestLocation(getProject(), GlobalSearchScope.allScope(getProject()),
                                                           "haxe:test", "cases.TinkStyleTest.addsNumbers");

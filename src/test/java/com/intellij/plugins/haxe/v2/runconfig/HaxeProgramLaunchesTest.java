@@ -24,10 +24,6 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     return "/testing/runner/";
   }
 
-  private static HaxeBuildFileInfo info(HaxeTarget target, String output) {
-    return new HaxeBuildFileInfo(target, output, List.of(), List.of(), List.of());
-  }
-
   @Test
   @DisplayName("neko builds launch for every build file kind")
   public void testNekoBuildsLaunchForEveryBuildFileKind() {
@@ -48,5 +44,9 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     assertNotNull(HaxeProgramLaunches.launchKind(info(HaxeTarget.CPP, "export"), HaxeBuildFileType.OPENFL));
     assertNull(HaxeProgramLaunches.launchKind(info(HaxeTarget.CPP, "bin/cpp"), HaxeBuildFileType.HXML),
                "plain hxml cpp launches through the tests/debug flows, not a Build & run action");
+  }
+
+  private static HaxeBuildFileInfo info(HaxeTarget target, String output) {
+    return new HaxeBuildFileInfo(target, output, List.of(), List.of(), List.of());
   }
 }

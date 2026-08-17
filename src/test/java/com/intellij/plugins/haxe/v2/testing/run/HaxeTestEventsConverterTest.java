@@ -17,27 +17,32 @@ public class HaxeTestEventsConverterTest {
   @Test
   @DisplayName("test started gains a location hint")
   public void testTestStartedGainsALocationHint() {
-    assertEquals("##teamcity[testStarted name='cases.SampleTest.testPasses'" +
-                 " locationHint='haxe:test://cases.SampleTest.testPasses']",
-                 injectLocationHint("##teamcity[testStarted name='cases.SampleTest.testPasses']"));
+    String expected = """
+      ##teamcity[testStarted name='cases.SampleTest.testPasses' \
+      locationHint='haxe:test://cases.SampleTest.testPasses']\
+      """;
+    assertEquals(expected, injectLocationHint("##teamcity[testStarted name='cases.SampleTest.testPasses']"));
   }
 
   @Test
   @DisplayName("build path rides the injected hint")
   public void testBuildPathRidesTheInjectedHint() {
     // the path is TC-escaped in the attribute; the platform unescapes it on parse
-    assertEquals("##teamcity[testStarted name='A.testX'" +
-                 " locationHint='haxe:test://A.testX?build=C:/p/tests |[x|].hxml']",
-                 HaxeTestEventsConverter.injectLocationHint("##teamcity[testStarted name='A.testX']",
-                                                            "C:/p/tests [x].hxml"));
+    String expected = """
+      ##teamcity[testStarted name='A.testX' \
+      locationHint='haxe:test://A.testX?build=C:/p/tests |[x|].hxml']\
+      """;
+    assertEquals(expected, injectLocationHint("##teamcity[testStarted name='A.testX']", "C:/p/tests [x].hxml"));
   }
 
   @Test
   @DisplayName("suite started gains a location hint")
   public void testSuiteStartedGainsALocationHint() {
-    assertEquals("##teamcity[testSuiteStarted name='cases.SampleTest'" +
-                 " locationHint='haxe:test://cases.SampleTest']",
-                 injectLocationHint("##teamcity[testSuiteStarted name='cases.SampleTest']"));
+    String expected = """
+      ##teamcity[testSuiteStarted name='cases.SampleTest' \
+      locationHint='haxe:test://cases.SampleTest']\
+      """;
+    assertEquals(expected, injectLocationHint("##teamcity[testSuiteStarted name='cases.SampleTest']"));
   }
 
   @Test
@@ -50,9 +55,11 @@ public class HaxeTestEventsConverterTest {
   @Test
   @DisplayName("escaped quote in the name survives")
   public void testEscapedQuoteInTheNameSurvives() {
-    assertEquals("##teamcity[testStarted name='A.test|'quoted|''" +
-                 " locationHint='haxe:test://A.test|'quoted|'']",
-                 injectLocationHint("##teamcity[testStarted name='A.test|'quoted|'']"));
+    String expected = """
+      ##teamcity[testStarted name='A.test|'quoted|'' \
+      locationHint='haxe:test://A.test|'quoted|'']\
+      """;
+    assertEquals(expected, injectLocationHint("##teamcity[testStarted name='A.test|'quoted|'']"));
   }
 
   @Test

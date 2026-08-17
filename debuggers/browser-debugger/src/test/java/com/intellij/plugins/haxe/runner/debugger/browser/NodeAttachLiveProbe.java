@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
@@ -168,7 +169,7 @@ public class NodeAttachLiveProbe {
       child.sendRequest(LiveProbeUtil.continueRequest(stopped.getBody().getThreadId()), TIMEOUT);
     }
 
-    assertTrue(debuggee.waitFor(30, java.util.concurrent.TimeUnit.SECONDS), "debuggee did not exit");
+    assertTrue(debuggee.waitFor(30, TimeUnit.SECONDS), "debuggee did not exit");
     assertEquals(0, debuggee.exitValue(), "debuggee exit code");
     String output = String.join("\n", debuggeeStdout);
     boolean traced = output.contains("start") && output.contains("tick") && output.contains("end");

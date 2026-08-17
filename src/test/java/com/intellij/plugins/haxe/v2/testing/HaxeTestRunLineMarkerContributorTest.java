@@ -61,9 +61,13 @@ public class HaxeTestRunLineMarkerContributorTest extends HaxeCodeInsightFixture
       """);
     myFixture.configureFromExistingVirtualFile(outside.getVirtualFile());
 
-    boolean anyRunMarker = myFixture.findAllGutters().stream()
-      .anyMatch(gutter -> gutter.getTooltipText() != null && gutter.getTooltipText().startsWith("Run '"));
+    boolean anyRunMarker = myFixture.findAllGutters().stream().anyMatch(HaxeTestRunLineMarkerContributorTest::isRunMarker);
     assertFalse(anyRunMarker, "no owning tests build - no run markers");
+  }
+
+  private static boolean isRunMarker(GutterMark gutter) {
+    String tooltip = gutter.getTooltipText();
+    return tooltip != null && tooltip.startsWith("Run '");
   }
 
   private static String tooltips(List<GutterMark> gutters) {

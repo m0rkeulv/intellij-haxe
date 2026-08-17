@@ -90,13 +90,13 @@ public class HaxelibLocalDocsTest {
   public void testDocFilesMatchWellKnownNamesInDisplayOrderRegardlessOfCase() throws Exception {
     Path versionDir = Files.createTempDirectory("haxelib-version");
     Files.writeString(versionDir.resolve("CHANGELOG.md"), "changes");
-    Files.writeString(versionDir.resolve("readme.MD".toLowerCase()), "readme");
+    Files.writeString(versionDir.resolve("ReadMe.MD"), "readme");
     Files.writeString(versionDir.resolve("LICENSE"), "license");
     Files.writeString(versionDir.resolve("Notes.md"), "not a doc tab");
 
     List<Path> docs = HaxelibLocalDocs.docFiles(versionDir);
     List<String> names = docs.stream().map(p -> p.getFileName().toString()).toList();
-    assertEquals(List.of("readme.md", "CHANGELOG.md", "LICENSE"), names,
+    assertEquals(List.of("ReadMe.MD", "CHANGELOG.md", "LICENSE"), names,
                  "readme first, then changelog and license; unrelated markdown excluded");
   }
 }

@@ -21,11 +21,6 @@ public class HaxeBuildSystemTest extends HaxeCodeInsightFixtureTestCase {
     return "/testing/runner/";
   }
 
-  private HaxeBuildFile fixture(String relativePath, HaxeBuildFileType type) {
-    VirtualFile file = myFixture.copyFileToProject(relativePath);
-    return new HaxeBuildFile(file, type);
-  }
-
   @Test
   @DisplayName("hxml resolves the selected sections target")
   public void testHxmlResolvesTheSelectedSectionsTarget() {
@@ -118,5 +113,10 @@ public class HaxeBuildSystemTest extends HaxeCodeInsightFixtureTestCase {
   public void testHxpScriptHasNoDebugAdditions() {
     HaxeBuildFile script = fixture("test.hxml", HaxeBuildFileType.HXP_SCRIPT);
     assertNull(HaxeBuildSystem.of(HaxeBuildFileType.HXP_SCRIPT).debugCompileAdditions(getProject(), script));
+  }
+
+  private HaxeBuildFile fixture(String relativePath, HaxeBuildFileType type) {
+    VirtualFile file = myFixture.copyFileToProject(relativePath);
+    return new HaxeBuildFile(file, type);
   }
 }
