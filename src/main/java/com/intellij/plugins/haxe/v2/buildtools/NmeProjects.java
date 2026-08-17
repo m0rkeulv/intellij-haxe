@@ -102,8 +102,7 @@ public final class NmeProjects {
       case "neko" -> HaxeTarget.NEKO;
       case "cpp", "windows", "mac", "linux", "android", "ios" -> HaxeTarget.CPP;
       case "flash", "air" -> HaxeTarget.FLASH;
-      case "html5", "js" -> HaxeTarget.JAVA_SCRIPT;
-      case "jsprime" -> HaxeTarget.JAVA_SCRIPT;
+      case "html5", "js", "jsprime" -> HaxeTarget.JAVA_SCRIPT;
       default -> null;
     };
   }

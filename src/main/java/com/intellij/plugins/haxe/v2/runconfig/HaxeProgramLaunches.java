@@ -72,7 +72,10 @@ public final class HaxeProgramLaunches {
       // HL/C output (-hl out/main.c) is a source directory, not runnable bytecode
       case HL -> output.endsWith(".hl") ? HASHLINK_APP : null;
       case JAVA_SCRIPT -> output.endsWith(".js") ? BROWSER_APP : null;
-      case FLASH -> !output.endsWith(".swf") ? null : isAirOutput(output) ? AIR_APP : FLASH_APP;
+      case FLASH -> {
+        if (!output.endsWith(".swf")) yield null;
+        yield isAirOutput(output) ? AIR_APP : FLASH_APP;
+      }
       case CPP -> type != HaxeBuildFileType.HXML ? HXCPP_APP : null;
       // hxml runs the .n through the neko runtime; lime/nme package a launcher
       case NEKO -> type != HaxeBuildFileType.HXML || output.endsWith(".n") ? NEKO_APP : null;

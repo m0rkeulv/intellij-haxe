@@ -135,6 +135,8 @@ public final class HxmlFileParser {
 
   private static final Set<String> LIBRARY_FLAGS = Set.of("-lib", "--library", "-L");
   private static final Set<String> CLASSPATH_FLAGS = Set.of("-cp", "-p", "--class-path");
+  private static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
+  private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
 
   private HxmlFileParser() {
   }
@@ -236,16 +238,12 @@ public final class HxmlFileParser {
     return TARGET_FLAGS.get(flag);
   }
 
-  private static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
-
   /** Whether effective (include-merged) content declares a debug compile — hxcpp renames its binary on it. */
   public static boolean hasDebugFlag(@NotNull String content) {
     return content.lines()
       .map(String::trim)
       .anyMatch(DEBUG_FLAGS::contains);
   }
-
-  private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
 
   /** Whether the flag declares the build's main class ({@code -main}/{@code --main}/{@code -m}). */
   public static boolean isMainFlag(@NotNull String flag) {

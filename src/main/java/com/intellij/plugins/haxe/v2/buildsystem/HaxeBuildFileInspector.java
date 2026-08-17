@@ -41,8 +41,8 @@ public final class HaxeBuildFileInspector {
    */
   @NotNull
   public static HaxeBuildFileInfo inspect(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-    List<HaxeBuildFileInfo> sections = inspectSections(project, buildFile);
-    return sections.isEmpty() ? HaxeBuildFileInfo.EMPTY : sections.get(0);
+    // inspectSections never answers an empty list (unreadable files come back as one EMPTY info)
+    return inspectSections(project, buildFile).get(0);
   }
 
   /** One info per {@code --next} compilation section (see {@link #sectionContents}); non-hxml files have one. */
@@ -58,9 +58,10 @@ public final class HaxeBuildFileInspector {
 
     String content = loadText(buildFile.file());
     if (content == null) return List.of(HaxeBuildFileInfo.EMPTY);
+    // exhaustive on purpose: a NEW type must decide its inspection here instead of silently reading as EMPTY
     return switch (buildFile.type()) {
       case OPENFL, LIME, NMML -> List.of(ProjectXmlParser.parse(content));
-      default -> List.of(HaxeBuildFileInfo.EMPTY);
+      case HXML, HXP_PROJECT, HXP_SCRIPT -> List.of(HaxeBuildFileInfo.EMPTY);
     };
   }
 
@@ -72,10 +73,10 @@ public final class HaxeBuildFileInspector {
    * one of them. The ROOT file's chain entries are the sections; an included
    * file's internal {@code --next} travels INSIDE its section (haxe still
    * runs those sub-compilations when the section compiles). A section a lone
-   * separator leaves empty is a silent compiler no-op — verified live — and
-   * produces no entry. Single-section files come back as the one whole
-   * effective content; unreadable files as an empty list. Call inside a read
-   * action.
+   * separator leaves empty is a silent compiler no-op and produces no entry.
+   * Single-section files come back as the one whole effective content;
+   * unreadable files as an empty list; a file without PSI comes back as one
+   * section, its chain unsplit. Call inside a read action.
    */
   @NotNull
   public static List<String> sectionContents(@NotNull Project project, @NotNull VirtualFile buildFile) {
@@ -85,8 +86,9 @@ public final class HaxeBuildFileInspector {
     if (psiFile == null) return List.of(effective);
 
     List<String> eachBlock = new ArrayList<>();
+    List<String> currentSection = new ArrayList<>();
     List<List<String>> sectionLines = new ArrayList<>();
-    sectionLines.add(new ArrayList<>());
+    sectionLines.add(currentSection);
     for (PsiElement child : psiFile.getChildren()) {
       if (isIgnorableInSection(child)) continue;
       if (child instanceof HXMLProperty property) {
@@ -94,21 +96,21 @@ public final class HaxeBuildFileInspector {
         // a value on the separator's own line is the FOLLOWING section's
         // first argument
         if (HxmlFileParser.isNextSeparator(key)) {
-          sectionLines.add(sectionStartingWith(property.getValue()));
+          currentSection = sectionStartingWith(property.getValue());
+          sectionLines.add(currentSection);
           continue;
         }
         if (HxmlFileParser.isEachSeparator(key)) {
-          List<String> current = sectionLines.get(sectionLines.size() - 1);
-          eachBlock.addAll(current);
-          current.clear();
+          eachBlock.addAll(currentSection);
+          currentSection.clear();
           HXMLValue value = property.getValue();
           if (value != null) {
-            current.add(value.getText());
+            currentSection.add(value.getText());
           }
           continue;
         }
       }
-      sectionLines.get(sectionLines.size() - 1).add(child.getText());
+      currentSection.add(child.getText());
     }
 
     sectionLines.removeIf(List::isEmpty);

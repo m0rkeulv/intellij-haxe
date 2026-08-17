@@ -29,21 +29,15 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.runner.debugger.browser.HaxeBrowserTestSupport;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.PathUtil;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
@@ -70,6 +64,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   private static final String FILTER_PATTERN = "filterPattern";
   private static final String TEST_CLASS = "testClass";
   private static final String TEST_METHOD = "testMethod";
+  private static final int LIME_DISPLAY_TIMEOUT_MS = 60_000;
 
   private String buildFilePath = "";
   private String filterPattern = "";
@@ -150,30 +145,32 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
                                    String fileName, String targetFlag) {
   }
 
-  private static final int LIME_DISPLAY_TIMEOUT_MS = 60_000;
-
   /** The lime flavor: the tool's display mode SPAWNS a process, so it runs between the read actions, never inside one. */
   @Nullable
   private HaxeCompileCommands.Resolved resolveLimeSingleRunCompile(@NotNull VirtualFile file,
                                                                    @NotNull HaxeBuildFileType type,
                                                                    @NotNull HaxeTestFramework framework,
                                                                    @NotNull HaxeTestSingleRuns.SingleRun run) {
-    LimeDisplayInputs inputs = ReadAction.computeBlocking(() -> {
-      String containerId = HaxeContainers.containerIdFor(getProject(), file);
-      String environmentSdk = HaxeEnvironmentStore.getInstance(getProject()).getSdkName(containerId);
-      return new LimeDisplayInputs(
-        HaxeToolPathResolver.resolveHaxelibExecutable(getProject(), environmentSdk),
-        LimeProjects.toolFor(type),
-        file.getParent().getPath(),
-        file.getName(),
-        LimeProjects.selectedTargetFlag(getProject(), type, file));
-    });
+    LimeDisplayInputs inputs = ReadAction.computeBlocking(() -> limeDisplayInputs(file, type));
+    if (inputs == null) return null;
     List<String> effectiveArguments = LimeProjects.displayArguments(
       inputs.haxelibExecutable(), inputs.tool(), inputs.directory(),
       inputs.fileName(), inputs.targetFlag(), LIME_DISPLAY_TIMEOUT_MS);
     if (effectiveArguments == null) return null;
     return ReadAction.computeBlocking(
       () -> HaxeTestLaunchPlanner.singleRunLimeCompile(getProject(), file, framework, run, effectiveArguments));
+  }
+
+  /** Everything the display invocation needs, resolved under the caller's read action; null for a parentless file. */
+  @Nullable
+  private LimeDisplayInputs limeDisplayInputs(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
+    VirtualFile parent = file.getParent();
+    if (parent == null) return null;
+    String containerId = HaxeContainers.containerIdFor(getProject(), file);
+    String environmentSdk = HaxeEnvironmentStore.getInstance(getProject()).getSdkName(containerId);
+    String haxelibExecutable = HaxeToolPathResolver.resolveHaxelibExecutable(getProject(), environmentSdk);
+    String targetFlag = LimeProjects.selectedTargetFlag(getProject(), type, file);
+    return new LimeDisplayInputs(haxelibExecutable, LimeProjects.toolFor(type), parent.getPath(), file.getName(), targetFlag);
   }
 
   /**
@@ -242,8 +239,8 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   public @Nullable String suggestedName() {
     if (StringUtil.isEmptyOrSpaces(buildFilePath)) return null;
     if (hasSingleRun()) {
-      String test = testMethod.isEmpty() ? StringUtil.getShortName(testClass)
-                                         : StringUtil.getShortName(testClass) + "." + testMethod;
+      String shortClass = StringUtil.getShortName(testClass);
+      String test = testMethod.isEmpty() ? shortClass : shortClass + "." + testMethod;
       return HaxeBundle.message("haxe.test.config.suggested.single.name", test, PathUtil.getFileName(buildFilePath));
     }
     return HaxeBundle.message("haxe.test.config.suggested.name", PathUtil.getFileName(buildFilePath));

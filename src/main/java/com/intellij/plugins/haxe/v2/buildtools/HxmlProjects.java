@@ -4,7 +4,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
-import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

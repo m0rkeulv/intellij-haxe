@@ -42,6 +42,15 @@ public final class LimeProjects {
   /** The default action a lime-family file compiles with. */
   public static final String BUILD_ACTION = "build";
 
+  /** The target flags whose packaged app is a host-launchable binary (see {@link #packagedBinary}). */
+  public static final Set<String> HOST_LAUNCHABLE_TARGETS = Set.of("neko", "hl", "cpp", "windows", "linux", "mac");
+
+  /** The target flags whose packaged artifact is a swf, hosted under adl for test runs. */
+  public static final Set<String> FLASH_FAMILY_TARGETS = Set.of("flash", "air");
+
+  /** The target flags whose packaged app runs in a BROWSER page, served and console-captured for test runs. */
+  public static final Set<String> BROWSER_TARGETS = Set.of("html5");
+
   private LimeProjects() {
   }
 
@@ -177,15 +186,6 @@ public final class LimeProjects {
     }
     return Map.of();
   }
-
-  /** The target flags whose packaged app is a host-launchable binary (see {@link #packagedBinary}). */
-  public static final Set<String> HOST_LAUNCHABLE_TARGETS = Set.of("neko", "hl", "cpp", "windows", "linux", "mac");
-
-  /** The target flags whose packaged artifact is a swf, hosted under adl for test runs. */
-  public static final Set<String> FLASH_FAMILY_TARGETS = Set.of("flash", "air");
-
-  /** The target flags whose packaged app runs in a BROWSER page, served and console-captured for test runs. */
-  public static final Set<String> BROWSER_TARGETS = Set.of("html5");
 
   /** Whether the flag's tests run under an IDE-provided host (adl for the flash family, a served browser page for html5). */
   public static boolean isHostedTarget(@NotNull String targetFlag) {

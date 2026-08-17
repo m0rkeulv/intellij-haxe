@@ -260,8 +260,7 @@ final class HaxeToolWindowModelBuilder {
     if (display == null) {
       return raw;
     }
-    List<HaxeBuildFileInfo.HaxeLibDependency> libraries =
-      !display.libraries().isEmpty() ? display.libraries() : raw.libraries();
+    var libraries = !display.libraries().isEmpty() ? display.libraries() : raw.libraries();
     // target + output come from the evaluation too: the actual haxe target and
     // artifact path of the SELECTED lime target (the raw xml declares neither)
     return new HaxeBuildFileInfo(display.target(), display.targetOutput(), display.defines(), libraries,
@@ -291,8 +290,7 @@ final class HaxeToolWindowModelBuilder {
       return withArtifact;
     }
     HaxeBuildFileInfo prepared = evaluation.info();
-    List<HaxeBuildFileInfo.HaxeLibDependency> libraries =
-      !prepared.libraries().isEmpty() ? prepared.libraries() : raw.libraries();
+    var libraries = !prepared.libraries().isEmpty() ? prepared.libraries() : raw.libraries();
     return new HaxeBuildFileInfo(withArtifact.target(), withArtifact.targetOutput(), prepared.defines(), libraries,
                                  prepared.classpaths());
   }

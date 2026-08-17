@@ -769,7 +769,7 @@
             text="NMML file" description="Create new NMML file">
       <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFromTemplate"/>
     </action>
-    <action id="Haxe.RegisterBuildFile" class="com.intellij.plugins.haxe.v2.buildtools.HaxeRegisterBuildFileAction"
+    <action id="Haxe.RegisterBuildFile" class="com.intellij.plugins.haxe.v2.toolwindow.actions.HaxeRegisterBuildFileAction"
             text="Add as Haxe Build File" description="Register this file as a Haxe build file of a module">
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </action>

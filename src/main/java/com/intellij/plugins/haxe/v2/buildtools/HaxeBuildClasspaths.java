@@ -52,10 +52,11 @@ public final class HaxeBuildClasspaths {
 
     List<String> directories = new ArrayList<>();
     directories.add(parent.getPath());
+    LocalFileSystem localFs = LocalFileSystem.getInstance();
     for (String classpath : classpaths) {
       String normalized = FileUtil.toSystemIndependentName(classpath.trim());
       VirtualFile resolved = OSAgnosticPathUtil.isAbsolute(normalized)
-                             ? LocalFileSystem.getInstance().findFileByPath(normalized)
+                             ? localFs.findFileByPath(normalized)
                              : parent.findFileByRelativePath(normalized);
       if (resolved != null && resolved.isDirectory()) {
         directories.add(resolved.getPath());

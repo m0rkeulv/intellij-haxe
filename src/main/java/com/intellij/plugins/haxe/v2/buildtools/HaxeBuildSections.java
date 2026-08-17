@@ -2,12 +2,7 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
-import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
-import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
+import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeSectionSelectionStore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

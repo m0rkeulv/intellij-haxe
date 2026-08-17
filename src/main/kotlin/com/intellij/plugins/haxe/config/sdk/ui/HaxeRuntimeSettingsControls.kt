@@ -30,7 +30,7 @@ import org.jetbrains.annotations.Nls
 fun executableField(@Nls chooserTitle: String): TextFieldWithBrowseButton {
   // an ExtendableTextField, so the field can show the inherited value as grayed empty text
   val field = TextFieldWithBrowseButton(ExtendableTextField())
-  val descriptor = FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor().withTitle(chooserTitle)
+  val descriptor = FileChooserDescriptorFactory.singleFile().withTitle(chooserTitle)
   field.addBrowseFolderListener(TextBrowseFolderListener(descriptor))
   return field
 }
@@ -69,15 +69,13 @@ class FlexSdkSelector(@Nls emptyText: String) {
   /** What the "not set" item reads as (panels showing an inherited value update it live). */
   fun setEmptyText(@Nls emptyText: String) {
     combo.renderer = listCellRenderer(emptyText) {
-      val name = value
-      if (name != null) {
-        val sdk = ProjectJdkTable.getInstance().findJdk(name)
-        if (sdk == null) {
-          text(name) { foreground = JBColor.RED }
-        } else {
-          (sdk.sdkType as? SdkType)?.icon?.let { icon(it) }
-          text(name)
-        }
+      // the platform overload renders emptyText for the null item itself - the block only sees real names
+      val sdk = ProjectJdkTable.getInstance().findJdk(value)
+      if (sdk == null) {
+        text(value) { foreground = JBColor.RED }
+      } else {
+        (sdk.sdkType as? SdkType)?.icon?.let { icon(it) }
+        text(value)
       }
     }
   }

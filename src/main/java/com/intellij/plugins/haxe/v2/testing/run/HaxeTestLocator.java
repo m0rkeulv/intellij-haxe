@@ -6,6 +6,7 @@ import com.intellij.execution.testframework.sm.runner.SMTestLocator;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestNameLocation;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
@@ -22,7 +23,7 @@ import java.util.List;
 public final class HaxeTestLocator implements SMTestLocator {
 
   /** The protocol of the converter-injected name hints (reporter-emitted hints carry their own). */
-  public static final String PROTOCOL = "haxe:test";
+  public static final String PROTOCOL = HaxeTestNameLocation.PROTOCOL;
   public static final HaxeTestLocator INSTANCE = new HaxeTestLocator();
 
   private HaxeTestLocator() {

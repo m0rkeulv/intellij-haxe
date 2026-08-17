@@ -616,7 +616,8 @@ final class HaxeTestLaunchPlanner {
     if (appFile == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.app.file", file.getName()));
     }
-    String appPath = content == null ? null : ProjectXmlParser.parseAppPath(content);
+    // content is non-null here: a null load already failed the appFile guard
+    String appPath = ProjectXmlParser.parseAppPath(content);
     String outputRoot = appPath != null ? appPath : "bin";
     NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact(targetFlag, appFile, outputRoot);
     if (artifact == null) {

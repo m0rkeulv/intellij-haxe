@@ -32,6 +32,13 @@ import java.util.Set;
 /// ambiguous to the two rewrites).
 public final class HaxeTestNameLocation {
 
+  /**
+   * The protocol of the converter-injected name hints (reporter-emitted
+   * hints carry their own). Lives here rather than on the locator because
+   * {@code v2.testing} must not depend on {@code v2.testing.run}.
+   */
+  public static final String PROTOCOL = "haxe:test";
+
   private HaxeTestNameLocation() {
   }
 

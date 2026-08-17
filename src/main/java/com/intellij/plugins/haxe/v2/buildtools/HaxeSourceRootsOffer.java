@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.MessageDialogBuilder;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -34,11 +35,11 @@ public final class HaxeSourceRootsOffer {
       () -> HaxeSourceRootsInitializer.INSTANCE.uncoveredSourceDirs(project, containerId, buildFile));
     if (uncovered.isEmpty()) return;
 
-    int answer = Messages.showYesNoDialog(project,
-                                          HaxeBundle.message("haxe.roots.offer.message", file.getName()),
-                                          HaxeBundle.message("haxe.roots.offer.title"),
-                                          Messages.getQuestionIcon());
-    if (answer != Messages.YES) return;
+    boolean accepted = MessageDialogBuilder
+      .yesNo(HaxeBundle.message("haxe.roots.offer.title"), HaxeBundle.message("haxe.roots.offer.message", file.getName()))
+      .icon(Messages.getQuestionIcon())
+      .ask(project);
+    if (!accepted) return;
 
     HaxeSourceRootsApplier.getInstance(project).applyFromBuildFileAsync(containerId, buildFile);
   }

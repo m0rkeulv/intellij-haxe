@@ -379,25 +379,30 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   /** The build system's debug compile additions for the file's current selection, or null when it has none. */
   @Nullable
   static List<String> debugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return null;
+    HaxeBuildFile buildFile = resolveBuildFile(project, buildFilePath);
+    if (buildFile == null) return null;
     return ReadAction.computeBlocking(
-      () -> HaxeBuildSystem.of(type).debugCompileAdditions(project, new HaxeBuildFile(file, type)));
+      () -> HaxeBuildSystem.of(buildFile.type()).debugCompileAdditions(project, buildFile));
   }
 
   /** Debug additions for a single-run compile: always the plain haxe spelling for the selected target (see the call site). */
   @Nullable
   private static List<String> singleRunDebugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
+    HaxeBuildFile buildFile = resolveBuildFile(project, buildFilePath);
+    if (buildFile == null) return null;
+    return ReadAction.computeBlocking(() -> {
+      HaxeTarget target = HaxeBuildSystem.of(buildFile.type()).launchTarget(project, buildFile);
+      return target != null ? HaxeDebugAdditions.forTarget(target) : null;
+    });
+  }
+
+  /** The path's typed build-file handle, or null when it resolves to no known build file. */
+  @Nullable
+  private static HaxeBuildFile resolveBuildFile(@NotNull Project project, @NotNull String buildFilePath) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return null;
-    return ReadAction.computeBlocking(() -> {
-      HaxeTarget target = HaxeBuildSystem.of(type).launchTarget(project, new HaxeBuildFile(file, type));
-      return target != null ? HaxeDebugAdditions.forTarget(target) : null;
-    });
+    return type == null ? null : new HaxeBuildFile(file, type);
   }
 
   private static void notifyFailure(@NotNull Project project, @NotNull String message) {

@@ -106,7 +106,7 @@ public final class HaxeToolWindowNodes {
   }
 
   /** "Tests" grouping row under the container's marked tests build file, holding the test-run entries. */
-  public record TestsGroupNode(@NotNull String ownerId, int count) implements HaxeToolWindowNode {
+  public record TestsGroupNode() implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
       return "tests";

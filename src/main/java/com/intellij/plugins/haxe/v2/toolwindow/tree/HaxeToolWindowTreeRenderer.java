@@ -112,10 +112,9 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         append(HaxeBundle.message("haxe.toolwindow.node.actions"));
         append(" (" + actionsGroup.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
-      case TestsGroupNode testsGroup -> {
+      case TestsGroupNode ignored -> {
         setIcon(AllIcons.Nodes.TestSourceFolder);
         append(HaxeBundle.message("haxe.toolwindow.node.tests.group"));
-        append(" (" + testsGroup.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
       case ActionNode actionNode -> {
         setIcon(isBuildAction(actionNode.name()) ? AllIcons.Actions.Compile : AllIcons.Actions.Execute);

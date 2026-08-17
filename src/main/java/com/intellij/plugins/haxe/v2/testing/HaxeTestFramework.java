@@ -103,7 +103,7 @@ public interface HaxeTestFramework {
                                          @NotNull GlobalSearchScope scope,
                                          @NotNull String protocol,
                                          @NotNull String path) {
-    if (!"haxe:test".equals(protocol)) return null;
+    if (!HaxeTestNameLocation.PROTOCOL.equals(protocol)) return null;
     int marker = path.lastIndexOf("?build=");
     String name = marker < 0 ? path : path.substring(0, marker);
     String buildFilePath = marker < 0 ? null : path.substring(marker + "?build=".length());

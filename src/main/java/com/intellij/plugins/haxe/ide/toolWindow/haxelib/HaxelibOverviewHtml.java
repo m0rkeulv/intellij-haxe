@@ -62,16 +62,20 @@ final class HaxelibOverviewHtml {
     appendFact(html, HaxeBundle.message("haxelib.explorer.owner"), info.owner());
     if (!info.website().isEmpty()) {
       String url = StringUtil.escapeXmlEntities(info.website());
-      html.append("<tr><td>").append(HaxeBundle.message("haxelib.explorer.website"))
-        .append("</td><td><a href=\"").append(url).append("\">").append(url).append("</a></td></tr>");
+      String websiteRow = """
+        <tr><td>%s</td><td><a href="%s">%s</a></td></tr>\
+        """.formatted(HaxeBundle.message("haxelib.explorer.website"), url, url);
+      html.append(websiteRow);
     }
     html.append("</table>");
   }
 
   private static void appendFact(@NotNull StringBuilder html, @Nls String label, @NotNull String value) {
     if (value.isEmpty()) return;
-    html.append("<tr><td>").append(label).append("</td><td>")
-      .append(StringUtil.escapeXmlEntities(value)).append("</td></tr>");
+    String row = """
+      <tr><td>%s</td><td>%s</td></tr>\
+      """.formatted(label, StringUtil.escapeXmlEntities(value));
+    html.append(row);
   }
 
   private static void appendInstalled(@NotNull StringBuilder html,
@@ -124,9 +128,12 @@ final class HaxelibOverviewHtml {
     List<HaxelibLibraryInfo.Release> newestFirst = releases.reversed();
     int shown = Math.min(RELEASES_SHOWN, newestFirst.size());
     for (HaxelibLibraryInfo.Release release : newestFirst.subList(0, shown)) {
-      html.append("<tr><td><b>").append(StringUtil.escapeXmlEntities(release.version())).append("</b></td><td>")
-        .append(StringUtil.escapeXmlEntities(release.date())).append("</td><td>")
-        .append(StringUtil.escapeXmlEntities(release.note())).append("</td></tr>");
+      String releaseRow = """
+        <tr><td><b>%s</b></td><td>%s</td><td>%s</td></tr>\
+        """.formatted(StringUtil.escapeXmlEntities(release.version()),
+                      StringUtil.escapeXmlEntities(release.date()),
+                      StringUtil.escapeXmlEntities(release.note()));
+      html.append(releaseRow);
     }
     html.append("</table>");
     if (newestFirst.size() > shown) {

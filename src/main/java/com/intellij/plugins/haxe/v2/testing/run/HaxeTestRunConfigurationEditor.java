@@ -21,6 +21,7 @@ import javax.swing.*;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Editor for {@link HaxeTestRunConfiguration}: the tests build file (any known
@@ -70,24 +71,24 @@ public final class HaxeTestRunConfigurationEditor extends SettingsEditor<HaxeTes
   @NotNull
   private Set<String> collectBuildFilePaths() {
     // the scanner walks module roots - EDT has no implicit read access
-    Set<String> paths = ReadAction.computeBlocking(() -> {
-      Set<String> collected = new LinkedHashSet<>();
-      for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scanProjectRoot(project)) {
+    Set<String> paths = ReadAction.computeBlocking(this::scanKnownBuildFiles);
+    return paths.stream()
+      .sorted(Comparator.comparing(PathUtil::getFileName, String.CASE_INSENSITIVE_ORDER))
+      .collect(Collectors.toCollection(LinkedHashSet::new));
+  }
+
+  @NotNull
+  private Set<String> scanKnownBuildFiles() {
+    Set<String> collected = new LinkedHashSet<>();
+    for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scanProjectRoot(project)) {
+      collected.add(buildFile.file().getPath());
+    }
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scan(module)) {
         collected.add(buildFile.file().getPath());
       }
-      for (Module module : ModuleManager.getInstance(project).getModules()) {
-        for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scan(module)) {
-          collected.add(buildFile.file().getPath());
-        }
-      }
-      collected.addAll(HaxeBuildFilesStore.getInstance(project).getAllAddedPaths());
-      return collected;
-    });
-
-    Set<String> sorted = new LinkedHashSet<>();
-    paths.stream()
-      .sorted(Comparator.comparing(PathUtil::getFileName, String.CASE_INSENSITIVE_ORDER))
-      .forEach(sorted::add);
-    return sorted;
+    }
+    collected.addAll(HaxeBuildFilesStore.getInstance(project).getAllAddedPaths());
+    return collected;
   }
 }

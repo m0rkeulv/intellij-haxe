@@ -29,7 +29,6 @@ import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.metadata.psi.impl.HaxeMetadataTypeName;
 import com.intellij.plugins.haxe.model.HaxeEnumValueConstructorModel;
-import com.intellij.plugins.haxe.model.HaxeMemberModel;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
 
 import com.intellij.plugins.haxe.model.HaxeParameterModel;
@@ -97,7 +96,7 @@ public abstract class HaxeMethodPsiMixinImpl extends HaxeStubBasedNamedComponent
 
   // implements HaxeMethod.isDeclaredPublic (declared on the interface the concrete impls carry, not the mixin's own supertypes)
   public boolean isDeclaredPublic() {
-    return getModel() instanceof HaxeMemberModel member ? member.isDeclaredPublic() : isPublic();
+    return getModel().isDeclaredPublic();
   }
 
   private HaxeMethodModel _model = null;

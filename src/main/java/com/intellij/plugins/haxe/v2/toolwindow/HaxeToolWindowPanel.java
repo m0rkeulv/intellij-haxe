@@ -135,7 +135,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     tree.addMouseListener(new TreeClickHandler());
     PopupHandler.installPopupMenu(tree, createTreePopupGroup(), TREE_POPUP_PLACE);
     TreeSpeedSearch.installOn(tree, true, HaxeToolWindowPanel::speedSearchText);
-    new TreeEnterAction().registerCustomShortcutSet(CustomShortcutSet.fromString("ENTER"), tree, this);
+    new TreeEnterAction().registerCustomShortcutSet(CommonShortcuts.ENTER, tree, this);
     new TreeDeleteAction().registerCustomShortcutSet(CommonShortcuts.getDelete(), tree, this);
 
     setToolbar(createToolbar());
@@ -344,7 +344,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   @NotNull
   private static DefaultMutableTreeNode buildTestsGroupNode(@NotNull FileEntry entry) {
     String path = entry.buildFile().file().getPath();
-    DefaultMutableTreeNode testsNode = new DefaultMutableTreeNode(new TestsGroupNode(path, 1));
+    DefaultMutableTreeNode testsNode = new DefaultMutableTreeNode(new TestsGroupNode());
     testsNode.add(new DefaultMutableTreeNode(new TestRunNode(path)));
     return testsNode;
   }
@@ -434,8 +434,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       new DefaultMutableTreeNode(new GroupNode(GroupKind.LIBRARIES, info.libraries().size()));
     for (HaxeBuildFileInfo.HaxeLibDependency library : info.libraries()) {
       String key = library.name().toLowerCase(Locale.ROOT);
-      HaxeToolWindowModelBuilder.InstalledLibrary installedLibrary =
-        installedLibraries != null ? installedLibraries.get(key) : null;
+      var installedLibrary = installedLibraries != null ? installedLibraries.get(key) : null;
       // a pinned version must itself be installed - the name alone is not enough
       boolean pinSatisfied = library.version() == null
                              || (installedLibrary != null && installedLibrary.versions().contains(library.version()));
@@ -849,9 +848,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       RelativePoint point = new RelativePoint(e.getComponent(), e.getPoint());
 
       if (clicks == 1) {
-        handleSingleClick(userObject, point, fragmentTagAt(e, path));
+        interactWithNode(userObject, point, fragmentTagAt(e, path));
       } else if (clicks == 2) {
-        handleDoubleClick(userObject);
+        activateNode(userObject);
       }
     }
 
@@ -868,13 +867,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       return colored.getFragmentTagAt(e.getX() - bounds.x);
     }
 
-    private void handleSingleClick(@Nullable Object userObject, @NotNull RelativePoint point, @Nullable Object fragmentTag) {
-      interactWithNode(userObject, point, fragmentTag);
-    }
-
-    private void handleDoubleClick(@Nullable Object userObject) {
-      activateNode(userObject);
-    }
   }
 
   /** Opens the server console at the tab serving this container's SDK — the status view holds the failure detail. */
@@ -975,7 +967,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     }
   }
 
-  private void confirmAndRemoveBuildFile(@NotNull BuildFileRow row) {
+  public void confirmAndRemoveBuildFile(@NotNull BuildFileRow row) {
     String confirmKey = row.manual() ? "haxe.toolwindow.remove.build.file.confirm"
                                      : "haxe.toolwindow.hide.build.file.confirm";
     String titleKey = row.manual() ? "haxe.toolwindow.remove.build.file" : "haxe.toolwindow.hide.build.file";

@@ -21,14 +21,7 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.haxelib.HaxelibCacheManager;
-import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
-import com.intellij.plugins.haxe.haxelib.HaxelibLibraryInfo;
-import com.intellij.plugins.haxe.haxelib.HaxelibLocalDocs;
-import com.intellij.plugins.haxe.haxelib.HaxelibSdkUtils;
-import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
-import com.intellij.plugins.haxe.haxelib.HaxelibUtil;
-import com.intellij.plugins.haxe.ide.documentation.HaxeDocumentationRenderer;
+import com.intellij.plugins.haxe.haxelib.*;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.DocumentAdapter;
@@ -42,10 +35,6 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.components.BorderLayoutPanel;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -123,7 +112,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   private final HaxelibDetailsPane details =
     new HaxelibDetailsPane(HaxeBundle.message("haxelib.explorer.tab.overview"));
   private final HaxelibExplorerFilters filters = new HaxelibExplorerFilters(this::refilter);
-  private final HaxeDocumentationRenderer markdownRenderer;
+  private final HaxelibDocsLoader docsLoader;
 
   private volatile List<LibraryRow> allRows = List.of();
   // name -> latest release from already-cached info; rebuilt on every
@@ -142,7 +131,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
 
   public HaxelibExplorerPanel(@NotNull Project project) {
     this.project = project;
-    this.markdownRenderer = new HaxeDocumentationRenderer(project);
+    this.docsLoader = new HaxelibDocsLoader(project);
 
     tree.setRootVisible(false);
     tree.setShowsRootHandles(true);
@@ -310,8 +299,9 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
       }
     }
     // installed first, alphabetical within each group
-    rows.sort(Comparator.comparing((LibraryRow row) -> !row.installed())
-                .thenComparing(LibraryRow::name, String.CASE_INSENSITIVE_ORDER));
+    Comparator<LibraryRow> installedFirstByName = Comparator.comparing((LibraryRow row) -> !row.installed())
+      .thenComparing(LibraryRow::name, String.CASE_INSENSITIVE_ORDER);
+    rows.sort(installedFirstByName);
     return rows;
   }
 
@@ -552,7 +542,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
 
   /** The version list under a library: dev/git and local-only versions first, then every release newest-first. */
   @NotNull
-  static List<VersionEntry> versionEntries(@NotNull LibraryRow row, @Nullable HaxelibLibraryInfo info) {
+  private static List<VersionEntry> versionEntries(@NotNull LibraryRow row, @Nullable HaxelibLibraryInfo info) {
     List<VersionEntry> entries = new ArrayList<>();
     Set<String> covered = new LinkedHashSet<>();
     for (String pseudo : List.of(HaxelibSemVer.DEV, HaxelibSemVer.GIT_SCM)) {
@@ -616,15 +606,36 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     AppExecutorUtil.getAppExecutorService().execute(() -> {
       HaxelibLibraryInfo info = manager == null ? null : manager.getLibraryInfo(row.name());
       Path repoRoot = repositoryRoot();
-      List<HaxelibDetailsPane.DocTab> docs =
-        docsVersion == null || repoRoot == null ? List.of() : loadDocs(repoRoot, row.name(), docsVersion);
-      String devPath = row.dev() && repoRoot != null ? HaxelibLocalDocs.devPath(repoRoot, row.name()) : null;
-      HaxelibLocalDocs.GitCheckout gitCheckout =
-        row.git() && repoRoot != null ? HaxelibLocalDocs.gitCheckout(repoRoot, row.name()) : null;
-      onUi(selectionGeneration, expected,
-           () -> details.showLibrary(row.name(), row.installedVersions(), row.selectedVersion(),
-                                     devPath, gitCheckout, info, docs));
+      List<HaxelibDetailsPane.DocTab> docs = loadDocsFor(row, docsVersion, repoRoot);
+      String devPath = devPathFor(row, repoRoot);
+      HaxelibLocalDocs.GitCheckout gitCheckout = gitCheckoutFor(row, repoRoot);
+      Runnable render = () -> details.showLibrary(row.name(), row.installedVersions(), row.selectedVersion(),
+                                                  devPath, gitCheckout, info, docs);
+      onUi(selectionGeneration, expected, render);
     });
+  }
+
+  /** The version's doc tabs; none without a resolvable repository or an installed version to read from. */
+  @NotNull
+  private List<HaxelibDetailsPane.DocTab> loadDocsFor(@NotNull LibraryRow row,
+                                                      @Nullable String docsVersion,
+                                                      @Nullable Path repoRoot) {
+    if (docsVersion == null || repoRoot == null) return List.of();
+    return docsLoader.loadDocs(repoRoot, row.name(), docsVersion);
+  }
+
+  /** The dev pseudo-version's target directory; null for non-dev rows or without a resolvable repository. */
+  @Nullable
+  private static String devPathFor(@NotNull LibraryRow row, @Nullable Path repoRoot) {
+    if (!row.dev() || repoRoot == null) return null;
+    return HaxelibLocalDocs.devPath(repoRoot, row.name());
+  }
+
+  /** The git pseudo-version's branch/commit; null for non-git rows or without a resolvable repository. */
+  @Nullable
+  private static HaxelibLocalDocs.GitCheckout gitCheckoutFor(@NotNull LibraryRow row, @Nullable Path repoRoot) {
+    if (!row.git() || repoRoot == null) return null;
+    return HaxelibLocalDocs.gitCheckout(repoRoot, row.name());
   }
 
   /** The version whose local files feed the doc tabs: the selected version node, else the library's current one. */
@@ -634,54 +645,6 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
       return entry.version();
     }
     return row.selectedVersion();
-  }
-
-  @NotNull
-  private List<HaxelibDetailsPane.DocTab> loadDocs(@NotNull Path repoRoot, @NotNull String name, @NotNull String version) {
-    Path directory = HaxelibLocalDocs.versionDirectory(repoRoot, name, version);
-    if (directory == null) return List.of();
-    List<HaxelibDetailsPane.DocTab> docs = new ArrayList<>();
-    URL base = directoryUrl(directory);
-    for (Path file : HaxelibLocalDocs.docFiles(directory)) {
-      try {
-        String markdown = Files.readString(file);
-        // the renderer's code-fence highlighting lexes through the
-        // platform's editor machinery, which requires the read lock even
-        // off the EDT
-        String rendered = ReadAction.nonBlocking(() -> markdownRenderer.parseAndRender(markdown))
-          .executeSynchronously();
-        String html = "<html><body>" + adaptImagesForSwing(rendered) + "</body></html>";
-        docs.add(new HaxelibDetailsPane.DocTab(file.getFileName().toString(), html, base));
-      }
-      catch (IOException ignored) {
-        // an unreadable doc file just contributes no tab
-      }
-    }
-    return docs;
-  }
-
-  /**
-   * Swing's HTML viewer draws a colored border around an image inside a
-   * link unless the img carries border=0, and cannot decode SVG at all —
-   * the typical CI/version badges would each render as a broken-image box,
-   * so those are dropped.
-   */
-  @NotNull
-  private static String adaptImagesForSwing(@NotNull String html) {
-    // an entire <img ...> tag whose src attribute points at an .svg file or
-    // a shields.io badge (served as SVG regardless of extension)
-    String withoutSvg = html.replaceAll("<img[^>]*src=\"[^\"]*(?:\\.svg|img\\.shields\\.io)[^\"]*\"[^>]*>", "");
-    return withoutSvg.replace("<img ", "<img border=\"0\" ");
-  }
-
-  @Nullable
-  private static URL directoryUrl(@NotNull Path directory) {
-    try {
-      return directory.toUri().toURL();
-    }
-    catch (MalformedURLException e) {
-      return null;
-    }
   }
 
   @Nullable

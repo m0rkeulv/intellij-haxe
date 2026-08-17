@@ -167,25 +167,25 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
       flushPendingOutput(event.name(), outputType, visitor);
     }
 
-    boolean result =
-      super.processServiceMessages(injectLocationHint(rewriteWarningOnlyMessage(text), testsBuildFilePath), outputType, visitor);
+    String rewritten = rewriteWarningOnlyMessage(text);
+    String withHint = injectLocationHint(rewritten, testsBuildFilePath);
+    boolean result = super.processServiceMessages(withHint, outputType, visitor);
 
     if (normalizedName != null) {
-      // the batch arrives after ALL output - each test's buffered lines
-      // follow its started event straight away
-      if (event.is("testStarted")) {
-        runningTest = normalizedName;
-        flushPendingOutput(event.name(), outputType, visitor);
-      }
-      if (event.is("testFinished")) {
-        completedTests.add(normalizedName);
-        runningTest = null;
-      }
-      if (event.is("testSuiteFinished")) {
-        finishedSuites.add(normalizedName);
-      }
-      if (event.is("testFailed")) {
-        pendingFailedFinish = event.name();
+      switch (event.kind()) {
+        // the batch arrives after ALL output - each test's buffered lines
+        // follow its started event straight away
+        case "testStarted" -> {
+          runningTest = normalizedName;
+          flushPendingOutput(event.name(), outputType, visitor);
+        }
+        case "testFinished" -> {
+          completedTests.add(normalizedName);
+          runningTest = null;
+        }
+        case "testSuiteFinished" -> finishedSuites.add(normalizedName);
+        case "testFailed" -> pendingFailedFinish = event.name();
+        default -> { }
       }
     }
     return result;
@@ -256,11 +256,6 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
       .replace("|r", " ")
       .trim();
     return "##teamcity[testFailed name='" + name + "' message='" + warningText + "']";
-  }
-
-  @NotNull
-  static String injectLocationHint(@NotNull String text) {
-    return injectLocationHint(text, null);
   }
 
   /**

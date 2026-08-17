@@ -142,19 +142,23 @@ public final class HaxeTestRunConfigurations {
    * background; only the configuration mutation lands on the EDT.
    */
   public static void resyncCompileSteps(@NotNull Project project) {
-    ReadAction.nonBlocking(() -> {
-        List<Runnable> applications = new ArrayList<>();
-        for (RunnerAndConfigurationSettings settings : RunManager.getInstance(project).getAllSettings()) {
-          if (settings.getConfiguration() instanceof HaxeTestRunConfiguration configuration) {
-            List<BeforeRunTask<?>> tasks = configuration.computedCompileStep();
-            applications.add(() -> configuration.setBeforeRunTasks(tasks));
-          }
-        }
-        return applications;
-      })
+    ReadAction.nonBlocking(() -> compileStepUpdates(project))
       .expireWith(project)
       .finishOnUiThread(ModalityState.defaultModalityState(), applications -> applications.forEach(Runnable::run))
       .submit(AppExecutorUtil.getAppExecutorService());
+  }
+
+  /** One deferred setBeforeRunTasks per test configuration, computed under the caller's read action. */
+  @NotNull
+  private static List<Runnable> compileStepUpdates(@NotNull Project project) {
+    List<Runnable> applications = new ArrayList<>();
+    for (RunnerAndConfigurationSettings settings : RunManager.getInstance(project).getAllSettings()) {
+      if (settings.getConfiguration() instanceof HaxeTestRunConfiguration configuration) {
+        List<BeforeRunTask<?>> tasks = configuration.computedCompileStep();
+        applications.add(() -> configuration.setBeforeRunTasks(tasks));
+      }
+    }
+    return applications;
   }
 
   /**

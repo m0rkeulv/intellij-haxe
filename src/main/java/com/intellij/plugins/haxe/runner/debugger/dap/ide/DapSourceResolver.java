@@ -53,8 +53,9 @@ public final class DapSourceResolver {
   }
 
   private static @Nullable VirtualFile findFile(Project project, String normalized, List<String> sourceDirectories) {
+    LocalFileSystem localFs = LocalFileSystem.getInstance();
     if (isAbsolute(normalized)) {
-      VirtualFile absolute = LocalFileSystem.getInstance().findFileByPath(normalized);
+      VirtualFile absolute = localFs.findFileByPath(normalized);
       if (absolute != null) {
         return absolute;
       }
@@ -63,7 +64,7 @@ public final class DapSourceResolver {
     // the fastest and most precise answer: the relative name resolved
     // directly against the build's own classpath roots
     for (String directory : sourceDirectories) {
-      VirtualFile underRoot = LocalFileSystem.getInstance().findFileByPath(directory + "/" + normalized);
+      VirtualFile underRoot = localFs.findFileByPath(directory + "/" + normalized);
       if (underRoot != null) {
         return underRoot;
       }
@@ -79,17 +80,21 @@ public final class DapSourceResolver {
       FilenameIndex.getVirtualFilesByName(fileName, GlobalSearchScope.allScope(project));
     VirtualFile suffixMatch = null;
     VirtualFile byName = null;
+    boolean byNameUnderRoots = false;
     for (VirtualFile candidate : candidates) {
-      boolean matchesSuffix = candidate.getPath().endsWith("/" + normalized) || candidate.getPath().equals(normalized);
-      boolean underRoots = DapSourceScopes.underAny(candidate.getPath(), sourceDirectories);
+      String candidatePath = candidate.getPath();
+      boolean matchesSuffix = candidatePath.endsWith("/" + normalized) || candidatePath.equals(normalized);
+      boolean underRoots = DapSourceScopes.underAny(candidatePath, sourceDirectories);
       if (matchesSuffix && underRoots) {
         return candidate;
       }
       if (matchesSuffix && suffixMatch == null) {
         suffixMatch = candidate;
       }
-      if (byName == null || (underRoots && !DapSourceScopes.underAny(byName.getPath(), sourceDirectories))) {
+      boolean betterByName = byName == null || (underRoots && !byNameUnderRoots);
+      if (betterByName) {
         byName = candidate;
+        byNameUnderRoots = underRoots;
       }
     }
     return suffixMatch != null ? suffixMatch : byName;

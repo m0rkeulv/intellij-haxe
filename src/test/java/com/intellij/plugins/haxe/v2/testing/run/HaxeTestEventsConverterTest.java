@@ -21,7 +21,7 @@ public class HaxeTestEventsConverterTest {
       ##teamcity[testStarted name='cases.SampleTest.testPasses' \
       locationHint='haxe:test://cases.SampleTest.testPasses']\
       """;
-    assertEquals(expected, injectLocationHint("##teamcity[testStarted name='cases.SampleTest.testPasses']"));
+    assertEquals(expected, injectLocationHint("##teamcity[testStarted name='cases.SampleTest.testPasses']", null));
   }
 
   @Test
@@ -42,14 +42,14 @@ public class HaxeTestEventsConverterTest {
       ##teamcity[testSuiteStarted name='cases.SampleTest' \
       locationHint='haxe:test://cases.SampleTest']\
       """;
-    assertEquals(expected, injectLocationHint("##teamcity[testSuiteStarted name='cases.SampleTest']"));
+    assertEquals(expected, injectLocationHint("##teamcity[testSuiteStarted name='cases.SampleTest']", null));
   }
 
   @Test
   @DisplayName("existing location hint is kept")
   public void testExistingLocationHintIsKept() {
     String withHint = "##teamcity[testStarted name='A.testX' locationHint='file://x']";
-    assertEquals(withHint, injectLocationHint(withHint));
+    assertEquals(withHint, injectLocationHint(withHint, null));
   }
 
   @Test
@@ -59,15 +59,15 @@ public class HaxeTestEventsConverterTest {
       ##teamcity[testStarted name='A.test|'quoted|'' \
       locationHint='haxe:test://A.test|'quoted|'']\
       """;
-    assertEquals(expected, injectLocationHint("##teamcity[testStarted name='A.test|'quoted|'']"));
+    assertEquals(expected, injectLocationHint("##teamcity[testStarted name='A.test|'quoted|'']", null));
   }
 
   @Test
   @DisplayName("other events and plain output pass through")
   public void testOtherEventsAndPlainOutputPassThrough() {
     String failed = "##teamcity[testFailed name='A.testX' message='F' details='boom']";
-    assertEquals(failed, injectLocationHint(failed));
-    assertEquals("plain output line", injectLocationHint("plain output line"));
+    assertEquals(failed, injectLocationHint(failed, null));
+    assertEquals("plain output line", injectLocationHint("plain output line", null));
   }
 
   @Test

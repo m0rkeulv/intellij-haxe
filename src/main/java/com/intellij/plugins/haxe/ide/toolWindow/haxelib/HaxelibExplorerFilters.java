@@ -42,31 +42,26 @@ final class HaxelibExplorerFilters {
   @NotNull
   DefaultActionGroup createToggleGroup() {
     DefaultActionGroup group = new DefaultActionGroup();
-    group.add(toggle(Filter.INSTALLED,
-                     () -> HaxeBundle.message("haxelib.explorer.filter.installed"),
-                     AllIcons.Actions.Checked));
-    group.add(toggle(Filter.NOT_INSTALLED,
-                     () -> HaxeBundle.message("haxelib.explorer.filter.not.installed"),
-                     AllIcons.Actions.Download));
-    group.add(toggle(Filter.DEV,
-                     () -> HaxeBundle.message("haxelib.explorer.filter.dev"),
-                     AllIcons.Nodes.HomeFolder));
-    group.add(toggle(Filter.GIT,
-                     () -> HaxeBundle.message("haxelib.explorer.filter.git"),
-                     AllIcons.Vcs.Branch));
+    group.add(new FilterToggle(Filter.INSTALLED,
+                               () -> HaxeBundle.message("haxelib.explorer.filter.installed"),
+                               AllIcons.Actions.Checked));
+    group.add(new FilterToggle(Filter.NOT_INSTALLED,
+                               () -> HaxeBundle.message("haxelib.explorer.filter.not.installed"),
+                               AllIcons.Actions.Download));
+    group.add(new FilterToggle(Filter.DEV,
+                               () -> HaxeBundle.message("haxelib.explorer.filter.dev"),
+                               AllIcons.Nodes.HomeFolder));
+    group.add(new FilterToggle(Filter.GIT,
+                               () -> HaxeBundle.message("haxelib.explorer.filter.git"),
+                               AllIcons.Vcs.Branch));
     group.addSeparator();
-    group.add(toggle(Filter.ONLY_UPDATES,
-                     () -> HaxeBundle.message("haxelib.explorer.filter.only.updates"),
-                     AllIcons.General.ArrowUp));
-    group.add(toggle(Filter.BEHIND_LATEST,
-                     () -> HaxeBundle.message("haxelib.explorer.filter.behind.latest"),
-                     AllIcons.Vcs.History));
+    group.add(new FilterToggle(Filter.ONLY_UPDATES,
+                               () -> HaxeBundle.message("haxelib.explorer.filter.only.updates"),
+                               AllIcons.General.ArrowUp));
+    group.add(new FilterToggle(Filter.BEHIND_LATEST,
+                               () -> HaxeBundle.message("haxelib.explorer.filter.behind.latest"),
+                               AllIcons.Vcs.History));
     return group;
-  }
-
-  @NotNull
-  private ToggleAction toggle(@NotNull Filter filter, @NotNull Supplier<String> text, @NotNull Icon icon) {
-    return new FilterToggle(filter, text, icon);
   }
 
   private final class FilterToggle extends ToggleAction implements DumbAware {

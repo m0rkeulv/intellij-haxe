@@ -5,10 +5,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.ui.Messages;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleWorkspace;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ModuleNode;
@@ -38,29 +35,31 @@ public final class HaxeRemoveNodeAction extends DumbAwareAction {
     if (project == null) return;
     switch (panel.getSelectedUserObject()) {
       case ModuleNode moduleNode -> panel.confirmAndRemoveModule(moduleNode);
-      case BuildFileRow row -> {
-        HaxeBuildFilesStore.getInstance(project).removeFile(row.containerId(), row.buildFile().file().getPath());
-        panel.refreshTree();
-      }
+      // the same confirmation the Delete key shows - the toolbar path must not skip it
+      case BuildFileRow row -> panel.confirmAndRemoveBuildFile(row);
       case null, default -> { }
     }
   }
 
   @Override
   public void update(@NotNull AnActionEvent e) {
+    // text AND description per branch: the presentation is reused across selections
     switch (panel.getSelectedUserObject()) {
       case ModuleNode ignored -> {
         e.getPresentation().setEnabled(true);
         e.getPresentation().setText(HaxeBundle.message("haxe.toolwindow.remove.module"));
+        e.getPresentation().setDescription(HaxeBundle.message("haxe.toolwindow.remove.module.description"));
       }
       case BuildFileRow row -> {
         e.getPresentation().setEnabled(true);
         e.getPresentation().setText(HaxeBundle.message(row.manual() ? "haxe.toolwindow.remove.build.file"
                                                                     : "haxe.toolwindow.hide.build.file"));
+        e.getPresentation().setDescription(HaxeBundle.message("haxe.toolwindow.remove.build.file.description"));
       }
       case null, default -> {
         e.getPresentation().setEnabled(false);
         e.getPresentation().setText(HaxeBundle.message("haxe.toolwindow.remove.module"));
+        e.getPresentation().setDescription(HaxeBundle.message("haxe.toolwindow.remove.module.description"));
       }
     }
   }
