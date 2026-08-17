@@ -86,19 +86,9 @@ public class NodeAttachLiveProbe {
     Assumptions.assumeTrue(Files.isRegularFile(dapServerJs()), "js-debug adapter not provisioned - skipping");
 
     adapterPort = LiveProbeUtil.freePort();
-    adapter = new ProcessBuilder(nodeExe().toString(), dapServerJs().toString(),
-                                 String.valueOf(adapterPort), "127.0.0.1")
-      .directory(dapServerJs().getParent().toFile())
-      .redirectErrorStream(true)
-      .start();
-
-    BufferedReader stdout = new BufferedReader(
-      new InputStreamReader(adapter.getInputStream(), StandardCharsets.UTF_8));
-    String line = stdout.readLine();
-    probe("[adapter] " + line);
-    assertNotNull(line, "adapter announced nothing (died?)");
-    assertTrue(line.contains("Debug server listening"), "unexpected announcement: " + line);
-    gobble(stdout, "[adapter] ", null);
+    adapter = LiveProbeUtil.spawnAdapterServer(
+      List.of(nodeExe().toString(), dapServerJs().toString(), String.valueOf(adapterPort), "127.0.0.1"),
+      dapServerJs().getParent(), "Debug server listening", "adapter");
 
     parent = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT);
   }

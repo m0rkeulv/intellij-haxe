@@ -10,7 +10,9 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.Initialized
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import com.intellij.util.net.NetUtils;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -319,6 +321,40 @@ final class LiveProbeUtil {
   /** Connects to an adapter's DAP port, retrying briefly (see DapClient.connectWithRetry). */
   static DapClient connectWithRetry(int port, int connectTimeoutMillis) throws IOException {
     return DapClient.connectWithRetry("127.0.0.1", port, connectTimeoutMillis, 10_000);
+  }
+
+  /**
+   * Spawns a node-hosted adapter server, verifies its announcement line, and
+   * keeps DRAINING its merged output on a daemon thread. The drain is
+   * load-bearing: an undrained pipe blocks the adapter once the OS buffer
+   * fills, which reads as a wedged session minutes later - every spawn goes
+   * through here so it cannot be forgotten.
+   */
+  static Process spawnAdapterServer(List<String> command, Path workingDir,
+                                    String expectedAnnouncement, String tag) throws IOException {
+    Process adapter = new ProcessBuilder(command)
+      .directory(workingDir.toFile())
+      .redirectErrorStream(true)
+      .start();
+    BufferedReader stdout = new BufferedReader(
+      new InputStreamReader(adapter.getInputStream(), StandardCharsets.UTF_8));
+    String line = stdout.readLine();
+    System.out.println("[" + tag + "] " + line);
+    assertNotNull(line, tag + " announced nothing (died?)");
+    assertTrue(line.contains(expectedAnnouncement), "unexpected announcement: " + line);
+
+    Thread gobbler = new Thread(() -> {
+      try {
+        String out;
+        while ((out = stdout.readLine()) != null) {
+          System.out.println("[" + tag + "] " + out);
+        }
+      } catch (IOException ignored) {
+      }
+    }, tag + "-gobbler");
+    gobbler.setDaemon(true);
+    gobbler.start();
+    return adapter;
   }
 
   /**

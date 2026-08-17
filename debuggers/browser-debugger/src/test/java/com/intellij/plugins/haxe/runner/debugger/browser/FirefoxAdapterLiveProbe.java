@@ -76,32 +76,10 @@ public class FirefoxAdapterLiveProbe {
     Assumptions.assumeTrue(Files.isRegularFile(adapterBundle()), "firefox adapter not provisioned - skipping");
 
     int port = LiveProbeUtil.freePort();
-    adapter = new ProcessBuilder(nodeExe().toString(), adapterBundle().toString(), "--server=" + port)
-      // cwd = dist so the bundle finds mappings.wasm however it resolves it
-      .directory(adapterBundle().getParent().toFile())
-      .redirectErrorStream(true)
-      .start();
-
-    // wait for its "waiting for debug protocol on port N" announcement
-    BufferedReader stdout = new BufferedReader(
-      new InputStreamReader(adapter.getInputStream(), StandardCharsets.UTF_8));
-    String line = stdout.readLine();
-    System.out.println("[adapter] " + line);
-    assertNotNull(line, "adapter announced nothing (died?)");
-    assertTrue(line.contains("waiting for debug protocol"), "unexpected announcement: " + line);
-
-    // keep draining in the background so the adapter can't block on a full pipe
-    Thread gobbler = new Thread(() -> {
-      try {
-        String out;
-        while ((out = stdout.readLine()) != null) {
-          System.out.println("[adapter] " + out);
-        }
-      } catch (IOException ignored) {
-      }
-    }, "adapter-gobbler");
-    gobbler.setDaemon(true);
-    gobbler.start();
+    // cwd = dist so the bundle finds mappings.wasm however it resolves it
+    adapter = LiveProbeUtil.spawnAdapterServer(
+      List.of(nodeExe().toString(), adapterBundle().toString(), "--server=" + port),
+      adapterBundle().getParent(), "waiting for debug protocol", "adapter");
 
     adapterPort = port;
     client = connectWithRetry(port);
@@ -473,10 +451,9 @@ public class FirefoxAdapterLiveProbe {
   private boolean runSeparatorVariant(String label, Path fixture, Path firefox,
                                       ContentHttpServer content, String breakpointPath) throws Exception {
     int ownPort = LiveProbeUtil.freePort();
-    Process ownAdapter = new ProcessBuilder(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort)
-      .directory(adapterBundle().getParent().toFile())
-      .redirectErrorStream(true)
-      .start();
+    Process ownAdapter = LiveProbeUtil.spawnAdapterServer(
+      List.of(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort),
+      adapterBundle().getParent(), "waiting for debug protocol", "adapter-" + label);
 
     try {
       DapClient session = connectWithRetry(ownPort);
@@ -869,23 +846,9 @@ public class FirefoxAdapterLiveProbe {
     // every variant gets its OWN adapter process + first connection, so no
     // verdict is polluted by session-reuse behaviour of the adapter server
     int ownPort = LiveProbeUtil.freePort();
-    Process ownAdapter = new ProcessBuilder(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort)
-      .directory(adapterBundle().getParent().toFile())
-      .redirectErrorStream(true)
-      .start();
-
-    Thread gobbler = new Thread(() -> {
-      try (BufferedReader out = new BufferedReader(
-        new InputStreamReader(ownAdapter.getInputStream(), StandardCharsets.UTF_8))) {
-        String line;
-        while ((line = out.readLine()) != null) {
-          System.out.println("[adapter-" + variant + "] " + line);
-        }
-      } catch (IOException ignored) {
-      }
-    }, "adapter-gobbler-" + variant);
-    gobbler.setDaemon(true);
-    gobbler.start();
+    Process ownAdapter = LiveProbeUtil.spawnAdapterServer(
+      List.of(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort),
+      adapterBundle().getParent(), "waiting for debug protocol", "adapter-" + variant);
 
     try {
       DapClient session = connectWithRetry(ownPort);

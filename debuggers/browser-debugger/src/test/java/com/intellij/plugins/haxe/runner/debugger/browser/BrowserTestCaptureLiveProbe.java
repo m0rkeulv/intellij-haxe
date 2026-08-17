@@ -21,6 +21,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
@@ -91,18 +92,9 @@ public class BrowserTestCaptureLiveProbe {
     Assumptions.assumeTrue(Files.isDirectory(utestReporterRoot()), "reporter sources not found - skipping");
 
     adapterPort = LiveProbeUtil.freePort();
-    adapter = new ProcessBuilder(nodeExe().toString(), dapServerJs().toString(),
-                                 String.valueOf(adapterPort), "127.0.0.1")
-      .directory(dapServerJs().getParent().toFile())
-      .redirectErrorStream(true)
-      .start();
-
-    BufferedReader stdout = new BufferedReader(
-      new InputStreamReader(adapter.getInputStream(), StandardCharsets.UTF_8));
-    String line = stdout.readLine();
-    probe("[adapter] " + line);
-    assertNotNull(line, "adapter announced nothing (died?)");
-    assertTrue(line.contains("Debug server listening"), "unexpected announcement: " + line);
+    adapter = LiveProbeUtil.spawnAdapterServer(
+      List.of(nodeExe().toString(), dapServerJs().toString(), String.valueOf(adapterPort), "127.0.0.1"),
+      dapServerJs().getParent(), "Debug server listening", "adapter");
 
     parent = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT);
   }

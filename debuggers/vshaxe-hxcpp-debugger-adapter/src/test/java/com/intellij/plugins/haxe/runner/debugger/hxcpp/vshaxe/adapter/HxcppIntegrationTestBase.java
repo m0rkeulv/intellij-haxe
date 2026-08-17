@@ -42,7 +42,7 @@ abstract class HxcppIntegrationTestBase {
   protected Process debuggee;
   protected Path fixtureSource;
 
-  private ServerSocket dapListener;
+  protected ServerSocket dapListener;
   private final StringBuilder debuggeeOutput = new StringBuilder();
 
   /**
@@ -64,6 +64,15 @@ abstract class HxcppIntegrationTestBase {
     adapter.start(new DapConnection(dapListener.accept()));
     dapClient = new DapClient(new DapConnection(clientSide));
 
+    spawnDebuggee(exe);
+  }
+
+  /**
+   * Spawns the fixture debuggee with its output drained into the sink the
+   * failure messages print - a discarded stream would leave a failing test
+   * with nothing to diagnose from.
+   */
+  protected void spawnDebuggee(Path exe) throws IOException {
     debuggee = new ProcessBuilder(exe.toString())
       .directory(exe.getParent().toFile())
       .redirectErrorStream(true)

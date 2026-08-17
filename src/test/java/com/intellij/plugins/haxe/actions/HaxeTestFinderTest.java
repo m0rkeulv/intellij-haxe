@@ -44,16 +44,16 @@ public class HaxeTestFinderTest extends HaxeCodeInsightFixtureTestCase {
     myTestFinder = new HaxeTestFinder();
   }
 
-  private void doFindTestsTest(int i) {
-    doFindTestsTest(myFixture.configureByFiles(getTestName(false) + "." + HaxeFileType.DEFAULT_EXTENSION), 1);
+  private void doFindTestsTest(int expectedCount) {
+    doFindTestsTest(myFixture.configureByFiles(getTestName(false) + "." + HaxeFileType.DEFAULT_EXTENSION), expectedCount);
   }
 
   private void doFindTestsTest(PsiFile[] files, int size) {
     assertEquals(size, myTestFinder.findTestsForClass(myFixture.getElementAtCaret()).size());
   }
 
-  private void doFindClassesTest(int i) {
-    doFindClassesTest(myFixture.configureByFiles(getTestName(false) + "." + HaxeFileType.DEFAULT_EXTENSION), 1);
+  private void doFindClassesTest(int expectedCount) {
+    doFindClassesTest(myFixture.configureByFiles(getTestName(false) + "." + HaxeFileType.DEFAULT_EXTENSION), expectedCount);
   }
 
   private void doFindClassesTest(PsiFile[] files, int size) {

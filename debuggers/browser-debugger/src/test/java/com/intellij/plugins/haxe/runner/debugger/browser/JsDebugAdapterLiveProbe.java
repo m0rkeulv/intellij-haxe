@@ -99,30 +99,9 @@ public class JsDebugAdapterLiveProbe {
     Assumptions.assumeTrue(chromiumExe() != null, "no chromium-family browser found (set WEB_DEBUG_CHROMIUM_EXE or install Chrome/Edge) - skipping");
 
     adapterPort = LiveProbeUtil.freePort();
-    adapter = new ProcessBuilder(nodeExe().toString(), dapServerJs().toString(),
-                                 String.valueOf(adapterPort), "127.0.0.1")
-      .directory(dapServerJs().getParent().toFile())
-      .redirectErrorStream(true)
-      .start();
-
-    BufferedReader stdout = new BufferedReader(
-      new InputStreamReader(adapter.getInputStream(), StandardCharsets.UTF_8));
-    String line = stdout.readLine();
-    System.out.println("[adapter] " + line);
-    assertNotNull(line, "adapter announced nothing (died?)");
-    assertTrue(line.contains("Debug server listening"), "unexpected announcement: " + line);
-
-    Thread gobbler = new Thread(() -> {
-      try {
-        String out;
-        while ((out = stdout.readLine()) != null) {
-          System.out.println("[adapter] " + out);
-        }
-      } catch (IOException ignored) {
-      }
-    }, "js-debug-gobbler");
-    gobbler.setDaemon(true);
-    gobbler.start();
+    adapter = LiveProbeUtil.spawnAdapterServer(
+      List.of(nodeExe().toString(), dapServerJs().toString(), String.valueOf(adapterPort), "127.0.0.1"),
+      dapServerJs().getParent(), "Debug server listening", "adapter");
 
     parent = connectWithRetry(adapterPort);
   }
@@ -936,8 +915,6 @@ public class JsDebugAdapterLiveProbe {
   }
 
   private volatile AtStop atStop;
-  /** When set, launch configs carry js-debug's "trace": true and output events are printed. */
-  private volatile boolean traceAdapter;
   private volatile int currentThreadId;
 
   /** The parent+child flow, shared by the probes; returns the stop's top frame. */
@@ -946,9 +923,6 @@ public class JsDebugAdapterLiveProbe {
       assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
 
       Map<String, Object> launchConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
-      if (traceAdapter) {
-        launchConfig.put("trace", true);
-      }
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(launchConfig));
 
       StartDebuggingRequest startDebugging = awaitStartDebugging(parent, 20_000, TIMEOUT);
@@ -963,9 +937,6 @@ public class JsDebugAdapterLiveProbe {
                 + " stepInTargets=" + ir.getBody().getSupportsStepInTargetsRequest());
         }
         Map<String, Object> childConfig = new LinkedHashMap<>(startDebugging.getArguments().getConfiguration());
-        if (traceAdapter) {
-          childConfig.put("trace", true);
-        }
         child.sendRequestNoWait(ConfiguredLaunchRequest.of(childConfig));
 
         boolean childConfigured = false;
@@ -973,9 +944,6 @@ public class JsDebugAdapterLiveProbe {
         long deadline = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = child.pollEvent(100);
-          if (traceAdapter && event instanceof OutputEvent o && o.getBody() != null) {
-            System.out.println("[trace-out] " + String.valueOf(o.getBody().getOutput()).trim());
-          }
           if (event instanceof InitializedEvent && !childConfigured) {
             childConfigured = true;
             SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, bpFileName, bpLine);

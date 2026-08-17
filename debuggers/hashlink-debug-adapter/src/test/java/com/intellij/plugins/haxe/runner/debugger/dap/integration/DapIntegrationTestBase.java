@@ -477,6 +477,26 @@ public abstract class DapIntegrationTestBase {
     return awaitStopped();
   }
 
+  /** Continues and drains events to process exit, returning the debuggee's collected output. */
+  protected String continueToExit(int threadId) throws Exception {
+    assertTrue(request(continueRequest(threadId)).isSuccess(), "continue");
+    List<String> output = new ArrayList<>();
+    while (true) {
+      Event event = client.pollEvent(TIMEOUT);
+      // a timed-out poll answers null - fail instead of spinning forever
+      assertNotNull(event, "expected more events before exit");
+      if (event instanceof OutputEvent out) {
+        output.add(out.getBody().getOutput());
+      } else if (event instanceof StoppedEvent stopped) {
+        // any further stop (none expected): keep going
+        request(continueRequest(stopped.getBody().getThreadId()));
+      } else if (event instanceof ExitedEvent) {
+        break;
+      }
+    }
+    return String.join("", output);
+  }
+
   // --- step/continue request builders ---
 
   protected static ContinueRequest continueRequest(int threadId) {

@@ -151,23 +151,4 @@ public class MutateIntegrationTest extends DapIntegrationTestBase {
     return ((SetVariableResponse)response).getBody().getValue();
   }
 
-  private String continueToExit(int threadId) throws Exception {
-    assertTrue(request(continueRequest(threadId)).isSuccess(), "continue after writes");
-
-    List<String> output = new ArrayList<>();
-
-    while (true) {
-      Event event = client.pollEvent(TIMEOUT);
-      assertNotNull(event, "expected more events before exit");
-      if (event instanceof OutputEvent out) {
-        output.add(out.getBody().getOutput());
-      } else if (event instanceof StoppedEvent stopped) {
-        // any further breakpoint (none expected): keep going
-        request(continueRequest(stopped.getBody().getThreadId()));
-      } else if (event instanceof ExitedEvent) {
-        break;
-      }
-    }
-    return String.join("", output);
-  }
 }
