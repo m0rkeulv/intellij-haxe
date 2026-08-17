@@ -4,6 +4,7 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;
 import com.intellij.execution.process.ProcessOutput;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
@@ -32,6 +33,8 @@ import java.util.Set;
  * the commands it accepts. The hxml counterpart is {@link HxmlProjects}.
  */
 public final class LimeProjects {
+
+  private static final Logger LOG = Logger.getInstance(LimeProjects.class);
 
   /** The lime tool's built-in actions, offered for every lime-family build file. */
   public static final List<String> DEFAULT_ACTIONS = List.of("test", "run", "build", "clean");
@@ -133,14 +136,26 @@ public final class LimeProjects {
       .withWorkDirectory(directory);
     try {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(timeoutMs);
-      if (output.isTimeout() || output.getExitCode() != 0) return null;
+      if (output.isTimeout()) {
+        LOG.warn(tool + " display timed out after " + timeoutMs + "ms for " + fileName + " " + targetFlag);
+        return null;
+      }
+      if (output.getExitCode() != 0) {
+        LOG.warn(tool + " display failed (exit " + output.getExitCode() + ") for " + fileName + " " + targetFlag
+                 + ": " + StringUtil.trimLog(output.getStderr(), 500));
+        return null;
+      }
       List<String> arguments = HxmlArguments.parseLines(output.getStdoutLines());
-      if (arguments.isEmpty()) return null;
+      if (arguments.isEmpty()) {
+        LOG.warn(tool + " display produced no haxe arguments for " + fileName + " " + targetFlag);
+        return null;
+      }
       List<String> withCwd = new ArrayList<>(List.of("--cwd", directory));
       withCwd.addAll(arguments);
       return List.copyOf(withCwd);
     }
     catch (ExecutionException e) {
+      LOG.warn(tool + " display could not be spawned for " + fileName + ": " + e.getMessage());
       return null;
     }
   }

@@ -47,9 +47,10 @@ public final class HaxeRunUnitTestsAction extends DumbAwareAction {
     boolean hasTestsFile = panel.resolveTestsPath(selection) != null;
     e.getPresentation().setVisible(true);
     e.getPresentation().setEnabled(hasTestsFile);
-    if (!hasTestsFile) {
-      e.getPresentation().setDescription(HaxeBundle.message("haxe.toolwindow.run.unit.tests.no.tests.file"));
-    }
+    // set in BOTH branches: the presentation is reused across selections, so
+    // a hint set once would stick to every later, enabled selection
+    e.getPresentation().setDescription(
+      hasTestsFile ? null : HaxeBundle.message("haxe.toolwindow.run.unit.tests.no.tests.file"));
   }
 
   @Override

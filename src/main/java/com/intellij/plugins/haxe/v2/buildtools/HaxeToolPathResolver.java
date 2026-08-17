@@ -78,7 +78,7 @@ public final class HaxeToolPathResolver {
   public static String resolveNekoExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
     String configured = HaxeBuildToolSettings.getInstance(project).getNekoPath();
     if (!configured.isEmpty()) {
-      return configured;
+      return configuredOverride(configured, "neko");
     }
     Sdk sdk = findSdk(project, preferredSdkName);
     if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
@@ -92,16 +92,28 @@ public final class HaxeToolPathResolver {
   }
 
   /**
-   * Absolute path to the node runtime for js-target runs: the Build Tools
-   * override when set, else the SDK's configured NodeJS, else a PATH lookup;
-   * null when nothing resolves (a js run then reports the missing runtime
-   * instead of failing on a bare name).
+   * An explicit Build Tools override always WINS: a directory resolves to
+   * the canonical executable inside it, and an unresolvable value comes back
+   * verbatim — validation then fails on the configured value instead of a
+   * typo silently running a different tool from the SDK or PATH.
+   */
+  @NotNull
+  private static String configuredOverride(@NotNull String configured, @NotNull String executableName) {
+    Path resolved = executableOrInDirectory(configured, executableName);
+    return resolved != null ? resolved.toString() : configured;
+  }
+
+  /**
+   * Path to the node runtime for js-target runs: the Build Tools override
+   * when set (see {@link #configuredOverride}), else the SDK's configured
+   * NodeJS, else a PATH lookup; null when nothing resolves (a js run then
+   * reports the missing runtime instead of failing on a bare name).
    */
   @Nullable
   public static String resolveNodeExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
-    Path configured = executableOrInDirectory(HaxeBuildToolSettings.getInstance(project).getNodePath(), "node");
-    if (configured != null) {
-      return configured.toString();
+    String configured = HaxeBuildToolSettings.getInstance(project).getNodePath();
+    if (!configured.isEmpty()) {
+      return configuredOverride(configured, "node");
     }
     Sdk sdk = findSdk(project, preferredSdkName);
     if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {

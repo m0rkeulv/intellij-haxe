@@ -197,13 +197,14 @@ public final class HaxeCompilationServerManager implements Disposable {
     if (instance == null) {
       return;
     }
-    stopInstanceLocked(instance);
-    clearServerDerivedState(id);
-    // backstop for callers bypassing ensureRunning - the console actions ask
-    // for trust on the EDT before reaching here
+    // backstop for callers bypassing ensureRunning (the console actions ask
+    // for trust on the EDT first) - checked BEFORE the teardown, so a refusal
+    // leaves the running server and every state listener untouched
     if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
       return;
     }
+    stopInstanceLocked(instance);
+    clearServerDerivedState(id);
     startLocked(instance);
   }
 

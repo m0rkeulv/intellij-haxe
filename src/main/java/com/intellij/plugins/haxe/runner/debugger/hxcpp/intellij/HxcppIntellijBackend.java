@@ -35,10 +35,6 @@ public class HxcppIntellijBackend implements DapBackend {
   private final int acceptTimeoutMillis;
   private final List<String> sourceDirectories;
 
-  public HxcppIntellijBackend(int acceptTimeoutMillis) throws IOException {
-    this(acceptTimeoutMillis, List.of());
-  }
-
   /**
    * With the build's source directories (absolute, VFS separators): the
    * server matches breakpoint files by their compile-time relative names, so

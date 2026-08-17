@@ -23,8 +23,10 @@ import java.util.stream.Collectors;
  * module's repository — a local {@code .haxelib} when one exists), the full
  * online catalog (one match-all search), and per-library {@code haxelib info}
  * metadata. Everything server-fetched stays cached for the session;
- * {@link #forceReload()} and {@link #refreshLibraryInfo} are the explicit
- * invalidations. Fetches run external processes — call off the EDT.
+ * {@link #reload()} and {@link #refreshLibraryInfo} are the explicit
+ * invalidations. Fetches run external processes — call off the EDT. A
+ * disposed cache (its module closed while a background sweep was in flight)
+ * answers nothing.
  */
 @CustomLog
 public class HaxelibCacheManager implements Disposable {
@@ -44,12 +46,14 @@ public class HaxelibCacheManager implements Disposable {
   }
 
 
-  private final Map<String, Set<String>> installedLibraries = new HashMap<>();
-  private final Map<String, Set<String>> availableLibraries = new HashMap<>();
+  // written from explorer/completion pooled threads while others read
+  private final Map<String, Set<String>> installedLibraries = new ConcurrentHashMap<>();
+  private final Map<String, Set<String>> availableLibraries = new ConcurrentHashMap<>();
   private final Map<String, HaxelibLibraryInfo> libraryInfos = new ConcurrentHashMap<>();
   private volatile HaxelibInstalledIndex installedIndex = HaxelibInstalledIndex.EMPTY;
 
-  private Module module;
+  private final Module module;
+  private volatile boolean disposed;
 
   private HaxelibCacheManager(Module module) {
     Disposer.register(module, this);
@@ -64,15 +68,11 @@ public class HaxelibCacheManager implements Disposable {
     installedIndex = HaxelibInstalledIndex.EMPTY;
   }
 
+  /** The explicit force-update: drops every cached answer (catalog, infos, installed) and refetches the lists. */
   public void reload() {
     clear();
     getInstalledLibraries();
     getAvailableLibraries();
-  }
-
-  /** The explicit force-update: drops every cached answer (catalog, infos, installed) and refetches the lists. */
-  public void forceReload() {
-    reload();
   }
 
   /** Drops only the installed picture; the next read refetches. Cheap enough to run after every install/remove. */
@@ -171,6 +171,11 @@ public class HaxelibCacheManager implements Disposable {
    */
   @Nullable
   private SdkContext sdkContext() {
+    // an in-flight background sweep can outlive the module - answer nothing
+    // instead of touching a disposed module's model
+    if (disposed) {
+      return null;
+    }
     Sdk moduleSdk = ReadAction.computeBlocking(() -> {
       ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
       return rootManager == null ? null : rootManager.getSdk();
@@ -208,11 +213,9 @@ public class HaxelibCacheManager implements Disposable {
 
   @Override
   public void dispose() {
+    disposed = true;
     // only this module's entry - clearing the whole map would orphan every
     // other module's cache on the first project close
-    if (module != null) {
-      instances.remove(module);
-    }
-    module = null;
+    instances.remove(module);
   }
 }

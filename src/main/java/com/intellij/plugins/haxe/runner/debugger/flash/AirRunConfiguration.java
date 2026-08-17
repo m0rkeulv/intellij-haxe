@@ -17,6 +17,7 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
@@ -190,7 +191,10 @@ public class AirRunConfiguration extends DapRunConfigurationBase {
       if (modified.equals(content)) {
         throw new ExecutionException(HaxeDebuggerBundle.message("air.runner.descriptor.no.id", descriptor.toString()));
       }
-      Path copy = Files.createTempDirectory("haxe-air-run").resolve(descriptor.getFileName());
+      // deleteOnExit: adl reads the copy at launch only, but its lifetime is
+      // unknown here - IDE-exit cleanup bounds the per-launch dirs to one session
+      Path directory = FileUtil.createTempDirectory("haxe-air-run", null, true).toPath();
+      Path copy = directory.resolve(descriptor.getFileName());
       Files.writeString(copy, modified);
       return copy;
     }

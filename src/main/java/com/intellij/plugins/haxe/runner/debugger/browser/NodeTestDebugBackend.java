@@ -8,6 +8,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfiguredLaunchRequest;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
+import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import java.io.BufferedReader;
 import java.io.File;
@@ -59,7 +60,10 @@ public class NodeTestDebugBackend implements DapBackend {
   public DapEndpoint connect() throws IOException {
     NodeLocator.requireModern(nodeExecutable);
     AdapterStore store = new AdapterStore(BrowserDebugBackend.adapterStoreRoot());
-    Path dapServerJs = BrowserDebugBackend.installedAdapterEntry(store, AdapterPin.JS_DEBUG, "js-debug");
+    // the same bundle display name the browser lane reports, so one missing
+    // artifact reads identically from both entry points
+    String adapterName = BrowserRunConfiguration.adapterDisplayName(BrowserFamily.CHROMIUM);
+    Path dapServerJs = BrowserDebugBackend.installedAdapterEntry(store, AdapterPin.JS_DEBUG, adapterName);
     BrowserAdapterLauncher.LaunchedAdapter launched = BrowserAdapterLauncher.launchJsDebug(nodeExecutable, dapServerJs);
     adapterProcess = launched.process();
     adapterStdout = launched.stdout();

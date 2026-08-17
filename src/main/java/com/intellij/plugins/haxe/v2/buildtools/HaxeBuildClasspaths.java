@@ -6,6 +6,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.OrderEnumerator;
 import com.intellij.openapi.roots.OrderRootType;
 import com.intellij.openapi.util.io.FileUtil;
+import com.intellij.openapi.util.io.OSAgnosticPathUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
@@ -32,18 +33,27 @@ public final class HaxeBuildClasspaths {
   @NotNull
   public static List<String> sourceDirectories(@NotNull Project project, @NotNull String buildFilePath) {
     VirtualFile buildFile = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (buildFile == null || !buildFile.isValid() || buildFile.getParent() == null) return List.of();
+    if (buildFile == null || !buildFile.isValid()) return List.of();
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, buildFile);
     if (type == null) return List.of();
-
-    VirtualFile parent = buildFile.getParent();
-    List<String> directories = new ArrayList<>();
-    directories.add(parent.getPath());
     List<String> classpaths =
       HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(buildFile, type)).classpaths();
+    return sourceDirectories(project, buildFile, classpaths);
+  }
+
+  /** Same, for a caller that already inspected the build file (no second parse of its selected section). Call in a read action. */
+  @NotNull
+  public static List<String> sourceDirectories(@NotNull Project project,
+                                               @NotNull VirtualFile buildFile,
+                                               @NotNull List<String> classpaths) {
+    VirtualFile parent = buildFile.getParent();
+    if (parent == null) return List.of();
+
+    List<String> directories = new ArrayList<>();
+    directories.add(parent.getPath());
     for (String classpath : classpaths) {
       String normalized = FileUtil.toSystemIndependentName(classpath.trim());
-      VirtualFile resolved = FileUtil.isAbsolutePlatformIndependent(normalized)
+      VirtualFile resolved = OSAgnosticPathUtil.isAbsolute(normalized)
                              ? LocalFileSystem.getInstance().findFileByPath(normalized)
                              : parent.findFileByRelativePath(normalized);
       if (resolved != null && resolved.isDirectory()) {

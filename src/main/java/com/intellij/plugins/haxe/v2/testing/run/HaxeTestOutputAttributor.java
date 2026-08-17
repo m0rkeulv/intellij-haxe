@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.io.FileUtil;
+import com.intellij.openapi.util.io.OSAgnosticPathUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
@@ -59,7 +60,10 @@ final class HaxeTestOutputAttributor {
     if (!matcher.find()) return null;
     int lineNumber = Integer.parseInt(matcher.group(2));
 
-    List<MethodSpan> spans = spansByPath.computeIfAbsent(matcher.group(1), this::methodSpans);
+    // normalized BEFORE keying the cache: haxe prints the path as the build
+    // file spelled it, so \ and / spellings of one file must share an entry
+    String path = FileUtil.toSystemIndependentName(matcher.group(1));
+    List<MethodSpan> spans = spansByPath.computeIfAbsent(path, this::methodSpans);
     for (MethodSpan span : spans) {
       if (lineNumber >= span.firstLine() && lineNumber <= span.lastLine()) {
         return span.testName();
@@ -107,9 +111,8 @@ final class HaxeTestOutputAttributor {
    */
   @Nullable
   private VirtualFile resolveFile(@NotNull String path) {
-    String normalized = FileUtil.toSystemIndependentName(path);
-    if (workDirectory == null || FileUtil.isAbsolutePlatformIndependent(normalized)) return null;
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(workDirectory + "/" + normalized);
+    if (workDirectory == null || OSAgnosticPathUtil.isAbsolute(path)) return null;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(workDirectory + "/" + path);
     if (file == null || !ProjectFileIndex.getInstance(project).isInContent(file)) return null;
     return file;
   }

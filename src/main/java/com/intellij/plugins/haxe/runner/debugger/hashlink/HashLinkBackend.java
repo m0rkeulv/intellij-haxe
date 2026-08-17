@@ -49,10 +49,6 @@ public class HashLinkBackend implements DapBackend {
   private volatile BufferedReader adapterStdout;
   private volatile HashLinkRegistersPanel registersPanel;
 
-  public HashLinkBackend(Path hlExecutable, Path hlProgram, int debugPort) {
-    this(hlExecutable, hlProgram, debugPort, List.of());
-  }
-
   /**
    * With the build's source directories (absolute, VFS separators): the HL
    * debug tables carry classpath-relative file names, so without a scope any

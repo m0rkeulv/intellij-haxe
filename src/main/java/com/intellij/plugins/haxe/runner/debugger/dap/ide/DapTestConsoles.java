@@ -9,6 +9,7 @@ import com.intellij.execution.testframework.sm.runner.SMRunnerConsolePropertiesP
 import com.intellij.execution.testframework.sm.runner.SMTRunnerConsoleProperties;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.Disposer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,6 +42,8 @@ public final class DapTestConsoles {
         properties.getTestFrameworkName(), processHandler, properties);
     } catch (ExecutionException e) {
       LOG.warn("SM test console could not be created; falling back to the plain console", e);
+      // on success the console owns the properties; without one, nobody does
+      Disposer.dispose(properties);
       return null;
     }
   }

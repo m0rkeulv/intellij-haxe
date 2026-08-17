@@ -50,9 +50,10 @@ public final class HaxeDebugUnitTestsAction extends DumbAwareAction {
     boolean debuggable = HaxeTestRunConfigurations.isDebugSupported(project, buildFilePath);
     e.getPresentation().setVisible(true);
     e.getPresentation().setEnabled(debuggable);
-    if (!debuggable) {
-      e.getPresentation().setDescription(HaxeBundle.message("haxe.test.debug.unsupported.target"));
-    }
+    // set in BOTH branches: the presentation is reused across selections, so
+    // a hint set once would stick to every later, enabled selection
+    e.getPresentation().setDescription(
+      debuggable ? null : HaxeBundle.message("haxe.test.debug.unsupported.target"));
   }
 
   @Override

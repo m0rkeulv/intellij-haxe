@@ -6,6 +6,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.HostedTestRunSentinel;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.OutputEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.TerminatedEvent;
@@ -30,6 +31,11 @@ public final class BrowserTestRunHost extends ProcessHandler {
 
   private static final long REQUEST_TIMEOUT_MILLIS = 15_000;
   private static final long EVENT_POLL_MILLIS = 100;
+  // a page that 404s or throws before the reporter loads produces neither
+  // the sentinel nor a terminated event, and the run would spin until Stop;
+  // output refreshes the deadline, so only sustained silence trips it, not
+  // a long suite
+  private static final long OUTPUT_STALL_MILLIS = 120_000;
 
   private final BrowserDebugBackend backend;
   private volatile boolean finished;
@@ -53,7 +59,10 @@ public final class BrowserTestRunHost extends ProcessHandler {
 
       InitializeRequest initialize = InitializeRequest.standard("chrome", true);
       initialize.getArguments().setClientName("IntelliJ Haxe");
-      endpoint.sendRequest(initialize, REQUEST_TIMEOUT_MILLIS);
+      Response initialized = endpoint.sendRequest(initialize, REQUEST_TIMEOUT_MILLIS);
+      if (!initialized.isSuccess()) {
+        throw new IOException("the adapter rejected initialize: " + initialized.getMessage());
+      }
       // js-debug answers launch only after configurationDone - fire and forget
       endpoint.sendRequestNoWait(backend.launchRequest());
       pumpEvents(endpoint);
@@ -66,12 +75,21 @@ public final class BrowserTestRunHost extends ProcessHandler {
   }
 
   private void pumpEvents(DapEndpoint endpoint) throws IOException, InterruptedException {
+    long deadline = System.currentTimeMillis() + OUTPUT_STALL_MILLIS;
     while (!finished) {
+      if (System.currentTimeMillis() > deadline) {
+        failRun("The browser test run produced no output for " + OUTPUT_STALL_MILLIS / 1000
+                + " seconds and never reported completion; the page likely failed to load the tests.\n");
+        return;
+      }
       Event event = endpoint.pollEvent(EVENT_POLL_MILLIS);
       switch (event) {
         case null -> { /* poll again */ }
         case InitializedEvent ignored -> endpoint.sendRequest(new ConfigurationDoneRequest(), REQUEST_TIMEOUT_MILLIS);
-        case OutputEvent output -> handleOutput(output);
+        case OutputEvent output -> {
+          deadline = System.currentTimeMillis() + OUTPUT_STALL_MILLIS;
+          handleOutput(output);
+        }
         // the browser closed underneath the run: without the sentinel the
         // tests never finished - report failure, not success
         case TerminatedEvent ignored -> finish(null);
@@ -99,6 +117,12 @@ public final class BrowserTestRunHost extends ProcessHandler {
   }
 
   private void failRun(String message) {
+    // Stop tears the backend down mid-poll and the resulting IOException
+    // lands here; that is not a startup failure and must not be printed
+    // after the run already ended
+    if (finished) {
+      return;
+    }
     notifyTextAvailable(message, ProcessOutputTypes.STDERR);
     finish(null);
   }

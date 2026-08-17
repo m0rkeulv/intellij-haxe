@@ -258,6 +258,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   /** Keeps the scan's per-container tests build files, so container-row actions resolve them without re-scanning. */
   private void rememberTestsPaths(@NotNull List<ContainerEntry> scan) {
     testsPathsByContainer.clear();
+    // reset alongside the map: a scan without a project-root container must
+    // not leave the previous id answering for a container that is gone
+    projectRootContainerId = null;
     for (ContainerEntry container : scan) {
       if (!container.testsPaths().isEmpty()) {
         testsPathsByContainer.put(container.id(), container.testsPaths());
@@ -288,11 +291,11 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Runs the build file as unit tests through the test run configuration (SM console). */
   public void runUnitTests(@NotNull String buildFilePath) {
-    HaxeTestRunConfigurations.run(project, buildFilePath, null);
+    HaxeTestRunConfigurations.run(project, buildFilePath);
   }
 
   public void debugUnitTests(@NotNull String buildFilePath) {
-    HaxeTestRunConfigurations.debug(project, buildFilePath, null);
+    HaxeTestRunConfigurations.debug(project, buildFilePath);
   }
 
   /** Gradle-style structure: one project root node containing root-level build files and the modules. */

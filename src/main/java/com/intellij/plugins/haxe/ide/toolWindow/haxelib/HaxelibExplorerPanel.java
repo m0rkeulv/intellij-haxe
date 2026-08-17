@@ -217,7 +217,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
         return;
       }
       if (force) {
-        manager.forceReload();
+        manager.reload();
       }
       HaxelibInstalledIndex installed = manager.getInstalledIndex();
       onUi(loadGeneration, expected, () -> setRows(buildRows(installed, Map.of())));
@@ -282,11 +282,16 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     });
   }
 
-  /** Re-reads the installed picture (cheap) and rebuilds — the after-mutation refresh. */
-  void reloadAfterMutation() {
+  /**
+   * Re-reads the installed picture (cheap) and rebuilds — the after-mutation
+   * refresh. The mutated library's cached {@code haxelib info} is dropped
+   * too: an install/remove changes the release picture its overview shows.
+   */
+  void reloadAfterMutation(@NotNull String libraryName) {
     HaxelibCacheManager manager = cacheManager();
     if (manager != null) {
       manager.refreshInstalled();
+      manager.refreshLibraryInfo(libraryName);
     }
     reload(false);
   }

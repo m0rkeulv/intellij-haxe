@@ -75,8 +75,8 @@ final class HaxelibExplorerActions {
                                       Messages.getWarningIcon()) == Messages.YES;
     }
 
-    /** Runs the mutation in the background; on success refreshes the explorer and the v2 library sync. */
-    void mutate(@NotNull String progressTitle, @NotNull Supplier<@Nullable String> mutation) {
+    /** Runs the mutation in the background; on success refreshes the explorer (dropping the library's stale info) and the v2 library sync. */
+    void mutate(@NotNull String progressTitle, @NotNull String libraryName, @NotNull Supplier<@Nullable String> mutation) {
       Project project = panel.getProject();
       new Task.Backgroundable(project, progressTitle, true) {
         @Override
@@ -84,7 +84,7 @@ final class HaxelibExplorerActions {
           String failure = mutation.get();
           if (failure == null) {
             HaxeLibrarySync.sync(project, () -> { });
-            ApplicationManager.getApplication().invokeLater(panel::reloadAfterMutation);
+            ApplicationManager.getApplication().invokeLater(() -> panel.reloadAfterMutation(libraryName));
           }
           else {
             HaxeCommandNotifications.notify(project, progressTitle, failure, NotificationType.ERROR);
@@ -112,6 +112,7 @@ final class HaxelibExplorerActions {
       // haxelib install SELECTS the installed version as a side effect;
       // passing no version to restore keeps that selection in place
       mutate(HaxeBundle.message("haxelib.explorer.action.install.progress", entry.library(), entry.version()),
+             entry.library(),
              () -> HaxelibInstaller.install(panel.getProject(), entry.library(), entry.version(), null));
     }
   }
@@ -139,6 +140,7 @@ final class HaxelibExplorerActions {
       if (entry == null) return;
       String selected = row != null ? row.selectedVersion() : null;
       mutate(HaxeBundle.message("haxelib.explorer.action.install.progress", entry.library(), entry.version()),
+             entry.library(),
              () -> HaxelibInstaller.install(panel.getProject(), entry.library(), entry.version(), selected));
     }
   }
@@ -159,6 +161,7 @@ final class HaxelibExplorerActions {
       VersionEntry entry = selectedVersion();
       if (entry == null) return;
       mutate(HaxeBundle.message("haxelib.explorer.action.set.current.progress", entry.library(), entry.version()),
+             entry.library(),
              () -> HaxelibInstaller.setCurrent(panel.getProject(), entry.library(), entry.version()));
     }
   }
@@ -181,6 +184,7 @@ final class HaxelibExplorerActions {
       String target = entry.library() + " " + entry.version();
       if (!confirmRemoval(target)) return;
       mutate(HaxeBundle.message("haxelib.explorer.action.remove.progress", target),
+             entry.library(),
              () -> HaxelibInstaller.remove(panel.getProject(), entry.library(), entry.version()));
     }
   }
@@ -201,6 +205,7 @@ final class HaxelibExplorerActions {
       LibraryRow row = selectedLibrary();
       if (row == null) return;
       mutate(HaxeBundle.message("haxelib.explorer.action.install.latest.progress", row.name()),
+             row.name(),
              () -> HaxelibInstaller.install(panel.getProject(), row.name(), null, null));
     }
   }
@@ -222,6 +227,7 @@ final class HaxelibExplorerActions {
       if (row == null) return;
       if (!confirmRemoval(row.name())) return;
       mutate(HaxeBundle.message("haxelib.explorer.action.remove.progress", row.name()),
+             row.name(),
              () -> HaxelibInstaller.remove(panel.getProject(), row.name(), null));
     }
   }
