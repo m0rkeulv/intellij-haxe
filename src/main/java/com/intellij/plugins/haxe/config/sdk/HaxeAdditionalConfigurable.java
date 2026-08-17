@@ -18,6 +18,8 @@
 package com.intellij.plugins.haxe.config.sdk;
 
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.projectRoots.AdditionalDataConfigurable;
 import com.intellij.openapi.projectRoots.Sdk;
@@ -26,6 +28,7 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.config.sdk.ui.HaxeAdditionalConfigurablePanel;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
@@ -102,14 +105,7 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
 
   @Override
   public void reset() {
-    String bundledHaxelib = mySdk.getHomePath() != null
-                            ? HaxeSdkUtilBase.getHaxelibPathByFolderPath(mySdk.getHomePath())
-                            : null;
-    myHaxeAdditionalConfigurablePanel.setInheritedDefaults(
-      bundledHaxelib != null ? bundledHaxelib : HaxeToolPathResolver.pathDetectedExecutable("haxelib"),
-      HaxeToolPathResolver.pathDetectedExecutable("neko"),
-      HaxeToolPathResolver.pathDetectedExecutable("hl"),
-      HaxeToolPathResolver.pathDetectedExecutable("node"));
+    updateInheritedDefaults();
 
     final HaxeSdkData haxeSdkData = getHaxeSdkData();
     if (haxeSdkData != null) {
@@ -134,6 +130,36 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
 
   private static @NonNull String toSystemDependentName(String nekoBinPath) {
     return FileUtil.toSystemDependentName(nekoBinPath == null ? "" : nekoBinPath);
+  }
+
+  /** The grayed haxelib/neko/hl/node defaults for a runtime field left empty. */
+  private record InheritedDefaults(@Nullable String haxelib,
+                                   @Nullable String neko,
+                                   @Nullable String hl,
+                                   @Nullable String node) {
+  }
+
+  // the defaults probe every PATH directory on disk - computed off the EDT,
+  // or a slow/network PATH freezes the SDK editor on every reset
+  private void updateInheritedDefaults() {
+    String homePath = mySdk.getHomePath();
+    ReadAction.nonBlocking(() -> computeInheritedDefaults(homePath))
+      .finishOnUiThread(ModalityState.defaultModalityState(), this::applyInheritedDefaults)
+      .submit(AppExecutorUtil.getAppExecutorService());
+  }
+
+  @NonNull
+  private static InheritedDefaults computeInheritedDefaults(@Nullable String homePath) {
+    String bundledHaxelib = homePath != null ? HaxeSdkUtilBase.getHaxelibPathByFolderPath(homePath) : null;
+    String haxelib = bundledHaxelib != null ? bundledHaxelib : HaxeToolPathResolver.pathDetectedExecutable("haxelib");
+    return new InheritedDefaults(haxelib,
+                                 HaxeToolPathResolver.pathDetectedExecutable("neko"),
+                                 HaxeToolPathResolver.pathDetectedExecutable("hl"),
+                                 HaxeToolPathResolver.pathDetectedExecutable("node"));
+  }
+
+  private void applyInheritedDefaults(@NonNull InheritedDefaults defaults) {
+    myHaxeAdditionalConfigurablePanel.setInheritedDefaults(defaults.haxelib(), defaults.neko(), defaults.hl(), defaults.node());
   }
 
   @Override

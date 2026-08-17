@@ -64,7 +64,19 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
 
   /** The grayed defaults the empty overrides inherit, recomputed for the SDK currently selected in the panel. */
   private void updateInheritedDefaults() {
-    panel.setInheritedDefaults(HaxeToolPathResolver.inheritedRuntimeDefaults(panel.getSelectedSdkName()));
+    HaxeBuildToolsSettingsPanel currentPanel = panel;
+    String sdkName = currentPanel.getSelectedSdkName();
+    // the defaults probe every PATH directory on disk - computed off the EDT,
+    // or a slow/network PATH freezes the settings dialog on each SDK change
+    ReadAction.nonBlocking(() -> HaxeToolPathResolver.inheritedRuntimeDefaults(sdkName))
+      .expireWhen(() -> panel != currentPanel)
+      .finishOnUiThread(ModalityState.defaultModalityState(), defaults -> {
+        boolean selectionUnchanged = Objects.equals(sdkName, currentPanel.getSelectedSdkName());
+        if (selectionUnchanged) {
+          currentPanel.setInheritedDefaults(defaults);
+        }
+      })
+      .submit(AppExecutorUtil.getAppExecutorService());
   }
 
   @Override

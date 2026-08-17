@@ -1,12 +1,12 @@
 package com.intellij.plugins.haxe.haxelib;
 
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import lombok.CustomLog;
@@ -176,7 +176,10 @@ public class HaxelibCacheManager implements Disposable {
     if (disposed) {
       return null;
     }
-    Sdk moduleSdk = ReadAction.computeBlocking(() -> {
+    // per-thread read form: the explorer fetches run on pooled threads
+    // (where computeBlocking would contend with the UI), but reload() is
+    // also reachable from EDT actions (where the non-blocking form asserts)
+    Sdk moduleSdk = HaxeReadActions.compute(() -> {
       ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
       return rootManager == null ? null : rootManager.getSdk();
     });
@@ -186,7 +189,7 @@ public class HaxelibCacheManager implements Disposable {
     if (!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
       return null;
     }
-    VirtualFile moduleDir = ReadAction.computeBlocking(() -> ProjectUtil.guessModuleDir(module));
+    VirtualFile moduleDir = HaxeReadActions.compute(() -> ProjectUtil.guessModuleDir(module));
     return new SdkContext(sdk, moduleDir);
   }
 

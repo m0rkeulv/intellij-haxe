@@ -21,7 +21,10 @@ import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -69,9 +72,18 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
     return HaxeTestRunConfiguration.class;
   }
 
+  // one launch's plan, computed in validate and reused by the later hooks of
+  // the same doExecute sequence - planning parses build files under a read
+  // action, too costly to pay three times per launch. Weak keys: a failed
+  // launch never reaches the last hook, so entries must not pin their
+  // configuration.
+  private final Map<HaxeTestRunConfiguration, Plan> plannedLaunches =
+    Collections.synchronizedMap(new WeakHashMap<>());
+
   @Override
   protected void validate(HaxeTestRunConfiguration configuration) throws ExecutionException {
     Plan plan = debuggablePlan(configuration);
+    plannedLaunches.put(configuration, plan);
     boolean needsSdkRuntime = plan.target() == HaxeTarget.HL && HaxeTestLaunchPlanner.packagedHlBoot(plan) == null;
     if (needsSdkRuntime) {
       resolveHlExecutable(configuration);
@@ -80,21 +92,12 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
 
   @Override
   protected DapBackend createBackend(HaxeTestRunConfiguration configuration) throws ExecutionException {
-    Plan plan = debuggablePlan(configuration);
+    Plan plan = plannedLaunch(configuration);
     try {
       return switch (plan.target()) {
-        case HL -> new HashLinkBackend(hlRuntime(configuration, plan),
-                                       hlProgram(plan),
-                                       HashLinkDebugRunner.findFreePort(),
-                                       HaxeTestRunConfigurations.sourceDirectories(configuration));
-        case CPP -> new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS,
-                                             HaxeTestRunConfigurations.sourceDirectories(configuration));
-        case JAVA_SCRIPT -> plan.browserHosted()
-                            ? HaxeBrowserTestSupport.createBackend(configuration.getProject(),
-                                                                   HaxeTestLaunchPlanner.browserWebRoot(plan))
-                            : new NodeTestDebugBackend(Path.of(plan.command().get(0)),
-                                                       HashLinkDebugRunner.findFreePort(),
-                                                       plan.workDirectory());
+        case HL -> hashLinkBackend(configuration, plan);
+        case CPP -> hxcppBackend(configuration);
+        case JAVA_SCRIPT -> jsBackend(configuration, plan);
         default -> new InterpDapBackend(VM_CONNECT_TIMEOUT_MILLIS);
       };
     } catch (IOException e) {
@@ -105,41 +108,84 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
   @Override
   protected GeneralCommandLine createCommandLine(HaxeTestRunConfiguration configuration, DapBackend backend)
     throws ExecutionException {
-    Plan plan = debuggablePlan(configuration);
-    if (backend instanceof BrowserDebugBackend) {
+    Plan plan = plannedLaunch(configuration);
+    return switch (backend) {
       // the adapter launches the browser itself; nothing is spawned here
-      return null;
+      case BrowserDebugBackend ignored -> null;
+      case HashLinkBackend hashLink -> hashLinkCommandLine(configuration, plan, hashLink);
+      case HxcppIntellijBackend hxcpp -> hxcppCommandLine(plan, hxcpp);
+      case NodeTestDebugBackend node -> nodeCommandLine(plan, node);
+      case InterpDapBackend interp -> interpCommandLine(plan, interp);
+      default -> throw new IllegalStateException("no command line for backend " + backend.getClass().getName());
+    };
+  }
+
+  @NotNull
+  private static DapBackend hashLinkBackend(HaxeTestRunConfiguration configuration, @NotNull Plan plan)
+    throws ExecutionException, IOException {
+    List<String> sourceDirectories = HaxeTestRunConfigurations.sourceDirectories(configuration);
+    return new HashLinkBackend(hlRuntime(configuration, plan), hlProgram(plan),
+                               HashLinkDebugRunner.findFreePort(), sourceDirectories);
+  }
+
+  @NotNull
+  private static DapBackend hxcppBackend(HaxeTestRunConfiguration configuration) throws IOException {
+    List<String> sourceDirectories = HaxeTestRunConfigurations.sourceDirectories(configuration);
+    return new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS, sourceDirectories);
+  }
+
+  /** Browser-hosted html5 packages debug through the shared browser lane; node-hosted artifacts attach at --inspect-brk. */
+  @NotNull
+  private static DapBackend jsBackend(HaxeTestRunConfiguration configuration, @NotNull Plan plan)
+    throws ExecutionException, IOException {
+    if (plan.browserHosted()) {
+      return HaxeBrowserTestSupport.createBackend(configuration.getProject(), HaxeTestLaunchPlanner.browserWebRoot(plan));
     }
-    if (backend instanceof HashLinkBackend hashLink) {
-      return new GeneralCommandLine()
-        .withExePath(hlRuntime(configuration, plan).toString())
-        .withParameters("--debug", Integer.toString(hashLink.getDebugPort()),
-                        "--debug-wait", hlProgram(plan).toString())
-        .withWorkDirectory(plan.workDirectory());
-    }
-    if (backend instanceof HxcppIntellijBackend hxcpp) {
-      // the binary's embedded debug server (compiled in by the debug
-      // additions) connects out to the backend's listener during startup
-      return new GeneralCommandLine(plan.command())
-        .withWorkDirectory(plan.workDirectory())
-        .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_HOST, hxcpp.getHost())
-        .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_PORT, Integer.toString(hxcpp.getPort()));
-    }
-    if (backend instanceof NodeTestDebugBackend node) {
-      // the plan's [node, artifact] with the inspector hold inserted; the
-      // adapter attaches to the port and releases the hold once configured
-      return new GeneralCommandLine()
-        .withExePath(plan.command().get(0))
-        .withParameters("--inspect-brk=" + node.getInspectorPort(), plan.command().get(1))
-        .withWorkDirectory(plan.workDirectory());
-    }
-    // interp: the plan's compile command (framework defines included) IS the
-    // debuggee - the eval VM inside it connects out to the adapter's port
-    InterpDapBackend interp = (InterpDapBackend)backend;
+    return new NodeTestDebugBackend(Path.of(plan.command().get(0)), HashLinkDebugRunner.findFreePort(), plan.workDirectory());
+  }
+
+  @NotNull
+  private static GeneralCommandLine hashLinkCommandLine(HaxeTestRunConfiguration configuration,
+                                                        @NotNull Plan plan,
+                                                        @NotNull HashLinkBackend backend) throws ExecutionException {
+    return new GeneralCommandLine()
+      .withExePath(hlRuntime(configuration, plan).toString())
+      .withParameters("--debug", Integer.toString(backend.getDebugPort()), "--debug-wait", hlProgram(plan).toString())
+      .withWorkDirectory(plan.workDirectory());
+  }
+
+  /** The binary's embedded debug server (compiled in by the debug additions) connects out to the backend's listener during startup. */
+  @NotNull
+  private static GeneralCommandLine hxcppCommandLine(@NotNull Plan plan, @NotNull HxcppIntellijBackend backend) {
+    return new GeneralCommandLine(plan.command())
+      .withWorkDirectory(plan.workDirectory())
+      .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_HOST, backend.getHost())
+      .withEnvironment(HxcppIntellijBackend.ENV_DEBUG_PORT, Integer.toString(backend.getPort()));
+  }
+
+  /** The plan's [node, artifact] with the inspector hold inserted; the adapter attaches to the port and releases the hold once configured. */
+  @NotNull
+  private static GeneralCommandLine nodeCommandLine(@NotNull Plan plan, @NotNull NodeTestDebugBackend backend) {
+    return new GeneralCommandLine()
+      .withExePath(plan.command().get(0))
+      .withParameters("--inspect-brk=" + backend.getInspectorPort(), plan.command().get(1))
+      .withWorkDirectory(plan.workDirectory());
+  }
+
+  /** The plan's compile command (framework defines included) IS the debuggee - the eval VM inside it connects out to the adapter's port. */
+  @NotNull
+  private static GeneralCommandLine interpCommandLine(@NotNull Plan plan, @NotNull InterpDapBackend backend) {
     List<String> command = new ArrayList<>(plan.command());
     command.add("-D");
-    command.add("eval-debugger=127.0.0.1:" + interp.getVmPort());
+    command.add("eval-debugger=127.0.0.1:" + backend.getVmPort());
     return new GeneralCommandLine(command).withWorkDirectory(plan.workDirectory());
+  }
+
+  /** This launch's plan from validate's run; recomputed only if the entry was collected in between. */
+  @NotNull
+  private Plan plannedLaunch(HaxeTestRunConfiguration configuration) throws ExecutionException {
+    Plan plan = plannedLaunches.get(configuration);
+    return plan != null ? plan : debuggablePlan(configuration);
   }
 
   /**

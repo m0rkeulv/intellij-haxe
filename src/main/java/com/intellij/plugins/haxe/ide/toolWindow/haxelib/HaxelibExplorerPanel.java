@@ -12,6 +12,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.DumbAware;
@@ -734,8 +735,10 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   @Nullable
   private Module haxeModule() {
     // pure model reads under the lock; lookupSdk's default-SDK fallback
-    // probes `haxe -help` (a process) and must never run in here
-    return ReadAction.computeBlocking(() -> {
+    // probes `haxe -help` (a process) and must never run in here. Reached
+    // from the EDT (tree selection) AND the pooled tasks, hence the
+    // per-thread read form.
+    return HaxeReadActions.compute(() -> {
       for (Module module : ModuleManager.getInstance(project).getModules()) {
         Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
         if (sdk != null && HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
