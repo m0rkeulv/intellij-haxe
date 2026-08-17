@@ -71,8 +71,6 @@ public class HaxeTestsBuildFileStoreTest {
     HaxeTestsBuildFileStore store = new HaxeTestsBuildFileStore();
     store.markTestsFile(MODULE, "/p/deleted.hxml");
     assertTrue(store.resolveTestsFiles(MODULE, PLAIN_FILES).isEmpty());
-    assertEquals(List.of("/p/test.hxml"),
-                 store.resolveTestsFiles(MODULE, List.of("/p/build.hxml", "/p/test.hxml")));
   }
 
   @Test

@@ -8,10 +8,14 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
  * Resolves the names utest's TeamCity reporter emits back to PSI:
@@ -37,42 +41,30 @@ public class HaxeTestLocatorTest extends HaxeCodeInsightFixtureTestCase {
     return locations.isEmpty() ? null : locations.get(0).getPsiElement();
   }
 
-  @Test
-  @DisplayName("test name resolves to the method")
-  public void testTestNameResolvesToTheMethod() {
-    configureFixtureProject();
-    PsiElement element = locate("cases.MathTest.testAddition");
-    assertInstanceOf(HaxeMethod.class, element);
-    assertEquals("testAddition", ((HaxeMethod)element).getName());
-  }
+  /**
+   * (reporter name, resolved PSI kind, resolved name; null skips the name
+   * check). Underscored package segments map back to dots; the default
+   * package reports with an empty leading segment.
+   */
+  static final List<Arguments> LOCATED_NAMES = List.of(
+    arguments("cases.MathTest.testAddition", HaxeMethod.class, "testAddition"),
+    arguments("cases.MathTest", HaxeClass.class, "cases.MathTest"),
+    arguments("pack_sub.DeepTest.testDeep", HaxeMethod.class, "testDeep"),
+    arguments("pack_sub.DeepTest", HaxeClass.class, null),
+    arguments(".RootTest", HaxeClass.class, null),
+    arguments(".RootTest.testRoot", HaxeMethod.class, "testRoot"));
 
-  @Test
-  @DisplayName("suite name resolves to the class")
-  public void testSuiteNameResolvesToTheClass() {
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("LOCATED_NAMES")
+  @DisplayName("reporter names resolve to their psi elements")
+  public void testReporterNamesResolveToTheirPsiElements(String reportedName, Class<?> kind, String expectedName) {
     configureFixtureProject();
-    PsiElement element = locate("cases.MathTest");
-    assertInstanceOf(HaxeClass.class, element);
-    assertEquals("cases.MathTest", ((HaxeClass)element).getQualifiedName());
-  }
-
-  @Test
-  @DisplayName("underscored package maps back to dots")
-  public void testUnderscoredPackageMapsBackToDots() {
-    configureFixtureProject();
-    PsiElement element = locate("pack_sub.DeepTest.testDeep");
-    assertInstanceOf(HaxeMethod.class, element);
-    assertEquals("testDeep", ((HaxeMethod)element).getName());
-    assertInstanceOf(HaxeClass.class, locate("pack_sub.DeepTest"));
-  }
-
-  @Test
-  @DisplayName("default package leading dot is stripped")
-  public void testDefaultPackageLeadingDotIsStripped() {
-    configureFixtureProject();
-    assertInstanceOf(HaxeClass.class, locate(".RootTest"));
-    PsiElement element = locate(".RootTest.testRoot");
-    assertInstanceOf(HaxeMethod.class, element);
-    assertEquals("testRoot", ((HaxeMethod)element).getName());
+    PsiElement element = locate(reportedName);
+    assertInstanceOf(kind, element);
+    if (expectedName != null) {
+      String name = element instanceof HaxeMethod method ? method.getName() : ((HaxeClass)element).getQualifiedName();
+      assertEquals(expectedName, name);
+    }
   }
 
   @Test

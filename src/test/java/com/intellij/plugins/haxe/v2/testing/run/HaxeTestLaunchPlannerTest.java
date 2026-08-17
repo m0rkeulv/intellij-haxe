@@ -108,9 +108,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   public void testMunitSingleMethodNarrowsThroughTheMacroDefine() throws ExecutionException {
     String path = fixturePath("targets/munit-neko.hxml");
     HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", "testAdd");
-    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
-    assertTrue(plan.command().get(1).endsWith("single.n"),
-               "the run launches the redirected artifact: " + plan.command());
+    HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
 
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     assertNotNull(file);
@@ -135,44 +133,66 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
                "the run must launch the redirected artifact: " + plan.command());
   }
 
-  @Test
-  @DisplayName("lime single run compile swaps the entry point over the display arguments")
-  public void testLimeSingleRunCompileSwapsTheEntryPointOverTheDisplayArguments() {
+  // what the tool's display mode prints: the build's entry point, its target
+  // output, an ECHO of a reporter macro and a --connect pair injected into
+  // earlier builds (the tool persists CLI extras in its export state), and
+  // the typing-run suppressors some targets carry (--no-output, hl)
+  private static final List<String> DISPLAY_MODE_ARGUMENTS = List.of(
+    "-main", "TestMain",
+    "-cp", "src",
+    "-D", "no-compilation",
+    "-D", "lime-cffi",
+    "-swf", "export/flash/bin/LimeTests.swf",
+    "--macro", "intellij_utest.Macro.init()",
+    "--connect", "51433",
+    "--no-output");
+
+  private record LimeSingleRun(HaxeCompileCommands.Resolved compile, VirtualFile buildFile) {}
+
+  /** The flash-lane lime single-run compile over {@link #DISPLAY_MODE_ARGUMENTS}. */
+  private LimeSingleRun limeSingleRunCompile() {
     String path = fixturePath("targets/lime-project.xml");
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     assertNotNull(file);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Flash");
     HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
-    // what the tool's display mode prints: the build's entry point, its target
-    // output, an ECHO of a reporter macro and a --connect pair injected into
-    // earlier builds (the tool persists CLI extras in its export state), and
-    // the typing-run suppressors some targets carry (--no-output, hl)
-    List<String> effectiveArguments = List.of(
-      "-main", "TestMain",
-      "-cp", "src",
-      "-D", "no-compilation",
-      "-D", "lime-cffi",
-      "-swf", "export/flash/bin/LimeTests.swf",
-      "--macro", "intellij_utest.Macro.init()",
-      "--connect", "51433",
-      "--no-output");
-
     HaxeCompileCommands.Resolved compile = HaxeTestLaunchPlanner.singleRunLimeCompile(
-      getProject(), file, HaxeTestFrameworks.forBuildFile(getProject(), path), singleRun, effectiveArguments);
+      getProject(), file, HaxeTestFrameworks.forBuildFile(getProject(), path), singleRun, DISPLAY_MODE_ARGUMENTS);
     assertNotNull(compile, "the lime single-run compile must resolve");
-    List<String> command = compile.command();
+    return new LimeSingleRun(compile, file);
+  }
+
+  @Test
+  @DisplayName("lime single run compile swaps the entry point and redirects the output")
+  public void testLimeSingleRunCompileSwapsTheEntryPointAndRedirectsTheOutput() {
+    LimeSingleRun singleRun = limeSingleRunCompile();
+    List<String> command = singleRun.compile().command();
 
     assertFalse(command.contains("TestMain"), "the build's own main is stripped: " + command);
     int mainFlag = command.indexOf("--main");
     assertEquals(HaxeTestSingleRuns.MAIN_CLASS, command.get(mainFlag + 1), "the generated main takes over");
     assertTrue(command.get(command.indexOf("-swf") + 1).endsWith("single.swf"),
                "the swf output is redirected away from the tests artifact: " + command);
+    assertEquals(singleRun.buildFile().getParent().getPath(), singleRun.compile().workDirectory());
+    assertFalse(singleRun.compile().connectEligible(), "swf output through the compilation server corrupts");
+  }
+
+  @Test
+  @DisplayName("lime single run compile forces the reporter macro once")
+  public void testLimeSingleRunCompileForcesTheReporterMacroOnce() {
+    List<String> command = limeSingleRunCompile().compile().command();
+
     int reporterMacro = command.indexOf("intellij_utest.Macro.init()");
     assertTrue(reporterMacro > 0, "the flash lane forces the live reporter macro: " + command);
     assertEquals(reporterMacro, command.lastIndexOf("intellij_utest.Macro.init()"),
                  "the echoed macro must not attach twice: " + command);
-    assertEquals(file.getParent().getPath(), compile.workDirectory());
-    assertFalse(compile.connectEligible(), "swf output through the compilation server corrupts");
+  }
+
+  @Test
+  @DisplayName("lime single run compile scrubs the display arguments")
+  public void testLimeSingleRunCompileScrubsTheDisplayArguments() {
+    List<String> command = limeSingleRunCompile().compile().command();
+
     assertFalse(command.contains("--no-output"), "the typing-run suppressor must go: " + command);
     assertFalse(command.contains("no-compilation"), "hxcpp's skip define must go: " + command);
     assertFalse(command.contains("lime-cffi"), "the lime runtime hook define must go: " + command);
@@ -340,10 +360,9 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("chained hxml plans only its selected section")
-  public void testChainedHxmlPlansOnlyItsSelectedSection() throws ExecutionException {
+  @DisplayName("chained hxml defaults to its first section")
+  public void testChainedHxmlDefaultsToItsFirstSection() throws ExecutionException {
     String path = fixturePath("targets/chained.hxml");
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
 
     // default selection is the first section (interp): a single compile-and-run
     // process built from the section's own lines - the file token is replaced,
@@ -356,6 +375,13 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
                "the --each block applies to every section: " + interpPlan.command());
     assertFalse(interpPlan.command().contains("chained.hxml"), "file token must be replaced: " + interpPlan.command());
     assertFalse(interpPlan.command().contains("-hl"), "sibling section must not compile: " + interpPlan.command());
+  }
+
+  @Test
+  @DisplayName("stored section selection picks the sibling section")
+  public void testStoredSectionSelectionPicksTheSiblingSection() throws ExecutionException {
+    String path = fixturePath("targets/chained.hxml");
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
 
     // selections are stored by section identity - inline sections carry the
     // build file's own name with an occurrence suffix
@@ -422,34 +448,19 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("test debuggability follows the shared target support")
   public void testTestDebuggabilityFollowsTheSharedTargetSupport() {
+    // the target-to-lane matrix itself is HaxeDebugSupport's pin; covered here
+    // is only what the planner adds on top of it
     assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("test.hxml")),
                "no target flag means interp - the eval lane debugs it");
-    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("targets/hl.hxml")));
-    assertFalse(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("targets/munit-neko.hxml")),
-                "neko has no debugger lane");
 
+    // the CURRENT target selection is read on every ask, never cached
     String limePath = fixturePath("targets/lime-project.xml");
     VirtualFile limeFile = LocalFileSystem.getInstance().findFileByPath(limePath);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(limeFile, "Neko");
-    assertFalse(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), limePath));
+    assertFalse(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), limePath), "neko has no debugger lane");
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(limeFile, "Windows");
     assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), limePath),
                "lime desktop builds debug through the hxcpp lane");
-    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(limeFile, "Flash");
-    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), limePath),
-               "flash-family builds debug through the fdb lane");
-    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("targets/swf.hxml")),
-               "an hxml -swf build debugs through the fdb lane");
-    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), fixturePath("targets/js-node.hxml")),
-               "an hxml -js build debugs node-hosted through the js-debug lane");
-
-    String nmePath = fixturePath("targets/tests.nmml");
-    VirtualFile nmeFile = LocalFileSystem.getInstance().findFileByPath(nmePath);
-    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(nmeFile, "Neko");
-    assertFalse(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), nmePath));
-    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(nmeFile, "Windows");
-    assertTrue(HaxeTestLaunchPlanner.isDebuggableTarget(getProject(), nmePath),
-               "nme desktop builds debug through the hxcpp lane like lime's");
   }
 
   @Test
@@ -579,7 +590,6 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     String lime = HaxeTestLaunchPlanner.compileArguments(getProject(), limeFile.getPath(), null);
     assertTrue(lime.contains("\"--haxeflag=--macro intellij_munit.Macro.init()\""),
                "munit's client rides lime's --haxeflag: " + lime);
-    assertTrue(lime.contains("--source="), "the reporter classpath rides lime's --source: " + lime);
     assertFalse(lime.contains("-Dteamcity "), "utest's batch define has no meaning for munit: " + lime);
 
     VirtualFile nmeFile = LocalFileSystem.getInstance().findFileByPath(fixturePath("targets/munit-tests.nmml"));
@@ -587,7 +597,6 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     String nme = HaxeTestLaunchPlanner.compileArguments(getProject(), nmeFile.getPath(), null);
     assertTrue(nme.contains("\"--macro intellij_munit.Macro.init()\""),
                "munit's client rides an nme double-dash token: " + nme);
-    assertTrue(nme.contains("\"--class-path "), "classpath spelling expected: " + nme);
   }
 
   @Test

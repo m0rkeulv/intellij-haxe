@@ -1,10 +1,12 @@
 package com.intellij.plugins.haxe.haxelib;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -12,10 +14,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Haxelib: local docs resolution")
 public class HaxelibLocalDocsTest {
 
+  @TempDir
+  Path temp;
+
   @Test
   @DisplayName("release versions map dots to comma directories")
   public void testReleaseVersionsMapDotsToCommaDirectories() throws Exception {
-    Path repo = Files.createTempDirectory("haxelib-repo");
+    Path repo = repo();
     Path versionDir = Files.createDirectories(repo.resolve("lime/8,3,2"));
 
     assertEquals(versionDir, HaxelibLocalDocs.versionDirectory(repo, "lime", "8.3.2"));
@@ -23,24 +28,14 @@ public class HaxelibLocalDocsTest {
   }
 
   @Test
-  @DisplayName("dev versions follow the dev pointer file")
-  public void testDevVersionsFollowTheDevPointerFile() throws Exception {
-    Path repo = Files.createTempDirectory("haxelib-repo");
-    Path devTarget = Files.createTempDirectory("haxelib-dev-target");
+  @DisplayName("dev pointer file drives both dev entry points")
+  public void testDevPointerFileDrivesBothDevEntryPoints() throws Exception {
+    Path repo = repo();
+    Path devTarget = Files.createDirectories(temp.resolve("dev-target"));
     Files.createDirectories(repo.resolve("mylib"));
     Files.writeString(repo.resolve("mylib/.dev"), devTarget + System.lineSeparator());
 
     assertEquals(devTarget, HaxelibLocalDocs.versionDirectory(repo, "mylib", "dev"));
-  }
-
-  @Test
-  @DisplayName("dev path reads the dev pointer file")
-  public void testDevPathReadsTheDevPointerFile() throws Exception {
-    Path repo = Files.createTempDirectory("haxelib-repo");
-    Path devTarget = Files.createTempDirectory("haxelib-dev-target");
-    Files.createDirectories(repo.resolve("mylib"));
-    Files.writeString(repo.resolve("mylib/.dev"), devTarget + System.lineSeparator());
-
     assertEquals(devTarget.toString(), HaxelibLocalDocs.devPath(repo, "mylib"));
     assertNull(HaxelibLocalDocs.devPath(repo, "otherlib"), "no dev pointer resolves to null");
   }
@@ -48,7 +43,7 @@ public class HaxelibLocalDocsTest {
   @Test
   @DisplayName("git checkout reads branch and commit from head and loose ref")
   public void testGitCheckoutReadsBranchAndCommitFromHeadAndLooseRef() throws Exception {
-    Path repo = Files.createTempDirectory("haxelib-repo");
+    Path repo = repo();
     Path gitDir = Files.createDirectories(repo.resolve("mylib/git/.git"));
     Files.writeString(gitDir.resolve("HEAD"), "ref: refs/heads/main\n");
     Files.createDirectories(gitDir.resolve("refs/heads"));
@@ -61,9 +56,9 @@ public class HaxelibLocalDocsTest {
   }
 
   @Test
-  @DisplayName("git checkout falls back to packed refs and detached head")
-  public void testGitCheckoutFallsBackToPackedRefsAndDetachedHead() throws Exception {
-    Path repo = Files.createTempDirectory("haxelib-repo");
+  @DisplayName("git checkout falls back to packed refs")
+  public void testGitCheckoutFallsBackToPackedRefs() throws Exception {
+    Path repo = repo();
     Path gitDir = Files.createDirectories(repo.resolve("packedlib/git/.git"));
     Files.writeString(gitDir.resolve("HEAD"), "ref: refs/heads/develop\n");
     Files.writeString(gitDir.resolve("packed-refs"), """
@@ -75,9 +70,14 @@ public class HaxelibLocalDocsTest {
     assertNotNull(packed);
     assertEquals("develop", packed.branch());
     assertEquals("fedcba9876543210fedcba9876543210fedcba98", packed.commit());
+  }
 
-    Path detachedGitDir = Files.createDirectories(repo.resolve("detachedlib/git/.git"));
-    Files.writeString(detachedGitDir.resolve("HEAD"), "abcdef0123456789abcdef0123456789abcdef01\n");
+  @Test
+  @DisplayName("detached head yields a commit without a branch")
+  public void testDetachedHeadYieldsACommitWithoutABranch() throws Exception {
+    Path repo = repo();
+    Path gitDir = Files.createDirectories(repo.resolve("detachedlib/git/.git"));
+    Files.writeString(gitDir.resolve("HEAD"), "abcdef0123456789abcdef0123456789abcdef01\n");
 
     HaxelibLocalDocs.GitCheckout detached = HaxelibLocalDocs.gitCheckout(repo, "detachedlib");
     assertNotNull(detached);
@@ -88,7 +88,7 @@ public class HaxelibLocalDocsTest {
   @Test
   @DisplayName("doc files match well known names in display order regardless of case")
   public void testDocFilesMatchWellKnownNamesInDisplayOrderRegardlessOfCase() throws Exception {
-    Path versionDir = Files.createTempDirectory("haxelib-version");
+    Path versionDir = Files.createDirectories(temp.resolve("version"));
     Files.writeString(versionDir.resolve("CHANGELOG.md"), "changes");
     Files.writeString(versionDir.resolve("ReadMe.MD"), "readme");
     Files.writeString(versionDir.resolve("LICENSE"), "license");
@@ -98,5 +98,9 @@ public class HaxelibLocalDocsTest {
     List<String> names = docs.stream().map(p -> p.getFileName().toString()).toList();
     assertEquals(List.of("ReadMe.MD", "CHANGELOG.md", "LICENSE"), names,
                  "readme first, then changelog and license; unrelated markdown excluded");
+  }
+
+  private Path repo() throws IOException {
+    return Files.createDirectories(temp.resolve("repo"));
   }
 }

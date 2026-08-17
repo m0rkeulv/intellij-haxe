@@ -33,6 +33,7 @@ import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
 import com.intellij.psi.JavaPsiFacade;
+import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementFactory;
 import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
@@ -275,6 +276,13 @@ abstract public class HaxeCodeInsightFixtureTestCase {
 
   public CodeInsightTestFixture getFixture() {
     return myFixture;
+  }
+
+  /** The element at the editor caret — the context anchor the debugger/fragment tests hang their expressions on. */
+  protected PsiElement contextAtCaret() {
+    PsiElement context = myFixture.getFile().findElementAt(myFixture.getCaretOffset());
+    assertNotNull(context, "context element at the caret");
+    return context;
   }
 
   /** Whether a haxe compiler is on the PATH - the gate live tests check via assumeTrue before compiling anything. */

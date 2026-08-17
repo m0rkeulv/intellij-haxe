@@ -31,8 +31,8 @@ public class HaxelibLibraryInfoTest {
     """.lines().toList();
 
   @Test
-  @DisplayName("fields and releases parse through the preamble noise")
-  public void testFieldsAndReleasesParseThroughThePreambleNoise() {
+  @DisplayName("fields parse through the preamble noise")
+  public void testFieldsParseThroughThePreambleNoise() {
     HaxelibLibraryInfo info = HaxelibLibraryInfo.parse(LIME_INFO);
     assertNotNull(info);
     assertEquals("lime", info.name());
@@ -41,14 +41,26 @@ public class HaxelibLibraryInfoTest {
     assertEquals("MIT", info.license());
     assertEquals("singmajesty", info.owner());
     assertEquals("8.3.2", info.latestVersion());
+  }
 
+  @Test
+  @DisplayName("releases carry date version and note")
+  public void testReleasesCarryDateVersionAndNote() {
+    HaxelibLibraryInfo info = HaxelibLibraryInfo.parse(LIME_INFO);
+    assertNotNull(info);
     assertEquals(3, info.releases().size());
     HaxelibLibraryInfo.Release alpha = info.releases().get(1);
     assertEquals("2.0.0-alpha", alpha.version());
     assertEquals("2014-10-14 23:02:00", alpha.date());
     assertEquals("Alpha version", alpha.note());
-    assertEquals("Bug fixes: see changelog", info.releases().get(2).note(),
-                 "a colon inside the note must not split it");
+  }
+
+  @Test
+  @DisplayName("a colon inside a release note does not split it")
+  public void testAColonInsideAReleaseNoteDoesNotSplitIt() {
+    HaxelibLibraryInfo info = HaxelibLibraryInfo.parse(LIME_INFO);
+    assertNotNull(info);
+    assertEquals("Bug fixes: see changelog", info.releases().get(2).note());
   }
 
   @Test

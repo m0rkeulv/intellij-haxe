@@ -5,11 +5,14 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @DisplayName("Build system: hxml file parser")
 public class HxmlFileParserTest {
@@ -47,17 +50,19 @@ public class HxmlFileParserTest {
     assertEquals(List.of("src", "C:/HaxeToolkit/haxe/lib/lime/8,1,2/src", "vendored/format"), info.classpaths());
   }
 
-  @Test
+  /** (hxml line, the target its flag selects). */
+  static final List<Arguments> TARGET_FLAG_SPELLINGS = List.of(
+    arguments("--hl out.hl", HaxeTarget.HL),
+    arguments("--jvm out.jar", HaxeTarget.JAVA),
+    arguments("-cpp out", HaxeTarget.CPP),
+    arguments("--interp", HaxeTarget.INTERP),
+    arguments("-as3 out", HaxeTarget.FLASH));
+
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("TARGET_FLAG_SPELLINGS")
   @DisplayName("recognizes double dash and alias target flags")
-  public void recognizesDoubleDashAndAliasTargetFlags() {
-    Map<String, HaxeTarget> expectations = Map.of(
-      "--hl out.hl", HaxeTarget.HL,
-      "--jvm out.jar", HaxeTarget.JAVA,
-      "-cpp out", HaxeTarget.CPP,
-      "--interp", HaxeTarget.INTERP,
-      "-as3 out", HaxeTarget.FLASH);
-    expectations.forEach((line, target) ->
-      assertEquals(target, HxmlFileParser.parse(line).target(), line));
+  public void recognizesDoubleDashAndAliasTargetFlags(String line, HaxeTarget target) {
+    assertEquals(target, HxmlFileParser.parse(line).target());
   }
 
   @Test

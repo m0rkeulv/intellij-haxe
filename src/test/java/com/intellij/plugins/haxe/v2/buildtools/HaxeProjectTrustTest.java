@@ -35,20 +35,21 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("untrusted project blocks background evaluation and the server")
-  public void testUntrustedProjectBlocksBackgroundEvaluationAndTheServer() {
-    Project project = getProject();
-    TrustedProjects.setProjectTrusted(project, false);
-    try {
-      assertFalse(HaxeProjectTrust.isTrusted(project));
-      assertFalse(HaxeProjectTrust.checkForBackgroundEvaluation(project));
+  @DisplayName("untrusted project blocks background evaluation")
+  public void testUntrustedProjectBlocksBackgroundEvaluation() {
+    withDistrustedProject(() -> {
+      assertFalse(HaxeProjectTrust.isTrusted(getProject()));
+      assertFalse(HaxeProjectTrust.checkForBackgroundEvaluation(getProject()));
+    });
+  }
 
-      int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(null);
+  @Test
+  @DisplayName("untrusted project refuses the compilation server")
+  public void testUntrustedProjectRefusesTheCompilationServer() {
+    withDistrustedProject(() -> {
+      int port = HaxeCompilationServerManager.getInstance(getProject()).ensureRunning(null);
       assertEquals(-1, port, "an untrusted project must not start a compilation server");
-    }
-    finally {
-      TrustedProjects.setProjectTrusted(project, true);
-    }
+    });
   }
 
   @Test
@@ -58,8 +59,7 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile projectXml = myFixture.addFileToProject("project.xml", "<project/>").getVirtualFile();
     HaxeBuildFile buildFile = new HaxeBuildFile(projectXml, HaxeBuildFileType.LIME);
 
-    TrustedProjects.setProjectTrusted(project, false);
-    try {
+    withDistrustedProject(() -> {
       var lime = HaxeLimeProjectInfoService.getInstance(project)
         .getCachedOrSchedule(buildFile, "html5", null, () -> { });
       assertNull(lime, "lime evaluation executes project code and must not be scheduled");
@@ -67,9 +67,17 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
       var nme = HaxeNmeProjectInfoService.getInstance(project)
         .getCachedOrSchedule(buildFile, "neko", null, () -> { });
       assertNull(nme, "nme prepare executes project code and must not be scheduled");
+    });
+  }
+
+  /** Runs the body with the project explicitly distrusted, restoring trust after. */
+  private void withDistrustedProject(Runnable body) {
+    TrustedProjects.setProjectTrusted(getProject(), false);
+    try {
+      body.run();
     }
     finally {
-      TrustedProjects.setProjectTrusted(project, true);
+      TrustedProjects.setProjectTrusted(getProject(), true);
     }
   }
 }

@@ -44,6 +44,14 @@ public class HaxeEnvironmentStoreTest {
     assertEquals(List.of(new EnvironmentDefine("debug", "", DefineEffect.SET),
                          new EnvironmentDefine("level", "2", DefineEffect.SET)),
                  store.getDefines(MODULE));
+  }
+
+  @Test
+  @DisplayName("remove define drops the entry")
+  public void removeDefineDropsTheEntry() {
+    HaxeEnvironmentStore store = new HaxeEnvironmentStore();
+    store.putDefine(MODULE, "debug", "");
+    store.putDefine(MODULE, "level", "2");
 
     store.removeDefine(MODULE, "debug");
     assertEquals(List.of(new EnvironmentDefine("level", "2", DefineEffect.SET)), store.getDefines(MODULE));

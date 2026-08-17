@@ -4,28 +4,37 @@ import com.intellij.openapi.util.SystemInfo;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @DisplayName("Build tools: NME projects")
 public class NmeProjectsTest {
 
-  @Test
-  @DisplayName("windows target maps to the packaged exe")
-  public void testWindowsTargetMapsToThePackagedExe() {
-    NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact("windows", "MyGame", "bin");
-    assertEquals(HaxeTarget.CPP, artifact.target());
-    assertEquals("bin/windows/MyGame/MyGame.exe", artifact.relativeOutput());
-  }
+  /** (nme target flag, app name, output root, haxe target, the packaged artifact nme lays out). */
+  static final List<Arguments> PACKAGED_ARTIFACTS = List.of(
+    arguments("windows", "MyGame", "bin", HaxeTarget.CPP, "bin/windows/MyGame/MyGame.exe"),
+    // the nmml app path overrides the default output root
+    arguments("windows", "NyanCat", "Export", HaxeTarget.CPP, "Export/windows/NyanCat/NyanCat.exe"),
+    arguments("mac", "MyGame", "bin", HaxeTarget.CPP, "bin/mac64/MyGame.app/Contents/MacOS/MyGame"),
+    arguments("flash", "MyGame", "bin", HaxeTarget.FLASH, "bin/flash/MyGame/MyGame.swf"));
 
-  @Test
-  @DisplayName("the nmml app path overrides the default output root")
-  public void testTheNmmlAppPathOverridesTheDefaultOutputRoot() {
-    NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact("windows", "NyanCat", "Export");
-    assertEquals("Export/windows/NyanCat/NyanCat.exe", artifact.relativeOutput());
+  @ParameterizedTest(name = "{0} {1}/{2}")
+  @FieldSource("PACKAGED_ARTIFACTS")
+  @DisplayName("target flags map to their packaged artifacts")
+  public void testTargetFlagsMapToTheirPackagedArtifacts(String flag, String app, String root,
+                                                         HaxeTarget target, String output) {
+    NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact(flag, app, root);
+    assertEquals(target, artifact.target());
+    assertEquals(output, artifact.relativeOutput());
   }
 
   @Test
@@ -37,22 +46,6 @@ public class NmeProjectsTest {
                                      : SystemInfo.isMac ? NmeProjects.targetArtifact("mac", "MyGame", "bin")
                                      : NmeProjects.targetArtifact("linux", "MyGame", "bin");
     assertEquals(host.relativeOutput(), artifact.relativeOutput());
-  }
-
-  @Test
-  @DisplayName("mac target maps into the app bundle")
-  public void testMacTargetMapsIntoTheAppBundle() {
-    NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact("mac", "MyGame", "bin");
-    assertEquals(HaxeTarget.CPP, artifact.target());
-    assertEquals("bin/mac64/MyGame.app/Contents/MacOS/MyGame", artifact.relativeOutput());
-  }
-
-  @Test
-  @DisplayName("flash target maps to the swf")
-  public void testFlashTargetMapsToTheSwf() {
-    NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact("flash", "MyGame", "bin");
-    assertEquals(HaxeTarget.FLASH, artifact.target());
-    assertEquals("bin/flash/MyGame/MyGame.swf", artifact.relativeOutput());
   }
 
   @Test
