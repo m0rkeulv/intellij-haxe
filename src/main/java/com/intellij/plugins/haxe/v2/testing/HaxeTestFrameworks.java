@@ -8,7 +8,10 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -59,5 +62,26 @@ public final class HaxeTestFrameworks {
       if (declared) return framework;
     }
     return null;
+  }
+
+  /**
+   * The container's effective tests build files: the marked ones, else the
+   * store's convention-based suggestions — both narrowed to candidates whose
+   * declared libraries name a known framework, so a plain application build
+   * (even a marked one) never presents a test run it cannot deliver. The one
+   * answer every consumer (tool window tree, library sync) shares; callers
+   * supply the libraries they already parsed per candidate path.
+   */
+  @NotNull
+  public static List<String> testsBuildPaths(@NotNull Project project,
+                                             @NotNull String containerId,
+                                             @NotNull Map<String, List<HaxeBuildFileInfo.HaxeLibDependency>> librariesByPath) {
+    List<String> candidates = new ArrayList<>();
+    librariesByPath.forEach((path, libraries) -> {
+      if (detectedFramework(libraries) != null) {
+        candidates.add(path);
+      }
+    });
+    return HaxeTestsBuildFileStore.getInstance(project).resolveTestsFiles(containerId, candidates);
   }
 }

@@ -223,7 +223,7 @@ public class HashLinkBackend implements DapBackend {
   // same-named sibling inside the build binds and stops the debuggee.
   @Override
   public boolean acceptsBreakpointFile(String vfsPath) {
-    return sourceDirectories.isEmpty() || DapSourceScopes.underAny(vfsPath, sourceDirectories);
+    return DapSourceScopes.acceptsWhenScoped(vfsPath, sourceDirectories);
   }
 
   // NOTE: the adapter currently only STORES the flag — labels stay class names

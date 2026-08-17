@@ -28,9 +28,9 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.RecursionManager;
-import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
+import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiElementFactory;
@@ -310,8 +310,7 @@ abstract public class HaxeCodeInsightFixtureTestCase {
   public static boolean adlAvailable() {
     String airSdk = System.getenv("AIR_SDK");
     if (airSdk == null || airSdk.isBlank()) return false;
-    String adl = SystemInfo.isWindows ? "adl.exe" : "adl";
-    return Files.isRegularFile(Path.of(airSdk, "bin", adl));
+    return Files.isRegularFile(Path.of(airSdk, "bin", HaxeSdkUtilBase.getExecutableName("adl")));
   }
 
   private static boolean toolAvailable(String... command) {

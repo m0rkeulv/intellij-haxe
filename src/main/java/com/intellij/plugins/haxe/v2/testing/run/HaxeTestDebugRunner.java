@@ -3,11 +3,7 @@ package com.intellij.plugins.haxe.v2.testing.run;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleUtilCore;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
@@ -21,14 +17,12 @@ import com.intellij.plugins.haxe.runner.debugger.browser.HaxeBrowserTestSupport;
 import com.intellij.plugins.haxe.runner.debugger.browser.NodeTestDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijBackend;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpDapBackend;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Debug executor for Haxe unit-test configurations, dispatching on the launch
@@ -92,8 +86,9 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
         case HL -> new HashLinkBackend(hlRuntime(configuration, plan),
                                        hlProgram(plan),
                                        HashLinkDebugRunner.findFreePort(),
-                                       sourceDirectories(configuration));
-        case CPP -> new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS, sourceDirectories(configuration));
+                                       HaxeTestRunConfigurations.sourceDirectories(configuration));
+        case CPP -> new HxcppIntellijBackend(DEBUGGEE_CONNECT_TIMEOUT_MILLIS,
+                                             HaxeTestRunConfigurations.sourceDirectories(configuration));
         case JAVA_SCRIPT -> plan.browserHosted()
                             ? HaxeBrowserTestSupport.createBackend(configuration.getProject(),
                                                                    HaxeTestLaunchPlanner.browserWebRoot(plan))
@@ -194,24 +189,8 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
   /** Same precedence as the plain run's launch command: the SDK-configured HashLink, then env, then PATH. */
   @NotNull
   private static Path resolveHlExecutable(HaxeTestRunConfiguration configuration) throws ExecutionException {
-    Module module = ReadAction.computeBlocking(() -> buildFileModule(configuration));
+    Module module = HaxeTestRunConfigurations.buildFileModule(configuration);
     return HlExecutableResolver.resolve(module)
       .orElseThrow(() -> new ExecutionException(HaxeBundle.message("haxe.test.debug.no.hl")));
-  }
-
-  @Nullable
-  private static Module buildFileModule(HaxeTestRunConfiguration configuration) {
-    String buildFilePath = configuration.getBuildFilePath();
-    VirtualFile file = buildFilePath == null ? null : LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    return file == null ? null : ModuleUtilCore.findModuleForFile(file, configuration.getProject());
-  }
-
-  /** The tests build's classpath roots, scoping breakpoint binding and frame resolution to THIS build's files. */
-  @NotNull
-  private static List<String> sourceDirectories(HaxeTestRunConfiguration configuration) {
-    String buildFilePath = configuration.getBuildFilePath();
-    if (StringUtil.isEmptyOrSpaces(buildFilePath)) return List.of();
-    return ReadAction.computeBlocking(
-      () -> HaxeBuildClasspaths.sourceDirectories(configuration.getProject(), buildFilePath));
   }
 }

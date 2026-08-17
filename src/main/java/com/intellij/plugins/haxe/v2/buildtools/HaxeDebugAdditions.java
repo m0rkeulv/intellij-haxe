@@ -13,6 +13,9 @@ import java.util.List;
  */
 public final class HaxeDebugAdditions {
 
+  /** The haxelib id of the in-debuggee DAP server hxcpp debug builds compile in. */
+  public static final String HXCPP_DEBUG_SERVER_LIB = "intellij-hxcpp-debug-server";
+
   private HaxeDebugAdditions() {
   }
 
@@ -25,7 +28,7 @@ public final class HaxeDebugAdditions {
       case HL, JAVA_SCRIPT, FLASH -> List.of("-debug");
       // hxcpp: line tables plus the in-debuggee DAP server compiled in - it
       // connects out at startup guided by the HXCPP_DEBUG_HOST/PORT env vars
-      case CPP -> List.of("-debug", "-lib", "intellij-hxcpp-debug-server");
+      case CPP -> List.of("-debug", "-lib", HXCPP_DEBUG_SERVER_LIB);
       // remaining targets follow in phase C (eval)
       default -> null;
     };

@@ -25,6 +25,7 @@ import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
 import com.intellij.plugins.haxe.haxelib.HaxelibLibraryInfo;
 import com.intellij.plugins.haxe.haxelib.HaxelibLocalDocs;
 import com.intellij.plugins.haxe.haxelib.HaxelibSdkUtils;
+import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.haxelib.HaxelibUtil;
 import com.intellij.plugins.haxe.ide.documentation.HaxeDocumentationRenderer;
 import com.intellij.openapi.project.ProjectUtil;
@@ -91,16 +92,16 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     }
 
     boolean dev() {
-      return installedVersions.contains("dev");
+      return installedVersions.contains(HaxelibSemVer.DEV);
     }
 
     boolean git() {
-      return installedVersions.contains("git");
+      return installedVersions.contains(HaxelibSemVer.GIT_SCM);
     }
 
     /** Whether a plain RELEASE version is installed (dev/git pseudo-versions aside). */
     boolean installedRelease() {
-      return installedVersions.stream().anyMatch(v -> !"dev".equals(v) && !"git".equals(v));
+      return installedVersions.stream().anyMatch(v -> !HaxelibSemVer.isPseudoVersion(v));
     }
   }
 
@@ -428,8 +429,8 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
 
   /** The filter applied to each version node: visible while its kind's toggle is on. */
   private boolean versionShown(@NotNull VersionEntry entry) {
-    if ("dev".equals(entry.version())) return filters.isActive(HaxelibExplorerFilters.Filter.DEV);
-    if ("git".equals(entry.version())) return filters.isActive(HaxelibExplorerFilters.Filter.GIT);
+    if (HaxelibSemVer.DEV.equals(entry.version())) return filters.isActive(HaxelibExplorerFilters.Filter.DEV);
+    if (HaxelibSemVer.GIT_SCM.equals(entry.version())) return filters.isActive(HaxelibExplorerFilters.Filter.GIT);
     return filters.isActive(entry.installed() ? HaxelibExplorerFilters.Filter.INSTALLED
                                               : HaxelibExplorerFilters.Filter.NOT_INSTALLED);
   }
@@ -452,7 +453,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   /** Whether the CURRENT selection is a release older than the latest — the forgotten-pin case. */
   private boolean behindLatest(@NotNull LibraryRow row) {
     String selected = row.selectedVersion();
-    if (selected == null || "dev".equals(selected) || "git".equals(selected)) return false;
+    if (selected == null || HaxelibSemVer.isPseudoVersion(selected)) return false;
     String latest = latestVersions.get(row.name());
     return latest != null && !latest.equals(selected);
   }
@@ -548,7 +549,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   static List<VersionEntry> versionEntries(@NotNull LibraryRow row, @Nullable HaxelibLibraryInfo info) {
     List<VersionEntry> entries = new ArrayList<>();
     Set<String> covered = new LinkedHashSet<>();
-    for (String pseudo : List.of("dev", "git")) {
+    for (String pseudo : List.of(HaxelibSemVer.DEV, HaxelibSemVer.GIT_SCM)) {
       if (row.installedVersions().contains(pseudo)) {
         entries.add(entry(row, pseudo, null, null));
         covered.add(pseudo);

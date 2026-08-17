@@ -12,9 +12,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeLibrarySync;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeSourceRootsOffer;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
@@ -60,11 +58,7 @@ public final class HaxeAddBuildFileAction extends DumbAwareAction {
       return;
     }
 
-    HaxeBuildFilesStore.getInstance(project).addFile(containerId, chosen.getPath());
-    HaxeSourceRootsOffer.offerFor(project, containerId, chosen);
-    // a newly known build file can change the module's library set (it may even
-    // become the implicit active file) - re-sync, not just repaint
-    HaxeLibrarySync.sync(project, panel::refreshTree);
+    HaxeKnownBuildFiles.registerBuildFile(project, containerId, chosen, panel::refreshTree);
   }
 
   @Override

@@ -68,6 +68,14 @@ public final class BuddyFramework implements HaxeTestFramework {
     return false;
   }
 
+  /** Or null when extraction fails - the run then reports to the console only. */
+  @Override
+  public @Nullable String reporterClasspath() {
+    return HaxeTestReporterFiles.classpath(
+      "/testing/buddyLiveReporter/", "buddy-live-reporter",
+      List.of("intellij_buddy/TcReporter.hx", "intellij_buddy/SuiteName.hx"));
+  }
+
   @Override
   public @NotNull List<String> reportingArgs(@Nullable String suiteName,
                                              @Nullable String reporterClasspath,
@@ -75,12 +83,8 @@ public final class BuddyFramework implements HaxeTestFramework {
     // without the extracted reporter there is nothing to report through -
     // the run still executes with buddy's console reporter
     if (reporterClasspath == null) return List.of();
-    List<String> arguments = new ArrayList<>();
-    // the reporter bakes the root suite name in from this define at compile time
-    if (suiteName != null) {
-      arguments.add("-D");
-      arguments.add("teamcity_suite_name=" + suiteName);
-    }
+    List<String> arguments = new ArrayList<>(HaxeTestReporterArgs.suiteNameDefine(suiteName));
+    // buddy selects the reporter class itself from this define - no macro patching
     arguments.add("-D");
     arguments.add("reporter=intellij_buddy.TcReporter");
     arguments.add("-cp");

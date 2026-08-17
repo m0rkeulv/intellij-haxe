@@ -9,8 +9,13 @@ import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -62,7 +67,11 @@ public final class HaxeTestRunConfigurations {
     }
     HaxeTestRunConfiguration configuration = (HaxeTestRunConfiguration)settings.getConfiguration();
     configuration.setBuildFilePath(buildFilePath);
-    configuration.setFilterPattern(filterPattern);
+    // a null pattern means "no opinion" - launching from the tool window must
+    // not erase the filter the user typed into the found configuration
+    if (filterPattern != null) {
+      configuration.setFilterPattern(filterPattern);
+    }
     configuration.setSingleRun(testClass, testMethod);
     if (created) {
       settings.setName(StringUtil.notNullize(configuration.suggestedName(), settings.getName()));
@@ -118,6 +127,25 @@ public final class HaxeTestRunConfigurations {
     return HaxeTestLaunchPlanner.isDebuggableTarget(project, buildFilePath);
   }
 
+  /** The configuration's tests build file's module, resolved inside a read action; null when unresolvable. */
+  @Nullable
+  static Module buildFileModule(@NotNull HaxeTestRunConfiguration configuration) {
+    String buildFilePath = configuration.getBuildFilePath();
+    if (StringUtil.isEmptyOrSpaces(buildFilePath)) return null;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    if (file == null) return null;
+    return ReadAction.computeBlocking(() -> ModuleUtilCore.findModuleForFile(file, configuration.getProject()));
+  }
+
+  /** The tests build's classpath roots, scoping breakpoint binding and frame resolution to THIS build's files. */
+  @NotNull
+  static List<String> sourceDirectories(@NotNull HaxeTestRunConfiguration configuration) {
+    String buildFilePath = configuration.getBuildFilePath();
+    if (StringUtil.isEmptyOrSpaces(buildFilePath)) return List.of();
+    return ReadAction.computeBlocking(
+      () -> HaxeBuildClasspaths.sourceDirectories(configuration.getProject(), buildFilePath));
+  }
+
   /**
    * Recomputes every test configuration's before-run compile step. Artifact
    * targets persist their compile arguments in that step, so a settings change
@@ -139,6 +167,21 @@ public final class HaxeTestRunConfigurations {
       })
       .expireWith(project)
       .finishOnUiThread(ModalityState.defaultModalityState(), applications -> applications.forEach(Runnable::run))
+      .submit(AppExecutorUtil.getAppExecutorService());
+  }
+
+  /**
+   * Recomputes ONE configuration's compile step in the background — the
+   * dialog's Apply must not parse build files on the EDT (the platform even
+   * applies to validation snapshots while the user types). Nothing needs the
+   * result synchronously: the dialog shows no step-derived field, and the
+   * before-run task re-derives its arguments at launch.
+   */
+  public static void resyncCompileStepAsync(@NotNull HaxeTestRunConfiguration configuration) {
+    Project project = configuration.getProject();
+    ReadAction.nonBlocking(configuration::computedCompileStep)
+      .expireWith(project)
+      .finishOnUiThread(ModalityState.defaultModalityState(), configuration::setBeforeRunTasks)
       .submit(AppExecutorUtil.getAppExecutorService());
   }
 }

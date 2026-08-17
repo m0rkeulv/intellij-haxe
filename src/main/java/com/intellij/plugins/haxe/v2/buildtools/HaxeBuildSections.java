@@ -6,6 +6,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInspector;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeSectionSelectionStore;
 import org.jetbrains.annotations.NotNull;
@@ -51,5 +52,19 @@ public final class HaxeBuildSections {
     if (sections.isEmpty()) return null;
     if (sections.size() == 1) return sections.get(0);
     return sections.get(selectedIndex(project, buildFile.file(), sections));
+  }
+
+  /**
+   * The SELECTED {@code --next} section's lines as compiler arguments, or
+   * null for a single-section file — callers keep their whole-file shape
+   * then. The one expansion the section-scoped compile and the display
+   * service's server context share. Call in a read action.
+   */
+  @Nullable
+  public static List<String> selectedSectionArguments(@NotNull Project project, @NotNull VirtualFile file) {
+    List<String> sections = HaxeBuildFileInspector.sectionContents(project, file);
+    if (sections.size() < 2) return null;
+    int index = selectedIndex(project, file, sections);
+    return HxmlArguments.parseLines(sections.get(index).lines().toList());
   }
 }

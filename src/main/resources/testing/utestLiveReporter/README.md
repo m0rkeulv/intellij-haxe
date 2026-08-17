@@ -5,7 +5,10 @@ into their test build — resources, not plugin code. The test planner adds
 `-cp <extracted dir> --macro intellij_utest.Macro.init()` to test compiles
 when the Build Tools | Haxe "Live test reporting" setting is on (the
 default); `HaxeTestReporterFiles` extracts this directory into the IDE
-system path once per content change.
+system path once per content change, together with the sources every
+framework's reporter shares (`../sharedLiveReporter/intellij_haxe_test/`:
+TeamCity escaping, line printing, the hosted-run sentinel and the flash
+shims) — one classpath root serves both.
 
 `Macro.init()` registers a `@:build` macro on `utest.Runner` that appends a
 `LiveReporter.attach(this, <root suite name>)` call to the constructor. The

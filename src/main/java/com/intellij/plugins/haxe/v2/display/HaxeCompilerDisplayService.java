@@ -155,13 +155,12 @@ public final class HaxeCompilerDisplayService {
    */
   @NotNull
   private List<String> hxmlContextArgs(@NotNull VirtualFile buildFile, @NotNull String directory) {
-    List<String> sections = HaxeBuildFileInspector.sectionContents(project, buildFile);
-    if (sections.size() < 2) {
+    List<String> sectionArguments = HaxeBuildSections.selectedSectionArguments(project, buildFile);
+    if (sectionArguments == null) {
       return List.of("--cwd", directory, buildFile.getName());
     }
-    int index = HaxeBuildSections.selectedIndex(project, buildFile, sections);
     List<String> args = new ArrayList<>(List.of("--cwd", directory));
-    args.addAll(HxmlArguments.parseLines(sections.get(index).lines().toList()));
+    args.addAll(sectionArguments);
     return List.copyOf(args);
   }
 

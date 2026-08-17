@@ -24,8 +24,8 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.projectRoots.SdkModificator;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.config.sdk.ui.HaxeAdditionalConfigurablePanel;
-import com.intellij.plugins.haxe.config.sdk.ui.HaxeRuntimeSettingsControls;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
@@ -106,10 +106,10 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
                             ? HaxeSdkUtilBase.getHaxelibPathByFolderPath(mySdk.getHomePath())
                             : null;
     myHaxeAdditionalConfigurablePanel.setInheritedDefaults(
-      bundledHaxelib != null ? bundledHaxelib : HaxeRuntimeSettingsControls.pathDetectedExecutable("haxelib"),
-      HaxeRuntimeSettingsControls.pathDetectedExecutable("neko"),
-      HaxeRuntimeSettingsControls.pathDetectedExecutable("hl"),
-      HaxeRuntimeSettingsControls.pathDetectedExecutable("node"));
+      bundledHaxelib != null ? bundledHaxelib : HaxeToolPathResolver.pathDetectedExecutable("haxelib"),
+      HaxeToolPathResolver.pathDetectedExecutable("neko"),
+      HaxeToolPathResolver.pathDetectedExecutable("hl"),
+      HaxeToolPathResolver.pathDetectedExecutable("node"));
 
     final HaxeSdkData haxeSdkData = getHaxeSdkData();
     if (haxeSdkData != null) {

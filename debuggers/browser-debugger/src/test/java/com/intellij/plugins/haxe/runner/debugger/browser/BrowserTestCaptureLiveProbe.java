@@ -1,14 +1,17 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitStartDebugging;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.baseLaunchConfig;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.chromiumExe;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.dapServerJs;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.initializeRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
-import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeRoot;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.probe;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.OutputEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
@@ -18,9 +21,6 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
@@ -69,37 +69,18 @@ public class BrowserTestCaptureLiveProbe {
   private int adapterPort;
   private DapClient parent;
 
-  private static Path dapServerJs() {
-    return nodeRoot().resolve("adapters/js-debug-1.117.0/js-debug/src/dapDebugServer.js");
-  }
-
   /** The repo's utest live reporter sources, compiled into the fixture exactly as the planner injects them. */
   private static Path utestReporterRoot() {
-    return Path.of("../../src/main/resources/testing/utestLiveReporter").toAbsolutePath().normalize();
+    return reporterRoot("utestLiveReporter");
   }
 
-  private static Path chromiumExe() {
-    String env = System.getenv("WEB_DEBUG_CHROMIUM_EXE");
-    if (env != null && !env.isBlank()) {
-      Path fromEnv = Path.of(env);
-      return Files.isRegularFile(fromEnv) ? fromEnv : null;
-    }
-    List<Path> candidates = new ArrayList<>();
-    String localAppData = System.getenv("LOCALAPPDATA");
-    if (localAppData != null && !localAppData.isBlank()) {
-      candidates.add(Path.of(localAppData, "Chromium/Application/chrome.exe"));
-      candidates.add(Path.of(localAppData, "Google/Chrome/Application/chrome.exe"));
-    }
-    candidates.add(Path.of("C:/Program Files/Google/Chrome/Application/chrome.exe"));
-    candidates.add(Path.of("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"));
-    candidates.add(Path.of("/usr/bin/chromium"));
-    candidates.add(Path.of("/usr/bin/google-chrome"));
-    for (Path path : candidates) {
-      if (Files.isRegularFile(path)) {
-        return path;
-      }
-    }
-    return null;
+  /** The reporter sources every framework shares — the planner extracts them onto the same classpath. */
+  private static Path sharedReporterRoot() {
+    return reporterRoot("sharedLiveReporter");
+  }
+
+  private static Path reporterRoot(String directoryName) {
+    return Path.of("../../src/main/resources/testing/" + directoryName).toAbsolutePath().normalize();
   }
 
   @BeforeEach
@@ -162,6 +143,7 @@ public class BrowserTestCaptureLiveProbe {
     Process haxe = new ProcessBuilder(
       "haxe", "-cp", fixture.toString(), "-lib", "utest",
       "-cp", utestReporterRoot().toString(),
+      "-cp", sharedReporterRoot().toString(),
       "-D", "teamcity", "-D", "teamcity_suite_name=Probe",
       "--macro", "intellij_utest.Macro.init()",
       "-main", "ProbeMain", "-js", fixture.resolve("app.js").toString(), "-debug")
@@ -176,23 +158,16 @@ public class BrowserTestCaptureLiveProbe {
   /** Parent handshake, child session, configurationDone, then output capture until the sentinel (or timeout). */
   private String driveAndCapture(Path fixture) throws Exception {
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
-      assertTrue(parent.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "parent initialize");
+      assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
 
-      Map<String, Object> launchConfig = new LinkedHashMap<>();
-      launchConfig.put("type", "pwa-chrome");
-      launchConfig.put("request", "launch");
-      launchConfig.put("name", "probe");
-      launchConfig.put("url", content.getBaseUrl());
-      launchConfig.put("webRoot", fixture.toString());
-      launchConfig.put("runtimeExecutable", chromiumExe().toString());
-      launchConfig.put("runtimeArgs", List.of("--headless=new"));
+      Map<String, Object> launchConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(launchConfig));
 
-      StartDebuggingRequest startDebugging = awaitStartDebugging(20_000);
+      StartDebuggingRequest startDebugging = awaitStartDebugging(parent, 20_000, TIMEOUT);
       assertNotNull(startDebugging, "no startDebugging reverse request");
 
       try (DapClient child = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT)) {
-        assertTrue(child.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "child initialize");
+        assertTrue(child.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "child initialize");
         child.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
 
         StringBuilder captured = new StringBuilder();
@@ -215,30 +190,5 @@ public class BrowserTestCaptureLiveProbe {
         return captured.toString();
       }
     }
-  }
-
-  private static InitializeRequest initializeRequest() {
-    InitializeRequest initialize = InitializeRequest.standard("chrome", true);
-    initialize.getArguments().setClientName("IntelliJ Haxe");
-    return initialize;
-  }
-
-  /** Answers reverse requests until startDebugging arrives; configurationDone on initialized. */
-  private StartDebuggingRequest awaitStartDebugging(long millis) throws Exception {
-    long deadline = System.currentTimeMillis() + millis;
-    while (System.currentTimeMillis() < deadline) {
-      Event event = parent.pollEvent(100);
-      if (event instanceof InitializedEvent) {
-        parent.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
-      }
-      Request incoming = parent.pollIncomingRequest(50);
-      if (incoming != null) {
-        parent.respond(incoming, true);
-        if (incoming instanceof StartDebuggingRequest start) {
-          return start;
-        }
-      }
-    }
-    return null;
   }
 }

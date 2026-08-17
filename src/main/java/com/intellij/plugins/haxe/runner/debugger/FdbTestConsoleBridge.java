@@ -47,6 +47,13 @@ class FdbTestConsoleBridge implements ConsoleView {
     return text.replaceAll("(?m)^\\[trace] ", "");
   }
 
+  /** Ends the synthetic test process so the SM view finalizes its test tree. */
+  void endTestOutput() {
+    if (!testOutputSink.isProcessTerminated()) {
+      testOutputSink.destroyProcess();
+    }
+  }
+
   @Override
   public void attachToProcess(@NotNull ProcessHandler processHandler) {
     // already attached to the sink; the debug framework's attach (the fdb
@@ -130,9 +137,7 @@ class FdbTestConsoleBridge implements ConsoleView {
 
   @Override
   public void dispose() {
-    if (!testOutputSink.isProcessTerminated()) {
-      testOutputSink.destroyProcess();
-    }
+    endTestOutput();
     Disposer.dispose(testConsole);
   }
 }

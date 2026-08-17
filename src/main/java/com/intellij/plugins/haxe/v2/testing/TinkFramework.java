@@ -13,7 +13,6 @@ import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -54,24 +53,20 @@ public final class TinkFramework implements HaxeTestFramework {
     return declaringClass != null && isTestClass(declaringClass);
   }
 
+  /** Or null when extraction fails - the run then reports to the console only. */
+  @Override
+  public @Nullable String reporterClasspath() {
+    return HaxeTestReporterFiles.classpath(
+      "/testing/tinkLiveReporter/", "tink-live-reporter",
+      List.of("intellij_tink/Macro.hx", "intellij_tink/TcReporter.hx"));
+  }
+
   @Override
   public @NotNull List<String> reportingArgs(@Nullable String suiteName,
                                              @Nullable String reporterClasspath,
                                              boolean liveReporting) {
-    // without the extracted reporter there is nothing to report through -
-    // the run still executes with tink's console reporter
-    if (reporterClasspath == null) return List.of();
-    List<String> arguments = new ArrayList<>();
-    // the injected reporter reads the root suite name from this define at macro time
-    if (suiteName != null) {
-      arguments.add("-D");
-      arguments.add("teamcity_suite_name=" + suiteName);
-    }
-    arguments.add("-cp");
-    arguments.add(reporterClasspath);
-    arguments.add("--macro");
-    arguments.add("intellij_tink.Macro.init()");
-    return arguments;
+    // the injected reporter is tink's only result channel - liveReporting cannot opt out
+    return HaxeTestReporterArgs.macroReporterArgs(suiteName, reporterClasspath, "intellij_tink.Macro.init()");
   }
 
   @Override

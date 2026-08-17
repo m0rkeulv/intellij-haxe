@@ -10,7 +10,6 @@ import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.GenericProgramRunner;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.module.Module;
-import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.HaxeFlashDebuggingUtil;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
 import java.util.List;
@@ -46,11 +45,7 @@ public class AirDebugRunner extends GenericProgramRunner<RunnerSettings> {
     AirRunConfiguration configuration = (AirRunConfiguration)environment.getRunProfile();
     Module module = configuration.requireModule();
 
-    FlexPluginGate.requireFlexPlugin();
-    String flexSdkName = configuration.effectiveFlexSdkName();
-    if (flexSdkName.isBlank()) {
-      throw new ExecutionException(HaxeDebuggerBundle.message("air.runner.no.flex.sdk"));
-    }
+    String flexSdkName = FlexPluginGate.requireFlexSdkName(configuration.getProject(), configuration.getFlexSdkName());
 
     GeneralCommandLine adlCommandLine = configuration.createAdlCommandLine(true);
     List<String> sourceDirectories = HaxeActionBeforeRunTaskProvider.buildStepSourceDirectories(configuration);

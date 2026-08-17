@@ -1,17 +1,17 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitStartDebugging;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.breakpointsRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.compileHaxeJs;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.dapServerJs;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.initializeRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
-import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeRoot;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.probe;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Source;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.SourceBreakpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
@@ -76,10 +76,6 @@ public class NodeAttachLiveProbe {
   private DapClient parent;
   private Process debuggee;
   private final List<String> debuggeeStdout = new CopyOnWriteArrayList<>();
-
-  private static Path dapServerJs() {
-    return nodeRoot().resolve("adapters/js-debug-1.117.0/js-debug/src/dapDebugServer.js");
-  }
 
   @BeforeEach
   public void spawnAdapter() throws IOException {
@@ -149,13 +145,13 @@ public class NodeAttachLiveProbe {
     gobble(new BufferedReader(new InputStreamReader(debuggee.getErrorStream(), StandardCharsets.UTF_8)),
            "[debuggee-err] ", null);
 
-    assertTrue(parent.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "parent initialize");
+    assertTrue(parent.sendRequest(initializeRequest("node"), TIMEOUT).isSuccess(), "parent initialize");
     parent.sendRequestNoWait(ConfiguredLaunchRequest.of(attachConfig(inspectorPort, cwd)));
-    StartDebuggingRequest startDebugging = awaitStartDebugging(20_000);
+    StartDebuggingRequest startDebugging = awaitStartDebugging(parent, 20_000, TIMEOUT);
     assertNotNull(startDebugging, "no startDebugging reverse request for the node attach");
 
     try (DapClient child = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT)) {
-      assertTrue(child.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "child initialize");
+      assertTrue(child.sendRequest(initializeRequest("node"), TIMEOUT).isSuccess(), "child initialize");
       child.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
 
       StoppedEvent stopped = configureAndAwaitBreakpoint(child, fixture);
@@ -185,7 +181,8 @@ public class NodeAttachLiveProbe {
       Event event = child.pollEvent(100);
       if (event instanceof InitializedEvent && !configured) {
         configured = true;
-        assertTrue(child.sendRequest(breakpointsRequest(fixture), TIMEOUT).isSuccess(), "setBreakpoints");
+        assertTrue(child.sendRequest(breakpointsRequest(fixture, "NodeMain.hx", BP_LINE), TIMEOUT).isSuccess(),
+                   "setBreakpoints");
         child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
       }
       if (event instanceof StoppedEvent stopped) {
@@ -200,12 +197,6 @@ public class NodeAttachLiveProbe {
     return null;
   }
 
-  private static InitializeRequest initializeRequest() {
-    InitializeRequest initialize = InitializeRequest.standard("node", true);
-    initialize.getArguments().setClientName("IntelliJ Haxe");
-    return initialize;
-  }
-
   /** The attach flavour of the parent config — what NodeTestDebugBackend sends. */
   private static Map<String, Object> attachConfig(int inspectorPort, Path cwd) {
     Map<String, Object> config = new LinkedHashMap<>();
@@ -218,39 +209,6 @@ public class NodeAttachLiveProbe {
     config.put("resolveSourceMapLocations", List.of("**"));
     config.put("cwd", cwd.toString());
     return config;
-  }
-
-  private SetBreakpointsRequest breakpointsRequest(Path fixture) {
-    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-    Source source = new Source();
-    source.setPath(fixture.resolve("NodeMain.hx").toString());
-    source.setName("NodeMain.hx");
-    bpArgs.setSource(source);
-    SourceBreakpoint bp = new SourceBreakpoint();
-    bp.setLine(BP_LINE);
-    bpArgs.setBreakpoints(List.of(bp));
-    setBreakpoints.setArguments(bpArgs);
-    return setBreakpoints;
-  }
-
-  /** Answers reverse requests until startDebugging arrives; configurationDone on initialized. */
-  private StartDebuggingRequest awaitStartDebugging(long millis) throws Exception {
-    long deadline = System.currentTimeMillis() + millis;
-    while (System.currentTimeMillis() < deadline) {
-      Event event = parent.pollEvent(100);
-      if (event instanceof InitializedEvent) {
-        parent.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
-      }
-      Request incoming = parent.pollIncomingRequest(50);
-      if (incoming != null) {
-        parent.respond(incoming, true);
-        if (incoming instanceof StartDebuggingRequest start) {
-          return start;
-        }
-      }
-    }
-    return null;
   }
 
   private static void gobble(BufferedReader reader, String tag, List<String> sink) {

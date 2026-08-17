@@ -6,6 +6,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeLibrarySync;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeSourceRootsOffer;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
@@ -38,6 +39,9 @@ public final class HaxeMarkTestsBuildFileAction extends DumbAwareAction {
       }
       else {
         store.markTestsFile(row.containerId(), path);
+        // a tests build often has its own source tree (tests/src) the module
+        // never marked - unmarked roots leave breakpoints unresolvable
+        HaxeSourceRootsOffer.offerFor(project, row.containerId(), row.buildFile().file());
       }
       // the tests build's libraries feed the module's resolve scope - re-sync
       HaxeLibrarySync.sync(project, panel::refreshTree);

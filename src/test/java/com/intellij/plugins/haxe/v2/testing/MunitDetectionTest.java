@@ -1,11 +1,6 @@
 package com.intellij.plugins.haxe.v2.testing;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
-import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
-import com.intellij.plugins.haxe.util.HaxeResolveUtil;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** munit needs no marker interface - detection reads the runtime {@code @Test} metadata off the methods. */
 @DisplayName("Test detection: munit")
-public class MunitDetectionTest extends HaxeCodeInsightFixtureTestCase {
+public class MunitDetectionTest extends HaxeTestFrameworkDetectionTestBase {
 
   private final MunitFramework framework = new MunitFramework();
 
@@ -76,22 +71,5 @@ public class MunitDetectionTest extends HaxeCodeInsightFixtureTestCase {
     assertTrue(framework.reportingArgs("Target: Neko", null, true).isEmpty(),
                "without the extracted reporter the run stays console-only");
     assertTrue(framework.filterArgs("Any.pattern").isEmpty(), "munit has no filter define");
-  }
-
-  private HaxeClass classByQName(String qName) {
-    HaxeClass haxeClass = HaxeResolveUtil.findClassByQName(qName, getPsiManager(),
-                                                           GlobalSearchScope.allScope(getProject()));
-    assertNotNull(haxeClass, "fixture class not found: " + qName);
-    return haxeClass;
-  }
-
-  private HaxeMethod methodOf(HaxeClass haxeClass, String name) {
-    for (PsiMethod method : haxeClass.getMethods()) {
-      if (name.equals(method.getName()) && method instanceof HaxeMethod haxeMethod) {
-        return haxeMethod;
-      }
-    }
-    fail("fixture method not found: " + haxeClass.getQualifiedName() + "." + name);
-    return null;
   }
 }

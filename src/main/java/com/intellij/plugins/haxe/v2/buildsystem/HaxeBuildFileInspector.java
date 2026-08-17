@@ -92,12 +92,12 @@ public final class HaxeBuildFileInspector {
       if (child instanceof HXMLProperty property) {
         String key = property.getKey().getText();
         // a value on the separator's own line is the FOLLOWING section's
-        // first argument - verified against a live compile
-        if (key.equals("--next")) {
+        // first argument
+        if (HxmlFileParser.isNextSeparator(key)) {
           sectionLines.add(sectionStartingWith(property.getValue()));
           continue;
         }
-        if (key.equals("--each")) {
+        if (HxmlFileParser.isEachSeparator(key)) {
           List<String> current = sectionLines.get(sectionLines.size() - 1);
           eachBlock.addAll(current);
           current.clear();

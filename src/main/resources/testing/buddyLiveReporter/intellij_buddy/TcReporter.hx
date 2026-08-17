@@ -5,6 +5,9 @@ import buddy.BuddySuite.Spec;
 import buddy.BuddySuite.SpecStatus;
 import buddy.BuddySuite.Suite;
 import haxe.CallStack;
+import intellij_haxe_test.TcOutput.announceHostedRunFinished;
+import intellij_haxe_test.TcOutput.escape;
+import intellij_haxe_test.TcOutput.printLine;
 import promhx.Deferred;
 import promhx.Promise;
 
@@ -38,15 +41,6 @@ class TcReporter implements buddy.reporting.Reporter {
 		if (rootSuite != "") printLine("##teamcity[testSuiteFinished name='" + escape(rootSuite) + "']");
 		announceHostedRunFinished(!status);
 		return resolveImmediately(suites);
-	}
-
-	// A BROWSER-hosted page has no process exit; the IDE ends the run when
-	// this line arrives (node/sys runs exit by themselves, flash through adl).
-	static function announceHostedRunFinished(failed:Bool):Void {
-		#if js
-		var proc:Dynamic = js.Syntax.code("typeof process !== 'undefined' ? process : null");
-		if (proc == null) printLine("##intellij-haxe[testRunFinished exit='" + (failed ? 1 : 0) + "']");
-		#end
 	}
 
 	function reportSuite(suite:Suite):Void {
@@ -111,34 +105,11 @@ class TcReporter implements buddy.reporting.Reporter {
 		return lines;
 	}
 
-	static function printLine(line:String):Void {
-		#if sys
-		Sys.println(line);
-		#elseif js
-		// console.log reaches node's stdout and the browser console alike;
-		// the trace fallback would prefix every line with its own position
-		untyped console.log(line);
-		#else
-		trace(line);
-		#end
-	}
-
 	function resolveImmediately<T>(value:T):Promise<T> {
 		var deferred = new Deferred<T>();
 		var promise = deferred.promise();
 		deferred.resolve(value);
 		return promise;
-	}
-
-	// TeamCity value escaping: https://www.jetbrains.com/help/teamcity/service-messages.html
-	static function escape(value:String):String {
-		value = StringTools.replace(value, "|", "||");
-		value = StringTools.replace(value, "'", "|'");
-		value = StringTools.replace(value, "\n", "|n");
-		value = StringTools.replace(value, "\r", "|r");
-		value = StringTools.replace(value, "[", "|[");
-		value = StringTools.replace(value, "]", "|]");
-		return value;
 	}
 }
 #end

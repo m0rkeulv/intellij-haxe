@@ -270,15 +270,20 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** The container's FIRST tests build file (marked or convention-suggested) from the last scan, or null - what a container-row run targets. */
   @Nullable
-  public String testsPathFor(@NotNull String containerId) {
+  private String testsPathFor(@NotNull String containerId) {
     List<String> paths = testsPathsByContainer.get(containerId);
     return paths == null || paths.isEmpty() ? null : paths.get(0);
   }
 
-  /** The container id behind the project row (the root module, or the synthetic project-root container). */
+  /** The selection's tests build file: the row's own file, or the container's marked/suggested one from the last scan. */
   @Nullable
-  public String getProjectRootContainerId() {
-    return projectRootContainerId;
+  public String resolveTestsPath(@Nullable Object selection) {
+    return switch (selection) {
+      case TestRunNode node -> node.buildFilePath();
+      case ModuleNode module -> testsPathFor(module.name());
+      case ProjectNode ignored -> projectRootContainerId == null ? null : testsPathFor(projectRootContainerId);
+      case null, default -> null;
+    };
   }
 
   /** Runs the build file as unit tests through the test run configuration (SM console). */
@@ -925,7 +930,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     public void actionPerformed(@NotNull AnActionEvent e) {
       Object selected = getSelectedUserObject();
       if (activateNode(selected)) return;
-      if (interactWithNode(selected, selectionPoint(), null)) return;
+      if (interactWithNode(selected, getSelectionPopupPoint(), null)) return;
       toggleSelectedExpansion();
     }
 
@@ -1010,15 +1015,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     else {
       tree.expandPath(path);
     }
-  }
-
-  /** Where a keyboard-opened popup anchors: the selected row's bounds, or the tree's corner without a selection. */
-  @NotNull
-  private RelativePoint selectionPoint() {
-    TreePath path = tree.getSelectionPath();
-    Rectangle bounds = path != null ? tree.getPathBounds(path) : null;
-    if (bounds == null) return new RelativePoint(tree, new Point(0, 0));
-    return new RelativePoint(tree, new Point(bounds.x, bounds.y + bounds.height));
   }
 
   @Override

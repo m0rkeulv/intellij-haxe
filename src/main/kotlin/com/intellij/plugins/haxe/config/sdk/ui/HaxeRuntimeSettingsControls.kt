@@ -2,10 +2,10 @@
 
 package com.intellij.plugins.haxe.config.sdk.ui
 
-import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.projectRoots.ProjectJdkTable
+import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.projectRoots.SdkType
 import com.intellij.openapi.projectRoots.ui.ProjectJdksEditor
 import com.intellij.openapi.ui.ComboBox
@@ -14,7 +14,7 @@ import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.plugins.haxe.HaxeBundle
-import com.intellij.plugins.haxe.util.HaxeSdkUtilBase
+import com.intellij.plugins.haxe.HaxeDebuggerBundle
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.fields.ExtendableTextField
 import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
@@ -41,10 +41,6 @@ fun setInheritedDefault(field: TextFieldWithBrowseButton, inherited: String?) {
   textField.emptyText.text = inherited?.let(FileUtil::toSystemDependentName) ?: ""
 }
 
-/** The executable a PATH lookup would pick, for display as an inherited default. */
-fun pathDetectedExecutable(executableName: String): String? =
-  PathEnvironmentVariableUtil.findInPath(HaxeSdkUtilBase.getExecutableName(executableName))?.absolutePath
-
 /**
  * A Flex/AIR SDK selector: entries come from the IDE's SDK table, matched by
  * type name so this control never depends on the (optional) Flash plugin's
@@ -58,6 +54,9 @@ fun pathDetectedExecutable(executableName: String): String? =
 class FlexSdkSelector(@Nls emptyText: String) {
   private val combo = ComboBox<String?>()
   private val component = ComponentWithBrowseButton(combo, null)
+
+  /** With the run-configuration editors' shared placeholder: the Flex SDK inherited from the Haxe SDK/runtimes chain. */
+  constructor() : this(HaxeDebuggerBundle.message("flash.runner.editor.flex.sdk.from.haxe.sdk"))
 
   init {
     setEmptyText(emptyText)
@@ -106,8 +105,9 @@ class FlexSdkSelector(@Nls emptyText: String) {
     combo.toolTipText = if (hasEntries) null else HaxeBundle.message("flex.sdk.none")
   }
 
-  private fun flexSdks() = ProjectJdkTable.getInstance().allJdks
-    .filter { it.sdkType.name.lowercase(Locale.ROOT).contains("flex") }
+  private fun flexSdks() = ProjectJdkTable.getInstance().allJdks.filter(::isFlexSdk)
+
+  private fun isFlexSdk(sdk: Sdk) = sdk.sdkType.name.lowercase(Locale.ROOT).contains("flex")
 
   private fun openSdkEditor() {
     // any project serves as the editor's context - the SDK table is
@@ -117,7 +117,7 @@ class FlexSdkSelector(@Nls emptyText: String) {
     val current = getSelectedName().ifEmpty { null }?.let { ProjectJdkTable.getInstance().findJdk(it) }
     val editor = ProjectJdksEditor(current, project, component)
     if (editor.showAndGet()) {
-      val chosen = editor.selectedJdk?.takeIf { it.sdkType.name.lowercase(Locale.ROOT).contains("flex") }
+      val chosen = editor.selectedJdk?.takeIf(::isFlexSdk)
       reload(chosen?.name ?: getSelectedName().ifEmpty { null })
     }
   }

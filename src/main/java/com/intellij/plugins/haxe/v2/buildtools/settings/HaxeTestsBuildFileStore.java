@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * Per-container (module / project root) "tests build files": the build files
@@ -53,7 +54,6 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
   public ModificationTracker getModificationTracker() {
     return modificationTracker;
   }
-
 
   public static final class State {
     public List<ContainerTestsFile> testsFiles = new ArrayList<>();
@@ -109,17 +109,22 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
       .toList();
   }
 
+  /** Matches the entry identified by the container/path pair. */
+  @NotNull
+  private static Predicate<ContainerTestsFile> entryFor(@NotNull String containerId, @NotNull String filePath) {
+    return entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath);
+  }
+
   /** Marks a tests build file in the container (clearing any exclusion); already-marked files stay marked once. */
   public void markTestsFile(@NotNull String containerId, @NotNull String filePath) {
-    boolean marked = state.testsFiles.stream()
-      .anyMatch(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    boolean marked = state.testsFiles.stream().anyMatch(entryFor(containerId, filePath));
     if (!marked) {
       ContainerTestsFile entry = new ContainerTestsFile();
       entry.containerId = containerId;
       entry.filePath = filePath;
       state.testsFiles.add(entry);
     }
-    state.excludedFiles.removeIf(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    state.excludedFiles.removeIf(entryFor(containerId, filePath));
     notifyChanged();
   }
 
@@ -129,9 +134,8 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
    * stays out instead of reappearing as a suggestion.
    */
   public void unmarkTestsFile(@NotNull String containerId, @NotNull String filePath) {
-    state.testsFiles.removeIf(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
-    boolean excluded = state.excludedFiles.stream()
-      .anyMatch(entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath));
+    state.testsFiles.removeIf(entryFor(containerId, filePath));
+    boolean excluded = state.excludedFiles.stream().anyMatch(entryFor(containerId, filePath));
     if (!excluded) {
       ContainerTestsFile entry = new ContainerTestsFile();
       entry.containerId = containerId;

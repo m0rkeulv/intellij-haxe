@@ -280,17 +280,6 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     assertTrue(recorder.failedTests.isEmpty(), "the failing sibling must not run: " + recorder.failedTests);
   }
 
-  /** The single-run compile the before-run step would perform: the generated template main over the build's classpaths. */
-  private void compileSingleRun(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
-    HaxeCompileCommands.Resolved resolved = configuration.resolveSingleRunCompile();
-    assertNotNull(resolved, "the single-run compile must resolve");
-    GeneralCommandLine commandLine = new GeneralCommandLine(resolved.command())
-      .withWorkDirectory(resolved.workDirectory());
-    ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(90_000);
-    assertFalse(output.isTimeout(), "the single-run compile must finish");
-    assertEquals(0, output.getExitCode(), "single-run compile failed:\n" + output.getStdout() + output.getStderr());
-  }
-
   @Test
   @Timeout(120)
   @DisplayName("gutter single test compiles the template and runs only the selected utest method")
@@ -338,6 +327,13 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
                "the failing case must be excluded, not run: " + recorder.failedTests);
   }
 
+  /** The single-run compile the before-run step would perform: the generated template main over the build's classpaths. */
+  private void compileSingleRun(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
+    HaxeCompileCommands.Resolved resolved = configuration.resolveSingleRunCompile();
+    assertNotNull(resolved, "the single-run compile must resolve");
+    runCompile(resolved, "single-run compile");
+  }
+
   /** The artifact compile the before-run step would perform: the tests build with the framework's reporting args. */
   private void compileTestsBuild(@NotNull VirtualFile buildFile) throws ExecutionException {
     String reportingArguments =
@@ -346,12 +342,17 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
       getProject(), buildFile.getPath(), HaxeBuildFileActions.defaultBuildActionName(HaxeBuildFileType.HXML),
       reportingArguments);
     assertNotNull(resolved, "the tests build must resolve to a compile command");
+    runCompile(resolved, "tests compile");
+  }
 
+  /** Runs a resolved compile command to completion and asserts it succeeds. */
+  private static void runCompile(@NotNull HaxeCompileCommands.Resolved resolved, @NotNull String what)
+    throws ExecutionException {
     GeneralCommandLine commandLine = new GeneralCommandLine(resolved.command())
       .withWorkDirectory(resolved.workDirectory());
     ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(90_000);
-    assertFalse(output.isTimeout(), "the tests compile must finish");
-    assertEquals(0, output.getExitCode(), "tests compile failed:\n" + output.getStdout() + output.getStderr());
+    assertFalse(output.isTimeout(), "the " + what + " must finish");
+    assertEquals(0, output.getExitCode(), what + " failed:\n" + output.getStdout() + output.getStderr());
   }
 
   @NotNull

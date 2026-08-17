@@ -68,6 +68,13 @@ final class HaxelibExplorerActions {
       return ActionUpdateThread.EDT;
     }
 
+    boolean confirmRemoval(@NotNull String target) {
+      return Messages.showYesNoDialog(panel.getProject(),
+                                      HaxeBundle.message("haxelib.explorer.action.remove.confirm", target),
+                                      HaxeBundle.message("haxelib.explorer.action.remove.title"),
+                                      Messages.getWarningIcon()) == Messages.YES;
+    }
+
     /** Runs the mutation in the background; on success refreshes the explorer and the v2 library sync. */
     void mutate(@NotNull String progressTitle, @NotNull Supplier<@Nullable String> mutation) {
       Project project = panel.getProject();
@@ -176,13 +183,6 @@ final class HaxelibExplorerActions {
       mutate(HaxeBundle.message("haxelib.explorer.action.remove.progress", target),
              () -> HaxelibInstaller.remove(panel.getProject(), entry.library(), entry.version()));
     }
-
-    private boolean confirmRemoval(@NotNull String target) {
-      return Messages.showYesNoDialog(panel.getProject(),
-                                      HaxeBundle.message("haxelib.explorer.action.remove.confirm", target),
-                                      HaxeBundle.message("haxelib.explorer.action.remove.title"),
-                                      Messages.getWarningIcon()) == Messages.YES;
-    }
   }
 
   private static final class InstallLatest extends ExplorerAction {
@@ -223,13 +223,6 @@ final class HaxelibExplorerActions {
       if (!confirmRemoval(row.name())) return;
       mutate(HaxeBundle.message("haxelib.explorer.action.remove.progress", row.name()),
              () -> HaxelibInstaller.remove(panel.getProject(), row.name(), null));
-    }
-
-    private boolean confirmRemoval(@NotNull String target) {
-      return Messages.showYesNoDialog(panel.getProject(),
-                                      HaxeBundle.message("haxelib.explorer.action.remove.confirm", target),
-                                      HaxeBundle.message("haxelib.explorer.action.remove.title"),
-                                      Messages.getWarningIcon()) == Messages.YES;
     }
   }
 }

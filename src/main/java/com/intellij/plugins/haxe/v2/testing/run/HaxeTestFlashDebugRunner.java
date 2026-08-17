@@ -15,17 +15,11 @@ import com.intellij.execution.testframework.ui.BaseTestsOutputConsoleView;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.runner.debugger.HaxeFlashDebuggingUtil;
 import com.intellij.plugins.haxe.runner.debugger.flash.FlexPluginGate;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
@@ -72,13 +66,8 @@ public class HaxeTestFlashDebugRunner extends GenericProgramRunner<RunnerSetting
   protected RunContentDescriptor doExecute(@NotNull RunProfileState state, @NotNull ExecutionEnvironment environment)
     throws ExecutionException {
     HaxeTestRunConfiguration configuration = (HaxeTestRunConfiguration)environment.getRunProfile();
-    FlexPluginGate.requireFlexPlugin();
-
-    String flexSdkName = HaxeToolPathResolver.resolveFlexSdkName(configuration.getProject(), null);
-    if (flexSdkName == null || flexSdkName.isBlank()) {
-      throw new ExecutionException(HaxeDebuggerBundle.message("air.runner.no.flex.sdk"));
-    }
-    Module module = buildFileModule(configuration);
+    String flexSdkName = FlexPluginGate.requireFlexSdkName(configuration.getProject());
+    Module module = HaxeTestRunConfigurations.buildFileModule(configuration);
     if (module == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.debug.no.module"));
     }
@@ -86,7 +75,7 @@ public class HaxeTestFlashDebugRunner extends GenericProgramRunner<RunnerSetting
     Plan plan = ReadAction.computeBlocking(() -> HaxeTestLaunchPlanner.planForDebug(configuration));
     GeneralCommandLine adlCommandLine = new GeneralCommandLine(plan.command())
       .withWorkDirectory(plan.workDirectory());
-    List<String> sourceDirectories = sourceDirectories(configuration);
+    List<String> sourceDirectories = HaxeTestRunConfigurations.sourceDirectories(configuration);
 
     // the test console: an SM view attached to a synthetic handler the debug
     // session feeds fdb's relayed trace lines into (fdb owns the real process)
@@ -98,21 +87,5 @@ public class HaxeTestFlashDebugRunner extends GenericProgramRunner<RunnerSetting
 
     return HaxeFlashDebuggingUtil.getAirTestDescriptor(
       module, environment, flexSdkName, adlCommandLine, sourceDirectories, testConsole, testOutputSink);
-  }
-
-  private static Module buildFileModule(@NotNull HaxeTestRunConfiguration configuration) {
-    String buildFilePath = configuration.getBuildFilePath();
-    VirtualFile file = buildFilePath == null ? null : LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null) return null;
-    return ReadAction.computeBlocking(() -> ModuleUtilCore.findModuleForFile(file, configuration.getProject()));
-  }
-
-  /** The tests build's classpath roots, scoping breakpoint binding to THIS build's files. */
-  @NotNull
-  private static List<String> sourceDirectories(@NotNull HaxeTestRunConfiguration configuration) {
-    String buildFilePath = configuration.getBuildFilePath();
-    if (StringUtil.isEmptyOrSpaces(buildFilePath)) return List.of();
-    return ReadAction.computeBlocking(
-      () -> HaxeBuildClasspaths.sourceDirectories(configuration.getProject(), buildFilePath));
   }
 }

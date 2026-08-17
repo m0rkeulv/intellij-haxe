@@ -67,6 +67,14 @@ public final class UtestFramework implements HaxeTestFramework {
     return true;
   }
 
+  /** Or null when extraction fails - the run then uses utest's batch reporter only. */
+  @Override
+  public @Nullable String reporterClasspath() {
+    return HaxeTestReporterFiles.classpath(
+      "/testing/utestLiveReporter/", "utest-live-reporter",
+      List.of("intellij_utest/Macro.hx", "intellij_utest/LiveReporter.hx"));
+  }
+
   /**
    * utest ships its own TeamCity batch reporter ({@code -D teamcity}); the
    * shipped live reporter streams per-test events on top and the converter
@@ -80,16 +88,11 @@ public final class UtestFramework implements HaxeTestFramework {
     List<String> arguments = new ArrayList<>(List.of("-D", "teamcity"));
     // utest's reporter derives its root suite name from a target #if chain
     // that lacks several targets (an HL run reads "Target: Undefined") - the
-    // teamcity_suite_name define overrides it with the build's real target
-    if (suiteName != null) {
-      arguments.add("-D");
-      arguments.add("teamcity_suite_name=" + suiteName);
-    }
-    if (liveReporting && reporterClasspath != null) {
-      arguments.add("-cp");
-      arguments.add(reporterClasspath);
-      arguments.add("--macro");
-      arguments.add("intellij_utest.Macro.init()");
+    // suite-name define overrides it with the build's real target
+    arguments.addAll(HaxeTestReporterArgs.suiteNameDefine(suiteName));
+    if (liveReporting) {
+      // the suite define is already in place - the live half adds only the injection
+      arguments.addAll(HaxeTestReporterArgs.macroReporterArgs(null, reporterClasspath, "intellij_utest.Macro.init()"));
     }
     return arguments;
   }

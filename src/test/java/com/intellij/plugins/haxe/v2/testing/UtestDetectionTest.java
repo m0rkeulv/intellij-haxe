@@ -1,11 +1,6 @@
 package com.intellij.plugins.haxe.v2.testing;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
-import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
-import com.intellij.plugins.haxe.util.HaxeResolveUtil;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * direct extends.
  */
 @DisplayName("Test detection: utest")
-public class UtestDetectionTest extends HaxeCodeInsightFixtureTestCase {
+public class UtestDetectionTest extends HaxeTestFrameworkDetectionTestBase {
 
   private final UtestFramework framework = new UtestFramework();
 
@@ -106,22 +101,5 @@ public class UtestDetectionTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals(List.of("-D", "UTEST_PATTERN=MathTest.testAddition"),
                  framework.filterArgs("MathTest.testAddition"));
     assertTrue(framework.filterArgs(null).isEmpty());
-  }
-
-  private HaxeClass classByQName(String qName) {
-    HaxeClass haxeClass = HaxeResolveUtil.findClassByQName(qName, getPsiManager(),
-                                                           GlobalSearchScope.allScope(getProject()));
-    assertNotNull(haxeClass, "fixture class not found: " + qName);
-    return haxeClass;
-  }
-
-  private HaxeMethod methodOf(HaxeClass haxeClass, String name) {
-    for (PsiMethod method : haxeClass.getMethods()) {
-      if (name.equals(method.getName()) && method instanceof HaxeMethod haxeMethod) {
-        return haxeMethod;
-      }
-    }
-    fail("fixture method not found: " + haxeClass.getQualifiedName() + "." + name);
-    return null;
   }
 }

@@ -1,4 +1,4 @@
-package intellij_munit;
+package intellij_haxe_test;
 
 #if flash
 /**

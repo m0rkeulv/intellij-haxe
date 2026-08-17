@@ -52,7 +52,7 @@ public final class HaxeRegisterBuildFileAction extends DumbAwareAction {
       .toList();
     if (moduleNames.isEmpty()) return;
     if (moduleNames.size() == 1) {
-      register(project, file, moduleNames.get(0));
+      HaxeKnownBuildFiles.registerBuildFile(project, moduleNames.get(0), file, null);
       return;
     }
 
@@ -62,17 +62,9 @@ public final class HaxeRegisterBuildFileAction extends DumbAwareAction {
       .createPopupChooserBuilder(moduleNames)
       .setTitle(HaxeBundle.message("haxe.register.build.file.module.chooser.title"))
       .setSelectedValue(preselected, true)
-      .setItemChosenCallback(moduleName -> register(project, file, moduleName))
+      .setItemChosenCallback(moduleName -> HaxeKnownBuildFiles.registerBuildFile(project, moduleName, file, null))
       .createPopup()
       .showInBestPositionFor(e.getDataContext());
-  }
-
-  private static void register(@NotNull Project project, @NotNull VirtualFile file, @NotNull String containerId) {
-    HaxeBuildFilesStore.getInstance(project).addFile(containerId, file.getPath());
-    HaxeSourceRootsOffer.offerFor(project, containerId, file);
-    // a newly known build file can change the module's library set (it may
-    // even become the implicit active file) - run the full sync pipeline
-    HaxeProjectSync.sync(project, null);
   }
 
   private static boolean isRegistered(@NotNull Project project, @Nullable VirtualFile file) {

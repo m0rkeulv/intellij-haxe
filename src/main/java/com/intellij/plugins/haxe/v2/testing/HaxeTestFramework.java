@@ -44,6 +44,10 @@ public interface HaxeTestFramework {
   /** Whether the method is an individual test of this framework. Detection only - false in dumb mode. */
   boolean isTestMethod(@NotNull HaxeMethod method);
 
+  /** The framework's extracted shipped-reporter classpath root (the value {@link #reportingArgs} takes), or null when extraction failed. */
+  @Nullable
+  String reporterClasspath();
+
   /**
    * Compiler arguments making the run report TeamCity service messages the
    * IDE's test console can parse. {@code suiteName} labels the run's root

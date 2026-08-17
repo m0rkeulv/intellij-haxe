@@ -302,10 +302,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     String path = fixturePath("targets/swf.hxml");
     // the AIR_SDK env fallback is the only adl source in the test fixture
     // (no Flex/AIR SDK entry exists in its SDK table)
-    String airSdk = System.getenv("AIR_SDK");
-    boolean adlAvailable = airSdk != null
-                           && Files.isRegularFile(Path.of(airSdk, "bin", HaxeSdkUtilBase.getExecutableName("adl")));
-    if (!adlAvailable) {
+    if (!adlAvailable()) {
       assertThrows(ExecutionException.class, () -> HaxeTestLaunchPlanner.plan(getProject(), path, null, false));
       return;
     }

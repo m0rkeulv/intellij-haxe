@@ -184,8 +184,8 @@ public final class HaxeLimeProjectInfoService implements Disposable {
         .toList();
 
       HaxeTarget target = LimeProjects.targetFor(targetFlag);
-      String targetOutputFor = targetOutputFor(targetFlag, parsed.app().path(), parsed.app().file());
-      return new HaxeBuildFileInfo(target, targetOutputFor, defines, libraries, List.copyOf(parsed.sources()));
+      String targetOutput = LimeProjects.relativeTargetOutput(targetFlag, parsed.app().path(), parsed.app().file());
+      return new HaxeBuildFileInfo(target, targetOutput, defines, libraries, List.copyOf(parsed.sources()));
     }
     catch (Exception e) {
       log.warn("LimeProjectParser output was not parseable: " + e.getMessage());
@@ -193,28 +193,6 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     }
   }
 
-
-  /// The compile artifact per lime's export layout (`<app path>/<target>/...`);
-  /// only the targets Build & run can launch need one.
-  @Nullable
-  private static String targetOutputFor(@NotNull String targetFlag, @NotNull String appPath, @NotNull String appFile) {
-    return switch (targetFlag) {
-      case "hl" -> appPath + "/hl/obj/ApplicationMain.hl";
-      case "html5" -> appPath + "/html5/bin/" + (appFile.isEmpty() ? "index" : appFile) + ".js";
-      case "flash" -> appPath + "/flash/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
-      // air: the descriptor (application.xml) sits at <app path>/air with the content swf in bin beside it
-      case "air" -> appPath + "/air/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
-      // desktop cpp: lime copies the built executable into bin, named after
-      // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
-      case "windows" -> appFile.isEmpty() ? null : appPath + "/windows/bin/" + appFile + ".exe";
-      case "linux" -> appFile.isEmpty() ? null : appPath + "/linux/bin/" + appFile;
-      // neko is wrapped in a launcher executable named after the app, host-suffixed
-      case "neko" -> appFile.isEmpty() ? null
-                                       : appPath + "/neko/bin/" + (SystemInfo.isWindows ? appFile + ".exe" : appFile);
-      // TODO mac: the artifact is a .app bundle (Contents/MacOS/<app file>) - needs bundle-aware launch
-      default -> null;
-    };
-  }
 
   /**
    * Approximates the condition defines lime seeds before parsing (target id plus

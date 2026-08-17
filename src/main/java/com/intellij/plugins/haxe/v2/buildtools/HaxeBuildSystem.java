@@ -83,7 +83,7 @@ public interface HaxeBuildSystem {
       // entry (include.xml and extraParams included), so no project.xml edit.
       // Run builds never get this: additions apply only under the Debug executor.
       if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
-        additions.add("--haxelib=intellij-hxcpp-debug-server");
+        additions.add("--haxelib=" + HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB);
       }
       return additions;
     }
@@ -104,7 +104,7 @@ public interface HaxeBuildSystem {
       // <lib>" haxeflag becomes one line of the generated build.hxml, and
       // haxe pulls the lib with its extraParams (the server-injection macro).
       if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
-        additions.add("--library intellij-hxcpp-debug-server");
+        additions.add("--library " + HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB);
       }
       return additions;
     }

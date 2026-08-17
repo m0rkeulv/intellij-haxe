@@ -49,9 +49,11 @@ public class HaxelibSemVer {
     }
   }
 
-  private static final String GIT_SCM = "git";
+  /** The git pseudo-version name — also haxelib's on-disk directory for the checkout. */
+  public static final String GIT_SCM = "git";
   private static final String MERCURIAL_SCM = "hg";
-  private static final String DEV = "dev";
+  /** The dev pseudo-version name (the {@code .dev} pointer file's target). */
+  public static final String DEV = "dev";
 
   public static final ConstantVer ANY_VERSION = new ConstantVer(0,0,0, "any");
   public static final ConstantVer DEVELOPMENT_VERSION = new ConstantVer(Integer.MAX_VALUE,Integer.MAX_VALUE,Integer.MAX_VALUE, DEV);
@@ -65,6 +67,11 @@ public class HaxelibSemVer {
 
   public static boolean isAny(HaxelibSemVer semVer) {
      return semVer == ANY_VERSION;
+  }
+
+  /** Whether the string names the dev or git pseudo-version rather than a release. */
+  public static boolean isPseudoVersion(String version) {
+    return DEV.equals(version) || GIT_SCM.equals(version);
   }
 
   // the semver.org 2.0.0 grammar (its suggested regex, as Java named groups):

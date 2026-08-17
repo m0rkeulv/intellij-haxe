@@ -1,8 +1,5 @@
 package com.intellij.plugins.haxe.v2.testing;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
-import com.intellij.plugins.haxe.lang.psi.HaxeClass;
-import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.DisplayName;
@@ -18,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * one.
  */
 @DisplayName("Test detection: buddy")
-public class BuddyDetectionTest extends HaxeCodeInsightFixtureTestCase {
+public class BuddyDetectionTest extends HaxeTestFrameworkDetectionTestBase {
 
   private final BuddyFramework framework = new BuddyFramework();
 
@@ -76,12 +73,5 @@ public class BuddyDetectionTest extends HaxeCodeInsightFixtureTestCase {
     assertNull(framework.resolveTestLocation(getProject(), GlobalSearchScope.allScope(getProject()),
                                              "haxe:test", "cases.BuddyStyleSuite"),
                "buddy answers only its own protocol");
-  }
-
-  private HaxeClass classByQName(String qName) {
-    HaxeClass haxeClass = HaxeResolveUtil.findClassByQName(qName, getPsiManager(),
-                                                           GlobalSearchScope.allScope(getProject()));
-    assertNotNull(haxeClass, "fixture class not found: " + qName);
-    return haxeClass;
   }
 }

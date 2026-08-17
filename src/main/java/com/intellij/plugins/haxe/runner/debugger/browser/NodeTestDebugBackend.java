@@ -106,24 +106,7 @@ public class NodeTestDebugBackend implements DapBackend {
   public void onConnected(DapDebugProcess process) {
     BufferedReader reader = adapterStdout;
     adapterStdout = null;
-    if (reader != null) {
-      Thread gobbler = new Thread(() -> {
-        try (BufferedReader stdout = reader) {
-          String line;
-          while ((line = stdout.readLine()) != null) {
-            process.printSystem("[adapter] " + line + "\n");
-          }
-        } catch (IOException ignored) {
-          // adapter ended
-        }
-      }, "Node adapter output");
-      gobbler.setDaemon(true);
-      gobbler.start();
-    }
-    JsDebugSessionMux mux = sessionMux;
-    if (mux != null) {
-      mux.setLogSink(line -> process.printSystem("[js-debug] " + line + "\n"));
-    }
+    BrowserDebugBackend.startBackgroundOutput(reader, sessionMux, line -> process.printSystem(line + "\n"));
   }
 
   @Override

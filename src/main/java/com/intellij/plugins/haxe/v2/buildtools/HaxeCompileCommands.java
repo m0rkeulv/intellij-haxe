@@ -108,36 +108,35 @@ public final class HaxeCompileCommands {
     command.addAll(ParametersListUtil.parse(extraArguments));
     VirtualFile parent = file.getParent();
     String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
-    boolean connectEligible = isConnectEligible(project, environmentSdk, command) && !producesSwf(project, file);
-    return new Resolved(containerId, command, workDirectory, String.join(" ", command), connectEligible);
+    boolean eligible = connectEligible(project, environmentSdk, command, file);
+    return new Resolved(containerId, command, workDirectory, String.join(" ", command), eligible);
+  }
+
+  /** True when the build file's command may ride the compilation server: connect-capable and not emitting a swf. */
+  public static boolean connectEligible(@NotNull Project project,
+                                        @Nullable String environmentSdk,
+                                        @NotNull List<String> command,
+                                        @NotNull VirtualFile file) {
+    return isConnectEligible(project, environmentSdk, command) && !producesSwf(project, file);
   }
 
   /**
-   * Whether the build emits a swf. The compilation server produces a CORRUPT
-   * swf on the second compile of the same build (VerifyError #1053 at load;
-   * identical arguments, warm server - live-verified against haxe 4.3.7), so
-   * swf-emitting compiles never ride {@code --connect}. Display/diagnostic
+   * Whether the build emits a swf. The compilation server produces a corrupt
+   * swf on the second compile of the same build (VerifyError #1053 at load),
+   * so swf-emitting compiles never ride {@code --connect}. Display/diagnostic
    * requests are unaffected - the corruption is in swf generation only.
    */
-  public static boolean producesSwf(@NotNull Project project, @NotNull VirtualFile file) {
+  private static boolean producesSwf(@NotNull Project project, @NotNull VirtualFile file) {
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     if (type == null) return false;
-    if (LimeProjects.isLimeFamily(type)) {
-      return LimeProjects.FLASH_FAMILY_TARGETS.contains(LimeProjects.selectedTargetFlag(project, type, file));
-    }
-    if (type == HaxeBuildFileType.NMML) {
-      return "flash".equals(NmeProjects.selectedTargetFlag(project, file));
-    }
-    if (type == HaxeBuildFileType.HXML) {
-      return HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, type)).target() == HaxeTarget.FLASH;
-    }
-    return false;
+    HaxeTarget target = HaxeBuildSystem.of(type).launchTarget(project, new HaxeBuildFile(file, type));
+    return target == HaxeTarget.FLASH;
   }
 
   /** True when the command can compile through the server: a direct haxe compile or a lime/openfl/nme build. */
-  public static boolean isConnectEligible(@NotNull Project project,
-                                          @Nullable String environmentSdk,
-                                          @NotNull List<String> command) {
+  private static boolean isConnectEligible(@NotNull Project project,
+                                           @Nullable String environmentSdk,
+                                           @NotNull List<String> command) {
     return HxmlProjects.isDirectHaxeCommand(project, environmentSdk, command)
            || LimeProjects.isToolCommand(command)
            || NmeProjects.isToolCommand(command);

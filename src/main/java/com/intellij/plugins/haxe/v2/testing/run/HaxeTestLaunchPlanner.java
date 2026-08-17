@@ -20,12 +20,10 @@ import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /// Turns a tests build file into the process a unit-test run spawns. Two shapes:
 ///
@@ -93,9 +91,8 @@ final class HaxeTestLaunchPlanner {
       return nmeCompileArguments(project, file, filterPattern);
     }
 
-    String suiteName = rootSuiteName(project, buildFilePath);
     return ParametersListUtil.join(
-      frameworkArguments(project, buildFilePath, suiteName, filterPattern, isFlashHxml(project, buildFilePath)));
+      frameworkArguments(project, buildFilePath, hxmlSuiteContext(project, buildFilePath), filterPattern));
   }
 
   /** Whether the hxml tests build compiles for flash - the adl-hosted lane needs the injected reporter (exit + stdout). */
@@ -106,29 +103,14 @@ final class HaxeTestLaunchPlanner {
     return info.target() == HaxeTarget.FLASH;
   }
 
-  /** The framework's extracted shipped-reporter root, or null for one that has no shipped reporter (or extraction failed). */
-  @Nullable
-  private static String reporterClasspath(@NotNull HaxeTestFramework framework) {
-    return switch (framework.libraryName()) {
-      case "utest" -> HaxeTestReporterFiles.utestClasspath().orElse(null);
-      case "munit" -> HaxeTestReporterFiles.munitClasspath().orElse(null);
-      case "buddy" -> HaxeTestReporterFiles.buddyClasspath().orElse(null);
-      case "tink_unittest" -> HaxeTestReporterFiles.tinkClasspath().orElse(null);
-      default -> null;
-    };
-  }
-
   @NotNull
   private static String limeCompileArguments(@NotNull Project project,
                                              @NotNull VirtualFile file,
                                              @NotNull HaxeBuildFileType type,
                                              @Nullable String filterPattern) {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
-    String suiteName = "Target: " + limeTarget(targetFlag);
-    boolean hostedTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag)
-                          || LimeProjects.BROWSER_TARGETS.contains(targetFlag);
-    List<String> plain = frameworkArguments(project, file.getPath(), suiteName, filterPattern, hostedTests);
-    List<String> spelled = new ArrayList<>(limeSpelling(plain));
+    List<String> plain = frameworkArguments(project, file.getPath(), limeSuiteContext(targetFlag), filterPattern);
+    List<String> spelled = new ArrayList<>(respell(plain, LIME_SPELLINGS));
     if ("air".equals(targetFlag)) {
       spelled.addAll(airSwfVersionFlag(project));
     }
@@ -151,10 +133,24 @@ final class HaxeTestLaunchPlanner {
     return List.of("--haxeflag=-swf-version " + major);
   }
 
+  /** The run's root-suite label plus whether an IDE-provided host (adl, a served browser page) runs the tests. */
+  private record SuiteContext(@Nullable String suiteName, boolean hostedTests) {
+  }
+
+  @NotNull
+  private static SuiteContext limeSuiteContext(@NotNull String targetFlag) {
+    return new SuiteContext(suiteLabel(limeTarget(targetFlag)), LimeProjects.isHostedTarget(targetFlag));
+  }
+
+  @NotNull
+  private static SuiteContext hxmlSuiteContext(@NotNull Project project, @NotNull String buildFilePath) {
+    return new SuiteContext(rootSuiteName(project, buildFilePath), isFlashHxml(project, buildFilePath));
+  }
+
   /**
    * The tests build's framework arguments in plain hxml spelling — the
    * reporting set plus the filter. The tool-specific paths respell them (see
-   * {@link #limeSpelling}/{@link #nmeSpelling}).
+   * {@link #respell}).
    *
    * buddy's packaged (lime/nme) tests only report when the app's OWN main
    * honors the injected {@code -D reporter} define — a lime/nme main is the
@@ -165,58 +161,59 @@ final class HaxeTestLaunchPlanner {
   @NotNull
   private static List<String> frameworkArguments(@NotNull Project project,
                                                  @NotNull String buildFilePath,
-                                                 @Nullable String suiteName,
-                                                 @Nullable String filterPattern,
-                                                 boolean hostedTests) {
+                                                 @NotNull SuiteContext suite,
+                                                 @Nullable String filterPattern) {
     HaxeTestFramework framework = frameworkFor(project, buildFilePath);
-    // the hosted lanes depend on the injected reporter: adl-hosted flash for
-    // its stdout output AND the exit call, browser-hosted html5 for the
-    // console transport and the completion sentinel - the live-reporting
-    // toggle cannot opt a hosted build out of it
-    boolean liveReporting = hostedTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
-    List<String> arguments =
-      new ArrayList<>(framework.reportingArgs(suiteName, reporterClasspath(framework), liveReporting));
+    List<String> arguments = reportingArguments(project, framework, suite);
     arguments.addAll(framework.filterArgs(StringUtil.nullize(filterPattern, true)));
     return arguments;
   }
 
   /**
-   * Respells plain hxml arguments into the lime tool's forwarding forms:
-   * ATTACHED defines ({@code -Dname=value}: the two-word spelling trips a
-   * lime bug duplicating the value), {@code --source=} for classpaths and
-   * {@code --haxeflag=} for macros (all verified against lime 8.3.2).
+   * The framework's reporting arguments over its extracted shipped reporter.
+   * The hosted lanes depend on the injected reporter: adl-hosted flash for its
+   * stdout output AND the exit call, browser-hosted html5 for the console
+   * transport and the completion sentinel - the live-reporting toggle cannot
+   * opt a hosted build out of it.
    */
   @NotNull
-  private static List<String> limeSpelling(@NotNull List<String> plainArguments) {
-    List<String> spelled = new ArrayList<>();
-    for (int i = 0; i < plainArguments.size(); i++) {
-      String argument = plainArguments.get(i);
-      switch (argument) {
-        case "-D" -> spelled.add("-D" + plainArguments.get(++i));
-        case "-cp" -> spelled.add("--source=" + plainArguments.get(++i));
-        case "--macro" -> spelled.add("--haxeflag=--macro " + plainArguments.get(++i));
-        default -> spelled.add(argument);
-      }
-    }
-    return spelled;
+  private static List<String> reportingArguments(@NotNull Project project,
+                                                 @NotNull HaxeTestFramework framework,
+                                                 @NotNull SuiteContext suite) {
+    boolean liveReporting = suite.hostedTests() || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
+    return new ArrayList<>(framework.reportingArgs(suite.suiteName(), framework.reporterClasspath(), liveReporting));
+  }
+
+  /** A build tool's forwarding forms for the three plain-hxml flags; each flag's VALUE is appended to its form. */
+  private record FlagSpellings(@NotNull String defineForm, @NotNull String classpathForm, @NotNull String macroForm) {
   }
 
   /**
-   * Respells plain hxml arguments into the nme tool's forwarding forms: the
-   * tool forwards ATTACHED defines and any double-dash token verbatim into
-   * its generated build.hxml (single-dash haxe flags like {@code -cp} are
-   * swallowed - the classpath rides the {@code --class-path} spelling; all
-   * verified against nme 7.0.64).
+   * lime's forwarding forms: ATTACHED defines ({@code -Dname=value}: the
+   * two-word spelling trips a lime bug duplicating the value),
+   * {@code --source=} for classpaths and {@code --haxeflag=} for macros (all
+   * verified against lime 8.3.2).
    */
+  private static final FlagSpellings LIME_SPELLINGS = new FlagSpellings("-D", "--source=", "--haxeflag=--macro ");
+
+  /**
+   * nme's forwarding forms: the tool forwards ATTACHED defines and any
+   * double-dash token verbatim into its generated build.hxml (single-dash
+   * haxe flags like {@code -cp} are swallowed - the classpath rides the
+   * {@code --class-path} spelling; all verified against nme 7.0.64).
+   */
+  private static final FlagSpellings NME_SPELLINGS = new FlagSpellings("-D", "--class-path ", "--macro ");
+
+  /** Respells plain hxml arguments into a build tool's forwarding forms. */
   @NotNull
-  private static List<String> nmeSpelling(@NotNull List<String> plainArguments) {
+  private static List<String> respell(@NotNull List<String> plainArguments, @NotNull FlagSpellings forms) {
     List<String> spelled = new ArrayList<>();
     for (int i = 0; i < plainArguments.size(); i++) {
       String argument = plainArguments.get(i);
       switch (argument) {
-        case "-D" -> spelled.add("-D" + plainArguments.get(++i));
-        case "-cp" -> spelled.add("--class-path " + plainArguments.get(++i));
-        case "--macro" -> spelled.add("--macro " + plainArguments.get(++i));
+        case "-D" -> spelled.add(forms.defineForm() + plainArguments.get(++i));
+        case "-cp" -> spelled.add(forms.classpathForm() + plainArguments.get(++i));
+        case "--macro" -> spelled.add(forms.macroForm() + plainArguments.get(++i));
         default -> spelled.add(argument);
       }
     }
@@ -235,14 +232,18 @@ final class HaxeTestLaunchPlanner {
                                             @NotNull VirtualFile file,
                                             @Nullable String filterPattern) {
     String targetFlag = NmeProjects.selectedTargetFlag(project, file);
-    HaxeTarget target = switch (targetFlag) {
-      case "neko" -> HaxeTarget.NEKO;
-      case "flash" -> HaxeTarget.FLASH;
-      default -> HaxeTarget.CPP;
-    };
-    List<String> plain =
-      frameworkArguments(project, file.getPath(), "Target: " + target, filterPattern, target == HaxeTarget.FLASH);
-    return ParametersListUtil.join(nmeSpelling(plain));
+    // unknown target ids fall to hxcpp, nme's host-desktop default
+    HaxeTarget mapped = NmeProjects.targetFor(targetFlag);
+    HaxeTarget target = mapped != null ? mapped : HaxeTarget.CPP;
+    SuiteContext suite = new SuiteContext(suiteLabel(target), target == HaxeTarget.FLASH);
+    List<String> plain = frameworkArguments(project, file.getPath(), suite, filterPattern);
+    return ParametersListUtil.join(respell(plain, NME_SPELLINGS));
+  }
+
+  /** The tree's root-suite label for a target ({@code Target: Neko}). */
+  @NotNull
+  private static String suiteLabel(@NotNull HaxeTarget target) {
+    return "Target: " + target;
   }
 
   /** The tree's root suite label, from the tests build's target. Null when the file cannot be inspected. */
@@ -254,7 +255,7 @@ final class HaxeTestLaunchPlanner {
     if (type != HaxeBuildFileType.HXML) return null;
     HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, type));
     HaxeTarget target = info.target() != null ? info.target() : HaxeTarget.INTERP;
-    return "Target: " + target;
+    return suiteLabel(target);
   }
 
   /**
@@ -523,24 +524,10 @@ final class HaxeTestLaunchPlanner {
                                                   @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
-    String suiteName;
-    boolean hostedTests;
-    if (LimeProjects.isLimeFamily(type)) {
-      String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
-      suiteName = "Target: " + limeTarget(targetFlag);
-      hostedTests = LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag)
-                    || LimeProjects.BROWSER_TARGETS.contains(targetFlag);
-    }
-    else {
-      suiteName = rootSuiteName(project, buildFilePath);
-      hostedTests = isFlashHxml(project, buildFilePath);
-    }
-    // the hosted lanes need the injected reporter: adl-hosted flash for the
-    // exit call and stdout traces, browser-hosted html5 for the console
-    // transport and the completion sentinel
-    boolean liveReporting = hostedTests || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
-    List<String> arguments = new ArrayList<>(
-      framework.reportingArgs(suiteName, reporterClasspath(framework), liveReporting));
+    SuiteContext suite = LimeProjects.isLimeFamily(type)
+                         ? limeSuiteContext(LimeProjects.selectedTargetFlag(project, type, file))
+                         : hxmlSuiteContext(project, buildFilePath);
+    List<String> arguments = reportingArguments(project, framework, suite);
     if (singleRun.singleTest()) {
       arguments.addAll(framework.singleRunFilterArgs(singleRun.testMethod()));
     }

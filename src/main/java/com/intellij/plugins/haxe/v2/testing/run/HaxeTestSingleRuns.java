@@ -11,6 +11,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeSystemPaths;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
@@ -20,10 +21,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import lombok.CustomLog;
@@ -296,10 +294,8 @@ final class HaxeTestSingleRuns {
     String source = substitutedTemplate(framework, templateName, singleRun);
     if (source == null) return null;
     try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      digest.update(buildFilePath.getBytes(StandardCharsets.UTF_8));
-      digest.update(source.getBytes(StandardCharsets.UTF_8));
-      String contentHash = HexFormat.of().formatHex(digest.digest()).substring(0, 16);
+      String contentHash = HaxeSystemPaths.shortHash(buildFilePath.getBytes(StandardCharsets.UTF_8),
+                                                     source.getBytes(StandardCharsets.UTF_8));
 
       // the system TEMP dir, not the IDE system dir: hxcpp nests deep type
       // paths under out/ (src/... plus obj/<toolchain>/..., with generic
@@ -313,7 +309,7 @@ final class HaxeTestSingleRuns {
         Files.writeString(main, source);
       }
       return root;
-    } catch (IOException | NoSuchAlgorithmException e) {
+    } catch (IOException e) {
       log.warn("cannot generate the single-run main: " + e.getMessage());
       return null;
     }

@@ -1,13 +1,18 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.assertStoppedInHx;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitStartDebugging;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitStopped;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.baseLaunchConfig;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.breakpointsRequest;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.chromiumExe;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.continueRequest;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.dapServerJs;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.exceptionBreakpointsRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.initializeRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nextRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
-import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeRoot;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.pauseRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.probe;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.scopesRequest;
@@ -31,7 +36,6 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,17 +66,6 @@ import org.junit.jupiter.api.Timeout;
 public class JsDebugAdapterLiveProbe {
   private static final long TIMEOUT = 15_000;
 
-  /** Machine-wide install locations, tried after the per-user LOCALAPPDATA ones. */
-  private static final List<String> CHROMIUM_PATHS = List.of(
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/google-chrome",
-    "/snap/bin/chromium");
-
   // fixture file names; the .hx names come back in reported breakpoint source paths
   private static final String MAIN_HX = "WebMain.hx";
   private static final String SMART_HX = "WebSmart.hx";
@@ -98,43 +91,6 @@ public class JsDebugAdapterLiveProbe {
   private Process adapter;
   private int adapterPort;
   private DapClient parent;
-
-  private static Path dapServerJs() {
-    return nodeRoot().resolve("adapters/js-debug-1.117.0/js-debug/src/dapDebugServer.js");
-  }
-
-  /**
-   * The browser under test: the {@code WEB_DEBUG_CHROMIUM_EXE} environment
-   * variable when set (any chromium-family build — e.g. a provisioned
-   * ungoogled-chromium), else an installed Chrome/Edge — mirroring the IDE
-   * behaviour, where a blank executable lets js-debug find the default
-   * installation. A set-but-invalid path SKIPS rather than silently testing
-   * a different browser than the one asked for.
-   */
-  private static Path chromiumExe() {
-    String env = System.getenv("WEB_DEBUG_CHROMIUM_EXE");
-    if (env != null && !env.isBlank()) {
-      Path fromEnv = Path.of(env);
-      return Files.isRegularFile(fromEnv) ? fromEnv : null;
-    }
-    List<Path> candidates = new ArrayList<>();
-    String localAppData = System.getenv("LOCALAPPDATA");
-    if (localAppData != null && !localAppData.isBlank()) {
-      // per-user installs; plain Chromium (e.g. ungoogled-chromium, the
-      // reference browser of this module) ahead of the branded ones
-      candidates.add(Path.of(localAppData, "Chromium/Application/chrome.exe"));
-      candidates.add(Path.of(localAppData, "Google/Chrome/Application/chrome.exe"));
-    }
-    for (String candidate : CHROMIUM_PATHS) {
-      candidates.add(Path.of(candidate));
-    }
-    for (Path path : candidates) {
-      if (Files.isRegularFile(path)) {
-        return path;
-      }
-    }
-    return null;
-  }
 
   @BeforeEach
   public void spawnAdapter() throws IOException {
@@ -194,72 +150,6 @@ public class JsDebugAdapterLiveProbe {
     LiveProbeUtil.writePageAndCompile(dir, "WebMain");
     return dir;
   }
-
-  private static InitializeRequest initializeRequest() {
-    InitializeRequest initialize = InitializeRequest.standard("chrome", true);
-    initialize.getArguments().setClientName("IntelliJ Haxe");
-    return initialize;
-  }
-
-  /** The parent-session launch config every probe here sends. */
-  private static Map<String, Object> baseLaunchConfig(String baseUrl, Path fixture) {
-    Map<String, Object> config = new LinkedHashMap<>();
-
-    config.put("type", "pwa-chrome");
-    config.put("request", "launch");
-    config.put("name", "probe");
-    config.put("url", baseUrl);
-    config.put("webRoot", fixture.toString());
-    config.put("runtimeExecutable", chromiumExe().toString());
-    config.put("runtimeArgs", List.of("--headless=new"));
-
-    return config;
-  }
-
-  private SetBreakpointsRequest breakpointsRequest(Path fixture) {
-    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-
-    Source source = new Source();
-    source.setPath(fixture.resolve(MAIN_HX).toString());
-    source.setName(MAIN_HX);
-    bpArgs.setSource(source);
-
-    SourceBreakpoint bp = new SourceBreakpoint();
-    bp.setLine(BP_LINE);
-    bpArgs.setBreakpoints(List.of(bp));
-
-    setBreakpoints.setArguments(bpArgs);
-    return setBreakpoints;
-  }
-
-  /**
-   * Drives the parent session until js-debug asks for the page's child session:
-   * configurationDone on the initialized event, every reverse request answered
-   * as the IDE answers it. Null when no startDebugging arrives in time.
-   */
-  private StartDebuggingRequest awaitStartDebugging(long millis) throws Exception {
-    long deadline = System.currentTimeMillis() + millis;
-    while (System.currentTimeMillis() < deadline) {
-      Event event = parent.pollEvent(100);
-      if (traceAdapter && event instanceof OutputEvent output && output.getBody() != null) {
-        System.out.println("[trace-out] " + String.valueOf(output.getBody().getOutput()).trim());
-      }
-      if (event instanceof InitializedEvent) {
-        parent.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
-      }
-
-      Request incoming = parent.pollIncomingRequest(50);
-      if (incoming != null) {
-        parent.respond(incoming, true);
-        if (incoming instanceof StartDebuggingRequest start) {
-          return start;
-        }
-      }
-    }
-    return null;
-  }
-
 
   /** As {@link #awaitStopped}, but only a stop owned by a worker session. */
   private static StoppedEvent awaitWorkerStop(DapEndpoint endpoint, long millis) throws Exception {
@@ -446,14 +336,14 @@ public class JsDebugAdapterLiveProbe {
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       // --- parent exactly as BrowserDebugBackend.runParentHandshake ---
-      assertTrue(parent.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "parent initialize");
+      assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
 
       Map<String, Object> parentConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
       parentConfig.put("name", "IntelliJ Haxe browser session");
 
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
 
-      StartDebuggingRequest startDebugging = awaitStartDebugging(20_000);
+      StartDebuggingRequest startDebugging = awaitStartDebugging(parent, 20_000, TIMEOUT);
       assertNotNull(startDebugging, "no startDebugging");
 
       try (DapClient child = connectWithRetry(adapterPort)) {
@@ -471,17 +361,7 @@ public class JsDebugAdapterLiveProbe {
         assertTrue(initialized, "child initialized");
 
         // flushAll
-        SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-        SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-        Source source = new Source();
-        source.setPath(fixture.resolve(SMART_HX).toString());
-        source.setName(SMART_HX);
-        bpArgs.setSource(source);
-        SourceBreakpoint bp = new SourceBreakpoint();
-        bp.setLine(CALLS_LINE);
-        bpArgs.setBreakpoints(List.of(bp));
-        setBreakpoints.setArguments(bpArgs);
-
+        SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, SMART_HX, CALLS_LINE);
         assertTrue(child.sendRequest(setBreakpoints, TIMEOUT).isSuccess(), "child setBreakpoints");
 
         // exception filters as the IDE's exceptionFiltersRequest would send
@@ -743,13 +623,13 @@ public class JsDebugAdapterLiveProbe {
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       // --- parent handshake exactly as BrowserDebugBackend.runParentHandshake ---
-      assertTrue(parent.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "parent initialize");
+      assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
 
       Map<String, Object> parentConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
 
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
 
-      StartDebuggingRequest startDebugging = awaitStartDebugging(20_000);
+      StartDebuggingRequest startDebugging = awaitStartDebugging(parent, 20_000, TIMEOUT);
       assertNotNull(startDebugging, "no startDebugging for the page");
 
       DapClient page = connectWithRetry(adapterPort);
@@ -757,7 +637,7 @@ public class JsDebugAdapterLiveProbe {
         mux.setLogSink(line -> System.out.println("[mux] " + line));
 
         // --- page handshake THROUGH the mux, as DapDebugProcess drives it ---
-        assertTrue(mux.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "page initialize");
+        assertTrue(mux.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "page initialize");
         mux.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
         boolean initialized = false;
         long deadline = System.currentTimeMillis() + 15_000;
@@ -768,19 +648,7 @@ public class JsDebugAdapterLiveProbe {
 
         // breakpoint in the WORKER's source while no worker session exists yet:
         // the mux must cache it and replay it into the worker as it attaches
-        SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-        SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-
-        Source source = new Source();
-        source.setPath(fixture.resolve(WORKER_HX).toString());
-        source.setName(WORKER_HX);
-        bpArgs.setSource(source);
-
-        SourceBreakpoint bp = new SourceBreakpoint();
-        bp.setLine(WORKER_BP_LINE);
-        bpArgs.setBreakpoints(List.of(bp));
-        setBreakpoints.setArguments(bpArgs);
-
+        SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, WORKER_HX, WORKER_BP_LINE);
         Response bpResponse = mux.sendRequest(setBreakpoints, TIMEOUT);
         assertTrue(bpResponse.isSuccess(), "setBreakpoints via mux");
         var bpResult = ((SetBreakpointsResponse)
@@ -849,7 +717,7 @@ public class JsDebugAdapterLiveProbe {
       content.setRequestListener(line -> System.out.println("[server] " + line));
 
       // --- parent session ---
-      Response initResponse = parent.sendRequest(initializeRequest(), TIMEOUT);
+      Response initResponse = parent.sendRequest(initializeRequest("chrome"), TIMEOUT);
       probe("parent initialize success=" + initResponse.isSuccess());
       assertTrue(initResponse.isSuccess(), "parent initialize");
 
@@ -881,7 +749,7 @@ public class JsDebugAdapterLiveProbe {
                 + (event instanceof OutputEvent o ? " :: " + o.getBody().getOutput() : ""));
           if (event instanceof InitializedEvent && !parentConfigured) {
             parentConfigured = true;
-            probe("parent setBreakpoints success=" + parent.sendRequest(breakpointsRequest(fixture), TIMEOUT).isSuccess());
+            probe("parent setBreakpoints success=" + parent.sendRequest(breakpointsRequest(fixture, MAIN_HX, BP_LINE), TIMEOUT).isSuccess());
             probe("parent configurationDone success=" + parent.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess());
           }
         }
@@ -906,7 +774,7 @@ public class JsDebugAdapterLiveProbe {
 
       // --- child session (second connection, config from the reverse request) ---
       try (DapClient child = connectWithRetry(adapterPort)) {
-        assertTrue(child.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "child initialize");
+        assertTrue(child.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "child initialize");
 
         CompletableFuture<Response> childLaunchFuture = new CompletableFuture<>();
         Thread childLauncher = new Thread(() -> {
@@ -932,7 +800,7 @@ public class JsDebugAdapterLiveProbe {
           if (event instanceof InitializedEvent && !childConfigured) {
             childConfigured = true;
             probe("child launch settled BEFORE configuration: " + childLaunchFuture.isDone());
-            probe("child setBreakpoints success=" + child.sendRequest(breakpointsRequest(fixture), TIMEOUT).isSuccess());
+            probe("child setBreakpoints success=" + child.sendRequest(breakpointsRequest(fixture, MAIN_HX, BP_LINE), TIMEOUT).isSuccess());
             probe("child configurationDone success=" + child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess());
             probe("child launch settled AFTER configurationDone: " + childLaunchFuture.isDone());
           }
@@ -1070,7 +938,7 @@ public class JsDebugAdapterLiveProbe {
   /** The parent+child flow, shared by the probes; returns the stop's top frame. */
   private StackFrame driveSessionToStop(Path fixture, String bpFileName, int bpLine) throws Exception {
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
-      assertTrue(parent.sendRequest(initializeRequest(), TIMEOUT).isSuccess(), "parent initialize");
+      assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
 
       Map<String, Object> launchConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
       if (traceAdapter) {
@@ -1078,11 +946,11 @@ public class JsDebugAdapterLiveProbe {
       }
       parent.sendRequestNoWait(ConfiguredLaunchRequest.of(launchConfig));
 
-      StartDebuggingRequest startDebugging = awaitStartDebugging(20_000);
+      StartDebuggingRequest startDebugging = awaitStartDebugging(parent, 20_000, TIMEOUT);
       assertNotNull(startDebugging, "no startDebugging reverse request");
 
       try (DapClient child = connectWithRetry(adapterPort)) {
-        Response childInit = child.sendRequest(initializeRequest(), TIMEOUT);
+        Response childInit = child.sendRequest(initializeRequest("chrome"), TIMEOUT);
         assertTrue(childInit.isSuccess(), "child initialize");
         if (childInit instanceof InitializeResponse ir
             && ir.getBody() != null) {
@@ -1105,17 +973,7 @@ public class JsDebugAdapterLiveProbe {
           }
           if (event instanceof InitializedEvent && !childConfigured) {
             childConfigured = true;
-            SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-            SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-            Source source = new Source();
-            source.setPath(fixture.resolve(bpFileName).toString());
-            source.setName(bpFileName);
-            bpArgs.setSource(source);
-            SourceBreakpoint bp = new SourceBreakpoint();
-            bp.setLine(bpLine);
-            bpArgs.setBreakpoints(List.of(bp));
-            setBreakpoints.setArguments(bpArgs);
-
+            SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, bpFileName, bpLine);
             assertTrue(child.sendRequest(setBreakpoints, TIMEOUT).isSuccess(), "child setBreakpoints");
             assertTrue(child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess(), "child configurationDone");
           }

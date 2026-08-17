@@ -1,8 +1,14 @@
 package intellij_munit;
 
 #if !macro
+import intellij_haxe_test.TcOutput;
+import intellij_haxe_test.TcOutput.announceHostedRunFinished;
+import intellij_haxe_test.TcOutput.escape;
 import massive.munit.ITestResultClient;
 import massive.munit.TestResult;
+#if flash
+import intellij_haxe_test.FlashSupport;
+#end
 
 /**
 	Streams one TeamCity service message per test as munit reports it,
@@ -86,15 +92,6 @@ class LiveClient implements ITestResultClient {
 		return null;
 	}
 
-	// A BROWSER-hosted page has no process exit; the IDE ends the run when
-	// this line arrives (node/sys runs exit by themselves, flash through adl).
-	static function announceHostedRunFinished(failed:Bool):Void {
-		#if js
-		var proc:Dynamic = js.Syntax.code("typeof process !== 'undefined' ? process : null");
-		if (proc == null) printLine("##intellij-haxe[testRunFinished exit='" + (failed ? 1 : 0) + "']");
-		#end
-	}
-
 	function reportTest(result:TestResult, failureMessage:Null<String>, failureDetails:Null<String>,
 			ignoreReason:Null<String>):Void {
 		if (!rootOpen && rootSuite != "") {
@@ -140,33 +137,11 @@ class LiveClient implements ITestResultClient {
 	}
 
 	static function printLine(line:String):Void {
-		// the leading break closes PrintClient's unfinished glyph line; a
-		// service message must start at a line start to be parsed.
-		// flash: NATIVE trace, bypassing the haxe.Log hijack above - the
-		// buffered replay must not re-enter the buffer
-		#if sys
-		Sys.print("\n" + line + "\n");
-		#elseif flash
-		flash.Lib.trace(line);
-		#elseif js
-		// console.log reaches node's stdout and the browser console alike
-		// (each call is its own line, so no unfinished glyph line to close);
-		// the trace fallback would prefix every line with its own position
-		untyped console.log(line);
-		#else
-		trace(line);
-		#end
-	}
-
-	// TeamCity value escaping: https://www.jetbrains.com/help/teamcity/service-messages.html
-	static function escape(value:String):String {
-		value = StringTools.replace(value, "|", "||");
-		value = StringTools.replace(value, "'", "|'");
-		value = StringTools.replace(value, "\n", "|n");
-		value = StringTools.replace(value, "\r", "|r");
-		value = StringTools.replace(value, "[", "|[");
-		value = StringTools.replace(value, "]", "|]");
-		return value;
+		// the leading break closes PrintClient's unfinished glyph line (sys
+		// only - flash's NATIVE trace and js's console.log are line-oriented
+		// already, and the native trace bypasses the haxe.Log hijack above,
+		// so the buffered replay cannot re-enter the buffer)
+		TcOutput.printLine(line, true);
 	}
 }
 #end

@@ -12,7 +12,6 @@ import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ModuleNo
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ProjectNode;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.TestRunNode;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Tree context menu: debugs the selection's unit tests, shown beside Run
@@ -30,7 +29,7 @@ public final class HaxeDebugUnitTestsAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
-    String buildFilePath = resolveTestsPath(panel.getSelectedUserObject());
+    String buildFilePath = panel.resolveTestsPath(panel.getSelectedUserObject());
     if (buildFilePath != null) {
       panel.debugUnitTests(buildFilePath);
     }
@@ -43,7 +42,7 @@ public final class HaxeDebugUnitTestsAction extends DumbAwareAction {
     boolean relevant = selection instanceof TestRunNode
       || selection instanceof ModuleNode
       || selection instanceof ProjectNode;
-    String buildFilePath = relevant ? resolveTestsPath(selection) : null;
+    String buildFilePath = relevant ? panel.resolveTestsPath(selection) : null;
     if (project == null || buildFilePath == null) {
       e.getPresentation().setEnabledAndVisible(false);
       return;
@@ -54,20 +53,6 @@ public final class HaxeDebugUnitTestsAction extends DumbAwareAction {
     if (!debuggable) {
       e.getPresentation().setDescription(HaxeBundle.message("haxe.test.debug.unsupported.target"));
     }
-  }
-
-  /** The selection's tests build file: the row's own file, or the container's marked/suggested one from the last scan. */
-  @Nullable
-  private String resolveTestsPath(@Nullable Object selection) {
-    return switch (selection) {
-      case TestRunNode node -> node.buildFilePath();
-      case ModuleNode module -> panel.testsPathFor(module.name());
-      case ProjectNode ignored -> {
-        String containerId = panel.getProjectRootContainerId();
-        yield containerId == null ? null : panel.testsPathFor(containerId);
-      }
-      case null, default -> null;
-    };
   }
 
   @Override

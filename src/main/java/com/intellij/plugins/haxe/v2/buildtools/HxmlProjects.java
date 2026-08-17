@@ -57,11 +57,9 @@ public final class HxmlProjects {
                                                     @NotNull List<String> command) {
     int fileToken = command.indexOf(file.getName());
     if (fileToken < 0) return command;
-    List<String> sections = HaxeBuildFileInspector.sectionContents(project, file);
-    if (sections.size() < 2) return command;
+    List<String> sectionArguments = HaxeBuildSections.selectedSectionArguments(project, file);
+    if (sectionArguments == null) return command;
 
-    int index = HaxeBuildSections.selectedIndex(project, file, sections);
-    List<String> sectionArguments = HxmlArguments.parseLines(sections.get(index).lines().toList());
     List<String> scoped = new ArrayList<>(command.subList(0, fileToken));
     scoped.addAll(sectionArguments);
     scoped.addAll(command.subList(fileToken + 1, command.size()));

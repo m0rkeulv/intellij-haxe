@@ -87,7 +87,7 @@ public final class HaxeToolPathResolver {
         return fromSdk.toString();
       }
     }
-    String onPath = pathHit("neko");
+    String onPath = pathDetectedExecutable("neko");
     return onPath != null ? onPath : HaxeSdkUtilBase.getExecutableName("neko");
   }
 
@@ -110,7 +110,7 @@ public final class HaxeToolPathResolver {
         return fromSdk.toString();
       }
     }
-    return pathHit("node");
+    return pathDetectedExecutable("node");
   }
 
   /**
@@ -152,6 +152,20 @@ public final class HaxeToolPathResolver {
     return null;
   }
 
+  /**
+   * The effective Flex/AIR SDK name for a run configuration: the
+   * configuration's own selection when non-blank, else
+   * {@link #resolveFlexSdkName}; empty when neither resolves.
+   */
+  @NotNull
+  public static String flexSdkNameOrEmpty(@NotNull Project project, @Nullable String override) {
+    if (override != null && !override.isBlank()) {
+      return override;
+    }
+    String resolved = resolveFlexSdkName(project, null);
+    return resolved != null ? resolved : "";
+  }
+
   /** What empty Build Tools overrides inherit, for display as grayed defaults. Null members mean nothing resolves. */
   public record InheritedRuntimeDefaults(@Nullable String haxelib,
                                          @Nullable String neko,
@@ -181,7 +195,7 @@ public final class HaxeToolPathResolver {
                      ? HaxeSdkUtilBase.getHaxelibPathByFolderPath(sdk.getHomePath())
                      : null;
     if (haxelib == null) {
-      haxelib = pathHit("haxelib");
+      haxelib = pathDetectedExecutable("haxelib");
     }
     String flashPlayer = data == null || data.getFlashPlayerPath().isBlank() ? null : data.getFlashPlayerPath();
     String flexSdkName = data == null || data.getFlexSdkName().isEmpty() ? null : data.getFlexSdkName();
@@ -197,11 +211,12 @@ public final class HaxeToolPathResolver {
   @Nullable
   private static String inheritedExecutable(@Nullable String sdkConfiguredPath, @NotNull String executableName) {
     Path fromSdk = executableOrInDirectory(sdkConfiguredPath, executableName);
-    return fromSdk != null ? fromSdk.toString() : pathHit(executableName);
+    return fromSdk != null ? fromSdk.toString() : pathDetectedExecutable(executableName);
   }
 
+  /** The executable a PATH lookup picks (absolute), or null; also displayed as an inherited default in the settings panels. */
   @Nullable
-  private static String pathHit(@NotNull String executableName) {
+  public static String pathDetectedExecutable(@NotNull String executableName) {
     File onPath = PathEnvironmentVariableUtil.findInPath(HaxeSdkUtilBase.getExecutableName(executableName));
     return onPath != null ? onPath.getAbsolutePath() : null;
   }

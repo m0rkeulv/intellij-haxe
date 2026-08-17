@@ -55,7 +55,7 @@ public final class HaxeTestRunConfigurationEditor extends SettingsEditor<HaxeTes
   protected void applyEditorTo(@NotNull HaxeTestRunConfiguration configuration) {
     configuration.setBuildFilePath((String)fileCombo.getSelectedItem());
     configuration.setFilterPattern(patternField.getText().trim());
-    configuration.syncCompileStep();
+    HaxeTestRunConfigurations.resyncCompileStepAsync(configuration);
   }
 
   @Override

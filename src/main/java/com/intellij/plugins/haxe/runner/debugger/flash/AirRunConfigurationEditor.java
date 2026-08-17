@@ -24,7 +24,7 @@ public final class AirRunConfigurationEditor extends SettingsEditor<AirRunConfig
   private final ModulesComboBox moduleCombo = new ModulesComboBox();
   private final TextFieldWithBrowseButton descriptorField = new TextFieldWithBrowseButton();
   private final TextFieldWithBrowseButton contentRootField = new TextFieldWithBrowseButton();
-  private final FlexSdkSelector flexSdkSelector;
+  private final FlexSdkSelector flexSdkSelector = new FlexSdkSelector();
   private final JBTextField adlOptionsField = new JBTextField();
   private final JBTextField programParametersField = new JBTextField();
 
@@ -35,9 +35,6 @@ public final class AirRunConfigurationEditor extends SettingsEditor<AirRunConfig
     descriptorField.addBrowseFolderListener(project, descriptorChooser);
     contentRootField.addBrowseFolderListener(project, FileChooserDescriptorFactory.singleDir()
       .withTitle(HaxeDebuggerBundle.message("air.runner.editor.content.root.chooser")));
-
-    String fromRuntimes = HaxeDebuggerBundle.message("flash.runner.editor.flex.sdk.from.haxe.sdk");
-    flexSdkSelector = new FlexSdkSelector(fromRuntimes);
   }
 
   @Override

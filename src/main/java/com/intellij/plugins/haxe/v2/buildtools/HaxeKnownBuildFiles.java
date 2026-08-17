@@ -67,6 +67,21 @@ public final class HaxeKnownBuildFiles {
     return known.size() == 1 ? known.get(0).file().getPath() : null;
   }
 
+  /**
+   * Registers a build file as a manual addition to the container and runs the
+   * full follow-up: source-roots offer, then a project sync - a newly known
+   * build file can change the module's library set (it may even become the
+   * implicit active file). {@code onFinished} runs when the sync completes.
+   */
+  public static void registerBuildFile(@NotNull Project project,
+                                       @NotNull String containerId,
+                                       @NotNull VirtualFile file,
+                                       @Nullable Runnable onFinished) {
+    HaxeBuildFilesStore.getInstance(project).addFile(containerId, file.getPath());
+    HaxeSourceRootsOffer.offerFor(project, containerId, file);
+    HaxeProjectSync.sync(project, onFinished);
+  }
+
   /** Applies the manual-files store to a detected set: additions resolved and typed, hidden paths dropped. */
   @NotNull
   public static List<HaxeBuildFile> mergeWithStore(@NotNull Project project,

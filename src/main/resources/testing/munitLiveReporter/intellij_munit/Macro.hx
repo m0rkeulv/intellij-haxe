@@ -13,11 +13,12 @@ import haxe.macro.Expr;
 	whatever clients the project's own TestMain installed. munit has no
 	TeamCity reporter of its own, so this client IS the IDE's result channel.
 
-	Every failure mode degrades to a plain run instead of breaking the build:
-	global metadata on an absent type is inert (a build without munit compiles
-	untouched), and the build macro verifies the runner's capability before
-	patching - a munit without `addResultClient` gets a warning and unmodified
-	fields.
+	Reporting failure modes degrade to a plain run instead of breaking the
+	build: global metadata on an absent type is inert (a build without munit
+	compiles untouched), and a munit without `addResultClient` gets a warning
+	and unmodified fields. The SINGLE-TEST filter is the exception - when it
+	cannot be proven sound the compile fails instead, because an unsound
+	filter registers no tests and the run would pass empty.
 **/
 class Macro {
 	public static function init():Void {
@@ -38,7 +39,17 @@ class Macro {
 			switch (field.kind) {
 				case FFun(fn) if (fn.expr != null && fn.args.length > 0):
 					// addTest(field, ...) is the one choke point every test
-					// registers through; guarding it narrows the run exactly
+					// registers through; guarding it narrows the run exactly.
+					// The guard compares the FIRST argument against the selected
+					// name, which is only sound while that argument is the test
+					// name String - against anything else the comparison would
+					// register NO tests and the run would pass empty.
+					if (!isStringType(fn.args[0].type)) {
+						Context.error("IDE single-test run cannot filter: this munit version's "
+							+ "TestClassHelper.addTest does not take the test name String as its "
+							+ "first argument. Run the whole suite instead.", Context.currentPos());
+						return fields;
+					}
 					var nameArg = fn.args[0].name;
 					fn.expr = macro {
 						if ($i{nameArg} != $v{selected}) return;
@@ -48,9 +59,18 @@ class Macro {
 				default:
 			}
 		}
-		Context.warning("IDE single-test run could not patch massive.munit.TestClassHelper.addTest - the whole class runs",
-			Context.currentPos());
+		// a hard stop, not a warning: an unpatched collection would run every
+		// test under a run the user asked to be ONE test
+		Context.error("IDE single-test run could not patch massive.munit.TestClassHelper.addTest. "
+			+ "Run the whole suite instead.", Context.currentPos());
 		return fields;
+	}
+
+	static function isStringType(type:Null<ComplexType>):Bool {
+		return switch (type) {
+			case TPath({name: "String", pack: []}): true;
+			default: false;
+		}
 	}
 
 	public static function buildRunner():Array<Field> {

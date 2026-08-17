@@ -21,7 +21,7 @@ public final class FlashRunConfigurationEditor extends SettingsEditor<FlashRunCo
 
   private final ModulesComboBox moduleCombo = new ModulesComboBox();
   private final TextFieldWithBrowseButton swfField = new TextFieldWithBrowseButton();
-  private final FlexSdkSelector flexSdkSelector;
+  private final FlexSdkSelector flexSdkSelector = new FlexSdkSelector();
   private final TextFieldWithBrowseButton playerField = new TextFieldWithBrowseButton();
 
   public FlashRunConfigurationEditor(@NotNull Project project) {
@@ -31,9 +31,6 @@ public final class FlashRunConfigurationEditor extends SettingsEditor<FlashRunCo
     swfField.addBrowseFolderListener(project, swfDescriptor);
     playerField.addBrowseFolderListener(project, FileChooserDescriptorFactory.singleFile()
       .withTitle(HaxeDebuggerBundle.message("flash.runner.editor.player.chooser")));
-
-    String fromRuntimes = HaxeDebuggerBundle.message("flash.runner.editor.flex.sdk.from.haxe.sdk");
-    flexSdkSelector = new FlexSdkSelector(fromRuntimes);
   }
 
   @Override

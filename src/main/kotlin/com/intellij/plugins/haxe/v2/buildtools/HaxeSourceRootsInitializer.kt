@@ -51,11 +51,28 @@ object HaxeSourceRootsInitializer {
 
   internal data class RootsPlan(val moduleName: String, val sourceDirs: List<String>, val excludeDirs: List<String>)
 
-  /** Whether the module still has no source roots — the state the first-open setup (and the add-file offer) applies to. */
+  /** Whether the module still has no source roots — the state the first-open setup applies to. */
   fun moduleHasNoSourceRoots(project: Project, moduleName: String): Boolean {
     val snapshot = WorkspaceModel.getInstance(project).currentSnapshot
     val entity = snapshot.entities(ModuleEntity::class.java).firstOrNull { it.name == moduleName } ?: return false
     return entity.contentRoots.none { it.sourceRoots.isNotEmpty() }
+  }
+
+  /**
+   * The build file's classpath directories not covered by an existing source
+   * root of the module (equal to or under one). A module whose MAIN sources
+   * are configured can still have a tests build whose separate source tree
+   * is unmarked — breakpoint resolution needs it marked, so the add/mark
+   * offers gate on this instead of on the module having no roots at all.
+   */
+  fun uncoveredSourceDirs(project: Project, moduleName: String, buildFile: HaxeBuildFile): List<String> {
+    val plan = planFor(project, moduleName, listOf(buildFile)) ?: return emptyList()
+    val snapshot = WorkspaceModel.getInstance(project).currentSnapshot
+    val entity = snapshot.entities(ModuleEntity::class.java).firstOrNull { it.name == moduleName } ?: return emptyList()
+    val existingRoots = entity.contentRoots
+      .flatMap { it.sourceRoots }
+      .map { it.url.url.removePrefix("file://") }
+    return plan.sourceDirs.filter { dir -> existingRoots.none { root -> FileUtil.isAncestor(root, dir, false) } }
   }
 
   private fun plan(project: Project): List<RootsPlan> {

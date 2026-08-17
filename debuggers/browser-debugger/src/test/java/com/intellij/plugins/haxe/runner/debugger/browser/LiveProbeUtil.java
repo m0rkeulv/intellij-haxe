@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
@@ -14,12 +14,16 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
  * The plumbing shared by the live probes: haxe availability, fixture
- * compilation, adapter connection with retry, and process-tree teardown.
+ * compilation, adapter/browser locations, request factories, adapter
+ * connection with retry, and process-tree teardown.
  */
 final class LiveProbeUtil {
   /** The one-page host for the compiled fixture; every probe writes the same file. */
@@ -27,7 +31,124 @@ final class LiveProbeUtil {
     <!DOCTYPE html><html><head><meta charset='utf-8'></head>\
     <body><script src='app.js'></script></body></html>""";
 
+  /** The pinned js-debug-dap release the probes drive (GitHub release, sha256-verified by the provisioner). */
+  static final String JS_DEBUG_VERSION = "1.117.0";
+
+  /** Machine-wide chromium-family install locations, tried after the per-user LOCALAPPDATA ones. */
+  private static final List<String> CHROMIUM_PATHS = List.of(
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/snap/bin/chromium");
+
   private LiveProbeUtil() {
+  }
+
+  /** The provisioned js-debug standalone DAP server's entry script. */
+  static Path dapServerJs() {
+    return nodeRoot().resolve("adapters/js-debug-" + JS_DEBUG_VERSION + "/js-debug/src/dapDebugServer.js");
+  }
+
+  /**
+   * The browser under test: the {@code WEB_DEBUG_CHROMIUM_EXE} environment
+   * variable when set (any chromium-family build — e.g. a provisioned
+   * ungoogled-chromium), else an installed Chrome/Edge — mirroring the IDE
+   * behaviour, where a blank executable lets js-debug find the default
+   * installation. A set-but-invalid path SKIPS rather than silently testing
+   * a different browser than the one asked for.
+   */
+  static Path chromiumExe() {
+    String env = System.getenv("WEB_DEBUG_CHROMIUM_EXE");
+    if (env != null && !env.isBlank()) {
+      Path fromEnv = Path.of(env);
+      return Files.isRegularFile(fromEnv) ? fromEnv : null;
+    }
+    List<Path> candidates = new ArrayList<>();
+    String localAppData = System.getenv("LOCALAPPDATA");
+    if (localAppData != null && !localAppData.isBlank()) {
+      // per-user installs; plain Chromium (e.g. ungoogled-chromium, the
+      // reference browser of this module) ahead of the branded ones
+      candidates.add(Path.of(localAppData, "Chromium/Application/chrome.exe"));
+      candidates.add(Path.of(localAppData, "Google/Chrome/Application/chrome.exe"));
+    }
+    for (String candidate : CHROMIUM_PATHS) {
+      candidates.add(Path.of(candidate));
+    }
+    for (Path path : candidates) {
+      if (Files.isRegularFile(path)) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  /** The probes' initialize: the given adapterID, IntelliJ Haxe as the client, startDebugging supported. */
+  static InitializeRequest initializeRequest(String adapterId) {
+    InitializeRequest initialize = InitializeRequest.standard(adapterId, true);
+    initialize.getArguments().setClientName("IntelliJ Haxe");
+    return initialize;
+  }
+
+  /** The parent-session chrome launch config every browser probe sends. */
+  static Map<String, Object> baseLaunchConfig(String baseUrl, Path fixture) {
+    Map<String, Object> config = new LinkedHashMap<>();
+
+    config.put("type", "pwa-chrome");
+    config.put("request", "launch");
+    config.put("name", "probe");
+    config.put("url", baseUrl);
+    config.put("webRoot", fixture.toString());
+    config.put("runtimeExecutable", chromiumExe().toString());
+    config.put("runtimeArgs", List.of("--headless=new"));
+
+    return config;
+  }
+
+  /** One source breakpoint on the fixture's {@code hxFileName} at {@code line}. */
+  static SetBreakpointsRequest breakpointsRequest(Path fixture, String hxFileName, int line) {
+    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
+    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
+
+    Source source = new Source();
+    source.setPath(fixture.resolve(hxFileName).toString());
+    source.setName(hxFileName);
+    bpArgs.setSource(source);
+
+    SourceBreakpoint bp = new SourceBreakpoint();
+    bp.setLine(line);
+    bpArgs.setBreakpoints(List.of(bp));
+
+    setBreakpoints.setArguments(bpArgs);
+    return setBreakpoints;
+  }
+
+  /**
+   * Drives the parent session until js-debug asks for the child session:
+   * configurationDone on the initialized event, every reverse request answered
+   * as the IDE answers it. Null when no startDebugging arrives in time.
+   */
+  static StartDebuggingRequest awaitStartDebugging(DapClient parent, long millis, long requestTimeout)
+    throws Exception {
+    long deadline = System.currentTimeMillis() + millis;
+    while (System.currentTimeMillis() < deadline) {
+      Event event = parent.pollEvent(100);
+      if (event instanceof InitializedEvent) {
+        parent.sendRequest(new ConfigurationDoneRequest(), requestTimeout);
+      }
+
+      Request incoming = parent.pollIncomingRequest(50);
+      if (incoming != null) {
+        parent.respond(incoming, true);
+        if (incoming instanceof StartDebuggingRequest start) {
+          return start;
+        }
+      }
+    }
+    return null;
   }
 
   /** Probe-side diagnostics; the tag separates them from the [adapter] and [server] streams. */

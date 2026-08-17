@@ -75,11 +75,7 @@ public class FlashRunConfiguration extends DapRunConfigurationBase {
   /** The Flex SDK the debug session uses: this configuration's own selection, else the Haxe SDK's runtimes entry. */
   @NotNull
   public String effectiveFlexSdkName() {
-    if (!flexSdkName.isBlank()) {
-      return flexSdkName;
-    }
-    String fromSdk = HaxeToolPathResolver.resolveFlexSdkName(getProject(), null);
-    return fromSdk != null ? fromSdk : "";
+    return HaxeToolPathResolver.flexSdkNameOrEmpty(getProject(), flexSdkName);
   }
 
   /** The standalone player launching the swf: this configuration's own path, else the Build Tools/SDK runtimes chain. */

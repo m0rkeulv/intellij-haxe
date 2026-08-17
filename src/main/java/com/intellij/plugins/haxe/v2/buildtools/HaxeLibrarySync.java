@@ -15,7 +15,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCommandUtils;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -185,15 +185,16 @@ public final class HaxeLibrarySync {
     return null;
   }
 
-  /** The container's marked (or convention-suggested) tests build files that this module owns. */
+  /** The container's marked (or convention-suggested) tests build files that this module owns - gating shared via {@link HaxeTestFrameworks#testsBuildPaths}. */
   @NotNull
   private static List<HaxeBuildFile> testsBuildFiles(@NotNull Project project,
                                                      @NotNull Module module,
                                                      @NotNull List<HaxeBuildFile> buildFiles) {
-    List<String> candidatePaths = buildFiles.stream()
-      .map(buildFile -> buildFile.file().getPath())
-      .toList();
-    List<String> testsPaths = HaxeTestsBuildFileStore.getInstance(project).resolveTestsFiles(module.getName(), candidatePaths);
+    Map<String, List<HaxeBuildFileInfo.HaxeLibDependency>> librariesByPath = new LinkedHashMap<>();
+    for (HaxeBuildFile buildFile : buildFiles) {
+      librariesByPath.put(buildFile.file().getPath(), HaxeBuildSections.inspectSelected(project, buildFile).libraries());
+    }
+    List<String> testsPaths = HaxeTestFrameworks.testsBuildPaths(project, module.getName(), librariesByPath);
     List<HaxeBuildFile> owned = new ArrayList<>();
     for (String testsPath : testsPaths) {
       HaxeBuildFile tests = byPath(project, buildFiles, testsPath);

@@ -23,6 +23,7 @@ import java.util.function.Consumer;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.AdapterTargetsSmartStepHandler;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The browser backend: resolves the family's pinned vscode debug adapter
@@ -291,9 +292,14 @@ public class BrowserDebugBackend implements DapBackend {
   public void startBackgroundOutput(Consumer<String> sink) {
     BufferedReader reader = adapterStdout;
     adapterStdout = null;
-    if (reader != null) {
+    startBackgroundOutput(reader, sessionMux, sink);
+  }
+
+  /** The reusable half: backends owning their own adapter process (the node test backend) hand in their reader and mux. */
+  static void startBackgroundOutput(@Nullable BufferedReader adapterStdout, @Nullable JsDebugSessionMux mux, Consumer<String> sink) {
+    if (adapterStdout != null) {
       Thread gobbler = new Thread(() -> {
-        try (BufferedReader stdout = reader) {
+        try (BufferedReader stdout = adapterStdout) {
           String line;
           while ((line = stdout.readLine()) != null) {
             sink.accept("[adapter] " + line);
@@ -305,7 +311,6 @@ public class BrowserDebugBackend implements DapBackend {
       gobbler.setDaemon(true);
       gobbler.start();
     }
-    JsDebugSessionMux mux = sessionMux;
     if (mux != null) {
       // the mux owns the parent pumping and worker attachment
       mux.setLogSink(line -> sink.accept("[js-debug] " + line));

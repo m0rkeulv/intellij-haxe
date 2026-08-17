@@ -172,6 +172,11 @@ public final class LimeProjects {
   /** The target flags whose packaged app runs in a BROWSER page, served and console-captured for test runs. */
   public static final Set<String> BROWSER_TARGETS = Set.of("html5");
 
+  /** Whether the flag's tests run under an IDE-provided host (adl for the flash family, a served browser page for html5). */
+  public static boolean isHostedTarget(@NotNull String targetFlag) {
+    return FLASH_FAMILY_TARGETS.contains(targetFlag) || BROWSER_TARGETS.contains(targetFlag);
+  }
+
   /**
    * The html5 build's packaged web root ({@code <app path>/html5/bin}, lime's
    * own index.html inside), or null for other targets or without an app path.
@@ -179,12 +184,7 @@ public final class LimeProjects {
   @Nullable
   public static Path packagedWebRoot(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
     if (!BROWSER_TARGETS.contains(targetFlag)) return null;
-    String appPath = StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin");
-    return Path.of(projectFile.getParent().getPath())
-      .resolve(appPath)
-      .resolve(targetFlag)
-      .resolve("bin")
-      .normalize();
+    return exportBinDirectory(projectFile, content, targetFlag);
   }
 
   /** The packaged swf a flash/air build exports ({@code <app path>/<target>/bin/<app file>.swf}), or null without an app file. */
@@ -192,12 +192,8 @@ public final class LimeProjects {
   public static Path packagedSwf(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
     if (!FLASH_FAMILY_TARGETS.contains(targetFlag)) return null;
     String appFile = ProjectXmlParser.parseAppFile(content);
-    String appPath = StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin");
     if (appFile == null) return null;
-    return Path.of(projectFile.getParent().getPath())
-      .resolve(appPath)
-      .resolve(targetFlag)
-      .resolve("bin")
+    return exportBinDirectory(projectFile, content, targetFlag)
       .resolve(appFile + ".swf")
       .normalize();
   }
@@ -230,13 +226,24 @@ public final class LimeProjects {
   public static Path packagedBinary(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
     if (!HOST_LAUNCHABLE_TARGETS.contains(targetFlag)) return null;
     String appFile = ProjectXmlParser.parseAppFile(content);
-    String appPath = StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin");
     if (appFile == null) return null;
+    return exportBinDirectory(projectFile, content, targetDirectory(targetFlag))
+      .resolve(HaxeSdkUtilBase.getExecutableName(appFile))
+      .normalize();
+  }
+
+  /**
+   * Lime's export layout, shared by every packaged-artifact lookup:
+   * {@code <app path>/<target dir>/bin} relative to the project file, the app
+   * path defaulting to {@code bin}.
+   */
+  @NotNull
+  private static Path exportBinDirectory(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetDirectory) {
+    String appPath = StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin");
     return Path.of(projectFile.getParent().getPath())
       .resolve(appPath)
-      .resolve(targetDirectory(targetFlag))
+      .resolve(targetDirectory)
       .resolve("bin")
-      .resolve(HaxeSdkUtilBase.getExecutableName(appFile))
       .normalize();
   }
 
@@ -246,5 +253,29 @@ public final class LimeProjects {
     if (!targetFlag.equals("cpp")) return targetFlag;
     if (SystemInfo.isWindows) return "windows";
     return SystemInfo.isMac ? "mac" : "linux";
+  }
+
+  /// The compile artifact per lime's export layout (`<app path>/<target>/...`),
+  /// RELATIVE to the project file - the shape the parser-tool evaluation
+  /// reports. Only the targets Build & run can launch need one; the packaged*
+  /// lookups above answer the same layout as absolute paths at launch time.
+  @Nullable
+  public static String relativeTargetOutput(@NotNull String targetFlag, @NotNull String appPath, @NotNull String appFile) {
+    return switch (targetFlag) {
+      case "hl" -> appPath + "/hl/obj/ApplicationMain.hl";
+      case "html5" -> appPath + "/html5/bin/" + (appFile.isEmpty() ? "index" : appFile) + ".js";
+      case "flash" -> appPath + "/flash/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
+      // air: the descriptor (application.xml) sits at <app path>/air with the content swf in bin beside it
+      case "air" -> appPath + "/air/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
+      // desktop cpp: lime copies the built executable into bin, named after
+      // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
+      case "windows" -> appFile.isEmpty() ? null : appPath + "/windows/bin/" + appFile + ".exe";
+      case "linux" -> appFile.isEmpty() ? null : appPath + "/linux/bin/" + appFile;
+      // neko is wrapped in a launcher executable named after the app, host-suffixed
+      case "neko" -> appFile.isEmpty() ? null
+                                       : appPath + "/neko/bin/" + (SystemInfo.isWindows ? appFile + ".exe" : appFile);
+      // TODO mac: the artifact is a .app bundle (Contents/MacOS/<app file>) - needs bundle-aware launch
+      default -> null;
+    };
   }
 }

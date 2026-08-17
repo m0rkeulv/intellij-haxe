@@ -56,6 +56,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   public void buildSettingsChanged() {
     snapshot = null;
     fastState = null;
+    effectiveActivePathComputed = false;
     refreshAsync();
   }
 
@@ -85,6 +86,23 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   /** The defines most recently handed to a consumer — what current PSI state was parsed against. */
   private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
 
+  // the implicit single-file fallback behind HaxeKnownBuildFiles sweeps every
+  // module under the read lock - far too heavy for getActiveDefines, which
+  // runs per candidate inside index lookups. Resolved once per build-settings
+  // change instead of per call (a module set change without a settings event
+  // keeps the stale answer until the next one).
+  private volatile String effectiveActivePath;
+  private volatile boolean effectiveActivePathComputed;
+
+  @Nullable
+  private String effectiveActivePath() {
+    if (!effectiveActivePathComputed) {
+      effectiveActivePath = ReadAction.computeBlocking(() -> HaxeKnownBuildFiles.effectiveActivePath(project));
+      effectiveActivePathComputed = true;
+    }
+    return effectiveActivePath;
+  }
+
   private static long contentStamp(@NotNull VirtualFile file) {
     Document document = FileDocumentManager.getInstance().getCachedDocument(file);
     return document != null ? document.getModificationStamp() : file.getModificationStamp();
@@ -97,7 +115,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    */
   @Nullable
   public Map<String, String> getActiveDefines() {
-    String path = HaxeKnownBuildFiles.effectiveActivePath(project);
+    String path = effectiveActivePath();
     if (StringUtil.isEmptyOrSpaces(path)) {
       // record the null handout: files parsed now use the LEGACY define
       // context, and activating a build file later must trigger a reparse

@@ -1,17 +1,14 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.ExecutionException;
-import com.intellij.openapi.application.PathManager;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeSystemPaths;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,12 +46,15 @@ final class AirTestHost {
    */
   @NotNull
   static Path descriptorFor(@NotNull Path swfArtifact, @NotNull String namespaceVersion) throws ExecutionException {
-    String artifactHash = hashOf(swfArtifact.toString());
-    Path directory = Path.of(PathManager.getSystemPath(), "haxe", "air-tests", artifactHash);
+    String artifactHash = HaxeSystemPaths.shortHash(swfArtifact.toString().getBytes(StandardCharsets.UTF_8));
+    Path directory = HaxeSystemPaths.cacheDirectory("air-tests", artifactHash);
     Path descriptor = directory.resolve("application.xml");
-    // AIR apps are single-instance per id: a stray instance would swallow the
-    // next launch ("invocation forwarded to primary instance"), so each
-    // artifact gets its own id
+    // AIR apps are single-instance per id: with a reused id a STRAY instance
+    // (e.g. a debug player orphaned by a stopped fdb, waiting forever for a
+    // debugger) swallows the next launch - "invocation forwarded to primary
+    // instance", the fresh adl exits 0 and fdb waits on nothing. A per-LAUNCH
+    // id makes every launch its own app.
+    String launchId = artifactHash + "t" + System.currentTimeMillis();
     String content = """
       <?xml version="1.0" encoding="utf-8"?>
       <application xmlns="http://ns.adobe.com/air/application/%s">
@@ -66,7 +66,7 @@ final class AirTestHost {
           <visible>false</visible>
         </initialWindow>
       </application>
-      """.formatted(namespaceVersion, artifactHash, swfArtifact.getFileName());
+      """.formatted(namespaceVersion, launchId, swfArtifact.getFileName());
     try {
       Files.createDirectories(directory);
       Files.writeString(descriptor, content);
@@ -101,17 +101,5 @@ final class AirTestHost {
       }
     }
     return "28.0";
-  }
-
-  @NotNull
-  private static String hashOf(@NotNull String value) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-      return HexFormat.of().formatHex(hash, 0, 8);
-    }
-    catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
   }
 }

@@ -6,6 +6,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapSourceResolver;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapSourceScopes;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions;
 import com.intellij.openapi.project.Project;
 import com.intellij.xdebugger.XSourcePosition;
 import org.jetbrains.annotations.Nullable;
@@ -54,7 +55,7 @@ public class HxcppIntellijBackend implements DapBackend {
 
   @Override
   public boolean acceptsBreakpointFile(String vfsPath) {
-    return sourceDirectories.isEmpty() || DapSourceScopes.underAny(vfsPath, sourceDirectories);
+    return DapSourceScopes.acceptsWhenScoped(vfsPath, sourceDirectories);
   }
 
   @Override
@@ -81,7 +82,7 @@ public class HxcppIntellijBackend implements DapBackend {
     } catch (SocketTimeoutException e) {
       throw new IOException("the program did not connect to the debugger within "
                             + (acceptTimeoutMillis / 1000) + "s — was it compiled with -debug and "
-                            + "-lib intellij-hxcpp-debug-server?");
+                            + "-lib " + HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB + "?");
     }
   }
 
@@ -107,7 +108,7 @@ public class HxcppIntellijBackend implements DapBackend {
 
   @Override
   public String startupHint() {
-    return "Check that it was compiled with -debug and -lib intellij-hxcpp-debug-server.";
+    return "Check that it was compiled with -debug and -lib " + HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB + ".";
   }
 
   @Override

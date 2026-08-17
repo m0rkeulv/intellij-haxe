@@ -103,11 +103,7 @@ public class AirRunConfiguration extends DapRunConfigurationBase {
   /** The Flex/AIR SDK supplying adl (and the debugger): this configuration's own selection, else the Build Tools/Haxe SDK chain. */
   @NotNull
   public String effectiveFlexSdkName() {
-    if (!flexSdkName.isBlank()) {
-      return flexSdkName;
-    }
-    String fromRuntimes = HaxeToolPathResolver.resolveFlexSdkName(getProject(), null);
-    return fromRuntimes != null ? fromRuntimes : "";
+    return HaxeToolPathResolver.flexSdkNameOrEmpty(getProject(), flexSdkName);
   }
 
   @Override

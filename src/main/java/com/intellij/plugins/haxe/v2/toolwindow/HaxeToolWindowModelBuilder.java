@@ -113,19 +113,14 @@ final class HaxeToolWindowModelBuilder {
     return containers;
   }
 
-  /**
-   * The container's tests build files: the marked ones, or the store's
-   * convention-based suggestions - in both cases only builds DECLARING a
-   * known test framework lib, so a plain application build (even a marked
-   * one) never presents a test run it cannot deliver.
-   */
+  /** The container's tests build files - the framework gating and store resolution live in {@link HaxeTestFrameworks#testsBuildPaths}. */
   @NotNull
   private List<String> resolveTestsPaths(@NotNull RawContainer raw) {
-    List<String> candidatePaths = raw.files().stream()
-      .filter(entry -> HaxeTestFrameworks.detectedFramework(entry.info().libraries()) != null)
-      .map(entry -> entry.buildFile().file().getPath())
-      .toList();
-    return HaxeTestsBuildFileStore.getInstance(project).resolveTestsFiles(raw.id(), candidatePaths);
+    Map<String, List<HaxeBuildFileInfo.HaxeLibDependency>> librariesByPath = new LinkedHashMap<>();
+    for (var entry : raw.files()) {
+      librariesByPath.put(entry.buildFile().file().getPath(), entry.info().libraries());
+    }
+    return HaxeTestFrameworks.testsBuildPaths(project, raw.id(), librariesByPath);
   }
 
   /** One installed haxelib: the selected version (null when none is set) and every installed version. */
@@ -335,8 +330,9 @@ final class HaxeToolWindowModelBuilder {
     switch (type) {
       case HXML -> {
         List<String> command = HxmlProjects.buildCommand(project, environmentSdk, file);
-        String name = HaxeBundle.message("haxe.toolwindow.action.build");
-        actions.add(new ActionNode(ownerId, name, command, workDirectory, "haxe " + file.getName(), false));
+        // the name doubles as the action's stored IDENTITY (resolve-by-name in
+        // configurations) - the non-localized constant, like the other types' names
+        actions.add(new ActionNode(ownerId, HxmlProjects.BUILD_ACTION, command, workDirectory, "haxe " + file.getName(), false));
       }
       case OPENFL, LIME, HXP_PROJECT -> {
         String tool = LimeProjects.toolFor(type);
@@ -395,7 +391,7 @@ final class HaxeToolWindowModelBuilder {
                                                             : findAction(chosen.actions(), stored.actionName());
     ActionNode baseAction = overrideAction != null
       ? overrideAction
-      : findAction(chosen.actions(), defaultBuildActionName(buildFile.type()));
+      : findAction(chosen.actions(), HaxeBuildFileActions.defaultBuildActionName(buildFile.type()));
     if (baseAction == null || baseAction.command().isEmpty()) {
       return new EnvCompileCommandNode(containerId,
                                        HaxeBundle.message("haxe.toolwindow.compile.command.unsupported", buildFile.file().getName()),
@@ -406,8 +402,7 @@ final class HaxeToolWindowModelBuilder {
     command.addAll(ParametersListUtil.parse(stored.arguments()));
     String display = StringUtil.trimTrailing(baseAction.presentableCommand() + " " + stored.arguments());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    boolean connectEligible = HaxeCompileCommands.isConnectEligible(project, environmentSdk, command)
-                              && !HaxeCompileCommands.producesSwf(project, buildFile.file());
+    boolean connectEligible = HaxeCompileCommands.connectEligible(project, environmentSdk, command, buildFile.file());
     return new EnvCompileCommandNode(containerId, display, command, baseAction.workDirectory(), candidatePaths,
                                      actionNamesByFile, connectEligible);
   }
@@ -418,17 +413,6 @@ final class HaxeToolWindowModelBuilder {
       .filter(action -> action.name().equals(name))
       .findFirst()
       .orElse(null);
-  }
-
-  /** The name {@link #addDefaultActions} gives the type's build action. */
-  @NotNull
-  private static String defaultBuildActionName(@NotNull HaxeBuildFileType type) {
-    return switch (type) {
-      case HXML -> HaxeBundle.message("haxe.toolwindow.action.build");
-      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.BUILD_ACTION;
-      case HXP_SCRIPT -> HxpScriptProjects.BUILD_ACTION;
-      case NMML -> NmeProjects.BUILD_ACTION;
-    };
   }
 
   @NotNull

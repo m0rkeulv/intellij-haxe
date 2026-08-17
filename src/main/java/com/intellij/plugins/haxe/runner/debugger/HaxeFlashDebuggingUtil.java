@@ -69,12 +69,7 @@ public class HaxeFlashDebuggingUtil {
                                                    String flexSdkName,
                                                    @Nullable String flashPlayerPath,
                                                    @NotNull List<String> sourceDirectories) throws ExecutionException {
-    final Sdk flexSdk = FlexSdkUtils.findFlexOrFlexmojosSdk(flexSdkName);
-    if (flexSdk == null) {
-      throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", flexSdkName));
-    }
-
-    final FlexBuildConfiguration bc = new FakeFlexBuildConfiguration(flexSdk, urlToLaunch);
+    final FlexBuildConfiguration bc = fakeBuildConfiguration(flexSdkName, urlToLaunch);
 
     XDebugProcessStarter starter = new XDebugProcessStarter() {
       @NotNull
@@ -124,34 +119,7 @@ public class HaxeFlashDebuggingUtil {
                                                       String flexSdkName,
                                                       @NotNull GeneralCommandLine adlCommandLine,
                                                       @NotNull List<String> sourceDirectories) throws ExecutionException {
-    final Sdk flexSdk = FlexSdkUtils.findFlexOrFlexmojosSdk(flexSdkName);
-    if (flexSdk == null) {
-      throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", flexSdkName));
-    }
-
-    final FlexBuildConfiguration bc = new FakeFlexBuildConfiguration(flexSdk, adlCommandLine.getExePath());
-
-    XDebugProcessStarter starter = new XDebugProcessStarter() {
-      @NotNull
-      public XDebugProcess start(@NotNull final XDebugSession session) throws ExecutionException {
-        try {
-          BCBasedRunnerParameters params = new BCBasedRunnerParameters();
-          params.setModuleName(module.getName());
-          return new HaxeDebugProcess(session, bc, params, sourceDirectories);
-        }
-        catch (IOException e) {
-          throw new ExecutionException(e.getMessage(), e);
-        }
-      }
-    };
-    XSessionStartedResult started = startSession(module, env, starter);
-
-    // fdb is up and waiting; the -debug swf connects to it as the app starts
-    OSProcessHandler adlHandler = new OSProcessHandler(adlCommandLine);
-    tieTogether(started.getSession(), adlHandler);
-    adlHandler.startNotify();
-
-    return started.getRunContentDescriptor();
+    return airDescriptor(module, env, flexSdkName, adlCommandLine, sourceDirectories, null);
   }
 
   /**
@@ -170,13 +138,18 @@ public class HaxeFlashDebuggingUtil {
                                                           @NotNull List<String> sourceDirectories,
                                                           @NotNull ConsoleView testConsole,
                                                           @NotNull ProcessHandler testOutputSink) throws ExecutionException {
-    final Sdk flexSdk = FlexSdkUtils.findFlexOrFlexmojosSdk(flexSdkName);
-    if (flexSdk == null) {
-      throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", flexSdkName));
-    }
+    FdbTestConsoleBridge bridge = new FdbTestConsoleBridge(testConsole, testOutputSink);
+    return airDescriptor(module, env, flexSdkName, adlCommandLine, sourceDirectories, bridge);
+  }
 
-    final FlexBuildConfiguration bc = new FakeFlexBuildConfiguration(flexSdk, adlCommandLine.getExePath());
-    final FdbTestConsoleBridge bridge = new FdbTestConsoleBridge(testConsole, testOutputSink);
+  /** The shared AIR session shape; a non-null {@code bridge} swaps in the SM test console and finalizes it with the session. */
+  private static RunContentDescriptor airDescriptor(final Module module,
+                                                    ExecutionEnvironment env,
+                                                    String flexSdkName,
+                                                    @NotNull GeneralCommandLine adlCommandLine,
+                                                    @NotNull List<String> sourceDirectories,
+                                                    @Nullable FdbTestConsoleBridge bridge) throws ExecutionException {
+    final FlexBuildConfiguration bc = fakeBuildConfiguration(flexSdkName, adlCommandLine.getExePath());
 
     XDebugProcessStarter starter = new XDebugProcessStarter() {
       @NotNull
@@ -184,6 +157,9 @@ public class HaxeFlashDebuggingUtil {
         try {
           BCBasedRunnerParameters params = new BCBasedRunnerParameters();
           params.setModuleName(module.getName());
+          if (bridge == null) {
+            return new HaxeDebugProcess(session, bc, params, sourceDirectories);
+          }
           return new HaxeDebugProcess(session, bc, params, sourceDirectories) {
             @Override
             @NotNull
@@ -198,15 +174,15 @@ public class HaxeFlashDebuggingUtil {
       }
     };
     XSessionStartedResult started = startSession(module, env, starter);
-    started.getSession().addSessionListener(new XDebugSessionListener() {
-      @Override
-      public void sessionStopped() {
-        // ends the synthetic test process so the SM tree finalizes
-        if (!testOutputSink.isProcessTerminated()) {
-          testOutputSink.destroyProcess();
+    if (bridge != null) {
+      started.getSession().addSessionListener(new XDebugSessionListener() {
+        @Override
+        public void sessionStopped() {
+          // ends the synthetic test process so the SM tree finalizes
+          bridge.endTestOutput();
         }
-      }
-    });
+      });
+    }
 
     // fdb is up and waiting; the -debug swf connects to it as the app starts
     OSProcessHandler adlHandler = new OSProcessHandler(adlCommandLine);
@@ -214,6 +190,16 @@ public class HaxeFlashDebuggingUtil {
     adlHandler.startNotify();
 
     return started.getRunContentDescriptor();
+  }
+
+  /** The resolved Flex SDK table entry wrapped as the stub build configuration fdb-driven sessions run against. */
+  @NotNull
+  private static FlexBuildConfiguration fakeBuildConfiguration(String flexSdkName, String launchTarget) throws ExecutionException {
+    Sdk flexSdk = FlexSdkUtils.findFlexOrFlexmojosSdk(flexSdkName);
+    if (flexSdk == null) {
+      throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", flexSdkName));
+    }
+    return new FakeFlexBuildConfiguration(flexSdk, launchTarget);
   }
 
   /**

@@ -8,14 +8,18 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * After a build file is registered into a module that still has NO source
- * roots, offers to derive them from the file: resolvable classpath
- * directories become source roots, output locations become excluded. Same
- * derivation the silent first-open pass uses ({@link
- * HaxeSourceRootsInitializer}); here the user decides. Call on the EDT.
+ * After a build file is registered (or marked as a tests build), offers to
+ * derive folders from it when any of its classpath directories is not yet
+ * covered by a source root: resolvable classpath directories become source
+ * roots, output locations become excluded. A module whose MAIN sources are
+ * configured still gets the offer for a tests build's separate tree —
+ * breakpoint resolution needs it marked. Same derivation the silent
+ * first-open pass uses ({@link HaxeSourceRootsInitializer}); here the user
+ * decides. Call on the EDT.
  */
 public final class HaxeSourceRootsOffer {
 
@@ -23,9 +27,12 @@ public final class HaxeSourceRootsOffer {
   }
 
   public static void offerFor(@NotNull Project project, @NotNull String containerId, @NotNull VirtualFile file) {
-    boolean moduleWithoutRoots = ReadAction.computeBlocking(
-      () -> HaxeSourceRootsInitializer.INSTANCE.moduleHasNoSourceRoots(project, containerId));
-    if (!moduleWithoutRoots) return;
+    HaxeBuildFileType type = ReadAction.computeBlocking(() -> HaxeBuildFileScanner.detectType(project, file));
+    if (type == null) return;
+    HaxeBuildFile buildFile = new HaxeBuildFile(file, type);
+    List<String> uncovered = ReadAction.computeBlocking(
+      () -> HaxeSourceRootsInitializer.INSTANCE.uncoveredSourceDirs(project, containerId, buildFile));
+    if (uncovered.isEmpty()) return;
 
     int answer = Messages.showYesNoDialog(project,
                                           HaxeBundle.message("haxe.roots.offer.message", file.getName()),
@@ -33,9 +40,6 @@ public final class HaxeSourceRootsOffer {
                                           Messages.getQuestionIcon());
     if (answer != Messages.YES) return;
 
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type != null) {
-      HaxeSourceRootsApplier.getInstance(project).applyFromBuildFileAsync(containerId, new HaxeBuildFile(file, type));
-    }
+    HaxeSourceRootsApplier.getInstance(project).applyFromBuildFileAsync(containerId, buildFile);
   }
 }

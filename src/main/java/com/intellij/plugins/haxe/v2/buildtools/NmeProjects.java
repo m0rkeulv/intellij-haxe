@@ -95,14 +95,6 @@ public final class NmeProjects {
     return new HaxeBuildFileInfo(artifact.target(), artifact.relativeOutput(), raw.defines(), raw.libraries(), raw.classpaths());
   }
 
-  /// Where the nme tool packages a target's runnable artifact, relative to the
-  /// project file: `<output root>/<platform dir>/<app file>/...` (mac
-  /// wraps an .app bundle instead of a plain directory). The output root is the
-  /// nmml's `<app path>`, defaulting to `bin`. Platform dirs follow
-  /// the tool's naming, which suffixes "64" for the 64-bit desktop builds every
-  /// modern mac/linux host produces; a neko build lands in a host-suffixed
-  /// `-neko` dir wrapping the bytecode in a launcher executable. "cpp" builds
-  /// for the host desktop. Target flags without a launchable artifact mapping
   /** The haxe compilation target behind an nme CLI target id ("cpp" is nme's host-desktop word), or null for an unknown id. */
   @Nullable
   public static HaxeTarget targetFor(@NotNull String targetFlag) {
@@ -116,6 +108,14 @@ public final class NmeProjects {
     };
   }
 
+  /// Where the nme tool packages a target's runnable artifact, relative to the
+  /// project file: `<output root>/<platform dir>/<app file>/...` (mac
+  /// wraps an .app bundle instead of a plain directory). The output root is the
+  /// nmml's `<app path>`, defaulting to `bin`. Platform dirs follow
+  /// the tool's naming, which suffixes "64" for the 64-bit desktop builds every
+  /// modern mac/linux host produces; a neko build lands in a host-suffixed
+  /// `-neko` dir wrapping the bytecode in a launcher executable. "cpp" builds
+  /// for the host desktop. Target flags without a launchable artifact mapping
   /// (android, ios, user-configured console targets...) return null.
   @Nullable
   public static TargetArtifact targetArtifact(@NotNull String targetFlag, @NotNull String appFile, @NotNull String outputRoot) {

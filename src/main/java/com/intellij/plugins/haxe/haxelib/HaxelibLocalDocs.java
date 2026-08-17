@@ -28,11 +28,11 @@ public final class HaxelibLocalDocs {
   @Nullable
   public static Path versionDirectory(@NotNull Path repoRoot, @NotNull String name, @NotNull String version) {
     Path libraryRoot = repoRoot.resolve(name);
-    if ("dev".equals(version)) {
+    if (HaxelibSemVer.DEV.equals(version)) {
       return devDirectory(libraryRoot);
     }
-    Path directory = "git".equals(version)
-                     ? libraryRoot.resolve("git")
+    Path directory = HaxelibSemVer.GIT_SCM.equals(version)
+                     ? libraryRoot.resolve(HaxelibSemVer.GIT_SCM)
                      : libraryRoot.resolve(version.replace('.', ','));
     return Files.isDirectory(directory) ? directory : null;
   }
@@ -98,7 +98,7 @@ public final class HaxelibLocalDocs {
    */
   @Nullable
   public static GitCheckout gitCheckout(@NotNull Path repoRoot, @NotNull String name) {
-    Path gitDir = gitMetadataDirectory(repoRoot.resolve(name).resolve("git"));
+    Path gitDir = gitMetadataDirectory(repoRoot.resolve(name).resolve(HaxelibSemVer.GIT_SCM));
     if (gitDir == null) return null;
     String head = readTrimmed(gitDir.resolve("HEAD"));
     if (head == null) return null;

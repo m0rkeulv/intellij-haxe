@@ -279,17 +279,8 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
     if (!started || event.name() == null || event.attributes().containsKey("locationHint")) {
       return text;
     }
-    String buildSuffix = buildFilePath == null ? "" : "?build=" + escapeAttribute(buildFilePath);
+    String buildSuffix = buildFilePath == null ? "" : "?build=" + escapeValue(buildFilePath);
     String beforeClosingBracket = trimmed.substring(0, trimmed.length() - 1);
     return beforeClosingBracket + " locationHint='" + HaxeTestLocator.PROTOCOL + "://" + event.name() + buildSuffix + "']";
-  }
-
-  // TeamCity attribute-value escaping for the appended path (the platform unescapes on parse)
-  @NotNull
-  private static String escapeAttribute(@NotNull String value) {
-    return value.replace("|", "||")
-      .replace("'", "|'")
-      .replace("[", "|[")
-      .replace("]", "|]");
   }
 }

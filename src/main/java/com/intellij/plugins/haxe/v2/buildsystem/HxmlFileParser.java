@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Line-based parser for hxml files, extracting the compilation target, defines and
@@ -36,9 +37,21 @@ public final class HxmlFileParser {
    * The section separators. A trailing token on their line is ONE argument of
    * the FOLLOWING content — an hxml reference or a dot path; the compiler
    * takes the whole rest as a single argument and rejects flags there
-   * (verified live: {@code --next -js out.js} fails as "unknown option").
+   * ({@code --next -js out.js} fails as "unknown option").
    */
-  private static final Set<String> SECTION_FLAGS = Set.of("--next", "--each");
+  private static final String NEXT_SEPARATOR = "--next";
+  private static final String EACH_SEPARATOR = "--each";
+  private static final Set<String> SECTION_FLAGS = Set.of(NEXT_SEPARATOR, EACH_SEPARATOR);
+
+  /** Whether the flag token starts a new {@code --next} compilation section. */
+  public static boolean isNextSeparator(@NotNull String token) {
+    return token.equals(NEXT_SEPARATOR);
+  }
+
+  /** Whether the flag token starts the shared {@code --each} block. */
+  public static boolean isEachSeparator(@NotNull String token) {
+    return token.equals(EACH_SEPARATOR);
+  }
 
   /**
    * The build's EFFECTIVE hxml: every referenced-hxml line replaced by that
@@ -154,13 +167,9 @@ public final class HxmlFileParser {
   @NotNull
   public static HaxeBuildFileInfo parse(@NotNull String content) {
     ParseAccumulator accumulator = new ParseAccumulator();
-    for (String rawLine : content.lines().toList()) {
-      String line = rawLine.trim();
-      if (line.isEmpty() || line.startsWith("#")) continue;
-
-      String[] tokens = line.split("\\s+", 2);
-      String flag = tokens[0];
-      String value = tokens.length > 1 ? tokens[1].trim() : null;
+    for (HxmlLine line : significantLines(content).toList()) {
+      String flag = line.flag();
+      String value = line.value();
 
       if (DEFINE_FLAGS.contains(flag) && value != null) {
         accumulator.defines.add(parseDefine(value));
@@ -179,6 +188,25 @@ public final class HxmlFileParser {
       }
     }
     return accumulator.toInfo();
+  }
+
+  /** One significant hxml line as (flag, value); the value is null for a bare flag. */
+  private record HxmlLine(@NotNull String flag, @Nullable String value) {
+  }
+
+  /** The compiler-visible lines tokenised — the one line grammar {@link #parse} and {@link #mainClass} share. */
+  @NotNull
+  private static Stream<HxmlLine> significantLines(@NotNull String content) {
+    return content.lines()
+      .filter(HxmlFileParser::isSignificantLine)
+      .map(HxmlFileParser::tokeniseLine);
+  }
+
+  @NotNull
+  private static HxmlLine tokeniseLine(@NotNull String rawLine) {
+    // the flag token and the rest of the line, which stays ONE argument
+    String[] tokens = rawLine.trim().split("\\s+", 2);
+    return new HxmlLine(tokens[0], tokens.length > 1 ? tokens[1].trim() : null);
   }
 
   // "name" or "name=value"
@@ -229,18 +257,11 @@ public final class HxmlFileParser {
    */
   @Nullable
   public static String mainClass(@NotNull String content) {
-    for (String rawLine : content.lines().toList()) {
-      String line = rawLine.trim();
-      if (line.isEmpty() || line.startsWith("#")) continue;
-
-      String[] tokens = line.split("\\s+", 2);
-      String flag = tokens[0];
-      String value = tokens.length > 1 ? tokens[1].trim() : null;
-      if (MAIN_FLAGS.contains(flag) && value != null) {
-        return value;
-      }
-    }
-    return null;
+    return significantLines(content)
+      .filter(line -> MAIN_FLAGS.contains(line.flag()) && line.value() != null)
+      .map(HxmlLine::value)
+      .findFirst()
+      .orElse(null);
   }
 
   private static Map<String, HaxeTarget> buildTargetFlagMap() {

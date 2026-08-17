@@ -1,11 +1,8 @@
 package com.intellij.plugins.haxe.v2.testing;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
-import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiMethod;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** tink_unittest marks its test classes with {@code @:asserts} - detection reads that metadata. */
 @DisplayName("Test detection: tink_unittest")
-public class TinkDetectionTest extends HaxeCodeInsightFixtureTestCase {
+public class TinkDetectionTest extends HaxeTestFrameworkDetectionTestBase {
 
   private final TinkFramework framework = new TinkFramework();
 
@@ -78,22 +75,5 @@ public class TinkDetectionTest extends HaxeCodeInsightFixtureTestCase {
     PsiElement byFullName = framework.resolveTestLocation(getProject(), GlobalSearchScope.allScope(getProject()),
                                                           "haxe:test", "cases.TinkStyleTest.addsNumbers");
     assertTrue(byFullName instanceof HaxeMethod, "the inherited name-based resolution still serves haxe:test");
-  }
-
-  private HaxeClass classByQName(String qName) {
-    HaxeClass haxeClass = HaxeResolveUtil.findClassByQName(qName, getPsiManager(),
-                                                           GlobalSearchScope.allScope(getProject()));
-    assertNotNull(haxeClass, "fixture class not found: " + qName);
-    return haxeClass;
-  }
-
-  private HaxeMethod methodOf(HaxeClass haxeClass, String name) {
-    for (PsiMethod method : haxeClass.getMethods()) {
-      if (name.equals(method.getName()) && method instanceof HaxeMethod haxeMethod) {
-        return haxeMethod;
-      }
-    }
-    fail("fixture method not found: " + haxeClass.getQualifiedName() + "." + name);
-    return null;
   }
 }
