@@ -18,10 +18,10 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The dependency-collection half of the library sync, against the layout the
- * crypto project uses: the only build file lives in a tests/ subfolder (so the
- * top-level scan finds nothing and it is registered manually), and its -lib
- * declarations sit behind a chain of hxml includes.
+ * The dependency-collection half of the library sync, against a layout whose
+ * only build file lives in a tests/ subfolder (so the top-level scan finds
+ * nothing and it is registered manually), with its -lib declarations behind
+ * a chain of hxml includes.
  */
 @DisplayName("Build tools: library sync")
 public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
@@ -50,7 +50,7 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("manually added active build file in a subfolder feeds the module dependencies")
   public void testManuallyAddedActiveBuildFileInASubfolderFeedsTheModuleDependencies() {
-    VirtualFile buildFile = registerCryptoShapedTestsBuild();
+    VirtualFile buildFile = registerTestsBuildInSubfolder();
     HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(buildFile.getPath());
 
     assertUtestCollected("-lib utest behind two include levels must be collected");
@@ -61,7 +61,7 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
   public void testSoleBuildFileIsTheImplicitActiveFileForTheSync() {
     // nothing stored: the tree shows the only build file as (Active), and the
     // sync must follow the same rule instead of seeing no active file at all
-    registerCryptoShapedTestsBuild();
+    registerTestsBuildInSubfolder();
 
     assertUtestCollected("the sole known build file must feed the module dependencies without an explicit activation");
   }
@@ -70,7 +70,7 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
   @DisplayName("tests build file libraries join the active build's dependencies")
   public void testTestsBuildFileLibrariesJoinTheActiveBuildsDependencies() {
     VirtualFile mainBuild = myFixture.addFileToProject("build.hxml", "-cp src\n--main Main\n").getVirtualFile();
-    VirtualFile testsBuild = registerCryptoShapedTestsBuild();
+    VirtualFile testsBuild = registerTestsBuildInSubfolder();
 
     HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(mainBuild.getPath());
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile(myFixture.getModule().getName(), testsBuild.getPath());
@@ -78,9 +78,9 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
     assertUtestCollected("the module holds the test sources too - the tests build's libraries must resolve");
   }
 
-  /** The crypto layout: the only build file sits in tests/ (registered manually) with its -libs behind includes. */
+  /** The only build file sits in tests/ (registered manually) with its -libs behind includes. */
   @NotNull
-  private VirtualFile registerCryptoShapedTestsBuild() {
+  private VirtualFile registerTestsBuildInSubfolder() {
     VirtualFile buildFile = myFixture.addFileToProject("tests/compile.hxml", TESTS_HXML).getVirtualFile();
     myFixture.addFileToProject("tests/compile-hl.hxml", HL_HXML);
     myFixture.addFileToProject("tests/compile-each.hxml", EACH_HXML);

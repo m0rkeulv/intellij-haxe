@@ -29,7 +29,7 @@ public final class HaxeDebugAdditions {
       // hxcpp: line tables plus the in-debuggee DAP server compiled in - it
       // connects out at startup guided by the HXCPP_DEBUG_HOST/PORT env vars
       case CPP -> List.of("-debug", "-lib", HXCPP_DEBUG_SERVER_LIB);
-      // remaining targets follow in phase C (eval)
+      // TODO: eval (INTERP) has no debug additions yet
       default -> null;
     };
   }

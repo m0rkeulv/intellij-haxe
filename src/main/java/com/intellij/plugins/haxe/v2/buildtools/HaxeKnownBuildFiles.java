@@ -36,7 +36,7 @@ public final class HaxeKnownBuildFiles {
     return mergeWithStore(project, module.getName(), HaxeBuildFileScanner.scan(module));
   }
 
-  /** Every known build file in the project: all module containers plus the project root. */
+  /** Every known build file in the project: all module containers plus the project root. Call inside a read action. */
   @NotNull
   public static List<HaxeBuildFile> all(@NotNull Project project) {
     Map<String, HaxeBuildFile> byPath = new LinkedHashMap<>();
@@ -56,8 +56,9 @@ public final class HaxeKnownBuildFiles {
   /**
    * The project's EFFECTIVE active build file: the stored choice, or the sole
    * known build file when none is stored (the rule behind the tree's (Active)
-   * badge). The known-files sweep runs only in the unstored case, so a stored
-   * choice keeps this cheap enough for hot paths.
+   * badge). A stored choice is a plain store read; the unstored case runs the
+   * full known-files sweep (module scans, VFS lookups) — call inside a read
+   * action, and never from a per-candidate hot path.
    */
   @Nullable
   public static String effectiveActivePath(@NotNull Project project) {

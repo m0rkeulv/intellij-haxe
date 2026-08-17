@@ -17,8 +17,9 @@ import java.util.stream.Stream;
 /**
  * Line-based parser for hxml files, extracting the compilation target, defines and
  * haxelib dependencies. Referenced hxml files (a bare {@code common.hxml} line) are
- * merged first through {@link #flatten}; a {@code --next} chain splits into
- * isolated per-compilation blocks through {@link #sections}, each parsed on its own.
+ * merged first through {@link #flatten}; a {@code --next} chain splits into isolated
+ * per-compilation blocks through {@code HaxeBuildFileInspector.sectionContents}
+ * (PSI-driven, so it cannot live here), each parsed on its own.
  */
 public final class HxmlFileParser {
 
@@ -87,6 +88,8 @@ public final class HxmlFileParser {
                                       @NotNull Set<String> visited,
                                       @NotNull StringBuilder out) {
     String line = rawLine.trim();
+    // the flag token and the rest of the line; a separator's trailing token
+    // belongs to the FOLLOWING section
     String[] tokens = line.split("\\s+", 2);
     if (SECTION_FLAGS.contains(tokens[0]) && tokens.length > 1) {
       out.append(tokens[0]).append('\n');
@@ -279,7 +282,7 @@ public final class HxmlFileParser {
     return Map.copyOf(map);
   }
 
-  /** One parse run's mutable state, shared across included files (first target flag wins). */
+  /** One parse run's mutable state (first target flag wins). */
   private static final class ParseAccumulator {
     final List<HaxeDefine> defines = new ArrayList<>();
     final List<HaxeLibDependency> libraries = new ArrayList<>();

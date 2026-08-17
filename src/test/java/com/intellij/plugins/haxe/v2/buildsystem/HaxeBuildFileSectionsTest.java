@@ -54,8 +54,8 @@ public class HaxeBuildFileSectionsTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("each section expands its includes independently")
   public void testEachSectionExpandsItsIncludesIndependently() {
-    // a file EVERY section includes must expand into every one of them - a
-    // whole-file flatten's cycle guard used to swallow the later expansions
+    // a file EVERY section includes must expand into every one of them, not
+    // just the first
     addHxml("shared/common.hxml", "-lib utest\n");
     addHxml("shared/neko.hxml", "common.hxml\n-neko bin/app.n\n");
     addHxml("shared/js.hxml", "common.hxml\n-js bin/app.js\n");
@@ -106,7 +106,7 @@ public class HaxeBuildFileSectionsTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("a lone trailing next produces no section")
   public void testALoneTrailingNextProducesNoSection() {
-    // the compiler silently skips an empty section - verified live
+    // the compiler silently skips an empty section
     VirtualFile root = addHxml("trailing/build.hxml", """
       -js bin/app.js
       --next

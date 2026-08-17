@@ -22,7 +22,8 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Run/Debug gutter markers on test classes and methods. A marker appears only
- * when a MARKED tests build owns the file (see {@link HaxeTestGutterContext})
+ * when a marked-or-conventional tests build owns the file (see
+ * {@link HaxeTestGutterContext})
  * and that build's framework recognizes the element - class markers run the
  * suite through the framework's single-suite template, method markers the one
  * test (frameworks without a method mechanism show class markers only).

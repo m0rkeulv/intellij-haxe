@@ -67,7 +67,7 @@ public class HaxeMethodStubFactory implements StubElementFactory<HaxeMethodStub,
   private static int buildKeywordFlags(@NotNull HaxeMethod psi) {
     int flags = 0;
     if (psi.isStatic())         flags |= HaxeMethodStub.KEYWORD_STATIC;
-    //Note: we can only check if declared as we can not access any other files while indexing.
+    // only the DECLARED visibility: indexing cannot read other files
     if (psi.isDeclaredPublic()) flags |= HaxeMethodStub.KEYWORD_PUBLIC;
     if (psi.isOverride())       flags |= HaxeMethodStub.KEYWORD_OVERRIDE;
     if (psi.isAbstract())       flags |= HaxeMethodStub.KEYWORD_ABSTRACT;

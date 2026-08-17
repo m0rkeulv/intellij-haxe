@@ -46,7 +46,7 @@ import org.junit.jupiter.api.Timeout;
  *
  * Skips when node/adapter/chromium/haxe (with the utest haxelib) are missing.
  */
-@DisplayName("Browser debugger: browser test console capture (live)")
+@DisplayName("Browser debugger: test capture (live)")
 public class BrowserTestCaptureLiveProbe {
   private static final long TIMEOUT = 15_000;
 

@@ -18,8 +18,9 @@ import org.jetbrains.annotations.NotNull;
  * kind — each version node is visible while its kind's toggle is on, and a
  * library node stays only while at least one of its versions would show, so
  * hiding "not installed" prunes the download rows under installed libraries
- * and drops catalog-only ones entirely — plus the one narrowing restriction
- * (updates only). Rendered as an always-visible VERTICAL strip of toggle
+ * and drops catalog-only ones entirely — plus the two narrowing restrictions
+ * (updates available; current selection behind the latest release).
+ * Rendered as an always-visible VERTICAL strip of toggle
  * buttons beside the tree, so the applied set is readable at a glance.
  */
 final class HaxelibExplorerFilters {

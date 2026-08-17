@@ -126,9 +126,8 @@ public class RunControlIT {
   /**
    * A thread spawned AFTER startup self-enables debugging when it attaches
    * (THREAD_CREATED runs on the new thread), so a breakpoint inside worker
-   * code actually hits — it used to verify against the global tables but
-   * never fire, which is how nme apps (whole application loop on a spawned
-   * thread) lost every breakpoint.
+   * code actually hits. nme runs its whole application loop on a spawned
+   * thread, so this is the path its breakpoints take.
    */
   @Test
   @DisplayName("breakpoint in worker code hits")

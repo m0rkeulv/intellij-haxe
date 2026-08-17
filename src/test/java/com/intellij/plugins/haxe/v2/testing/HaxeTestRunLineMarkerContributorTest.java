@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * whole chain - ownership resolution, framework detection and the
  * contributor's PSI shape.
  */
-@DisplayName("Test runner: gutter markers")
+@DisplayName("Test runner: run line marker contributor")
 public class HaxeTestRunLineMarkerContributorTest extends HaxeCodeInsightFixtureTestCase {
 
   @Override

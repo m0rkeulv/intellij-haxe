@@ -18,11 +18,12 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * The directories a build's sources come from: the build file's own directory
- * plus the resolved {@code -cp} entries of its selected section (lime/nme
- * resolve through their effective hxml). Name-based lookups scope themselves
- * to these — test-result navigation and debugger source mapping would
- * otherwise pick a same-named file from a SIBLING project in the same IDE
- * project.
+ * plus its declared classpaths — hxml {@code -cp} entries of the selected
+ * section; for the lime family the raw {@code <source>}/{@code <classpath>}
+ * entries of the project xml (no tool run, so haxelib-provided paths are not
+ * seen). Name-based lookups scope themselves to these — test-result
+ * navigation and debugger source mapping would otherwise pick a same-named
+ * file from a SIBLING project in the same IDE project.
  */
 public final class HaxeBuildClasspaths {
 

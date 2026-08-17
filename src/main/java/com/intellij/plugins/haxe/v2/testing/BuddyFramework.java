@@ -94,8 +94,8 @@ public final class BuddyFramework implements HaxeTestFramework {
 
   @Override
   public @NotNull List<String> filterArgs(@Nullable String pattern) {
-    // TODO Phase 2: buddy filters via @include metadata in code, not a
-    //  define - single-spec runs need a source-level strategy
+    // TODO: single-spec buddy runs - buddy filters via @include metadata in
+    //  code, not a define, so they need a source-level strategy
     return List.of();
   }
 

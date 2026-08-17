@@ -45,8 +45,10 @@ import org.junit.jupiter.api.Timeout;
  *       launch (fire-and-forget attach, startDebugging hand-over);</li>
  *   <li>{@code continueOnAttach} releases the --inspect-brk hold after
  *       configurationDone — breakpoints installed first stop the run;</li>
- *   <li>{@code resolveSourceMapLocations=null} lets the map of an artifact
- *       OUTSIDE the cwd resolve (the gutter single-run temp root);</li>
+ *   <li>{@code resolveSourceMapLocations=["**"]} lets the map of an artifact
+ *       OUTSIDE the cwd resolve (the gutter single-run temp root) — null is
+ *       NOT equivalent: the DAP encoder drops null values, and an absent
+ *       field keeps the workspace-folder default;</li>
  *   <li>the debuggee's trace output stays on ITS process stdout — the SM
  *       test console needs no output replay from the debug connection.</li>
  * </ul>
@@ -127,8 +129,8 @@ public class NodeAttachLiveProbe {
   public void attachStopsOnAHaxeBreakpointAndOutputStaysOnStdout() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     // the artifact deliberately lives OUTSIDE the debuggee's cwd, replicating
-    // the gutter single-run temp root - resolveSourceMapLocations=null is
-    // what makes its map resolvable
+    // the gutter single-run temp root - the resolveSourceMapLocations
+    // match-all glob is what makes its map resolvable
     Path fixture = Files.createTempDirectory("haxe-node-attach");
     Path cwd = Files.createTempDirectory("haxe-node-cwd");
     Files.writeString(fixture.resolve("NodeMain.hx"), NODE_MAIN_HX);

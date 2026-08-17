@@ -10,9 +10,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Applies one build file's source/excluded roots to its module on demand —
- * the user-consented counterpart of {@link HaxeSourceRootsInitializer}'s
- * silent first-open pass, used by the add-build-file actions after the user
- * accepts the offer.
+ * the user-consented counterpart of [HaxeSourceRootsInitializer]'s silent
+ * first-open pass, used by the add-build-file actions after the user accepts
+ * the offer.
  */
 @Service(Service.Level.PROJECT)
 class HaxeSourceRootsApplier(private val project: Project, private val scope: CoroutineScope) {

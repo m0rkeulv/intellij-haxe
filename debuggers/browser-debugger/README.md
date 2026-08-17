@@ -115,6 +115,31 @@ the details.
   has no source-map entry and js-debug bails); any following mapped
   statement restores the smart-step chooser.
 
+## Node test lane (pinned by `NodeAttachLiveProbe`)
+
+The gutter/test runs of js tests spawn the debuggee themselves
+(`node --inspect-brk=<port> <tests.js>`) and ATTACH js-debug to the
+inspector port, so the test protocol stays on the real process stdout:
+
+- `type=pwa-node` + `request=attach` runs the same parent/child
+  `startDebugging` dance as the browser launch (fire-and-forget attach,
+  deferred response).
+- `continueOnAttach: true` is what releases the `--inspect-brk` hold after
+  `configurationDone` — breakpoints installed first stop the run.
+- `resolveSourceMapLocations` must be `["**"]`, not null: the DAP encoder
+  drops null values, and an absent field keeps js-debug's workspace-folder
+  default, so the map of an artifact outside the cwd (the gutter
+  single-run's temp root) never resolves.
+
+## Browser test lane (pinned by `BrowserTestCaptureLiveProbe`)
+
+Plain (non-debug) browser-hosted test runs have no debuggee process: the
+backend serves and launches the page, a synthetic process handler drives
+the minimal DAP handshake, and the page's console output — arriving as DAP
+output events — is replayed into the handler's stdout where the SM test
+console parses it. The run ends on the injected reporter's completion
+sentinel (a page has no exit code).
+
 ## Diagnostics
 
 `DapConsoleTracer.ENABLED` (a code constant, off by default)
@@ -136,7 +161,7 @@ The adapters have their own verbose logs too: js-debug via the launch config
 | `src/main/java/.../browser/BrowserAdapterLauncher.java` | spawns the adapters on node, parses their port announcements |
 | `src/main/java/.../browser/ContentHttpServer.java` | the serve-mode loopback server + the firefox first-page refresh |
 | `src/main/java/.../browser/JsDebugSessionMux.java` | the Chromium multi-session → one-session multiplexer (workers as threads) |
-| `src/test/java/.../browser/` | live probes against the real adapters/browsers (`FirefoxAdapterLiveProbe`, `JsDebugAdapterLiveProbe`) + unit tests |
+| `src/test/java/.../browser/` | live probes against the real adapters/browsers (`FirefoxAdapterLiveProbe`, `JsDebugAdapterLiveProbe`, `NodeAttachLiveProbe`, `BrowserTestCaptureLiveProbe`) + unit tests |
 
 The IDE-side wiring (run configuration, editor, runners, `BrowserDebugBackend`)
 lives in the main plugin under

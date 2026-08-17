@@ -7,28 +7,29 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** The one shared answer to "does a debugger lane exist" - program and test actions both gate on it. */
-@DisplayName("Run config: debug support")
+@DisplayName("Run configurations: debug support")
 public class HaxeDebugSupportTest {
 
   @Test
   @DisplayName("program sessions debug hl cpp js and flash")
-  public void programSessionsDebugHlCppJsAndFlash() {
+  public void testProgramSessionsDebugHlCppJsAndFlash() {
     assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.HL));
     assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.CPP));
     assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.JAVA_SCRIPT));
     assertTrue(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.FLASH));
+    assertFalse(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.INTERP), "programs have no interp lane");
   }
 
   @Test
   @DisplayName("neko has no debugger in either session kind")
-  public void nekoHasNoDebuggerInEitherSessionKind() {
+  public void testNekoHasNoDebuggerInEitherSessionKind() {
     assertFalse(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.NEKO));
     assertFalse(HaxeDebugSupport.supportsTestDebug(HaxeTarget.NEKO));
   }
 
   @Test
   @DisplayName("test sessions add interp flash and node js")
-  public void testSessionsAddInterpFlashAndNodeJs() {
+  public void testTestSessionsAddInterpFlashAndNodeJs() {
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.INTERP));
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.HL));
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.CPP));
@@ -36,12 +37,11 @@ public class HaxeDebugSupportTest {
                "fdb hosts flash tests and the test console parses its relayed traces");
     assertTrue(HaxeDebugSupport.supportsTestDebug(HaxeTarget.JAVA_SCRIPT),
                "js tests run under node with the js-debug adapter attached");
-    assertFalse(HaxeDebugSupport.supportsProgramDebug(HaxeTarget.INTERP), "programs have no interp lane");
   }
 
   @Test
   @DisplayName("null target is never debuggable")
-  public void nullTargetIsNeverDebuggable() {
+  public void testNullTargetIsNeverDebuggable() {
     assertFalse(HaxeDebugSupport.supportsProgramDebug(null));
     assertFalse(HaxeDebugSupport.supportsTestDebug(null));
   }

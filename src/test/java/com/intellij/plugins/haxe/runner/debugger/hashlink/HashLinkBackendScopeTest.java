@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
  * source directories — a same-named sibling-project file would otherwise bind
  * into this debuggee.
  */
-@DisplayName("Debugger: hash link backend scope")
+@DisplayName("Debugger: hashlink backend scope")
 public class HashLinkBackendScopeTest {
 
   private static HashLinkBackend backend(List<String> sourceDirectories) {
