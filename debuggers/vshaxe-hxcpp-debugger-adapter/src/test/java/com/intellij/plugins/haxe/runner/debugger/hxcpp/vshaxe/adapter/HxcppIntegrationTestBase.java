@@ -178,12 +178,16 @@ abstract class HxcppIntegrationTestBase {
     return require(request);
   }
 
-  protected void sendContinue(int threadId) throws Exception {
+  protected static ContinueRequest continueRequest(int threadId) {
     ContinueArguments arguments = new ContinueArguments();
     arguments.setThreadId(threadId);
     ContinueRequest request = new ContinueRequest();
     request.setArguments(arguments);
-    require(request);
+    return request;
+  }
+
+  protected void sendContinue(int threadId) throws Exception {
+    require(continueRequest(threadId));
   }
 
   /** Sends the request and fails with the server's error message rather than a cast error. */

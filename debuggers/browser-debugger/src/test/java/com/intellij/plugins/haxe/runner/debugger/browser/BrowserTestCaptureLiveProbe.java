@@ -15,15 +15,11 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.OutputEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,14 +47,14 @@ import org.junit.jupiter.api.Timeout;
 public class BrowserTestCaptureLiveProbe {
   private static final long TIMEOUT = 15_000;
 
-  private static final String CASE_HX = """
+  private static final String PROBE_CASE_HX_SOURCE = """
     class ProbeCase extends utest.Test {
     	function testPasses() {
     		utest.Assert.isTrue(true);
     	}
     }
     """;
-  private static final String MAIN_HX = """
+  private static final String PROBE_MAIN_HX_SOURCE = """
     class ProbeMain {
     	static function main() {
     		utest.UTest.run([new ProbeCase()]);
@@ -118,8 +114,8 @@ public class BrowserTestCaptureLiveProbe {
   public void utestReporterStreamsTheProtocolAndTheCompletionSentinelThroughThePageConsole() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-browser-tests");
-    Files.writeString(fixture.resolve("ProbeCase.hx"), CASE_HX);
-    Files.writeString(fixture.resolve("ProbeMain.hx"), MAIN_HX);
+    Files.writeString(fixture.resolve("ProbeCase.hx"), PROBE_CASE_HX_SOURCE);
+    Files.writeString(fixture.resolve("ProbeMain.hx"), PROBE_MAIN_HX_SOURCE);
     Files.writeString(fixture.resolve("index.html"), LiveProbeUtil.INDEX_HTML);
     compileWithReporter(fixture);
 
@@ -132,19 +128,13 @@ public class BrowserTestCaptureLiveProbe {
 
   /** The planner's utest reporting set: teamcity defines + the reporter classpath + the runner patch. */
   private static void compileWithReporter(Path fixture) throws Exception {
-    Process haxe = new ProcessBuilder(
-      "haxe", "-cp", fixture.toString(), "-lib", "utest",
+    List<String> reporterArgs = List.of(
+      "-lib", "utest",
       "-cp", utestReporterRoot().toString(),
       "-cp", sharedReporterRoot().toString(),
       "-D", "teamcity", "-D", "teamcity_suite_name=Probe",
-      "--macro", "intellij_utest.Macro.init()",
-      "-main", "ProbeMain", "-js", fixture.resolve("app.js").toString(), "-debug")
-      .redirectErrorStream(true)
-      .start();
-    String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    if (!haxe.waitFor(60, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
-      throw new AssertionError("fixture compile failed:\n" + output);
-    }
+      "--macro", "intellij_utest.Macro.init()");
+    LiveProbeUtil.compileHaxeJs(fixture, "ProbeMain", "app.js", 60, reporterArgs);
   }
 
   /** Parent handshake, child session, configurationDone, then output capture until the sentinel (or timeout). */

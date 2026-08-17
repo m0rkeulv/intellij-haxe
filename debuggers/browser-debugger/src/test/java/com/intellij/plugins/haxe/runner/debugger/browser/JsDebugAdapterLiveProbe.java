@@ -1,5 +1,11 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.BP_LINE;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.LOAD_BP_LINE;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_LOAD_HX_NAME;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_MAIN_HX_NAME;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_LOAD_HX_SOURCE;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_MAIN_HX_SOURCE;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.assertStoppedInHx;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitStartDebugging;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitStopped;
@@ -67,26 +73,8 @@ public class JsDebugAdapterLiveProbe {
   private static final long TIMEOUT = 15_000;
 
   // fixture file names; the .hx names come back in reported breakpoint source paths
-  private static final String MAIN_HX = "WebMain.hx";
-  private static final String SMART_HX = "WebSmart.hx";
-  private static final String WORKER_HX = "WorkerMain.hx";
-
-  private static final int BP_LINE = 5;
-  private static final String WEB_MAIN_HX = """
-    class WebMain {
-    	static var counter = 0;
-
-    	static function tick() {
-    		counter++; // BP_LINE = 5
-    		var label = "tick-" + counter;
-    		js.Browser.console.log(label);
-    	}
-
-    	static function main() {
-    		js.Browser.window.setInterval(tick, 250);
-    	}
-    }
-    """;
+  private static final String WEB_SMART_HX_NAME = "WebSmart.hx";
+  private static final String WORKER_MAIN_HX_NAME = "WorkerMain.hx";
 
   private Process adapter;
   private int adapterPort;
@@ -125,7 +113,7 @@ public class JsDebugAdapterLiveProbe {
 
   private static Path buildFixture() throws Exception {
     Path dir = Files.createTempDirectory("haxe-jsdbg-probe");
-    Files.writeString(dir.resolve(MAIN_HX), WEB_MAIN_HX);
+    Files.writeString(dir.resolve(WEB_MAIN_HX_NAME), WEB_MAIN_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(dir, "WebMain");
     return dir;
   }
@@ -158,16 +146,6 @@ public class JsDebugAdapterLiveProbe {
            && thread.getName() != null && thread.getName().contains("worker.js");
   }
 
-  private static final int LOAD_BP_LINE = 3;
-  private static final String WEB_LOAD_HX = """
-    class WebLoad {
-    	static function main() {
-    		var marker = "before"; // LOAD_BP_LINE = 3
-    		js.Browser.console.log(marker + "-loaded");
-    	}
-    }
-    """;
-
   /**
    * Load-time code (main body, runs during page load) — the case the firefox
    * adapter needed the refresh-once trick for. js-debug pre-registers
@@ -181,10 +159,10 @@ public class JsDebugAdapterLiveProbe {
   public void loadTimeBreakpointHitsOnFirstLoad() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-jsdbg-load");
-    Files.writeString(fixture.resolve("WebLoad.hx"), WEB_LOAD_HX);
+    Files.writeString(fixture.resolve(WEB_LOAD_HX_NAME), WEB_LOAD_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(fixture, "WebLoad");
 
-    StackFrame top = driveSessionToStop(fixture, "WebLoad.hx", LOAD_BP_LINE);
+    StackFrame top = driveSessionToStop(fixture, WEB_LOAD_HX_NAME, LOAD_BP_LINE);
     assertTrue(top.getSource().getPath().endsWith("WebLoad.hx") && top.getLine() == LOAD_BP_LINE, "stopped in the load-time .hx line: " + top.getSource().getPath() + ":" + top.getLine());
   }
 
@@ -192,7 +170,7 @@ public class JsDebugAdapterLiveProbe {
   // smart-step material; F2_BODY_LINE is inside f2.
   private static final int CALLS_LINE = 8;
   private static final int F2_BODY_LINE = 4;
-  private static final String WEB_SMART_HX = """
+  private static final String WEB_SMART_HX_SOURCE = """
     class WebSmart {
     	static function f1(v:Int):Int { return v + 1; }
 
@@ -221,7 +199,7 @@ public class JsDebugAdapterLiveProbe {
   public void stepInTargetsAndRuntimeCompletions() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-jsdbg-smart");
-    Files.writeString(fixture.resolve(SMART_HX), WEB_SMART_HX);
+    Files.writeString(fixture.resolve(WEB_SMART_HX_NAME), WEB_SMART_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(fixture, "WebSmart");
 
     atStop = (child, top) -> {
@@ -289,7 +267,7 @@ public class JsDebugAdapterLiveProbe {
       assertTrue(landedTop.getLine() == F2_BODY_LINE, "landed in f2's body line, got line " + landedTop.getLine());
     };
     try {
-      driveSessionToStop(fixture, SMART_HX, CALLS_LINE);
+      driveSessionToStop(fixture, WEB_SMART_HX_NAME, CALLS_LINE);
     } finally {
       atStop = null;
     }
@@ -310,7 +288,7 @@ public class JsDebugAdapterLiveProbe {
   public void stepInTargetsUnderTheIdeExactSequence() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-jsdbg-idelike");
-    Files.writeString(fixture.resolve(SMART_HX), WEB_SMART_HX);
+    Files.writeString(fixture.resolve(WEB_SMART_HX_NAME), WEB_SMART_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(fixture, "WebSmart");
 
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
@@ -340,7 +318,7 @@ public class JsDebugAdapterLiveProbe {
         assertTrue(initialized, "child initialized");
 
         // flushAll
-        SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, SMART_HX, CALLS_LINE);
+        SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, WEB_SMART_HX_NAME, CALLS_LINE);
         assertTrue(child.sendRequest(setBreakpoints, TIMEOUT).isSuccess(), "child setBreakpoints");
 
         // exception filters as the IDE's exceptionFiltersRequest would send
@@ -365,11 +343,7 @@ public class JsDebugAdapterLiveProbe {
         Response stResponse = child.sendRequest(stackTrace, TIMEOUT);
         StackFrame top = ((StackTraceResponse)stResponse).getBody().getStackFrames().get(0);
 
-        // --- staged stepInTargets: which IDE behaviour kills the targets? ---
-        probe("ide-seq top frame id=" + top.getId());
-        int n1 = stepInTargetsCount(child, top.getId(), "1:immediately");
-
-        // stage 2: hydrate the views like the IDE (scopes + variables)
+        // hydrate the views like the IDE (scopes + variables) before stepping on
         Response scResponse = child.sendRequest(scopesRequest(top.getId()), TIMEOUT);
 
         if (scResponse instanceof ScopesResponse okScopes
@@ -377,24 +351,9 @@ public class JsDebugAdapterLiveProbe {
           int reference = okScopes.getBody().getScopes().get(0).getVariablesReference();
           child.sendRequest(variablesRequest(reference), TIMEOUT);
         }
-        int n2 = stepInTargetsCount(child, top.getId(), "2:after scopes+variables");
 
-        // stage 3: a SECOND stackTrace (frames view refresh) - do ids change?
-        Response stResponse2 = child.sendRequest(stackTrace, TIMEOUT);
-        StackFrame top2 = ((StackTraceResponse)stResponse2).getBody().getStackFrames().get(0);
-        probe("ide-seq second stackTrace top id=" + top2.getId() + " (was " + top.getId() + ")");
-        int n3 = stepInTargetsCount(child, top2.getId(), "3:fresh frame id");
-        int n3old = stepInTargetsCount(child, top.getId(), "3b:old frame id after re-stackTrace");
-
-        // stage 4: wall time
-        Thread.sleep(4_000);
-        int n4 = stepInTargetsCount(child, top2.getId(), "4:after 4s delay");
-
-        probe("ide-seq counts: immediate=" + n1 + " hydrated=" + n2
-              + " freshId=" + n3 + " oldIdAfterRefresh=" + n3old + " delayed=" + n4);
-        assertTrue(n1 >= 2, "immediate stepInTargets must find the calls");
-
-        // stage 5: SECOND pause (the user's failing case had frameId=3 - ids
+        // first-stop targets are the plain probe's pin; the unique pin here is
+        // the SECOND pause (the user's failing case had frameId=3 - ids
         // increment across pauses, so their stop was not the first). continue,
         // let the ticking fixture re-hit the same line, ask again.
         assertTrue(child.sendRequest(continueRequest(threadId), TIMEOUT).isSuccess(), "continue");
@@ -421,7 +380,7 @@ public class JsDebugAdapterLiveProbe {
   // WebClick.hx line numbers are load-bearing: CLICK_CALLS_LINE is the
   // two-call line INSIDE A DOM EVENT HANDLER - the user's exact failing case.
   private static final int CLICK_CALLS_LINE = 8;
-  private static final String WEB_CLICK_HX = """
+  private static final String WEB_CLICK_HX_SOURCE = """
     class WebClick {
     	static function abc(i:Int):Int { return i; }
 
@@ -447,7 +406,7 @@ public class JsDebugAdapterLiveProbe {
   // (`abc(cde(1));`) - same as the user's. Same timer delivery as the
   // working fixture, only the statement shape differs.
   private static final int EXPR_CALLS_LINE = 9;
-  private static final String WEB_EXPR_HX = """
+  private static final String WEB_EXPR_HX_SOURCE = """
     class WebExpr {
     	static function f1(v:Int):Int { return v + 1; }
 
@@ -471,7 +430,7 @@ public class JsDebugAdapterLiveProbe {
   public void stepInTargetsOnABareExpressionStatement() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-jsdbg-expr");
-    Files.writeString(fixture.resolve("WebExpr.hx"), WEB_EXPR_HX);
+    Files.writeString(fixture.resolve("WebExpr.hx"), WEB_EXPR_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(fixture, "WebExpr");
 
     final int[] targetsAtStop = {-2};
@@ -488,7 +447,7 @@ public class JsDebugAdapterLiveProbe {
 
   // Same fixture with the call line as the LAST statement (next line is the
   // unmapped closing brace) - the shape that breaks js-debug's target lookup.
-  private static final String WEB_CLICK_LAST_HX = WEB_CLICK_HX.replace("\tx++;\n", "");
+  private static final String WEB_CLICK_LAST_HX_SOURCE = WEB_CLICK_HX_SOURCE.replace("\tx++;\n", "");
 
   /**
    * UPSTREAM LIMITATION, pinned: when the multi-call line is the LAST
@@ -506,7 +465,7 @@ public class JsDebugAdapterLiveProbe {
   public void stepInTargetsKnownLimitationOnLastStatementOfFunction() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-jsdbg-lastline");
-    Files.writeString(fixture.resolve("WebClick.hx"), WEB_CLICK_LAST_HX);
+    Files.writeString(fixture.resolve("WebClick.hx"), WEB_CLICK_LAST_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(fixture, "WebClick");
 
     final int[] targetsAtStop = {-2};
@@ -531,7 +490,7 @@ public class JsDebugAdapterLiveProbe {
   public void stepInTargetsInsideADomEventHandler() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-jsdbg-click");
-    Files.writeString(fixture.resolve("WebClick.hx"), WEB_CLICK_HX);
+    Files.writeString(fixture.resolve("WebClick.hx"), WEB_CLICK_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(fixture, "WebClick");
 
     final int[] targetsAtStop = {-2};
@@ -550,7 +509,7 @@ public class JsDebugAdapterLiveProbe {
   // WorkerMain.hx line numbers are load-bearing: WORKER_BP_LINE ticks forever,
   // so a breakpoint replayed slightly after the worker attaches still hits.
   private static final int WORKER_BP_LINE = 4;
-  private static final String WORKER_MAIN_HX = """
+  private static final String WORKER_MAIN_HX_SOURCE = """
     class WorkerMain {
     	static var counter = 0;
     	static function tick() {
@@ -562,7 +521,7 @@ public class JsDebugAdapterLiveProbe {
     	}
     }
     """;
-  private static final String WEB_PAGE_HX = """
+  private static final String WEB_PAGE_HX_SOURCE = """
     class WebPage {
     	static var beats = 0;
     	static function heartbeat() {
@@ -595,8 +554,8 @@ public class JsDebugAdapterLiveProbe {
   public void workerAppearsAsAdditionalThreadThroughTheMux() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
     Path fixture = Files.createTempDirectory("haxe-jsdbg-worker");
-    Files.writeString(fixture.resolve("WebPage.hx"), WEB_PAGE_HX);
-    Files.writeString(fixture.resolve(WORKER_HX), WORKER_MAIN_HX);
+    Files.writeString(fixture.resolve("WebPage.hx"), WEB_PAGE_HX_SOURCE);
+    Files.writeString(fixture.resolve(WORKER_MAIN_HX_NAME), WORKER_MAIN_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(fixture, "WebPage");
     LiveProbeUtil.compileHaxeJs(fixture, "WorkerMain", "worker.js");
 
@@ -627,7 +586,7 @@ public class JsDebugAdapterLiveProbe {
 
         // breakpoint in the WORKER's source while no worker session exists yet:
         // the mux must cache it and replay it into the worker as it attaches
-        SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, WORKER_HX, WORKER_BP_LINE);
+        SetBreakpointsRequest setBreakpoints = breakpointsRequest(fixture, WORKER_MAIN_HX_NAME, WORKER_BP_LINE);
         Response bpResponse = mux.sendRequest(setBreakpoints, TIMEOUT);
         assertTrue(bpResponse.isSuccess(), "setBreakpoints via mux");
         var bpResult = ((SetBreakpointsResponse)
@@ -690,120 +649,8 @@ public class JsDebugAdapterLiveProbe {
   @DisplayName("full session with child via start debugging")
   public void fullSessionWithChildViaStartDebugging() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
-    Path fixture = buildFixture();
-
-    try (ContentHttpServer content = new ContentHttpServer(fixture)) {
-      content.setRequestListener(line -> System.out.println("[server] " + line));
-
-      // --- parent session ---
-      Response initResponse = parent.sendRequest(initializeRequest("chrome"), TIMEOUT);
-      probe("parent initialize success=" + initResponse.isSuccess());
-      assertTrue(initResponse.isSuccess(), "parent initialize");
-
-      Map<String, Object> launchConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
-
-      // js-debug may hold the launch response until configurationDone, so the
-      // launch goes out on a helper thread rather than blocking the sequence
-      CompletableFuture<Response> launchFuture = new CompletableFuture<>();
-      Thread launcher = new Thread(() -> {
-        try {
-          launchFuture.complete(parent.sendRequest(ConfiguredLaunchRequest.of(launchConfig), 20_000));
-        } catch (Exception e) {
-          launchFuture.completeExceptionally(e);
-        }
-      }, "probe-launch");
-      launcher.setDaemon(true);
-      launcher.start();
-
-      // drive the parent: initialized -> breakpoints + configurationDone;
-      // meanwhile watch for the startDebugging reverse request
-      StartDebuggingRequest startDebugging = null;
-      boolean parentConfigured = false;
-      long deadline = System.currentTimeMillis() + 20_000;
-
-      while (System.currentTimeMillis() < deadline && startDebugging == null) {
-        Event event = parent.pollEvent(100);
-        if (event != null) {
-          probe("parent event '" + event.getEvent() + "'"
-                + (event instanceof OutputEvent o ? " :: " + o.getBody().getOutput() : ""));
-          if (event instanceof InitializedEvent && !parentConfigured) {
-            parentConfigured = true;
-            probe("parent setBreakpoints success=" + parent.sendRequest(breakpointsRequest(fixture, MAIN_HX, BP_LINE), TIMEOUT).isSuccess());
-            probe("parent configurationDone success=" + parent.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess());
-          }
-        }
-        Request incoming = parent.pollIncomingRequest(50);
-        if (incoming != null) {
-          probe("parent REVERSE request '" + incoming.getCommand() + "'");
-          if (incoming instanceof StartDebuggingRequest start) {
-            startDebugging = start;
-            parent.respond(incoming, true);
-          } else {
-            parent.respond(incoming, true);
-          }
-        }
-        if (launchFuture.isDone() && !launchFuture.isCompletedExceptionally()) {
-          // just report once - the loop condition is the reverse request
-        }
-      }
-      probe("launch settled=" + launchFuture.isDone() + " startDebugging=" + (startDebugging != null));
-      assertNotNull(startDebugging, "no startDebugging reverse request from js-debug");
-      Map<String, Object> childConfig = startDebugging.getArguments().getConfiguration();
-      probe("child config keys=" + childConfig.keySet());
-
-      // --- child session (second connection, config from the reverse request) ---
-      try (DapClient child = connectWithRetry(adapterPort)) {
-        assertTrue(child.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "child initialize");
-
-        CompletableFuture<Response> childLaunchFuture = new CompletableFuture<>();
-        Thread childLauncher = new Thread(() -> {
-          try {
-            childLaunchFuture.complete(child.sendRequest(ConfiguredLaunchRequest.of(childConfig), 20_000));
-          } catch (Exception e) {
-            childLaunchFuture.completeExceptionally(e);
-          }
-        }, "probe-child-launch");
-        childLauncher.setDaemon(true);
-        childLauncher.start();
-
-        boolean childConfigured = false;
-        StoppedEvent stopped = null;
-        deadline = System.currentTimeMillis() + 20_000;
-        while (System.currentTimeMillis() < deadline && stopped == null) {
-          Event event = child.pollEvent(100);
-          if (event == null) {
-            continue;
-          }
-          probe("child event '" + event.getEvent() + "'"
-                + (event instanceof StoppedEvent s ? " reason=" + s.getBody().getReason() : ""));
-          if (event instanceof InitializedEvent && !childConfigured) {
-            childConfigured = true;
-            probe("child launch settled BEFORE configuration: " + childLaunchFuture.isDone());
-            probe("child setBreakpoints success=" + child.sendRequest(breakpointsRequest(fixture, MAIN_HX, BP_LINE), TIMEOUT).isSuccess());
-            probe("child configurationDone success=" + child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT).isSuccess());
-            probe("child launch settled AFTER configurationDone: " + childLaunchFuture.isDone());
-          }
-          if (event instanceof StoppedEvent s) {
-            stopped = s;
-          }
-        }
-        assertNotNull(stopped, "breakpoint never hit in the child session");
-        probe("at stop: parent launch settled=" + launchFuture.isDone() + " child launch settled=" + childLaunchFuture.isDone());
-        int threadId = stopped.getBody().getThreadId() != null ? stopped.getBody().getThreadId() : 1;
-
-        Response stResponse = child.sendRequest(stackTraceRequest(threadId), TIMEOUT);
-        assertTrue(stResponse.isSuccess(), "child stackTrace");
-        List<StackFrame> frames = ((StackTraceResponse)stResponse).getBody().getStackFrames();
-        assertTrue(!frames.isEmpty(), "no frames");
-        StackFrame top = frames.get(0);
-        probe("child top frame: " + top.getName() + " @ "
-              + (top.getSource() != null ? top.getSource().getPath() : "?") + ":" + top.getLine());
-        assertStoppedInHx(top, MAIN_HX, BP_LINE);
-
-        child.sendRequest(new DisconnectRequest(), TIMEOUT);
-      }
-      parent.sendRequest(new DisconnectRequest(), TIMEOUT);
-    }
+    StackFrame top = driveSessionToStop(buildFixture(), WEB_MAIN_HX_NAME, BP_LINE);
+    assertStoppedInHx(top, WEB_MAIN_HX_NAME, BP_LINE);
   }
 
   /**
@@ -819,7 +666,7 @@ public class JsDebugAdapterLiveProbe {
     probe("worker top frame: " + top.getName() + " @ "
           + (top.getSource() != null ? top.getSource().getPath() : "?") + ":" + top.getLine());
 
-    assertStoppedInHx(top, WORKER_HX, WORKER_BP_LINE);
+    assertStoppedInHx(top, WORKER_MAIN_HX_NAME, WORKER_BP_LINE);
     assertTrue(top.getId() >= COMPOSITE_FLOOR, "frame id must be composited, got " + top.getId());
 
     Response scResponse = mux.sendRequest(scopesRequest(top.getId()), TIMEOUT);

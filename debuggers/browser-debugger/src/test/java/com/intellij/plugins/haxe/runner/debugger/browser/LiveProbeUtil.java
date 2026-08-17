@@ -33,6 +33,39 @@ final class LiveProbeUtil {
     <!DOCTYPE html><html><head><meta charset='utf-8'></head>\
     <body><script src='app.js'></script></body></html>""";
 
+  // The ticking breakpoint fixture both browser families drive their
+  // sessions against. Line numbers are load-bearing: BP_LINE is `counter++;`.
+  static final int BP_LINE = 5;
+  static final String WEB_MAIN_HX_NAME = "WebMain.hx";
+  static final String WEB_MAIN_HX_SOURCE = """
+    class WebMain {
+    	static var counter = 0;
+
+    	static function tick() {
+    		counter++; // BP_LINE = 5
+    		var label = "tick-" + counter;
+    		js.Browser.console.log(label);
+    	}
+
+    	static function main() {
+    		js.Browser.window.setInterval(tick, 250);
+    	}
+    }
+    """;
+
+  // WebLoad.hx line numbers are load-bearing: LOAD_BP_LINE is `var marker...`,
+  // which executes DURING PAGE LOAD - the race the ticking fixture cannot see.
+  static final String WEB_LOAD_HX_NAME = "WebLoad.hx";
+  static final int LOAD_BP_LINE = 3;
+  static final String WEB_LOAD_HX_SOURCE = """
+    class WebLoad {
+    	static function main() {
+    		var marker = "before"; // LOAD_BP_LINE = 3
+    		js.Browser.console.log(marker + "-loaded");
+    	}
+    }
+    """;
+
   /** The pinned js-debug-dap release the probes drive (GitHub release, sha256-verified by the provisioner). */
   static final String JS_DEBUG_VERSION = "1.117.0";
 
@@ -112,12 +145,17 @@ final class LiveProbeUtil {
 
   /** One source breakpoint on the fixture's {@code hxFileName} at {@code line}. */
   static SetBreakpointsRequest breakpointsRequest(Path fixture, String hxFileName, int line) {
+    return breakpointsRequest(fixture.resolve(hxFileName).toString(), hxFileName, line);
+  }
+
+  /** Raw-path form for probes that vary the path SPELLING (separator variants). */
+  static SetBreakpointsRequest breakpointsRequest(String sourcePath, String sourceName, int line) {
     SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
     SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
 
     Source source = new Source();
-    source.setPath(fixture.resolve(hxFileName).toString());
-    source.setName(hxFileName);
+    source.setPath(sourcePath);
+    source.setName(sourceName);
     bpArgs.setSource(source);
 
     SourceBreakpoint bp = new SourceBreakpoint();
@@ -297,13 +335,19 @@ final class LiveProbeUtil {
    * fails the test with the compiler's output when the compile fails.
    */
   static void compileHaxeJs(Path classPath, String mainClass, String outJsName) throws Exception {
-    Process haxe = new ProcessBuilder("haxe", "-cp", classPath.toString(), "-main", mainClass,
-                                      "-js", classPath.resolve(outJsName).toString(), "-debug")
-      .redirectErrorStream(true)
-      .start();
+    compileHaxeJs(classPath, mainClass, outJsName, 30, List.of());
+  }
+
+  /** As above with extra compiler arguments (libs, defines, macros) and a timeout for builds that pull libraries. */
+  static void compileHaxeJs(Path classPath, String mainClass, String outJsName,
+                            long timeoutSeconds, List<String> extraArgs) throws Exception {
+    List<String> command = new ArrayList<>(List.of("haxe", "-cp", classPath.toString()));
+    command.addAll(extraArgs);
+    command.addAll(List.of("-main", mainClass, "-js", classPath.resolve(outJsName).toString(), "-debug"));
+    Process haxe = new ProcessBuilder(command).redirectErrorStream(true).start();
 
     String output = new String(haxe.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    if (!haxe.waitFor(30, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
+    if (!haxe.waitFor(timeoutSeconds, TimeUnit.SECONDS) || haxe.exitValue() != 0) {
       throw new AssertionError("fixture compile of " + mainClass + " failed:\n" + output);
     }
   }

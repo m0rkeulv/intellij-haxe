@@ -61,7 +61,7 @@ public class NodeAttachLiveProbe {
   private static final long TIMEOUT = 15_000;
 
   private static final int BP_LINE = 3;
-  private static final String NODE_MAIN_HX = """
+  private static final String NODE_MAIN_HX_SOURCE = """
     class NodeMain {
     	static function tick() {
     		trace("tick"); // BP_LINE = 3
@@ -124,7 +124,7 @@ public class NodeAttachLiveProbe {
     // match-all glob is what makes its map resolvable
     Path fixture = Files.createTempDirectory("haxe-node-attach");
     Path cwd = Files.createTempDirectory("haxe-node-cwd");
-    Files.writeString(fixture.resolve("NodeMain.hx"), NODE_MAIN_HX);
+    Files.writeString(fixture.resolve("NodeMain.hx"), NODE_MAIN_HX_SOURCE);
     compileHaxeJs(fixture, "NodeMain", "app.js");
 
     int inspectorPort = LiveProbeUtil.freePort();

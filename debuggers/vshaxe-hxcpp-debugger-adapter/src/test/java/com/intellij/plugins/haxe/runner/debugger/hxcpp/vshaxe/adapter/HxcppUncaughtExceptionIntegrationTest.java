@@ -63,12 +63,8 @@ public class HxcppUncaughtExceptionIntegrationTest extends HxcppIntegrationTestB
   }
 
   private void continueQuietly(int threadId) {
-    ContinueArguments arguments = new ContinueArguments();
-    arguments.setThreadId(threadId);
-    ContinueRequest request = new ContinueRequest();
-    request.setArguments(arguments);
     try {
-      dapClient.sendRequest(request, TIMEOUT);
+      dapClient.sendRequest(continueRequest(threadId), TIMEOUT);
     } catch (Exception ignored) {
       // the dying debuggee may close the connection first
     }

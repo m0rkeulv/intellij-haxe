@@ -2,8 +2,15 @@ package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.BP_LINE;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.LOAD_BP_LINE;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_LOAD_HX_NAME;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_MAIN_HX_NAME;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_LOAD_HX_SOURCE;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_MAIN_HX_SOURCE;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.assertStoppedInHx;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitInitialized;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.breakpointsRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.continueRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
@@ -214,33 +221,14 @@ public class FirefoxAdapterLiveProbe {
   }
 
   // fixture file names; the .hx names come back in reported breakpoint source paths
-  private static final String MAIN_HX = "WebMain.hx";
-  private static final String WORKER_HX = "WorkerMain.hx";
+  private static final String WORKER_MAIN_HX_NAME = "WorkerMain.hx";
   private static final String INDEX_FILE = "index.html";
   private static final String APP_JS = "app.js";
-
-  // WebMain.hx line numbers are load-bearing: BP_LINE is `counter++;`
-  private static final int BP_LINE = 5;
-  private static final String WEB_MAIN_HX = """
-    class WebMain {
-    	static var counter = 0;
-
-    	static function tick() {
-    		counter++; // BP_LINE = 5
-    		var label = "tick-" + counter;
-    		js.Browser.console.log(label);
-    	}
-
-    	static function main() {
-    		js.Browser.window.setInterval(tick, 250);
-    	}
-    }
-    """;
 
   /** Writes + compiles the fixture, returns its directory (app.js/app.js.map/index.html/WebMain.hx). */
   private static Path buildFixture() throws Exception {
     Path dir = Files.createTempDirectory("haxe-web-probe");
-    Files.writeString(dir.resolve(MAIN_HX), WEB_MAIN_HX);
+    Files.writeString(dir.resolve(WEB_MAIN_HX_NAME), WEB_MAIN_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(dir, "WebMain");
     return dir;
   }
@@ -276,20 +264,7 @@ public class FirefoxAdapterLiveProbe {
     assertTrue(initialized, "no initialized event after launch");
 
     // breakpoint by the ORIGINAL .hx path (native absolute path)
-    SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-    SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-
-    Source source = new Source();
-    source.setPath(fixture.resolve(MAIN_HX).toString());
-    source.setName(MAIN_HX);
-    bpArgs.setSource(source);
-
-    SourceBreakpoint bp = new SourceBreakpoint();
-    bp.setLine(BP_LINE);
-    bpArgs.setBreakpoints(List.of(bp));
-
-    setBreakpoints.setArguments(bpArgs);
-    Response bpResponse = client.sendRequest(setBreakpoints, TIMEOUT);
+    Response bpResponse = client.sendRequest(breakpointsRequest(fixture, WEB_MAIN_HX_NAME, BP_LINE), TIMEOUT);
     if (bpResponse instanceof SetBreakpointsResponse ok && ok.getBody() != null) {
       for (var b : ok.getBody().getBreakpoints()) {
         probe("breakpoint verified=" + b.isVerified() + " line=" + b.getLine());
@@ -327,7 +302,7 @@ public class FirefoxAdapterLiveProbe {
     }
     assertTrue(!frames.isEmpty(), "no frames");
     StackFrame top = frames.get(0);
-    assertStoppedInHx(top, MAIN_HX, BP_LINE);
+    assertStoppedInHx(top, WEB_MAIN_HX_NAME, BP_LINE);
 
     // scopes + a few variables of the top frame
     Response scResponse = client.sendRequest(scopesRequest(top.getId()), TIMEOUT);
@@ -378,17 +353,7 @@ public class FirefoxAdapterLiveProbe {
       boolean initialized = awaitInitialized(client, 15_000);
       assertTrue(initialized, "no initialized event after launch");
 
-      SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-      SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-      Source source = new Source();
-      source.setPath(fixture.resolve(MAIN_HX).toString());
-      source.setName(MAIN_HX);
-      bpArgs.setSource(source);
-      SourceBreakpoint bp = new SourceBreakpoint();
-      bp.setLine(BP_LINE);
-      bpArgs.setBreakpoints(List.of(bp));
-      setBreakpoints.setArguments(bpArgs);
-      assertTrue(client.sendRequest(setBreakpoints, TIMEOUT).isSuccess(), "setBreakpoints failed");
+      assertTrue(client.sendRequest(breakpointsRequest(fixture, WEB_MAIN_HX_NAME, BP_LINE), TIMEOUT).isSuccess(), "setBreakpoints failed");
 
       StoppedEvent stopped = null;
       long deadline = System.currentTimeMillis() + 15_000;
@@ -410,7 +375,7 @@ public class FirefoxAdapterLiveProbe {
             + " @ " + (top.getSource() != null ? top.getSource().getPath() : "?")
             + ":" + top.getLine());
 
-      assertStoppedInHx(top, MAIN_HX, BP_LINE);
+      assertStoppedInHx(top, WEB_MAIN_HX_NAME, BP_LINE);
 
       Response disconnect = client.sendRequest(new DisconnectRequest(), TIMEOUT);
       probe("disconnect success=" + disconnect.isSuccess());
@@ -436,11 +401,11 @@ public class FirefoxAdapterLiveProbe {
     boolean nativeBound;
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       forwardBound = runSeparatorVariant("forward", fixture, firefox, content,
-                                         fixture.resolve(MAIN_HX).toString().replace('\\', '/'));
+                                         fixture.resolve(WEB_MAIN_HX_NAME).toString().replace('\\', '/'));
     }
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       nativeBound = runSeparatorVariant("native", fixture, firefox, content,
-                                        fixture.resolve(MAIN_HX).toString());
+                                        fixture.resolve(WEB_MAIN_HX_NAME).toString());
     }
     probe("separator sensitivity: forward=" + forwardBound + " native=" + nativeBound);
     assertTrue(nativeBound, "native breakpoint path must bind");
@@ -469,17 +434,7 @@ public class FirefoxAdapterLiveProbe {
         if (!initialized) {
           return false;
         }
-        SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-        SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-        Source source = new Source();
-        source.setPath(breakpointPath);
-        source.setName(MAIN_HX);
-        bpArgs.setSource(source);
-        SourceBreakpoint bp = new SourceBreakpoint();
-        bp.setLine(BP_LINE);
-        bpArgs.setBreakpoints(List.of(bp));
-        setBreakpoints.setArguments(bpArgs);
-        session.sendRequest(setBreakpoints, TIMEOUT);
+        session.sendRequest(breakpointsRequest(breakpointPath, WEB_MAIN_HX_NAME, BP_LINE), TIMEOUT);
 
         StoppedEvent stopped = null;
         // the fixture ticks every 250ms and lazy verification takes 1-2s, so
@@ -509,22 +464,10 @@ public class FirefoxAdapterLiveProbe {
 
   // ------------------------------------------- load-time breakpoint strategies
 
-  // WebLoad.hx line numbers are load-bearing: LOAD_BP_LINE is `var marker...`,
-  // which executes DURING PAGE LOAD - the race the ticking fixture cannot see.
-  private static final int LOAD_BP_LINE = 3;
-  private static final String WEB_LOAD_HX = """
-    class WebLoad {
-    	static function main() {
-    		var marker = "before"; // LOAD_BP_LINE = 3
-    		js.Browser.console.log(marker + "-loaded");
-    	}
-    }
-    """;
-
   // --- worker-frame request behaviour (evaluate vs variables) ---
 
   private static final int FF_WORKER_TICK_LINE = 4;
-  private static final String FF_WORKER_HX = """
+  private static final String FF_WORKER_HX_SOURCE = """
     class WorkerMain {
     	static var ticks = 0;
     	static function tick() {
@@ -537,7 +480,7 @@ public class FirefoxAdapterLiveProbe {
     }
     """;
   private static final int FF_PAGE_BEAT_LINE = 4;
-  private static final String FF_PAGE_HX = """
+  private static final String FF_PAGE_HX_SOURCE = """
     class WebPage {
     	static var beats = 0;
     	static function heartbeat() {
@@ -568,8 +511,8 @@ public class FirefoxAdapterLiveProbe {
 
     Path fixture = Files.createTempDirectory("haxe-ff-worker-probe");
     probe("fixture dir: " + fixture);
-    Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX);
-    Files.writeString(fixture.resolve(WORKER_HX), FF_WORKER_HX);
+    Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX_SOURCE);
+    Files.writeString(fixture.resolve(WORKER_MAIN_HX_NAME), FF_WORKER_HX_SOURCE);
     Files.writeString(fixture.resolve(INDEX_FILE), LiveProbeUtil.INDEX_HTML);
 
     LiveProbeUtil.compileHaxeJs(fixture, "WebPage", APP_JS);
@@ -592,7 +535,7 @@ public class FirefoxAdapterLiveProbe {
       assertTrue(initialized, "initialized");
 
       // breakpoint in the worker only; the ticking line hits ~immediately
-      sendBreakpoint(fixture.resolve(WORKER_HX), FF_WORKER_TICK_LINE);
+      sendBreakpoint(fixture.resolve(WORKER_MAIN_HX_NAME), FF_WORKER_TICK_LINE);
       StoppedEvent workerStop = awaitStop(15_000);
       assertNotNull(workerStop, "worker breakpoint never hit");
       int workerThread = workerStop.getBody().getThreadId() != null ? workerStop.getBody().getThreadId() : 1;
@@ -609,7 +552,7 @@ public class FirefoxAdapterLiveProbe {
       probe("worker evaluate(repl):  " + timedEvaluate("ticks", workerFrame.getId(), "repl"));
 
       // 3) CONTROL: the TAB thread - move the breakpoint to the page heartbeat
-      sendBreakpoints(fixture.resolve(WORKER_HX), List.of()); // clear worker bp
+      sendBreakpoints(fixture.resolve(WORKER_MAIN_HX_NAME), List.of()); // clear worker bp
       sendBreakpoint(fixture.resolve("WebPage.hx"), FF_PAGE_BEAT_LINE);
 
       resumeThread(workerThread);
@@ -644,8 +587,8 @@ public class FirefoxAdapterLiveProbe {
     Assumptions.assumeTrue(firefox != null, "firefox not found (set WEB_DEBUG_FIREFOX_EXE or install Firefox) - skipping");
 
     Path fixture = Files.createTempDirectory("haxe-ff-refresh-probe");
-    Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX);
-    Files.writeString(fixture.resolve(WORKER_HX), FF_WORKER_HX);
+    Files.writeString(fixture.resolve("WebPage.hx"), FF_PAGE_HX_SOURCE);
+    Files.writeString(fixture.resolve(WORKER_MAIN_HX_NAME), FF_WORKER_HX_SOURCE);
     Files.writeString(fixture.resolve(INDEX_FILE), LiveProbeUtil.INDEX_HTML);
 
     LiveProbeUtil.compileHaxeJs(fixture, "WebPage", APP_JS);
@@ -663,7 +606,7 @@ public class FirefoxAdapterLiveProbe {
 
       boolean initialized = awaitInitialized(client, 15_000);
       assertTrue(initialized, "initialized");
-      sendBreakpoint(fixture.resolve(WORKER_HX), FF_WORKER_TICK_LINE);
+      sendBreakpoint(fixture.resolve(WORKER_MAIN_HX_NAME), FF_WORKER_TICK_LINE);
 
       // first stop: the first load's worker hits its ticking bp BEFORE the 2s
       // reload; then the reload fires while that worker is paused
@@ -784,7 +727,7 @@ public class FirefoxAdapterLiveProbe {
 
   private static Path buildLoadFixture() throws Exception {
     Path dir = Files.createTempDirectory("haxe-web-load-probe");
-    Files.writeString(dir.resolve("WebLoad.hx"), WEB_LOAD_HX);
+    Files.writeString(dir.resolve(WEB_LOAD_HX_NAME), WEB_LOAD_HX_SOURCE);
     LiveProbeUtil.writePageAndCompile(dir, "WebLoad");
     return dir;
   }
@@ -876,20 +819,7 @@ public class FirefoxAdapterLiveProbe {
           return false;
         }
 
-        SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
-        SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
-
-        Source source = new Source();
-        source.setPath(fixture.resolve("WebLoad.hx").toString());
-        source.setName("WebLoad.hx");
-        bpArgs.setSource(source);
-
-        SourceBreakpoint bp = new SourceBreakpoint();
-        bp.setLine(LOAD_BP_LINE);
-        bpArgs.setBreakpoints(List.of(bp));
-        setBreakpoints.setArguments(bpArgs);
-
-        Response bpResponse = session.sendRequest(setBreakpoints, TIMEOUT);
+        Response bpResponse = session.sendRequest(breakpointsRequest(fixture, WEB_LOAD_HX_NAME, LOAD_BP_LINE), TIMEOUT);
         probe("  variant " + variant + " setBreakpoints success=" + bpResponse.isSuccess());
 
         // observe everything; an entry pause (non-breakpoint stop) is resumed

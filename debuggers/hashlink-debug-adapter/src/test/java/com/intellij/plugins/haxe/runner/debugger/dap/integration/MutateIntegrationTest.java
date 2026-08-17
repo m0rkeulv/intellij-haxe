@@ -67,6 +67,14 @@ public class MutateIntegrationTest extends DapIntegrationTestBase {
     int locals = localsScopeReference(topFrameId(lastStoppedThreadId()));
     assertEquals("1", findVariable(variables(locals), "n").getValue(), "n now holds idx's value");
 
+    // expression RHS on an array element with a COMPUTED index (idx=1, n=1)
+    assertTrue(evaluateRaw(frameId, "arr[idx] = n + 89").isSuccess(), "arr[idx] = n + 89");
+    assertEquals("90", evaluated(frameId, "arr[1]"), "arr[1] holds the computed result");
+
+    // boolean expression into a Bool local (flag starts false)
+    assertTrue(evaluateRaw(frameId, "flag = n < 10").isSuccess(), "flag = n < 10");
+    assertEquals("true", evaluated(frameId, "flag"), "flag took the comparison's result");
+
     request(new DisconnectRequest());
   }
 

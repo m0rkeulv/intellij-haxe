@@ -456,12 +456,30 @@ public abstract class DapIntegrationTestBase {
 
   /** Polls events until a stopped event arrives (output etc. is skipped). */
   protected StoppedEvent awaitStopped() throws Exception {
+    StoppedEvent stopped = awaitEvent(StoppedEvent.class);
+    lastThreadId = stopped.getBody().getThreadId();
+    return stopped;
+  }
+
+  /** The next event of {@code type}; other events are skipped, a timed-out poll fails. */
+  protected <T extends Event> T awaitEvent(Class<T> type) throws Exception {
     while (true) {
       Event event = client.pollEvent(TIMEOUT);
-      assertNotNull(event, "expected a stopped event");
-      if (event instanceof StoppedEvent stopped) {
-        lastThreadId = stopped.getBody().getThreadId();
-        return stopped;
+      assertNotNull(event, "expected a " + type.getSimpleName());
+      if (type.isInstance(event)) {
+        return type.cast(event);
+      }
+    }
+  }
+
+  /** Skips events until an output event containing {@code needle} arrives. */
+  protected void awaitOutputContaining(String needle) throws Exception {
+    while (true) {
+      Event event = client.pollEvent(TIMEOUT);
+      assertNotNull(event, "expected output containing '" + needle + "'");
+      if (event instanceof OutputEvent out && out.getBody().getOutput() != null
+          && out.getBody().getOutput().contains(needle)) {
+        return;
       }
     }
   }
@@ -630,11 +648,7 @@ public abstract class DapIntegrationTestBase {
   }
 
   protected Scope scopeByPrefix(int frameId, String namePrefix) throws Exception {
-    ScopesRequest request = new ScopesRequest();
-    ScopesArguments args = new ScopesArguments();
-    args.setFrameId(frameId);
-    request.setArguments(args);
-    ScopesResponse response = (ScopesResponse)request(request);
+    ScopesResponse response = (ScopesResponse)request(scopesRequest(frameId));
     for (Scope scope : response.getBody().getScopes()) {
       if (scope.getName() != null && scope.getName().startsWith(namePrefix)) {
         return scope;
