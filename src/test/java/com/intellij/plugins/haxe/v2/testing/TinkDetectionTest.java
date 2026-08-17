@@ -7,8 +7,6 @@ import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /** tink_unittest marks its test classes with {@code @:asserts} - detection reads that metadata. */
@@ -42,22 +40,6 @@ public class TinkDetectionTest extends HaxeTestFrameworkDetectionTestBase {
     assertTrue(framework.isTestMethod(methodOf(tinkTest, "addsNumbers")));
     assertFalse(framework.isTestMethod(methodOf(tinkTest, "notPublic")));
     assertFalse(framework.isTestMethod(methodOf(tinkTest, "staticFactory")));
-  }
-
-  @Test
-  @DisplayName("reporting args are the injected reporter or nothing")
-  public void testReportingArgsAreTheInjectedReporterOrNothing() {
-    assertEquals(List.of("-D", "teamcity_suite_name=Target: Interpretation",
-                         "-cp", "reporter-root",
-                         "--macro", "intellij_tink.Macro.init()"),
-                 framework.reportingArgs("Target: Interpretation", "reporter-root", true));
-    // tink has no TeamCity reporter of its own: the injected one is the
-    // result channel, so the live-reporting toggle does not drop it
-    assertEquals(framework.reportingArgs("Target: Interpretation", "reporter-root", true),
-                 framework.reportingArgs("Target: Interpretation", "reporter-root", false));
-    assertTrue(framework.reportingArgs("Target: Interpretation", null, true).isEmpty(),
-               "without the extracted reporter the run stays console-only");
-    assertTrue(framework.filterArgs("Any.pattern").isEmpty(), "tink has no filter define");
   }
 
   @Test

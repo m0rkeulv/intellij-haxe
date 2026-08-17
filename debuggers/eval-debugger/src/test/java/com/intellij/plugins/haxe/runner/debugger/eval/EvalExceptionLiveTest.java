@@ -28,20 +28,11 @@ public class EvalExceptionLiveTest extends EvalLiveTestBase {
   @Test
   @DisplayName("uncaught exception stops inspects and terminates without stalling")
   public void uncaughtExceptionStopsInspectsAndTerminatesWithoutStalling() throws Exception {
-    InitializeRequest initialize = new InitializeRequest();
-    initialize.setArguments(new InitializeRequestArguments());
-    assertTrue(request(initialize).isSuccess(), "initialize");
-    dapClient.pollEvent(TIMEOUT);
-    launch();
-
     // the IDE sends exception filters (the backend reports it can't honor
     // them, but the request must still not wedge the session)
-    SetExceptionBreakpointsRequest exceptions = exceptionBreakpointsRequest(List.of("uncaught"));
-    assertTrue(request(exceptions).isSuccess(), "setExceptionBreakpoints");
+    startSession(List.of("uncaught"));
 
-    configurationDone();
-
-    StoppedEvent stopped = awaitEvent(StoppedEvent.class);
+    StoppedEvent stopped = awaitStopped();
     assertEquals("exception", stopped.getBody().getReason(), "stopped for an exception");
     String description = stopped.getBody().getDescription();
     assertTrue(description != null && description.contains("uncaught-boom"), "carries the thrown text");

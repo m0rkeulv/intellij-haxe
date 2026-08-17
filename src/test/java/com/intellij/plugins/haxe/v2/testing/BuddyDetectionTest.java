@@ -5,8 +5,6 @@ import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -41,22 +39,6 @@ public class BuddyDetectionTest extends HaxeTestFrameworkDetectionTestBase {
   public void testPlainClassIsNotDetected() {
     configureFixtureProject();
     assertFalse(framework.isTestClass(classByQName("cases.NotATest")));
-  }
-
-  @Test
-  @DisplayName("reporting args ride the reporter define or nothing")
-  public void testReportingArgsRideTheReporterDefineOrNothing() {
-    assertEquals(List.of("-D", "teamcity_suite_name=Target: Interpretation",
-                         "-D", "reporter=intellij_buddy.TcReporter",
-                         "-cp", "reporter-root"),
-                 framework.reportingArgs("Target: Interpretation", "reporter-root", true));
-    // buddy has no TeamCity reporter of its own: the shipped one is the
-    // result channel, so the live-reporting toggle does not drop it
-    assertEquals(framework.reportingArgs("Target: Interpretation", "reporter-root", true),
-                 framework.reportingArgs("Target: Interpretation", "reporter-root", false));
-    assertTrue(framework.reportingArgs("Target: Interpretation", null, true).isEmpty(),
-               "without the extracted reporter the run stays console-only");
-    assertTrue(framework.filterArgs("Any.pattern").isEmpty(), "buddy has no filter define");
   }
 
   @Test

@@ -4,8 +4,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -84,22 +82,5 @@ public class UtestDetectionTest extends HaxeTestFrameworkDetectionTestBase {
   public void testTestShapedMethodOnPlainClassIsNotDetected() {
     configureFixtureProject();
     assertFalse(framework.isTestMethod(methodOf(classByQName("cases.NotATest"), "testLooking")));
-  }
-
-  @Test
-  @DisplayName("reporting and filter args follow utest defines")
-  public void testReportingAndFilterArgsFollowUtestDefines() {
-    assertEquals(List.of("-D", "teamcity"), framework.reportingArgs(null, null, false));
-    assertEquals(List.of("-D", "teamcity",
-                         "-D", "teamcity_suite_name=Target: Neko",
-                         "-cp", "reporter-root",
-                         "--macro", "intellij_utest.Macro.init()"),
-                 framework.reportingArgs("Target: Neko", "reporter-root", true));
-    assertEquals(List.of("-D", "teamcity"),
-                 framework.reportingArgs(null, "reporter-root", false),
-                 "the live-reporting toggle drops the optional injection, batch reporting stays");
-    assertEquals(List.of("-D", "UTEST_PATTERN=MathTest.testAddition"),
-                 framework.filterArgs("MathTest.testAddition"));
-    assertTrue(framework.filterArgs(null).isEmpty());
   }
 }

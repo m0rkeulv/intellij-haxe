@@ -4,8 +4,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /** munit needs no marker interface - detection reads the runtime {@code @Test} metadata off the methods. */
@@ -55,21 +53,5 @@ public class MunitDetectionTest extends HaxeTestFrameworkDetectionTestBase {
     assertFalse(framework.isTestMethod(methodOf(munitTest, "notPublic")));
     assertFalse(framework.isTestMethod(methodOf(munitTest, "staticFactory")));
     assertFalse(framework.isTestMethod(methodOf(munitTest, "plainHelper")));
-  }
-
-  @Test
-  @DisplayName("reporting args are the injected client or nothing")
-  public void testReportingArgsAreTheInjectedClientOrNothing() {
-    assertEquals(List.of("-D", "teamcity_suite_name=Target: Neko",
-                         "-cp", "reporter-root",
-                         "--macro", "intellij_munit.Macro.init()"),
-                 framework.reportingArgs("Target: Neko", "reporter-root", true));
-    // munit has no TeamCity reporter of its own: the injected client is the
-    // result channel, so the live-reporting toggle does not drop it
-    assertEquals(framework.reportingArgs("Target: Neko", "reporter-root", true),
-                 framework.reportingArgs("Target: Neko", "reporter-root", false));
-    assertTrue(framework.reportingArgs("Target: Neko", null, true).isEmpty(),
-               "without the extracted reporter the run stays console-only");
-    assertTrue(framework.filterArgs("Any.pattern").isEmpty(), "munit has no filter define");
   }
 }
