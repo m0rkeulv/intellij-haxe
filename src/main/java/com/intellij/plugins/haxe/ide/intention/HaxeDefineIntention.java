@@ -21,7 +21,7 @@ import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeDefineContextService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;

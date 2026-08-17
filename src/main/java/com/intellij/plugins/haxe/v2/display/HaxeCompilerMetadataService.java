@@ -9,7 +9,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.MetadataEntry;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import java.util.List;
 import java.util.Map;

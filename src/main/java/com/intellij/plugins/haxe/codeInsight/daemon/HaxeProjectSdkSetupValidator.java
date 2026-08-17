@@ -29,7 +29,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeProjectBundle;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
+import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;

@@ -1,5 +1,7 @@
-package com.intellij.plugins.haxe.v2.buildtools
+package com.intellij.plugins.haxe.v2.buildtools.projectmodel
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service

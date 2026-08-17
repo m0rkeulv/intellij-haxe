@@ -8,9 +8,9 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeServerMetrics;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
@@ -67,7 +67,7 @@ final class HaxeServerStatusPanel extends JPanel {
     this.serverId = serverId;
 
     Map<String, String> failures = new LinkedHashMap<>();
-    HaxeContextHealth.getInstance(project).snapshot().forEach((containerId, failure) -> {
+    HaxeContextFailures.getInstance(project).snapshot().forEach((containerId, failure) -> {
       String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
       if (serverId.equals(HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName))) {
         failures.put(containerId, failure);

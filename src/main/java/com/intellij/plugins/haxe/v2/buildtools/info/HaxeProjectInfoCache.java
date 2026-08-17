@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.info;
 
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.application.ApplicationManager;

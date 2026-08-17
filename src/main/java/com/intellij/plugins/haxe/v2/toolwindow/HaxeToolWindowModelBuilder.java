@@ -1,5 +1,9 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
@@ -479,7 +483,7 @@ final class HaxeToolWindowModelBuilder {
       display = running ? HaxeBundle.message("haxe.toolwindow.server.running", String.valueOf(port))
                         : HaxeBundle.message("haxe.toolwindow.server.on.idle");
     }
-    String contextFailure = HaxeContextHealth.getInstance(project).lastFailure(containerId);
+    String contextFailure = HaxeContextFailures.getInstance(project).lastFailure(containerId);
     return new CompilationServerNode(containerId, display, projectEnabled, moduleUses, running, connectEligible,
                                      contextFailure);
   }

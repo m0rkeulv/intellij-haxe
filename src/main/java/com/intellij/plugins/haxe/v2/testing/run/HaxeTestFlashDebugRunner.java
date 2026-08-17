@@ -18,7 +18,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
-import com.intellij.plugins.haxe.runner.debugger.HaxeFlashDebuggingUtil;
+import com.intellij.plugins.haxe.runner.debugger.flash.HaxeFlashDebuggingUtil;
 import com.intellij.plugins.haxe.runner.debugger.flash.FlexPluginGate;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import java.util.List;

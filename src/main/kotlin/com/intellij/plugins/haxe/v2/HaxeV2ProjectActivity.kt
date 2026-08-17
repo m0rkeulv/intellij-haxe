@@ -7,10 +7,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.plugins.haxe.util.HaxeModuleDetection
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFilesProjectAware
-import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier
+import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectSync
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust
-import com.intellij.plugins.haxe.v2.buildtools.HaxeSourceRootsInitializer
+import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeSourceRootsInitializer
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner

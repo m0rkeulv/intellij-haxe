@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger;
+package com.intellij.plugins.haxe.runner.debugger.flash;
 
 import com.intellij.execution.filters.Filter;
 import com.intellij.execution.filters.HyperlinkInfo;

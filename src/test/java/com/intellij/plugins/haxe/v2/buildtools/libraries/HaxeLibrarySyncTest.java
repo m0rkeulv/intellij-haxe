@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;

@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibPathParser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.util.SystemInfo;

@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.server;
 
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;

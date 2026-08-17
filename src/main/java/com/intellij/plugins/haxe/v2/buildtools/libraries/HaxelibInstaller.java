@@ -1,5 +1,6 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;

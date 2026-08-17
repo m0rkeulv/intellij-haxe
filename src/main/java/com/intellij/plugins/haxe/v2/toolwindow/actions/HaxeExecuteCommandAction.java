@@ -10,7 +10,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeCommandRunner;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeConsoleCommandRunner;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 
@@ -49,7 +49,7 @@ public final class HaxeExecuteCommandAction extends DumbAwareAction {
     List<String> command = new ArrayList<>();
     command.add(HaxeToolPathResolver.resolveHaxeExecutable(project));
     command.addAll(ParametersListUtil.parse(arguments.trim()));
-    HaxeCommandRunner.run(project, "haxe " + arguments.trim(), command, project.getBasePath());
+    HaxeConsoleCommandRunner.run(project, "haxe " + arguments.trim(), command, project.getBasePath());
   }
 
   @Override

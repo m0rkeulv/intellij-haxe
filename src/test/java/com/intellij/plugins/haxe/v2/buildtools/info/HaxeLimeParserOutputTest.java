@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.info;
 
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.plugins.haxe.config.HaxeTarget;

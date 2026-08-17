@@ -44,12 +44,12 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleWorkspace;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
+import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleWorkspace;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContextHealth;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeDefineContextService;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleSdkApplier;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
+import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
@@ -633,7 +633,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
         project, compileCommand.containerId(), compileCommand.connectEligible(), compileCommand.command());
       ApplicationManager.getApplication().invokeLater(() -> {
         if (!project.isDisposed()) {
-          HaxeCommandRunner.run(project, compileCommand.display(), command, compileCommand.workDirectory());
+          HaxeConsoleCommandRunner.run(project, compileCommand.display(), command, compileCommand.workDirectory());
         }
       });
     });
@@ -716,7 +716,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       HaxeEnvironmentStore.getInstance(project).setUsingCompilationServer(serverNode.containerId(), enable);
       if (!enable) {
         // an opted-out container sends no more requests - a lingering failure could never clear itself
-        HaxeContextHealth.getInstance(project).record(serverNode.containerId(), null);
+        HaxeContextFailures.getInstance(project).record(serverNode.containerId(), null);
       }
     }
     refreshTree();

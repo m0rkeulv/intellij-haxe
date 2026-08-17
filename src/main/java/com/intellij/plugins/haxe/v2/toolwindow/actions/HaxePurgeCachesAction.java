@@ -8,8 +8,8 @@ import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCacheManager;
 import com.intellij.plugins.haxe.haxelib.HaxelibUtil;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeLimeProjectInfoService;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
 import org.jetbrains.annotations.NotNull;
 

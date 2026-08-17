@@ -1,5 +1,8 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.server;
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.OSProcessHandler;
@@ -210,7 +213,7 @@ public final class HaxeCompilationServerManager implements Disposable {
 
   /** Failures and request statistics describe the stopped process — a fresh server starts clean. */
   private void clearServerDerivedState(@NotNull String id) {
-    HaxeContextHealth.getInstance(project).clearForServer(id);
+    HaxeContextFailures.getInstance(project).clearForServer(id);
     HaxeServerMetrics.getInstance(project).clear(id);
   }
 

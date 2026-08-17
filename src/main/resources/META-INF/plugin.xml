@@ -359,7 +359,7 @@
     <programRunner implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestFlashDebugRunner"/>
     <programRunner implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestDebugRunner"/>
     <runLineMarkerContributor language="Haxe"
-                              implementationClass="com.intellij.plugins.haxe.v2.testing.HaxeTestRunLineMarkerContributor"/>
+                              implementationClass="com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunLineMarkerContributor"/>
 
     <moduleService serviceImplementation="com.intellij.plugins.haxe.ide.module.HaxeModuleSettings"/>
 
@@ -748,7 +748,7 @@
     <listener class="com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorCacheChangeListener"
               topic="com.intellij.psi.util.PsiModificationTracker$Listener"/>
     <listener class="com.intellij.plugins.haxe.v2.display.HaxeDisplayCacheInvalidator"
-              topic="com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener"/>
+              topic="com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener"/>
     <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
 <!--    <listener class="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"-->

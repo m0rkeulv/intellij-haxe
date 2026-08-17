@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;

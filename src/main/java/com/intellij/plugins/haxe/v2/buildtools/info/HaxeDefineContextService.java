@@ -1,5 +1,9 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.info;
 
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.openapi.Disposable;

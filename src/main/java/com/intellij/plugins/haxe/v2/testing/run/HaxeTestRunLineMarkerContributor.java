@@ -1,5 +1,6 @@
-package com.intellij.plugins.haxe.v2.testing;
+package com.intellij.plugins.haxe.v2.testing.run;
 
+import com.intellij.plugins.haxe.v2.testing.HaxeTestGutterContext;
 import com.intellij.execution.lineMarker.RunLineMarkerContributor;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;

@@ -1,5 +1,11 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;

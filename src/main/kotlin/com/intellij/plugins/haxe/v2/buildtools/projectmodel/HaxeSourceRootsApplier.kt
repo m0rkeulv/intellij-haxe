@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.buildtools
+package com.intellij.plugins.haxe.v2.buildtools.projectmodel
 
 import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.components.Service

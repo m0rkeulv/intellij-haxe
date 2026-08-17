@@ -16,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intellij.plugins.haxe.runner.debugger;
+package com.intellij.plugins.haxe.runner.debugger.flash;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
@@ -38,6 +38,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.Key;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.runner.debugger.HaxeDebugProcess;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugProcessStarter;

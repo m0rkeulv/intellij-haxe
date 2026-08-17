@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger;
+package com.intellij.plugins.haxe.runner.debugger.flash;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

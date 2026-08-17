@@ -1,5 +1,6 @@
-package com.intellij.plugins.haxe.v2.buildtools
+package com.intellij.plugins.haxe.v2.buildtools.projectmodel
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project

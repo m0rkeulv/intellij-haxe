@@ -1,5 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;

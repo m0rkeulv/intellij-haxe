@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intellij.plugins.haxe.runner.debugger;
+package com.intellij.plugins.haxe.runner.debugger.flash;
 
 import com.intellij.lang.javascript.flex.projectStructure.model.Dependencies;
 import com.intellij.lang.javascript.flex.projectStructure.model.DependencyEntry;

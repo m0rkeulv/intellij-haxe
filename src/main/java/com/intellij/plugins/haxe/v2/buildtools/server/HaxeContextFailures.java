@@ -1,5 +1,7 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.server;
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
@@ -17,18 +19,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * Compilation server row shows the failure.
  */
 @Service(Service.Level.PROJECT)
-public final class HaxeContextHealth {
+public final class HaxeContextFailures {
 
   private final Project project;
   private final Map<String, String> failures = new ConcurrentHashMap<>();
 
-  public HaxeContextHealth(@NotNull Project project) {
+  public HaxeContextFailures(@NotNull Project project) {
     this.project = project;
   }
 
   @NotNull
-  public static HaxeContextHealth getInstance(@NotNull Project project) {
-    return project.getService(HaxeContextHealth.class);
+  public static HaxeContextFailures getInstance(@NotNull Project project) {
+    return project.getService(HaxeContextFailures.class);
   }
 
   /** The container's last failed compiler request, or null while requests succeed. */

@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompilationServerListener;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
 import org.jetbrains.annotations.NotNull;
 
 /**

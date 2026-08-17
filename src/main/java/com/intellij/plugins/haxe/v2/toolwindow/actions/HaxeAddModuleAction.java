@@ -16,7 +16,7 @@ import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeModuleWorkspace;
+import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleWorkspace;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

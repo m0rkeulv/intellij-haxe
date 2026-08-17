@@ -1,5 +1,8 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.info;
 
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.intellij.execution.ExecutionException;
@@ -17,8 +20,8 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Key;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Outcome;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Key;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Outcome;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.util.HaxePluginPaths;
 import lombok.CustomLog;
@@ -30,7 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.firstErrorLine;
+import static com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.firstErrorLine;
 
 /**
  * Resolves the effective compiler configuration of Lime/OpenFL/HXP project files.

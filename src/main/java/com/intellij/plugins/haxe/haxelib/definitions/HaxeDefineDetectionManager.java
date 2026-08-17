@@ -18,7 +18,7 @@ import com.intellij.plugins.haxe.haxelib.definitions.tags.ProjectXmlHaxelibValue
 import com.intellij.plugins.haxe.haxelib.definitions.tags.ProjectXmlUndefineValue;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeDefineContextService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.psi.xml.XmlFile;
 import com.intellij.util.text.SemVer;
 import lombok.CustomLog;

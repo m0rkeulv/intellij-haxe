@@ -1,5 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.ide.trustedProjects.TrustedProjects;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;

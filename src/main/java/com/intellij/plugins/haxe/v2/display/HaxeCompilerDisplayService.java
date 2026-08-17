@@ -1,5 +1,9 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -204,12 +208,12 @@ public final class HaxeCompilerDisplayService {
         connected.client().invalidate(connected.args(), filePath);
       }
       List<FileDiagnostics> results = connected.client().diagnostics(connected.args(), filePath, contents);
-      HaxeContextHealth.getInstance(project).record(context.containerId(), null);
+      HaxeContextFailures.getInstance(project).record(context.containerId(), null);
       return results;
     } catch (DisplayRequestException e) {
       String failure = explainRequestFailure(connected, e);
       log.info("display/diagnostics failed: " + failure);
-      HaxeContextHealth.getInstance(project).record(context.containerId(), failure);
+      HaxeContextFailures.getInstance(project).record(context.containerId(), failure);
       return null;
     }
   }

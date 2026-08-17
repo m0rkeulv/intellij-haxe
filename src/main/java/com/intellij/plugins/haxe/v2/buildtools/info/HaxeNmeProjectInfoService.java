@@ -1,5 +1,7 @@
-package com.intellij.plugins.haxe.v2.buildtools;
+package com.intellij.plugins.haxe.v2.buildtools.info;
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;
 import com.intellij.execution.process.ProcessOutput;
@@ -11,8 +13,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Key;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.Outcome;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Key;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Outcome;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
@@ -25,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import static com.intellij.plugins.haxe.v2.buildtools.HaxeProjectInfoCache.firstErrorLine;
+import static com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.firstErrorLine;
 
 /**
  * Resolves the effective compiler configuration of NME project files (nmml).

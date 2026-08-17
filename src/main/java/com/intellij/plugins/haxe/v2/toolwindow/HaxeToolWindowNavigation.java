@@ -18,7 +18,7 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileNavigation;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeLibrarySync;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.pom.Navigatable;
 import org.jetbrains.annotations.NotNull;

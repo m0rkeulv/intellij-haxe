@@ -28,9 +28,9 @@ import java.util.List;
  * up the plugin's error filters, giving clickable file:line links). Must be called
  * on the EDT. Used by the tool window's execute button and the build file action rows.
  */
-public final class HaxeCommandRunner {
+public final class HaxeConsoleCommandRunner {
 
-  private HaxeCommandRunner() {
+  private HaxeConsoleCommandRunner() {
   }
 
   public static void run(@NotNull Project project,
