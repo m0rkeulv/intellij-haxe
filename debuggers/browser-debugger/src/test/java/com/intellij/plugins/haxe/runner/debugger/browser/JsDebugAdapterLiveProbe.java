@@ -917,12 +917,17 @@ public class JsDebugAdapterLiveProbe {
 
     Response response = child.sendRequest(request, TIMEOUT);
 
-    int count = response instanceof StepInTargetsResponse ok
-                && ok.isSuccess() && ok.getBody() != null && ok.getBody().getTargets() != null
-                ? ok.getBody().getTargets().size() : -1;
+    int count = targetsCountOf(response);
     probe("ide-seq stage " + stage + " frameId=" + frameId + " -> targets=" + count
           + (response.isSuccess() ? "" : " message=" + response.getMessage()));
     return count;
+  }
+
+  /** The response's step-in target count, or -1 when the request failed or answered without targets. */
+  private static int targetsCountOf(Response response) {
+    boolean answered = response instanceof StepInTargetsResponse ok
+      && ok.isSuccess() && ok.getBody() != null && ok.getBody().getTargets() != null;
+    return answered ? ((StepInTargetsResponse)response).getBody().getTargets().size() : -1;
   }
 
   /** Optional at-stop hook for probes needing extra requests before disconnect. */

@@ -183,14 +183,26 @@ public class HaxelibCacheManager implements Disposable {
       ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
       return rootManager == null ? null : rootManager.getSdk();
     });
-    Sdk sdk = moduleSdk != null
-              ? moduleSdk
-              : HaxelibSdkUtils.getDefaultSDK(HaxeBundle.message("haxe.haxelib.invalid.sdk.for.module", module.getName()));
+    Sdk sdk = moduleSdk != null ? moduleSdk : defaultSdk();
     if (!HaxelibSdkUtils.isValidHaxeSdk(sdk)) {
       return null;
     }
     VirtualFile moduleDir = HaxeReadActions.compute(() -> ProjectUtil.guessModuleDir(module));
     return new SdkContext(sdk, moduleDir);
+  }
+
+  /** The library's release versions; empty when the info fetch failed. */
+  @NotNull
+  private static Set<String> releaseVersions(@Nullable HaxelibLibraryInfo info) {
+    if (info == null) return Set.of();
+    return info.releases().stream()
+      .map(HaxelibLibraryInfo.Release::version)
+      .collect(Collectors.toSet());
+  }
+
+  /** The application-default Haxe SDK, standing in for a module without one (logs a warning with the module's name). */
+  private Sdk defaultSdk() {
+    return HaxelibSdkUtils.getDefaultSDK(HaxeBundle.message("haxe.haxelib.invalid.sdk.for.module", module.getName()));
   }
 
   private static Map<String, Set<String>> readAvailableOnline(Sdk sdk) {
@@ -204,12 +216,7 @@ public class HaxelibCacheManager implements Disposable {
   public Set<String> fetchAvailableVersions(String name) {
     if (getAvailableLibraries().getOrDefault(name, Set.of()).isEmpty()) {
       HaxelibLibraryInfo info = getLibraryInfo(name);
-      Set<String> versions = info == null
-                             ? Set.of()
-                             : info.releases().stream()
-                               .map(HaxelibLibraryInfo.Release::version)
-                               .collect(Collectors.toSet());
-      availableLibraries.put(name, new ConcurrentSkipListSet<>(versions));
+      availableLibraries.put(name, new ConcurrentSkipListSet<>(releaseVersions(info)));
     }
     return new HashSet<>(availableLibraries.get(name));
   }

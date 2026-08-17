@@ -435,14 +435,20 @@ final class HaxeToolWindowModelBuilder {
     HaxeLanguageLevel levelOverride = compilerSettings.getModuleLanguageLevelOverride(containerId);
     String levelDisplay = levelOverride != null
       ? levelOverride.getPresentableText()
-      : HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default",
-                           compilerSettings.getDefaultLanguageLevel(containerId).getPresentableText());
+      : defaultLevelDisplay(compilerSettings, containerId);
 
     List<EnvDefineNode> defines = environmentStore.getDefines(containerId).stream()
       .map(define -> new EnvDefineNode(containerId, define.name(), define.value(), define.effect(),
                                        activeFileDefines.contains(define.name())))
       .toList();
     return new EnvironmentData(sdkDisplay, sdkMissing, levelDisplay, defines, activeFileDefines);
+  }
+
+  /** The "Project default (X)" label following the compiler settings' per-container default level. */
+  @NotNull
+  private static String defaultLevelDisplay(@NotNull HaxeCompilerSettings settings, @NotNull String containerId) {
+    String defaultLevel = settings.getDefaultLanguageLevel(containerId).getPresentableText();
+    return HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default", defaultLevel);
   }
 
   @NotNull

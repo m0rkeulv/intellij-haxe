@@ -222,10 +222,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     }
     HaxeCompileCommands.Resolved resolvedCompile = resolved;
 
-    List<String> base = !singleRun && task.isSectionScoped()
-      ? ReadAction.computeBlocking(() -> sectionScopedCommand(project, task.getBuildFilePath(), resolvedCompile.command()))
-      : resolved.command();
-    List<String> command = new ArrayList<>(base);
+    List<String> command = new ArrayList<>(baseCommand(project, task, singleRun, resolvedCompile));
     if (debug && task.isInjectDebugArguments()) {
       // a single-run compile is a DIRECT haxe compile whatever the build
       // system, so its additions use the haxe spelling - the tool spellings
@@ -346,6 +343,16 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
         return buildDescriptor;
       }
     };
+  }
+
+  /** The compile command; a section-scoped suite run narrows it to the selected section, single runs keep it whole. */
+  @NotNull
+  private static List<String> baseCommand(@NotNull Project project,
+                                          @NotNull Task task,
+                                          boolean singleRun,
+                                          @NotNull HaxeCompileCommands.Resolved resolved) {
+    if (singleRun || !task.isSectionScoped()) return resolved.command();
+    return ReadAction.computeBlocking(() -> sectionScopedCommand(project, task.getBuildFilePath(), resolved.command()));
   }
 
   /** The resolved command scoped to the hxml's selected {@code --next} section; unchanged for non-hxml files. */

@@ -432,13 +432,17 @@ public class DapDebugProcess extends XDebugProcess {
   }
 
   List<DapThread> requestThreads() {
-    return sendRequest(new ThreadsRequest()) instanceof ThreadsResponse response && response.isSuccess()
-           ? response.getBody().getThreads() : List.of();
+    if (sendRequest(new ThreadsRequest()) instanceof ThreadsResponse response && response.isSuccess()) {
+      return response.getBody().getThreads();
+    }
+    return List.of();
   }
 
   List<StackFrame> requestStackTrace(int threadId) {
-    return sendRequest(StackTraceRequest.of(threadId)) instanceof StackTraceResponse response && response.isSuccess()
-           ? response.getBody().getStackFrames() : List.of();
+    if (sendRequest(StackTraceRequest.of(threadId)) instanceof StackTraceResponse response && response.isSuccess()) {
+      return response.getBody().getStackFrames();
+    }
+    return List.of();
   }
 
   private void handleOutput(OutputEvent output) {
@@ -773,8 +777,10 @@ public class DapDebugProcess extends XDebugProcess {
   }
 
   public List<Scope> requestScopes(int frameId) {
-    return sendRequest(ScopesRequest.of(frameId)) instanceof ScopesResponse response && response.isSuccess()
-           ? response.getBody().getScopes() : List.of();
+    if (sendRequest(ScopesRequest.of(frameId)) instanceof ScopesResponse response && response.isSuccess()) {
+      return response.getBody().getScopes();
+    }
+    return List.of();
   }
 
   /**
@@ -798,8 +804,10 @@ public class DapDebugProcess extends XDebugProcess {
       unresponsiveVariableRefs.add(variablesReference);
       return List.of();
     }
-    return response instanceof VariablesResponse ok && ok.isSuccess()
-           ? ok.getBody().getVariables() : List.of();
+    if (response instanceof VariablesResponse ok && ok.isSuccess()) {
+      return ok.getBody().getVariables();
+    }
+    return List.of();
   }
 
   /**
@@ -879,9 +887,7 @@ public class DapDebugProcess extends XDebugProcess {
       future = new CompletableFuture<>();
     onRequestThread(() -> {
       CompletionsRequest request = CompletionsRequest.of(frameId >= 0 ? frameId : null, text, column);
-      future.complete(sendRequest(request) instanceof CompletionsResponse response && response.isSuccess()
-                      && response.getBody() != null && response.getBody().getTargets() != null
-                      ? response.getBody().getTargets() : List.of());
+      future.complete(completionTargets(sendRequest(request)));
     }, () -> future.complete(List.of()));
     try {
       return future.get(2, TimeUnit.SECONDS);
@@ -905,8 +911,17 @@ public class DapDebugProcess extends XDebugProcess {
     if (response instanceof SetVariableResponse ok && response.isSuccess() && ok.getBody() != null) {
       return ok.getBody();
     }
-    throw new IllegalStateException(response != null && response.getMessage() != null
-                                    ? response.getMessage() : "the debugger rejected the change");
+    String reason = response != null && response.getMessage() != null
+                    ? response.getMessage() : "the debugger rejected the change";
+    throw new IllegalStateException(reason);
+  }
+
+  /** The completion targets of a successful response; empty on failure or an answer without targets. */
+  @NotNull
+  private static List<CompletionItem> completionTargets(@Nullable Response response) {
+    boolean answered = response instanceof CompletionsResponse ok
+      && ok.isSuccess() && ok.getBody() != null && ok.getBody().getTargets() != null;
+    return answered ? ((CompletionsResponse)response).getBody().getTargets() : List.of();
   }
 
   // --- XDebugProcess wiring ---
