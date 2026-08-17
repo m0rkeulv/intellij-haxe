@@ -60,7 +60,7 @@ public class NekoRunConfiguration extends DapExecutableRunConfigurationBase {
     }
     // the runtime is resolved at launch; only the module needs to exist here
     if (getConfigurationModule().getModule() == null) {
-      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hxcpp.runner.no.module"));
+      throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("neko.runner.no.module"));
     }
   }
 }

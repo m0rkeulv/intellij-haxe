@@ -225,7 +225,7 @@ public class HaxeFlashDebuggingUtil {
 
       @Override
       public void processTerminated(@NotNull ProcessEvent event) {
-        printToSessionConsole(debugSession, "adl exited with code " + event.getExitCode() + "\n");
+        printToSessionConsole(debugSession, HaxeDebuggerBundle.message("air.runner.adl.exit.code", event.getExitCode()) + "\n");
         if (forwardedToRunningInstance) {
           printToSessionConsole(debugSession, HaxeDebuggerBundle.message("air.runner.instance.hint") + "\n");
         }
@@ -243,8 +243,9 @@ public class HaxeFlashDebuggingUtil {
   }
 
   private static void printToSessionConsole(@NotNull XDebugSession debugSession, @NotNull String text) {
-    if (debugSession.getConsoleView() != null) {
-      debugSession.getConsoleView().print(text, ConsoleViewContentType.NORMAL_OUTPUT);
+    ConsoleView console = debugSession.getConsoleView();
+    if (console != null) {
+      console.print(text, ConsoleViewContentType.NORMAL_OUTPUT);
     }
   }
 }

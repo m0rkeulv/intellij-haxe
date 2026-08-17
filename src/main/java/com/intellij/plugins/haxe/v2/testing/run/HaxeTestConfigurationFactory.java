@@ -23,7 +23,7 @@ public class HaxeTestConfigurationFactory extends ConfigurationFactory {
 
   @Override
   public @NotNull RunConfiguration createTemplateConfiguration(@NotNull Project project) {
-    return new HaxeTestRunConfiguration(project, this, HaxeBundle.message("haxe.test.configuration.name"));
+    return new HaxeTestRunConfiguration(project, this, getName());
   }
 
   @Override
