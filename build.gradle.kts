@@ -176,15 +176,11 @@ tasks {
 
     test {
         useJUnitPlatform()
-        // watchdog-extension tuning lives in src/test/resources/junit-platform.properties;
-        // a system property set here would be overwritten by the IJ launcher session listener
-
-        // usually takes 4-8 minutes so  15 min should be an acceptable timeout
+        // Tests usually takes 3-6 minutes, so 15 min should be an acceptable timeout (in case of Debugger deadlocks)
         timeout.set(Duration.ofMinutes(15))
 
-        // Live compiler-integration tests drive a real `haxe --wait` server
-        // through the IDE services (catalog, resolve, completion): opt-in,
-        // since the machine may lack haxe or carry an unexpected version.
+        // Compiler integration tests (`haxe --wait`) used in IDE services (catalog, resolve, completion).
+        // Tests are opt-in as they depend on haxe being installed and might be sensitive to what version is installed.
         val liveCompilerTests = providers.gradleProperty("liveCompilerTests").getOrElse("false").toBoolean()
         if (!liveCompilerTests) {
             logger.lifecycle("SKIPPING live compiler integration tests (opt in with -PliveCompilerTests=true)")
@@ -295,18 +291,20 @@ tasks {
     }
 
 
-    // ship the DAP debug adapter bytecode inside the plugin directory (not a jar):
-    // the hl executable needs a real file path to run it
+    //Makes sure the latest Hashlink debugger and LimeProjectParser is added to the sandbox
     withType<PrepareSandboxTask> {
+
         dependsOn(":debuggers:hashlink-debug-adapter:buildDebugAdapter")
         from(project(":debuggers:hashlink-debug-adapter").layout.buildDirectory.file("hl/hl-debug-adapter.hl")) {
             into(pluginName.map { "$it/adapter" })
         }
-        // the lime project evaluator runs on the IDE's own JRE; ship it beside the plugin jars
+
+        // Note: the lime project parser/evaluator is a jar that contains compiled java and Haxe sources
         dependsOn(":tools:LimeProjectParser:buildParser")
         from(project(":tools:LimeProjectParser").layout.buildDirectory.file("libs/LimeProjectParser.jar")) {
             into(pluginName.map { "$it/tools" })
         }
+
     }
 
 
