@@ -7,7 +7,6 @@ import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.da
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.initializeRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
-import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.probe;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
