@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * Lime Targets based on
+ * Lime Targets based on console output and
  * <a href="https://lime.openfl.org/docs/getting-started/targets/">Lime targets docs</a>
  */
 public enum LimeTarget {
