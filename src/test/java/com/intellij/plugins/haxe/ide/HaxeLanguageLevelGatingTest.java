@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel.*;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Language-level annotations, one fixture per test: each file under
@@ -26,9 +28,8 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
     Set.of(HaxeSemanticAnnotatorInspections.IsTypeExpressionInspection4dot1Compatible.class);
 
   @Override
-  public void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   @Override

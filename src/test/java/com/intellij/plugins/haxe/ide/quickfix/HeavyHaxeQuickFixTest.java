@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
 import com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolInspection;
+import com.intellij.testFramework.LightProjectDescriptor;
 import com.intellij.util.ArrayUtil;
 
 import java.util.HashSet;
@@ -16,9 +18,8 @@ import java.util.Set;
 @DisplayName("Quick fix: heavy")
 public class HeavyHaxeQuickFixTest extends HaxeCodeInsightFixtureTestCase {
     @Override
-    public void setUp() throws Exception {
-        useHaxeToolkit();
-        super.setUp();
+    protected LightProjectDescriptor lightProjectDescriptor() {
+        return HaxeLightProjectDescriptors.WITH_TOOLKIT;
     }
 
     @Override

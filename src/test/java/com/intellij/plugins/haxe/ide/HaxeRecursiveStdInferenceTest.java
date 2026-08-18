@@ -4,6 +4,7 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.util.HaxeTestUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -12,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Termination guard for type inference over mutually recursive, untyped std
@@ -30,16 +33,16 @@ public class HaxeRecursiveStdInferenceTest extends HaxeCodeInsightFixtureTestCas
   }
 
   @Override
-  protected void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   @Test
   @DisplayName("array sort highlighting terminates in bounded time")
   @Timeout(value = 300, unit = TimeUnit.SECONDS)
   public void testArraySortHighlightingTerminates() {
-    String path = FileUtil.toSystemIndependentName(myHaxeToolkit + "/haxe/ds/ArraySort.hx");
+    String toolkit = HaxeTestUtils.getAbsoluteToolkitPath(HaxeTestUtils.LATEST);
+    String path = FileUtil.toSystemIndependentName(toolkit + "/haxe/ds/ArraySort.hx");
     VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(path);
     assertNotNull(file, "ArraySort.hx missing from the test toolkit std: " + path);
 

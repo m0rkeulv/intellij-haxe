@@ -25,6 +25,8 @@ import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.testFramework.fixtures.CodeInsightTestUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
@@ -34,6 +36,11 @@ public class HaxeGoToImplementationTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/gotoImplementation/";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   private void doTest(int expectedLength) throws Throwable {

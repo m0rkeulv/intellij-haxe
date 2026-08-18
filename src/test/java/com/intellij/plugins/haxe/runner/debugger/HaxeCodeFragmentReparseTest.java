@@ -13,6 +13,8 @@ import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Reparse of the debugger's expression fragments (Evaluate, Watches, Set
@@ -30,6 +32,11 @@ public class HaxeCodeFragmentReparseTest extends HaxeCodeInsightFixtureTestCase 
   @Override
   protected String getBasePath() {
     return "";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   private PsiFile fragment(String text) {

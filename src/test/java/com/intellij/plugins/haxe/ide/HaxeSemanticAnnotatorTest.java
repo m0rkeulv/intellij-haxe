@@ -28,15 +28,21 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 
 @DisplayName("Annotation: semantic annotator")
 public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
   @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
+  }
+
+  @Override
   public void setUp() throws Exception {
     // for use when idempotence check problems occur and we need consistent results.
     //Registry.get("platform.random.idempotence.check.rate").setValue(1, getTestRootDisposable());
-    useHaxeToolkit();
     super.setUp();
     setTestStyleSettings(2);
   }

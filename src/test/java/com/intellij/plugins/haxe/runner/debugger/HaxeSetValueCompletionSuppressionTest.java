@@ -17,6 +17,8 @@ import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XExpression;
 import com.intellij.xdebugger.evaluation.EvaluationMode;
 import com.intellij.xdebugger.impl.XDebuggerHistoryManager;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The debugger's Set Value editor expects a plain VALUE: completion must not
@@ -35,6 +37,11 @@ public class HaxeSetValueCompletionSuppressionTest extends HaxeCodeInsightFixtur
   @Override
   protected String getBasePath() {
     return "";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   private PsiFile createFragment(XExpression expression) {

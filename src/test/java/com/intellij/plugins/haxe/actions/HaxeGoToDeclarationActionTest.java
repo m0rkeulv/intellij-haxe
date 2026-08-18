@@ -41,6 +41,8 @@ import org.junit.jupiter.params.provider.FieldSource;
 import java.util.List;
 
 import java.util.Collection;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
@@ -52,9 +54,9 @@ public class HaxeGoToDeclarationActionTest extends HaxeCodeInsightFixtureTestCas
     return "/goto/";
   }
 
-  protected void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   protected void doTest(PsiFile file, int expectedSize) {

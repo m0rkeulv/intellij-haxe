@@ -18,6 +18,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 @DisplayName("Indexing: fully qualified name file-based indexes")
 public class HaxeFqnFileBasedIndexTest extends HaxeCodeInsightFixtureTestCase {
@@ -25,6 +27,11 @@ public class HaxeFqnFileBasedIndexTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/filebasedIndexes/";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   @Nested

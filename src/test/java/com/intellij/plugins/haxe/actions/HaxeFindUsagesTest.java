@@ -44,6 +44,8 @@ import java.util.Collection;
 import java.util.Comparator;
 
 import static com.intellij.plugins.haxe.ide.HaxeFindUsagesHandlerFactory.TestInterface.*;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
@@ -53,6 +55,11 @@ public class HaxeFindUsagesTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/findUsages/";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   protected String getResultsPath() {

@@ -28,6 +28,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Created by as3boyan on 07.10.14.
@@ -37,6 +39,11 @@ public class HaxeSmartEnterTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/smartEnter/";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   public void doTest() {

@@ -23,6 +23,8 @@ import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
@@ -32,6 +34,11 @@ public class HaxeGoToSuperTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/gotoSuper/";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   private void doTest() throws Throwable {

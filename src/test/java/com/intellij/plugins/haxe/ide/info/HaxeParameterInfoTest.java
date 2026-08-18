@@ -36,6 +36,8 @@ import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoCon
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 
 /**
@@ -45,9 +47,9 @@ import org.junit.jupiter.api.Test;
 public class HaxeParameterInfoTest extends HaxeCodeInsightFixtureTestCase {
 
 
-  public void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   @Override

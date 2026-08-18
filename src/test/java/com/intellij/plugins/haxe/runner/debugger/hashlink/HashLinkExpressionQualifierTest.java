@@ -24,6 +24,8 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 
 import java.util.List;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The eager name-qualification linchpin: {@link HashLinkExpressionQualifier}
@@ -40,6 +42,11 @@ public class HashLinkExpressionQualifierTest extends HaxeCodeInsightFixtureTestC
   @Override
   protected String getBasePath() {
     return "";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   /**

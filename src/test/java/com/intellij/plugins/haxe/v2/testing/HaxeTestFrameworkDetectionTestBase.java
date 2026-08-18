@@ -9,9 +9,16 @@ import com.intellij.psi.search.GlobalSearchScope;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /** The fixture lookups every framework detection test uses. */
 public abstract class HaxeTestFrameworkDetectionTestBase extends HaxeCodeInsightFixtureTestCase {
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
+  }
 
   protected HaxeClass classByQName(String qName) {
     HaxeClass haxeClass = HaxeResolveUtil.findClassByQName(qName, getPsiManager(),

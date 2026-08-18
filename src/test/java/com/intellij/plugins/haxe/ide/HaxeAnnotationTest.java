@@ -23,6 +23,8 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolInspection;
 import com.intellij.util.ArrayUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
@@ -35,9 +37,8 @@ public class HaxeAnnotationTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Override
-  protected void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   private void doTest(String... additionalPaths) throws Exception {

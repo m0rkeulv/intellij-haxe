@@ -10,6 +10,8 @@ import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import java.util.List;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Completion inside the debugger's Evaluate Expression / Watches editor — a
@@ -28,6 +30,11 @@ public class HaxeCodeFragmentCompletionTest extends HaxeCodeInsightFixtureTestCa
   @Override
   protected String getBasePath() {
     return "";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   /** The caret context of {@link HaxeDebuggerTestFixtures#instanceFrameProject}'s breakpoint. */

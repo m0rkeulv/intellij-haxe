@@ -28,11 +28,19 @@ import com.intellij.util.Consumer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 public abstract class HaxeIntroduceTestBase extends HaxeCodeInsightFixtureTestCase {
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
+  }
+
   protected void doTestSuggestions(Class<? extends HaxeExpression> parentClass, String... expectedNames) {
     final Collection<String> names = buildSuggestions(parentClass);
     for (String expectedName : expectedNames) {

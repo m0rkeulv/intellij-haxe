@@ -19,19 +19,12 @@
  */
 package com.intellij.plugins.haxe.ide;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 import com.intellij.codeInsight.intention.IntentionAction;
-import com.intellij.codeInspection.InspectionToolProvider;
+import com.intellij.codeInspection.InspectionProfileEntry;
 import com.intellij.codeInspection.LocalInspectionTool;
-import com.intellij.codeInspection.ex.InspectionProfileImpl;
-import com.intellij.codeInspection.ex.InspectionToolWrapper;
-import com.intellij.codeInspection.ex.LocalInspectionToolWrapper;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.annotator.HaxeSemanticAnnotatorInspections;
-import com.intellij.profile.codeInspection.InspectionProfileManager;
 import com.intellij.util.ArrayUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nullable;
@@ -52,32 +45,27 @@ public abstract class HaxeSemanticAnnotatorTestBase extends HaxeCodeInsightFixtu
     throws Exception {
     myFixture.configureByFiles(ArrayUtil.mergeArrays(new String[]{getTestName(false) + ".hx"}, additionalFiles));
     myFixture.enableInspections(getAnnotatorBasedInspection());
-    registerInspectionsForTesting( new HaxeSemanticAnnotatorInspections.Registrar(), myFixture.getProject(), unsetInspections);
+    myFixture.enableInspections(semanticInspections(unsetInspections));
     myFixture.testHighlighting(checkWarnings, checkInfos, checkWeakWarnings);
   }
 
-  public void registerInspectionsForTesting(InspectionToolProvider provider, Project project,
-                                            @Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections) {
-    InspectionProfileManager mgr = InspectionProfileManager.getInstance(project);
-    InspectionProfileImpl profile = mgr.getCurrentProfile();
-
-    try {
-      Class<? extends LocalInspectionTool>[] classes = provider.getInspectionClasses();
-      for (Class<? extends LocalInspectionTool> c : classes) {
-        if (null != unsetInspections && unsetInspections.contains(c)) continue;
-
-        Constructor<? extends LocalInspectionTool> constructor = c.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        InspectionToolWrapper<?, ?> wrapper = new LocalInspectionToolWrapper(constructor.newInstance());
-
-        Map<String, List<String>> dependencies = new HashMap<>();
-        profile.addTool(project, wrapper, dependencies);
-        profile.enableTool(wrapper.getShortName(), project);
-      }
+  /**
+   * The semantic-annotator inspections minus the unset ones, instantiated
+   * reflectively (some carry non-public constructors). Enabled through the
+   * fixture rather than the project profile so they are dropped per test -
+   * the shared light project would otherwise carry each test's registration
+   * into the next.
+   */
+  private static InspectionProfileEntry[] semanticInspections(@Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections)
+    throws Exception {
+    List<InspectionProfileEntry> tools = new ArrayList<>();
+    for (Class<? extends LocalInspectionTool> c : new HaxeSemanticAnnotatorInspections.Registrar().getInspectionClasses()) {
+      if (null != unsetInspections && unsetInspections.contains(c)) continue;
+      Constructor<? extends LocalInspectionTool> constructor = c.getDeclaredConstructor();
+      constructor.setAccessible(true);
+      tools.add(constructor.newInstance());
     }
-    catch (Exception ex) {
-      assertNotNull(ex.toString());
-    }
+    return tools.toArray(new InspectionProfileEntry[0]);
   }
 
   protected void doTestSkippingAnnotators(Set<Class<? extends LocalInspectionTool>> unsetInspections) throws Exception {

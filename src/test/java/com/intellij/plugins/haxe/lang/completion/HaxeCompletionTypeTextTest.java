@@ -9,6 +9,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The lookup's type column is produced by the EXPENSIVE renderer on a
@@ -25,9 +27,8 @@ public class HaxeCompletionTypeTextTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Override
-  protected void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   @Test

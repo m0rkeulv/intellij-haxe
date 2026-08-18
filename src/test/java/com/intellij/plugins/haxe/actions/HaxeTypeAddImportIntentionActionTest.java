@@ -40,6 +40,8 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
@@ -49,6 +51,11 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixture
   @Override
   protected String getBasePath() {
     return "/addImportIntention/";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   protected CommonCodeStyleSettings myTestStyleSettings;

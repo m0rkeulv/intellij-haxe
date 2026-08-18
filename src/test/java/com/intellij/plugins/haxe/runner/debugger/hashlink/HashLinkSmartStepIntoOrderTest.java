@@ -16,6 +16,8 @@ import com.intellij.psi.PsiElement;
 import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import java.util.List;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The target↔highlight pairing for smart step into: the adapter reports
@@ -34,6 +36,11 @@ public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCa
   @Override
   protected String getBasePath() {
     return "";
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   private List<PsiElement> namesOnCaretLine(String mainBody) {

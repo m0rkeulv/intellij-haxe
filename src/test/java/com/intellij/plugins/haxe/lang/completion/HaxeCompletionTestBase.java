@@ -32,6 +32,8 @@ import com.intellij.testFramework.UsefulTestCase;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
+import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
@@ -57,6 +59,11 @@ public abstract class HaxeCompletionTestBase extends HaxeCodeInsightFixtureTestC
   @Override
   protected String getBasePath() {
     return myPath;
+  }
+
+  @Override
+  protected LightProjectDescriptor lightProjectDescriptor() {
+    return HaxeLightProjectDescriptors.BARE;
   }
 
   protected PsiFile configureFileByText(String fname, String text) {
