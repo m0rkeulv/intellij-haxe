@@ -108,16 +108,6 @@ public class JpsHaxeSdkAdditionalDataImpl extends JpsElementBase<JpsHaxeSdkAddit
   }
 
   @Override
-  public boolean getUseCompilerCompletionFlag() {
-    return myAdditionalData.getUseCompilerCompletionFlag();
-  }
-
-  @Override
-  public void setUseCompilerCompletionFlag(boolean newState) {
-    myAdditionalData.setUseCompilerCompletionFlag(newState);
-  }
-
-  @Override
   public boolean getRemoveCompletionDuplicatesFlag() {
     return myAdditionalData.getRemoveCompletionDuplicatesFlag();
   }

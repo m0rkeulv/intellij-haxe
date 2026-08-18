@@ -49,10 +49,6 @@ public interface HaxeSdkAdditionalDataBase {
 
   void setHaxelibPath(String haxelibPath);
 
-  boolean getUseCompilerCompletionFlag();
-
-  void setUseCompilerCompletionFlag(boolean newState);
-
   boolean getRemoveCompletionDuplicatesFlag();
 
   void setRemoveCompletionDuplicatesFlag(boolean newState);

@@ -85,8 +85,6 @@ public class HaxeAdditionalConfigurable implements AdditionalDataConfigurable {
     newData.setNodeBinPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getNodeBinPath()));
     newData.setFlashPlayerPath(FileUtil.toSystemIndependentName(myHaxeAdditionalConfigurablePanel.getFlashPlayerPath()));
     newData.setFlexSdkName(myHaxeAdditionalConfigurablePanel.getFlexSdkName());
-    // no UI: the v1 compiler-completion feature the flag toggled is gone; carried over so old settings survive
-    newData.setUseCompilerCompletionFlag(haxeSdkData != null && haxeSdkData.getUseCompilerCompletionFlag());
     newData.setRemoveCompletionDuplicatesFlag(myHaxeAdditionalConfigurablePanel.getRemoveCompletionDuplicatesFlag());
 
     final SdkModificator modificator = mySdk.getSdkModificator();
