@@ -1,0 +1,13 @@
+# 02-toolwindow-actions-ui
+
+### should-fix — src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeInstallLibraryAction.java:33
+The action class doubles as the haxelib install utility: `installQuietly`, `restoreSelectedVersion` and `notifyUser` are package-visible statics that HaxeInstallAllMissingLibrariesAction reaches into, so one action is both a UI action and a domain helper (checklist: no class doing several jobs; domain knowledge lives in its domain's class). On top of that the file re-spells things that already have homes: `NOTIFICATION_GROUP = "haxe.command"` duplicates the identical private constant in HaxeCommandRunner (same `v2/toolwindow` package), and the same literal is inlined again in HaxeToolWindowPanel:601, HaxeActionBeforeRunTaskProvider:302 and HaxeCompilationServerManager:327 — five spellings of one constant across the branch; and the `GeneralCommandLine` scaffold (`withExePath(HaxeToolPathResolver.resolveHaxelibExecutable(project)) ... withWorkDirectory(project.getBasePath())`) is duplicated between `installQuietly` (lines 91–94) and `restoreSelectedVersion` (lines 137–140). Fix: extract the install/notify logic into a non-action helper (e.g. a `HaxelibInstaller` in `v2/buildtools` plus a shared notification helper owning the `"haxe.command"` group id), let both actions call it, and fold the two command-line constructions into one `haxelibCommand(project, params...)`.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeExecuteCommandAction.java:43
+`icons.HaxeIcons.HAXE_LOGO` is a fully-qualified name in code; there is no name collision in this file (nothing else named HaxeIcons is imported), and every other v2 file imports `icons.HaxeIcons`. Add the import and use `HaxeIcons.HAXE_LOGO`.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeExecuteCommandAction.java:51-52
+`arguments.trim()` is evaluated twice in consecutive statements (`command.addAll(ParametersListUtil.parse(arguments.trim())); HaxeCommandRunner.run(project, "haxe " + arguments.trim(), ...)`). Per the one-local rule, name it once (`String trimmed = arguments.trim();`) and use the local in both places.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/DefinePrompt.java:24
+`!name.matches(".*\\s.*")` hand-rolls a check the platform already provides: `StringUtil.containsWhitespaces(name)` (verified present in `com.intellij.openapi.util.text.StringUtil` in the 2026.2 util jar), and the class already imports StringUtil. Using it drops the regex (and its required comment) entirely: `return !name.isEmpty() && !StringUtil.containsWhitespaces(name);`.

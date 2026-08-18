@@ -1,0 +1,16 @@
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeCallExpressionEvaluatorCacheService.java
+A src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeEvaluationTaint.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeExpressionEvaluator.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeExpressionEvaluatorCacheChangeListener.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeExpressionEvaluatorCacheService.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeExpressionEvaluatorHandlers.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeExpressionUsageUtil.java
+A src/main/java/com/intellij/plugins/haxe/model/evaluator/HaxeUntypedParameterInference.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/assign/HaxeAnonymousAssignUtil.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/assign/HaxeAssignEvaluation.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/assign/HaxeClassAssignUtil.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/assign/HaxeTypeCompatible.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/callexpression/CallExpressionArgumentModel.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/callexpression/HaxeCallExpressionContext.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/callexpression/HaxeCallExpressionEvaluation.java
+M src/main/java/com/intellij/plugins/haxe/model/evaluator/callexpression/HaxeCallExpressionUtil.java

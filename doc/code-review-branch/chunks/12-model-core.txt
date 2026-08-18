@@ -1,0 +1,15 @@
+M src/main/java/com/intellij/plugins/haxe/model/HaxeFileModel.java
+A src/main/java/com/intellij/plugins/haxe/model/HaxeFilenameCandidateCache.java
+M src/main/java/com/intellij/plugins/haxe/model/HaxeImportableModel.java
+M src/main/java/com/intellij/plugins/haxe/model/HaxeMemberModel.java
+M src/main/java/com/intellij/plugins/haxe/model/HaxeMethodModel.java
+M src/main/java/com/intellij/plugins/haxe/model/HaxePackageModel.java
+M src/main/java/com/intellij/plugins/haxe/model/HaxeParameterModel.java
+M src/main/java/com/intellij/plugins/haxe/model/HaxeProjectModel.java
+M src/main/java/com/intellij/plugins/haxe/model/HaxeStdPackageModel.java
+M src/main/java/com/intellij/plugins/haxe/model/type/HaxeGenericResolver.java
+M src/main/java/com/intellij/plugins/haxe/model/type/HaxeGenericResolverUtil.java
+M src/main/java/com/intellij/plugins/haxe/model/type/HaxeTypeResolver.java
+M src/main/java/com/intellij/plugins/haxe/model/type/ResultHolder.java
+M src/main/java/com/intellij/plugins/haxe/model/type/SpecificHaxeClassReference.java
+M src/main/java/com/intellij/plugins/haxe/model/type/resolver/HaxeGenericResolverCastUtil.java

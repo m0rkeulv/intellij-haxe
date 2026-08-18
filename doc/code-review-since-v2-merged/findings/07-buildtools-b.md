@@ -1,0 +1,43 @@
+# 07-buildtools-b
+
+### fix-now — src/main/java/com/intellij/plugins/haxe/v2/buildtools/NmeProjects.java:98-119
+The new `targetFor` method was inserted **inside** `targetArtifact`'s doc comment, splitting it across two declarations. Lines 98-105 (`/// Where the nme tool packages a target's runnable artifact … Target flags without a launchable artifact mapping`) now sit above `targetFor` and describe the artifact layout that method has nothing to do with; `targetFor` then carries its own `/** … */` right under that orphaned block, and the sentence's tail is stranded at line 119 as `/// (android, ios, user-configured console targets...) return null.` above `targetArtifact`. This is exactly the "a comment travels with the declaration beneath it" trap. Fix: restore `targetArtifact`'s `///` block as one contiguous comment directly above it (re-joining "Target flags without a launchable artifact mapping (android, ios, user-configured console targets...) return null."), and place `targetFor` with its own doc before or after the whole unit.
+
+### should-fix — src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeRegisterBuildFileAction.java:70-76
+`register()` duplicates `HaxeAddBuildFileAction.actionPerformed` (`src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeAddBuildFileAction.java:63-67`) statement for statement — `HaxeBuildFilesStore.addFile` → `HaxeSourceRootsOffer.offerFor` → sync — down to a near-identical comment ("a newly known build file can change the module's library set (it may even become the implicit active file)"). Worse, the two copies have already diverged on the last step: the new one runs the full `HaxeProjectSync.sync` (save + drop lime/nme caches + library sync + `HaxeBuildConfigListener`), the old one only `HaxeLibrarySync.sync(project, panel::refreshTree)`. Registering a build file should be one named home (e.g. a `registerBuildFile(project, containerId, file)` helper in the buildtools layer) that both actions call, so the pipeline cannot drift again.
+
+### should-fix — src/main/java/com/intellij/plugins/haxe/v2/buildtools/LimeProjects.java:180-238
+`packagedWebRoot`, `packagedSwf` and `packagedBinary` each re-spell the same two things: `StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppPath(content), "bin")` (lines 182, 195, 233) and the `Path.of(projectFile.getParent().getPath()).resolve(appPath).resolve(<target dir>).resolve("bin")` chain. That is the lime export-layout constant spelled three times in one class. Extract one `private static Path exportBinDirectory(VirtualFile projectFile, String content, String targetDirectory)`; the three public methods then differ only in their target-set guard and the leaf they resolve.
+
+### should-fix — src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeLimeProjectInfoService.java:197-217
+`targetOutputFor` encodes lime's export layout (`<app path>/<target>/bin/<app file>…`) a second time, in a different class from `LimeProjects.packagedSwf`/`packagedBinary` which this branch added for the same knowledge. The two rows added here are precisely the overlapping ones: `case "air" -> appPath + "/air/bin/" + … + ".swf"` restates `packagedSwf`, and `case "neko" -> … + "/neko/bin/" + (SystemInfo.isWindows ? appFile + ".exe" : appFile)` restates `packagedBinary`'s `HaxeSdkUtilBase.getExecutableName(appFile)` leaf. Per the checklist, lime layout knowledge belongs in `LimeProjects`; have `targetOutputFor` delegate (or relativise `LimeProjects`' result) instead of maintaining a parallel switch that will drift.
+
+### should-fix — src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/ui/HaxeBuildToolsConfigurable.java:66-68
+`updateInheritedDefaults()` runs on the EDT: it is wired to `sdkCombo.addActionListener` (fires on every selection change *and* on the programmatic `reset()`, which reassigns the model and the selected item) and is also called directly at the end of `reset()`. It calls `HaxeToolPathResolver.inheritedRuntimeDefaults`, which does up to four `PathEnvironmentVariableUtil.findInPath` scans plus several `Files.isRegularFile` probes. `findInPath` is *not* cached (only `isOnPath` uses `ourOnPathCache`), so each invocation walks every `PATH` directory on disk — a settings-dialog freeze on a slow or network `PATH`. Compute the defaults off the EDT (the class already uses `ReadAction.nonBlocking(...).finishOnUiThread(...)` in `applyDefaultSdkToModules`) and push them into the panel when they land.
+
+### should-fix — src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/HaxeTestsBuildFileStore.java:115,122,132,134
+The entry-matching predicate `containerId.equals(entry.containerId) && filePath.equals(entry.filePath)` is written out four times (twice in `markTestsFile`, twice in `unmarkTestsFile`). Give it one named home — `private static Predicate<ContainerTestsFile> entryFor(String containerId, String filePath)` — and use it in all four spots; the mark/unmark bodies then read as add-if-absent / remove-and-record. (Also: the stray double blank line at lines 56-57 separates members of the same group and should go.)
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/buildtools/HxmlProjects.java:7
+`import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;` is unused — `HxmlFileParser` appears nowhere in the file (the added `scopeToSelectedSection` uses `HaxeBuildFileInspector` and `HxmlArguments` only). Leftover from an earlier draft; delete it.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeToolPathResolver.java:79-81,102,124-126
+The three new resolvers treat the configured Build Tools override inconsistently. `resolveNodeExecutable` runs the value through `executableOrInDirectory` (so a directory works, but a value that does not resolve to an existing file is *silently discarded* and the SDK/PATH value used instead — a typo'd node path then runs a different node with no diagnostic). `resolveNekoExecutable` and `resolveFlashPlayerExecutable` return the configured string verbatim, so a directory does not work there even though the panel renders all three with the same `executableField` chooser and the same grayed executable-path placeholder from `inheritedRuntimeDefaults`. Pick one rule for an explicit override and apply it to all three.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeLimeProjectInfoService.java:195-196
+Removing `haxeTargetFor` (moved to `LimeProjects.targetFor`) left a double blank line before `targetOutputFor`'s doc comment. Blank lines separate groups, not members — collapse to one.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/buildtools/LimeProjects.java:166-173
+`HOST_LAUNCHABLE_TARGETS`, `FLASH_FAMILY_TARGETS` and `BROWSER_TARGETS` are declared mid-class, between `commandEnvironment` and `packagedWebRoot`, while the class's other constants sit at the top. Constants are one group and belong with the rest at the head of the class.
+
+### minor — src/main/kotlin/com/intellij/plugins/haxe/v2/buildtools/HaxeSourceRootsApplier.kt:14
+The KDoc uses javadoc link syntax — `{@link HaxeSourceRootsInitializer}` — which KDoc renders literally rather than as a link. Use `[HaxeSourceRootsInitializer]`.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeSourceRootsOffer.java:30-33
+`Messages.showYesNoDialog(project, message, title, icon)` carries the platform javadoc `/** Use {@link MessageDialogBuilder#yesNo} */` (it is not `@Deprecated`, so this is not a hard-rule breach). The same branch's `HaxeProjectTrust.confirmForAction` already uses `MessageDialogBuilder.yesNo(...).ask(project)`; using the builder here too matches the platform's own pointer and the branch's other new dialog.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/buildtools/NmeProjects.java:113-114
+`case "html5", "js" -> HaxeTarget.JAVA_SCRIPT;` is immediately followed by `case "jsprime" -> HaxeTarget.JAVA_SCRIPT;` — two arms producing the same value. Fold into one: `case "html5", "js", "jsprime" -> HaxeTarget.JAVA_SCRIPT;`.
+
+### minor — src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeRegisterBuildFileAction.java:30
+The class is an `AnAction` registered on `ProjectViewPopupMenu` (plugin.xml:772) but lives in `com.intellij.plugins.haxe.v2.buildtools`, the model/domain package, while all ~30 sibling v2 actions live in `com.intellij.plugins.haxe.v2.toolwindow.actions` — including the counterpart its own javadoc names, `HaxeAddBuildFileAction`. The checklist's package direction wants presentation code out of `buildtools`; move it (and, if it stays a dialog host, reconsider `HaxeSourceRootsOffer`'s placement too) to the actions package.

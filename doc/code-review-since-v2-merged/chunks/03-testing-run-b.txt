@@ -1,0 +1,9 @@
+﻿A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestLocator.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestOutputAttributor.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestReporterFiles.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestRunConfiguration.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestRunConfigurationEditor.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestRunConfigurationType.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestRunConfigurations.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestRunner.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestSingleRuns.java

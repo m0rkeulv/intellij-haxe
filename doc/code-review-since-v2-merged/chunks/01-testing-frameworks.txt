@@ -1,0 +1,11 @@
+﻿A	src/main/java/com/intellij/plugins/haxe/v2/testing/BuddyFramework.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/HaxeTestFileLocation.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/HaxeTestFramework.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/HaxeTestFrameworks.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/HaxeTestGutterContext.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/HaxeTestNameLocation.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/HaxeTestRunLineMarkerContributor.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/HaxeTestSupertypes.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/MunitFramework.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/TinkFramework.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/UtestFramework.java

@@ -1,0 +1,74 @@
+src\fallback\java\haxe\root\Type.java:346: warning: [deprecation] newInstance() in Class has been deprecated
+src\main\java\com\intellij\plugins\haxe\config\sdk\HaxeSdkType.java:67: warning: [deprecation] suggestHomePath() in SdkType has been deprecated
+src\main\java\com\intellij\plugins\haxe\editor\HaxeRestoreReferencesDialog.java:74: warning: [deprecation] getSelectedValues() in JList has been deprecated
+src\main\java\com\intellij\plugins\haxe\haxelib\HaxelibProjectUpdater.java:1590: warning: [deprecation] runWhenProjectIsInitialized(@org.jetbrains.annotations.NotNull Runnable) in StartupManager has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\HaxeFindUsagesHandlerNS.java:152: warning: [deprecation] startsWith(CharSequence,CharSequence) in StringUtils has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\HaxeFindUsagesHandlerNS.java:154: warning: [deprecation] startsWith(CharSequence,CharSequence) in StringUtils has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\HaxeFindUsagesHandlerNS.java:192: warning: [deprecation] <T,E>compute(@org.jetbrains.annotations.NotNull ThrowableComputable<T,E>) in ReadAction has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\documentation\providers\HaxeDocumentationProvider.java:206: warning: [deprecation] createHyperlink(StringBuilder,String,String,boolean,boolean) in DocumentationManagerUtil has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\documentation\providers\HaxeDocumentationProvider.java:284: warning: [deprecation] createHyperlink(StringBuilder,String,String,boolean,boolean) in DocumentationManagerUtil has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\documentation\providers\HaxeDocumentationProvider.java:410: warning: [deprecation] createHyperlink(StringBuilder,String,String,boolean,boolean) in DocumentationManagerUtil has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\formatter\settings\HaxeCodeStyleSettingsProvider.java:41: warning: [deprecation] createSettingsPage(@org.jetbrains.annotations.NotNull CodeStyleSettings,@org.jetbrains.annotations.NotNull CodeStyleSettings) in CodeStyleSettingsProvider has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\generation\GetterSetterMethodBuilder.java:36: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\highlight\HXMLSyntaxHighlighter.java:45: warning: [deprecation] createTextAttributesKey(@org.jetbrains.annotations.NonNls @org.jetbrains.annotations.NotNull String,TextAttributes) in TextAttributesKey has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\highlight\HaxeSyntaxHighlighterColors.java:104: warning: [deprecation] createTextAttributesKey(@org.jetbrains.annotations.NonNls @org.jetbrains.annotations.NotNull String,TextAttributes) in TextAttributesKey has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\lookup\indexed\HaxeIndexedStaticMemberLookupElement.java:145: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\quickfix\typedialog\HaxeCreateTypeDialogBuilder.java:187: warning: [deprecation] <T,E>compute(@org.jetbrains.annotations.NotNull ThrowableComputable<T,E>) in ReadAction has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\refactoring\introduceVariable\HaxeIntroduceDialog.java:77: warning: [deprecation] ALT_MASK in InputEvent has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\refactoring\memberPullUp\HaxePullUpHelper.java:276: warning: [deprecation] isLanguageLevel6OrHigher(@org.jetbrains.annotations.NotNull PsiElement) in PsiUtil has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\refactoring\move\HaxeMoveDeclarationHandler.java:119: warning: [deprecation] getSettings(@org.jetbrains.annotations.Nullable Project) in CodeStyleSettingsManager has been deprecated
+src\main\java\com\intellij\plugins\haxe\ide\template\macro\HaxeArrayVariableMacro.java:56: warning: [deprecation] getHaxeClassResolveResult(@org.jetbrains.annotations.Nullable PsiElement) in HaxeResolveUtil has been deprecated
+src\main\java\com\intellij\plugins\haxe\lang\psi\HaxeResolveResult.java:434: warning: [deprecation] getHaxeClassResolveResult(@org.jetbrains.annotations.Nullable PsiElement) in HaxeResolveUtil has been deprecated
+src\main\java\com\intellij\plugins\haxe\lang\psi\HaxeResolver.java:770: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\lang\psi\impl\HaxePsiTypeAdapter.java:289: warning: [deprecation] getElementType() in StubBasedPsiElement has been deprecated
+src\main\java\com\intellij\plugins\haxe\lang\psi\impl\HaxePsiTypeAdapter.java:290: warning: [deprecation] getElementType() in StubBasedPsiElement has been deprecated
+src\main\java\com\intellij\plugins\haxe\lang\psi\impl\HaxeRegularExpressionImpl.java:101: warning: [deprecation] supportsPossessiveQuantifiers() in RegExpLanguageHost has been deprecated
+src\main\java\com\intellij\plugins\haxe\model\HaxeEnumValueConstructorModel.java:51: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\model\HaxeFileModel.java:428: warning: [deprecation] replace(String,String,String) in StringUtils has been deprecated
+src\main\java\com\intellij\plugins\haxe\model\HaxeLocalVarModel.java:41: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\model\HaxeObjectLiteralClassModel.java:87: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\model\HaxeParameterModel.java:242: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\model\evaluator\assign\HaxeAnonymousAssignUtil.java:95: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\model\evaluator\assign\HaxeAssignEvaluation.java:417: warning: [deprecation] getResultType() in HaxeBaseMemberModel has been deprecated
+src\main\java\com\intellij\plugins\haxe\runner\debugger\HaxeFlashDebuggingUtil.java:54: warning: [deprecation] startSession(@org.jetbrains.annotations.NotNull ExecutionEnvironment,@org.jetbrains.annotations.NotNull XDebugProcessStarter) in XDebuggerManager has been deprecated
+src\main\java\com\intellij\plugins\haxe\runner\debugger\HaxeFlashDebuggingUtil.java:68: warning: [deprecation] getRunContentDescriptor() in XDebugSession has been deprecated
+src\main\java\com\intellij\plugins\haxe\runner\debugger\hxcpp\legacy\LegacyHxcppDebugRunner.java:48: warning: [deprecation] startSession(@org.jetbrains.annotations.NotNull ExecutionEnvironment,@org.jetbrains.annotations.NotNull XDebugProcessStarter) in XDebuggerManager has been deprecated
+src\main\java\com\intellij\plugins\haxe\runner\debugger\hxcpp\legacy\LegacyHxcppDebugRunner.java:72: warning: [deprecation] getRunContentDescriptor() in XDebugSession has been deprecated
+src\main\java\com\intellij\plugins\haxe\util\HaxeDebugUtil.java:217: warning: [deprecation] getId() in Thread has been deprecated
+src\main\java\com\intellij\plugins\haxe\util\HaxeResolveUtil.java:448: warning: [deprecation] getId() in Thread has been deprecated
+src\main\java\com\intellij\plugins\haxe\util\HaxeUtil.java:60: warning: [deprecation] getBaseDir() in Project has been deprecated
+src\main\java\com\intellij\plugins\haxe\util\PsiFileUtils.java:71: warning: [deprecation] getFiles(@org.jetbrains.annotations.NotNull OrderRootType) in OrderEntry has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\compiler\HaxeLanguageLevelUtil.java:52: warning: [deprecation] restart() in DaemonCodeAnalyzer has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\display\HaxeCompilerMetadataService.java:118: warning: [deprecation] restart() in DaemonCodeAnalyzer has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\display\HaxeCompilerResolveService.java:382: warning: [deprecation] restart() in DaemonCodeAnalyzer has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\display\HaxeCompilerUsageService.java:173: warning: [deprecation] restart() in DaemonCodeAnalyzer has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\display\HaxeDisplayCacheInvalidator.java:31: warning: [deprecation] restart() in DaemonCodeAnalyzer has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\runconfig\HaxeActionBeforeRunTaskProvider.java:110: warning: [deprecation] writeExternal(@org.jetbrains.annotations.NotNull Element) in BeforeRunTask has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\runconfig\HaxeActionBeforeRunTaskProvider.java:111: warning: [deprecation] writeExternal(@org.jetbrains.annotations.NotNull Element) in BeforeRunTask has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\runconfig\HaxeActionBeforeRunTaskProvider.java:119: warning: [deprecation] readExternal(@org.jetbrains.annotations.NotNull Element) in BeforeRunTask has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\runconfig\HaxeActionBeforeRunTaskProvider.java:120: warning: [deprecation] readExternal(@org.jetbrains.annotations.NotNull Element) in BeforeRunTask has been deprecated
+src\main\java\com\intellij\plugins\haxe\v2\toolwindow\HaxeToolWindowNavigation.java:119: warning: [deprecation] getFiles(@org.jetbrains.annotations.NotNull OrderRootType) in LibraryOrSdkOrderEntry has been deprecated
+src\test\java\com\intellij\plugins\haxe\HaxeCodeInsightFixtureTestCase.java:246: warning: [deprecation] getSettings(@org.jetbrains.annotations.Nullable Project) in CodeStyleSettingsManager has been deprecated
+src\test\java\com\intellij\plugins\haxe\HaxeCodeInsightFixtureTestCase.java:248: warning: [deprecation] clone() in CodeStyleSettings has been deprecated
+src\test\java\com\intellij\plugins\haxe\HaxeCodeInsightFixtureTestCase.java:63: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\HaxeLightCodeInsightTestBase.java:25: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\HaxeMultiFileTestBase.java:25: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\actions\HaxeTypeAddImportIntentionActionTest.java:79: warning: [deprecation] getSettings(@org.jetbrains.annotations.Nullable Project) in CodeStyleSettingsManager has been deprecated
+src\test\java\com\intellij\plugins\haxe\actions\HaxeTypeAddImportIntentionActionTest.java:81: warning: [deprecation] clone() in CodeStyleSettings has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:1044: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:1181: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:1258: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:1343: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:1379: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:1414: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:241: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:276: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:311: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:354: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:401: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:502: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:555: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:590: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:615: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:716: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated
+src\test\java\com\intellij\plugins\haxe\ide\HaxeSemanticAnnotatorTest.java:954: warning: [deprecation] RunInEdt in com.intellij.testFramework.junit5 has been deprecated

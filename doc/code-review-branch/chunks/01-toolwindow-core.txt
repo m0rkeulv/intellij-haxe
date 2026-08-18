@@ -1,0 +1,11 @@
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeServerConsoleWindowFactory.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeServerStatusPanel.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeToolWindowFactory.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeToolWindowModelBuilder.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeToolWindowNavigation.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeToolWindowPanel.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/tree/HaxeBuildFile.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/tree/HaxeBuildFileScanner.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/tree/HaxeBuildFileType.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/tree/HaxeToolWindowNodes.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/tree/HaxeToolWindowTreeRenderer.java

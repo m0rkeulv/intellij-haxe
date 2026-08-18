@@ -1,0 +1,8 @@
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeActiveBuildFileStore.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeBuildFilesStore.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeBuildSettingsListener.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeCommandRunner.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeCustomActionsStore.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeEnvironmentStore.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeTargetOptions.java
+A src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeTargetSelectionStore.java

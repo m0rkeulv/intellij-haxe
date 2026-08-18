@@ -1,0 +1,16 @@
+# 15-references-links
+
+### fix-now — src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringLinkCompletionConfidence.java:36
+The class overrides the deprecated `CompletionConfidence.shouldSkipAutopopup(PsiElement, PsiFile, int)`. Verified against the 2026.2 platform sources: that overload is `@Deprecated` with javadoc *"use shouldSkipAutopopup(Editor, PsiElement, PsiFile, int). It provides information about the current editor."* Hard rule: no `@Deprecated` platform API introduced, and the javadoc names the replacement. Fix: override the four-arg overload taking `Editor` (the editor parameter can simply be ignored); the rest of the body is unchanged.
+
+### minor — src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringLinkCompletionConfidence.java:37-41
+The method hand-rolls both lookups that the package's own helper class already provides: `PsiTreeUtil.getParentOfType(contextElement, HaxeStringLiteralExpression.class, false)` duplicates `HaxeStringLiterals.literalAtCaret`, and the `caretInLiteral` / `literal.getText().substring(1, caretInLiteral)` slice duplicates `HaxeStringLiterals.contentBeforeCaret` — the two typed handlers and the completion contributor all go through the helpers. Same predicate spelled in 2+ places wants one named home; route the confidence through `HaxeStringLiterals` too (keeping its extra past-the-literal guard if it is really reachable).
+
+### minor — src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringQnameCompletionContributor.java:70-100
+`addCompletions` runs three distinct steps in one ~50-line body: top-level first segments, children of a package prefix, and members of a resolved class. Each is one logical step with a short parameter list (`matched`, `fqns`/`project`, `parent`, `seen`) — extract them into named private methods so the body reads as three sentences. The duplicated lookup-element construction `matched.addElement(LookupElementBuilder.create(x).withIcon(dot < 0 ? AllIcons.Nodes.Class : AllIcons.Nodes.Package))` at lines 75 and 88 then collapses into one shared helper instead of two copies of the same ternary.
+
+### minor — src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringLiteralReferenceContributor.java:70-72
+The `else if` head is a three-line multi-term boolean (`value.length() >= 3 && looksLikePath(value) && resolveFile(...) != null`). The sibling qname branch directly below already shows the intended shape — shape check named (`qnameShaped`), resolution kept inline in the head. Mirror it: `boolean pathShaped = value.length() >= 3 && HaxeStringFilePathReference.looksLikePath(value);` then `else if (pathShaped && HaxeStringFilePathReference.resolveFile(literal, value) != null)`, which keeps the costly resolve lazily evaluated and the head to one line.
+
+### minor — src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringLiteralReferenceContributor.java:68
+`references.addAll(List.of(new HaxeStringFileReferenceSet(value, literal, 1).getAllReferences()))` allocates an intermediate list only to copy it; the JDK already has the array-to-collection helper: `Collections.addAll(references, refs)` with the reference array in a named local (which also satisfies the no-multi-line-values-inside-a-call rule as the set construction gets its own line).

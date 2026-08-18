@@ -1,0 +1,9 @@
+A src/main/java/com/intellij/plugins/haxe/v2/wizard/HaxeModuleBuilder.java
+A src/main/java/com/intellij/plugins/haxe/v2/wizard/HaxeProjectTemplatesFactory.java
+A src/main/kotlin/com/intellij/plugins/haxe/v2/wizard/HaxeNewProjectWizard.kt
+A src/main/kotlin/com/intellij/plugins/haxe/v2/wizard/HaxeProjectGenerator.kt
+A src/main/kotlin/com/intellij/plugins/haxe/v2/wizard/HaxeProjectSdkStep.kt
+A src/main/kotlin/com/intellij/plugins/haxe/v2/wizard/HaxeTemplateFiles.kt
+A src/main/kotlin/com/intellij/plugins/haxe/v2/wizard/HaxeTemplateScaffold.kt
+A src/main/kotlin/com/intellij/plugins/haxe/v2/wizard/HaxeTemplateStep.kt
+A src/main/kotlin/com/intellij/plugins/haxe/v2/wizard/HaxelibTemplateStep.kt

@@ -1,0 +1,13 @@
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeCompilationServerManager.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeDefineContextService.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeLibrarySync.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeLimeProjectInfoService.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeNmeProjectInfoService.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeProjectSync.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/HaxeBuildToolProjectSettings.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/HaxeBuildToolSettings.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/HaxeFrameworkTargetSettings.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/ui/HaxeBuildToolsConfigurable.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/ui/HaxeBuildToolsSettingsPanel.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/ui/HaxeFrameworkConfigurables.java
+A src/main/java/com/intellij/plugins/haxe/v2/buildtools/settings/ui/HaxeFrameworkTargetsConfigurable.java

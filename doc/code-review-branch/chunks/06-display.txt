@@ -1,0 +1,16 @@
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeBlueprintCompletionContributor.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerCaches.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerDiagnosticsAnnotator.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerDisplayService.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerMetadataService.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerProblemMarker.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerResolveService.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerTypeCatalogService.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerUsageService.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeDisplayCacheInvalidator.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeDisplayConfiguration.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeGeneratedCodePreview.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeGeneratedDumpService.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeGeneratedPreviewGotoHandler.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeGeneratedPreviewHighlightingSetting.java
+A src/main/java/com/intellij/plugins/haxe/v2/display/HaxeUsageSearch.java

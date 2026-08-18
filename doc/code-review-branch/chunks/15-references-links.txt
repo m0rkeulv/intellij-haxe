@@ -1,0 +1,9 @@
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringFilePathReference.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringFileReferenceSet.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringLinkCompletionConfidence.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringLiteralReferenceContributor.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringLiterals.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringPathTypedHandler.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringQnameCompletionContributor.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringQnameReference.java
+A src/main/java/com/intellij/plugins/haxe/ide/references/HaxeStringQnameTypedHandler.java

@@ -1,0 +1,10 @@
+﻿M	src/main/java/com/intellij/plugins/haxe/haxelib/HaxelibCacheManager.java
+A	src/main/java/com/intellij/plugins/haxe/haxelib/HaxelibLibraryInfo.java
+A	src/main/java/com/intellij/plugins/haxe/haxelib/HaxelibLocalDocs.java
+M	src/main/java/com/intellij/plugins/haxe/haxelib/HaxelibProjectUpdater.java
+M	src/main/java/com/intellij/plugins/haxe/ide/toolWindow/HaxelibConsoleWindowFactory.java
+A	src/main/java/com/intellij/plugins/haxe/ide/toolWindow/haxelib/HaxelibDetailsPane.java
+A	src/main/java/com/intellij/plugins/haxe/ide/toolWindow/haxelib/HaxelibExplorerActions.java
+A	src/main/java/com/intellij/plugins/haxe/ide/toolWindow/haxelib/HaxelibExplorerFilters.java
+A	src/main/java/com/intellij/plugins/haxe/ide/toolWindow/haxelib/HaxelibExplorerPanel.java
+A	src/main/java/com/intellij/plugins/haxe/ide/toolWindow/haxelib/HaxelibOverviewHtml.java

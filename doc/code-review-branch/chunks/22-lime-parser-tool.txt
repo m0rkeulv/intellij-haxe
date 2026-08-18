@@ -1,0 +1,12 @@
+A tools/LimeProjectParser/README.md
+A tools/LimeProjectParser/build.gradle.kts
+A tools/LimeProjectParser/build.hxml
+A tools/LimeProjectParser/integration-test.hxml
+A tools/LimeProjectParser/src/main/haxe/limeparser/HaxelibLookup.hx
+A tools/LimeProjectParser/src/main/haxe/limeparser/HxpEvaluator.hx
+A tools/LimeProjectParser/src/main/haxe/limeparser/Main.hx
+A tools/LimeProjectParser/src/main/haxe/limeparser/ProjectXmlEvaluator.hx
+A tools/LimeProjectParser/src/main/resources/HxpRunner.hx
+A tools/LimeProjectParser/src/test/haxe/limeparser/IntegrationMain.hx
+A tools/LimeProjectParser/src/test/haxe/limeparser/TestMain.hx
+A tools/LimeProjectParser/test.hxml

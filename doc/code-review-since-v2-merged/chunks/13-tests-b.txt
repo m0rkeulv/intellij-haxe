@@ -1,0 +1,13 @@
+﻿A	src/test/java/com/intellij/plugins/haxe/v2/runconfig/HaxeDebugSupportTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/runconfig/HaxeProgramLaunchesTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/BuddyDetectionTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/HaxeTestGutterContextTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/HaxeTestRunLineMarkerContributorTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/MunitDetectionTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/TinkDetectionTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/UtestDetectionTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestDebugConsoleSeamTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestEventsConverterTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestLaunchPlannerTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestLocatorTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestRunnerPipelineTest.java

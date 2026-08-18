@@ -1,0 +1,10 @@
+M src/main/java/com/intellij/plugins/haxe/lang/lexer/haxe.flex
+M src/main/java/com/intellij/plugins/haxe/lang/parser/haxe.bnf
+A src/main/java/com/intellij/plugins/haxe/lang/psi/HaxeIsReferenceToUtil.java
+A src/main/java/com/intellij/plugins/haxe/lang/psi/HaxeResolveChecks.java
+A src/main/java/com/intellij/plugins/haxe/lang/psi/HaxeResolveFrames.java
+M src/main/java/com/intellij/plugins/haxe/lang/psi/HaxeResolveResult.java
+M src/main/java/com/intellij/plugins/haxe/lang/psi/HaxeResolver.java
+M src/main/java/com/intellij/plugins/haxe/lang/psi/impl/HaxeReferenceImpl.java
+M src/main/java/com/intellij/plugins/haxe/lang/psi/impl/HaxeRegularExpressionImpl.java
+M src/main/java/com/intellij/plugins/haxe/lang/psi/impl/HaxeTypeParameterDeclaration.java

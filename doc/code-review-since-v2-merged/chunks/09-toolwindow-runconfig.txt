@@ -1,0 +1,24 @@
+﻿R073	src/main/java/com/intellij/plugins/haxe/v2/runconfig/HaxeDebugAdditions.java	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeDebugAdditions.java
+M	src/main/java/com/intellij/plugins/haxe/v2/display/HaxeCompilerDisplayService.java
+M	src/main/java/com/intellij/plugins/haxe/v2/display/HaxeGeneratedPreviewGotoHandler.java
+M	src/main/java/com/intellij/plugins/haxe/v2/runconfig/HaxeActionBeforeRunTaskProvider.java
+M	src/main/java/com/intellij/plugins/haxe/v2/runconfig/HaxeActionRunConfiguration.java
+A	src/main/java/com/intellij/plugins/haxe/v2/runconfig/HaxeDebugSupport.java
+M	src/main/java/com/intellij/plugins/haxe/v2/runconfig/HaxeProgramLaunches.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeCommandRunner.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeServerConsoleWindowFactory.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeToolWindowModelBuilder.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/HaxeToolWindowPanel.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeAddBuildFileAction.java
+A	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeDebugUnitTestsAction.java
+A	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeMarkTestsBuildFileAction.java
+D	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeRemoveModuleAction.java
+A	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeRemoveNodeAction.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeRunProgramAction.java
+A	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeRunUnitTestsAction.java
+A	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/actions/HaxeSelectSectionAction.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/tree/HaxeToolWindowNodes.java
+M	src/main/java/com/intellij/plugins/haxe/v2/toolwindow/tree/HaxeToolWindowTreeRenderer.java
+M	src/test/java/com/intellij/plugins/haxe/v2/display/HaxeLiveCompilerIntegrationTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/runconfig/HaxeDebugSupportTest.java
+A	src/test/java/com/intellij/plugins/haxe/v2/runconfig/HaxeProgramLaunchesTest.java

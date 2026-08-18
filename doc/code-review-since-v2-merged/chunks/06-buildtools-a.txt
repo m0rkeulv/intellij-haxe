@@ -1,0 +1,9 @@
+﻿A	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeBuildClasspaths.java
+M	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeBuildFileActions.java
+A	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeBuildSections.java
+A	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeBuildSystem.java
+M	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeCompilationServerManager.java
+M	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeCompileCommands.java
+R073	src/main/java/com/intellij/plugins/haxe/v2/runconfig/HaxeDebugAdditions.java	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeDebugAdditions.java
+M	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeDefineContextService.java
+A	src/main/java/com/intellij/plugins/haxe/v2/buildtools/HaxeKnownBuildFiles.java

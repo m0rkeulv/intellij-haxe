@@ -1,0 +1,8 @@
+﻿A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/AirTestHost.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestCompileStepResync.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestConfigurationFactory.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestConsoleProperties.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestDebugRunner.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestEventsConverter.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestFlashDebugRunner.java
+A	src/main/java/com/intellij/plugins/haxe/v2/testing/run/HaxeTestLaunchPlanner.java

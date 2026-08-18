@@ -1,0 +1,15 @@
+﻿A	debuggers/browser-debugger/src/test/java/com/intellij/plugins/haxe/runner/debugger/browser/BrowserTestCaptureLiveProbe.java
+A	debuggers/browser-debugger/src/test/java/com/intellij/plugins/haxe/runner/debugger/browser/NodeAttachLiveProbe.java
+M	src/main/java/com/intellij/plugins/haxe/runner/debugger/browser/BrowserDebugBackend.java
+M	src/main/java/com/intellij/plugins/haxe/runner/debugger/browser/BrowserDebugRunner.java
+M	src/main/java/com/intellij/plugins/haxe/runner/debugger/browser/BrowserRunConfiguration.java
+A	src/main/java/com/intellij/plugins/haxe/runner/debugger/browser/BrowserTestRunHost.java
+A	src/main/java/com/intellij/plugins/haxe/runner/debugger/browser/HaxeBrowserTestSupport.java
+A	src/main/java/com/intellij/plugins/haxe/runner/debugger/browser/NodeTestDebugBackend.java
+M	src/main/java/com/intellij/plugins/haxe/runner/debugger/dap/ide/DapBackend.java
+M	src/main/java/com/intellij/plugins/haxe/runner/debugger/dap/ide/DapBreakpointManager.java
+M	src/main/java/com/intellij/plugins/haxe/runner/debugger/dap/ide/DapDebugProcess.java
+M	src/main/java/com/intellij/plugins/haxe/runner/debugger/dap/ide/DapSourceResolver.java
+A	src/main/java/com/intellij/plugins/haxe/runner/debugger/dap/ide/DapSourceScopes.java
+A	src/main/java/com/intellij/plugins/haxe/runner/debugger/dap/ide/DapTestConsoles.java
+A	src/main/java/com/intellij/plugins/haxe/runner/debugger/dap/ide/HostedTestRunSentinel.java
