@@ -20,26 +20,19 @@ package com.intellij.plugins.haxe.ide;
 import com.intellij.codeInsight.actions.OptimizeImportsAction;
 import com.intellij.ide.DataManager;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.util.ArrayUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Created by fedorkorotkov.
  */
 @DisplayName("Refactoring: import optimizer")
-public class HaxeImportOptimizerTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeImportOptimizerTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/imports/optimize/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   @Test

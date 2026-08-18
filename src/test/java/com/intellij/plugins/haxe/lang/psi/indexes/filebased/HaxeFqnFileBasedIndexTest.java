@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeModule;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.extension.fqn.HaxeFullyQualifiedClassNameIndex;
@@ -18,20 +18,13 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 @DisplayName("Indexing: fully qualified name file-based indexes")
-public class HaxeFqnFileBasedIndexTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeFqnFileBasedIndexTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "/filebasedIndexes/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   @Nested

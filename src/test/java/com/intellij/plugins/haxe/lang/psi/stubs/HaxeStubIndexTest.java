@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxePsiField;
@@ -19,8 +19,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Tests for Haxe PSI stub indexes.
@@ -33,16 +31,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * which includes the module name only when the class name differs from the file name.
  */
 @DisplayName("Indexing: stub index")
-public class HaxeStubIndexTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeStubIndexTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "/stubs/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   // ── HaxeClassNameStubIndex ────────────────────────────────────────────
@@ -263,8 +256,6 @@ public class HaxeStubIndexTest extends HaxeCodeInsightFixtureTestCase {
     assertFalse(methods.isEmpty(), "Expected at least one constructor ('new') in index");
   }
 
-
-
   @Test
   @DisplayName("method name index instance method")
   public void testMethodNameIndex_instanceMethod() throws Throwable {
@@ -280,7 +271,6 @@ public class HaxeStubIndexTest extends HaxeCodeInsightFixtureTestCase {
     Collection<HaxeMethod> methods = getMethods("staticMethod", HaxeStaticMethodNameStubIndex.KEY);
     assertFalse(methods.isEmpty(), "Expected result for static method 'staticMethod'");
   }
-
 
   @Test
   @DisplayName("method name index module function")

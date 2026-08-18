@@ -23,7 +23,7 @@ import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.codeInspection.InspectionProfileEntry;
 import com.intellij.codeInspection.LocalInspectionTool;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeToolkitLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.annotator.HaxeSemanticAnnotatorInspections;
 import com.intellij.util.ArrayUtil;
 import org.apache.commons.lang3.StringUtils;
@@ -33,7 +33,7 @@ import java.lang.reflect.Constructor;
 import java.util.*;
 
 
-public abstract class HaxeSemanticAnnotatorTestBase extends HaxeCodeInsightFixtureTestCase {
+public abstract class HaxeSemanticAnnotatorTestBase extends HaxeToolkitLightFixtureTestCase {
 
 
   @Override

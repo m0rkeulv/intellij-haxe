@@ -39,7 +39,6 @@ import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.impl.PsiManagerEx;
-import com.intellij.testFramework.LightProjectDescriptor;
 import com.intellij.testFramework.PlatformTestUtil;
 import com.intellij.testFramework.builders.ModuleFixtureBuilder;
 import com.intellij.testFramework.fixtures.*;
@@ -113,26 +112,7 @@ abstract public class HaxeCodeInsightFixtureTestCase {
     }
   }
 
-  /**
-   * Light-fixture opt-in: return a shared descriptor from
-   * {@link HaxeLightProjectDescriptors} to run this class against the
-   * platform's REUSED light project instead of a fresh heavy project per
-   * test. The {@link CodeInsightTestFixture} surface is identical and
-   * per-test files roll back, but project-level state (settings, inspection
-   * profile, trust) survives between tests - a class that mutates it must
-   * reset it in tearDown.
-   */
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return null;
-  }
-
   protected void setUp() throws Exception {
-    LightProjectDescriptor lightDescriptor = lightProjectDescriptor();
-    if (lightDescriptor != null) {
-      myFixture = HaxeLightFixtures.setUpLightFixture(lightDescriptor, getName(), getTestDataPath(), getTestRootDisposable());
-      return;
-    }
-
     testFixtureFactory.registerFixtureBuilder(MyHaxeModuleFixtureBuilderImpl.class, MyHaxeModuleFixtureBuilderImpl.class);
     final TestFixtureBuilder<IdeaProjectTestFixture> projectBuilder = testFixtureFactory.createFixtureBuilder(getName());
     myFixture = testFixtureFactory.createCodeInsightFixture(projectBuilder.getFixture());
@@ -182,7 +162,6 @@ abstract public class HaxeCodeInsightFixtureTestCase {
   protected void tearDown() throws Exception {
     try {
       HaxeTestUtils.cleanupUnexpiredAppleUITimers(this::addSuppressedException);
-      dropTemporaryCodeStyleSettings();
       myFixture.tearDown();
     }
     catch (Throwable e) {
@@ -191,12 +170,6 @@ abstract public class HaxeCodeInsightFixtureTestCase {
     finally {
       myFixture = null;
     }
-  }
-
-  /** A leftover temporary code style would leak into the next test of a shared light project. */
-  private void dropTemporaryCodeStyleSettings() {
-    if (myFixture == null) return;
-    CodeStyleSettingsManager.getInstance(myFixture.getProject()).dropTemporarySettings();
   }
 
   /** The JUnit3-style test name ({@code testFoo}); still drives fixture-file lookup. */

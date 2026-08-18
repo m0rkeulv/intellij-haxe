@@ -24,7 +24,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import com.intellij.codeInsight.TargetElementUtil;
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeToolkitLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeObjectLiteral;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypedefDeclaration;
@@ -41,22 +41,15 @@ import org.junit.jupiter.params.provider.FieldSource;
 import java.util.List;
 
 import java.util.Collection;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @DisplayName("Navigation: go to declaration action")
-public class HaxeGoToDeclarationActionTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeGoToDeclarationActionTest extends HaxeToolkitLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/goto/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   protected void doTest(PsiFile file, int expectedSize) {

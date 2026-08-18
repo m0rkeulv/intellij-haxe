@@ -21,26 +21,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.intellij.codeInsight.navigation.GotoTargetHandler;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.testFramework.fixtures.CodeInsightTestUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @DisplayName("Navigation: go to implementation")
-public class HaxeGoToImplementationTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeGoToImplementationTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/gotoImplementation/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private void doTest(int expectedLength) throws Throwable {

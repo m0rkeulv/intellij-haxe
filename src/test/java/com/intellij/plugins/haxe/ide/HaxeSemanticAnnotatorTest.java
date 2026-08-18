@@ -28,16 +28,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
-
 
 @DisplayName("Annotation: semantic annotator")
 public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
-  }
 
   @Override
   public void setUp() throws Exception {
@@ -51,7 +44,6 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
   protected String getBasePath() {
     return "/annotation.semantic/";
   }
-
 
   @Test
   @DisplayName("char dot code")
@@ -889,7 +881,6 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
     //@Test public void testAssignAnonymousStructToInt() throws Exception {
     //  doTestNoFixWithWarnings();
     //}
-
 
     // typedef Pt = {x:Int; y:Int;}; var c:Int = new Pt();
     @Test

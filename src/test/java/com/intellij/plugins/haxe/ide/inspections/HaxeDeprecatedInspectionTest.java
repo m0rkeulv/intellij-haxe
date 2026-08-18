@@ -17,11 +17,9 @@
  */
 package com.intellij.plugins.haxe.ide.inspections;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Test for the HaxeDeprecatedInspection.
@@ -29,7 +27,7 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * Created by Usievaład Kimajeŭ on 7.06.2016.
  */
 @DisplayName("Inspection: deprecated")
-public class HaxeDeprecatedInspectionTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeDeprecatedInspectionTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("method")
   public void testMethod() {
@@ -105,11 +103,6 @@ public class HaxeDeprecatedInspectionTest extends HaxeCodeInsightFixtureTestCase
   @Override
   protected String getBasePath() {
     return "/annotation.semantic/deprecated/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private void doTest(String fileName) {

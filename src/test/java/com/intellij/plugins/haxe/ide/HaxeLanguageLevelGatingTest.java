@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel.*;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Language-level annotations, one fixture per test: each file under
@@ -26,11 +24,6 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
   // the LEVEL must be what drives pre-4.2 `is` semantics here, not the manual opt-in inspection
   private static final Set<Class<? extends LocalInspectionTool>> MANUAL_OPT_INS =
     Set.of(HaxeSemanticAnnotatorInspections.IsTypeExpressionInspection4dot1Compatible.class);
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
-  }
 
   @Override
   public void tearDown() throws Exception {

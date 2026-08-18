@@ -19,7 +19,7 @@ package com.intellij.plugins.haxe.resolve;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -27,22 +27,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Created by Boch on 05.02.2016.
  */
 @DisplayName("Resolve: variable")
-public class HaxeResolveVariableTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeResolveVariableTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/resolve/variable/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private void doTest() throws Exception {

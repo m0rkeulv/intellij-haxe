@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.v2.wizard;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,20 +10,13 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 @DisplayName("Project generator: template files")
-public class HaxeTemplateFilesTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeTemplateFilesTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "/wizard/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   @Test

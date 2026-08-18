@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import com.intellij.openapi.command.WriteCommandAction;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeExpressionCodeFragment;
 import com.intellij.plugins.haxe.lang.psi.HaxeReferenceExpression;
@@ -24,8 +24,6 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 
 import java.util.List;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The eager name-qualification linchpin: {@link HashLinkExpressionQualifier}
@@ -37,16 +35,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * re-evaluated on a lazy retry.
  */
 @DisplayName("Debugger: hashlink expression qualifier")
-public class HashLinkExpressionQualifierTest extends HaxeCodeInsightFixtureTestCase {
+public class HashLinkExpressionQualifierTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   /**

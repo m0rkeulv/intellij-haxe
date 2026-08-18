@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.ide.references;
 
 import com.intellij.openapi.editor.colors.TextAttributesKey;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeStringLiteralExpression;
@@ -21,20 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 @DisplayName("References: string literal links")
-public class HaxeStringLiteralLinkTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeStringLiteralLinkTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "/references/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   @Test

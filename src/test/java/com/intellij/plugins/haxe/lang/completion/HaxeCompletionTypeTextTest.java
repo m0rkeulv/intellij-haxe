@@ -3,14 +3,12 @@ package com.intellij.plugins.haxe.lang.completion;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementPresentation;
 import com.intellij.codeInsight.lookup.LookupElementRenderer;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeToolkitLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.lookup.HaxeMemberLookupElement;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The lookup's type column is produced by the EXPENSIVE renderer on a
@@ -19,16 +17,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * the popup does: cheap presentation first, then the expensive upgrade.
  */
 @DisplayName("Completion: lookup type text")
-public class HaxeCompletionTypeTextTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeCompletionTypeTextTest extends HaxeToolkitLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "/completion/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   @Test

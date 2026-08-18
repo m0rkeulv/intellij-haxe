@@ -5,13 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import static com.intellij.testFramework.UsefulTestCase.assertContainsElements;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import java.util.List;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Completion inside the debugger's Evaluate Expression / Watches editor — a
@@ -25,16 +23,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * crossing both typed as Dynamic/unknown and the popup came up empty.
  */
 @DisplayName("Debugger: code fragment completion")
-public class HaxeCodeFragmentCompletionTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeCodeFragmentCompletionTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   /** The caret context of {@link HaxeDebuggerTestFixtures#instanceFrameProject}'s breakpoint. */

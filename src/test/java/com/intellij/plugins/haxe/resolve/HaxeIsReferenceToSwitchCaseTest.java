@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.resolve;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeEnumDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeIsReferenceToUtil;
@@ -17,8 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The isReferenceTo fast path (HaxeIsReferenceToUtil) against the full
@@ -29,16 +27,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * resolve implies.
  */
 @DisplayName("Resolve: isReferenceTo switch case fast path")
-public class HaxeIsReferenceToSwitchCaseTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeIsReferenceToSwitchCaseTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private HaxeReference caseReference() {

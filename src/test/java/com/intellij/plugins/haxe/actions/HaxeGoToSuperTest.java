@@ -19,26 +19,19 @@ package com.intellij.plugins.haxe.actions;
 
 import com.intellij.codeInsight.CodeInsightActionHandler;
 import com.intellij.lang.CodeInsightActions;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @DisplayName("Navigation: go to super")
-public class HaxeGoToSuperTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeGoToSuperTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/gotoSuper/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private void doTest() throws Throwable {

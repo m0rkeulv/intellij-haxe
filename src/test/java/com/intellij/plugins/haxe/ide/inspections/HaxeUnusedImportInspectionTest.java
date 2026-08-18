@@ -17,11 +17,9 @@
  */
 package com.intellij.plugins.haxe.ide.inspections;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Test for the HaxeUnusedImportInspection.
@@ -29,7 +27,7 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * Created by Usievaład Kimajeŭ on 27.05.2016.
  */
 @DisplayName("Inspection: unused import")
-public class HaxeUnusedImportInspectionTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeUnusedImportInspectionTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("unused alias typedef")
   public void testUnusedAliasTypedef() {
@@ -87,11 +85,6 @@ public class HaxeUnusedImportInspectionTest extends HaxeCodeInsightFixtureTestCa
   @Override
   protected String getBasePath() {
     return "/imports/unused/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private void doTest(String fileName) {

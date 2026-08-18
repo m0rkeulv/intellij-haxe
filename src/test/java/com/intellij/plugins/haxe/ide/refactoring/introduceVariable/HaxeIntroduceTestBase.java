@@ -21,25 +21,18 @@ package com.intellij.plugins.haxe.ide.refactoring.introduceVariable;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeExpression;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.Consumer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
-public abstract class HaxeIntroduceTestBase extends HaxeCodeInsightFixtureTestCase {
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
-  }
+public abstract class HaxeIntroduceTestBase extends HaxeLightFixtureTestCase {
 
   protected void doTestSuggestions(Class<? extends HaxeExpression> parentClass, String... expectedNames) {
     final Collection<String> names = buildSuggestions(parentClass);

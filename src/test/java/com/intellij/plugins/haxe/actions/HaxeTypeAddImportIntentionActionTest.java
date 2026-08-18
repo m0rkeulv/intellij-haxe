@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.actions.HaxeTypeAddImportIntentionAction;
@@ -40,26 +40,18 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @DisplayName("Intention: type add import action")
-public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeTypeAddImportIntentionActionTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/addImportIntention/";
   }
 
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
-  }
-
   protected CommonCodeStyleSettings myTestStyleSettings;
-
 
   public void doTest() {
     final PsiFile file = PsiDocumentManager.getInstance(myFixture.getProject()).getPsiFile(myFixture.getEditor().getDocument());
@@ -79,7 +71,6 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixture
     super.setUp();
     setTestStyleSettings();
   }
-
 
   @Override
   public void setTestStyleSettings() {
@@ -104,7 +95,6 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixture
     myTestStyleSettings.BLANK_LINES_AFTER_PACKAGE = 2;
     myTestStyleSettings.BLANK_LINES_AFTER_IMPORTS = 2;
   }
-
 
   @Test
   @DisplayName("simple")

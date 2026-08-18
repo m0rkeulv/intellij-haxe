@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIndex;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -15,8 +15,6 @@ import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import java.util.Collection;
 import org.jetbrains.annotations.Nullable;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Jump to Source resolution from a Variables-view access path, pinning down
@@ -36,16 +34,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * </ul>
  */
 @DisplayName("Debugger: variable source navigator")
-public class HaxeVariableSourceNavigatorTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeVariableSourceNavigatorTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private XSourcePosition framePosition() {

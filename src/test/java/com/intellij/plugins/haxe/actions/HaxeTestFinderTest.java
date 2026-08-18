@@ -19,30 +19,23 @@ package com.intellij.plugins.haxe.actions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.ide.HaxeTestFinder;
 import com.intellij.psi.PsiFile;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @DisplayName("Navigation: test finder")
-public class HaxeTestFinderTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeTestFinderTest extends HaxeLightFixtureTestCase {
   private HaxeTestFinder myTestFinder = null;
 
   @Override
   protected String getBasePath() {
     return "/testFinder/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   @Override

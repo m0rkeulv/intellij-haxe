@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.psi.codeStyle.CodeStyleManager;
@@ -35,24 +35,17 @@ import org.junit.jupiter.api.Test;
 
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @DisplayName("Formatting: formatter")
-public class HaxeFormatterTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
   protected CommonCodeStyleSettings myTestStyleSettings;
 
   @Override
   protected String getBasePath() {
     return "/formatter/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   @Override

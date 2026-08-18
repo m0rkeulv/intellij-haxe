@@ -26,7 +26,7 @@ import com.intellij.openapi.fileTypes.FileTypes;
 import com.intellij.openapi.ui.TestDialog;
 import com.intellij.openapi.ui.TestDialogManager;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiFileFactory;
@@ -44,22 +44,15 @@ import java.util.Collection;
 import java.util.Comparator;
 
 import static com.intellij.plugins.haxe.ide.HaxeFindUsagesHandlerFactory.TestInterface.*;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @DisplayName("Navigation: find usages")
-public class HaxeFindUsagesTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeFindUsagesTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/findUsages/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   protected String getResultsPath() {
@@ -152,7 +145,6 @@ public class HaxeFindUsagesTest extends HaxeCodeInsightFixtureTestCase {
     doTest(3);
   }
 
-
   //
   // Overrides tests
   //
@@ -173,7 +165,6 @@ public class HaxeFindUsagesTest extends HaxeCodeInsightFixtureTestCase {
       return getOptionIndex(getAncestorClassesOption());
     }
   };
-
 
   public void doOverrideTest(String testFile, TestDialog answer) throws Throwable {
     TestDialogManager.setTestDialog(answer);
@@ -236,7 +227,6 @@ public class HaxeFindUsagesTest extends HaxeCodeInsightFixtureTestCase {
 
     return builder.toString();
   }
-
 
   @Test
   @DisplayName("find current class")

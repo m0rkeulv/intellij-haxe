@@ -9,12 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Reparse of the debugger's expression fragments (Evaluate, Watches, Set
@@ -27,16 +25,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
 
  */
 @DisplayName("Debugger: code fragment reparse")
-public class HaxeCodeFragmentReparseTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeCodeFragmentReparseTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private PsiFile fragment(String text) {

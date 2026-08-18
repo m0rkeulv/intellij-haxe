@@ -23,7 +23,7 @@ import static com.intellij.testFramework.UsefulTestCase.assertNotEmpty;
 
 import com.intellij.openapi.editor.CaretState;
 import com.intellij.openapi.ui.MessageConstants;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeComponentType;
 import com.intellij.plugins.haxe.ide.refactoring.rename.HaxeRenameProcessor;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
@@ -39,23 +39,16 @@ import org.junit.jupiter.api.Test;
 
 import java.util.*;
 import java.util.stream.Collectors;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
 @CustomLog
 @DisplayName("Refactoring: rename")
-public class HaxeRenameTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeRenameTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/rename/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   public void doTest(String newName, String... additionalFiles) {
@@ -89,10 +82,8 @@ public class HaxeRenameTest extends HaxeCodeInsightFixtureTestCase {
     HaxeRenameProcessor.alsoRenameAnswer = dialogAnswer;
     myFixture.configureByFiles(ArrayUtil.reverseArray(ArrayUtil.append(additionalFiles, getTruncatedSourceFileName())));
 
-
     PsiElement elementAtCaret = myFixture.getElementAtCaret();
     RenameProcessor renameProcessor = new RenameProcessor(elementAtCaret.getProject(), elementAtCaret, newName, true, true);
-
 
     LinkedHashMap<PsiElement, String> allRenames = new LinkedHashMap<>();
     allRenames.put(elementAtCaret, newName);

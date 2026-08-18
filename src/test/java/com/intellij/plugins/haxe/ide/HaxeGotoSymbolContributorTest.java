@@ -20,7 +20,7 @@ package com.intellij.plugins.haxe.ide;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.*;
 import com.intellij.psi.stubs.StubIndex;
 import com.intellij.util.ArrayUtil;
@@ -28,19 +28,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 @DisplayName("Navigation: goto symbol contributor")
-public class HaxeGotoSymbolContributorTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeGotoSymbolContributorTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/indexers/symbols/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   public HaxeGotoSymbolContributorTest() {

@@ -25,20 +25,18 @@ import com.intellij.navigation.NavigationItem;
 import com.intellij.openapi.util.text.CharFilter;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.testFramework.UsefulTestCase;
 
 import java.util.*;
 import java.util.stream.Collectors;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * @author: Fedor.Korotkov
  */
-public abstract class HaxeCompletionTestBase extends HaxeCodeInsightFixtureTestCase {
+public abstract class HaxeCompletionTestBase extends HaxeLightFixtureTestCase {
   enum CheckType {EQUALS, INCLUDES, EXCLUDES}
 
   private final String myPath;
@@ -59,11 +57,6 @@ public abstract class HaxeCompletionTestBase extends HaxeCodeInsightFixtureTestC
   @Override
   protected String getBasePath() {
     return myPath;
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   protected PsiFile configureFileByText(String fname, String text) {

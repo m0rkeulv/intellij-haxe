@@ -3,7 +3,7 @@ package com.intellij.plugins.haxe.ide;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeToolkitLightFixtureTestCase;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,8 +13,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * Termination guard for type inference over mutually recursive, untyped std
@@ -25,16 +23,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * a hang here means an inference cycle escaped its caches and budgets again.
  */
 @DisplayName("Annotation: recursive std inference (ArraySort)")
-public class HaxeRecursiveStdInferenceTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeRecursiveStdInferenceTest extends HaxeToolkitLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "/annotation/";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.WITH_TOOLKIT;
   }
 
   @Test

@@ -9,15 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.intellij.openapi.util.TextRange;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.AdapterTargetsSmartStepHandler;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StepInTarget;
 import com.intellij.psi.PsiElement;
 import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
 import java.util.List;
-import com.intellij.plugins.haxe.HaxeLightProjectDescriptors;
-import com.intellij.testFramework.LightProjectDescriptor;
 
 /**
  * The target↔highlight pairing for smart step into: the adapter reports
@@ -31,16 +29,11 @@ import com.intellij.testFramework.LightProjectDescriptor;
  * wrong method.
  */
 @DisplayName("Debugger: hashlink smart step into order")
-public class HashLinkSmartStepIntoOrderTest extends HaxeCodeInsightFixtureTestCase {
+public class HashLinkSmartStepIntoOrderTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
     return "";
-  }
-
-  @Override
-  protected LightProjectDescriptor lightProjectDescriptor() {
-    return HaxeLightProjectDescriptors.BARE;
   }
 
   private List<PsiElement> namesOnCaretLine(String mainBody) {
