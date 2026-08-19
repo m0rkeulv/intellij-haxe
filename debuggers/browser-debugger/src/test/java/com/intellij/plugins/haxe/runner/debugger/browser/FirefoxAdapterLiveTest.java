@@ -10,7 +10,10 @@ import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WE
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.WEB_MAIN_HX_SOURCE;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.assertStoppedInHx;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.awaitInitialized;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.breakpointOf;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.breakpointsRequest;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.isStoppedInHx;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.outputTextOf;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.continueRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
@@ -19,8 +22,7 @@ import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.pr
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.scopesRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.stackTraceRequest;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.variablesRequest;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
@@ -178,7 +180,7 @@ public class FirefoxAdapterLiveTest {
       }
     }
     assertNotNull(stopped, "breakpoint never hit");
-    int threadId = stopped.getBody().getThreadId() != null ? stopped.getBody().getThreadId() : 1;
+    int threadId = threadIdOf(stopped);
 
     assertTrue(client.sendRequest(new ThreadsRequest(), TIMEOUT).isSuccess(), "threads");
 
@@ -192,7 +194,7 @@ public class FirefoxAdapterLiveTest {
             + " @ " + (frame.getSource() != null ? frame.getSource().getPath() : "?")
             + ":" + frame.getLine());
     }
-    assertTrue(!frames.isEmpty(), "no frames");
+    assertFalse(frames.isEmpty(), "no frames");
     StackFrame top = frames.get(0);
     assertStoppedInHx(top, WEB_MAIN_HX_NAME, BP_LINE);
 
@@ -253,12 +255,12 @@ public class FirefoxAdapterLiveTest {
         }
       }
       assertNotNull(stopped, "breakpoint never hit over http");
-      int threadId = stopped.getBody().getThreadId() != null ? stopped.getBody().getThreadId() : 1;
+      int threadId = threadIdOf(stopped);
 
       Response stResponse = client.sendRequest(stackTraceRequest(threadId), TIMEOUT);
       assertTrue(stResponse.isSuccess(), "stackTrace");
       List<StackFrame> frames = ((StackTraceResponse)stResponse).getBody().getStackFrames();
-      assertTrue(!frames.isEmpty(), "no frames");
+      assertFalse(frames.isEmpty(), "no frames");
 
       StackFrame top = frames.get(0);
       probe("http-mode top frame: " + top.getName()
@@ -291,10 +293,12 @@ public class FirefoxAdapterLiveTest {
       forwardBound = runSeparatorVariant("forward", fixture, firefox, content,
                                          fixture.resolve(WEB_MAIN_HX_NAME).toString().replace('\\', '/'));
     }
+
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       nativeBound = runSeparatorVariant("native", fixture, firefox, content,
                                         fixture.resolve(WEB_MAIN_HX_NAME).toString());
     }
+
     probe("separator sensitivity: forward=" + forwardBound + " native=" + nativeBound);
     assertTrue(nativeBound, "native breakpoint path must bind");
     // no assert on forwardBound: this test RECORDS the adapter's behaviour;
@@ -371,35 +375,26 @@ public class FirefoxAdapterLiveTest {
 
       // breakpoint in the worker only; the ticking line hits ~immediately
       sendBreakpoint(fixture.resolve(WORKER_MAIN_HX_NAME), FF_WORKER_TICK_LINE);
-      StoppedEvent workerStop = awaitStop(15_000);
-      assertNotNull(workerStop, "worker breakpoint never hit");
-      int workerThread = workerStop.getBody().getThreadId() != null ? workerStop.getBody().getThreadId() : 1;
-      StackFrame workerFrame = topFrame(workerThread);
-      assertNotNull(workerFrame, "no worker top frame");
-      probe("worker stop: thread=" + workerThread + " frame=" + workerFrame.getId()
-            + " @ " + (workerFrame.getSource() != null ? workerFrame.getSource().getPath() : "?")
-            + ":" + workerFrame.getLine());
+      StopSite worker = awaitStopSite("worker breakpoint");
+      probe("worker stop: thread=" + worker.threadId() + " frame=" + worker.frame().getId()
+            + " @ " + frameLabel(worker.frame()));
 
       // 1) scopes+variables on the worker frame (expected to answer)
-      probe("worker scopes/variables: " + timedScopesAndVariables(workerFrame.getId()));
+      probe("worker scopes/variables: " + timedScopesAndVariables(worker.frame().getId()));
+
       // 2) evaluate on the worker frame - the suspected never-answered request
-      probe("worker evaluate(watch): " + timedEvaluate("ticks", workerFrame.getId(), "watch"));
-      probe("worker evaluate(repl):  " + timedEvaluate("ticks", workerFrame.getId(), "repl"));
+      probe("worker evaluate(watch): " + timedEvaluate("ticks", worker.frame().getId(), "watch"));
+      probe("worker evaluate(repl):  " + timedEvaluate("ticks", worker.frame().getId(), "repl"));
 
       // 3) CONTROL: the TAB thread - move the breakpoint to the page heartbeat
       sendBreakpoints(fixture.resolve(WORKER_MAIN_HX_NAME), List.of()); // clear worker bp
       sendBreakpoint(fixture.resolve("WebPage.hx"), FF_PAGE_BEAT_LINE);
 
-      resumeThread(workerThread);
-      StoppedEvent tabStop = awaitStop(15_000);
-      assertNotNull(tabStop, "page heartbeat breakpoint never hit");
-      int tabThread = tabStop.getBody().getThreadId() != null ? tabStop.getBody().getThreadId() : 1;
-
-      StackFrame tabFrame = topFrame(tabThread);
-      assertNotNull(tabFrame, "no tab top frame");
-      probe("tab stop: thread=" + tabThread + " frame=" + tabFrame.getId());
-      probe("tab scopes/variables: " + timedScopesAndVariables(tabFrame.getId()));
-      probe("tab evaluate(watch): " + timedEvaluate("beats", tabFrame.getId(), "watch"));
+      resumeThread(worker.threadId());
+      StopSite tab = awaitStopSite("page heartbeat breakpoint");
+      probe("tab stop: thread=" + tab.threadId() + " frame=" + tab.frame().getId());
+      probe("tab scopes/variables: " + timedScopesAndVariables(tab.frame().getId()));
+      probe("tab evaluate(watch): " + timedEvaluate("beats", tab.frame().getId(), "watch"));
 
       client.sendRequest(new DisconnectRequest(), TIMEOUT);
     }
@@ -510,6 +505,7 @@ public class FirefoxAdapterLiveTest {
         }
       }
     }
+
     assertNotNull(worked, "no strategy hit the load-time breakpoint");
     probe("first working load strategy: " + worked);
   }
@@ -631,11 +627,11 @@ public class FirefoxAdapterLiveTest {
 
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = session.pollEvent(250);
+          Breakpoint breakpoint = breakpointOf(event);
           if (event instanceof StoppedEvent s) {
             stopped = s;
-          } else if (event instanceof BreakpointEvent be
-                     && be.getBody() != null && be.getBody().getBreakpoint() != null) {
-            probe("  " + label + " breakpointEvent verified=" + be.getBody().getBreakpoint().isVerified());
+          } else if (breakpoint != null) {
+            probe("  " + label + " breakpointEvent verified=" + breakpoint.isVerified());
           }
         }
         probe("  " + label + " path stop=" + (stopped != null));
@@ -701,9 +697,8 @@ public class FirefoxAdapterLiveTest {
           // so page output arriving without a stop is definitive - the load
           // ran through unpaused. Refresh variants skip this: their FIRST
           // load is expected to run through, only the reloaded one stops.
-          if (!refreshOnce && event instanceof OutputEvent output
-              && output.getBody() != null && output.getBody().getOutput() != null
-              && output.getBody().getOutput().contains("-loaded")) {
+          String pageOutput = outputTextOf(event);
+          if (!refreshOnce && pageOutput != null && pageOutput.contains("-loaded")) {
             probe("  variant " + variant + " page output without a stop - missed");
             session.sendRequest(new DisconnectRequest(), TIMEOUT);
             return false;
@@ -711,19 +706,11 @@ public class FirefoxAdapterLiveTest {
           if (!(event instanceof StoppedEvent stopped)) {
             continue;
           }
-          int threadId = stopped.getBody().getThreadId() != null ? stopped.getBody().getThreadId() : 1;
+          int threadId = threadIdOf(stopped);
 
-          Response stResponse = session.sendRequest(stackTraceRequest(threadId), TIMEOUT);
-
-          StackFrame top = stResponse instanceof StackTraceResponse st && st.isSuccess()
-                           && !st.getBody().getStackFrames().isEmpty()
-                           ? st.getBody().getStackFrames().get(0) : null;
-          probe("  variant " + variant + " stop frame: "
-                + (top == null ? "<none>"
-                   : (top.getSource() != null ? top.getSource().getPath() : "?") + ":" + top.getLine()));
-          boolean onBpLine = top != null && top.getSource() != null && top.getSource().getPath() != null
-                             && top.getSource().getPath().endsWith("WebLoad.hx") && top.getLine() == LOAD_BP_LINE;
-          if (onBpLine) {
+          StackFrame top = firstFrame(session.sendRequest(stackTraceRequest(threadId), TIMEOUT));
+          probe("  variant " + variant + " stop frame: " + frameLabel(top));
+          if (isStoppedInHx(top, WEB_LOAD_HX_NAME, LOAD_BP_LINE)) {
             session.sendRequest(new DisconnectRequest(), TIMEOUT);
             return true;
           }
@@ -768,6 +755,17 @@ public class FirefoxAdapterLiveTest {
     }
   }
 
+  /// Awaits the next stop and resolves its top frame, failing loud at the step that died.
+  private StopSite awaitStopSite(String what) throws Exception {
+    StoppedEvent stopped = awaitStop(15_000);
+    assertNotNull(stopped, what + " never hit");
+
+    int threadId = threadIdOf(stopped);
+    StackFrame frame = topFrame(threadId);
+    assertNotNull(frame, "no top frame after " + what);
+    return new StopSite(threadId, frame);
+  }
+
   private StoppedEvent awaitStop(long timeoutMillis) throws InterruptedException {
     long deadline = System.currentTimeMillis() + timeoutMillis;
     while (System.currentTimeMillis() < deadline) {
@@ -776,24 +774,60 @@ public class FirefoxAdapterLiveTest {
         return stopped;
       }
       if (event != null) {
-        String detail = event instanceof BreakpointEvent be
-                        && be.getBody() != null && be.getBody().getBreakpoint() != null
-                        ? " id=" + be.getBody().getBreakpoint().getId()
-                          + " verified=" + be.getBody().getBreakpoint().isVerified()
-                        : event instanceof ThreadEvent te
-                          && te.getBody() != null
-                          ? " reason=" + te.getBody().getReason() + " threadId=" + te.getBody().getThreadId()
-                          : "";
-        probe("event '" + event.getEvent() + "'" + detail);
+        probe("event '" + event.getEvent() + "'" + eventDetail(event));
       }
     }
     return null;
   }
 
   private StackFrame topFrame(int threadId) throws Exception {
-    Response response = client.sendRequest(stackTraceRequest(threadId), TIMEOUT);
-    return response instanceof StackTraceResponse st && st.isSuccess() && !st.getBody().getStackFrames().isEmpty()
-           ? st.getBody().getStackFrames().get(0) : null;
+    return firstFrame(client.sendRequest(stackTraceRequest(threadId), TIMEOUT));
+  }
+
+  /// The top frame of a stackTrace response; null when the request failed or the stack is empty.
+  private static StackFrame firstFrame(Response stackTraceResponse) {
+    if (!(stackTraceResponse instanceof StackTraceResponse st) || !st.isSuccess()) return null;
+    List<StackFrame> frames = st.getBody().getStackFrames();
+    return frames.isEmpty() ? null : frames.get(0);
+  }
+
+  /// `path:line` of a frame for the probe log; `<none>` without a frame, `?` without a source.
+  private static String frameLabel(StackFrame frame) {
+    if (frame == null) return "<none>";
+    String path = frame.getSource() != null ? frame.getSource().getPath() : "?";
+    return path + ":" + frame.getLine();
+  }
+
+  /// One-line log suffix for the event kinds worth detailing.
+  private static String eventDetail(Event event) {
+    Breakpoint breakpoint = breakpointOf(event);
+    if (breakpoint != null) {
+      return " id=" + breakpoint.getId() + " verified=" + breakpoint.isVerified();
+    }
+    if (event instanceof ThreadEvent te && te.getBody() != null) {
+      return " reason=" + te.getBody().getReason() + " threadId=" + te.getBody().getThreadId();
+    }
+    return "";
+  }
+
+  /// The stopped event's thread id; DAP allows it to be absent, 1 is the conventional main thread.
+  private static int threadIdOf(StoppedEvent stopped) {
+    Integer threadId = stopped.getBody().getThreadId();
+    return threadId != null ? threadId : 1;
+  }
+
+  /// Variable count of a variables response; -1 when it failed (the caller's log records the shape).
+  private static int variableCount(Response response) {
+    if (response instanceof VariablesResponse vr && vr.isSuccess() && vr.getBody().getVariables() != null) {
+      return vr.getBody().getVariables().size();
+    }
+    return -1;
+  }
+
+  /// The evaluate result text, or the failure message when the adapter said no.
+  private static String evaluateResult(Response response) {
+    if (response instanceof EvaluateResponse ok && ok.isSuccess()) return ok.getBody().getResult();
+    return "error: " + response.getMessage();
   }
 
   private void resumeThread(int threadId) throws Exception {
@@ -810,10 +844,8 @@ public class FirefoxAdapterLiveTest {
 
       int reference = ok.getBody().getScopes().get(0).getVariablesReference();
       Response vResponse = client.sendRequest(variablesRequest(reference), 10_000);
-      int count = vResponse instanceof VariablesResponse vr && vr.isSuccess() && vr.getBody().getVariables() != null
-                  ? vr.getBody().getVariables().size() : -1;
 
-      return "OK (" + count + " vars, " + (System.currentTimeMillis() - start) + "ms)";
+      return "OK (" + variableCount(vResponse) + " vars, " + (System.currentTimeMillis() - start) + "ms)";
 
     } catch (Exception e) {
       return "HUNG/FAILED after " + (System.currentTimeMillis() - start) + "ms: " + e.getMessage();
@@ -831,16 +863,16 @@ public class FirefoxAdapterLiveTest {
       request.setArguments(arguments);
 
       Response response = client.sendRequest(request, 10_000);
-
-      String result = response instanceof EvaluateResponse ok
-                      && ok.isSuccess() ? ok.getBody().getResult() : "error: " + response.getMessage();
-      return "answered in " + (System.currentTimeMillis() - start) + "ms -> " + result;
+      return "answered in " + (System.currentTimeMillis() - start) + "ms -> " + evaluateResult(response);
     } catch (Exception e) {
       return "NO ANSWER after " + (System.currentTimeMillis() - start) + "ms (" + e.getMessage() + ")";
     }
   }
 
   /// A launch request whose arguments are the firefox adapter's own vocabulary.
+  /// A stop's thread id and top frame — what the drive-to-state helper returns.
+  private record StopSite(int threadId, StackFrame frame) {}
+
   static final class FirefoxLaunchRequest extends Request {
     @SuppressWarnings("unused") // serialized by jackson
     private final Map<String, Object> arguments;

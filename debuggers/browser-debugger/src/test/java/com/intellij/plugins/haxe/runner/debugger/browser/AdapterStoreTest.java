@@ -76,6 +76,7 @@ public class AdapterStoreTest {
     } catch (IOException e) {
       assertTrue(e.getMessage().contains("SHA-256 mismatch"), e.getMessage());
     }
+
     assertTrue(!Files.exists(storeRoot.resolve("test-adapter").resolve("1.0.0").resolve(ENTRY)), "nothing unpacked");
     assertTrue(!Files.exists(storeRoot.resolve("test-adapter").resolve("1.0.0.ok")), "no marker");
   }
@@ -129,6 +130,7 @@ public class AdapterStoreTest {
     } catch (IOException e) {
       assertTrue(e.getMessage().contains("zip-slip"), e.getMessage());
     }
+
     assertTrue(!Files.exists(storeRoot.resolve("test-adapter").resolve("escaped.txt")), "nothing escaped the store");
   }
 
@@ -156,6 +158,7 @@ public class AdapterStoreTest {
     } catch (IOException e) {
       assertTrue(e.getMessage().contains("tar-slip"), e.getMessage());
     }
+
     assertTrue(!Files.exists(storeRoot.resolve("test-tgz").resolve("escaped.txt")), "nothing escaped the store");
   }
 

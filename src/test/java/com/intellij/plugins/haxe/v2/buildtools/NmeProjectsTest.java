@@ -42,9 +42,7 @@ public class NmeProjectsTest {
   public void testCppTargetMapsToTheHostDesktopBuild() {
     NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact("cpp", "MyGame", "bin");
     assertEquals(HaxeTarget.CPP, artifact.target());
-    NmeProjects.TargetArtifact host = SystemInfo.isWindows ? NmeProjects.targetArtifact("windows", "MyGame", "bin")
-                                     : SystemInfo.isMac ? NmeProjects.targetArtifact("mac", "MyGame", "bin")
-                                     : NmeProjects.targetArtifact("linux", "MyGame", "bin");
+    NmeProjects.TargetArtifact host = hostDesktopArtifact();
     assertEquals(host.relativeOutput(), artifact.relativeOutput());
   }
 
@@ -66,5 +64,12 @@ public class NmeProjectsTest {
     assertNull(NmeProjects.targetArtifact("html5", "MyGame", "bin"));
     assertNull(NmeProjects.targetArtifact("android", "MyGame", "bin"));
     assertNull(NmeProjects.targetArtifact("ps4", "MyGame", "bin"));
+  }
+
+  /// What "cpp" should resolve to on the machine running the test.
+  private static NmeProjects.TargetArtifact hostDesktopArtifact() {
+    if (SystemInfo.isWindows) return NmeProjects.targetArtifact("windows", "MyGame", "bin");
+    if (SystemInfo.isMac) return NmeProjects.targetArtifact("mac", "MyGame", "bin");
+    return NmeProjects.targetArtifact("linux", "MyGame", "bin");
   }
 }

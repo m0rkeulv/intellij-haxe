@@ -65,23 +65,39 @@ public final class HaxeBuildFileActions {
                                                   @NotNull HaxeBuildFileType type,
                                                   @NotNull String actionName) {
     return switch (type) {
-
-      case HXML -> HxmlProjects.isBuildAction(actionName)
-                   ? HxmlProjects.buildCommand(project, environmentSdk, file)
-                   : null;
-
-      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.DEFAULT_ACTIONS.contains(actionName)
-                                        ? LimeProjects.actionCommand(project, environmentSdk, file, type, actionName)
-                                        : null;
-
-      case NMML -> NmeProjects.DEFAULT_ACTIONS.contains(actionName)
-                   ? NmeProjects.actionCommand(project, environmentSdk, file, actionName)
-                   : null;
-
-      case HXP_SCRIPT -> HxpScriptProjects.BUILD_ACTION.equals(actionName)
-                         ? HxpScriptProjects.buildCommand(project, environmentSdk, file)
-                         : null;
+      case HXML -> hxmlActionCommand(project, environmentSdk, file, actionName);
+      case OPENFL, LIME, HXP_PROJECT -> limeActionCommand(project, environmentSdk, file, type, actionName);
+      case NMML -> nmeActionCommand(project, environmentSdk, file, actionName);
+      case HXP_SCRIPT -> hxpScriptActionCommand(project, environmentSdk, file, actionName);
     };
+  }
+
+  @Nullable
+  private static List<String> hxmlActionCommand(Project project, @Nullable String environmentSdk,
+                                                VirtualFile file, String actionName) {
+    if (!HxmlProjects.isBuildAction(actionName)) return null;
+    return HxmlProjects.buildCommand(project, environmentSdk, file);
+  }
+
+  @Nullable
+  private static List<String> limeActionCommand(Project project, @Nullable String environmentSdk,
+                                                VirtualFile file, HaxeBuildFileType type, String actionName) {
+    if (!LimeProjects.DEFAULT_ACTIONS.contains(actionName)) return null;
+    return LimeProjects.actionCommand(project, environmentSdk, file, type, actionName);
+  }
+
+  @Nullable
+  private static List<String> nmeActionCommand(Project project, @Nullable String environmentSdk,
+                                               VirtualFile file, String actionName) {
+    if (!NmeProjects.DEFAULT_ACTIONS.contains(actionName)) return null;
+    return NmeProjects.actionCommand(project, environmentSdk, file, actionName);
+  }
+
+  @Nullable
+  private static List<String> hxpScriptActionCommand(Project project, @Nullable String environmentSdk,
+                                                     VirtualFile file, String actionName) {
+    if (!HxpScriptProjects.BUILD_ACTION.equals(actionName)) return null;
+    return HxpScriptProjects.buildCommand(project, environmentSdk, file);
   }
 
   /**

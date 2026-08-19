@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.ScopesResponse;
 import com.intellij.util.net.NetUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -190,6 +190,32 @@ final class LiveProbeUtil {
     System.out.println("[probe] " + message);
   }
 
+  /// Whether the frame landed on the haxe original at `line` (source-mapped, not the generated js).
+  static boolean isStoppedInHx(StackFrame frame, String hxFile, int line) {
+    if (frame == null || frame.getSource() == null || frame.getSource().getPath() == null) return false;
+    return frame.getSource().getPath().endsWith(hxFile) && frame.getLine() == line;
+  }
+
+  /// The breakpoint carried by a breakpoint event; null for other events and empty bodies.
+  static Breakpoint breakpointOf(Event event) {
+    if (event instanceof BreakpointEvent be && be.getBody() != null) return be.getBody().getBreakpoint();
+    return null;
+  }
+
+  /// The output event's text; null for other events and output-less bodies.
+  static String outputTextOf(Event event) {
+    if (event instanceof OutputEvent output && output.getBody() != null) return output.getBody().getOutput();
+    return null;
+  }
+
+  /// The first scope's variables reference; -1 when the request failed or no scopes came back.
+  static int firstScopeReference(Response response) {
+    if (response instanceof ScopesResponse ok && ok.getBody() != null && !ok.getBody().getScopes().isEmpty()) {
+      return ok.getBody().getScopes().get(0).getVariablesReference();
+    }
+    return -1;
+  }
+
   /// Asserts the stop landed on the haxe original at `line` — a frame
   /// pointing at the generated app.js means the source map was not applied.
   static void assertStoppedInHx(StackFrame top, String hxFile, int line) {
@@ -303,8 +329,8 @@ final class LiveProbeUtil {
   static Path nodeExe() {
     // the compat-matrix web lanes point each cell at a provisioned node
     String override = System.getProperty("web.debug.node.exe");
-    return override != null ? Path.of(override)
-                            : nodeRoot().resolve("node-v24.18.0-win-x64/node.exe");
+    if (override != null) return Path.of(override);
+    return nodeRoot().resolve("node-v24.18.0-win-x64/node.exe");
   }
 
   static boolean haxeOnPath() {

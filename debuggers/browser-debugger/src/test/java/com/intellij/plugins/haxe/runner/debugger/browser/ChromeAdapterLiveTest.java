@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
-import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.OutputEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -123,7 +122,6 @@ public class ChromeAdapterLiveTest {
   /// Parent handshake, child session, configurationDone, then output capture until the sentinel (or timeout).
   private String driveAndCapture(Path fixture) throws Exception {
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
-
       assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
 
       Map<String, Object> launchConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
@@ -133,7 +131,6 @@ public class ChromeAdapterLiveTest {
       assertNotNull(startDebugging, "no startDebugging reverse request");
 
       try (DapClient child = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT)) {
-
         assertTrue(child.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "child initialize");
         child.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
 
@@ -146,9 +143,9 @@ public class ChromeAdapterLiveTest {
             configured = true;
             child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
           }
-          if (event instanceof OutputEvent output && output.getBody() != null
-              && output.getBody().getOutput() != null) {
-            captured.append(output.getBody().getOutput());
+          String outputText = LiveProbeUtil.outputTextOf(event);
+          if (outputText != null) {
+            captured.append(outputText);
             if (captured.toString().contains("##intellij-haxe[testRunFinished")) {
               break;
             }

@@ -440,10 +440,7 @@ final class HaxeTestLaunchPlanner {
     }
     String workDirectory = file.getParent().getPath();
     List<String> command = singleRunCommand(project, file, artifact, target, nodeExecutable, debugLaunch);
-    String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
-                  ? HaxeBundle.message("haxe.test.config.hxnodejs.hint")
-                  : null;
-    return new Plan(command, workDirectory, false, target, hint);
+    return new Plan(command, workDirectory, false, target, nodeHint(target, info));
   }
 
   /**
@@ -524,14 +521,20 @@ final class HaxeTestLaunchPlanner {
                                                   @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
-    SuiteContext suite = LimeProjects.isLimeFamily(type)
-                         ? limeSuiteContext(LimeProjects.selectedTargetFlag(project, type, file))
-                         : hxmlSuiteContext(project, buildFilePath);
+    SuiteContext suite = suiteContextFor(project, buildFilePath, file, type);
     List<String> arguments = reportingArguments(project, framework, suite);
     if (singleRun.singleTest()) {
       arguments.addAll(framework.singleRunFilterArgs(singleRun.testMethod()));
     }
     return ParametersListUtil.join(arguments);
+  }
+
+  private static SuiteContext suiteContextFor(@NotNull Project project, @NotNull String buildFilePath,
+                                              @Nullable VirtualFile file, @Nullable HaxeBuildFileType type) {
+    if (LimeProjects.isLimeFamily(type)) {
+      return limeSuiteContext(LimeProjects.selectedTargetFlag(project, type, file));
+    }
+    return hxmlSuiteContext(project, buildFilePath);
   }
 
   /**
@@ -681,10 +684,7 @@ final class HaxeTestLaunchPlanner {
       case FLASH -> flashCommand(project, file, artifact, debugLaunch);
       default -> throw unrunnableTarget(target);
     };
-    String hint = target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)
-                  ? HaxeBundle.message("haxe.test.config.hxnodejs.hint")
-                  : null;
-    return new Plan(command, workDirectory, false, target, hint);
+    return new Plan(command, workDirectory, false, target, nodeHint(target, info));
   }
 
   /** The plan's HL artifact (the {@code [hl, <file>.hl]} launch shape); null when the plan runs anything else. */
@@ -754,6 +754,15 @@ final class HaxeTestLaunchPlanner {
     }
     boolean debugBuild = debugLaunch || (effective != null && HxmlFileParser.hasDebugFlag(effective));
     return HxcppBinaries.binary(outputDirectory, StringUtil.getShortName(mainClass), debugBuild);
+  }
+
+  /** The hxnodejs hint for a js run whose build carries no node signal; null otherwise. */
+  @Nullable
+  private static String nodeHint(@NotNull HaxeTarget target, @NotNull HaxeBuildFileInfo info) {
+    if (target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)) {
+      return HaxeBundle.message("haxe.test.config.hxnodejs.hint");
+    }
+    return null;
   }
 
   /** A tests build carrying hxnodejs or -D nodejs declares node-runnability (utest then reports to stdout and exits properly). */

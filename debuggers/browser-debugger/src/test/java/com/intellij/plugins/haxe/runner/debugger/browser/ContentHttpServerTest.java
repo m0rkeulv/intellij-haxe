@@ -59,7 +59,6 @@ public class ContentHttpServerTest {
     assertEquals(200, html.statusCode());
     assertEquals("<html>hello</html>", html.body());
     assertEquals("no-store", html.headers().firstValue("Cache-Control").orElse(""));
-
     assertTrue(html.headers().firstValue("Content-Type").orElse("").startsWith("text/html"));
 
     assertTrue(get("/app.js").headers().firstValue("Content-Type").orElse("").startsWith("text/javascript"));
@@ -150,6 +149,7 @@ public class ContentHttpServerTest {
       .build();
 
     HttpResponse<String> response = http.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
     assertEquals(405, response.statusCode());
   }
 
@@ -164,6 +164,7 @@ public class ContentHttpServerTest {
 
     String second = get("/index.html").body();
     assertEquals("<html>hello</html>", second, "second response is served clean");
+
     // scripts are never touched by the injection
     assertEquals("console.log('x');", get("/app.js").body());
   }

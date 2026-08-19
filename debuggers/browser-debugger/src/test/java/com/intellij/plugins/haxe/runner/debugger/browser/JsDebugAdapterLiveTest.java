@@ -155,7 +155,7 @@ public class JsDebugAdapterLiveTest {
     LiveProbeUtil.writePageAndCompile(fixture, "WebLoad");
 
     StackFrame top = driveSessionToStop(fixture, WEB_LOAD_HX_NAME, LOAD_BP_LINE);
-    assertTrue(top.getSource().getPath().endsWith("WebLoad.hx") && top.getLine() == LOAD_BP_LINE, "stopped in the load-time .hx line: " + top.getSource().getPath() + ":" + top.getLine());
+    assertStoppedInHx(top, WEB_LOAD_HX_NAME, LOAD_BP_LINE);
   }
 
   // WebSmart.hx line numbers are load-bearing: CALLS_LINE has TWO calls, the
@@ -256,6 +256,7 @@ public class JsDebugAdapterLiveTest {
             + ":" + landedTop.getLine());
       assertTrue(landedTop.getLine() == F2_BODY_LINE, "landed in f2's body line, got line " + landedTop.getLine());
     };
+
     try {
       driveSessionToStop(fixture, WEB_SMART_HX_NAME, CALLS_LINE);
     } finally {
@@ -334,9 +335,8 @@ public class JsDebugAdapterLiveTest {
         // hydrate the views like the IDE (scopes + variables) before stepping on
         Response scResponse = child.sendRequest(scopesRequest(top.getId()), TIMEOUT);
 
-        if (scResponse instanceof ScopesResponse okScopes
-            && okScopes.getBody() != null && !okScopes.getBody().getScopes().isEmpty()) {
-          int reference = okScopes.getBody().getScopes().get(0).getVariablesReference();
+        int reference = LiveProbeUtil.firstScopeReference(scResponse);
+        if (reference >= 0) {
           child.sendRequest(variablesRequest(reference), TIMEOUT);
         }
 
@@ -428,6 +428,7 @@ public class JsDebugAdapterLiveTest {
     } finally {
       atStop = null;
     }
+
     probe("bare-expression (timer) stepInTargets count=" + targetsAtStop[0]);
     // diagnostic: no assert on the count - the pairing with the event-handler
     // test tells whether the trigger is the statement shape or the delivery
@@ -461,6 +462,7 @@ public class JsDebugAdapterLiveTest {
     } finally {
       atStop = null;
     }
+
     probe("last-statement stepInTargets count=" + targetsAtStop[0]);
     assertTrue(targetsAtStop[0] == 0, "js-debug currently yields NO targets for a last-statement line (upstream limitation);"
                + " if this failed with a count >= 2, the pin fixed it - remove the limitation");
@@ -485,6 +487,7 @@ public class JsDebugAdapterLiveTest {
     } finally {
       atStop = null;
     }
+
     probe("event-handler stepInTargets count=" + targetsAtStop[0]);
     assertTrue(targetsAtStop[0] >= 2, "stepInTargets inside a DOM event handler must find the calls (user's case), got "
                + targetsAtStop[0]);
@@ -588,9 +591,8 @@ public class JsDebugAdapterLiveTest {
 
         while (System.currentTimeMillis() < deadline && stopped == null) {
           Event event = mux.pollEvent(250);
-          if (event instanceof BreakpointEvent be
-              && be.getBody() != null && be.getBody().getBreakpoint() != null) {
-            var state = be.getBody().getBreakpoint();
+          var state = LiveProbeUtil.breakpointOf(event);
+          if (state != null) {
             probe("breakpoint event: id=" + state.getId() + " verified=" + state.isVerified());
             if (state.isVerified() && state.getId() != null && state.getId().equals(pageBreakpointId)) {
               verifiedUpgradeSeen = true;
@@ -624,7 +626,6 @@ public class JsDebugAdapterLiveTest {
       }
     }
   }
-
 
   @Test
   @Timeout(60)
@@ -800,6 +801,4 @@ public class JsDebugAdapterLiveTest {
       }
     }
   }
-
-
 }

@@ -113,6 +113,7 @@ public class NodeAttachLiveTest {
   @DisplayName("attach stops on a haxe breakpoint and output stays on stdout")
   public void attachStopsOnAHaxeBreakpointAndOutputStaysOnStdout() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
+
     // the artifact deliberately lives OUTSIDE the debuggee's cwd, replicating
     // the gutter single-run temp root - the resolveSourceMapLocations
     // match-all glob is what makes its map resolvable
@@ -155,6 +156,7 @@ public class NodeAttachLiveTest {
 
     assertTrue(debuggee.waitFor(30, TimeUnit.SECONDS), "debuggee did not exit");
     assertEquals(0, debuggee.exitValue(), "debuggee exit code");
+
     String output = String.join("\n", debuggeeStdout);
     boolean traced = output.contains("start") && output.contains("tick") && output.contains("end");
     assertTrue(traced, "trace output must arrive on the debuggee's own stdout: " + output);
