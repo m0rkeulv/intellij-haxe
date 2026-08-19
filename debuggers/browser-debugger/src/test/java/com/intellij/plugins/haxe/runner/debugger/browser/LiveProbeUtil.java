@@ -78,6 +78,14 @@ final class LiveProbeUtil {
     "/usr/bin/google-chrome",
     "/snap/bin/chromium");
 
+  /// Standard firefox install locations, tried when WEB_DEBUG_FIREFOX_EXE is unset.
+  private static final List<String> FIREFOX_PATHS = List.of(
+    "C:/Program Files/Mozilla Firefox/firefox.exe",
+    "C:/Program Files (x86)/Mozilla Firefox/firefox.exe",
+    "/usr/bin/firefox",
+    "/usr/bin/firefox-esr",
+    "/snap/bin/firefox");
+
   private LiveProbeUtil() {
   }
 
@@ -110,6 +118,25 @@ final class LiveProbeUtil {
       candidates.add(Path.of(candidate));
     }
     for (Path path : candidates) {
+      if (Files.isRegularFile(path)) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  /// The browser under test: the `WEB_DEBUG_FIREFOX_EXE` environment
+  /// variable when set (e.g. an ESR install), else the standard installation
+  /// paths. A set-but-invalid path SKIPS rather than silently testing a
+  /// different browser than the one asked for.
+  static Path firefoxExe() {
+    String env = System.getenv("WEB_DEBUG_FIREFOX_EXE");
+    if (env != null && !env.isBlank()) {
+      Path fromEnv = Path.of(env);
+      return Files.isRegularFile(fromEnv) ? fromEnv : null;
+    }
+    for (String candidate : FIREFOX_PATHS) {
+      Path path = Path.of(candidate);
       if (Files.isRegularFile(path)) {
         return path;
       }

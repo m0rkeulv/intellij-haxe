@@ -15,6 +15,7 @@ import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.br
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.isStoppedInHx;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.outputTextOf;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.continueRequest;
+import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.firefoxExe;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.haxeOnPath;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeExe;
 import static com.intellij.plugins.haxe.runner.debugger.browser.LiveProbeUtil.nodeRoot;
@@ -48,14 +49,6 @@ import org.junit.jupiter.api.Timeout;
 @DisplayName("Browser debugger: firefox adapter (live)")
 public class FirefoxAdapterLiveTest {
   private static final long TIMEOUT = 15_000;
-
-  /// Default install locations, tried in order when WEB_DEBUG_FIREFOX_EXE is unset.
-  private static final List<String> FIREFOX_PATHS = List.of(
-    "C:/Program Files/Mozilla Firefox/firefox.exe",
-    "C:/Program Files (x86)/Mozilla Firefox/firefox.exe",
-    "/usr/bin/firefox",
-    "/usr/bin/firefox-esr",
-    "/snap/bin/firefox");
 
   /// The two load-timing variants runLoadVariant is exercised with.
   private static final List<String> LOAD_VARIANTS = List.of("J", "K");
@@ -274,7 +267,7 @@ public class FirefoxAdapterLiveTest {
     }
   }
 
-  /// The IDE's breakpoint paths come from IntelliJ's VFS, which uses FORWARD
+  /// The IDE's breakpoint paths come from IntelliJ's VFS, which uses forward
   /// slashes on Windows (C:/Users/...). Does the adapter bind those, or only
   /// native backslash paths? (The IDE smoke test showed breakpoints never
   /// binding; my earlier probes all sent native paths and worked.)
@@ -335,11 +328,11 @@ public class FirefoxAdapterLiveTest {
     }
     """;
 
-  /// Pins whether the firefox adapter ANSWERS evaluate for a WORKER thread's
+  /// Pins whether the firefox adapter answers evaluate for a worker thread's
   /// frame. Suspicion (IDE-observed): variables/scopes answer, evaluate never
   /// does — and per the adapter's per-actor FIFO queue, one unanswered request
   /// wedges that thread forever. The TAB thread's evaluate is the control.
-  /// Runs variables BEFORE evaluate (evaluate may poison the queue).
+  /// Runs variables before evaluate (evaluate may poison the queue).
   @Test
   @Timeout(60)
   @DisplayName("worker frame evaluate behaviour")
@@ -560,25 +553,6 @@ public class FirefoxAdapterLiveTest {
     config.put("webRoot", fixture.toString());
 
     return config;
-  }
-
-  /// The browser under test: the `WEB_DEBUG_FIREFOX_EXE` environment
-  /// variable when set (e.g. an ESR install), else the standard installation
-  /// paths. A set-but-invalid path SKIPS rather than silently testing a
-  /// different browser than the one asked for.
-  private static Path firefoxExe() {
-    String env = System.getenv("WEB_DEBUG_FIREFOX_EXE");
-    if (env != null && !env.isBlank()) {
-      Path fromEnv = Path.of(env);
-      return Files.isRegularFile(fromEnv) ? fromEnv : null;
-    }
-    for (String candidate : FIREFOX_PATHS) {
-      Path path = Path.of(candidate);
-      if (Files.isRegularFile(path)) {
-        return path;
-      }
-    }
-    return null;
   }
 
   /// Writes + compiles the fixture, returns its directory (app.js/app.js.map/index.html/WebMain.hx).
