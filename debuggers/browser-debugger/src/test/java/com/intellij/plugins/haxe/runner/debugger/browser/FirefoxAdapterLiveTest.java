@@ -26,10 +26,8 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
-import java.io.BufferedReader;
+
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -42,22 +40,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/**
- * M0 wire probe for the vscode-firefox-debug adapter (web-debugger project):
- * spawns the PINNED adapter bundle (Open VSX 2.15.0, sha256 f72f7443...) on the
- * local portable node, in {@code --server=<port>} TCP mode, and drives it with
- * the SAME DapClient the IDE backends use. Verifies the plugin's framing/decoding against
- * a foreign adapter and records the initialize capabilities + event ordering.
- *
- * Skips (does not fail) when node or the adapter are not provisioned — they are
- * user-provisioned under {@code <project>/node/} (git-ignored), see the
- * web-debugger plan.
- */
+/// Test that verifies live that we can connect and start a debugger session with a Firefox browser.
+/// verify breakpoints, capabilities.
+/// Require a Chrome-based browser, Node.js and Haxe and utest (Haxe test framework)
 @DisplayName("Browser debugger: firefox adapter (live)")
-public class FirefoxAdapterLiveProbe {
+public class FirefoxAdapterLiveTest {
   private static final long TIMEOUT = 15_000;
 
-  /** Default install locations, tried in order when WEB_DEBUG_FIREFOX_EXE is unset. */
+  /// Default install locations, tried in order when WEB_DEBUG_FIREFOX_EXE is unset.
   private static final List<String> FIREFOX_PATHS = List.of(
     "C:/Program Files/Mozilla Firefox/firefox.exe",
     "C:/Program Files (x86)/Mozilla Firefox/firefox.exe",
@@ -65,17 +55,16 @@ public class FirefoxAdapterLiveProbe {
     "/usr/bin/firefox-esr",
     "/snap/bin/firefox");
 
-  /** The two load-timing variants runLoadVariant is exercised with. */
+  /// The two load-timing variants runLoadVariant is exercised with.
   private static final List<String> LOAD_VARIANTS = List.of("J", "K");
 
-  private Process adapter;
-  private int adapterPort;
-  private DapClient client;
+  // fixture file names; the .hx names come back in reported breakpoint source paths
+  private static final String WORKER_MAIN_HX_NAME = "WorkerMain.hx";
+  private static final String INDEX_FILE = "index.html";
+  private static final String APP_JS = "app.js";
 
-  /** {@code <root>/node} — provided by the gradle test task; falls back for IDE runs. */
-  private static Path adapterBundle() {
-    return nodeRoot().resolve("adapters/vscode-firefox-debug-2.15.0/extension/dist/adapter.bundle.js");
-  }
+  private Process adapter;
+  private DapClient client;
 
   @BeforeEach
   public void spawnAdapter() throws IOException {
@@ -88,15 +77,7 @@ public class FirefoxAdapterLiveProbe {
       List.of(nodeExe().toString(), adapterBundle().toString(), "--server=" + port),
       adapterBundle().getParent(), "waiting for debug protocol", "adapter");
 
-    adapterPort = port;
     client = connectWithRetry(port);
-  }
-
-  // The adapter prints its "waiting for debug protocol" line slightly
-  // BEFORE the TCP listener accepts, so an immediate connect can be
-  // refused - retry briefly (the production launcher must do the same).
-  private static DapClient connectWithRetry(int port) throws IOException {
-    return LiveProbeUtil.connectWithRetry(port, (int)TIMEOUT);
   }
 
   @AfterEach
@@ -110,12 +91,6 @@ public class FirefoxAdapterLiveProbe {
     if (adapter != null) {
       killTree(adapter);
     }
-  }
-
-  // Killing node does NOT kill the Firefox it spawned - reap the whole tree,
-  // or every probe run leaks a headless browser.
-  private static void killTree(Process process) throws InterruptedException {
-    LiveProbeUtil.killTree(process);
   }
 
   @Timeout(30)
@@ -149,89 +124,6 @@ public class FirefoxAdapterLiveProbe {
   }
 
   // ---------------------------------------------------------- full session
-
-  /** A launch request whose arguments are the firefox adapter's own vocabulary. */
-  static final class FirefoxLaunchRequest extends Request {
-    @SuppressWarnings("unused") // serialized by jackson
-    private final Map<String, Object> arguments;
-
-    FirefoxLaunchRequest(Map<String, Object> arguments) {
-      setCommand("launch");
-      this.arguments = arguments;
-    }
-
-    public Map<String, Object> getArguments() {
-      return arguments;
-    }
-  }
-
-  /** The handshake every probe here opens with. */
-  private static InitializeRequest initializeRequest() {
-    return InitializeRequest.standard("firefox", false);
-  }
-
-  /**
-   * The launch config every probe here starts from. The RDP port is always a
-   * fresh one: the adapter defaults to 6000, and a firefox surviving from an
-   * earlier session still holds it, so the adapter attaches to THAT instance
-   * instead of the one it just launched ("Not attaching to this thread" for
-   * every worker, and foreign processes' workers in the target list).
-   */
-  private static Map<String, Object> baseLaunchConfig(Path firefox) throws IOException {
-    Map<String, Object> config = new LinkedHashMap<>();
-
-    config.put("request", "launch");
-    config.put("firefoxExecutable", firefox.toString());
-    config.put("firefoxArgs", List.of("-headless"));
-    config.put("port", LiveProbeUtil.freePort());
-
-    return config;
-  }
-
-  /** {@link #baseLaunchConfig} for a page served over http rather than a file:// url. */
-  private static Map<String, Object> servedLaunchConfig(Path firefox, String baseUrl, Path fixture)
-    throws IOException {
-    Map<String, Object> config = baseLaunchConfig(firefox);
-
-    config.put("url", baseUrl);
-    config.put("webRoot", fixture.toString());
-
-    return config;
-  }
-
-  /**
-   * The browser under test: the {@code WEB_DEBUG_FIREFOX_EXE} environment
-   * variable when set (e.g. an ESR install), else the standard installation
-   * paths. A set-but-invalid path SKIPS rather than silently testing a
-   * different browser than the one asked for.
-   */
-  private static Path firefoxExe() {
-    String env = System.getenv("WEB_DEBUG_FIREFOX_EXE");
-    if (env != null && !env.isBlank()) {
-      Path fromEnv = Path.of(env);
-      return Files.isRegularFile(fromEnv) ? fromEnv : null;
-    }
-    for (String candidate : FIREFOX_PATHS) {
-      Path path = Path.of(candidate);
-      if (Files.isRegularFile(path)) {
-        return path;
-      }
-    }
-    return null;
-  }
-
-  // fixture file names; the .hx names come back in reported breakpoint source paths
-  private static final String WORKER_MAIN_HX_NAME = "WorkerMain.hx";
-  private static final String INDEX_FILE = "index.html";
-  private static final String APP_JS = "app.js";
-
-  /** Writes + compiles the fixture, returns its directory (app.js/app.js.map/index.html/WebMain.hx). */
-  private static Path buildFixture() throws Exception {
-    Path dir = Files.createTempDirectory("haxe-web-probe");
-    Files.writeString(dir.resolve(WEB_MAIN_HX_NAME), WEB_MAIN_HX_SOURCE);
-    LiveProbeUtil.writePageAndCompile(dir, "WebMain");
-    return dir;
-  }
 
   @Test
   @Timeout(60)
@@ -326,12 +218,10 @@ public class FirefoxAdapterLiveProbe {
     probe("disconnect success=" + disconnect.isSuccess());
   }
 
-  /**
-   * The SERVE mode the IDE backend uses: the fixture is hosted by the module's own
-   * ContentHttpServer and the browser navigates to the http url (webRoot maps
-   * served urls back to the content directory for the source maps). Mirrors
-   * BrowserDebugBackend's launch config; a stop must still land in the .hx.
-   */
+  /// The SERVE mode the IDE backend uses: the fixture is hosted by the module's own
+  /// ContentHttpServer and the browser navigates to the http url (webRoot maps
+  /// served urls back to the content directory for the source maps). Mirrors
+  /// BrowserDebugBackend's launch config; a stop must still land in the .hx.
   @Test
   @Timeout(60)
   @DisplayName("full session breakpoint in hx source via content server")
@@ -382,12 +272,10 @@ public class FirefoxAdapterLiveProbe {
     }
   }
 
-  /**
-   * The IDE's breakpoint paths come from IntelliJ's VFS, which uses FORWARD
-   * slashes on Windows (C:/Users/...). Does the adapter bind those, or only
-   * native backslash paths? (The IDE smoke test showed breakpoints never
-   * binding; my earlier probes all sent native paths and worked.)
-   */
+  /// The IDE's breakpoint paths come from IntelliJ's VFS, which uses FORWARD
+  /// slashes on Windows (C:/Users/...). Does the adapter bind those, or only
+  /// native backslash paths? (The IDE smoke test showed breakpoints never
+  /// binding; my earlier probes all sent native paths and worked.)
   @Test
   @Timeout(60)
   @DisplayName("breakpoint path separator sensitivity")
@@ -412,57 +300,6 @@ public class FirefoxAdapterLiveProbe {
     // no assert on forwardBound: this test RECORDS the adapter's behaviour;
     // the IDE-side fix (DapBreakpointManager normalization) covers either way
   }
-
-  private boolean runSeparatorVariant(String label, Path fixture, Path firefox,
-                                      ContentHttpServer content, String breakpointPath) throws Exception {
-    int ownPort = LiveProbeUtil.freePort();
-    Process ownAdapter = LiveProbeUtil.spawnAdapterServer(
-      List.of(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort),
-      adapterBundle().getParent(), "waiting for debug protocol", "adapter-" + label);
-
-    try {
-      DapClient session = connectWithRetry(ownPort);
-      try {
-        if (!session.sendRequest(initializeRequest(), TIMEOUT).isSuccess()) {
-          return false;
-        }
-        Map<String, Object> launchConfig = servedLaunchConfig(firefox, content.getBaseUrl(), fixture);
-        if (!session.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000).isSuccess()) {
-          return false;
-        }
-        boolean initialized = awaitInitialized(session, 15_000);
-        if (!initialized) {
-          return false;
-        }
-        session.sendRequest(breakpointsRequest(breakpointPath, WEB_MAIN_HX_NAME, BP_LINE), TIMEOUT);
-
-        StoppedEvent stopped = null;
-        // the fixture ticks every 250ms and lazy verification takes 1-2s, so
-        // a path that binds stops well inside this window; the forward
-        // variant is EXPECTED not to stop and pays the full wait
-        long deadline = System.currentTimeMillis() + 8_000;
-
-        while (System.currentTimeMillis() < deadline && stopped == null) {
-          Event event = session.pollEvent(250);
-          if (event instanceof StoppedEvent s) {
-            stopped = s;
-          } else if (event instanceof BreakpointEvent be
-                     && be.getBody() != null && be.getBody().getBreakpoint() != null) {
-            probe("  " + label + " breakpointEvent verified=" + be.getBody().getBreakpoint().isVerified());
-          }
-        }
-        probe("  " + label + " path stop=" + (stopped != null));
-        session.sendRequest(new DisconnectRequest(), TIMEOUT);
-        return stopped != null;
-      } finally {
-        session.close();
-      }
-    } finally {
-      killTree(ownAdapter);
-    }
-  }
-
-  // ------------------------------------------- load-time breakpoint strategies
 
   // --- worker-frame request behaviour (evaluate vs variables) ---
 
@@ -494,13 +331,11 @@ public class FirefoxAdapterLiveProbe {
     }
     """;
 
-  /**
-   * Pins whether the firefox adapter ANSWERS evaluate for a WORKER thread's
-   * frame. Suspicion (IDE-observed): variables/scopes answer, evaluate never
-   * does — and per the adapter's per-actor FIFO queue, one unanswered request
-   * wedges that thread forever. The TAB thread's evaluate is the control.
-   * Runs variables BEFORE evaluate (evaluate may poison the queue).
-   */
+  /// Pins whether the firefox adapter ANSWERS evaluate for a WORKER thread's
+  /// frame. Suspicion (IDE-observed): variables/scopes answer, evaluate never
+  /// does — and per the adapter's per-actor FIFO queue, one unanswered request
+  /// wedges that thread forever. The TAB thread's evaluate is the control.
+  /// Runs variables BEFORE evaluate (evaluate may poison the queue).
   @Test
   @Timeout(60)
   @DisplayName("worker frame evaluate behaviour")
@@ -570,14 +405,12 @@ public class FirefoxAdapterLiveProbe {
     }
   }
 
-  /**
-   * The ZOMBIE question, on a CLEAN instance (unique RDP port): with the
-   * serve-mode refresh armed and a worker breakpoint hitting BEFORE the
-   * reload, what does the thread list look like after the reload settles?
-   * (The contaminated-era sessions showed doubled worker threads whose
-   * actors answered nothing; this pins whether that happens without the
-   * stale-instance pollution.)
-   */
+  /// The ZOMBIE question, on a CLEAN instance (unique RDP port): with the
+  /// serve-mode refresh armed and a worker breakpoint hitting BEFORE the
+  /// reload, what does the thread list look like after the reload settles?
+  /// (The contaminated-era sessions showed doubled worker threads whose
+  /// actors answered nothing; this pins whether that happens without the
+  /// stale-instance pollution.)
   @Test
   @Timeout(60)
   @DisplayName("worker threads across refresh")
@@ -629,119 +462,16 @@ public class FirefoxAdapterLiveProbe {
     }
   }
 
-  private void sendBreakpoint(Path hxFile, int line) throws Exception {
-    SourceBreakpoint bp = new SourceBreakpoint();
-    bp.setLine(line);
-    sendBreakpoints(hxFile, List.of(bp));
-  }
+  // ------------------------------------------- load-time breakpoint strategies
 
-  private void sendBreakpoints(Path hxFile, List<SourceBreakpoint> bps) throws Exception {
-    SetBreakpointsRequest request = new SetBreakpointsRequest();
-    SetBreakpointsArguments arguments = new SetBreakpointsArguments();
-    Source source = new Source();
-    source.setPath(hxFile.toString());
-    source.setName(hxFile.getFileName().toString());
-    arguments.setSource(source);
-    arguments.setBreakpoints(bps);
-    request.setArguments(arguments);
-    Response response = client.sendRequest(request, TIMEOUT);
-    assertTrue(response.isSuccess(), "setBreakpoints " + hxFile.getFileName());
-
-    if (response instanceof SetBreakpointsResponse ok && ok.getBody() != null && ok.getBody().getBreakpoints() != null) {
-      ok.getBody()
-        .getBreakpoints()
-        .forEach(b -> {
-          probe("bp " + hxFile.getFileName() + " id=" + b.getId() + " verified=" + b.isVerified());
-        });
-    }
-  }
-
-  private StoppedEvent awaitStop(long timeoutMillis) throws InterruptedException {
-    long deadline = System.currentTimeMillis() + timeoutMillis;
-    while (System.currentTimeMillis() < deadline) {
-      Event event = client.pollEvent(250);
-      if (event instanceof StoppedEvent stopped) {
-        return stopped;
-      }
-      if (event != null) {
-        String detail = event instanceof BreakpointEvent be
-                        && be.getBody() != null && be.getBody().getBreakpoint() != null
-                        ? " id=" + be.getBody().getBreakpoint().getId()
-                          + " verified=" + be.getBody().getBreakpoint().isVerified()
-                        : event instanceof ThreadEvent te
-                          && te.getBody() != null
-                          ? " reason=" + te.getBody().getReason() + " threadId=" + te.getBody().getThreadId()
-                          : "";
-        probe("event '" + event.getEvent() + "'" + detail);
-      }
-    }
-    return null;
-  }
-
-  private StackFrame topFrame(int threadId) throws Exception {
-    Response response = client.sendRequest(stackTraceRequest(threadId), TIMEOUT);
-    return response instanceof StackTraceResponse st && st.isSuccess() && !st.getBody().getStackFrames().isEmpty()
-           ? st.getBody().getStackFrames().get(0) : null;
-  }
-
-  private void resumeThread(int threadId) throws Exception {
-    client.sendRequest(continueRequest(threadId), TIMEOUT);
-  }
-
-  private String timedScopesAndVariables(int frameId) {
-    long start = System.currentTimeMillis();
-    try {
-      Response scResponse = client.sendRequest(scopesRequest(frameId), 10_000);
-      if (!(scResponse instanceof ScopesResponse ok) || !ok.isSuccess() || ok.getBody().getScopes().isEmpty()) {
-        return "scopes FAILED after " + (System.currentTimeMillis() - start) + "ms";
-      }
-      int reference = ok.getBody().getScopes().get(0).getVariablesReference();
-      Response vResponse = client.sendRequest(variablesRequest(reference), 10_000);
-      int count = vResponse instanceof VariablesResponse vr && vr.isSuccess() && vr.getBody().getVariables() != null
-                  ? vr.getBody().getVariables().size() : -1;
-      return "OK (" + count + " vars, " + (System.currentTimeMillis() - start) + "ms)";
-    } catch (Exception e) {
-      return "HUNG/FAILED after " + (System.currentTimeMillis() - start) + "ms: " + e.getMessage();
-    }
-  }
-
-  private String timedEvaluate(String expression, int frameId, String context) {
-    long start = System.currentTimeMillis();
-    try {
-      EvaluateRequest request = new EvaluateRequest();
-      EvaluateArguments arguments = new EvaluateArguments();
-      arguments.setExpression(expression);
-      arguments.setFrameId(frameId);
-      arguments.setContext(context);
-      request.setArguments(arguments);
-
-      Response response = client.sendRequest(request, 10_000);
-
-      String result = response instanceof EvaluateResponse ok
-                      && ok.isSuccess() ? ok.getBody().getResult() : "error: " + response.getMessage();
-      return "answered in " + (System.currentTimeMillis() - start) + "ms -> " + result;
-    } catch (Exception e) {
-      return "NO ANSWER after " + (System.currentTimeMillis() - start) + "ms (" + e.getMessage() + ")";
-    }
-  }
-
-  private static Path buildLoadFixture() throws Exception {
-    Path dir = Files.createTempDirectory("haxe-web-load-probe");
-    Files.writeString(dir.resolve(WEB_LOAD_HX_NAME), WEB_LOAD_HX_SOURCE);
-    LiveProbeUtil.writePageAndCompile(dir, "WebLoad");
-    return dir;
-  }
-
-  /**
-   * Which strategy beats the load race: code in main() runs while the page
-   * loads, likely BEFORE the standard breakpoint flow (launch -> initialized
-   * -> setBreakpoints) completes. Tries, in order:
-   *   A: breakpoints BEFORE launch;
-   *   B: breakpoints before launch + reloadOnAttach:true;
-   *   C: standard order + reloadOnAttach:true.
-   * Each variant is a fresh DAP connection to the same adapter server (it
-   * accepts sequential connections). Asserts at least one variant stops.
-   */
+  /// Which strategy beats the load race: code in main() runs while the page
+  /// loads, likely BEFORE the standard breakpoint flow (launch -> initialized
+  /// -> setBreakpoints) completes. Tries, in order:
+  ///   A: breakpoints BEFORE launch;
+  ///   B: breakpoints before launch + reloadOnAttach:true;
+  ///   C: standard order + reloadOnAttach:true.
+  /// Each variant is a fresh DAP connection to the same adapter server (it
+  /// accepts sequential connections). Asserts at least one variant stops.
   @Test
   @Timeout(60)
   @DisplayName("load time breakpoint strategies")
@@ -782,6 +512,141 @@ public class FirefoxAdapterLiveProbe {
     }
     assertNotNull(worked, "no strategy hit the load-time breakpoint");
     probe("first working load strategy: " + worked);
+  }
+
+  // ---------------------------------------------------------------- helpers
+
+  /// `<root>/node` — provided by the gradle test task; falls back for IDE runs.
+  private static Path adapterBundle() {
+    return nodeRoot().resolve("adapters/vscode-firefox-debug-2.15.0/extension/dist/adapter.bundle.js");
+  }
+
+  // The adapter prints its "waiting for debug protocol" line slightly
+  // BEFORE the TCP listener accepts, so an immediate connect can be
+  // refused - retry briefly (the production launcher must do the same).
+  private static DapClient connectWithRetry(int port) throws IOException {
+    return LiveProbeUtil.connectWithRetry(port, (int)TIMEOUT);
+  }
+
+  // Killing node does NOT kill the Firefox it spawned - reap the whole tree,
+  // or every probe run leaks a headless browser.
+  private static void killTree(Process process) throws InterruptedException {
+    LiveProbeUtil.killTree(process);
+  }
+
+  /// The handshake every probe here opens with.
+  private static InitializeRequest initializeRequest() {
+    return InitializeRequest.standard("firefox", false);
+  }
+
+  /// The launch config every probe here starts from. The RDP port is always a
+  /// fresh one: the adapter defaults to 6000, and a firefox surviving from an
+  /// earlier session still holds it, so the adapter attaches to THAT instance
+  /// instead of the one it just launched ("Not attaching to this thread" for
+  /// every worker, and foreign processes' workers in the target list).
+  private static Map<String, Object> baseLaunchConfig(Path firefox) throws IOException {
+    Map<String, Object> config = new LinkedHashMap<>();
+
+    config.put("request", "launch");
+    config.put("firefoxExecutable", firefox.toString());
+    config.put("firefoxArgs", List.of("-headless"));
+    config.put("port", LiveProbeUtil.freePort());
+
+    return config;
+  }
+
+  /// {@link #baseLaunchConfig} for a page served over http rather than a file:// url.
+  private static Map<String, Object> servedLaunchConfig(Path firefox, String baseUrl, Path fixture)
+    throws IOException {
+    Map<String, Object> config = baseLaunchConfig(firefox);
+
+    config.put("url", baseUrl);
+    config.put("webRoot", fixture.toString());
+
+    return config;
+  }
+
+  /// The browser under test: the `WEB_DEBUG_FIREFOX_EXE` environment
+  /// variable when set (e.g. an ESR install), else the standard installation
+  /// paths. A set-but-invalid path SKIPS rather than silently testing a
+  /// different browser than the one asked for.
+  private static Path firefoxExe() {
+    String env = System.getenv("WEB_DEBUG_FIREFOX_EXE");
+    if (env != null && !env.isBlank()) {
+      Path fromEnv = Path.of(env);
+      return Files.isRegularFile(fromEnv) ? fromEnv : null;
+    }
+    for (String candidate : FIREFOX_PATHS) {
+      Path path = Path.of(candidate);
+      if (Files.isRegularFile(path)) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  /// Writes + compiles the fixture, returns its directory (app.js/app.js.map/index.html/WebMain.hx).
+  private static Path buildFixture() throws Exception {
+    Path dir = Files.createTempDirectory("haxe-web-probe");
+    Files.writeString(dir.resolve(WEB_MAIN_HX_NAME), WEB_MAIN_HX_SOURCE);
+    LiveProbeUtil.writePageAndCompile(dir, "WebMain");
+    return dir;
+  }
+
+  private static Path buildLoadFixture() throws Exception {
+    Path dir = Files.createTempDirectory("haxe-web-load-probe");
+    Files.writeString(dir.resolve(WEB_LOAD_HX_NAME), WEB_LOAD_HX_SOURCE);
+    LiveProbeUtil.writePageAndCompile(dir, "WebLoad");
+    return dir;
+  }
+
+  private boolean runSeparatorVariant(String label, Path fixture, Path firefox,
+                                      ContentHttpServer content, String breakpointPath) throws Exception {
+    int ownPort = LiveProbeUtil.freePort();
+    Process ownAdapter = LiveProbeUtil.spawnAdapterServer(
+      List.of(nodeExe().toString(), adapterBundle().toString(), "--server=" + ownPort),
+      adapterBundle().getParent(), "waiting for debug protocol", "adapter-" + label);
+
+    try {
+      DapClient session = connectWithRetry(ownPort);
+      try {
+        if (!session.sendRequest(initializeRequest(), TIMEOUT).isSuccess()) {
+          return false;
+        }
+        Map<String, Object> launchConfig = servedLaunchConfig(firefox, content.getBaseUrl(), fixture);
+        if (!session.sendRequest(new FirefoxLaunchRequest(launchConfig), 20_000).isSuccess()) {
+          return false;
+        }
+        boolean initialized = awaitInitialized(session, 15_000);
+        if (!initialized) {
+          return false;
+        }
+        session.sendRequest(breakpointsRequest(breakpointPath, WEB_MAIN_HX_NAME, BP_LINE), TIMEOUT);
+
+        StoppedEvent stopped = null;
+        // the fixture ticks every 250ms and lazy verification takes 1-2s, so
+        // a path that binds stops well inside this window; the forward
+        // variant is EXPECTED not to stop and pays the full wait
+        long deadline = System.currentTimeMillis() + 8_000;
+
+        while (System.currentTimeMillis() < deadline && stopped == null) {
+          Event event = session.pollEvent(250);
+          if (event instanceof StoppedEvent s) {
+            stopped = s;
+          } else if (event instanceof BreakpointEvent be
+                     && be.getBody() != null && be.getBody().getBreakpoint() != null) {
+            probe("  " + label + " breakpointEvent verified=" + be.getBody().getBreakpoint().isVerified());
+          }
+        }
+        probe("  " + label + " path stop=" + (stopped != null));
+        session.sendRequest(new DisconnectRequest(), TIMEOUT);
+        return stopped != null;
+      } finally {
+        session.close();
+      }
+    } finally {
+      killTree(ownAdapter);
+    }
   }
 
   private boolean runLoadVariant(String variant, Path fixture, Path firefox, ContentHttpServer content)
@@ -873,6 +738,120 @@ public class FirefoxAdapterLiveProbe {
       }
     } finally {
       killTree(ownAdapter);
+    }
+  }
+
+  private void sendBreakpoint(Path hxFile, int line) throws Exception {
+    SourceBreakpoint bp = new SourceBreakpoint();
+    bp.setLine(line);
+    sendBreakpoints(hxFile, List.of(bp));
+  }
+
+  private void sendBreakpoints(Path hxFile, List<SourceBreakpoint> bps) throws Exception {
+    SetBreakpointsRequest request = new SetBreakpointsRequest();
+    SetBreakpointsArguments arguments = new SetBreakpointsArguments();
+    Source source = new Source();
+    source.setPath(hxFile.toString());
+    source.setName(hxFile.getFileName().toString());
+    arguments.setSource(source);
+    arguments.setBreakpoints(bps);
+    request.setArguments(arguments);
+    Response response = client.sendRequest(request, TIMEOUT);
+    assertTrue(response.isSuccess(), "setBreakpoints " + hxFile.getFileName());
+
+    if (response instanceof SetBreakpointsResponse ok && ok.getBody() != null && ok.getBody().getBreakpoints() != null) {
+      ok.getBody()
+        .getBreakpoints()
+        .forEach(b -> {
+          probe("bp " + hxFile.getFileName() + " id=" + b.getId() + " verified=" + b.isVerified());
+        });
+    }
+  }
+
+  private StoppedEvent awaitStop(long timeoutMillis) throws InterruptedException {
+    long deadline = System.currentTimeMillis() + timeoutMillis;
+    while (System.currentTimeMillis() < deadline) {
+      Event event = client.pollEvent(250);
+      if (event instanceof StoppedEvent stopped) {
+        return stopped;
+      }
+      if (event != null) {
+        String detail = event instanceof BreakpointEvent be
+                        && be.getBody() != null && be.getBody().getBreakpoint() != null
+                        ? " id=" + be.getBody().getBreakpoint().getId()
+                          + " verified=" + be.getBody().getBreakpoint().isVerified()
+                        : event instanceof ThreadEvent te
+                          && te.getBody() != null
+                          ? " reason=" + te.getBody().getReason() + " threadId=" + te.getBody().getThreadId()
+                          : "";
+        probe("event '" + event.getEvent() + "'" + detail);
+      }
+    }
+    return null;
+  }
+
+  private StackFrame topFrame(int threadId) throws Exception {
+    Response response = client.sendRequest(stackTraceRequest(threadId), TIMEOUT);
+    return response instanceof StackTraceResponse st && st.isSuccess() && !st.getBody().getStackFrames().isEmpty()
+           ? st.getBody().getStackFrames().get(0) : null;
+  }
+
+  private void resumeThread(int threadId) throws Exception {
+    client.sendRequest(continueRequest(threadId), TIMEOUT);
+  }
+
+  private String timedScopesAndVariables(int frameId) {
+    long start = System.currentTimeMillis();
+    try {
+      Response scResponse = client.sendRequest(scopesRequest(frameId), 10_000);
+      if (!(scResponse instanceof ScopesResponse ok) || !ok.isSuccess() || ok.getBody().getScopes().isEmpty()) {
+        return "scopes FAILED after " + (System.currentTimeMillis() - start) + "ms";
+      }
+
+      int reference = ok.getBody().getScopes().get(0).getVariablesReference();
+      Response vResponse = client.sendRequest(variablesRequest(reference), 10_000);
+      int count = vResponse instanceof VariablesResponse vr && vr.isSuccess() && vr.getBody().getVariables() != null
+                  ? vr.getBody().getVariables().size() : -1;
+
+      return "OK (" + count + " vars, " + (System.currentTimeMillis() - start) + "ms)";
+
+    } catch (Exception e) {
+      return "HUNG/FAILED after " + (System.currentTimeMillis() - start) + "ms: " + e.getMessage();
+    }
+  }
+
+  private String timedEvaluate(String expression, int frameId, String context) {
+    long start = System.currentTimeMillis();
+    try {
+      EvaluateRequest request = new EvaluateRequest();
+      EvaluateArguments arguments = new EvaluateArguments();
+      arguments.setExpression(expression);
+      arguments.setFrameId(frameId);
+      arguments.setContext(context);
+      request.setArguments(arguments);
+
+      Response response = client.sendRequest(request, 10_000);
+
+      String result = response instanceof EvaluateResponse ok
+                      && ok.isSuccess() ? ok.getBody().getResult() : "error: " + response.getMessage();
+      return "answered in " + (System.currentTimeMillis() - start) + "ms -> " + result;
+    } catch (Exception e) {
+      return "NO ANSWER after " + (System.currentTimeMillis() - start) + "ms (" + e.getMessage() + ")";
+    }
+  }
+
+  /// A launch request whose arguments are the firefox adapter's own vocabulary.
+  static final class FirefoxLaunchRequest extends Request {
+    @SuppressWarnings("unused") // serialized by jackson
+    private final Map<String, Object> arguments;
+
+    FirefoxLaunchRequest(Map<String, Object> arguments) {
+      setCommand("launch");
+      this.arguments = arguments;
+    }
+
+    public Map<String, Object> getArguments() {
+      return arguments;
     }
   }
 }

@@ -22,13 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/**
- * The plumbing shared by the live probes: haxe availability, fixture
- * compilation, adapter/browser locations, request factories, adapter
- * connection with retry, and process-tree teardown.
- */
+/// The plumbing shared by the live probes: haxe availability, fixture
+/// compilation, adapter/browser locations, request factories, adapter
+/// connection with retry, and process-tree teardown.
 final class LiveProbeUtil {
-  /** The one-page host for the compiled fixture; every probe writes the same file. */
+  /// The one-page host for the compiled fixture; every probe writes the same file.
   static final String INDEX_HTML = """
     <!DOCTYPE html><html><head><meta charset='utf-8'></head>\
     <body><script src='app.js'></script></body></html>""";
@@ -66,10 +64,10 @@ final class LiveProbeUtil {
     }
     """;
 
-  /** The pinned js-debug-dap release the probes drive (GitHub release, sha256-verified by the provisioner). */
+  /// The pinned js-debug-dap release the probes drive (GitHub release, sha256-verified by the provisioner).
   static final String JS_DEBUG_VERSION = "1.117.0";
 
-  /** Machine-wide chromium-family install locations, tried after the per-user LOCALAPPDATA ones. */
+  /// Machine-wide chromium-family install locations, tried after the per-user LOCALAPPDATA ones.
   private static final List<String> CHROMIUM_PATHS = List.of(
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
@@ -83,19 +81,17 @@ final class LiveProbeUtil {
   private LiveProbeUtil() {
   }
 
-  /** The provisioned js-debug standalone DAP server's entry script. */
+  /// The provisioned js-debug standalone DAP server's entry script.
   static Path dapServerJs() {
     return nodeRoot().resolve("adapters/js-debug-" + JS_DEBUG_VERSION + "/js-debug/src/dapDebugServer.js");
   }
 
-  /**
-   * The browser under test: the {@code WEB_DEBUG_CHROMIUM_EXE} environment
-   * variable when set (any chromium-family build — e.g. a provisioned
-   * ungoogled-chromium), else an installed Chrome/Edge — mirroring the IDE
-   * behaviour, where a blank executable lets js-debug find the default
-   * installation. A set-but-invalid path SKIPS rather than silently testing
-   * a different browser than the one asked for.
-   */
+  /// The browser under test: the `WEB_DEBUG_CHROMIUM_EXE` environment
+  /// variable when set (any chromium-family build — e.g. a provisioned
+  /// ungoogled-chromium), else an installed Chrome/Edge — mirroring the IDE
+  /// behaviour, where a blank executable lets js-debug find the default
+  /// installation. A set-but-invalid path SKIPS rather than silently testing
+  /// a different browser than the one asked for.
   static Path chromiumExe() {
     String env = System.getenv("WEB_DEBUG_CHROMIUM_EXE");
     if (env != null && !env.isBlank()) {
@@ -121,14 +117,14 @@ final class LiveProbeUtil {
     return null;
   }
 
-  /** The probes' initialize: the given adapterID, IntelliJ Haxe as the client, startDebugging supported. */
+  /// The probes' initialize: the given adapterID, IntelliJ Haxe as the client, startDebugging supported.
   static InitializeRequest initializeRequest(String adapterId) {
     InitializeRequest initialize = InitializeRequest.standard(adapterId, true);
     initialize.getArguments().setClientName("IntelliJ Haxe");
     return initialize;
   }
 
-  /** The parent-session chrome launch config every browser probe sends. */
+  /// The parent-session chrome launch config every browser probe sends.
   static Map<String, Object> baseLaunchConfig(String baseUrl, Path fixture) {
     Map<String, Object> config = new LinkedHashMap<>();
 
@@ -143,12 +139,12 @@ final class LiveProbeUtil {
     return config;
   }
 
-  /** One source breakpoint on the fixture's {@code hxFileName} at {@code line}. */
+  /// One source breakpoint on the fixture's `hxFileName` at `line`.
   static SetBreakpointsRequest breakpointsRequest(Path fixture, String hxFileName, int line) {
     return breakpointsRequest(fixture.resolve(hxFileName).toString(), hxFileName, line);
   }
 
-  /** Raw-path form for probes that vary the path SPELLING (separator variants). */
+  /// Raw-path form for probes that vary the path SPELLING (separator variants).
   static SetBreakpointsRequest breakpointsRequest(String sourcePath, String sourceName, int line) {
     SetBreakpointsRequest setBreakpoints = new SetBreakpointsRequest();
     SetBreakpointsArguments bpArgs = new SetBreakpointsArguments();
@@ -166,11 +162,9 @@ final class LiveProbeUtil {
     return setBreakpoints;
   }
 
-  /**
-   * Drives the parent session until js-debug asks for the child session:
-   * configurationDone on the initialized event, every reverse request answered
-   * as the IDE answers it. Null when no startDebugging arrives in time.
-   */
+  /// Drives the parent session until js-debug asks for the child session:
+  /// configurationDone on the initialized event, every reverse request answered
+  /// as the IDE answers it. Null when no startDebugging arrives in time.
   static StartDebuggingRequest awaitStartDebugging(DapClient parent, long millis, long requestTimeout)
     throws Exception {
     long deadline = System.currentTimeMillis() + millis;
@@ -191,15 +185,13 @@ final class LiveProbeUtil {
     return null;
   }
 
-  /** Probe-side diagnostics; the tag separates them from the [adapter] and [server] streams. */
+  /// Probe-side diagnostics; the tag separates them from the [adapter] and [server] streams.
   static void probe(String message) {
     System.out.println("[probe] " + message);
   }
 
-  /**
-   * Asserts the stop landed on the haxe original at {@code line} — a frame
-   * pointing at the generated app.js means the source map was not applied.
-   */
+  /// Asserts the stop landed on the haxe original at `line` — a frame
+  /// pointing at the generated app.js means the source map was not applied.
   static void assertStoppedInHx(StackFrame top, String hxFile, int line) {
     assertNotNull(top.getSource(), "top frame has no source");
     assertTrue(top.getSource().getPath() != null && top.getSource().getPath().endsWith(hxFile), "top frame is not the .hx original: " + top.getSource().getPath());
@@ -262,7 +254,7 @@ final class LiveProbeUtil {
     return request;
   }
 
-  /** Smart step into: enter the chosen call on the line rather than the first one. */
+  /// Smart step into: enter the chosen call on the line rather than the first one.
   static StepInRequest stepInRequest(int threadId, int targetId) {
     StepInRequest request = new StepInRequest();
     StepInArguments arguments = new StepInArguments();
@@ -280,7 +272,7 @@ final class LiveProbeUtil {
     return request;
   }
 
-  /** True when the adapter's initialized event arrives before the timeout. */
+  /// True when the adapter's initialized event arrives before the timeout.
   static boolean awaitInitialized(DapEndpoint endpoint, long millis) throws Exception {
     long deadline = System.currentTimeMillis() + millis;
     while (System.currentTimeMillis() < deadline) {
@@ -291,7 +283,7 @@ final class LiveProbeUtil {
     return false;
   }
 
-  /** The next stopped event, or null when none arrives before the timeout. */
+  /// The next stopped event, or null when none arrives before the timeout.
   static StoppedEvent awaitStopped(DapEndpoint endpoint, long millis) throws Exception {
     long deadline = System.currentTimeMillis() + millis;
     while (System.currentTimeMillis() < deadline) {
@@ -302,7 +294,7 @@ final class LiveProbeUtil {
     return null;
   }
 
-  /** Where the provisioned node + adapters live; the matrix lanes point elsewhere. */
+  /// Where the provisioned node + adapters live; the matrix lanes point elsewhere.
   static Path nodeRoot() {
     String override = System.getProperty("web.debug.node.root");
     return override != null ? Path.of(override) : Path.of("../../node").toAbsolutePath().normalize();
@@ -324,21 +316,19 @@ final class LiveProbeUtil {
     }
   }
 
-  /** The host page plus its compiled app.js — the two files every probe fixture needs. */
+  /// The host page plus its compiled app.js — the two files every probe fixture needs.
   static void writePageAndCompile(Path dir, String mainClass) throws Exception {
     Files.writeString(dir.resolve("index.html"), INDEX_HTML);
     compileHaxeJs(dir, mainClass, "app.js");
   }
 
-  /**
-   * Compiles one {@code haxe -js} unit with {@code -debug} (source maps);
-   * fails the test with the compiler's output when the compile fails.
-   */
+  /// Compiles one `haxe -js` unit with `-debug` (source maps);
+  /// fails the test with the compiler's output when the compile fails.
   static void compileHaxeJs(Path classPath, String mainClass, String outJsName) throws Exception {
     compileHaxeJs(classPath, mainClass, outJsName, 30, List.of());
   }
 
-  /** As above with extra compiler arguments (libs, defines, macros) and a timeout for builds that pull libraries. */
+  /// As above with extra compiler arguments (libs, defines, macros) and a timeout for builds that pull libraries.
   static void compileHaxeJs(Path classPath, String mainClass, String outJsName,
                             long timeoutSeconds, List<String> extraArgs) throws Exception {
     List<String> command = new ArrayList<>(List.of("haxe", "-cp", classPath.toString()));
@@ -352,28 +342,24 @@ final class LiveProbeUtil {
     }
   }
 
-  /**
-   * A free TCP port from the OS, for the adapter's DAP listener and the RDP
-   * port in launch configs. A random pick from a fixed range flakes on
-   * Windows: Hyper-V/WinNAT reserve blocks of the port space (excluded port
-   * ranges) and a bind inside one dies with EACCES.
-   */
+  /// A free TCP port from the OS, for the adapter's DAP listener and the RDP
+  /// port in launch configs. A random pick from a fixed range flakes on
+  /// Windows: Hyper-V/WinNAT reserve blocks of the port space (excluded port
+  /// ranges) and a bind inside one dies with EACCES.
   static int freePort() throws IOException {
     return NetUtils.findAvailableSocketPort();
   }
 
-  /** Connects to an adapter's DAP port, retrying briefly (see DapClient.connectWithRetry). */
+  /// Connects to an adapter's DAP port, retrying briefly (see DapClient.connectWithRetry).
   static DapClient connectWithRetry(int port, int connectTimeoutMillis) throws IOException {
     return DapClient.connectWithRetry("127.0.0.1", port, connectTimeoutMillis, 10_000);
   }
 
-  /**
-   * Spawns a node-hosted adapter server, verifies its announcement line, and
-   * keeps DRAINING its merged output on a daemon thread. The drain is
-   * load-bearing: an undrained pipe blocks the adapter once the OS buffer
-   * fills, which reads as a wedged session minutes later - every spawn goes
-   * through here so it cannot be forgotten.
-   */
+  /// Spawns a node-hosted adapter server, verifies its announcement line, and
+  /// keeps DRAINING its merged output on a daemon thread. The drain is
+  /// load-bearing: an undrained pipe blocks the adapter once the OS buffer
+  /// fills, which reads as a wedged session minutes later - every spawn goes
+  /// through here so it cannot be forgotten.
   static Process spawnAdapterServer(List<String> command, Path workingDir,
                                     String expectedAnnouncement, String tag) throws IOException {
     Process adapter = new ProcessBuilder(command)
@@ -401,11 +387,9 @@ final class LiveProbeUtil {
     return adapter;
   }
 
-  /**
-   * Kills the WHOLE process tree: killing node does not kill the browser it
-   * spawned, and every leaked headless browser poisons later
-   * launches.
-   */
+  /// Kills the WHOLE process tree: killing node does not kill the browser it
+  /// spawned, and every leaked headless browser poisons later
+  /// launches.
   static void killTree(Process process) throws InterruptedException {
     process.descendants().forEach(ProcessHandle::destroyForcibly);
     process.destroy();

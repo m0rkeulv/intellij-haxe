@@ -35,29 +35,25 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/**
- * Wire probe for the NODE test-debug lane: the debuggee is
- * {@code node --inspect-brk=<port> app.js} spawned by the PROBE (as the test
- * runner spawns it), and vscode-js-debug ATTACHES ({@code pwa-node}). Pins
- * what {@code NodeTestDebugBackend} relies on:
- *
- * <ul>
- *   <li>the attach flavour runs the same parent/child dance as the browser
- *       launch (fire-and-forget attach, startDebugging hand-over);</li>
- *   <li>{@code continueOnAttach} releases the --inspect-brk hold after
- *       configurationDone — breakpoints installed first stop the run;</li>
- *   <li>{@code resolveSourceMapLocations=["**"]} lets the map of an artifact
- *       OUTSIDE the cwd resolve (the gutter single-run temp root) — null is
- *       NOT equivalent: the DAP encoder drops null values, and an absent
- *       field keeps the workspace-folder default;</li>
- *   <li>the debuggee's trace output stays on ITS process stdout — the SM
- *       test console needs no output replay from the debug connection.</li>
- * </ul>
- *
- * Skips when node or the adapter are not provisioned under {@code <root>/node}.
- */
+/// Wire probe for the NODE test-debug lane: the debuggee is
+/// `node --inspect-brk=<port> app.js` spawned by the PROBE (as the test
+/// runner spawns it), and vscode-js-debug ATTACHES (`pwa-node`). Pins
+/// what `NodeTestDebugBackend` relies on:
+///
+///   - the attach flavour runs the same parent/child dance as the browser
+///       launch (fire-and-forget attach, startDebugging hand-over);
+///   - `continueOnAttach` releases the --inspect-brk hold after
+///       configurationDone — breakpoints installed first stop the run;
+///   - `resolveSourceMapLocations=["**"]` lets the map of an artifact
+///       OUTSIDE the cwd resolve (the gutter single-run temp root) — null is
+///       NOT equivalent: the DAP encoder drops null values, and an absent
+///       field keeps the workspace-folder default;
+///   - the debuggee's trace output stays on ITS process stdout — the SM
+///       test console needs no output replay from the debug connection.
+///
+/// Skips when node or the adapter are not provisioned under `<root>/node`.
 @DisplayName("Browser debugger: node attach (live)")
-public class NodeAttachLiveProbe {
+public class NodeAttachLiveTest {
   private static final long TIMEOUT = 15_000;
 
   private static final int BP_LINE = 3;
@@ -109,11 +105,9 @@ public class NodeAttachLiveProbe {
     }
   }
 
-  /**
-   * The full lane: hold at --inspect-brk, attach, breakpoint by .hx path over
-   * the source map, stop on the test line, resume to a clean exit with the
-   * trace output on the DEBUGGEE's stdout.
-   */
+  /// The full lane: hold at --inspect-brk, attach, breakpoint by .hx path over
+  /// the source map, stop on the test line, resume to a clean exit with the
+  /// trace output on the DEBUGGEE's stdout.
   @Test
   @Timeout(90)
   @DisplayName("attach stops on a haxe breakpoint and output stays on stdout")
@@ -166,7 +160,7 @@ public class NodeAttachLiveProbe {
     assertTrue(traced, "trace output must arrive on the debuggee's own stdout: " + output);
   }
 
-  /** Breakpoint + configurationDone on the child's initialized event, then the breakpoint stop (entry stops resumed). */
+  /// Breakpoint + configurationDone on the child's initialized event, then the breakpoint stop (entry stops resumed).
   private StoppedEvent configureAndAwaitBreakpoint(DapClient child, Path fixture) throws Exception {
     long deadline = System.currentTimeMillis() + 30_000;
     boolean configured = false;
@@ -190,7 +184,7 @@ public class NodeAttachLiveProbe {
     return null;
   }
 
-  /** The attach flavour of the parent config — what NodeTestDebugBackend sends. */
+  /// The attach flavour of the parent config — what NodeTestDebugBackend sends.
   private static Map<String, Object> attachConfig(int inspectorPort, Path cwd) {
     Map<String, Object> config = new LinkedHashMap<>();
     config.put("type", "pwa-node");

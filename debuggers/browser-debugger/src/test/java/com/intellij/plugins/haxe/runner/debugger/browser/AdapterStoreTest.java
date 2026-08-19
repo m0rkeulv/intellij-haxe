@@ -21,11 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/**
- * Exercises the store against a LOCAL http server (the module's own
- * ContentHttpServer, dogfooded) — no network, no real pins. The archive shape
- * mirrors the firefox vsix: a zip with extension/dist/adapter.bundle.js.
- */
+/// Tests logic for downloading and verifying DAP debuggers (Chrome and Firefox)
 @DisplayName("Browser debugger: adapter store")
 public class AdapterStoreTest {
   private static final String ENTRY = "extension/dist/adapter.bundle.js";

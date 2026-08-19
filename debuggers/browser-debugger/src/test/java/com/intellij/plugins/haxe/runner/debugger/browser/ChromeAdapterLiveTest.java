@@ -26,24 +26,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/**
- * Wire probe for the BROWSER-hosted test lane: a REAL utest run with the
- * IDE-injected live reporter, compiled to plain js and executed in a headless
- * chromium page through js-debug — no breakpoints, console capture only.
- * Pins what {@code BrowserTestRunHost} relies on:
- *
- * <ul>
- *   <li>the reporter's {@code console.log} lines arrive as DAP output events
- *       with the service messages intact at line starts;</li>
- *   <li>the completion sentinel ({@code ##intellij-haxe[testRunFinished ...]})
- *       arrives after the tree — the run-ending signal a page's missing exit
- *       code is replaced by.</li>
- * </ul>
- *
- * Skips when node/adapter/chromium/haxe (with the utest haxelib) are missing.
- */
+/// Test that verifies live that we can connect and start a debugger session with a Chrome browser.
+/// We don't do nay breakpoints here, but verify that we can connect and capture output.
+/// Require a Chrome-based browser, Node.js and Haxe and utest (Haxe test framework)
 @DisplayName("Browser debugger: test capture (live)")
-public class BrowserTestCaptureLiveProbe {
+public class ChromeAdapterLiveTest {
   private static final long TIMEOUT = 15_000;
 
   private static final String PROBE_CASE_HX_SOURCE = """
@@ -65,12 +52,10 @@ public class BrowserTestCaptureLiveProbe {
   private int adapterPort;
   private DapClient parent;
 
-  /** The repo's utest live reporter sources, compiled into the fixture exactly as the planner injects them. */
   private static Path utestReporterRoot() {
     return reporterRoot("utestLiveReporter");
   }
 
-  /** The reporter sources every framework shares — the planner extracts them onto the same classpath. */
   private static Path sharedReporterRoot() {
     return reporterRoot("sharedLiveReporter");
   }
@@ -87,9 +72,8 @@ public class BrowserTestCaptureLiveProbe {
     Assumptions.assumeTrue(Files.isDirectory(utestReporterRoot()), "reporter sources not found - skipping");
 
     adapterPort = LiveProbeUtil.freePort();
-    adapter = LiveProbeUtil.spawnAdapterServer(
-      List.of(nodeExe().toString(), dapServerJs().toString(), String.valueOf(adapterPort), "127.0.0.1"),
-      dapServerJs().getParent(), "Debug server listening", "adapter");
+    List<String> command = List.of(nodeExe().toString(), dapServerJs().toString(), String.valueOf(adapterPort), "127.0.0.1");
+    adapter = LiveProbeUtil.spawnAdapterServer(command, dapServerJs().getParent(), "Debug server listening", "adapter");
 
     parent = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT);
   }
@@ -108,24 +92,24 @@ public class BrowserTestCaptureLiveProbe {
   }
 
   @Test
-  @Timeout(120)
+  @Timeout(60)
   @DisplayName("utest reporter streams the protocol and the completion sentinel through the page console")
   public void utestReporterStreamsTheProtocolAndTheCompletionSentinelThroughThePageConsole() throws Exception {
     Assumptions.assumeTrue(haxeOnPath(), "haxe not on PATH - skipping");
+
     Path fixture = Files.createTempDirectory("haxe-browser-tests");
     Files.writeString(fixture.resolve("ProbeCase.hx"), PROBE_CASE_HX_SOURCE);
     Files.writeString(fixture.resolve("ProbeMain.hx"), PROBE_MAIN_HX_SOURCE);
     Files.writeString(fixture.resolve("index.html"), LiveProbeUtil.INDEX_HTML);
+
     compileWithReporter(fixture);
 
     String captured = driveAndCapture(fixture);
-    assertTrue(captured.contains("##teamcity[testStarted"),
-               "the reporter's service messages must reach the console capture: " + captured);
-    assertTrue(captured.contains("##intellij-haxe[testRunFinished exit='0']"),
-               "the completion sentinel must arrive after the tree: " + captured);
+    assertTrue(captured.contains("##teamcity[testStarted"), "the reporter's service messages must reach the console capture: " + captured);
+    assertTrue(captured.contains("##intellij-haxe[testRunFinished exit='0']"), "the completion sentinel must arrive after the tree: " + captured);
   }
 
-  /** The planner's utest reporting set: teamcity defines + the reporter classpath + the runner patch. */
+  /// The planner's utest reporting set: teamcity defines + the reporter classpath + the runner patch.
   private static void compileWithReporter(Path fixture) throws Exception {
     List<String> reporterArgs = List.of(
       "-lib", "utest",
@@ -136,9 +120,10 @@ public class BrowserTestCaptureLiveProbe {
     LiveProbeUtil.compileHaxeJs(fixture, "ProbeMain", "app.js", 60, reporterArgs);
   }
 
-  /** Parent handshake, child session, configurationDone, then output capture until the sentinel (or timeout). */
+  /// Parent handshake, child session, configurationDone, then output capture until the sentinel (or timeout).
   private String driveAndCapture(Path fixture) throws Exception {
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
+
       assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
 
       Map<String, Object> launchConfig = baseLaunchConfig(content.getBaseUrl(), fixture);
@@ -148,6 +133,7 @@ public class BrowserTestCaptureLiveProbe {
       assertNotNull(startDebugging, "no startDebugging reverse request");
 
       try (DapClient child = LiveProbeUtil.connectWithRetry(adapterPort, (int)TIMEOUT)) {
+
         assertTrue(child.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "child initialize");
         child.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
 

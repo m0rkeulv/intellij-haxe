@@ -36,16 +36,14 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.responses.*;
-import java.io.BufferedReader;
+
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,23 +51,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/**
- * M2 wire probe for vscode-js-debug's standalone DAP server (pinned
- * js-debug-dap v1.117.0, sha256 ad8d04ed..., from the GitHub release), driving
- * an UNGOOGLED-CHROMIUM fork — the user's chosen first Chromium target. Pins
- * the parts that differ from the firefox adapter:
- *
- * <ul>
- *   <li>launch ordering (does the launch response wait for configurationDone?);</li>
- *   <li>the {@code startDebugging} REVERSE request and the child-session
- *       handshake via {@code __pendingTargetId} on a SECOND connection;</li>
- *   <li>breakpoint-by-.hx-path over source maps in the child session.</li>
- * </ul>
- *
- * Skips when node/adapter/chromium are not provisioned under {@code <root>/node}.
- */
+/// M2 wire probe for vscode-js-debug's standalone DAP server (pinned
+/// js-debug-dap v1.117.0, sha256 ad8d04ed..., from the GitHub release), driving
+/// an UNGOOGLED-CHROMIUM fork — the user's chosen first Chromium target. Pins
+/// the parts that differ from the firefox adapter:
+///
+///   - launch ordering (does the launch response wait for configurationDone?);
+///   - the `startDebugging` REVERSE request and the child-session
+///       handshake via `__pendingTargetId` on a SECOND connection;
+///   - breakpoint-by-.hx-path over source maps in the child session.
+///
+/// Skips when node/adapter/chromium are not provisioned under `<root>/node`.
 @DisplayName("Browser debugger: js debug adapter (live)")
-public class JsDebugAdapterLiveProbe {
+public class JsDebugAdapterLiveTest {
   private static final long TIMEOUT = 15_000;
 
   // fixture file names; the .hx names come back in reported breakpoint source paths
@@ -118,7 +112,7 @@ public class JsDebugAdapterLiveProbe {
     return dir;
   }
 
-  /** As {@link #awaitStopped}, but only a stop owned by a worker session. */
+  /// As {@link #awaitStopped}, but only a stop owned by a worker session.
   private static StoppedEvent awaitWorkerStop(DapEndpoint endpoint, long millis) throws Exception {
     long deadline = System.currentTimeMillis() + millis;
     while (System.currentTimeMillis() < deadline) {
@@ -129,7 +123,7 @@ public class JsDebugAdapterLiveProbe {
     return null;
   }
 
-  /** Worker sessions are multiplexed behind composite ids; the page keeps raw ones. */
+  /// Worker sessions are multiplexed behind composite ids; the page keeps raw ones.
   private static boolean isWorkerStop(StoppedEvent stopped) {
     Integer threadId = stopped.getBody().getThreadId();
     return threadId != null && threadId >= COMPOSITE_FLOOR;
@@ -140,19 +134,17 @@ public class JsDebugAdapterLiveProbe {
     return threadId != null && threadId < COMPOSITE_FLOOR;
   }
 
-  /** The mux names a worker thread after the script it runs. */
+  /// The mux names a worker thread after the script it runs.
   private static boolean isWorkerThread(DapThread thread) {
     return thread.getId() >= COMPOSITE_FLOOR
            && thread.getName() != null && thread.getName().contains("worker.js");
   }
 
-  /**
-   * Load-time code (main body, runs during page load) — the case the firefox
-   * adapter needed the refresh-once trick for. js-debug pre-registers
-   * breakpoints through CDP before scripts execute, so the FIRST load must
-   * stop, with no serving tricks. Guards the family split in the backend
-   * (no refreshFirstPage for chromium).
-   */
+  /// Load-time code (main body, runs during page load) — the case the firefox
+  /// adapter needed the refresh-once trick for. js-debug pre-registers
+  /// breakpoints through CDP before scripts execute, so the FIRST load must
+  /// stop, with no serving tricks. Guards the family split in the backend
+  /// (no refreshFirstPage for chromium).
   @Test
   @Timeout(60)
   @DisplayName("load time breakpoint hits on first load")
@@ -187,12 +179,10 @@ public class JsDebugAdapterLiveProbe {
     }
     """;
 
-  /**
-   * Smart-step material: DAP stepInTargets on a line with two calls, then
-   * stepIn with a chosen targetId. Also probes the "completions" request —
-   * the runtime-truth fallback for identifiers the Haxe PSI cannot resolve
-   * (browser globals behind incomplete externs).
-   */
+  /// Smart-step material: DAP stepInTargets on a line with two calls, then
+  /// stepIn with a chosen targetId. Also probes the "completions" request —
+  /// the runtime-truth fallback for identifiers the Haxe PSI cannot resolve
+  /// (browser globals behind incomplete externs).
   @Test
   @Timeout(60)
   @DisplayName("step in targets and runtime completions")
@@ -273,15 +263,13 @@ public class JsDebugAdapterLiveProbe {
     }
   }
 
-  /**
-   * Replicates the IDE's EXACT child-session sequence (DapDebugProcess):
-   * initialize with adapterID intellij-haxe and NO supportsStartDebuggingRequest,
-   * fire-and-forget launch, await initialized, setBreakpoints,
-   * setExceptionBreakpoints(["uncaught"]), configurationDone — then at the stop:
-   * threads, stackTrace, and the stepInTargets the smart-step handler sends.
-   * Exists because the IDE reported no step-in chooser while the probe's own
-   * sequence got targets fine — this pins whether the SEQUENCE is the culprit.
-   */
+  /// Replicates the IDE's EXACT child-session sequence (DapDebugProcess):
+  /// initialize with adapterID intellij-haxe and NO supportsStartDebuggingRequest,
+  /// fire-and-forget launch, await initialized, setBreakpoints,
+  /// setExceptionBreakpoints(["uncaught"]), configurationDone — then at the stop:
+  /// threads, stackTrace, and the stepInTargets the smart-step handler sends.
+  /// Exists because the IDE reported no step-in chooser while the probe's own
+  /// sequence got targets fine — this pins whether the SEQUENCE is the culprit.
   @Test
   @Timeout(60)
   @DisplayName("step in targets under the ide exact sequence")
@@ -449,16 +437,14 @@ public class JsDebugAdapterLiveProbe {
   // unmapped closing brace) - the shape that breaks js-debug's target lookup.
   private static final String WEB_CLICK_LAST_HX_SOURCE = WEB_CLICK_HX_SOURCE.replace("\tx++;\n", "");
 
-  /**
-   * UPSTREAM LIMITATION, pinned: when the multi-call line is the LAST
-   * statement of its function, js-debug's getStepInTargets reverse-maps the
-   * line AND line+1; the closing-brace line has no source-map entries, the
-   * sibling counts differ, and it bails to [] with the internal warning
-   * "Expected to have the same number of start and end locations" (no CDP is
-   * even consulted). Diagnosed via trace logs; the IDE then falls back to a
-   * plain step into. If a future js-debug pin fixes this, THIS TEST FAILS -
-   * celebrate and delete it.
-   */
+  /// UPSTREAM LIMITATION, pinned: when the multi-call line is the LAST
+  /// statement of its function, js-debug's getStepInTargets reverse-maps the
+  /// line AND line+1; the closing-brace line has no source-map entries, the
+  /// sibling counts differ, and it bails to [] with the internal warning
+  /// "Expected to have the same number of start and end locations" (no CDP is
+  /// even consulted). Diagnosed via trace logs; the IDE then falls back to a
+  /// plain step into. If a future js-debug pin fixes this, THIS TEST FAILS -
+  /// celebrate and delete it.
   @Test
   @Timeout(60)
   @DisplayName("step in targets known limitation on last statement of function")
@@ -480,10 +466,8 @@ public class JsDebugAdapterLiveProbe {
                + " if this failed with a count >= 2, the pin fixed it - remove the limitation");
   }
 
-  /**
-   * Smart-step INSIDE A DOM EVENT HANDLER works when the call line is
-   * followed by another mapped statement (the general case).
-   */
+  /// Smart-step INSIDE A DOM EVENT HANDLER works when the call line is
+  /// followed by another mapped statement (the general case).
   @Test
   @Timeout(60)
   @DisplayName("step in targets inside a dom event handler")
@@ -535,19 +519,17 @@ public class JsDebugAdapterLiveProbe {
     }
     """;
 
-  /** Ids from a k>0 session carry the session index above this. */
+  /// Ids from a k>0 session carry the session index above this.
   private static final int COMPOSITE_FLOOR = 1 << 24;
 
-  /**
-   * Workers-as-threads: the {@link JsDebugSessionMux} auto-attaches the worker
-   * session js-debug announces via {@code startDebugging} on the PAGE
-   * connection, replays the cached breakpoint (set through the mux BEFORE the
-   * worker existed), and surfaces the worker's stop as a COMPOSITE thread id
-   * in the one merged session. Pins the id round-trip the IDE relies on:
-   * stackTrace by composite threadId, scopes/variables by composite
-   * frameId/variablesReference, merged threads listing both targets, and
-   * continue routed back to the worker.
-   */
+  /// Workers-as-threads: the {@link JsDebugSessionMux} auto-attaches the worker
+  /// session js-debug announces via `startDebugging` on the PAGE
+  /// connection, replays the cached breakpoint (set through the mux BEFORE the
+  /// worker existed), and surfaces the worker's stop as a COMPOSITE thread id
+  /// in the one merged session. Pins the id round-trip the IDE relies on:
+  /// stackTrace by composite threadId, scopes/variables by composite
+  /// frameId/variablesReference, merged threads listing both targets, and
+  /// continue routed back to the worker.
   @Test
   @Timeout(60)
   @DisplayName("worker appears as additional thread through the mux")
@@ -653,11 +635,9 @@ public class JsDebugAdapterLiveProbe {
     assertStoppedInHx(top, WEB_MAIN_HX_NAME, BP_LINE);
   }
 
-  /**
-   * stackTrace -> scopes -> variables, every one routed by a COMPOSITE id: the
-   * mux has to map each id back to the worker session that owns it, and the
-   * ids it hands out must stay composited on the way back.
-   */
+  /// stackTrace -> scopes -> variables, every one routed by a COMPOSITE id: the
+  /// mux has to map each id back to the worker session that owns it, and the
+  /// ids it hands out must stay composited on the way back.
   private static void assertCompositeIdsRoundTrip(JsDebugSessionMux mux, int threadId) throws Exception {
     Response stResponse = mux.sendRequest(stackTraceRequest(threadId), TIMEOUT);
     assertTrue(stResponse.isSuccess(), "stackTrace via composite thread id");
@@ -680,7 +660,7 @@ public class JsDebugAdapterLiveProbe {
     assertTrue(mux.sendRequest(variablesRequest(varRef), TIMEOUT).isSuccess(), "variables via composite reference");
   }
 
-  /** The merged listing carries the page under its raw id and the worker under a composite one. */
+  /// The merged listing carries the page under its raw id and the worker under a composite one.
   private static int pageThreadIdFromMergedThreads(JsDebugSessionMux mux) throws Exception {
     Response threadsResponse = mux.sendRequest(new ThreadsRequest(), TIMEOUT);
     assertTrue(threadsResponse.isSuccess(), "merged threads");
@@ -690,7 +670,7 @@ public class JsDebugAdapterLiveProbe {
       probe("merged thread id=" + thread.getId() + " name=" + thread.getName());
     }
     boolean pageListed = threads.stream().anyMatch(t -> t.getId() < COMPOSITE_FLOOR);
-    boolean workerListed = threads.stream().anyMatch(JsDebugAdapterLiveProbe::isWorkerThread);
+    boolean workerListed = threads.stream().anyMatch(JsDebugAdapterLiveTest::isWorkerThread);
 
     assertTrue(pageListed, "merged threads must include the page (raw id)");
     assertTrue(workerListed, "merged threads must include the worker (composite id, named after its script)");
@@ -702,13 +682,11 @@ public class JsDebugAdapterLiveProbe {
       .getId();
   }
 
-  /**
-   * Pausing, stepping and resuming the PAGE must never disturb a worker that is
-   * already paused. The IDE holds the worker's stop back and presents it after
-   * the page resumes, so releasing it early would run it past the breakpoint
-   * before the user ever sees it. The ticking worker re-hits within ~250ms once
-   * resumed, so silence is what pins that it stayed put.
-   */
+  /// Pausing, stepping and resuming the PAGE must never disturb a worker that is
+  /// already paused. The IDE holds the worker's stop back and presents it after
+  /// the page resumes, so releasing it early would run it past the breakpoint
+  /// before the user ever sees it. The ticking worker re-hits within ~250ms once
+  /// resumed, so silence is what pins that it stayed put.
   private static void assertPageRoutingLeavesWorkerPaused(JsDebugSessionMux mux, int pageThreadId,
                                                           int workerThreadId) throws Exception {
     assertTrue(mux.sendRequest(pauseRequest(pageThreadId), TIMEOUT).isSuccess(), "pause the page thread");
@@ -749,14 +727,14 @@ public class JsDebugAdapterLiveProbe {
     return count;
   }
 
-  /** The response's step-in target count, or -1 when the request failed or answered without targets. */
+  /// The response's step-in target count, or -1 when the request failed or answered without targets.
   private static int targetsCountOf(Response response) {
     boolean answered = response instanceof StepInTargetsResponse ok
       && ok.isSuccess() && ok.getBody() != null && ok.getBody().getTargets() != null;
     return answered ? ((StepInTargetsResponse)response).getBody().getTargets().size() : -1;
   }
 
-  /** Optional at-stop hook for probes needing extra requests before disconnect. */
+  /// Optional at-stop hook for probes needing extra requests before disconnect.
   private interface AtStop {
     void run(DapClient child, StackFrame top) throws Exception;
   }
@@ -764,7 +742,7 @@ public class JsDebugAdapterLiveProbe {
   private volatile AtStop atStop;
   private volatile int currentThreadId;
 
-  /** The parent+child flow, shared by the probes; returns the stop's top frame. */
+  /// The parent+child flow, shared by the probes; returns the stop's top frame.
   private StackFrame driveSessionToStop(Path fixture, String bpFileName, int bpLine) throws Exception {
     try (ContentHttpServer content = new ContentHttpServer(fixture)) {
       assertTrue(parent.sendRequest(initializeRequest("chrome"), TIMEOUT).isSuccess(), "parent initialize");
