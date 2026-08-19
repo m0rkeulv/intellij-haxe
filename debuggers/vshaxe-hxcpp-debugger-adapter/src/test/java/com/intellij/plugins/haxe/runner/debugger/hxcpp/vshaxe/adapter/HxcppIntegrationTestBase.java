@@ -162,12 +162,17 @@ abstract class HxcppIntegrationTestBase {
       }
       seen.append("\n  reason=").append(stopped.getBody().getReason())
         .append(" threadId=").append(stopped.getBody().getThreadId())
-        .append(" top=").append(frames.isEmpty() ? "<no frames>"
-                                                 : frames.get(0).getName() + ":" + frames.get(0).getLine());
+        .append(" top=").append(topFrameLabel(frames));
       sendContinue(stopped.getBody().getThreadId());
     }
     throw new AssertionError("No stop at line " + line + "; stray stops seen:" + seen
                              + "\ndebuggee output so far:\n" + output());
+  }
+
+  /// `name:line` of the top frame for the stray-stop log; `<no frames>` on an empty stack.
+  private static String topFrameLabel(List<StackFrame> frames) {
+    if (frames.isEmpty()) return "<no frames>";
+    return frames.get(0).getName() + ":" + frames.get(0).getLine();
   }
 
   protected StackTraceResponse stackTrace(int threadId) throws Exception {

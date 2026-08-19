@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.InitializedEvent;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
@@ -170,8 +171,8 @@ public class NodeAttachLiveTest {
       Event event = child.pollEvent(100);
       if (event instanceof InitializedEvent && !configured) {
         configured = true;
-        assertTrue(child.sendRequest(breakpointsRequest(fixture, "NodeMain.hx", BP_LINE), TIMEOUT).isSuccess(),
-                   "setBreakpoints");
+        Response bpResponse = child.sendRequest(breakpointsRequest(fixture, "NodeMain.hx", BP_LINE), TIMEOUT);
+        assertTrue(bpResponse.isSuccess(), "setBreakpoints");
         child.sendRequest(new ConfigurationDoneRequest(), TIMEOUT);
       }
       if (event instanceof StoppedEvent stopped) {

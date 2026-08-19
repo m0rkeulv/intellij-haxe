@@ -38,7 +38,9 @@ public class HaxeCompletionTypeTextTest extends HaxeToolkitLightFixtureTestCase 
               tot<caret>
           }
       }""");
+
     myFixture.completeBasic();
+
     LookupElementPresentation presentation = renderFully(findElement("total"));
     assertEquals("Int", presentation.getTypeText(),
                  "the local's type flows through call-site-typed parameters and must survive the completion copy");
@@ -66,7 +68,9 @@ public class HaxeCompletionTypeTextTest extends HaxeToolkitLightFixtureTestCase 
               tot<caret>
           }
       }""");
+
     myFixture.completeBasic();
+
     LookupElementPresentation presentation = renderFully(findElement("total"));
     assertEquals("Int", presentation.getTypeText(),
                  "an uninitialized local typed by assignments (ArraySort's first_cut shape) must show its type");

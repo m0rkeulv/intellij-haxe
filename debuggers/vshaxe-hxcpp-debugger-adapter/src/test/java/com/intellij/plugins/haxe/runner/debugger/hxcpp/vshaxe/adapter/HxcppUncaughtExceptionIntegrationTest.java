@@ -58,7 +58,9 @@ public class HxcppUncaughtExceptionIntegrationTest extends HxcppIntegrationTestB
     }
 
     debuggee.waitFor(TIMEOUT, TimeUnit.MILLISECONDS);
-    assertTrue(sawExceptionStop || output().contains("kaboom"), "the thrown text should surface somewhere (exception stop or Critical Error output); "
+
+    boolean thrownTextSurfaced = sawExceptionStop || output().contains("kaboom");
+    assertTrue(thrownTextSurfaced, "the thrown text should surface somewhere (exception stop or Critical Error output); "
                + "sawExceptionStop=" + sawExceptionStop + ", output:\n" + output());
   }
 
