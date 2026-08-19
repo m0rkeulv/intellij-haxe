@@ -31,9 +31,9 @@ public class HaxeBuildSystemTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals(HaxeTarget.INTERP, HaxeBuildSystem.of(HaxeBuildFileType.HXML).launchTarget(getProject(), interp));
 
     VirtualFile noTarget = myFixture.addFileToProject("no-target.hxml", "-cp src\n--main Main\n").getVirtualFile();
-    assertNull(HaxeBuildSystem.of(HaxeBuildFileType.HXML)
-                 .launchTarget(getProject(), new HaxeBuildFile(noTarget, HaxeBuildFileType.HXML)),
-               "an hxml without a target flag declares none - the caller decides interp semantics");
+    HaxeTarget launchTarget = HaxeBuildSystem.of(HaxeBuildFileType.HXML)
+      .launchTarget(getProject(), new HaxeBuildFile(noTarget, HaxeBuildFileType.HXML));
+    assertNull(launchTarget, "an hxml without a target flag declares none - the caller decides interp semantics");
   }
 
   @Test

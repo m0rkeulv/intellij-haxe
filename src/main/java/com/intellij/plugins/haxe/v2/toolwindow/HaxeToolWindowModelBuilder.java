@@ -77,6 +77,32 @@ final class HaxeToolWindowModelBuilder {
   }
 
   /** A container before global active-file resolution. */
+  private static Set<String> activeDefineNames(@Nullable FileEntry activeEntry) {
+    if (activeEntry == null) return Set.of();
+    return activeEntry.info().defines().stream()
+      .map(HaxeBuildFileInfo.HaxeDefine::name)
+      .collect(Collectors.toSet());
+  }
+
+  /// The entry the stored compile command points at; null when unset or no longer scanned.
+  private static FileEntry chosenEntry(List<FileEntry> files, @Nullable HaxeEnvironmentStore.CompileCommand stored) {
+    if (stored == null) return null;
+    return files.stream()
+      .filter(entry -> entry.buildFile().file().getPath().equals(stored.buildFilePath()))
+      .findFirst()
+      .orElse(null);
+  }
+
+  /// The stored action override when it still exists, else the type's default build action.
+  private static ActionNode resolveBaseAction(FileEntry chosen, HaxeEnvironmentStore.CompileCommand stored,
+                                              HaxeBuildFile buildFile) {
+    if (stored.actionName() != null) {
+      ActionNode overrideAction = findAction(chosen.actions(), stored.actionName());
+      if (overrideAction != null) return overrideAction;
+    }
+    return findAction(chosen.actions(), HaxeBuildFileActions.defaultBuildActionName(buildFile.type()));
+  }
+
   private record RawContainer(String id, String displayName, boolean projectRoot, List<FileEntry> files) {
   }
 
@@ -99,10 +125,7 @@ final class HaxeToolWindowModelBuilder {
       .findFirst()
       .orElse(null);
 
-    Set<String> activeDefines = activeEntry == null ? Set.of()
-                                                    : activeEntry.info().defines().stream()
-                                                        .map(HaxeBuildFileInfo.HaxeDefine::name)
-                                                        .collect(Collectors.toSet());
+    Set<String> activeDefines = activeDefineNames(activeEntry);
 
     List<ContainerEntry> containers = new ArrayList<>();
     for (RawContainer raw : rawContainers) {
@@ -379,21 +402,14 @@ final class HaxeToolWindowModelBuilder {
                                 entry -> entry.actions().stream().map(ActionNode::name).toList()));
 
     HaxeEnvironmentStore.CompileCommand stored = HaxeEnvironmentStore.getInstance(project).getCompileCommand(containerId);
-    FileEntry chosen = stored == null ? null : files.stream()
-      .filter(entry -> entry.buildFile().file().getPath().equals(stored.buildFilePath()))
-      .findFirst()
-      .orElse(null);
+    FileEntry chosen = chosenEntry(files, stored);
     if (chosen == null) {
       return new EnvCompileCommandNode(containerId, HaxeBundle.message("haxe.toolwindow.compile.command.not.set"),
                                        null, null, candidatePaths, actionNamesByFile, false);
     }
 
     HaxeBuildFile buildFile = chosen.buildFile();
-    ActionNode overrideAction = stored.actionName() == null ? null
-                                                            : findAction(chosen.actions(), stored.actionName());
-    ActionNode baseAction = overrideAction != null
-      ? overrideAction
-      : findAction(chosen.actions(), HaxeBuildFileActions.defaultBuildActionName(buildFile.type()));
+    ActionNode baseAction = resolveBaseAction(chosen, stored, buildFile);
     if (baseAction == null || baseAction.command().isEmpty()) {
       return new EnvCompileCommandNode(containerId,
                                        HaxeBundle.message("haxe.toolwindow.compile.command.unsupported", buildFile.file().getName()),

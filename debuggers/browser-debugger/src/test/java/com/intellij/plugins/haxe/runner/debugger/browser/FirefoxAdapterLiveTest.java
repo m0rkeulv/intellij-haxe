@@ -869,10 +869,10 @@ public class FirefoxAdapterLiveTest {
     }
   }
 
-  /// A launch request whose arguments are the firefox adapter's own vocabulary.
   /// A stop's thread id and top frame — what the drive-to-state helper returns.
   private record StopSite(int threadId, StackFrame frame) {}
 
+  /// A launch request whose arguments are the firefox adapter's own vocabulary.
   static final class FirefoxLaunchRequest extends Request {
     @SuppressWarnings("unused") // serialized by jackson
     private final Map<String, Object> arguments;

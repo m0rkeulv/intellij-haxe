@@ -248,14 +248,21 @@ public final class HaxeLibrarySync {
         // definitions when entries disagree on a dependency's version)
         for (HaxelibPathParser.LibrarySection section : HaxelibPathParser.parseSections(dependency.name(), output)) {
           if (section.classpaths().isEmpty()) continue;
-          String version = section.version() != null ? section.version()
-                                                     : section.name().equals(dependency.name()) ? dependency.version() : null;
+          String version = sectionVersion(section, dependency);
           String entryName = version == null ? section.name() : section.name() + " " + version;
           libraries.merge(managedLibraryName(entryName), section.classpaths(), HaxeLibrarySync::unionPreservingOrder);
         }
       }
     }
     return libraries;
+  }
+
+  /// The section carries its own version; the queried library itself may only know it from the dependency.
+  @Nullable
+  private static String sectionVersion(HaxelibPathParser.LibrarySection section,
+                                       HaxeBuildFileInfo.HaxeLibDependency dependency) {
+    if (section.version() != null) return section.version();
+    return section.name().equals(dependency.name()) ? dependency.version() : null;
   }
 
   @NotNull

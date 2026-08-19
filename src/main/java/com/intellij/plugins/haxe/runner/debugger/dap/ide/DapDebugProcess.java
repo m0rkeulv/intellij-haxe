@@ -911,8 +911,7 @@ public class DapDebugProcess extends XDebugProcess {
     if (response instanceof SetVariableResponse ok && response.isSuccess() && ok.getBody() != null) {
       return ok.getBody();
     }
-    String reason = response != null && response.getMessage() != null
-                    ? response.getMessage() : "the debugger rejected the change";
+    String reason = response != null && response.getMessage() != null ? response.getMessage() : "the debugger rejected the change";
     throw new IllegalStateException(reason);
   }
 

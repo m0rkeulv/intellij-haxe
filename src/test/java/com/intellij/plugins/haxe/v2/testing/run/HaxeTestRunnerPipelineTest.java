@@ -225,8 +225,8 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     // the reporter's hints carry the it() call site's file and the description
     String specLocation = recorder.locationsByTest.get("adds numbers");
     assertNotNull(specLocation, "spec location hint expected, got: " + recorder.locationsByTest);
-    assertTrue(specLocation.startsWith("haxe:buddy://") && specLocation.endsWith("::adds numbers"),
-               "file-plus-description hint expected: " + specLocation);
+    boolean specHintShape = specLocation.startsWith("haxe:buddy://") && specLocation.endsWith("::adds numbers");
+    assertTrue(specHintShape, "file-plus-description hint expected: " + specLocation);
   }
 
   @Test
@@ -253,8 +253,8 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     assertFalse(recorder.failedTests.contains("passes"), "the passing test must stay green");
     String caseLocation = recorder.locationsByTest.get("passes");
     assertNotNull(caseLocation, "case location hint expected, got: " + recorder.locationsByTest);
-    assertTrue(caseLocation.startsWith("haxe:tink://") && caseLocation.endsWith("::TinkCase.passes"),
-               "file-plus-name hint from the case's PosInfos expected: " + caseLocation);
+    boolean caseHintShape = caseLocation.startsWith("haxe:tink://") && caseLocation.endsWith("::TinkCase.passes");
+    assertTrue(caseHintShape, "file-plus-name hint from the case's PosInfos expected: " + caseLocation);
   }
 
   @Test

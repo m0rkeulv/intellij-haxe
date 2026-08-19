@@ -102,6 +102,7 @@ public class MetadataTest {
   @DisplayName("accessors")
   public void testAccessors() throws Exception {
     HaxelibMetadata md = getTestMetadata();
+
     assertEquals(NAME_DATA, md.getName());
     assertEquals(URL_DATA, md.getUrl());
     assertEquals(LICENSE_DATA, md.getLicense());

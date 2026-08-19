@@ -97,7 +97,9 @@ public class HaxeTestLocatorTest extends HaxeCodeInsightFixtureTestCase {
   public void testUnknownNamesAndForeignProtocolsYieldNothing() {
     configureFixtureProject();
     assertNull(locate("no.such.ClassAnywhere.testNothing"));
-    assertTrue(HaxeTestLocator.INSTANCE.getLocation(
-      "java:test", "cases.MathTest", getProject(), GlobalSearchScope.allScope(getProject())).isEmpty());
+    var foreignProtocolMatches = HaxeTestLocator.INSTANCE.getLocation(
+      "java:test", "cases.MathTest", getProject(), GlobalSearchScope.allScope(getProject()));
+
+    assertTrue(foreignProtocolMatches.isEmpty());
   }
 }

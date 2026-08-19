@@ -131,10 +131,15 @@ public final class NmeProjects {
 
   @NotNull
   private static TargetArtifact nekoArtifact(@NotNull String appFile, @NotNull String outputRoot) {
-    String platformDir = SystemInfo.isWindows ? "windows-neko"
-                                              : SystemInfo.isMac ? "mac64-neko" : "linux64-neko";
+    String platformDir = nekoPlatformDirectory();
     String launcher = SystemInfo.isWindows ? appFile + ".exe" : appFile;
     return new TargetArtifact(HaxeTarget.NEKO, outputRoot + "/" + platformDir + "/" + appFile + "/" + launcher);
+  }
+
+  private static String nekoPlatformDirectory() {
+    if (SystemInfo.isWindows) return "windows-neko";
+    if (SystemInfo.isMac) return "mac64-neko";
+    return "linux64-neko";
   }
 
   @NotNull

@@ -97,15 +97,17 @@ public final class HaxeCompileCommandDialog extends DialogWrapper {
     commandCombo.setEnabled(selectedFile != null);
   }
 
+  /// The dialog state as a command; null (= clear) when no build file is selected.
+  private CompileCommand selectedCompileCommand() {
+    String selectedPath = (String)fileCombo.getSelectedItem();
+    if (selectedPath == null) return null;
+    String arguments = StringUtil.notNullize(argumentsField.getText()).trim();
+    return new CompileCommand(selectedPath, (String)commandCombo.getSelectedItem(), arguments);
+  }
+
   @Override
   protected void doOKAction() {
-    String selectedPath = (String)fileCombo.getSelectedItem();
-    CompileCommand compileCommand = selectedPath == null
-                                    ? null
-                                    : new CompileCommand(selectedPath,
-                                                         (String)commandCombo.getSelectedItem(),
-                                                         StringUtil.notNullize(argumentsField.getText()).trim());
-    HaxeEnvironmentStore.getInstance(project).setCompileCommand(containerId, compileCommand);
+    HaxeEnvironmentStore.getInstance(project).setCompileCommand(containerId, selectedCompileCommand());
     super.doOKAction();
   }
 }

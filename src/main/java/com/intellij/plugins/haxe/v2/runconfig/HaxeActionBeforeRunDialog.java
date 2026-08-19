@@ -91,12 +91,16 @@ final class HaxeActionBeforeRunDialog extends DialogWrapper {
     super.doOKAction();
   }
 
+  /// Additions derive from the file type and selected target - content sniffing needs a read action.
+  private List<String> debugAdditionsFor(String path) {
+    if (path.isEmpty()) return null;
+    return ReadAction.computeBlocking(() -> HaxeActionBeforeRunTaskProvider.debugAdditions(project, path));
+  }
+
   /** Shows the exact arguments a Debug launch would append for the chosen file's target. */
   private void refreshDebugPreview() {
     String path = fileField.getText().trim();
-    // additions derive from the file's type and selected target - content sniffing needs a read action
-    List<String> additions = path.isEmpty() ? null
-      : ReadAction.computeBlocking(() -> HaxeActionBeforeRunTaskProvider.debugAdditions(project, path));
+    List<String> additions = debugAdditionsFor(path);
     if (additions == null || additions.isEmpty()) {
       injectDebugPreview.setText(HaxeDebuggerBundle.message("haxe.before.run.dialog.inject.debug.none"));
       injectDebugCheckBox.setEnabled(false);

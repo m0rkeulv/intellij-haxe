@@ -778,11 +778,8 @@ public class HaxeResolveChecks {
         }
 
 
-        HaxePsiField field =
-          fieldFromReferenceExpression != null ? fieldFromReferenceExpression : PsiTreeUtil.getParentOfType(referenceParent, HaxePsiField.class, true, HaxeCallExpression.class, HaxeNewExpression.class);
-        HaxeParameter parameter = parameterFromReferenceExpression != null
-                                  ? parameterFromReferenceExpression
-                                  : PsiTreeUtil.getParentOfType(referenceParent, HaxeParameter.class, true, HaxeCallExpression.class, HaxeNewExpression.class);
+        HaxePsiField field = findFieldIfNull(fieldFromReferenceExpression, referenceParent);
+        HaxeParameter parameter = findParameterIfNull(parameterFromReferenceExpression, referenceParent);
         HaxeTypeTag tag = null;
         HaxeVarInit init = null;
         if (field != null) {
@@ -2871,10 +2868,22 @@ public class HaxeResolveChecks {
 
 
 
+  private static HaxePsiField findFieldIfNull(@Nullable HaxePsiField fromReference, PsiElement referenceParent) {
+    if (fromReference != null) return fromReference;
+    return PsiTreeUtil.getParentOfType(referenceParent, HaxePsiField.class, true,
+                                       HaxeCallExpression.class, HaxeNewExpression.class);
+  }
+
+  private static HaxeParameter findParameterIfNull(@Nullable HaxeParameter fromReference, PsiElement referenceParent) {
+    if (fromReference != null) return fromReference;
+    return PsiTreeUtil.getParentOfType(referenceParent, HaxeParameter.class, true,
+                                       HaxeCallExpression.class, HaxeNewExpression.class);
+  }
+
   private static List<? extends PsiElement> asList(@Nullable PsiElement element) {
     if (log.isDebugEnabled()) {
-      log.debug("Resolved as " + (element == null ? "empty result list."
-                                                  : elide(element.toString(), MAX_DEBUG_MESSAGE_LENGTH)));
+      String resolvedText = element == null ? "empty result list." : elide(element.toString(), MAX_DEBUG_MESSAGE_LENGTH);
+      log.debug("Resolved as " + resolvedText);
     }
     return element == null ? Collections.emptyList() : Collections.singletonList(element);
   }

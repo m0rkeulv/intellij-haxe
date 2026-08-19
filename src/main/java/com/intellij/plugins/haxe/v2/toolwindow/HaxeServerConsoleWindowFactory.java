@@ -39,6 +39,7 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.Icon;
 import javax.swing.JComponent;
 
 /**
@@ -99,6 +100,11 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
   }
 
   /** Mirrors the manager's instance list into tabs; runs on the EDT (the topic delivers there). */
+  private static Icon statusIcon(boolean hasFailures, boolean running) {
+    if (hasFailures) return AllIcons.General.Error;
+    return running ? AllIcons.General.InspectionsOK : null;
+  }
+
   private static void syncTabs(@NotNull Project project, @NotNull ToolWindow toolWindow) {
     ContentManager contentManager = toolWindow.getContentManager();
     var serverInfos = HaxeCompilationServerManager.getInstance(project).getServers();
@@ -130,8 +136,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
         status.clearFetchedStats();
       }
       status.update(project, serverId);
-      content.setIcon(status.hasFailures() ? AllIcons.General.Error
-                                           : running ? AllIcons.General.InspectionsOK : null);
+      content.setIcon(statusIcon(status.hasFailures(), running));
     }
   }
 

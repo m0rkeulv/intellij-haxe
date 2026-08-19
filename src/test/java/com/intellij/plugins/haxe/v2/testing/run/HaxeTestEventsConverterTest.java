@@ -73,9 +73,9 @@ public class HaxeTestEventsConverterTest {
   @Test
   @DisplayName("assertion less warning failure gets the warning text as its message")
   public void testAssertionLessWarningFailureGetsTheWarningTextAsItsMessage() {
-    assertEquals("##teamcity[testFailed name='unit.AesTest.test_ff1' message='no assertions']",
-                 rewriteWarningOnlyMessage(
-                   "##teamcity[testFailed name='unit.AesTest.test_ff1' message='W' details='    no assertions|n']"));
+    String rewritten = rewriteWarningOnlyMessage(
+      "##teamcity[testFailed name='unit.AesTest.test_ff1' message='W' details='    no assertions|n']");
+    assertEquals("##teamcity[testFailed name='unit.AesTest.test_ff1' message='no assertions']", rewritten);
   }
 
   @Test

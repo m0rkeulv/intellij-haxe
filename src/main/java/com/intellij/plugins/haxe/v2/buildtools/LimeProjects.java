@@ -247,6 +247,10 @@ public final class LimeProjects {
       .normalize();
   }
 
+  private static String hostLauncherName(String appFile) {
+    return SystemInfo.isWindows ? appFile + ".exe" : appFile;
+  }
+
   /**
    * Lime's export layout, shared by every packaged-artifact lookup:
    * {@code <app path>/<target dir>/bin} relative to the project file, the app
@@ -287,8 +291,7 @@ public final class LimeProjects {
       case "windows" -> appFile.isEmpty() ? null : appPath + "/windows/bin/" + appFile + ".exe";
       case "linux" -> appFile.isEmpty() ? null : appPath + "/linux/bin/" + appFile;
       // neko is wrapped in a launcher executable named after the app, host-suffixed
-      case "neko" -> appFile.isEmpty() ? null
-                                       : appPath + "/neko/bin/" + (SystemInfo.isWindows ? appFile + ".exe" : appFile);
+      case "neko" -> appFile.isEmpty() ? null : appPath + "/neko/bin/" + hostLauncherName(appFile);
       // TODO mac: the artifact is a .app bundle (Contents/MacOS/<app file>) - needs bundle-aware launch
       default -> null;
     };

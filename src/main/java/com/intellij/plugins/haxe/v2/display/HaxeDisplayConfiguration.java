@@ -69,15 +69,18 @@ public final class HaxeDisplayConfiguration {
   public static List<String> applyOverrides(@NotNull List<String> baseArgs, @NotNull DefineOverrides overrides) {
     if (overrides.isEmpty()) return baseArgs;
 
-    List<String> args = overrides.removedNames().isEmpty()
-                        ? new ArrayList<>(baseArgs)
-                        : withoutRemovedDefines(HxmlArguments.expandReferences(baseArgs), overrides.removedNames());
+    List<String> args = baseWithRemovals(baseArgs, overrides);
 
     args.addAll(overrides.setArgs());
     return args;
   }
 
   @NotNull
+  private static List<String> baseWithRemovals(List<String> baseArgs, DefineOverrides overrides) {
+    if (overrides.removedNames().isEmpty()) return new ArrayList<>(baseArgs);
+    return withoutRemovedDefines(HxmlArguments.expandReferences(baseArgs), overrides.removedNames());
+  }
+
   private static List<String> withoutRemovedDefines(@NotNull List<String> args, @NotNull Set<String> removedNames) {
     List<String> kept = new ArrayList<>(args.size());
     for (int i = 0; i < args.size(); i++) {

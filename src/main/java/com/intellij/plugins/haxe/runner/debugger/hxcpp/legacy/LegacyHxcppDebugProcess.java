@@ -462,8 +462,7 @@ public class LegacyHxcppDebugProcess extends XDebugProcess {
       if (file != null) {
         file = HaxeFileUtil.getCanonicalFile(file);
       }
-      sourcePosition = file == null ? null
-                                    : XDebuggerUtil.getInstance().createPosition(file, Math.max(0, lineNumber - 1));
+      sourcePosition = file == null ? null : XDebuggerUtil.getInstance().createPosition(file, Math.max(0, lineNumber - 1));
     }
 
     @Nullable

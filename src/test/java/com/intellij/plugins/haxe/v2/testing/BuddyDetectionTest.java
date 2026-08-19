@@ -52,8 +52,8 @@ public class BuddyDetectionTest extends HaxeTestFrameworkDetectionTestBase {
     assertTrue(resolved.getText().contains("adds numbers"),
                "navigation lands on the description literal, got: " + resolved.getText());
 
-    assertNull(framework.resolveTestLocation(getProject(), GlobalSearchScope.allScope(getProject()),
-                                             "haxe:test", "cases.BuddyStyleSuite"),
-               "buddy answers only its own protocol");
+    var foreignProtocolLocation = framework.resolveTestLocation(getProject(), GlobalSearchScope.allScope(getProject()),
+                                                                "haxe:test", "cases.BuddyStyleSuite");
+    assertNull(foreignProtocolLocation, "buddy answers only its own protocol");
   }
 }
