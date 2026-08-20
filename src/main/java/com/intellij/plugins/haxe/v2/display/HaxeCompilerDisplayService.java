@@ -69,7 +69,8 @@ public final class HaxeCompilerDisplayService {
   }
 
   /** Capability of the currently running server; re-checked when the port changes. */
-  private record Capability(int port, @NotNull Set<String> methods) {
+  private record Capability(int port, @NotNull Set<String> methods,
+                            @Nullable InitializeResult.SemVer haxeVersion) {
   }
 
   /** A connected, capability-checked client with its resolved args. */
@@ -86,6 +87,13 @@ public final class HaxeCompilerDisplayService {
   /** Contexts already warmed with a compile this session (the server's module cache needs one). */
   private final Set<String> compiledContexts = ConcurrentHashMap.newKeySet();
   private volatile Capability capability;
+
+  /** The connected server's haxe version; null before the first successful initialize. */
+  @Nullable
+  public InitializeResult.SemVer connectedHaxeVersion() {
+    Capability known = capability;
+    return known != null ? known.haxeVersion() : null;
+  }
 
   public HaxeCompilerDisplayService(@NotNull Project project) {
     this.project = project;
@@ -364,7 +372,7 @@ public final class HaxeCompilerDisplayService {
     if (known == null || known.port() != port) {
       InitializeResult initialized = initializeWithRetry(client, args);
       if (initialized == null) return null;
-      known = new Capability(port, Set.copyOf(initialized.methods()));
+      known = new Capability(port, Set.copyOf(initialized.methods()), initialized.haxeVersion());
       log.info("haxe display protocol " + initialized.protocolVersion()
                + " (haxe " + initialized.haxeVersion() + "), "
                + known.methods().size() + " methods");

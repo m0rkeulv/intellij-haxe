@@ -60,13 +60,28 @@ public interface HaxeCompilerSettings {
   HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String moduleName);
 
   /**
-   * Whether editor problems come from the compilation server's
-   * {@code display/diagnostics} (experimental) instead of only the plugin's
-   * own static analysis.
+   * The master toggle: whether editor highlighting uses the compilation
+   * server's {@code display/diagnostics} (experimental). The per-feature
+   * toggles below only take effect while this one is on.
    */
   boolean isCompilerDiagnosticsEnabled();
 
   void setCompilerDiagnosticsEnabled(boolean enabled);
+
+  /** Compiler/parser errors, deprecation warnings, unresolved identifiers and missing fields. */
+  boolean isDiagnosticsErrorsEnabled();
+
+  void setDiagnosticsErrorsEnabled(boolean enabled);
+
+  /** Unused imports from the compiler; while on it REPLACES the plugin's own unused-import inspection. */
+  boolean isDiagnosticsUnusedImportsEnabled();
+
+  void setDiagnosticsUnusedImportsEnabled(boolean enabled);
+
+  /** Removable code from the compiler; while on it REPLACES the plugin's unused field/function/local-var inspections. */
+  boolean isDiagnosticsRemovableCodeEnabled();
+
+  void setDiagnosticsRemovableCodeEnabled(boolean enabled);
 
   /** Where completion and resolve get their symbols; see {@link HaxeCompletionMode}. */
   @NotNull

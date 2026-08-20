@@ -1,14 +1,15 @@
 package com.intellij.plugins.haxe.v2.compiler;
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
-import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -42,9 +43,22 @@ public final class HaxeLanguageLevelUtil {
   @NotNull
   public static HaxeLanguageLevel getLanguageLevel(@NotNull PsiElement element) {
     HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(element.getProject());
-    Module module = ModuleUtilCore.findModuleForPsiElement(element);
-    return module != null ? settings.getEffectiveLanguageLevel(module.getName())
-                          : settings.getDefaultLanguageLevel();
+    String containerId = containerIdOf(element);
+    return containerId != null ? settings.getEffectiveLanguageLevel(containerId)
+                               : settings.getDefaultLanguageLevel();
+  }
+
+  /**
+   * The element's container id — the KEY the tool window's Language level row
+   * stores overrides under (module name, or the project-root container for
+   * files outside every module). Null only for non-physical elements.
+   */
+  @Nullable
+  private static String containerIdOf(@NotNull PsiElement element) {
+    PsiFile psiFile = element.getContainingFile();
+    if (psiFile == null) return null;
+    VirtualFile file = psiFile.getOriginalFile().getVirtualFile();
+    return file == null ? null : HaxeContainers.containerIdFor(element.getProject(), file);
   }
 
   public static boolean isAtLeast(@NotNull PsiElement element, @NotNull HaxeLanguageLevel level) {
@@ -52,16 +66,17 @@ public final class HaxeLanguageLevelUtil {
   }
 
   /**
-   * Applies the level as the element's MODULE override (the project default
-   * when there is no module) and refreshes highlighting plus the tool
-   * window's Language level row. Backs the "set language level" quickfix.
+   * Applies the level as the element's CONTAINER override (the project
+   * default when the element has no container) and refreshes highlighting
+   * plus the tool window's Language level row. Backs the "set language
+   * level" quickfix.
    */
   public static void setLanguageLevel(@NotNull PsiElement context, @NotNull HaxeLanguageLevel level) {
     Project project = context.getProject();
     HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(project);
-    Module module = ModuleUtilCore.findModuleForPsiElement(context);
-    if (module != null) {
-      settings.setModuleLanguageLevelOverride(module.getName(), level);
+    String containerId = containerIdOf(context);
+    if (containerId != null) {
+      settings.setModuleLanguageLevelOverride(containerId, level);
     }
     else {
       settings.setDefaultLanguageLevel(level);

@@ -26,6 +26,9 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
     public String defaultLanguageLevel = USE_COMPILER_LEVEL;
     public Map<String, String> moduleLanguageLevels = new TreeMap<>();
     public boolean compilerDiagnostics = false;
+    public boolean compilerDiagnosticsErrors = true;
+    public boolean compilerDiagnosticsUnusedImports = false;
+    public boolean compilerDiagnosticsRemovableCode = false;
     public String completionMode = HaxeCompletionMode.IDE_AND_COMPILER.getId();
   }
 
@@ -128,6 +131,36 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public void setCompilerDiagnosticsEnabled(boolean enabled) {
     state.compilerDiagnostics = enabled;
+  }
+
+  @Override
+  public boolean isDiagnosticsErrorsEnabled() {
+    return state.compilerDiagnosticsErrors;
+  }
+
+  @Override
+  public void setDiagnosticsErrorsEnabled(boolean enabled) {
+    state.compilerDiagnosticsErrors = enabled;
+  }
+
+  @Override
+  public boolean isDiagnosticsUnusedImportsEnabled() {
+    return state.compilerDiagnosticsUnusedImports;
+  }
+
+  @Override
+  public void setDiagnosticsUnusedImportsEnabled(boolean enabled) {
+    state.compilerDiagnosticsUnusedImports = enabled;
+  }
+
+  @Override
+  public boolean isDiagnosticsRemovableCodeEnabled() {
+    return state.compilerDiagnosticsRemovableCode;
+  }
+
+  @Override
+  public void setDiagnosticsRemovableCodeEnabled(boolean enabled) {
+    state.compilerDiagnosticsRemovableCode = enabled;
   }
 
   @Override

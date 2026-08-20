@@ -57,6 +57,9 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     return panel.getSelectedDefaultLevel() != settings.getExplicitDefaultLanguageLevel()
            || !panel.getModuleOverrides().equals(settings.getModuleLanguageLevelOverrides())
            || panel.isCompilerDiagnosticsEnabled() != settings.isCompilerDiagnosticsEnabled()
+           || panel.isDiagnosticsErrorsEnabled() != settings.isDiagnosticsErrorsEnabled()
+           || panel.isDiagnosticsUnusedImportsEnabled() != settings.isDiagnosticsUnusedImportsEnabled()
+           || panel.isDiagnosticsRemovableCodeEnabled() != settings.isDiagnosticsRemovableCodeEnabled()
            || panel.getCompletionMode() != settings.getCompletionMode();
   }
 
@@ -67,6 +70,9 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     settings.setDefaultLanguageLevel(panel.getSelectedDefaultLevel());
     settings.setModuleLanguageLevelOverrides(panel.getModuleOverrides());
     settings.setCompilerDiagnosticsEnabled(panel.isCompilerDiagnosticsEnabled());
+    settings.setDiagnosticsErrorsEnabled(panel.isDiagnosticsErrorsEnabled());
+    settings.setDiagnosticsUnusedImportsEnabled(panel.isDiagnosticsUnusedImportsEnabled());
+    settings.setDiagnosticsRemovableCodeEnabled(panel.isDiagnosticsRemovableCodeEnabled());
     settings.setCompletionMode(panel.getCompletionMode());
     // the tool window's Language level rows mirror these settings
     project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
@@ -82,6 +88,9 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
                 settings.getModuleLanguageLevelOverrides(),
                 getModuleNames());
     panel.setCompilerDiagnosticsEnabled(settings.isCompilerDiagnosticsEnabled());
+    panel.setDiagnosticsErrorsEnabled(settings.isDiagnosticsErrorsEnabled());
+    panel.setDiagnosticsUnusedImportsEnabled(settings.isDiagnosticsUnusedImportsEnabled());
+    panel.setDiagnosticsRemovableCodeEnabled(settings.isDiagnosticsRemovableCodeEnabled());
     panel.setCompletionMode(settings.getCompletionMode());
   }
 

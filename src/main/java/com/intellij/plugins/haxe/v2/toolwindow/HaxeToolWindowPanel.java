@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.execution.Executor;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.RunManager;
@@ -533,6 +534,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .setRenderer(BuilderKt.textListCellRenderer("", LevelChoice::display))
       .setItemChosenCallback(choice -> {
         compilerSettings.setModuleLanguageLevelOverride(levelNode.containerId(), choice.level());
+        // level-gated highlighting (feature annotators, compiler-diagnostics
+        // filtering) only updates on a fresh daemon pass
+        DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
         refreshTree();
       })
       .createPopup()

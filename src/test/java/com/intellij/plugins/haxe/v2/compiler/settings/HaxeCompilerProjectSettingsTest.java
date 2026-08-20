@@ -148,4 +148,36 @@ public class HaxeCompilerProjectSettingsTest {
     assertNull(settings.getModuleLanguageLevelOverride("app"));
     assertTrue(settings.getModuleLanguageLevelOverrides().isEmpty());
   }
+  @Test
+  @DisplayName("diagnostics feature toggles default to errors only")
+  public void diagnosticsFeatureTogglesDefaultToErrorsOnly() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+
+    assertFalse(settings.isCompilerDiagnosticsEnabled());
+    assertTrue(settings.isDiagnosticsErrorsEnabled());
+    assertFalse(settings.isDiagnosticsUnusedImportsEnabled());
+    assertFalse(settings.isDiagnosticsRemovableCodeEnabled());
+  }
+
+  @Test
+  @DisplayName("diagnostics feature toggles survive serialization")
+  public void diagnosticsFeatureTogglesSurviveSerialization() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    settings.setCompilerDiagnosticsEnabled(true);
+    settings.setDiagnosticsErrorsEnabled(false);
+    settings.setDiagnosticsUnusedImportsEnabled(true);
+    settings.setDiagnosticsRemovableCodeEnabled(true);
+
+    Element serialized = XmlSerializer.serialize(settings.getState());
+    HaxeCompilerProjectSettings.State deserialized =
+      XmlSerializer.deserialize(serialized, HaxeCompilerProjectSettings.State.class);
+    HaxeCompilerProjectSettings reloaded = new HaxeCompilerProjectSettings(null);
+    reloaded.loadState(deserialized);
+
+    assertTrue(reloaded.isCompilerDiagnosticsEnabled());
+    assertFalse(reloaded.isDiagnosticsErrorsEnabled());
+    assertTrue(reloaded.isDiagnosticsUnusedImportsEnabled());
+    assertTrue(reloaded.isDiagnosticsRemovableCodeEnabled());
+  }
+
 }

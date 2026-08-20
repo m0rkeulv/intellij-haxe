@@ -71,6 +71,7 @@ public interface HaxeMeta extends HaxePsiCompositeElement {
   HaxeMetadataTypeName DEPRECATED = new HaxeMetadataTypeName("deprecated");
   HaxeMetadataTypeName ENUM = new HaxeMetadataTypeName("enum");
   HaxeMetadataTypeName EXPOSE = new HaxeMetadataTypeName("expose"); // <name>
+  HaxeMetadataTypeName EXTERN = new HaxeMetadataTypeName("extern");
   HaxeMetadataTypeName FAKE_ENUM = new HaxeMetadataTypeName("fakeEnum");
   HaxeMetadataTypeName FILE = new HaxeMetadataTypeName("file"); // <File path>
   HaxeMetadataTypeName FINAL = new HaxeMetadataTypeName("final");

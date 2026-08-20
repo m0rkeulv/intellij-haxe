@@ -46,6 +46,11 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
     doTestSkippingAnnotators(MANUAL_OPT_INS);
   }
 
+  private void doFixTestAtLevel(HaxeLanguageLevel level, String fixText) throws Exception {
+    setLevel(level);
+    doTestActions(fixText);
+  }
+
   // ---- 3.4 ----
 
   @Test
@@ -224,5 +229,125 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
   @DisplayName("binary literals at 5.0")
   public void testBinaryLiteralsAt50() throws Exception {
     doTestAtLevel(HAXE_5_0);
+  }
+
+  // ---- syntax migrations: old metadata forms vs their 4.0 keywords ----
+
+  @Test
+  @DisplayName("enum abstract meta not deprecated below 4.0")
+  public void testEnumAbstractMetaBelow40() throws Exception {
+    doTestAtLevel(HAXE_3_4);
+  }
+
+  @Test
+  @DisplayName("enum abstract meta deprecated at 4.0")
+  public void testEnumAbstractMetaDeprecatedAt40() throws Exception {
+    doTestAtLevel(HAXE_4_0);
+  }
+
+  @Test
+  @DisplayName("final meta deprecated at 4.0")
+  public void testFinalMetaDeprecatedAt40() throws Exception {
+    doTestAtLevel(HAXE_4_0);
+  }
+
+  @Test
+  @DisplayName("extern meta deprecated at 4.0")
+  public void testExternMetaDeprecatedAt40() throws Exception {
+    doTestAtLevel(HAXE_4_0);
+  }
+
+  @Test
+  @DisplayName("extern field modifier below 4.0")
+  public void testExternFieldModifierBelow40() throws Exception {
+    doTestAtLevel(HAXE_3_4);
+  }
+
+  @Test
+  @DisplayName("extern field modifier at 4.0")
+  public void testExternFieldModifierAt40() throws Exception {
+    doTestAtLevel(HAXE_4_0);
+  }
+
+  // ---- syntax migrations: renamed std APIs ----
+
+  @Test
+  @DisplayName("Std.isOfType below 4.1")
+  public void testStdIsOfTypeBelow41() throws Exception {
+    doTestAtLevel(HAXE_4_0);
+  }
+
+  @Test
+  @DisplayName("untyped __js__ deprecated at 4.0")
+  public void testUntypedJsDeprecatedAt40() throws Exception {
+    doTestAtLevel(HAXE_4_0);
+  }
+
+  // ---- syntax migration quick fixes, both directions ----
+
+  @Test
+  @DisplayName("fix enum abstract meta to keyword")
+  public void testFixEnumAbstractMetaToKeyword() throws Exception {
+    doFixTestAtLevel(HAXE_4_0, "Replace with enum abstract");
+  }
+
+  @Test
+  @DisplayName("fix enum abstract to meta")
+  public void testFixEnumAbstractToMeta() throws Exception {
+    doFixTestAtLevel(HAXE_3_4, "Replace with @:enum");
+  }
+
+  @Test
+  @DisplayName("fix final field to var")
+  public void testFixFinalFieldToVar() throws Exception {
+    doFixTestAtLevel(HAXE_3_4, "Replace with var");
+  }
+
+  @Test
+  @DisplayName("fix final method to meta")
+  public void testFixFinalMethodToMeta() throws Exception {
+    doFixTestAtLevel(HAXE_3_4, "Replace with @:final");
+  }
+
+  @Test
+  @DisplayName("fix final meta to keyword")
+  public void testFixFinalMetaToKeyword() throws Exception {
+    doFixTestAtLevel(HAXE_4_0, "Replace with final");
+  }
+
+  @Test
+  @DisplayName("fix extern modifier to meta")
+  public void testFixExternModifierToMeta() throws Exception {
+    doFixTestAtLevel(HAXE_3_4, "Replace with @:extern");
+  }
+
+  @Test
+  @DisplayName("fix extern meta to keyword")
+  public void testFixExternMetaToKeyword() throws Exception {
+    doFixTestAtLevel(HAXE_4_0, "Replace with extern");
+  }
+
+  @Test
+  @DisplayName("fix Std.is to Std.isOfType")
+  public void testFixStdIsToIsOfType() throws Exception {
+    doFixTestAtLevel(HAXE_4_3, "Replace with Std.isOfType");
+  }
+
+  @Test
+  @DisplayName("fix Std.isOfType to Std.is")
+  public void testFixStdIsOfTypeToStdIs() throws Exception {
+    doFixTestAtLevel(HAXE_3_4, "Replace with Std.is");
+  }
+
+  @Test
+  @DisplayName("fix untyped js to Syntax.code")
+  public void testFixUntypedJsToSyntaxCode() throws Exception {
+    doFixTestAtLevel(HAXE_4_0, "Replace with js.Syntax.code");
+  }
+
+  @Test
+  @DisplayName("fix js Syntax.code to untyped")
+  public void testFixJsSyntaxCodeToUntyped() throws Exception {
+    doFixTestAtLevel(HAXE_3_4, "Replace with untyped __js__");
   }
 }

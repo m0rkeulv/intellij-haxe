@@ -554,8 +554,24 @@
 
     <annotator language="Haxe" id="body" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeMethodBodyAnnotator" order="last"/>
 
-    <!-- opt-in (Haxe Compiler settings): problems from the compilation server's display/diagnostics -->
+    <!-- opt-in (Haxe Compiler settings): problems from the compilation server's display/diagnostics.
+         Each annotator pairs with a batch inspection below so Inspect Code runs it and files its
+         findings under the Haxe group. -->
     <externalAnnotator language="Haxe" implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerDiagnosticsAnnotator"/>
+    <externalAnnotator language="Haxe" implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerUnusedImportAnnotator"/>
+    <externalAnnotator language="Haxe" implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerRemovableCodeAnnotator"/>
+    <localInspection language="Haxe" shortName="HaxeCompilerDiagnostics" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.compiler.diagnostics.name"
+                     groupKey="inspections.group.name" enabledByDefault="true" level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerDiagnosticsBatchInspections$Errors"/>
+    <localInspection language="Haxe" shortName="HaxeCompilerUnusedImport" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.compiler.unused.import.name"
+                     groupKey="inspections.group.name" enabledByDefault="true" level="WARNING"
+                     implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerDiagnosticsBatchInspections$UnusedImport"/>
+    <localInspection language="Haxe" shortName="HaxeCompilerRemovableCode" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.compiler.removable.code.name"
+                     groupKey="inspections.group.name" enabledByDefault="true" level="WARNING"
+                     implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerDiagnosticsBatchInspections$RemovableCode"/>
 
     <highlightRangeExtension implementation="com.intellij.plugins.haxe.ide.annotator.HaxeHighlightRangeExtension"/>
     <!-- opts haxe files into problem-file tracking (wavy file names in the Project view) -->

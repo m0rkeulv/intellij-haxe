@@ -31,9 +31,24 @@ public class HaxeCompilerRemovableCodeAnnotator
   @Override
   @Nullable
   public HaxeDiagnosticsPass.Request collectInformation(@NotNull PsiFile file, @NotNull Editor editor, boolean hasErrors) {
+    return enabled(file) ? HaxeDiagnosticsPass.collect(file, editor) : null;
+  }
+
+  /** Batch (Inspect Code) entry, reached through the paired inspection. */
+  @Override
+  @Nullable
+  public HaxeDiagnosticsPass.Request collectInformation(@NotNull PsiFile file) {
+    return enabled(file) ? HaxeDiagnosticsPass.collect(file) : null;
+  }
+
+  @Override
+  public String getPairedBatchInspectionShortName() {
+    return HaxeCompilerDiagnosticsBatchInspections.REMOVABLE_CODE_SHORT_NAME;
+  }
+
+  private static boolean enabled(@NotNull PsiFile file) {
     HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(file.getProject());
-    if (!settings.isCompilerDiagnosticsEnabled() || !settings.isDiagnosticsRemovableCodeEnabled()) return null;
-    return HaxeDiagnosticsPass.collect(file, editor);
+    return settings.isCompilerDiagnosticsEnabled() && settings.isDiagnosticsRemovableCodeEnabled();
   }
 
   @Override

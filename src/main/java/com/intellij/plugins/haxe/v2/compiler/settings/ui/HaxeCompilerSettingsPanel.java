@@ -9,6 +9,7 @@ import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.ui.table.TableView;
 import com.intellij.util.ui.ColumnInfo;
 import com.intellij.util.ui.FormBuilder;
+import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.ListTableModel;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -60,6 +61,12 @@ public final class HaxeCompilerSettingsPanel {
   private @Nullable HaxeLanguageLevel compilerLevel;
   private final JCheckBox compilerDiagnosticsCheckBox =
     new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.checkbox"));
+  private final JCheckBox diagnosticsErrorsCheckBox =
+    new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.errors.checkbox"));
+  private final JCheckBox diagnosticsUnusedImportsCheckBox =
+    new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.unused.imports.checkbox"));
+  private final JCheckBox diagnosticsRemovableCodeCheckBox =
+    new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.removable.code.checkbox"));
   private final ListTableModel<ModuleLevelRow> tableModel = new ListTableModel<>(new ModuleColumn(), new LevelColumn());
   private final TableView<ModuleLevelRow> table = new TableView<>(tableModel);
   private final JPanel mainPanel;
@@ -69,6 +76,14 @@ public final class HaxeCompilerSettingsPanel {
     defaultLevelCombo.addActionListener(e -> table.repaint());
 
     compilerDiagnosticsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.tooltip"));
+    diagnosticsErrorsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.errors.tooltip"));
+    diagnosticsUnusedImportsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.unused.imports.tooltip"));
+    diagnosticsRemovableCodeCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.removable.code.tooltip"));
+    for (JCheckBox child : diagnosticsChildren()) {
+      child.setBorder(JBUI.Borders.emptyLeft(24));
+    }
+    compilerDiagnosticsCheckBox.addItemListener(e -> updateDiagnosticsChildEnablement());
+    updateDiagnosticsChildEnablement();
     completionModeCombo.setRenderer(BuilderKt.textListCellRenderer("", HaxeCompletionMode::getPresentableText));
     completionModeCombo.setToolTipText(HaxeBundle.message("haxe.compiler.completion.mode.tooltip"));
 
@@ -79,6 +94,9 @@ public final class HaxeCompilerSettingsPanel {
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.default.language.level"), defaultLevelCombo)
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.completion.mode"), completionModeCombo)
       .addComponent(compilerDiagnosticsCheckBox)
+      .addComponent(diagnosticsErrorsCheckBox)
+      .addComponent(diagnosticsUnusedImportsCheckBox)
+      .addComponent(diagnosticsRemovableCodeCheckBox)
       .addComponentFillVertically(new JBScrollPane(table), 8)
       .getPanel();
   }
@@ -89,6 +107,41 @@ public final class HaxeCompilerSettingsPanel {
 
   public void setCompilerDiagnosticsEnabled(boolean enabled) {
     compilerDiagnosticsCheckBox.setSelected(enabled);
+  }
+
+  public boolean isDiagnosticsErrorsEnabled() {
+    return diagnosticsErrorsCheckBox.isSelected();
+  }
+
+  public void setDiagnosticsErrorsEnabled(boolean enabled) {
+    diagnosticsErrorsCheckBox.setSelected(enabled);
+  }
+
+  public boolean isDiagnosticsUnusedImportsEnabled() {
+    return diagnosticsUnusedImportsCheckBox.isSelected();
+  }
+
+  public void setDiagnosticsUnusedImportsEnabled(boolean enabled) {
+    diagnosticsUnusedImportsCheckBox.setSelected(enabled);
+  }
+
+  public boolean isDiagnosticsRemovableCodeEnabled() {
+    return diagnosticsRemovableCodeCheckBox.isSelected();
+  }
+
+  public void setDiagnosticsRemovableCodeEnabled(boolean enabled) {
+    diagnosticsRemovableCodeCheckBox.setSelected(enabled);
+  }
+
+  private List<JCheckBox> diagnosticsChildren() {
+    return List.of(diagnosticsErrorsCheckBox, diagnosticsUnusedImportsCheckBox, diagnosticsRemovableCodeCheckBox);
+  }
+
+  /// The per-feature toggles only apply while the master toggle is on.
+  private void updateDiagnosticsChildEnablement() {
+    for (JCheckBox child : diagnosticsChildren()) {
+      child.setEnabled(compilerDiagnosticsCheckBox.isSelected());
+    }
   }
 
   @NotNull

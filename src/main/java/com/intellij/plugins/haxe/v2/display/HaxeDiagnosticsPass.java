@@ -12,6 +12,7 @@ import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.Position;
 import com.intellij.plugins.haxe.display.protocol.Range;
 import com.intellij.psi.PsiFile;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,9 +23,14 @@ import org.jetbrains.annotations.Nullable;
  * The shared half of the compiler-diagnostics annotators: request gating,
  * the {@code display/diagnostics} fetch, and wire-range conversion. Every
  * per-feature annotator (errors, unused imports, removable code) collects
- * through {@link #collect} and fetches through {@link #fetch}; a short-lived
- * cache keyed by file + buffer state means one editor pass costs ONE wire
- * request no matter how many annotators consume it.
+ * through {@link #collect} and fetches through {@link #fetch}.
+ *
+ * The cache keeps the LAST KNOWN diagnostics per file. Within the TTL it
+ * also means one editor pass costs ONE wire request no matter how many
+ * annotators consume it — but its real job is surviving transient fetch
+ * failures (server restarting, one refused socket): a settings-driven
+ * re-highlight then still renders the last known diagnostics instead of
+ * silently wiping them until the next edit.
  */
 final class HaxeDiagnosticsPass {
 
@@ -35,16 +41,16 @@ final class HaxeDiagnosticsPass {
                  @Nullable String contents) {
   }
 
-  private record CacheKey(String filePath, int contentsHash) {
-  }
-
-  private record CacheEntry(long timestampMillis, List<Diagnostic> diagnostics) {
+  private record CacheEntry(int contentsHash, long timestampMillis, List<Diagnostic> diagnostics) {
   }
 
   /** Long enough to span one daemon pass over all annotators, short enough to never serve a stale edit. */
   private static final long CACHE_TTL_MILLIS = 5_000;
 
-  private static final Map<CacheKey, CacheEntry> CACHE = new ConcurrentHashMap<>();
+  /** Last known diagnostics per file path; entries persist past the TTL as the transient-failure fallback. */
+  private static final Map<String, CacheEntry> CACHE = new ConcurrentHashMap<>();
+
+  private static final int CACHE_MAX_FILES = 200;
 
   private HaxeDiagnosticsPass() {
   }
@@ -52,6 +58,20 @@ final class HaxeDiagnosticsPass {
   /** The request when compiler diagnostics can run for this file, else null (feature toggles are the caller's gate). */
   @Nullable
   static Request collect(@NotNull PsiFile file, @NotNull Editor editor) {
+    return collect(file, editor.getDocument());
+  }
+
+  /** Batch (Inspect Code) entry: no editor; the file's document still decides whether unsaved contents ride along. */
+  @Nullable
+  static Request collect(@NotNull PsiFile file) {
+    VirtualFile virtualFile = file.getVirtualFile();
+    if (virtualFile == null) return null;
+    Document document = FileDocumentManager.getInstance().getDocument(virtualFile);
+    return document == null ? null : collect(file, document);
+  }
+
+  @Nullable
+  private static Request collect(@NotNull PsiFile file, @NotNull Document document) {
     VirtualFile virtualFile = file.getVirtualFile();
     if (virtualFile == null || !virtualFile.isInLocalFileSystem()) return null;
 
@@ -63,7 +83,6 @@ final class HaxeDiagnosticsPass {
     HaxeCompilerDisplayService.DisplayContext context = service.contextFor(virtualFile);
     if (context == null) return null;
 
-    Document document = editor.getDocument();
     boolean diverged = FileDocumentManager.getInstance().isDocumentUnsaved(document);
     String contents = diverged ? document.getText() : null;
     return new Request(context, service, virtualFile.getPath(), contents);
@@ -76,16 +95,24 @@ final class HaxeDiagnosticsPass {
    */
   @Nullable
   static List<Diagnostic> fetch(@NotNull Request request) {
-    CacheKey key = new CacheKey(request.filePath(),
-                                request.contents() != null ? request.contents().hashCode() : 0);
+    String key = request.filePath();
+    int contentsHash = request.contents() != null ? request.contents().hashCode() : 0;
     CacheEntry cached = CACHE.get(key);
-    if (cached != null && System.currentTimeMillis() - cached.timestampMillis() < CACHE_TTL_MILLIS) {
+    boolean fresh = cached != null && cached.contentsHash() == contentsHash
+                    && System.currentTimeMillis() - cached.timestampMillis() < CACHE_TTL_MILLIS;
+    if (fresh) {
       return cached.diagnostics();
     }
 
     List<FileDiagnostics> results =
       request.service().diagnostics(request.context(), request.filePath(), request.contents());
-    if (results == null) return null;
+    if (results == null) {
+      // transient failure (server restarting, one refused socket): keep
+      // rendering the last known diagnostics rather than wiping highlights.
+      // Out-of-date ranges drop in toTextRange; the quick fixes re-validate
+      // the captured text before touching the document.
+      return cached != null ? cached.diagnostics() : null;
+    }
 
     // the whole-project sweep is what surfaces OTHER files' errors - the
     // per-file request above tolerates broken dependencies; its findings
@@ -100,9 +127,21 @@ final class HaxeDiagnosticsPass {
       .filter(entry -> FileUtil.pathsEqual(entry.file(), request.filePath()))
       .flatMap(entry -> entry.diagnostics().stream())
       .toList();
-    CACHE.entrySet().removeIf(e -> System.currentTimeMillis() - e.getValue().timestampMillis() >= CACHE_TTL_MILLIS);
-    CACHE.put(key, new CacheEntry(System.currentTimeMillis(), diagnostics));
+    if (CACHE.size() >= CACHE_MAX_FILES) {
+      evictOldest();
+    }
+    CACHE.put(key, new CacheEntry(contentsHash, System.currentTimeMillis(), diagnostics));
     return diagnostics;
+  }
+
+  static void clearCache() {
+    CACHE.clear();
+  }
+
+  private static void evictOldest() {
+    CACHE.entrySet().stream()
+      .min(Map.Entry.comparingByValue(Comparator.comparingLong(CacheEntry::timestampMillis)))
+      .ifPresent(oldest -> CACHE.remove(oldest.getKey()));
   }
 
   @NotNull
