@@ -104,6 +104,7 @@ public final class DisplayJson {
       decodeRange(entry.path("range")),
       DiagnosticSeverity.fromCode(entry.path("severity").asInt(-1)),
       entry.path("args"),
+      entry.path("code").isString() ? entry.path("code").asString() : null,
       List.copyOf(related));
   }
 

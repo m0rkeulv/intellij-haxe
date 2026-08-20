@@ -36,4 +36,6 @@ tasks.named<Test>("test") {
         logger.lifecycle("SKIPPING live display server tests (opt in with -PdisplayTests=true)")
         filter.excludeTestsMatching("com.intellij.plugins.haxe.display.client.LiveDisplayServerTest")
     }
+    // which compiler the live tests drive; defaults to the PATH haxe
+    systemProperty("display.test.haxe", providers.gradleProperty("displayTestHaxe").getOrElse("haxe"))
 }

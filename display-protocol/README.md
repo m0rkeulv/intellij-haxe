@@ -4,7 +4,7 @@ Client for the Haxe compiler's JSON-RPC display protocol, spoken against the
 same `haxe --wait <port>` compilation server the plugin already runs for
 builds. DTOs mirror the std `haxe.display.*` typedefs; the transport speaks
 the compiler's null-terminated socket form. Everything below was verified
-live against haxe 4.3.7.
+live against haxe 4.3.7 and, where marked, the haxe 5.0.0-preview.1.
 
 ## Wire protocol (`--wait <port>` TCP mode)
 
@@ -56,12 +56,39 @@ Facts that shape the client:
   modules) → `server/module` (dependencies/dependents, for invalidation) →
   `server/type` (the complete post-macro type: every field with its
   `JsonType` — macro-generated members included).
-- **`Context.defineType` modules are invisible to `server/modules`** and
-  `server/module` rejects them ("Compiler error") — they surface ONLY in the
-  `dependencies` lists of the modules using them. `server/type` on the
-  defined dot path answers normally. Pinned by
+- **`Context.defineType` modules are invisible to `server/modules`** — they
+  surface ONLY in the `dependencies` lists of the modules using them.
+  `server/type` on the defined dot path answers normally. On haxe 4
+  `server/module` rejects them ("Compiler error"); haxe 5 serves their
+  `ModuleInfo` too. Pinned by
   `LiveDisplayServerTest.macroDefinedTypeAppearsInModulesAndBlueprintsAfterACompile`;
   the IDE's type catalog discovers generated types through this dependency
   sweep.
 - Gate features on the method list returned by `initialize`
   (`display/diagnostics` is haxe 4.3+).
+
+## Haxe 5 differences (verified against 5.0.0-preview.1)
+
+The JSON-RPC surface is unchanged — same methods, framing and envelopes —
+but the answers differ in ways a client must branch on (the live suite's
+capability helpers, `sendsDiagnosticCodes()`/`blueprintTypesResolved()`):
+
+- **Diagnostics carry LSP-style `code`s**: the specific `-w` warning
+  identifiers (`WDeprecatedEnumAbstract`, not just the `WDeprecated` class).
+  4.x sends `code: null` throughout. `-w -WDeprecated` in the request args
+  suppresses the whole class on both generations.
+- **`RemovableCode` is renamed `ReplaceableCode`** and its args gain an
+  optional `newCode` replacement string alongside `description`/`range`.
+- **`server/type` member types arrive as unresolved `TMono`** — the module
+  cache is serialized before lazy typing is forced, so field/return types
+  that 4.3.7 reports concretely (`TInst String`) come back as monomorphs.
+  Member names, kinds and shapes are reliable on both; only type resolution
+  degrades (the resolve service renders unexpressible types as `Dynamic`).
+  A `display/hover` on the same field DOES resolve — the degradation is
+  specific to the blueprint answer.
+- **The legacy `--version` wire request answers with an empty close** (4.x
+  returns the version string). Probe server readiness by any completed
+  exchange, not by expecting bytes back.
+- **`Context.defineType` from an init macro is an error** ("Cannot use this
+  API from initialization macros") — defer via
+  `Context.onAfterInitMacros(() -> ...)`, which works on 4.2+ as well.

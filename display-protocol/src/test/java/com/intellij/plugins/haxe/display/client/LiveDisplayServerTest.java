@@ -20,6 +20,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import com.intellij.plugins.haxe.display.protocol.Diagnostic;
+import com.intellij.plugins.haxe.display.protocol.Range;
+import java.util.ArrayList;
 
 /**
  * The full flow against a real {@code haxe --wait} server. Self-skips when no
@@ -40,19 +43,24 @@ public class LiveDisplayServerTest {
   @TempDir
   static Path workDir;
 
+  /// Which compiler to drive: the default PATH haxe, or an alternative
+  /// binary via -PdisplayTestHaxe (e.g. a haxe 5 preview).
+  private static final String HAXE_EXE = System.getProperty("display.test.haxe", "haxe");
+
   private static Process server;
   private static int port;
+  private static InitializeResult.SemVer serverVersion;
   private static HaxeDisplayClient client;
   private static List<String> baseArgs;
   private static String fixtureFile;
 
   @BeforeAll
   static void startServer() throws Exception {
-    assumeTrue(haxeAvailable(), "haxe not on PATH - skipping live display test");
+    assumeTrue(haxeAvailable(), "haxe (" + HAXE_EXE + ") not runnable - skipping live display test");
     try (ServerSocket probe = new ServerSocket(0)) {
       port = probe.getLocalPort();
     }
-    server = new ProcessBuilder("haxe", "--wait", String.valueOf(port))
+    server = new ProcessBuilder(HAXE_EXE, "--wait", String.valueOf(port))
       .redirectErrorStream(true)
       .redirectOutput(ProcessBuilder.Redirect.DISCARD)
       .start();
@@ -62,6 +70,20 @@ public class LiveDisplayServerTest {
     baseArgs = List.of("--cwd", workDir.toString(), "-cp", ".", "-main", "Live", "-js", "out.js", "--no-output");
     client = new HaxeDisplayClient("127.0.0.1", port);
     waitUntilAccepting();
+    serverVersion = client.initialize(baseArgs).haxeVersion();
+    System.out.println("[live] driving haxe " + serverVersion);
+  }
+
+  /// Haxe 5+ populates the LSP-style diagnostic code with -w warning identifiers.
+  private static boolean sendsDiagnosticCodes() {
+    return serverVersion.major() >= 5;
+  }
+
+  /// Haxe 5 (preview) serializes server/type member types BEFORE forcing lazy
+  /// typing, so fields arrive as unresolved TMono; 4.x answers concrete types.
+  /// Names and shapes are reliable on both - only type resolution differs.
+  private static boolean blueprintTypesResolved() {
+    return serverVersion.major() < 5;
   }
 
   @AfterAll
@@ -103,6 +125,102 @@ public class LiveDisplayServerTest {
 
   @Test
   @Timeout(60)
+  @DisplayName("deprecation warning identification per compiler generation")
+  public void deprecationWarningIdentificationPerCompilerGeneration() throws Exception {
+    String withOldEnumAbstract = FIXTURE
+      .replace("static function main() trace(new Live().shout());",
+               "static function main() { trace(new Live().shout()); trace(Old.A); }")
+      + """
+
+      @:enum abstract Old(Int) {
+      	var A = 1;
+      }
+      """;
+    client.invalidate(baseArgs, fixtureFile);
+    List<FileDiagnostics> results = client.diagnostics(baseArgs, fixtureFile, withOldEnumAbstract);
+
+    List<Diagnostic> all = results.stream().flatMap(file -> file.diagnostics().stream()).toList();
+    for (Diagnostic diagnostic : all) {
+      System.out.println("[live] diag kind=" + diagnostic.kind() + " severity=" + diagnostic.severity()
+                         + " code=" + diagnostic.code() + " args=" + diagnostic.args());
+    }
+    Diagnostic deprecation = all.stream()
+      .filter(diagnostic -> diagnostic.messageArg().contains("deprecated"))
+      .findFirst()
+      .orElse(null);
+    assertNotNull(deprecation, "@:enum abstract must surface a deprecation warning");
+    System.out.println("[live] deprecation message = " + deprecation.messageArg());
+    System.out.println("[live] deprecation code    = " + deprecation.code());
+    System.out.println("[live] deprecation args    = " + deprecation.args());
+
+    // What identification the wire offers, per compiler generation: 4.x sends
+    // prose only; 5+ fills code with the SPECIFIC -w warning identifier
+    // (WDeprecatedEnumAbstract here, not just the WDeprecated class).
+    if (sendsDiagnosticCodes()) {
+      assertNotNull(deprecation.code(), "haxe 5+ identifies warnings by code");
+      assertTrue(deprecation.code().startsWith("WDeprecated"),
+                 "deprecation codes share the WDeprecated prefix, got " + deprecation.code());
+    } else {
+      assertNull(deprecation.code(), "haxe 4.x sends no code ids");
+    }
+
+    // The flag-side counterpart: -w -WDeprecated suppresses the warning CLASS
+    // at the request level, so class-based filtering is possible without ids.
+    List<String> suppressed = new ArrayList<>(baseArgs);
+    suppressed.add("-w");
+    suppressed.add("-WDeprecated");
+    client.invalidate(suppressed, fixtureFile);
+    List<FileDiagnostics> filtered = client.diagnostics(suppressed, fixtureFile, withOldEnumAbstract);
+    boolean stillWarned = filtered.stream()
+      .flatMap(file -> file.diagnostics().stream())
+      .anyMatch(diagnostic -> diagnostic.messageArg().contains("deprecated"));
+    System.out.println("[live] with -w -WDeprecated stillWarned=" + stillWarned);
+    assertFalse(stillWarned, "-w -WDeprecated must suppress the deprecation warning class");
+  }
+
+  @Test
+  @Timeout(60)
+  @DisplayName("removable code range for an unused local keeps the initializer")
+  public void removableCodeRangeForAnUnusedLocalKeepsTheInitializer() throws Exception {
+    String withUnusedVar = FIXTURE.replace(
+      "static function main() trace(new Live().shout());",
+      """
+      static function main() {
+      		var dummy:Int = 0;
+      		trace(new Live().shout());
+      	}""");
+    client.invalidate(baseArgs, fixtureFile);
+    List<FileDiagnostics> results = client.diagnostics(baseArgs, fixtureFile, withUnusedVar);
+
+    Diagnostic removable = results.stream()
+      .flatMap(file -> file.diagnostics().stream())
+      .filter(diagnostic -> diagnostic.kind() == DiagnosticKind.REMOVABLE_CODE)
+      .findFirst()
+      .orElse(null);
+    assertNotNull(removable, "the unused local must surface as REMOVABLE_CODE");
+    System.out.println("[live] removable args = " + removable.args());
+    System.out.println("[live] display range  = " + removable.range());
+
+    // The wire fact the remove quick fix relies on: the args' removal span
+    // covers the BINDING ("var dummy:Int = ") and deliberately KEEPS the
+    // initializer expression - `var x = sideEffect();` must not lose the call.
+    Range removal = removable.removableRangeArg();
+    assertNotNull(removal, "removable-code args must carry the removal range");
+    if (sendsDiagnosticCodes()) {
+      // haxe 5 renames the kind to ReplaceableCode and may add newCode
+      System.out.println("[live] haxe5 replaceable newCode = " + removable.args().path("newCode"));
+      return;
+    }
+    String varLine = "var dummy:Int = 0;";
+    List<String> lines = withUnusedVar.lines().toList();
+    int varLineIndex = lines.indexOf(lines.stream().filter(l -> l.contains(varLine)).findFirst().orElseThrow());
+    int initializerColumn = lines.get(varLineIndex).indexOf("0;");
+    boolean initializerKept = removal.end().line() == varLineIndex && removal.end().character() <= initializerColumn;
+    assertTrue(initializerKept, "expected the removal range to end before the initializer, got " + removal);
+  }
+
+  @Test
+  @Timeout(60)
   @DisplayName("hover definition and references resolve the fixture")
   public void hoverDefinitionAndReferencesResolveTheFixture() throws Exception {
     int labelUsage = FIXTURE.indexOf("label.toUpperCase") + 2;
@@ -137,17 +255,28 @@ public class LiveDisplayServerTest {
 
     TypeBlueprint blueprint = client.typeBlueprint(baseArgs, modulesContext.signature(), "Live", "Live");
     assertEquals("class", blueprint.kind());
-    assertEquals("String", blueprint.findMember("label").type().dotPath());
-    assertEquals("() -> String", blueprint.findMember("shout").type().presentable());
+    assertNotNull(blueprint.findMember("label"), "members must be listed by name");
+    assertNotNull(blueprint.findMember("shout"), "members must be listed by name");
+    if (blueprintTypesResolved()) {
+      assertEquals("String", blueprint.findMember("label").type().dotPath());
+      assertEquals("() -> String", blueprint.findMember("shout").type().presentable());
+    }
+    else {
+      System.out.println("[live] unresolved blueprint member type kinds: label="
+                         + blueprint.findMember("label").type().kind()
+                         + " shout=" + blueprint.findMember("shout").type().presentable());
+    }
   }
 
   // A macro-defined type: exists in NO source file, only in the compiler's
   // post-macro world - the case the IDE's type catalog serves.
+  // defineType runs inside onAfterInitMacros: haxe 5 forbids it straight from
+  // an initialization macro, and the deferred form works on 4.2+ as well
   private static final String GEN_MACRO = """
     import haxe.macro.Context;
     class GenMacro {
     	public static function define() {
-    		Context.defineType({
+    		Context.onAfterInitMacros(() -> Context.defineType({
     			pack: ["gen"],
     			name: "GeneratedThing",
     			pos: Context.currentPos(),
@@ -163,7 +292,7 @@ public class LiveDisplayServerTest {
     				kind: FFun({args: [], ret: macro :String, expr: macro return "made"}),
     				pos: Context.currentPos()
     			}]
-    		});
+    		}));
     	}
     }
     """;
@@ -202,15 +331,26 @@ public class LiveDisplayServerTest {
     assertTrue(userInfo.dependencies().contains("gen.GeneratedThing"),
                "the using module's dependencies expose the defined module");
     assertFalse(userInfo.sign().isEmpty(), "sign drives the catalog's incremental refresh");
-    assertThrows(Exception.class,
-                 () -> client.module(genArgs, context.signature(), "gen.GeneratedThing"),
-                 "server/module rejects a defined module");
+    if (sendsDiagnosticCodes()) {
+      // haxe 5 answers server/module for defineType-created modules too
+      ModuleInfo definedInfo = client.module(genArgs, context.signature(), "gen.GeneratedThing");
+      assertFalse(definedInfo.sign().isEmpty(), "haxe 5 serves ModuleInfo for a defined module");
+    }
+    else {
+      assertThrows(Exception.class,
+                   () -> client.module(genArgs, context.signature(), "gen.GeneratedThing"),
+                   "haxe 4 server/module rejects a defined module");
+    }
 
-    // server/type answers regardless - blueprints are how the defined type's
-    // members become visible
+    // server/type answers on both generations - blueprints are how the
+    // defined type's members become visible
     TypeBlueprint blueprint = client.typeBlueprint(genArgs, context.signature(), "gen.GeneratedThing", "GeneratedThing");
-    assertEquals("String", blueprint.findMember("tag").type().dotPath());
-    assertEquals("() -> String", blueprint.findMember("make").type().presentable());
+    assertNotNull(blueprint.findMember("tag"), "generated members must be listed by name");
+    assertNotNull(blueprint.findMember("make"), "generated members must be listed by name");
+    if (blueprintTypesResolved()) {
+      assertEquals("String", blueprint.findMember("tag").type().dotPath());
+      assertEquals("() -> String", blueprint.findMember("make").type().presentable());
+    }
   }
 
   /** The server context whose module cache holds {@code module}, or null (also while no cache exists at all). */
@@ -235,7 +375,7 @@ public class LiveDisplayServerTest {
 
   private static boolean haxeAvailable() {
     try {
-      Process process = new ProcessBuilder("haxe", "--version")
+      Process process = new ProcessBuilder(HAXE_EXE, "--version")
         .redirectErrorStream(true)
         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
         .start();
@@ -250,10 +390,11 @@ public class LiveDisplayServerTest {
     long deadline = System.currentTimeMillis() + 15_000;
     while (true) {
       try {
-        DisplayResponse response = HaxeDisplayTransport.request("127.0.0.1", port, List.of("--version"), 5_000);
-        if (!response.payload().isEmpty() || !response.logs().isEmpty()) {
-          return;
-        }
+        // any completed exchange proves the server accepts; the RESPONSE may
+        // legitimately be empty (haxe 5 answers the legacy --version request
+        // with a bare close)
+        HaxeDisplayTransport.request("127.0.0.1", port, List.of("--version"), 5_000);
+        return;
       } catch (Exception e) {
         if (System.currentTimeMillis() > deadline) {
           throw e;
