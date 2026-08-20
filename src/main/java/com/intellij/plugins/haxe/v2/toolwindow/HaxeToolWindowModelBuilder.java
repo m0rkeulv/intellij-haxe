@@ -57,9 +57,10 @@ final class HaxeToolWindowModelBuilder {
     this.onEvaluationReady = onEvaluationReady;
   }
 
-  /** {@code sectionIds}/{@code sectionLabels} list a multi-section hxml's {@code --next} compilations (empty otherwise); {@code selectedSection} indexes into them. */
+  /** {@code sectionIds}/{@code sectionLabels}/{@code sectionDescriptors} list a multi-section hxml's {@code --next} compilations (empty otherwise); {@code selectedSection} indexes into them. */
   record FileEntry(HaxeBuildFile buildFile, HaxeBuildFileInfo info, boolean manual, List<ActionNode> actions,
-                   List<String> sectionIds, List<String> sectionLabels, int selectedSection) {
+                   List<String> sectionIds, List<String> sectionLabels, List<String> sectionDescriptors,
+                   int selectedSection) {
   }
 
   /** A build-file container: a module, or the project root for files outside every module. */
@@ -222,39 +223,42 @@ final class HaxeToolWindowModelBuilder {
   @NotNull
   private FileEntry fileEntry(@NotNull String containerId, @NotNull HaxeBuildFile buildFile,
                               @NotNull Set<String> manualPaths) {
-    List<String> sectionIds = sectionIds(buildFile);
+    List<String> sections = multiSectionContents(buildFile);
+    List<String> sectionIds = sections.isEmpty() ? List.of()
+      : HxmlFileParser.sectionIds(buildFile.file().getName(), sections);
     List<String> sectionLabels = sectionLabels(sectionIds);
+    List<String> sectionDescriptors = sections.isEmpty() ? List.of() : HxmlFileParser.sectionDescriptors(sections);
     int selectedSection = sectionIds.isEmpty() ? 0
       : HaxeSectionSelectionStore.getInstance(project).getSelectedSection(buildFile.file(), sectionIds);
     return new FileEntry(buildFile, effectiveInfo(containerId, buildFile),
                          manualPaths.contains(buildFile.file().getPath()),
                          buildFileActions(containerId, buildFile),
-                         sectionIds, sectionLabels, selectedSection);
+                         sectionIds, sectionLabels, sectionDescriptors, selectedSection);
   }
 
-  /** One identity per {@code --next} section of a multi-section hxml; empty for everything else. */
+  /** The {@code --next} sections of a multi-section hxml; empty for single-section files and other build types. */
   @NotNull
-  private List<String> sectionIds(@NotNull HaxeBuildFile buildFile) {
+  private List<String> multiSectionContents(@NotNull HaxeBuildFile buildFile) {
     if (buildFile.type() != HaxeBuildFileType.HXML) return List.of();
     List<String> sections = HaxeBuildFileInspector.sectionContents(project, buildFile.file());
-    if (sections.size() < 2) return List.of();
-    return HxmlFileParser.sectionIds(buildFile.file().getName(), sections);
+    return sections.size() < 2 ? List.of() : sections;
   }
 
   /**
-   * Section labels are FILENAMES, never targets: the file the section's
-   * content came from, the build file's own name for inline sections, and a
-   * counter when one file chains several builds internally
-   * ("1: compile-cs.hxml", "2: compile-cs.hxml (2)").
+   * Section labels are position-prefixed FILENAMES: the file the section's
+   * content came from, the build file's own name for inline sections. The
+   * leading number is already the row's unique handle, so an id's "#n"
+   * occurrence suffix is NOT repeated in the label; what DISTINGUISHES the
+   * sections - target, output, main class - is the separate (gray)
+   * descriptor list.
    */
   @NotNull
   private static List<String> sectionLabels(@NotNull List<String> sectionIds) {
     List<String> labels = new ArrayList<>();
     for (int i = 0; i < sectionIds.size(); i++) {
       String id = sectionIds.get(i);
-      // the identity's "#n" occurrence suffix reads better as " (n)"
       int hash = id.lastIndexOf('#');
-      String name = hash < 0 ? id : id.substring(0, hash) + " (" + id.substring(hash + 1) + ")";
+      String name = hash < 0 ? id : id.substring(0, hash);
       labels.add((i + 1) + ": " + name);
     }
     return labels;

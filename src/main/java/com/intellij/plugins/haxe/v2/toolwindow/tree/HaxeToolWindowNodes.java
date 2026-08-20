@@ -199,15 +199,24 @@ public final class HaxeToolWindowNodes {
   /**
    * Section row under a multi-section hxml (a {@code --next} chain): which
    * compilation the tree's defines/libraries/target and test runs follow.
-   * Carries every section's identity and label so the chooser popup needs no
-   * re-parse; selections are stored by identity, index-aligned with labels.
+   * Carries every section's identity, label and descriptor (its target/output
+   * summary, possibly empty) so the chooser popup needs no re-parse;
+   * selections are stored by identity, index-aligned with the other lists.
    */
   public record SectionNode(@NotNull HaxeBuildFile buildFile,
                             @NotNull List<String> ids,
                             @NotNull List<String> labels,
+                            @NotNull List<String> descriptors,
                             int selected) implements HaxeToolWindowNode {
     public String displayName() {
-      return labels.get(selected);
+      String descriptor = displayDescriptor(selected);
+      return descriptor.isEmpty() ? labels.get(selected) : labels.get(selected) + "  " + descriptor;
+    }
+
+    /** The section's descriptor parenthesized for display ("(JavaScript)"), or "" without one. */
+    public String displayDescriptor(int index) {
+      String descriptor = descriptors.get(index);
+      return descriptor.isEmpty() ? "" : "(" + descriptor + ")";
     }
 
     @Override

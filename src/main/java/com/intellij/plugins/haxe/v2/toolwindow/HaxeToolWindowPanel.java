@@ -73,12 +73,14 @@ import com.intellij.util.PathUtil;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleColoredComponent;
+import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.tree.TreeUtil;
+import kotlin.Unit;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -417,8 +419,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     }
     // multi-section hxml (--next chain): the row picking which compilation the tree follows
     if (!entry.sectionLabels().isEmpty()) {
-      SectionNode sectionNode =
-        new SectionNode(buildFile, entry.sectionIds(), entry.sectionLabels(), entry.selectedSection());
+      SectionNode sectionNode = new SectionNode(buildFile, entry.sectionIds(), entry.sectionLabels(),
+                                                entry.sectionDescriptors(), entry.selectedSection());
       fileNode.add(new DefaultMutableTreeNode(sectionNode));
     }
 
@@ -482,17 +484,40 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Shows the {@code --next} section dropdown for a multi-section hxml, anchored at the given point. */
   public void showSectionPopup(@NotNull SectionNode sectionNode, @NotNull RelativePoint point) {
+    List<SectionChoice> choices = new ArrayList<>();
+    for (int i = 0; i < sectionNode.labels().size(); i++) {
+      choices.add(new SectionChoice(i, sectionNode.labels().get(i), sectionNode.displayDescriptor(i)));
+    }
     JBPopupFactory.getInstance()
-      .createPopupChooserBuilder(sectionNode.labels())
+      .createPopupChooserBuilder(choices)
       .setTitle(HaxeBundle.message("haxe.toolwindow.select.section.title"))
-      .setRenderer(BuilderKt.textListCellRenderer("", label -> label))
-      .setItemChosenCallback(label -> {
-        String sectionId = sectionNode.ids().get(sectionNode.labels().indexOf(label));
+      .setRenderer(sectionChoiceRenderer())
+      .setItemChosenCallback(choice -> {
+        String sectionId = sectionNode.ids().get(choice.index());
         HaxeSectionSelectionStore.getInstance(project).setSelectedSection(sectionNode.buildFile().file(), sectionId);
         refreshTree();
       })
       .createPopup()
       .show(point);
+  }
+
+  private record SectionChoice(int index, @NotNull String label, @NotNull String descriptor) {
+  }
+
+  /** Section label first, its target/output descriptor grayed - one glance tells the sections apart. */
+  @NotNull
+  private static ListCellRenderer<SectionChoice> sectionChoiceRenderer() {
+    return BuilderKt.listCellRenderer(row -> {
+      SectionChoice choice = row.getValue();
+      row.text(choice.label(), null);
+      if (!choice.descriptor().isEmpty()) {
+        row.text(choice.descriptor(), params -> {
+          params.setAttributes(SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          return Unit.INSTANCE;
+        });
+      }
+      return Unit.INSTANCE;
+    });
   }
 
   /** Shows the environment SDK dropdown, anchored at the given point. */

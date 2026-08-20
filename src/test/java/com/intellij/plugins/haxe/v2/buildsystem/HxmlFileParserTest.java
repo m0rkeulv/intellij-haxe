@@ -113,6 +113,52 @@ public class HxmlFileParserTest {
   }
 
   @Test
+  @DisplayName("section descriptors name each section by target")
+  public void sectionDescriptorsNameEachSectionByTarget() {
+    List<String> sections = List.of(
+      "-python bin/app.py",
+      "-php bin/php",
+      "--jvm bin/app.jar");
+
+    assertEquals(List.of("Python", "PHP", "Java"), HxmlFileParser.sectionDescriptors(sections));
+  }
+
+  @Test
+  @DisplayName("section descriptors extend colliding targets with their outputs")
+  public void sectionDescriptorsExtendCollidingTargetsWithTheirOutputs() {
+    List<String> sections = List.of(
+      "-js bin/app.js",
+      "-js bin/worker.js",
+      "-python bin/app.py");
+
+    assertEquals(List.of("JavaScript · bin/app.js", "JavaScript · bin/worker.js", "Python"),
+                 HxmlFileParser.sectionDescriptors(sections));
+  }
+
+  @Test
+  @DisplayName("section descriptors fall back to the main class when outputs do not differ")
+  public void sectionDescriptorsFallBackToTheMainClassWhenOutputsDoNotDiffer() {
+    // same target, same output: appending the shared output would separate
+    // nothing, so the main classes take over
+    List<String> sections = List.of(
+      "-main app.Client\n-js bin/app.js",
+      "-main app.Worker\n-js bin/app.js");
+
+    assertEquals(List.of("JavaScript · Client", "JavaScript · Worker"),
+                 HxmlFileParser.sectionDescriptors(sections));
+  }
+
+  @Test
+  @DisplayName("target less sections use the main class or stay blank")
+  public void targetLessSectionsUseTheMainClassOrStayBlank() {
+    List<String> sections = List.of(
+      "-main tools.Generate",
+      "-cp src\n-D setup");
+
+    assertEquals(List.of("Generate", ""), HxmlFileParser.sectionDescriptors(sections));
+  }
+
+  @Test
   @DisplayName("flatten merges hxml includes")
   public void flattenMergesHxmlIncludes() {
     HxmlFileParser.IncludeReader reader = path ->

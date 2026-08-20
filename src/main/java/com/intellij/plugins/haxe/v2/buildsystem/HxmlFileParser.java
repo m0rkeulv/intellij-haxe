@@ -9,9 +9,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.IntFunction;
 import java.util.stream.Stream;
 
 /**
@@ -166,6 +168,66 @@ public final class HxmlFileParser {
       ids.add(occurrence == 1 ? name : name + "#" + occurrence);
     }
     return ids;
+  }
+
+  /**
+   * One human descriptor per section for chooser UIs: the compilation
+   * target's display name (the {@code -main} class's simple name for a
+   * target-less section), extended where sections would otherwise read the
+   * same — first with the target flag's output argument, then with the main
+   * class — so each descriptor states what sets its section apart. Empty for
+   * a section declaring neither target nor main. Index-aligned with
+   * {@code sections}.
+   */
+  @NotNull
+  public static List<String> sectionDescriptors(@NotNull List<String> sections) {
+    List<HaxeBuildFileInfo> infos = sections.stream().map(HxmlFileParser::parse).toList();
+    List<String> mains = sections.stream().map(HxmlFileParser::mainClass).toList();
+
+    List<String> descriptors = new ArrayList<>();
+    for (int i = 0; i < sections.size(); i++) {
+      HaxeTarget target = infos.get(i).target();
+      String main = mains.get(i);
+      descriptors.add(target != null ? target.toString() : main != null ? simpleClassName(main) : "");
+    }
+    extendCollidingDescriptors(descriptors, i -> infos.get(i).targetOutput());
+    extendCollidingDescriptors(descriptors, i -> mains.get(i) == null ? null : simpleClassName(mains.get(i)));
+    return descriptors;
+  }
+
+  /**
+   * Appends the extra to every member of a group of EQUAL non-empty
+   * descriptors — colliding sections grow the next differentiator while
+   * already-distinct ones stay short. A group whose extras are all the same
+   * is left alone (appending a shared value separates nothing); a remaining
+   * tie is the section number's job.
+   */
+  private static void extendCollidingDescriptors(@NotNull List<String> descriptors,
+                                                 @NotNull IntFunction<@Nullable String> extras) {
+    Map<String, List<Integer>> groups = new LinkedHashMap<>();
+    for (int i = 0; i < descriptors.size(); i++) {
+      if (!descriptors.get(i).isEmpty()) {
+        groups.computeIfAbsent(descriptors.get(i), key -> new ArrayList<>()).add(i);
+      }
+    }
+    for (List<Integer> group : groups.values()) {
+      if (group.size() < 2) continue;
+      Set<String> distinctExtras = new HashSet<>();
+      for (int i : group) distinctExtras.add(extras.apply(i));
+      if (distinctExtras.size() < 2) continue;
+      for (int i : group) {
+        String extra = extras.apply(i);
+        if (extra == null || extra.isBlank() || extra.equals(descriptors.get(i))) continue;
+        descriptors.set(i, descriptors.get(i) + " · " + extra);
+      }
+    }
+  }
+
+  // "com.example.Main" -> "Main"
+  @NotNull
+  private static String simpleClassName(@NotNull String dottedName) {
+    int lastDot = dottedName.lastIndexOf('.');
+    return lastDot < 0 ? dottedName : dottedName.substring(lastDot + 1);
   }
 
   /** Parses effective (include-merged) hxml content — see {@link #flatten}. */
