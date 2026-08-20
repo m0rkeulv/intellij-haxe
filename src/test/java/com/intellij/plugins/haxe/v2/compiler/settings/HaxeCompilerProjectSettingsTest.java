@@ -40,6 +40,28 @@ public class HaxeCompilerProjectSettingsTest {
   }
 
   @Test
+  @DisplayName("conditional compilation uses the language level by default")
+  public void conditionalCompilationUsesTheLanguageLevelByDefault() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    assertTrue(settings.isUseLanguageLevelForConditionals());
+  }
+
+  @Test
+  @DisplayName("use language level for conditionals survives xml round trip")
+  public void useLanguageLevelForConditionalsSurvivesXmlRoundTrip() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    settings.setUseLanguageLevelForConditionals(false);
+
+    Element serialized = XmlSerializer.serialize(settings.getState());
+    HaxeCompilerProjectSettings.State deserialized =
+      XmlSerializer.deserialize(serialized, HaxeCompilerProjectSettings.State.class);
+    HaxeCompilerProjectSettings reloaded = new HaxeCompilerProjectSettings(null);
+    reloaded.loadState(deserialized);
+
+    assertFalse(reloaded.isUseLanguageLevelForConditionals());
+  }
+
+  @Test
   @DisplayName("use compiler level survives xml serialization round trip")
   public void useCompilerLevelSurvivesXmlSerializationRoundTrip() {
     HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);

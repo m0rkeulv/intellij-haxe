@@ -16,6 +16,9 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.util.HaxeUtil;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
+import com.intellij.util.text.SemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -47,8 +50,12 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   public HaxeDefineContextService(@NotNull Project project) {
     this.project = project;
-    // any build-settings mutation invalidates the derived define context
+    // any build-settings mutation invalidates the derived define context;
+    // config changes (language level, compiler settings) feed haxe_ver so
+    // they invalidate it too
     project.getMessageBus().connect().subscribe(HaxeBuildSettingsListener.TOPIC, this);
+    project.getMessageBus().connect().subscribe(HaxeBuildConfigListener.TOPIC,
+                                                (HaxeBuildConfigListener)this::buildSettingsChanged);
   }
 
   /**
@@ -61,6 +68,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     snapshot = null;
     fastState = null;
     effectiveActivePathComputed = false;
+    activeContainerIdComputed = false;
     refreshAsync();
   }
 
@@ -97,6 +105,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   // keeps the stale answer until the next one).
   private volatile String effectiveActivePath;
   private volatile boolean effectiveActivePathComputed;
+  private volatile String activeContainerId;
+  private volatile boolean activeContainerIdComputed;
 
   @Nullable
   private String effectiveActivePath() {
@@ -196,7 +206,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     String targetId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file);
     String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     List<EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
-    return file.getPath() + '|' + type + '|' + stamp + '|' + targetId + '|' + sdkName + '|' + overrides;
+    String compilerIdentity = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
+    return file.getPath() + '|' + type + '|' + stamp + '|' + targetId + '|' + sdkName + '|' + compilerIdentity + '|' + overrides;
   }
 
   @NotNull
@@ -204,6 +215,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     Map<String, String> defines = baseDefines(file, type);
 
     String containerId = HaxeContainers.containerIdFor(project, file);
+    putCompilerIdentityDefines(defines, containerId);
     for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
       if (override.effect() == DefineEffect.REMOVE) {
         defines.remove(override.name());
@@ -234,6 +246,26 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
+   * The compiler's identity defines ({@code haxe_ver}, {@code haxe} and the
+   * major-version flags), mirrored so `#if (haxe_ver >= 4.1)` blocks activate
+   * correctly. Sourced from the language level or the container's compiler
+   * version per the compiler settings; wins over a build-tool-reported value
+   * (the point of choosing the level), while the container's explicit Define
+   * overrides still apply on top.
+   */
+  private void putCompilerIdentityDefines(@NotNull Map<String, String> defines, @NotNull String containerId) {
+    String version = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
+    defines.put("haxe_ver", version);
+    defines.put("haxe", version);
+    SemVer semVer = SemVer.parseFromText(version);
+    if (semVer != null) {
+      if (semVer.getMajor() >= 3) defines.put("haxe3", version);
+      if (semVer.getMajor() >= 4) defines.put("haxe4", version);
+      if (semVer.getMajor() >= 5) defines.put("haxe5", version);
+    }
+  }
+
+  /**
    * Whether the ACTIVE build context defines the name before environment
    * overrides apply — the define quickfix uses this to decide between merely
    * dropping its own override and masking a build-file define with a REMOVE
@@ -251,10 +283,24 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     }));
   }
 
-  /** The container owning the ACTIVE build file, or null without one — where define overrides belong. */
+  /**
+   * The container owning the ACTIVE build file, or null without one — where
+   * define overrides belong, and the container library/SDK elements resolve
+   * their language level against. Cached (the language level lookup calls
+   * this per annotated element); callers hold the read lock.
+   */
   @Nullable
   public String activeContainerId() {
-    String path = HaxeKnownBuildFiles.effectiveActivePath(project);
+    if (!activeContainerIdComputed) {
+      activeContainerId = computeActiveContainerId();
+      activeContainerIdComputed = true;
+    }
+    return activeContainerId;
+  }
+
+  @Nullable
+  private String computeActiveContainerId() {
+    String path = effectiveActivePath();
     if (StringUtil.isEmptyOrSpaces(path)) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return null;

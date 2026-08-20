@@ -56,6 +56,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     HaxeCompilerSettings settings = getSettings();
     return panel.getSelectedDefaultLevel() != settings.getExplicitDefaultLanguageLevel()
            || !panel.getModuleOverrides().equals(settings.getModuleLanguageLevelOverrides())
+           || panel.isUseLanguageLevelForConditionals() != settings.isUseLanguageLevelForConditionals()
            || panel.isCompilerDiagnosticsEnabled() != settings.isCompilerDiagnosticsEnabled()
            || panel.isDiagnosticsErrorsEnabled() != settings.isDiagnosticsErrorsEnabled()
            || panel.isDiagnosticsUnusedImportsEnabled() != settings.isDiagnosticsUnusedImportsEnabled()
@@ -69,6 +70,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     HaxeCompilerSettings settings = getSettings();
     settings.setDefaultLanguageLevel(panel.getSelectedDefaultLevel());
     settings.setModuleLanguageLevelOverrides(panel.getModuleOverrides());
+    settings.setUseLanguageLevelForConditionals(panel.isUseLanguageLevelForConditionals());
     settings.setCompilerDiagnosticsEnabled(panel.isCompilerDiagnosticsEnabled());
     settings.setDiagnosticsErrorsEnabled(panel.isDiagnosticsErrorsEnabled());
     settings.setDiagnosticsUnusedImportsEnabled(panel.isDiagnosticsUnusedImportsEnabled());
@@ -87,6 +89,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
                 HaxeLanguageLevelUtil.fromCompiler(project, null),
                 settings.getModuleLanguageLevelOverrides(),
                 getModuleNames());
+    panel.setUseLanguageLevelForConditionals(settings.isUseLanguageLevelForConditionals());
     panel.setCompilerDiagnosticsEnabled(settings.isCompilerDiagnosticsEnabled());
     panel.setDiagnosticsErrorsEnabled(settings.isDiagnosticsErrorsEnabled());
     panel.setDiagnosticsUnusedImportsEnabled(settings.isDiagnosticsUnusedImportsEnabled());

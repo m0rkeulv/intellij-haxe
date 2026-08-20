@@ -59,6 +59,8 @@ public final class HaxeCompilerSettingsPanel {
   private final ComboBox<HaxeCompletionMode> completionModeCombo = new ComboBox<>(HaxeCompletionMode.values());
   /** Level resolved from the SDK, shown in the "use compiler level" labels; null when no SDK. */
   private @Nullable HaxeLanguageLevel compilerLevel;
+  private final JCheckBox useLevelForConditionalsCheckBox =
+    new JCheckBox(HaxeBundle.message("haxe.compiler.conditionals.language.level.checkbox"));
   private final JCheckBox compilerDiagnosticsCheckBox =
     new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.checkbox"));
   private final JCheckBox diagnosticsErrorsCheckBox =
@@ -87,11 +89,14 @@ public final class HaxeCompilerSettingsPanel {
     completionModeCombo.setRenderer(BuilderKt.textListCellRenderer("", HaxeCompletionMode::getPresentableText));
     completionModeCombo.setToolTipText(HaxeBundle.message("haxe.compiler.completion.mode.tooltip"));
 
+    useLevelForConditionalsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.conditionals.language.level.tooltip"));
+
     table.setShowGrid(false);
     table.setRowHeight(defaultLevelCombo.getPreferredSize().height);
 
     mainPanel = FormBuilder.createFormBuilder()
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.default.language.level"), defaultLevelCombo)
+      .addComponent(useLevelForConditionalsCheckBox)
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.completion.mode"), completionModeCombo)
       .addComponent(compilerDiagnosticsCheckBox)
       .addComponent(diagnosticsErrorsCheckBox)
@@ -99,6 +104,14 @@ public final class HaxeCompilerSettingsPanel {
       .addComponent(diagnosticsRemovableCodeCheckBox)
       .addComponentFillVertically(new JBScrollPane(table), 8)
       .getPanel();
+  }
+
+  public boolean isUseLanguageLevelForConditionals() {
+    return useLevelForConditionalsCheckBox.isSelected();
+  }
+
+  public void setUseLanguageLevelForConditionals(boolean enabled) {
+    useLevelForConditionalsCheckBox.setSelected(enabled);
   }
 
   public boolean isCompilerDiagnosticsEnabled() {

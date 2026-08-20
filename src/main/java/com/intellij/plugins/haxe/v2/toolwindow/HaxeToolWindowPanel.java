@@ -534,8 +534,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .setRenderer(BuilderKt.textListCellRenderer("", LevelChoice::display))
       .setItemChosenCallback(choice -> {
         compilerSettings.setModuleLanguageLevelOverride(levelNode.containerId(), choice.level());
-        // level-gated highlighting (feature annotators, compiler-diagnostics
-        // filtering) only updates on a fresh daemon pass
+        // the define context derives haxe_ver from the level; the daemon
+        // restart refreshes level-gated highlighting
+        project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
         DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
         refreshTree();
       })

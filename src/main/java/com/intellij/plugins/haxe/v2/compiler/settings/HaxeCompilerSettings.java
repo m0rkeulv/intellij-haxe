@@ -81,6 +81,15 @@ public interface HaxeCompilerSettings {
   /** Removable code from the compiler; while on it REPLACES the plugin's unused field/function/local-var inspections. */
   boolean isDiagnosticsRemovableCodeEnabled();
 
+  /**
+   * Whether conditional compilation (`#if haxe_ver` and friends) evaluates
+   * against the module's LANGUAGE LEVEL rather than the container's actual
+   * compiler version.
+   */
+  boolean isUseLanguageLevelForConditionals();
+
+  void setUseLanguageLevelForConditionals(boolean enabled);
+
   void setDiagnosticsRemovableCodeEnabled(boolean enabled);
 
   /** Where completion and resolve get their symbols; see {@link HaxeCompletionMode}. */

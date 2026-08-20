@@ -1,12 +1,14 @@
 package com.intellij.plugins.haxe.ide;
 
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 
 import static com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Language-level annotations, one fixture per test: each file under
@@ -225,6 +227,30 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
   @DisplayName("binary literals at 5.0")
   public void testBinaryLiteralsAt50() throws Exception {
     doTestAtLevel(HAXE_5_0);
+  }
+
+  // ---- conditional-compilation version (haxe_ver define source) ----
+
+  @Test
+  @DisplayName("conditional haxe version follows the language level")
+  public void testConditionalHaxeVersionFollowsTheLanguageLevel() {
+    setLevel(HAXE_4_1);
+    assertEquals("4.1.0", HaxeLanguageLevelUtil.getHaxeVersion(myFixture.getProject(), null));
+  }
+
+  @Test
+  @DisplayName("conditional haxe version falls back to the level without an sdk")
+  public void testConditionalHaxeVersionFallsBackToTheLevelWithoutAnSdk() {
+    HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(myFixture.getProject());
+    settings.setUseLanguageLevelForConditionals(false);
+    try {
+      setLevel(HAXE_4_2);
+      // the light project registers no haxe SDK, so the level is the fallback
+      assertEquals("4.2.0", HaxeLanguageLevelUtil.getHaxeVersion(myFixture.getProject(), null));
+    }
+    finally {
+      settings.setUseLanguageLevelForConditionals(true);
+    }
   }
 
   // ---- syntax migrations: old metadata forms vs their 4.0 keywords ----

@@ -29,6 +29,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
     public boolean compilerDiagnosticsErrors = true;
     public boolean compilerDiagnosticsUnusedImports = false;
     public boolean compilerDiagnosticsRemovableCode = false;
+    public boolean useLanguageLevelForConditionals = true;
     public String completionMode = HaxeCompletionMode.IDE_AND_COMPILER.getId();
   }
 
@@ -156,6 +157,16 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public boolean isDiagnosticsRemovableCodeEnabled() {
     return state.compilerDiagnosticsRemovableCode;
+  }
+
+  @Override
+  public boolean isUseLanguageLevelForConditionals() {
+    return state.useLanguageLevelForConditionals;
+  }
+
+  @Override
+  public void setUseLanguageLevelForConditionals(boolean enabled) {
+    state.useLanguageLevelForConditionals = enabled;
   }
 
   @Override
