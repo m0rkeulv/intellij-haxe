@@ -212,7 +212,7 @@ final class LiveProbeUtil {
     return null;
   }
 
-  /// Probe-side diagnostics; the tag separates them from the [adapter] and [server] streams.
+  /// Probe-side diagnostics; the tag separates them from the adapter and server streams.
   static void probe(String message) {
     System.out.println("[probe] " + message);
   }
