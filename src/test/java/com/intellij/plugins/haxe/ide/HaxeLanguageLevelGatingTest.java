@@ -1,13 +1,10 @@
 package com.intellij.plugins.haxe.ide;
 
-import com.intellij.codeInspection.LocalInspectionTool;
-import com.intellij.plugins.haxe.ide.annotator.HaxeSemanticAnnotatorInspections;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Set;
 
 import static com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel.*;
 
@@ -21,9 +18,6 @@ import static com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel.*;
 @DisplayName("Annotation: language level features")
 public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
 
-  // the LEVEL must be what drives pre-4.2 `is` semantics here, not the manual opt-in inspection
-  private static final Set<Class<? extends LocalInspectionTool>> MANUAL_OPT_INS =
-    Set.of(HaxeSemanticAnnotatorInspections.IsTypeExpressionInspection4dot1Compatible.class);
 
   @Override
   public void tearDown() throws Exception {
@@ -43,7 +37,9 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
 
   private void doTestAtLevel(HaxeLanguageLevel level) throws Exception {
     setLevel(level);
-    doTestSkippingAnnotators(MANUAL_OPT_INS);
+    // pre-4.2 `is` semantics are driven by the LEVEL; the 4.1-compat
+    // inspection option defaults to off
+    doTestSkippingAnnotators(null);
   }
 
   private void doFixTestAtLevel(HaxeLanguageLevel level, String fixText) throws Exception {

@@ -17,7 +17,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-import static com.intellij.plugins.haxe.ide.annotator.HaxeSemanticAnnotatorInspections.INVALID_TYPE_NAME;
 import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.DYNAMIC;
 import static java.util.function.Predicate.not;
 
@@ -32,30 +31,10 @@ public class HaxeTypeAnnotator implements Annotator {
     }
   }
 
+  // type-name casing is HaxeInvalidTypeNameInspection;
+  // the parameter-count mismatches below mirror compiler errors and stay here
   static public void check(final HaxeType type, final AnnotationHolder holder) {
-    checkValidClassName(type.getReferenceExpression().getIdentifier(), holder);
     checkValidTypeParameters(type, holder);
-  }
-
-  //TODO mlo : extract to dumbAware?
-  static public void checkValidClassName(final PsiIdentifier identifier, final AnnotationHolder holder) {
-    if (identifier == null) return;
-    if (!INVALID_TYPE_NAME.isEnabled(identifier)) return;
-
-    final String typeName = getTypeName(identifier);
-    if (!HaxeClassModel.isValidClassName(typeName)) {
-      holder.newAnnotation(HighlightSeverity.ERROR, "Type name must start by upper case")
-        .range(identifier)
-        .withFix(new HaxeFixer("Change name") {
-          @Override
-          public void run() {
-            HaxeDocumentModel.fromElement(identifier).replaceElementText(
-              identifier,
-              typeName.substring(0, 1).toUpperCase() + typeName.substring(1)
-            );
-          }
-        }).create();
-    }
   }
 
   static public void checkValidTypeParameters(final HaxeType type, final AnnotationHolder holder) {

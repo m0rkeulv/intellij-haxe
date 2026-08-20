@@ -35,9 +35,6 @@ public class HaxeHighlightRangeExtension implements HighlightRangeExtension {
   }
 
   //TODO mlo
-  //public static HaxeSemanticAnnotatorInspections.Registrar getInspectionProvider() {
-  //  return new HaxeSemanticAnnotatorInspections.Registrar();
-  //}
 }
 
 

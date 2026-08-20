@@ -23,6 +23,7 @@ import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedImportInspection;
 
 /**
  * Test for the HaxeUnusedImportInspection.

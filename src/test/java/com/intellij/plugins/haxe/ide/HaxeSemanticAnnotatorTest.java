@@ -20,8 +20,8 @@
 package com.intellij.plugins.haxe.ide;
 
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.ide.annotator.HaxeSemanticAnnotatorInspections;
-import com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolInspection;
+import com.intellij.plugins.haxe.ide.inspections.operators.HaxeIsTypeExpressionInspection;
+import com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolInspection;
 import com.intellij.testFramework.junit5.RunInEdt;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -172,15 +172,16 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
   @Test
   @DisplayName("is keyword for haxe 4.2 - unparenthesized is allowed in 4.2")
   public void testIsKeywordFor4_2() throws Throwable {
-    HashSet skipAnnotators = new HashSet();
-    skipAnnotators.add(HaxeSemanticAnnotatorInspections.IsTypeExpressionInspection4dot1Compatible.class);
-    doTestSkippingAnnotators(skipAnnotators);
+    // the 4.1-compat option defaults to off, so 4.2 semantics apply
+    doTestSkippingAnnotators(new HashSet<>());
   }
 
   @Test
   @DisplayName("is keyword for haxe 4.1 - unparenthesized is flagged pre 4.2")
   public void testIsKeywordFor4_1() throws Throwable {
-    doTestSkippingAnnotators(new HashSet<>());
+    HaxeIsTypeExpressionInspection compat41 = new HaxeIsTypeExpressionInspection();
+    compat41.enforce41Semantics = true;
+    doTestReplacingInspection(compat41);
   }
 
   @Test

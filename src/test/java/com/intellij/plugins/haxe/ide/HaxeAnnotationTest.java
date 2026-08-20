@@ -19,7 +19,8 @@
 package com.intellij.plugins.haxe.ide;
 
 import com.intellij.plugins.haxe.HaxeToolkitLightFixtureTestCase;
-import com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolInspection;
+import com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolInspection;
+import com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedTypeInspection;
 import com.intellij.util.ArrayUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ public class HaxeAnnotationTest extends HaxeToolkitLightFixtureTestCase {
     myFixture.configureByFiles(ArrayUtil.reverseArray(paths));
     myFixture.configureByFile(getTestName(false) + ".hx");
     myFixture.enableInspections(getAnnotatorBasedInspection());
+    myFixture.enableInspections(HaxeUnresolvedTypeInspection.class);
     myFixture.testHighlighting(true, true, true, myFixture.getFile().getVirtualFile());
   }
 

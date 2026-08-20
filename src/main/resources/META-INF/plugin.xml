@@ -523,7 +523,6 @@
     <annotator language="Haxe" id="fastColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeFastColorAnnotator" order="first"/>
     <annotator language="Haxe" id="xmlFastColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeXmlFastColorAnnotator" order="after fastColor before slowColor"/>
     <annotator language="Haxe" id="slowColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeSlowColorAnnotator" order="after fastColor"/>
-    <annotator language="Haxe" id="type" implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeUnresolvedTypeAnnotator" order="after slowColor"/>
     <annotator language="Haxe" id="invalidEscape" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInvalidEscapeAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="stringLink" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeStringLinkColorAnnotator" order="after slowColor"/>
 
@@ -531,19 +530,12 @@
 
 
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeStringAnnotator"/>
-    <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeLocalVarAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeFieldAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeTypeAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeAbstractClassAnnotator"/>
-    <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeClassAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeMethodAnnotator"/>
-    <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeIsTypeExpressionAnnotator"/>
-    <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeAssignExpressionAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeCallExpressionAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxePackageAnnotator"/>
-    <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeTypeCheckExprAnnotator"/>
-    <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeBinaryExpressionAnnotator"/>
-    <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeUnaryExpressionAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeDefaultTypeParameterAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeNullCoalescingAnnotator"/>
     <annotator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.annotator.semantics.HaxeLanguageFeatureAnnotator"/>
@@ -562,22 +554,98 @@
     <externalAnnotator language="Haxe" implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerRemovableCodeAnnotator"/>
     <localInspection language="Haxe" shortName="HaxeCompilerDiagnostics" bundle="messages.HaxeBundle"
                      key="haxe.inspections.compiler.diagnostics.name"
-                     groupKey="inspections.group.name" enabledByDefault="true" level="ERROR"
+                     groupPath="Haxe" groupKey="inspections.group.compiler.diagnostics" enabledByDefault="true" level="ERROR"
                      implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerDiagnosticsBatchInspections$Errors"/>
     <localInspection language="Haxe" shortName="HaxeCompilerUnusedImport" bundle="messages.HaxeBundle"
                      key="haxe.inspections.compiler.unused.import.name"
-                     groupKey="inspections.group.name" enabledByDefault="true" level="WARNING"
+                     groupPath="Haxe" groupKey="inspections.group.compiler.diagnostics" enabledByDefault="true" level="WARNING"
                      implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerDiagnosticsBatchInspections$UnusedImport"/>
     <localInspection language="Haxe" shortName="HaxeCompilerRemovableCode" bundle="messages.HaxeBundle"
                      key="haxe.inspections.compiler.removable.code.name"
-                     groupKey="inspections.group.name" enabledByDefault="true" level="WARNING"
+                     groupPath="Haxe" groupKey="inspections.group.compiler.diagnostics" enabledByDefault="true" level="WARNING"
                      implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerDiagnosticsBatchInspections$RemovableCode"/>
 
     <highlightRangeExtension implementation="com.intellij.plugins.haxe.ide.annotator.HaxeHighlightRangeExtension"/>
     <!-- opts haxe files into problem-file tracking (wavy file names in the Project view) -->
     <problemFileHighlightFilter implementation="com.intellij.plugins.haxe.ide.HaxeProblemFileHighlightFilter"/>
 
-    <inspectionToolProvider implementation="com.intellij.plugins.haxe.ide.annotator.HaxeSemanticAnnotatorInspections$Registrar"/>
+    <!-- Semantic inspections converted from the class/method/field annotators -->
+    <localInspection language="Haxe" shortName="HaxeDuplicateClassModifier" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.duplicate.class.modifier.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateClassModifierInspection"/>
+    <localInspection language="Haxe" shortName="HaxeDuplicateField" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.duplicated.field.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateFieldInspection"/>
+    <localInspection language="Haxe" shortName="HaxeFieldRedefinition" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.field.redefinition.inspection.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeFieldRedefinitionInspection"/>
+    <localInspection language="Haxe" shortName="HaxeFinalFieldIsInitialized" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.final.field.is.initialized.inspection.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeFinalFieldIsInitializedInspection"/>
+    <localInspection language="Haxe" shortName="HaxeInheritedInterfaceMethodSignature" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.inherited.interface.method.signature.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeInheritedInterfaceMethodSignatureInspection"/>
+    <localInspection language="Haxe" shortName="HaxeInterfaceMethodSignature" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.interface.methods.signature.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeInterfaceMethodSignatureInspection"/>
+    <localInspection language="Haxe" shortName="HaxeInvalidTypeName" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.type.name.casing.name"
+                     groupPath="Haxe" groupKey="inspections.group.naming.conventions" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.style.HaxeInvalidTypeNameInspection"/>
+    <localInspection language="Haxe" shortName="HaxeMethodOverride" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.method.override.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMethodOverrideInspection"/>
+    <localInspection language="Haxe" shortName="HaxeMethodSignatureCompatibility" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.method.signature.compatibility.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMethodSignatureCompatibilityInspection"/>
+    <localInspection language="Haxe" shortName="HaxeMissingInterfaceMethod" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.missing.interface.methods.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMissingInterfaceMethodInspection"/>
+    <localInspection language="Haxe" shortName="HaxeMissingTypeTagOnExternAndInterface" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.missing.type.tag.on.extern.or.interface.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeMissingTypeTagOnExternAndInterfaceInspection"/>
+    <localInspection language="Haxe" shortName="HaxeParameterInitializerType" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.parameter.initializer.type.name"
+                     groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeParameterInitializerTypeInspection"/>
+    <localInspection language="Haxe" shortName="HaxeParameterNameDuplicated" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.parameter.name.duplicated.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeParameterNameDuplicatedInspection"/>
+    <localInspection language="Haxe" shortName="HaxePropertyAccessorExistence" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.property.accessor.existence.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyAccessorExistenceInspection"/>
+    <localInspection language="Haxe" shortName="HaxePropertyAccessorValid" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.property.accessor.valid.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyAccessorValidInspection"/>
+    <localInspection language="Haxe" shortName="HaxePropertyCannotBeFinal" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.property.cannot.be.final.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyCannotBeFinalInspection"/>
+    <localInspection language="Haxe" shortName="HaxePropertyIsNotARealVariable" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.property.is.not.a.real.variable.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyIsNotARealVariableInspection"/>
+    <localInspection language="Haxe" shortName="HaxeSuperclassTypeCompatibility" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.superclass.type.compatibility.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeSuperclassTypeCompatibilityInspection"/>
+    <localInspection language="Haxe" shortName="HaxeSuperInterfaceTypeCompatibility" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.superinterface.type.compatibility.name"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeSuperInterfaceTypeCompatibilityInspection"/>
 
     <spellchecker.support language="Haxe" implementationClass="com.intellij.plugins.haxe.spellchecker.HaxeSpellcheckingStrategy"/>
 
@@ -588,42 +656,91 @@
 
     <localInspection language="Haxe" shortName="HaxeUnusedImport" bundle="messages.HaxeBundle"
                      key="haxe.inspection.unused.import.name"
-                     groupKey="inspections.group.name" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxeUnusedImportInspection"/>
+                     groupPath="Haxe" groupKey="inspections.group.declaration.redundancy" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedImportInspection"/>
 
     <localInspection language="Haxe" shortName="HaxeUnusedVariable" bundle="messages.HaxeBundle"
                      key="haxe.inspections.unused.var.name"
-                     groupKey="inspections.group.name" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxeUnusedLocalVarInspection"/>
+                     groupPath="Haxe" groupKey="inspections.group.declaration.redundancy" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedLocalVarInspection"/>
 
     <localInspection language="Haxe" shortName="HaxeUnusedField" bundle="messages.HaxeBundle"
                      key="haxe.inspections.unused.field.name"
-                     groupKey="inspections.group.name" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxeUnusedFieldInspection"/>
+                     groupPath="Haxe" groupKey="inspections.group.declaration.redundancy" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedFieldInspection"/>
 
     <localInspection language="Haxe" shortName="HaxeUnusedMethod" bundle="messages.HaxeBundle"
                      key="haxe.inspections.unused.method.name"
-                     groupKey="inspections.group.name" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxeUnusedMethodInspection"/>
+                     groupPath="Haxe" groupKey="inspections.group.declaration.redundancy" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedMethodInspection"/>
 
     <localInspection language="Haxe" shortName="HaxeUnusedFunction" bundle="messages.HaxeBundle"
                      key="haxe.inspections.unused.function.name"
-                     groupKey="inspections.group.name" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxeUnusedFunctionInspection"/>
+                     groupPath="Haxe" groupKey="inspections.group.declaration.redundancy" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedFunctionInspection"/>
+
+    <!-- Converted semantic inspections: metadata lives here, the check
+         logic in ide.inspections.checks -->
+    <localInspection language="Haxe" shortName="HaxeAssignmentTypeCompatibility" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.assignment.type.compatibility.name"
+                     groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.typing.HaxeAssignmentTypeCompatibilityInspection"/>
+    <localInspection language="Haxe" shortName="HaxeIncompatibleInitialization" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.incompatible.initialization.inspection.name"
+                     groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.typing.HaxeIncompatibleInitializationInspection"/>
+    <localInspection language="Haxe" shortName="HaxeIncompatibleTypeChecks" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.incompatible.type.checks.inspection.name"
+                     groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.typing.HaxeIncompatibleTypeChecksInspection"/>
+    <localInspection language="Haxe" shortName="HaxeIsTypeExpression" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.is.type.expression.inspection.name"
+                     groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.operators.HaxeIsTypeExpressionInspection"/>
+    <localInspection language="Haxe" shortName="HaxeBinaryOperatorApplicability" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.binary.operator.applicability.name"
+                     groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.operators.HaxeBinaryOperatorApplicabilityInspection"/>
+    <localInspection language="Haxe" shortName="HaxeUnaryOperatorApplicability" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.unary.operator.applicability.name"
+                     groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.operators.HaxeUnaryOperatorApplicabilityInspection"/>
+    <localInspection language="Haxe" shortName="HaxePackageName" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.package.name.name"
+                     groupPath="Haxe" groupKey="inspections.group.naming.conventions" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.style.HaxePackageNameInspection"/>
+    <localInspection language="Haxe" shortName="HaxeStringInterpolationQuote" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.string.interpolation.quote.name"
+                     groupPath="Haxe" groupKey="inspections.group.probable.bugs" enabledByDefault="true"
+                     level="WARNING"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.style.HaxeStringInterpolationQuoteInspection"/>
+
+    <localInspection language="Haxe" shortName="HaxeUnresolvedType" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.unresolved.type.name"
+                     groupPath="Haxe" groupKey="inspections.group.probable.bugs" enabledByDefault="true"
+                     level="ERROR"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedTypeInspection"/>
 
     <localInspection language="Haxe" shortName="HaxeUnresolvedSymbol" bundle="messages.HaxeBundle"
                      key="haxe.inspection.unresolved.symbol"
-                     groupKey="inspections.group.name" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolInspection"/>
+                     groupPath="Haxe" groupKey="inspections.group.probable.bugs" enabledByDefault="true"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolInspection"/>
 
     <localInspection language="Haxe" shortName="HaxeDeprecatedSymbol" bundle="messages.HaxeBundle"
                      key="haxe.inspection.deprecated.symbol"
-                     groupKey="inspections.group.name" enabledByDefault="true"
+                     groupPath="Haxe" groupKey="inspections.group.code.maturity" enabledByDefault="true"
                      implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxeDeprecatedInspection"/>
 
     <localInspection language="Haxe" shortName="HaxePreprocessorInspection" bundle="messages.HaxeBundle"
                      key="haxe.inspection.preprocessor.symbol.name"
-                     groupKey="inspections.group.name" enabledByDefault="true"
+                     groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
                      implementationClass="com.intellij.plugins.haxe.ide.inspections.HaxePreprocessorInspection"/>
 
     <typeHierarchyProvider language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.hierarchy.type.HaxeTypeHierarchyProvider"/>
