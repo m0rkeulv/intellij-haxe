@@ -1,5 +1,12 @@
 <html>
 <body>
-Checks whether types are specified in field (property, method) declarations for interfaces and <code>extern</code> classes.
+Reports interface and extern-class methods that omit parameter or return
+types - required there, since no body exists to infer them from.
+<p><b>Example:</b></p>
+<pre><code>
+interface Shape {
+    function scale(factor);   // parameter and return types are required
+}
+</code></pre>
 </body>
 </html>

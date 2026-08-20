@@ -1,5 +1,18 @@
 <html>
 <body>
-Checks whether a property initialization is disallowed because no underlying variable will be allocated by the compiler.  Based upon its access declaration a property may not need an underlying variable, thus none will be created unless the property is marked with <code>@:isVar</code> metatdata. 
+Reports storage-less properties used as if they had a backing field: an
+initializer on a property without physical storage, or the property's own
+accessors reading/writing it directly (which would recurse).
+<p><b>Example:</b></p>
+<pre><code>
+class Counter {
+    public var value(get, never):Int = 1;   // no storage to initialize
+    function get_value():Int {
+        return value;                        // reads through the getter again
+    }
+}
+</code></pre>
+Quick fixes add <code>@:isVar</code> to give the property real storage, or
+remove the initializer.
 </body>
 </html>

@@ -1,5 +1,10 @@
 <html>
 <body>
-Checks that parameter names are unique for a given method.
+Reports the same parameter name used twice in one signature. The name
+<code>_</code> is exempt - it conventionally marks ignored parameters.
+<p><b>Example:</b></p>
+<pre><code>
+function move(x:Int, x:Int) {}   // `x` is repeated
+</code></pre>
 </body>
 </html>

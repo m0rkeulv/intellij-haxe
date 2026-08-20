@@ -1,5 +1,10 @@
 <html>
 <body>
-Checks whether duplicate modifiers (e.g. <code>private</code>, <code>final</code>, <code>extern</code>) have been applied to a class declaration.
+Reports modifiers repeated on one class declaration, with a quick fix that
+removes the extra occurrence.
+<p><b>Example:</b></p>
+<pre><code>
+final final class Registry {}   // `final` is repeated
+</code></pre>
 </body>
 </html>
