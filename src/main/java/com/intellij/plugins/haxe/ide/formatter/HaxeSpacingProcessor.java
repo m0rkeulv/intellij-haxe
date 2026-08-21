@@ -27,6 +27,7 @@ import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeTag;
 import com.intellij.plugins.haxe.metadata.lexer.HaxeMetadataTokenTypes;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
+import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -221,6 +222,23 @@ public class HaxeSpacingProcessor {
     if (type2 == PRCURLY && type1 != PLCURLY && isClassBodyType(elementType) && isLastChild(child2)) {
       int lineFeeds = isType ? 0 : 1 + mySettings.BLANK_LINES_BEFORE_CLASS_END;
       return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
+    }
+
+    // a blank line before a member belongs BEFORE its doc comment - resolve
+    // the pair as if the comment were the member's first line
+    boolean memberThenDoc = type2 == DOC_COMMENT
+                            && (isFieldDeclaration(type1) || isMethodDeclarationOrConstructorDeclaration(type1));
+    if (memberThenDoc) {
+      ASTNode documented = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(node2);
+      IElementType documentedType = documented == null ? null : documented.getElementType();
+      if (isMethodDeclarationOrConstructorDeclaration(documentedType)) {
+        return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
+      }
+      if (isFieldDeclaration(documentedType)) {
+        int blanks = Math.max(mySettings.BLANK_LINES_AROUND_FIELD,
+                              isMethodDeclarationOrConstructorDeclaration(type1) ? mySettings.BLANK_LINES_AROUND_METHOD : 0);
+        return Spacing.createSpacing(0, 0, 1 + blanks, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
+      }
     }
 
     if (isMethodDeclarationOrConstructorDeclaration(type1) && isMethodDeclarationOrConstructorDeclaration(type2)) {

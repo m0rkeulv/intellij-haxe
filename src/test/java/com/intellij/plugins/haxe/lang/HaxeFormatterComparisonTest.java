@@ -380,4 +380,16 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   public void testExpressionSameLine() throws Exception {
     doParityTest("expression-same-line");
   }
+
+  @Test
+  @DisplayName("multi var and patterns")
+  public void testMultiVarAndPatterns() throws Exception {
+    doParityTest("multi-var-and-patterns");
+  }
+
+  @Test
+  @DisplayName("doc comment blanks")
+  public void testDocCommentBlanks() throws Exception {
+    doParityTest("doc-comment-blanks");
+  }
 }
