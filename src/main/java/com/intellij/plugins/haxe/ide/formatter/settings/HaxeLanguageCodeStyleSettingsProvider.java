@@ -130,7 +130,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_AFTER_COMMA.name(),
                                    SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS.name(),
                                    SPACE_BEFORE_COMMA.name(),
-                                   SPACE_AROUND_UNARY_OPERATOR.name()
+                                   SPACE_AROUND_UNARY_OPERATOR.name(),
+                                   SPACE_WITHIN_BRACKETS.name()
       );
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", "Around ->",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
@@ -138,6 +139,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", "Space after type reference colon ':'",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", "Type parameter angle brackets",
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
       consumer.showStandardOptions(
@@ -165,6 +168,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE.name(),
                                    ARRAY_INITIALIZER_WRAP.name(),
                                    METHOD_CALL_CHAIN_WRAP.name(),
+                                   EXTENDS_LIST_WRAP.name(),
                                    BRACE_STYLE.name(),
                                    METHOD_BRACE_STYLE.name(),
                                    CALL_PARAMETERS_WRAP.name(),
@@ -188,6 +192,9 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    ALIGN_MULTILINE_TERNARY_OPERATION.name(),
                                    SPECIAL_ELSE_IF_TREATMENT.name()
       );
+      // the platform default label says "permits" - Java sealed-class syntax
+      // that does not exist in Haxe
+      consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), "Extends/implements list");
     }
   }
 
@@ -251,7 +258,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
 
   public static final String WRAPPING_CODE_SAMPLE = """
     @author("Penelope") @:final
-    class Foo {
+    class Foo extends BaseComponent implements Drawable implements Resizable implements Serializable implements Comparable implements Observable {
          // function fBar (x,y);
          function fOne(argA, argB, argC, argD, argE, argF, argG, argH) {
               var numbers:Array<String> = ['one', 'two', 'three', 'four', 'five', 'six'];

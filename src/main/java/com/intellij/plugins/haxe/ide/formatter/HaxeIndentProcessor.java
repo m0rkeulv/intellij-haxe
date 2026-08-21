@@ -123,11 +123,16 @@ public class HaxeIndentProcessor {
     if (parentType == ANONYMOUS_TYPE_BODY) {
       return Indent.getNormalIndent();
     }
-    // a wrapped chain link (.map(...) on its own line) indents one step from
-    // the chain's base line
+    // a wrapped chain link (.map(...) on its own line) indents ONE step from
+    // the chain's base line - continuation indent would be a declaration-style
+    // double step
     if (parentType == REFERENCE_EXPRESSION && elementType != CALL_EXPRESSION
         && parent.getFirstChildNode() != null
         && parent.getFirstChildNode().getElementType() == CALL_EXPRESSION) {
+      return Indent.getNormalIndent();
+    }
+    // a wrapped extends/implements clause continues the declaration header
+    if (parentType == INHERIT_LIST) {
       return Indent.getContinuationIndent();
     }
     return Indent.getNoneIndent();

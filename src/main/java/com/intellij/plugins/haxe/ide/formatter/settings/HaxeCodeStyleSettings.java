@@ -27,6 +27,7 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public boolean SPACE_AROUND_ARROW = true;
     public boolean SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_AFTER_TYPE_REFERENCE_COLON = false;
+    public boolean SPACE_WITHIN_TYPE_PARAMETERS = false;
 
     // counts BLANK LINES (like the platform's BLANK_LINES_* options)
     public int MINIMUM_BLANK_LINES_AFTER_USING = 1;

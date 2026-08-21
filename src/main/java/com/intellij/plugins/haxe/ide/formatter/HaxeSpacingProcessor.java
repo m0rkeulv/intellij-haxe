@@ -229,8 +229,9 @@ public class HaxeSpacingProcessor {
 
     // "keep control statement in one line" OFF forces a NON-BLOCK body onto
     // its own line (haxe-formatter's sameLine=Next); block bodies follow the
-    // brace rules instead
-    if (!mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE) {
+    // brace rules instead. A for/while inside a literal is a COMPREHENSION,
+    // not a control statement - its body always stays on the line.
+    if (!mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE && !isComprehension(myNode)) {
       boolean nonBlockBody =
         (elementType == IF_STATEMENT && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT)
         || (elementType == ELSE_STATEMENT && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT)
@@ -239,6 +240,26 @@ public class HaxeSpacingProcessor {
       if (nonBlockBody) {
         return Spacing.createSpacing(0, 0, 1, false, 0);
       }
+    }
+
+    // bracketConfig NoSpace: an access target keeps its '[' snug
+    if (elementType == ARRAY_ACCESS_EXPRESSION && type2 == PLBRACK) {
+      return addSingleSpaceIf(false);
+    }
+    boolean bracketInner = (elementType == ARRAY_ACCESS_EXPRESSION || elementType == ARRAY_LITERAL || elementType == MAP_LITERAL)
+                           && (type1 == PLBRACK || type2 == PRBRACK);
+    if (bracketInner) {
+      return addSingleSpaceIf(mySettings.SPACE_WITHIN_BRACKETS);
+    }
+
+    // type parameter/argument angle brackets: never a space between the name
+    // and its '<'; inside the brackets per the Haxe spacing option
+    if (type2 == TYPE_PARAM || type2 == GENERIC_PARAM) {
+      return addSingleSpaceIf(false);
+    }
+    boolean typeParams = elementType == TYPE_PARAM || elementType == GENERIC_PARAM;
+    if (typeParams && (type1 == OLESS || type2 == OGREATER)) {
+      return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_WITHIN_TYPE_PARAMETERS);
     }
 
     if (type2 == PLPAREN) {
@@ -521,6 +542,17 @@ public class HaxeSpacingProcessor {
 
 
       return null;
+  }
+
+  /** A for/while whose enclosing construct is an array/map literal: {@code [for (x in y) v]}. */
+  private static boolean isComprehension(ASTNode statement) {
+    ASTNode parent = statement.getTreeParent();
+    IElementType parentType = parent == null ? null : parent.getElementType();
+    if (parentType == EXPRESSION_LIST || parentType == MAP_LOOP_INITIALIZER_EXPRESSION) {
+      parent = parent.getTreeParent();
+      parentType = parent == null ? null : parent.getElementType();
+    }
+    return parentType == ARRAY_LITERAL || parentType == MAP_LITERAL;
   }
 
   /** Which keep-in-one-line option owns an empty {@code {}} body. */

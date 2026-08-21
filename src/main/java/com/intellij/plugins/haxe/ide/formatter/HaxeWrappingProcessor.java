@@ -100,6 +100,23 @@ public class HaxeWrappingProcessor {
     }
 
     //
+    // extends/implements clauses share the list's ONE wrap group. Chop mode
+    // wraps the first element too (folds every clause); the fill modes must
+    // NOT (wrap-first-element pulls the break back to the first clause when
+    // a later one overflows).
+    //
+    if (elementType == INHERIT_LIST
+        && (childType == EXTENDS_DECLARATION || childType == IMPLEMENTS_DECLARATION)
+        && mySettings.EXTENDS_LIST_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
+        && child != myNode.getFirstChildNode()) {
+      if (sharedItemWrap == null) {
+        boolean chop = mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
+        sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(mySettings.EXTENDS_LIST_WRAP), chop);
+      }
+      return sharedItemWrap;
+    }
+
+    //
     // Function definition/call
     //
     if (elementType == PARAMETER_LIST || elementType == EXPRESSION_LIST || elementType == CALL_EXPRESSION_LIST) {

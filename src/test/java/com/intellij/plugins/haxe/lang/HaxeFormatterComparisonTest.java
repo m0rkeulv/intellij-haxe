@@ -58,7 +58,8 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     indent.USE_TAB_CHARACTER = true;
     indent.TAB_SIZE = 4;
     indent.INDENT_SIZE = 4;
-    indent.CONTINUATION_INDENT_SIZE = 4;
+    // a wrapped declaration header (implementsExtends) continues TWO steps in
+    indent.CONTINUATION_INDENT_SIZE = 8;
 
     CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
     // wrapping.maxLineLength=160
@@ -144,6 +145,10 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     // when the line exceeds maxLineLength
     common.ARRAY_INITIALIZER_WRAP = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
     common.METHOD_CALL_CHAIN_WRAP = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
+    // wrapping.implementsExtends: FillLine - break only past maxLineLength
+    common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
+    // whitespace.bracketConfig: NoSpace for access/literal/comprehension brackets
+    common.SPACE_WITHIN_BRACKETS = false;
 
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     // whitespace.arrowFunctionsPolicy/functionTypeHaxe4Policy=Around
@@ -151,6 +156,8 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     // whitespace.typeHintColonPolicy=None
     haxe.SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
     haxe.SPACE_AFTER_TYPE_REFERENCE_COLON = false;
+    // whitespace.typeParamOpenPolicy/typeParamClosePolicy=None
+    haxe.SPACE_WITHIN_TYPE_PARAMETERS = false;
     // emptyLines.importAndUsing.beforeType=1
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
   }
@@ -292,5 +299,23 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("same line bodies")
   public void testSameLineBodies() throws Exception {
     doParityTest("same-line-bodies");
+  }
+
+  @Test
+  @DisplayName("extends implements wrap")
+  public void testExtendsImplementsWrap() throws Exception {
+    doParityTest("extends-implements-wrap");
+  }
+
+  @Test
+  @DisplayName("bracket spacing")
+  public void testBracketSpacing() throws Exception {
+    doParityTest("bracket-spacing");
+  }
+
+  @Test
+  @DisplayName("type param spacing")
+  public void testTypeParamSpacing() throws Exception {
+    doParityTest("type-param-spacing");
   }
 }
