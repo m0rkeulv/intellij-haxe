@@ -8,6 +8,7 @@ import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
+import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -18,6 +19,7 @@ import java.util.List;
  * Installs haxelib libraries without touching haxelib's selected version.
  * Runs external processes - call on a background thread.
  */
+@CustomLog
 public final class HaxelibInstaller {
 
   private static final int INSTALL_TIMEOUT_MS = 600_000;
@@ -41,6 +43,11 @@ public final class HaxelibInstaller {
     return failure;
   }
 
+  /** Whether haxelib resolves the library (installed, dev or git) — runs {@code haxelib path}. */
+  public static boolean isInstalled(@NotNull Project project, @NotNull String name) {
+    return run(project, List.of("path", name)) == null;
+  }
+
   /** Runs {@code haxelib remove <name> [version]}; null on success, else the failure detail. */
   @Nullable
   public static String remove(@NotNull Project project, @NotNull String name, @Nullable String version) {
@@ -57,17 +64,42 @@ public final class HaxelibInstaller {
     return run(project, List.of("set", name, version, "--always"));
   }
 
+  /**
+   * Registers the library's dev pointer ({@code haxelib dev <name> <directory>});
+   * null on success, else the failure detail. Works for libraries with no
+   * installed release too - dev registration creates the repository entry.
+   */
+  @Nullable
+  public static String setDev(@NotNull Project project, @NotNull String name, @NotNull String directory) {
+    return run(project, List.of("dev", name, directory));
+  }
+
+  /**
+   * Clears the library's dev pointer ({@code haxelib dev <name>} with no
+   * directory); null on success, else the failure detail. A dev pointer
+   * overrides the selected version, so switching a dev-pinned library to a
+   * release needs this on top of {@link #setCurrent}.
+   */
+  @Nullable
+  public static String clearDev(@NotNull Project project, @NotNull String name) {
+    return run(project, List.of("dev", name));
+  }
+
   @Nullable
   private static String run(@NotNull Project project, @NotNull List<String> parameters) {
     GeneralCommandLine commandLine = haxelibCommand(project, parameters);
     try {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
       if (output.getExitCode() != 0 || output.isTimeout()) {
-        return StringUtil.trimTrailing(output.getStdout() + "\n" + output.getStderr());
+        String detail = StringUtil.trimTrailing(output.getStdout() + "\n" + output.getStderr());
+        log.warn("haxelib command failed (exit " + output.getExitCode() + "): "
+                 + commandLine.getCommandLineString() + "\n" + detail);
+        return detail;
       }
       return null;
     }
     catch (ExecutionException e) {
+      log.warn("haxelib command failed to start: " + commandLine.getCommandLineString(), e);
       return StringUtil.notNullize(e.getMessage());
     }
   }

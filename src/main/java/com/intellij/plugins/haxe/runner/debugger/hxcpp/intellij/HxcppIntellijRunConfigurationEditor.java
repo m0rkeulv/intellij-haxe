@@ -4,6 +4,10 @@ import com.intellij.application.options.ModulesComboBox;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationEditorBase;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.HaxelibStatusRow;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions;
+import com.intellij.ui.components.ActionLink;
+import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.UIUtil;
 import javax.swing.JComponent;
@@ -30,12 +34,18 @@ public class HxcppIntellijRunConfigurationEditor
   private JTextPane workingDirectoryHintArea;
   private JBTextField programArgumentsField;
   private JTextPane debugHintArea;
+  private JBLabel serverLibStatusLabel;
+  private ActionLink installServerLibLink;
+
+  private final HaxelibStatusRow serverLibRow;
 
   public HxcppIntellijRunConfigurationEditor(Project project) {
     super(project);
     wireCommonChoosers();
     styleHint(workingDirectoryHintArea);
     styleHint(debugHintArea);
+    serverLibRow = new HaxelibStatusRow(project, HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB,
+                                        serverLibStatusLabel, installServerLibLink);
   }
 
   private static void styleHint(JTextPane hint) {
@@ -67,6 +77,7 @@ public class HxcppIntellijRunConfigurationEditor
   @Override
   protected void resetEditorFrom(@NotNull HxcppIntellijRunConfiguration configuration) {
     resetCommon(configuration);
+    serverLibRow.refresh();
   }
 
   @Override

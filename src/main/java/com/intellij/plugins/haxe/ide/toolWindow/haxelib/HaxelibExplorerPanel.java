@@ -11,7 +11,6 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
@@ -649,8 +648,9 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
 
   @Nullable
   private Path repositoryRoot() {
-    // SDK and VFS resolution read the project model - pooled callers need the read lock
-    return ReadAction.nonBlocking(() -> {
+    // SDK and VFS resolution read the project model; reached from pooled
+    // detail loads and from EDT context-menu actions (dev directory chooser)
+    return HaxeReadActions.compute(() -> {
       Module module = haxeModule();
       if (module == null) return null;
       // haxeModule() guarantees a configured SDK; lookupSdk's fallback would probe a process
@@ -659,7 +659,13 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
       VirtualFile moduleDir = ProjectUtil.guessModuleDir(module);
       VirtualFile root = HaxelibUtil.getLibraryBasePath(sdk, moduleDir);
       return root == null ? null : Path.of(root.getPath());
-    }).executeSynchronously();
+    });
+  }
+
+  /** The row's registered dev directory, or null without one. Callable from the EDT and pooled threads. */
+  @Nullable
+  String devDirectoryOf(@NotNull LibraryRow row) {
+    return devPathFor(row, repositoryRoot());
   }
 
   // ------------------------------------------------------------- context

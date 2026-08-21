@@ -18,9 +18,13 @@ import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.execution.process.ProcessOutputType;
 import com.intellij.execution.runners.ExecutionEnvironment;
+import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationType;
+import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.Task.Backgroundable;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.Key;
@@ -31,6 +35,7 @@ import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfiguration;
 import com.intellij.util.PathUtil;
 import icons.HaxeIcons;
@@ -231,6 +236,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                                ? singleRunDebugAdditions(project, task.getBuildFilePath())
                                : debugAdditions(project, task.getBuildFilePath());
       if (additions != null) {
+        if (!ensureHxcppDebugServerInstalled(project, additions)) {
+          return false;
+        }
         command.addAll(additions);
       }
     }
@@ -410,6 +418,53 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     if (file == null) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     return type == null ? null : new HaxeBuildFile(file, type);
+  }
+
+  /**
+   * A debug compile pulling in the hxcpp debug-server haxelib dies with a raw
+   * haxelib error in the build console when the lib is absent. Checked up
+   * front instead, turning the failure into a notification whose Install
+   * action fetches the lib (published on lib.haxe.org). True when the
+   * additions need no server lib or it is already present.
+   */
+  private static boolean ensureHxcppDebugServerInstalled(@NotNull Project project, @NotNull List<String> additions) {
+    // covers every spelling: haxe's "-lib X", lime's "--haxelib=X", hxp's "--library X"
+    boolean needsServerLib = additions.stream()
+      .anyMatch(addition -> addition.contains(HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB));
+    if (!needsServerLib) return true;
+    if (HaxelibInstaller.isInstalled(project, HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB)) return true;
+
+    String title = HaxeDebuggerBundle.message("haxe.before.run.name");
+    String message = HaxeDebuggerBundle.message("haxe.before.run.debug.server.missing",
+                                                HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB);
+    HaxeCommandNotifications.notify(project, title, message, NotificationType.ERROR, installDebugServerAction(project));
+    return false;
+  }
+
+  @NotNull
+  private static AnAction installDebugServerAction(@NotNull Project project) {
+    String text = HaxeDebuggerBundle.message("haxe.before.run.debug.server.install");
+    return NotificationAction.createSimpleExpiring(text, () -> installDebugServerInBackground(project));
+  }
+
+  private static void installDebugServerInBackground(@NotNull Project project) {
+    String progressTitle = HaxeDebuggerBundle.message("haxe.before.run.debug.server.installing");
+    new Backgroundable(project, progressTitle, true) {
+      @Override
+      public void run(@NotNull ProgressIndicator indicator) {
+        String failure = HaxelibInstaller.install(project, HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB, null, null);
+        if (failure != null) {
+          HaxeCommandNotifications.notify(project,
+                                          HaxeDebuggerBundle.message("haxe.before.run.debug.server.install.failed"),
+                                          failure, NotificationType.ERROR);
+        }
+        else {
+          HaxeCommandNotifications.notify(project,
+                                          HaxeDebuggerBundle.message("haxe.before.run.debug.server.installed"),
+                                          NotificationType.INFORMATION);
+        }
+      }
+    }.queue();
   }
 
   private static void notifyFailure(@NotNull Project project, @NotNull String message) {

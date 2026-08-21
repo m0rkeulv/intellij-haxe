@@ -5,17 +5,25 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.io.FileUtil;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.ide.toolWindow.haxelib.HaxelibExplorerPanel.LibraryRow;
 import com.intellij.plugins.haxe.ide.toolWindow.haxelib.HaxelibExplorerPanel.VersionEntry;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
+import java.util.Comparator;
 import java.util.function.Supplier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -42,6 +50,9 @@ final class HaxelibExplorerActions {
     group.addSeparator();
     group.add(new InstallLatest(panel));
     group.add(new RemoveLibrary(panel));
+    group.addSeparator();
+    group.add(new SetDevDirectory(panel));
+    group.add(new RemoveDevDirectory(panel));
     return group;
   }
 
@@ -159,10 +170,21 @@ final class HaxelibExplorerActions {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
       VersionEntry entry = selectedVersion();
+      LibraryRow row = panel.selectedLibraryRow();
       if (entry == null) return;
+      // a dev pointer overrides the .current selection and haxelib set never
+      // touches it - without clearing it the set would look ignored
+      boolean devOverride = row != null && row.dev();
       mutate(HaxeBundle.message("haxelib.explorer.action.set.current.progress", entry.library(), entry.version()),
              entry.library(),
-             () -> HaxelibInstaller.setCurrent(panel.getProject(), entry.library(), entry.version()));
+             () -> setCurrentClearingDev(entry, devOverride));
+    }
+
+    @Nullable
+    private String setCurrentClearingDev(@NotNull VersionEntry entry, boolean devOverride) {
+      String failure = HaxelibInstaller.setCurrent(panel.getProject(), entry.library(), entry.version());
+      if (failure != null || !devOverride) return failure;
+      return HaxelibInstaller.clearDev(panel.getProject(), entry.library());
     }
   }
 
@@ -174,18 +196,61 @@ final class HaxelibExplorerActions {
     @Override
     public void update(@NotNull AnActionEvent e) {
       VersionEntry entry = selectedVersion();
-      e.getPresentation().setEnabledAndVisible(entry != null && entry.installed());
+      // the dev pseudo-version is a pointer, not an installed directory -
+      // Remove Development Directory handles it
+      boolean removable = entry != null && entry.installed() && !HaxelibSemVer.DEV.equals(entry.version());
+      e.getPresentation().setEnabledAndVisible(removable);
     }
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
       VersionEntry entry = selectedVersion();
+      LibraryRow row = panel.selectedLibraryRow();
       if (entry == null) return;
       String target = entry.library() + " " + entry.version();
       if (!confirmRemoval(target)) return;
+      String fallback = newestOtherRelease(row, entry.version());
       mutate(HaxeBundle.message("haxelib.explorer.action.remove.progress", target),
              entry.library(),
-             () -> HaxelibInstaller.remove(panel.getProject(), entry.library(), entry.version()));
+             () -> removeSteppingOffCurrent(entry, fallback));
+    }
+
+    /**
+     * haxelib refuses to remove the version its .current file names - even
+     * when a dev pointer is what actually drives resolution. On that refusal
+     * the newest other installed release is selected and the removal retried;
+     * without one the removal cannot work (haxelib always keeps a current
+     * version), reported with a pointer to Remove Library. Any other failure
+     * (or a changed refusal wording in a future haxelib) surfaces as-is.
+     */
+    @Nullable
+    private String removeSteppingOffCurrent(@NotNull VersionEntry entry, @Nullable String fallback) {
+      Project project = panel.getProject();
+      String failure = HaxelibInstaller.remove(project, entry.library(), entry.version());
+      boolean currentRefusal = failure != null && failure.contains("Can't remove current version");
+      if (!currentRefusal) return failure;
+      if (fallback == null) {
+        return HaxeBundle.message("haxelib.explorer.action.remove.version.last.release", entry.library());
+      }
+      String setFailure = HaxelibInstaller.setCurrent(project, entry.library(), fallback);
+      if (setFailure != null) return setFailure;
+      return HaxelibInstaller.remove(project, entry.library(), entry.version());
+    }
+
+    /** The newest OTHER installed release - what becomes current when the current version itself is removed. */
+    @Nullable
+    private static String newestOtherRelease(@Nullable LibraryRow row, @NotNull String removedVersion) {
+      if (row == null) return null;
+      return row.installedVersions().stream()
+        .filter(version -> !HaxelibSemVer.isPseudoVersion(version) && !version.equals(removedVersion))
+        .max(Comparator.comparing(RemoveVersion::releaseOrder))
+        .orElse(null);
+    }
+
+    @NotNull
+    private static Float releaseOrder(@NotNull String version) {
+      HaxelibSemVer semVer = HaxelibSemVer.create(version);
+      return semVer != null ? semVer.toCompareValue() : Float.valueOf(0);
     }
   }
 
@@ -207,6 +272,67 @@ final class HaxelibExplorerActions {
       mutate(HaxeBundle.message("haxelib.explorer.action.install.latest.progress", row.name()),
              row.name(),
              () -> HaxelibInstaller.install(panel.getProject(), row.name(), null, null));
+    }
+  }
+
+  private static final class SetDevDirectory extends ExplorerAction {
+    private SetDevDirectory(@NotNull HaxelibExplorerPanel panel) {
+      super(panel, () -> HaxeBundle.message("haxelib.explorer.action.set.dev"));
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      // registering a dev directory needs no installed release - haxelib
+      // creates the repository entry, exactly how unpublished libs are used
+      e.getPresentation().setEnabledAndVisible(selectedLibrary() != null);
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      LibraryRow row = selectedLibrary();
+      if (row == null) return;
+      FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor()
+        .withTitle(HaxeBundle.message("haxelib.explorer.action.set.dev.chooser.title", row.name()));
+      VirtualFile chosen = FileChooser.chooseFile(descriptor, panel.getProject(), currentDevDirectory(row));
+      if (chosen == null) return;
+      String directory = FileUtil.toSystemDependentName(chosen.getPath());
+      mutate(HaxeBundle.message("haxelib.explorer.action.set.dev.progress", row.name()),
+             row.name(),
+             () -> HaxelibInstaller.setDev(panel.getProject(), row.name(), directory));
+    }
+
+    /** The chooser's starting point: the registered dev directory when one exists. */
+    @Nullable
+    private VirtualFile currentDevDirectory(@NotNull LibraryRow row) {
+      String devPath = panel.devDirectoryOf(row);
+      return devPath == null ? null : LocalFileSystem.getInstance().findFileByPath(devPath);
+    }
+  }
+
+  private static final class RemoveDevDirectory extends ExplorerAction {
+    private RemoveDevDirectory(@NotNull HaxelibExplorerPanel panel) {
+      super(panel, () -> HaxeBundle.message("haxelib.explorer.action.remove.dev"));
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      e.getPresentation().setEnabledAndVisible(devLibraryName() != null);
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      String library = devLibraryName();
+      if (library == null) return;
+      mutate(HaxeBundle.message("haxelib.explorer.action.remove.dev.progress", library),
+             library,
+             () -> HaxelibInstaller.clearDev(panel.getProject(), library));
+    }
+
+    /** The selection's library when its dev pointer is set - the library node or any of its version nodes. */
+    @Nullable
+    private String devLibraryName() {
+      LibraryRow row = panel.selectedLibraryRow();
+      return row != null && row.dev() ? row.name() : null;
     }
   }
 

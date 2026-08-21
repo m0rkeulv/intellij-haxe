@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.buildtools;
 import com.intellij.notification.NotificationGroup;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
+import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 
@@ -25,6 +26,14 @@ public final class HaxeCommandNotifications {
   /** Title-less balloon: the message is the whole notification. */
   public static void notify(@NotNull Project project, @NotNull String content, @NotNull NotificationType type) {
     group().createNotification(content, type).notify(project);
+  }
+
+  /** Balloon carrying one action button (e.g. an install fix). */
+  public static void notify(@NotNull Project project, @NotNull String title, @NotNull String content,
+                            @NotNull NotificationType type, @NotNull AnAction action) {
+    group().createNotification(title, content, type)
+      .addAction(action)
+      .notify(project);
   }
 
   @NotNull
