@@ -143,15 +143,18 @@ public final class HaxeCompileCommands {
            || NmeProjects.isToolCommand(command);
   }
 
-  /// Adds `--connect <port>` when the compilation server is enabled and the
-  /// container participates: right after the executable for a direct haxe compile,
-  /// appended for a lime/openfl/nme build (the tools forward it to their haxe
-  /// calls); otherwise returns the command unchanged.
+  /// The shared execution-time server step: expands a custom action's
+  /// `${serverPort}` variable, then adds `--connect <port>` when the
+  /// compilation server is enabled and the container participates - right
+  /// after the executable for a direct haxe compile, appended for a
+  /// lime/openfl/nme build (the tools forward it to their haxe calls);
+  /// otherwise returns the command unchanged.
   @NotNull
   public static List<String> connectIfEnabled(@NotNull Project project,
                                               @NotNull String containerId,
                                               boolean connectEligible,
-                                              @NotNull List<String> command) {
+                                              @NotNull List<String> rawCommand) {
+    List<String> command = HaxeCustomCommands.expandServerPort(project, containerId, rawCommand);
     boolean useServer = connectEligible
                         && HaxeBuildToolSettings.getInstance(project).isCompilationServerEnabled()
                         && HaxeEnvironmentStore.getInstance(project).isUsingCompilationServer(containerId);
