@@ -179,6 +179,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   @NotNull
   private BorderLayoutPanel createToolbarRow() {
     DefaultActionGroup actions = new DefaultActionGroup();
+    actions.add(HaxelibExplorerActions.createAddLibraryAction(this));
     actions.add(new RefreshAction());
     DefaultTreeExpander treeExpander = new DefaultTreeExpander(() -> tree);
     actions.add(CommonActionsManager.getInstance().createCollapseAllAction(treeExpander, tree));
@@ -361,6 +362,12 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
         }
       }
     });
+  }
+
+  /** Selects the library once a rebuild shows it — for the add flow, whose row does not exist until haxelib ran. */
+  void revealAfterReload(@NotNull String libraryName) {
+    pendingRevealLibrary = libraryName;
+    pendingRevealVersion = null;
   }
 
   /** Filters the tree to the library and selects it; a version entry is selected once its child materializes. */
@@ -618,11 +625,16 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   /** The git entry's gray suffix: what the checkout points at ("main @ 559b24c9a3"). */
   @Nullable
   private String gitCheckoutNote(@NotNull LibraryRow row) {
+    HaxelibLocalDocs.GitCheckout checkout = gitCheckoutOf(row);
+    return checkout == null ? null : checkout.display();
+  }
+
+  /** The row's git checkout state, or null without one. Callable from the EDT and pooled threads. */
+  @Nullable
+  HaxelibLocalDocs.GitCheckout gitCheckoutOf(@NotNull LibraryRow row) {
     if (!row.git()) return null;
     Path repoRoot = repositoryRoot();
-    if (repoRoot == null) return null;
-    HaxelibLocalDocs.GitCheckout checkout = HaxelibLocalDocs.gitCheckout(repoRoot, row.name());
-    return checkout == null ? null : checkout.display();
+    return repoRoot == null ? null : HaxelibLocalDocs.gitCheckout(repoRoot, row.name());
   }
 
   /** The version list under a library: dev/git and local-only versions first, then every release newest-first. */

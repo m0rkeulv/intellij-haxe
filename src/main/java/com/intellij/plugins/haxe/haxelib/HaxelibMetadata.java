@@ -97,7 +97,7 @@ public class HaxelibMetadata {
     path = "";
   }
 
-  /** Test constructor */
+  /** Parses in-memory content — fetched haxelib.json or test json. */
   public HaxelibMetadata(@NotNull String json) {
     root = parse(json);
     path = "";

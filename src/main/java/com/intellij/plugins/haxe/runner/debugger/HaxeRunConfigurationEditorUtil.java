@@ -13,10 +13,10 @@ import java.nio.file.Path;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Shared browse-button wiring for the run-configuration editors' path fields:
- * one place for the chooser behavior, so a UX tweak reaches every editor
- * (before extraction, the "open at the current path" improvement had reached
- * only two of the three copies).
+ * Shared browse-button wiring for path fields (run-configuration editors,
+ * the haxelib add-library dialog): one place for the chooser behavior, so a
+ * UX tweak reaches every field (before extraction, the "open at the current
+ * path" improvement had reached only two of the three copies).
  */
 public final class HaxeRunConfigurationEditorUtil {
   private HaxeRunConfigurationEditorUtil() {

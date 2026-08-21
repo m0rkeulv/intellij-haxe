@@ -54,4 +54,27 @@ public class HaxelibGitSpecTest {
     // short hex names stay as written - they may be abbreviations already
     assertEquals("559b24c9a3", HaxelibGitSpec.shortRef("559b24c9a3"));
   }
+
+  @Test
+  @DisplayName("browsable base strips git suffix and converts scp remotes")
+  public void browsableBaseStripsGitSuffixAndConvertsScpRemotes() {
+    assertEquals("https://github.com/libowner/repo", HaxelibGitSpec.browsableBase("https://github.com/libowner/repo.git"));
+    assertEquals("https://github.com/libowner/repo", HaxelibGitSpec.browsableBase("git@github.com:libowner/repo.git"));
+    assertNull(HaxelibGitSpec.browsableBase("file:///local/mirror.git"));
+    assertNull(HaxelibGitSpec.browsableBase(null));
+  }
+
+  @Test
+  @DisplayName("raw haxelib json url covers the known forges")
+  public void rawHaxelibJsonUrlCoversTheKnownForges() {
+    assertEquals("https://raw.githubusercontent.com/libowner/repo/HEAD/haxelib.json",
+                 HaxelibGitSpec.rawHaxelibJsonUrl("https://github.com/libowner/repo.git", null));
+    assertEquals("https://raw.githubusercontent.com/libowner/repo/v1.2.0/haxelib.json",
+                 HaxelibGitSpec.rawHaxelibJsonUrl("https://github.com/libowner/repo.git", "v1.2.0"));
+    assertEquals("https://gitlab.com/libowner/repo/-/raw/main/haxelib.json",
+                 HaxelibGitSpec.rawHaxelibJsonUrl("https://gitlab.com/libowner/repo.git", "main"));
+    // no known raw scheme for arbitrary hosts
+    assertNull(HaxelibGitSpec.rawHaxelibJsonUrl("https://example.com/libowner/repo.git", null));
+    assertNull(HaxelibGitSpec.rawHaxelibJsonUrl("", null));
+  }
 }

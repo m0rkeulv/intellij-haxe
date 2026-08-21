@@ -42,13 +42,30 @@ public final class HaxelibInstaller {
                                @Nullable String version, @Nullable String resolvedVersion) {
     HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(version);
     if (gitSpec != null) {
-      return run(project, gitParameters(name, gitSpec));
+      return installGit(project, name, gitSpec.url(), gitSpec.ref());
     }
     String failure = run(project, installParameters(name, version));
     if (failure == null) {
       restoreSelectedVersion(project, name, version, resolvedVersion);
     }
     return failure;
+  }
+
+  /**
+   * Runs {@code haxelib git <name> <url> [ref]} — clones the repository and
+   * checks out the branch/tag/commit; null on success, else the failure
+   * detail. Registers the library when unknown, and haxelib selects the git
+   * version as current.
+   */
+  @Nullable
+  public static String installGit(@NotNull Project project, @NotNull String name,
+                                  @NotNull String url, @Nullable String ref) {
+    var parameters = new ArrayList<>(List.of("git", name, url));
+    if (ref != null && !ref.isBlank()) {
+      parameters.add(ref);
+    }
+    parameters.add("--always");
+    return run(project, parameters);
   }
 
   /** Whether haxelib resolves the library (installed, dev or git) — runs {@code haxelib path}. */
@@ -131,16 +148,6 @@ public final class HaxelibInstaller {
     return parameters;
   }
 
-  // "haxelib git name url [ref] --always"; haxelib clones and checks out the branch/tag/commit
-  @NotNull
-  private static List<String> gitParameters(@NotNull String name, @NotNull HaxelibGitSpec gitSpec) {
-    var parameters = new ArrayList<>(List.of("git", name, gitSpec.url()));
-    if (gitSpec.ref() != null) {
-      parameters.add(gitSpec.ref());
-    }
-    parameters.add("--always");
-    return parameters;
-  }
 
   /**
    * Installing a pinned version makes it haxelib's SELECTED version as a side

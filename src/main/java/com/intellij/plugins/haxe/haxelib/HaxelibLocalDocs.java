@@ -99,25 +99,11 @@ public final class HaxelibLocalDocs {
      */
     @Nullable
     public String webUrl() {
-      String base = webBase();
+      String base = HaxelibGitSpec.browsableBase(remoteUrl);
       if (base == null) return null;
       if (commit != null) return base + "/commit/" + commit;
       if (branch != null) return base + "/tree/" + branch;
       return base;
-    }
-
-    @Nullable
-    private String webBase() {
-      if (remoteUrl == null) return null;
-      String url = remoteUrl.endsWith(".git") ? remoteUrl.substring(0, remoteUrl.length() - ".git".length())
-                                              : remoteUrl;
-      // the scp-like ssh remote form (user@host:path) browses as https://host/path
-      int at = url.indexOf('@');
-      int colon = url.indexOf(':', at + 1);
-      if (at > 0 && colon > at && !url.contains("://")) {
-        return "https://" + url.substring(at + 1, colon) + "/" + url.substring(colon + 1);
-      }
-      return url.startsWith("http://") || url.startsWith("https://") ? url : null;
     }
   }
 

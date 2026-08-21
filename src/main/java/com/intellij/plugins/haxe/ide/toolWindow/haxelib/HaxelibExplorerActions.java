@@ -1,7 +1,9 @@
 package com.intellij.plugins.haxe.ide.toolWindow.haxelib;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
@@ -17,6 +19,7 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.haxelib.HaxelibLocalDocs;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.ide.toolWindow.haxelib.HaxelibExplorerPanel.LibraryRow;
 import com.intellij.plugins.haxe.ide.toolWindow.haxelib.HaxelibExplorerPanel.VersionEntry;
@@ -50,10 +53,20 @@ final class HaxelibExplorerActions {
     group.addSeparator();
     group.add(new InstallLatest(panel));
     group.add(new RemoveLibrary(panel));
+    group.add(new AddLibrary(panel));
     group.addSeparator();
     group.add(new SetDevDirectory(panel));
     group.add(new RemoveDevDirectory(panel));
+    group.add(new InstallFromGitRepository(panel));
     return group;
+  }
+
+  /** The tree toolbar's plus button — the same add flow the context menu offers (icon-less there). */
+  @NotNull
+  static AnAction createAddLibraryAction(@NotNull HaxelibExplorerPanel panel) {
+    AnAction action = new AddLibrary(panel);
+    action.getTemplatePresentation().setIcon(AllIcons.General.Add);
+    return action;
   }
 
   private abstract static class ExplorerAction extends DumbAwareAction {
@@ -306,6 +319,62 @@ final class HaxelibExplorerActions {
     private VirtualFile currentDevDirectory(@NotNull LibraryRow row) {
       String devPath = panel.devDirectoryOf(row);
       return devPath == null ? null : LocalFileSystem.getInstance().findFileByPath(devPath);
+    }
+  }
+
+  private static final class AddLibrary extends ExplorerAction {
+    private AddLibrary(@NotNull HaxelibExplorerPanel panel) {
+      super(panel, () -> HaxeBundle.message("haxelib.explorer.action.add.library"));
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      HaxelibAddLibraryDialog dialog = new HaxelibAddLibraryDialog(panel.getProject());
+      if (!dialog.showAndGet()) return;
+      String name = dialog.getLibraryName();
+      panel.revealAfterReload(name);
+      if (dialog.isDevMethod()) {
+        String directory = dialog.getDevDirectory();
+        mutate(HaxeBundle.message("haxelib.explorer.action.set.dev.progress", name),
+               name,
+               () -> HaxelibInstaller.setDev(panel.getProject(), name, directory));
+      }
+      else {
+        String url = dialog.getGitUrl();
+        String ref = dialog.getGitRef();
+        mutate(HaxeBundle.message("haxelib.explorer.action.install.git.progress", name),
+               name,
+               () -> HaxelibInstaller.installGit(panel.getProject(), name, url, ref));
+      }
+    }
+  }
+
+  private static final class InstallFromGitRepository extends ExplorerAction {
+    private InstallFromGitRepository(@NotNull HaxelibExplorerPanel panel) {
+      super(panel, () -> HaxeBundle.message("haxelib.explorer.action.install.git"));
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      // like a dev directory, a git install needs no installed release -
+      // haxelib registers the library when unknown
+      e.getPresentation().setEnabledAndVisible(selectedLibrary() != null);
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      LibraryRow row = selectedLibrary();
+      if (row == null) return;
+      HaxelibLocalDocs.GitCheckout existing = panel.gitCheckoutOf(row);
+      HaxelibGitInstallDialog dialog = new HaxelibGitInstallDialog(panel.getProject(), row.name(),
+                                                                  existing == null ? null : existing.remoteUrl(),
+                                                                  existing == null ? null : existing.branch());
+      if (!dialog.showAndGet()) return;
+      String url = dialog.getUrl();
+      String ref = dialog.getRef();
+      mutate(HaxeBundle.message("haxelib.explorer.action.install.git.progress", row.name()),
+             row.name(),
+             () -> HaxelibInstaller.installGit(panel.getProject(), row.name(), url, ref));
     }
   }
 
