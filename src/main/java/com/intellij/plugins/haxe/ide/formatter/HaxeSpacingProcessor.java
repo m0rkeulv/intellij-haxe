@@ -220,6 +220,27 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, 1, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
 
+    // an EMPTY body's braces collapse to {} when the matching keep-in-one-line
+    // option allows it (class bodies excluded - smart enter owns their caret line)
+    if (type1 == PLCURLY && type2 == PRCURLY && !isClassBodyType(elementType)
+        && collapseEmptyBody(elementType, parentType)) {
+      return Spacing.createSpacing(0, 0, 0, false, 0);
+    }
+
+    // "keep control statement in one line" OFF forces a NON-BLOCK body onto
+    // its own line (haxe-formatter's sameLine=Next); block bodies follow the
+    // brace rules instead
+    if (!mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE) {
+      boolean nonBlockBody =
+        (elementType == IF_STATEMENT && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT)
+        || (elementType == ELSE_STATEMENT && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT)
+        || (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT)
+        || (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT);
+      if (nonBlockBody) {
+        return Spacing.createSpacing(0, 0, 1, false, 0);
+      }
+    }
+
     if (type2 == PLPAREN) {
       if (elementType == GUARD) { // IF_STATEMENT) {
         return addSingleSpaceIf(mySettings.SPACE_BEFORE_IF_PARENTHESES);
@@ -502,16 +523,25 @@ public class HaxeSpacingProcessor {
       return null;
   }
 
+  /** Which keep-in-one-line option owns an empty {@code {}} body. */
+  private boolean collapseEmptyBody(IElementType elementType, IElementType parentType) {
+    // FUNCTION_LITERAL first: FUNCTION_DEFINITION contains it too
+    if (parentType == FUNCTION_LITERAL) return mySettings.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE;
+    if (FUNCTION_DEFINITION.contains(parentType)) return mySettings.KEEP_SIMPLE_METHODS_IN_ONE_LINE;
+    return mySettings.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE;
+  }
+
   /**
    * A placement option decides the keyword's line after a BLOCK, overriding
    * kept line breaks: false must JOIN "} else", not merely allow it. After a
    * non-block body ("trace(x); else") the written break stays — joining onto
-   * the statement reads wrong and haxe-formatter keeps it on its own line too.
+   * the statement reads wrong and haxe-formatter keeps it on its own line too
+   * (and keep-control-statement-in-one-line OFF forces that break).
    */
   private Spacing keywordPlacement(boolean spaceBefore, boolean onNewLine, ASTNode before) {
     final int spaces = spaceBefore ? 1 : 0;
     if (!endsWithRightCurly(before)) {
-      return addSingleSpaceIf(spaceBefore, onNewLine);
+      return addSingleSpaceIf(spaceBefore, onNewLine || !mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE);
     }
     return Spacing.createSpacing(spaces, spaces, onNewLine ? 1 : 0, false, 0);
   }

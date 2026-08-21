@@ -90,6 +90,10 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
       if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
       final HaxeBlock childBlock = new HaxeBlock(childNode, createChildWrap(childNode), createChildAlignment(childNode), mySettings);
       childBlock.setParent(this);
+      // wrap groups can span levels (a literal's items chop with its closing
+      // bracket, a call chain's dots chop together) - the child's processor
+      // reaches the enclosing ones through this link
+      childBlock.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
       tlChildren.add(childBlock);
     }
     return tlChildren;

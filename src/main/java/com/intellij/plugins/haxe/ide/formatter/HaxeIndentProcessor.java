@@ -123,6 +123,13 @@ public class HaxeIndentProcessor {
     if (parentType == ANONYMOUS_TYPE_BODY) {
       return Indent.getNormalIndent();
     }
+    // a wrapped chain link (.map(...) on its own line) indents one step from
+    // the chain's base line
+    if (parentType == REFERENCE_EXPRESSION && elementType != CALL_EXPRESSION
+        && parent.getFirstChildNode() != null
+        && parent.getFirstChildNode().getElementType() == CALL_EXPRESSION) {
+      return Indent.getContinuationIndent();
+    }
     return Indent.getNoneIndent();
   }
 
@@ -134,10 +141,12 @@ public class HaxeIndentProcessor {
     result = result || type == CLASS_BODY;
     result = result || type == ABSTRACT_BODY;
     result = result || (type == ARRAY_LITERAL && elementType != PLBRACK && elementType != PRBRACK);
+    result = result || (type == MAP_LITERAL && elementType != PLBRACK && elementType != PRBRACK);
     result = result || type == OBJECT_LITERAL;
     result = result || type == XML_LITERAL_EXPRESSION;
     result = result || type == XML_MARKUP_ELEMENT;
-    result = result || type == MAP_INITIALIZER_EXPRESSION;
+    // NOT the map entry types: indenting an entry's children indents the
+    // entry's own first token again when the literal wraps one-per-line
     result = result || type == MAP_LOOP_INITIALIZER_EXPRESSION;
     result = result || type == EXTERN_CLASS_DECLARATION_BODY;
     result = result || type == ENUM_BODY;

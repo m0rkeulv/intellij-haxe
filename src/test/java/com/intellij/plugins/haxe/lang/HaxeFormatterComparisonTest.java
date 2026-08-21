@@ -134,6 +134,17 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     common.BLANK_LINES_AROUND_METHOD = 1;
     common.BLANK_LINES_BEFORE_CLASS_END = 0;
 
+    // sameLine.ifBody/elseBody/forBody/whileBody=Next (non-block bodies break)
+    common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE = false;
+    // lineEnds.emptyCurly=NoBreak ({} collapses)
+    common.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE = true;
+    common.KEEP_SIMPLE_METHODS_IN_ONE_LINE = true;
+    common.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE = true;
+    // wrapping.arrayWrap/mapWrap/objectLiteral/methodChain: break one-per-line
+    // when the line exceeds maxLineLength
+    common.ARRAY_INITIALIZER_WRAP = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
+    common.METHOD_CALL_CHAIN_WRAP = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
+
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     // whitespace.arrowFunctionsPolicy/functionTypeHaxe4Policy=Around
     haxe.SPACE_AROUND_ARROW = true;
@@ -245,5 +256,41 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("function types")
   public void testFunctionTypes() throws Exception {
     doParityTest("function-types");
+  }
+
+  @Test
+  @DisplayName("array literal wrap")
+  public void testArrayLiteralWrap() throws Exception {
+    doParityTest("array-literal-wrap");
+  }
+
+  @Test
+  @DisplayName("map literal wrap")
+  public void testMapLiteralWrap() throws Exception {
+    doParityTest("map-literal-wrap");
+  }
+
+  @Test
+  @DisplayName("object literal wrap")
+  public void testObjectLiteralWrap() throws Exception {
+    doParityTest("object-literal-wrap");
+  }
+
+  @Test
+  @DisplayName("method chain wrap")
+  public void testMethodChainWrap() throws Exception {
+    doParityTest("method-chain-wrap");
+  }
+
+  @Test
+  @DisplayName("empty curly")
+  public void testEmptyCurly() throws Exception {
+    doParityTest("empty-curly");
+  }
+
+  @Test
+  @DisplayName("same line bodies")
+  public void testSameLineBodies() throws Exception {
+    doParityTest("same-line-bodies");
   }
 }

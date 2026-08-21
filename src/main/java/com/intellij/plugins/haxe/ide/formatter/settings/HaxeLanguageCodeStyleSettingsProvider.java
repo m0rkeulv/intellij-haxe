@@ -159,6 +159,12 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       consumer.showStandardOptions(
                       KEEP_LINE_BREAKS.name(),
                                    KEEP_FIRST_COLUMN_COMMENT.name(),
+                                   KEEP_CONTROL_STATEMENT_IN_ONE_LINE.name(),
+                                   KEEP_SIMPLE_BLOCKS_IN_ONE_LINE.name(),
+                                   KEEP_SIMPLE_METHODS_IN_ONE_LINE.name(),
+                                   KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE.name(),
+                                   ARRAY_INITIALIZER_WRAP.name(),
+                                   METHOD_CALL_CHAIN_WRAP.name(),
                                    BRACE_STYLE.name(),
                                    METHOD_BRACE_STYLE.name(),
                                    CALL_PARAMETERS_WRAP.name(),
@@ -249,6 +255,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
          // function fBar (x,y);
          function fOne(argA, argB, argC, argD, argE, argF, argG, argH) {
               var numbers:Array<String> = ['one', 'two', 'three', 'four', 'five', 'six'];
+              var planets = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'ceres', 'pluto', 'haumea', 'makemake', 'eris'];
+              var shouted = numbers.filter(function(n) { return n.length > 3; }).map(function(n) { return n.toUpperCase(); }).join(', ') + planets.join('; ');
               var x = ("" + argA) + argB + argC + argD + argE + argF + argG + argH;
               try {
                    this.fTwo(argA, argB, argC, this.fThree("", argE, argF, argG, argH));
@@ -258,11 +266,18 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
               for (colorIndex in 0...colors.length) {
                    var colorString = numbers[colorIndex];
               }
+              if (colors.length > 6) colors.pop();
+              if (colors.length == 0) {
+              }
+              var emptyCallback = function() {
+              };
+              var arrowCallback = () -> {
+              };
               do {
                    colors.pop();
               } while (colors.length > 0);
          }
-        
+
          function fTwo(strA, strB, strC, strD) {
               if (true)
                    return strC;
@@ -272,11 +287,14 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
               } else if (true) return strD;
               throw strD;
          }
-        
+
          function fThree(strA, strB, strC, strD, strE) {
               return strA + strB + strC + strD + strE;
          }
-        
+
+         function fEmpty() {
+         }
+
          public function new() {}
     }
     """;
