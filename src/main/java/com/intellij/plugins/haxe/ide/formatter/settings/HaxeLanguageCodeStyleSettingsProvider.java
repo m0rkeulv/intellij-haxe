@@ -102,6 +102,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_AROUND_RELATIONAL_OPERATORS.name(),
                                    SPACE_AROUND_ADDITIVE_OPERATORS.name(),
                                    SPACE_AROUND_MULTIPLICATIVE_OPERATORS.name(),
+                                   SPACE_AROUND_BITWISE_OPERATORS.name(),
+                                   SPACE_AROUND_SHIFT_OPERATORS.name(),
                                    SPACE_BEFORE_METHOD_LBRACE.name(),
                                    SPACE_BEFORE_IF_LBRACE.name(),
                                    SPACE_BEFORE_ELSE_LBRACE.name(),
@@ -140,8 +142,15 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
       consumer.showStandardOptions(
         KEEP_BLANK_LINES_IN_CODE.name(),
+        KEEP_BLANK_LINES_IN_DECLARATIONS.name(),
+        KEEP_BLANK_LINES_BEFORE_RBRACE.name(),
         BLANK_LINES_AFTER_PACKAGE.name(),
-        BLANK_LINES_AFTER_IMPORTS.name()
+        BLANK_LINES_AFTER_IMPORTS.name(),
+        BLANK_LINES_AROUND_CLASS.name(),
+        BLANK_LINES_AFTER_CLASS_HEADER.name(),
+        BLANK_LINES_AROUND_FIELD.name(),
+        BLANK_LINES_AROUND_METHOD.name(),
+        BLANK_LINES_BEFORE_CLASS_END.name()
       );
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", "After using:",
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);

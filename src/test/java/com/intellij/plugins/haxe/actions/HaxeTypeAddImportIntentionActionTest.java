@@ -92,8 +92,9 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeLightFixtureTestCa
     myTestStyleSettings.ALIGN_MULTILINE_PARAMETERS = false;
     myTestStyleSettings.ALIGN_MULTILINE_PARAMETERS_IN_CALLS = false;
     myTestStyleSettings.KEEP_FIRST_COLUMN_COMMENT = false;
-    myTestStyleSettings.BLANK_LINES_AFTER_PACKAGE = 2;
-    myTestStyleSettings.BLANK_LINES_AFTER_IMPORTS = 2;
+    // one BLANK LINE each - the .txt fixtures encode exactly that
+    myTestStyleSettings.BLANK_LINES_AFTER_PACKAGE = 1;
+    myTestStyleSettings.BLANK_LINES_AFTER_IMPORTS = 1;
   }
 
   @Test
