@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
+import java.nio.file.NoSuchFileException;
 
 /**
  * @author: Fedor.Korotkov
@@ -95,7 +96,8 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
       myFixture.checkResultByFile(getTestName(false) + ".txt");
     }
     catch (RuntimeException e) {
-      if (!(e.getCause() instanceof FileNotFoundException)) {
+      // the platform reads expected files with nio nowadays
+      if (!(e.getCause() instanceof FileNotFoundException || e.getCause() instanceof NoSuchFileException)) {
         throw e;
       }
       final String path = getTestDataPath() + getTestName(false) + ".txt";
