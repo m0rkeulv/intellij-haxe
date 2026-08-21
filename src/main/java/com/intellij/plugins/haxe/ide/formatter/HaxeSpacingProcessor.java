@@ -173,6 +173,14 @@ public class HaxeSpacingProcessor {
       return setBraceSpace(mySettings.SPACE_BEFORE_CLASS_LBRACE, mySettings.BRACE_STYLE, child1.getTextRange());
     }
 
+    // adjacent ONE-LINE type declarations keep their own blank-line cap
+    // (0 = snug); a multi-line neighbour follows the around-class rules
+    boolean singleLineTypePair = isTypeDeclaration(type1) && isTypeDeclaration(type2)
+                                 && !node1.textContains('\n') && !node2.textContains('\n');
+    if (singleLineTypePair) {
+      return Spacing.createSpacing(0, 0, 1, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES);
+    }
+
     if (isClassDeclaration(type1)) {
       return Spacing.createSpacing(0, 0, mySettings.BLANK_LINES_AROUND_CLASS, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
@@ -191,7 +199,9 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.BLANK_LINES_AFTER_CLASS_HEADER);
     }
 
-    if (type2 == PRCURLY && isClassBodyType(elementType) && isLastChild(child2)) {
+    // type1 == PLCURLY is the EMPTY body - kept as written ({} stays inline,
+    // a caret line stays for smart enter)
+    if (type2 == PRCURLY && type1 != PLCURLY && isClassBodyType(elementType) && isLastChild(child2)) {
       int lineFeeds = isType ? 0 : 1 + mySettings.BLANK_LINES_BEFORE_CLASS_END;
       return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
     }
@@ -240,6 +250,20 @@ public class HaxeSpacingProcessor {
       if (nonBlockBody) {
         return Spacing.createSpacing(0, 0, 1, false, 0);
       }
+    }
+
+    // a NAMED function's non-block body (function f() return x;) moves to
+    // its own line; anonymous/arrow function bodies always stay inline
+    boolean namedFunction = elementType == METHOD_DECLARATION || elementType == CONSTRUCTOR_DECLARATION
+                            || elementType == LOCAL_FUNCTION_DECLARATION || elementType == MODULE_METHOD_DECLARATION;
+    boolean headerEnd = type1 == PRPAREN || type1 == TYPE_TAG || type1 == KUNTYPED;
+    // the header's own trailing parts also follow a headerEnd - only what
+    // comes after the LAST of them is the body
+    boolean headerTrailer = type2 == PRPAREN || type2 == TYPE_TAG || type2 == KUNTYPED
+                            || type2 == OSEMI || type2 == BLOCK_STATEMENT;
+    if (myHaxeCodeStyleSettings.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE
+        && namedFunction && headerEnd && !headerTrailer) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
     }
 
     // bracketConfig NoSpace: an access target keeps its '[' snug
@@ -503,6 +527,17 @@ public class HaxeSpacingProcessor {
       return addSingleSpaceIf(mySettings.SPACE_BEFORE_COMMA);
     }
 
+    // the (expr : Type) type-check colon, spaced UNLIKE type-hint colons
+    if (elementType == TYPE_CHECK_EXPR && (type1 == OCOLON || type2 == OCOLON)) {
+      return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_AROUND_TYPE_CHECK_COLON);
+    }
+
+    // plain grouping parens - the keyword/call paren kinds have their own
+    // rules above
+    if (elementType == PARENTHESIZED_EXPRESSION && (type1 == PLPAREN || type2 == PRPAREN)) {
+      return addSingleSpaceIf(mySettings.SPACE_WITHIN_PARENTHESES);
+    }
+
     if (type1 == OCOLON && elementType == TYPE_TAG) {
       return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_AFTER_TYPE_REFERENCE_COLON);
     }
@@ -628,6 +663,11 @@ public class HaxeSpacingProcessor {
 
   private boolean isClassDeclaration(IElementType type) {
     return CLASS_TYPES.contains(type);
+  }
+
+  /** Any top-level type declaration; CLASS_TYPES lacks the body-less typedef kind. */
+  private static boolean isTypeDeclaration(IElementType type) {
+    return CLASS_TYPES.contains(type) || type == TYPEDEF_DECLARATION;
   }
 
   private boolean blockBeginsWith(Block block, IElementType type) {

@@ -97,6 +97,15 @@ public class HaxeIndentProcessor {
         return Indent.getNormalIndent();
       }
     }
+    // a named function's non-block body on its own line indents one step
+    // (FUNCTION_DEFINITION lacks the module-level kind); the header's own
+    // trailing parts also follow a header end and stay unindented
+    if ((FUNCTION_DEFINITION.contains(parentType) || parentType == MODULE_METHOD_DECLARATION)
+        && elementType != BLOCK_STATEMENT && elementType != TYPE_TAG
+        && elementType != PRPAREN && elementType != KUNTYPED && elementType != OSEMI
+        && (prevSiblingType == PRPAREN || prevSiblingType == TYPE_TAG || prevSiblingType == KUNTYPED)) {
+      return Indent.getNormalIndent();
+    }
     if (parentType == FOR_STATEMENT && prevSiblingType == PRPAREN && elementType != BLOCK_STATEMENT) {
       return Indent.getNormalIndent();
     }

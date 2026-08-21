@@ -28,9 +28,18 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public boolean SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_AFTER_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_WITHIN_TYPE_PARAMETERS = false;
+    // the (expr : Type) type-check colon is conventionally spaced, UNLIKE type hints
+    public boolean SPACE_AROUND_TYPE_CHECK_COLON = true;
+
+    // a NAMED function's non-block body (function f() return x;) moves to its
+    // own line; anonymous/arrow function bodies always stay inline
+    public boolean FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = false;
 
     // counts BLANK LINES (like the platform's BLANK_LINES_* options)
     public int MINIMUM_BLANK_LINES_AFTER_USING = 1;
+    // keep cap between ADJACENT one-line type declarations (interface One {});
+    // 0 pulls them snug, hxformat-style
+    public int KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 2;
 
     protected HaxeCodeStyleSettings(CodeStyleSettings container) {
         super("HaxeCodeStyleSettings", container);

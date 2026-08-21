@@ -123,6 +123,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_WITHIN_FOR_PARENTHESES.name(),
                                    SPACE_WITHIN_CATCH_PARENTHESES.name(),
                                    SPACE_WITHIN_SWITCH_PARENTHESES.name(),
+                                   SPACE_WITHIN_PARENTHESES.name(),
                                    SPACE_BEFORE_QUEST.name(),
                                    SPACE_AFTER_QUEST.name(),
                                    SPACE_BEFORE_COLON.name(),
@@ -141,6 +142,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", "Type parameter angle brackets",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_TYPE_CHECK_COLON", "Around type check colon '(value : Type)'",
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
       consumer.showStandardOptions(
@@ -157,6 +160,9 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       );
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", "After using:",
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
+                                "Between single-line types:",
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.WRAPPING_AND_BRACES_SETTINGS) {
       consumer.showStandardOptions(
@@ -195,6 +201,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       // the platform default label says "permits" - Java sealed-class syntax
       // that does not exist in Haxe
       consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), "Extends/implements list");
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE",
+                                "Expression function body on next line", "Function declarations");
     }
   }
 
@@ -218,6 +226,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
               }
               var increment:Int -> Int = function(i:Int) {return ++i;}
               var arr = ["zero", "one"];
+              var asInt = (z : Int);
               var y = (x ^ 0x123) << 2;
               for (i in 0...10) {
                    y = (y ^ 0x123) << 2;
@@ -302,6 +311,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
          function fEmpty() {
          }
 
+         function fQuick() return 'fast';
+
          public function new() {}
     }
     """;
@@ -311,11 +322,15 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     import a.b.SomeClass;
     import a.b.SomeOther as ClassAlias;
     using someUtil;
+    interface Drawable {}
+
+    interface Resizable {}
+
     class Foo {
          public function new() {
          }
-        
-        
+
+
          public static function main() {
               trace("Hello!");
          }

@@ -158,8 +158,14 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     haxe.SPACE_AFTER_TYPE_REFERENCE_COLON = false;
     // whitespace.typeParamOpenPolicy/typeParamClosePolicy=None
     haxe.SPACE_WITHIN_TYPE_PARAMETERS = false;
+    // whitespace.typeCheckColonPolicy=Around
+    haxe.SPACE_AROUND_TYPE_CHECK_COLON = true;
+    // sameLine.functionBody=Next (anonFunctionBody=Same has no flag - always inline)
+    haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
     // emptyLines.importAndUsing.beforeType=1
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
+    // emptyLines.betweenSingleLineTypes=0
+    haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 0;
   }
 
   /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
@@ -317,5 +323,23 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("type param spacing")
   public void testTypeParamSpacing() throws Exception {
     doParityTest("type-param-spacing");
+  }
+
+  @Test
+  @DisplayName("function body next line")
+  public void testFunctionBodyNextLine() throws Exception {
+    doParityTest("function-body-next-line");
+  }
+
+  @Test
+  @DisplayName("type check colon")
+  public void testTypeCheckColon() throws Exception {
+    doParityTest("type-check-colon");
+  }
+
+  @Test
+  @DisplayName("single line types")
+  public void testSingleLineTypes() throws Exception {
+    doParityTest("single-line-types");
   }
 }
