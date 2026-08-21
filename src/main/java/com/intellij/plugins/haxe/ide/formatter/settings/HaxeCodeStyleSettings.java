@@ -30,6 +30,11 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public boolean SPACE_WITHIN_TYPE_PARAMETERS = false;
     // the (expr : Type) type-check colon is conventionally spaced, UNLIKE type hints
     public boolean SPACE_AROUND_TYPE_CHECK_COLON = true;
+    public boolean SPACE_WITHIN_METADATA_PARENTHESES = false;
+
+    // a structure extension hugs a one-line body ({ > Base, ... }) and takes
+    // its own line in a multi-line one; off keeps it as written
+    public boolean STRUCTURE_EXTENSION_ON_OWN_LINE = false;
 
     // a NAMED function's non-block body (function f() return x;) moves to its
     // own line; anonymous/arrow function bodies always stay inline
@@ -40,6 +45,8 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // keep cap between ADJACENT one-line type declarations (interface One {});
     // 0 pulls them snug, hxformat-style
     public int KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 2;
+    // keep cap WITHIN the import/using section; 0 makes it one solid block
+    public int KEEP_BLANK_LINES_BETWEEN_IMPORTS = 2;
 
     protected HaxeCodeStyleSettings(CodeStyleSettings container) {
         super("HaxeCodeStyleSettings", container);

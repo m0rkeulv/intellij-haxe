@@ -144,6 +144,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_TYPE_CHECK_COLON", "Around type check colon '(value : Type)'",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_METADATA_PARENTHESES", "Metadata parentheses",
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
       consumer.showStandardOptions(
@@ -162,6 +164,9 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
                                 "Between single-line types:",
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_IMPORTS",
+                                "Between imports:",
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.WRAPPING_AND_BRACES_SETTINGS) {
@@ -203,6 +208,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), "Extends/implements list");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE",
                                 "Expression function body on next line", "Function declarations");
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "STRUCTURE_EXTENSION_ON_OWN_LINE",
+                                "Structure extension '> Base' on own line", "Anonymous structures");
     }
   }
 
@@ -313,6 +320,12 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
 
          function fQuick() return 'fast';
 
+         function fMerge(base:{> Iterable<String>,
+              var label:String;
+         }) {
+              return base.label;
+         }
+
          public function new() {}
     }
     """;
@@ -320,6 +333,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
   public static final String BLANK_LINES_CODE_SAMPLE = """
     package foo.bar;
     import a.b.SomeClass;
+
     import a.b.SomeOther as ClassAlias;
     using someUtil;
     interface Drawable {}

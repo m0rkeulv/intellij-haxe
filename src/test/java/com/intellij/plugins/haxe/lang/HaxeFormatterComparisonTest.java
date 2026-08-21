@@ -160,12 +160,18 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     haxe.SPACE_WITHIN_TYPE_PARAMETERS = false;
     // whitespace.typeCheckColonPolicy=Around
     haxe.SPACE_AROUND_TYPE_CHECK_COLON = true;
+    // whitespace.parenConfig.metadataParens=NoSpace
+    haxe.SPACE_WITHIN_METADATA_PARENTHESES = false;
+    // typeExtensionPolicy=After
+    haxe.STRUCTURE_EXTENSION_ON_OWN_LINE = true;
     // sameLine.functionBody=Next (anonFunctionBody=Same has no flag - always inline)
     haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
     // emptyLines.importAndUsing.beforeType=1
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
     // emptyLines.betweenSingleLineTypes=0
     haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 0;
+    // emptyLines.importAndUsing.betweenImports=0
+    haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS = 0;
   }
 
   /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
@@ -341,5 +347,23 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("single line types")
   public void testSingleLineTypes() throws Exception {
     doParityTest("single-line-types");
+  }
+
+  @Test
+  @DisplayName("metadata parens")
+  public void testMetadataParens() throws Exception {
+    doParityTest("metadata-parens");
+  }
+
+  @Test
+  @DisplayName("typedef extension")
+  public void testTypedefExtension() throws Exception {
+    doParityTest("typedef-extension");
+  }
+
+  @Test
+  @DisplayName("import blanks")
+  public void testImportBlanks() throws Exception {
+    doParityTest("import-blanks");
   }
 }

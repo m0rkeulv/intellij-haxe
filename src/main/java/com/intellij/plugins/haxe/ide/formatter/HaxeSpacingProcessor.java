@@ -25,6 +25,7 @@ import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeTag;
+import com.intellij.plugins.haxe.metadata.lexer.HaxeMetadataTokenTypes;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
 
 import com.intellij.psi.PsiElement;
@@ -156,6 +157,13 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AFTER_PACKAGE, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
 
+    // blanks WITHIN the import/using section keep their own cap (0 = a solid
+    // block); the section-end rules below own the blank after the section
+    if ((type1 == IMPORT_STATEMENT && type2 == IMPORT_STATEMENT)
+        || (type1 == USING_STATEMENT && type2 == USING_STATEMENT)) {
+      return Spacing.createSpacing(0, 0, 1, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
+    }
+
     // a comment inside the import section belongs to the import BELOW it -
     // the section-end blank must not push it away from its import
     if (type1 == IMPORT_STATEMENT && type2 != IMPORT_STATEMENT && !ONLY_COMMENTS.contains(type2)) {
@@ -190,6 +198,15 @@ public class HaxeSpacingProcessor {
     }
     // avoid  multi-line formatting types (anonymous structures have brackets)
     boolean isType = parentType == ANONYMOUS_TYPE || PsiTreeUtil.getParentOfType(myNode.getPsi(), HaxeTypeTag.class) != null;
+
+    // a structure extension hugs a one-line body ({ > Base, ... }) and takes
+    // its own line in a multi-line one; must precede the class-body { rule,
+    // whose isType arm keeps the pair as written (the OFF behavior)
+    if (myHaxeCodeStyleSettings.STRUCTURE_EXTENSION_ON_OWN_LINE
+        && elementType == ANONYMOUS_TYPE_BODY && type1 == PLCURLY && type2 == TYPE_EXTENDS_LIST) {
+      return Spacing.createDependentLFSpacing(1, 1, myNode.getTextRange(),
+                                              mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
 
     // type2 == PRCURLY is the EMPTY body - the before-} rule below keeps its
     // (caret) line, which smart enter and live templates rely on
@@ -530,6 +547,19 @@ public class HaxeSpacingProcessor {
     // the (expr : Type) type-check colon, spaced UNLIKE type-hint colons
     if (elementType == TYPE_CHECK_EXPR && (type1 == OCOLON || type2 == OCOLON)) {
       return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_AROUND_TYPE_CHECK_COLON);
+    }
+
+    // metadata parens - metadata has its own token set, hence the qualified
+    // names. The @:name-to-( gap is always snug; inside per the option
+    boolean insideMeta = elementType == HaxeMetadataTokenTypes.COMPILE_TIME_META
+                         || elementType == HaxeMetadataTokenTypes.RUN_TIME_META;
+    if (insideMeta) {
+      if (type2 == HaxeMetadataTokenTypes.PLPAREN) {
+        return addSingleSpaceIf(false);
+      }
+      if (type1 == HaxeMetadataTokenTypes.PLPAREN || type2 == HaxeMetadataTokenTypes.PRPAREN) {
+        return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_WITHIN_METADATA_PARENTHESES);
+      }
     }
 
     // plain grouping parens - the keyword/call paren kinds have their own
