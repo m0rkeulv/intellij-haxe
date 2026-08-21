@@ -10,7 +10,6 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore.Com
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.util.PathUtil;
-import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -23,6 +22,7 @@ import java.util.Map;
  * Configures a container's compile command: which build file compiling runs
  * (None = the container is skipped on project build), optionally one of the file's
  * actions as command override, and extra arguments such as "-clean -debug".
+ * The layout lives in the matching .form (labels bind their bundle keys there).
  */
 public final class HaxeCompileCommandDialog extends DialogWrapper {
 
@@ -30,9 +30,11 @@ public final class HaxeCompileCommandDialog extends DialogWrapper {
   private final String containerId;
   private final Map<String, List<String>> actionNamesByFile;
 
-  private final ComboBox<String> fileCombo = new ComboBox<>();
-  private final ComboBox<String> commandCombo = new ComboBox<>();
-  private final JBTextField argumentsField = new JBTextField();
+  private JPanel panel;
+  private ComboBox<String> fileCombo;
+  private ComboBox<String> commandCombo;
+  private JBTextField argumentsField;
+  private JTextPane hintArea;
 
   public HaxeCompileCommandDialog(@NotNull Project project,
                                   @NotNull String containerId,
@@ -44,23 +46,17 @@ public final class HaxeCompileCommandDialog extends DialogWrapper {
     this.actionNamesByFile = actionNamesByFile;
 
     setTitle(HaxeBundle.message("haxe.compile.command.dialog.title"));
+    HaxeDialogHints.style(hintArea);
+    fileCombo.setRenderer(BuilderKt.textListCellRenderer(
+      HaxeBundle.message("haxe.compile.command.dialog.none"), PathUtil::getFileName));
+    commandCombo.setRenderer(BuilderKt.textListCellRenderer(
+      HaxeBundle.message("haxe.compile.command.dialog.default.command"), name -> name));
     fillFields(candidateFilePaths);
     init();
   }
 
   @Override
   protected @NotNull JComponent createCenterPanel() {
-    fileCombo.setRenderer(BuilderKt.textListCellRenderer(
-      HaxeBundle.message("haxe.compile.command.dialog.none"), PathUtil::getFileName));
-    commandCombo.setRenderer(BuilderKt.textListCellRenderer(
-      HaxeBundle.message("haxe.compile.command.dialog.default.command"), name -> name));
-
-    JPanel panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeBundle.message("haxe.compile.command.dialog.file"), fileCombo)
-      .addLabeledComponent(HaxeBundle.message("haxe.compile.command.dialog.command"), commandCombo)
-      .addLabeledComponent(HaxeBundle.message("haxe.compile.command.dialog.arguments"), argumentsField)
-      .addTooltip(HaxeBundle.message("haxe.compile.command.dialog.hint"))
-      .getPanel();
     panel.setPreferredSize(JBUI.size(480, -1));
     return panel;
   }

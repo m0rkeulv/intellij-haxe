@@ -7,7 +7,6 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,16 +16,20 @@ import javax.swing.*;
 /**
  * Add/edit dialog for a custom tool window action: a name and the command line to
  * run (executed with the active build file's directory as working directory).
+ * The layout lives in the matching .form (labels bind their bundle keys there).
  */
 public final class HaxeCustomActionDialog extends DialogWrapper {
 
-  private final JBTextField nameField = new JBTextField();
-  private final JBTextField commandField = new JBTextField();
+  private JPanel panel;
+  private JBTextField nameField;
+  private JBTextField commandField;
+  private JTextPane hintArea;
 
   public HaxeCustomActionDialog(@NotNull Project project, @Nullable CustomAction initial) {
     super(project);
     setTitle(HaxeBundle.message(initial == null ? "haxe.custom.action.dialog.add.title"
                                                 : "haxe.custom.action.dialog.edit.title"));
+    HaxeDialogHints.style(hintArea);
     if (initial != null) {
       nameField.setText(initial.name());
       commandField.setText(initial.command());
@@ -36,11 +39,6 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
 
   @Override
   protected @NotNull JComponent createCenterPanel() {
-    JPanel panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeBundle.message("haxe.custom.action.dialog.name"), nameField)
-      .addLabeledComponent(HaxeBundle.message("haxe.custom.action.dialog.command"), commandField)
-      .addTooltip(HaxeBundle.message("haxe.custom.action.dialog.hint"))
-      .getPanel();
     panel.setPreferredSize(JBUI.size(480, -1));
     return panel;
   }

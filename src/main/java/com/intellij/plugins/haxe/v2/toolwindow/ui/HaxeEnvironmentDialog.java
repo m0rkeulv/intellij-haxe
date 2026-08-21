@@ -17,7 +17,6 @@ import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.ui.table.TableView;
 import com.intellij.util.ui.ColumnInfo;
-import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.ListTableModel;
 import org.jetbrains.annotations.NotNull;
@@ -35,7 +34,9 @@ import java.util.Set;
  * "Configure Environment" dialog for one container: the Haxe SDK to use and the
  * define entries. The Effect column shows what an entry does against the
  * container's active build file: Add (new name), Override (name exists there)
- * or Remove (unsets the build file's define).
+ * or Remove (unsets the build file's define). The layout lives in the matching
+ * .form; the defines table plus its toolbar is the form's custom-created panel
+ * (see {@link #createUIComponents}).
  */
 public final class HaxeEnvironmentDialog extends DialogWrapper {
 
@@ -50,9 +51,11 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
   private final String containerId;
   private final Set<String> activeBuildFileDefines;
 
-  private final ComboBox<String> sdkCombo = new ComboBox<>();
-  private final ListTableModel<DefineRow> tableModel = new ListTableModel<>(new NameColumn(), new ValueColumn(), new EffectColumn());
-  private final TableView<DefineRow> table = new TableView<>(tableModel);
+  private JPanel panel;
+  private ComboBox<String> sdkCombo;
+  private JPanel definesPanel;
+  private ListTableModel<DefineRow> tableModel;
+  private TableView<DefineRow> table;
 
   public HaxeEnvironmentDialog(@NotNull Project project,
                                @NotNull String containerId,
@@ -64,26 +67,26 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
     this.activeBuildFileDefines = activeBuildFileDefines;
 
     setTitle(HaxeBundle.message("haxe.environment.dialog.title", containerDisplayName));
+    sdkCombo.setRenderer(BuilderKt.textListCellRenderer(
+      HaxeBundle.message("haxe.toolwindow.environment.sdk.default.choice"), name -> name));
     fillFromStore();
     init();
   }
 
-  @Override
-  protected @NotNull JComponent createCenterPanel() {
-    sdkCombo.setRenderer(BuilderKt.textListCellRenderer(
-      HaxeBundle.message("haxe.toolwindow.environment.sdk.default.choice"), name -> name));
-
+  /** Called by the generated form binding for the {@code custom-create} defines panel. */
+  private void createUIComponents() {
+    tableModel = new ListTableModel<>(new NameColumn(), new ValueColumn(), new EffectColumn());
+    table = new TableView<>(tableModel);
     table.setShowGrid(false);
-    JPanel tablePanel = ToolbarDecorator.createDecorator(table)
+    definesPanel = ToolbarDecorator.createDecorator(table)
       .setAddAction(button -> addRow())
       .setRemoveAction(button -> TableUtil.removeSelectedItems(table))
       .disableUpDownActions()
       .createPanel();
+  }
 
-    JPanel panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeBundle.message("haxe.environment.dialog.sdk"), sdkCombo)
-      .addComponentFillVertically(tablePanel, 8)
-      .getPanel();
+  @Override
+  protected @NotNull JComponent createCenterPanel() {
     panel.setPreferredSize(JBUI.size(560, 360));
     return panel;
   }
