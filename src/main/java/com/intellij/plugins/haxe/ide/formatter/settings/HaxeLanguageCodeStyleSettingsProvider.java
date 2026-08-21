@@ -210,6 +210,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 "Expression function body on next line", "Function declarations");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "STRUCTURE_EXTENSION_ON_OWN_LINE",
                                 "Structure extension '> Base' on own line", "Anonymous structures");
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "ALIGN_INACTIVE_CONDITIONAL_BRANCHES",
+                                "Align inactive #if branches", "Conditional compilation");
     }
   }
 
@@ -290,6 +292,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                    var colorString = numbers[colorIndex];
               }
               if (colors.length > 6) colors.pop();
+              var pick = if (colors.length > 3) 'many' else 'few';
               if (colors.length == 0) {
               }
               var emptyCallback = function() {
@@ -299,6 +302,11 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
               do {
                    colors.pop();
               } while (colors.length > 0);
+              #if debug
+              trace('debug build');
+              #else
+              trace('release build');
+              #end
          }
 
          function fTwo(strA, strB, strC, strD) {

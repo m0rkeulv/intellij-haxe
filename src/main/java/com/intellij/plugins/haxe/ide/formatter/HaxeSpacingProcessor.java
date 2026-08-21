@@ -259,9 +259,11 @@ public class HaxeSpacingProcessor {
     // brace rules instead. A for/while inside a literal is a COMPREHENSION,
     // not a control statement - its body always stays on the line.
     if (!mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE && !isComprehension(myNode)) {
+      boolean expressionIf = elementType == IF_STATEMENT && isExpressionPosition(myNode);
+      boolean expressionElse = elementType == ELSE_STATEMENT && isExpressionPosition(myNode.getTreeParent());
       boolean nonBlockBody =
-        (elementType == IF_STATEMENT && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT)
-        || (elementType == ELSE_STATEMENT && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT)
+        (elementType == IF_STATEMENT && !expressionIf && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT)
+        || (elementType == ELSE_STATEMENT && !expressionElse && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT)
         || (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT)
         || (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT);
       if (nonBlockBody) {
@@ -511,6 +513,13 @@ public class HaxeSpacingProcessor {
     //
     //Spacing before keyword (else, catch, etc)
     //
+    // a value-position if/try keeps its keywords as written
+    // (expressionIf/expressionTry=Same)
+    if ((type2 == ELSE_STATEMENT || type2 == CATCH_STATEMENT) && isExpressionPosition(myNode)) {
+      boolean spaceBefore = type2 == ELSE_STATEMENT ? mySettings.SPACE_BEFORE_ELSE_KEYWORD
+                                                    : mySettings.SPACE_BEFORE_CATCH_KEYWORD;
+      return addSingleSpaceIf(spaceBefore);
+    }
     if (type2 == ELSE_STATEMENT) {
       return keywordPlacement(mySettings.SPACE_BEFORE_ELSE_KEYWORD, mySettings.ELSE_ON_NEW_LINE, node1);
     }
@@ -607,6 +616,26 @@ public class HaxeSpacingProcessor {
 
 
       return null;
+  }
+
+  /**
+   * An if/try used as a VALUE ({@code var x = if (c) 1 else 2;}) rather than
+   * as a statement - haxe-formatter's expressionIf/expressionTry=Same keeps
+   * those on one line regardless of the statement-body policies.
+   */
+  private static boolean isExpressionPosition(ASTNode statement) {
+    ASTNode parent = statement.getTreeParent();
+    if (parent == null) return false;
+    IElementType parentType = parent.getElementType();
+    boolean statementPosition = parentType == BLOCK_STATEMENT
+                                || parentType == SWITCH_CASE_BLOCK
+                                || parentType == GUARDED_STATEMENT
+                                || parentType == ELSE_STATEMENT
+                                || parentType == DO_WHILE_BODY
+                                || parentType == FOR_STATEMENT
+                                || parentType == MODULE_METHOD_DECLARATION
+                                || FUNCTION_DEFINITION.contains(parentType);
+    return !statementPosition;
   }
 
   /** A for/while whose enclosing construct is an array/map literal: {@code [for (x in y) v]}. */

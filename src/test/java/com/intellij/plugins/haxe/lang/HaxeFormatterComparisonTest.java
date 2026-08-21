@@ -164,6 +164,8 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     haxe.SPACE_WITHIN_METADATA_PARENTHESES = false;
     // typeExtensionPolicy=After
     haxe.STRUCTURE_EXTENSION_ON_OWN_LINE = true;
+    // indentation.conditionalPolicy=Aligned - inactive branches too
+    haxe.ALIGN_INACTIVE_CONDITIONAL_BRANCHES = true;
     // sameLine.functionBody=Next (anonFunctionBody=Same has no flag - always inline)
     haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
     // emptyLines.importAndUsing.beforeType=1
@@ -365,5 +367,17 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("import blanks")
   public void testImportBlanks() throws Exception {
     doParityTest("import-blanks");
+  }
+
+  @Test
+  @DisplayName("conditional compilation")
+  public void testConditionalCompilation() throws Exception {
+    doParityTest("conditional-compilation");
+  }
+
+  @Test
+  @DisplayName("expression same line")
+  public void testExpressionSameLine() throws Exception {
+    doParityTest("expression-same-line");
   }
 }

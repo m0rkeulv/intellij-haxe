@@ -36,6 +36,12 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // its own line in a multi-line one; off keeps it as written
     public boolean STRUCTURE_EXTENSION_ON_OWN_LINE = false;
 
+    // reformat also re-aligns the INACTIVE #if/#elseif/#else branches (the
+    // block formatter only reaches the active one). Off by default: inactive
+    // code is NOT parsed, so its lines are shifted as a group - statements
+    // nested inside the branch do not get their own indent steps
+    public boolean ALIGN_INACTIVE_CONDITIONAL_BRANCHES = false;
+
     // a NAMED function's non-block body (function f() return x;) moves to its
     // own line; anonymous/arrow function bodies always stay inline
     public boolean FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = false;
