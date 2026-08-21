@@ -23,17 +23,19 @@ import com.intellij.plugins.haxe.config.sdk.HaxeSdkAdditionalDataBase;
  * @author: Fedor.Korotkov
  */
 public class HaxeSdkAdditionalDataBaseImpl implements HaxeSdkAdditionalDataBase {
-  private String homePath = "";
   private String version = "";
-
-  private String nekoBinPath = "";
-
-  // HashLink executable, used by the (experimental) HashLink run/debug support
-  private String hlBinPath = "";
-
+  private String homePath = "";
   private String haxelibPath = "";
 
-  private boolean useCompilerCompletionFlag = false;
+  private String nekoBinPath = ""; // Neko executable
+  private String hlBinPath = ""; // HashLink executable
+  private String nodeBinPath = ""; // NodeJS executable
+  private String flashPlayerPath = ""; // Flash player (projector) executable
+
+  private String flexSdkName = ""; // Flex/AIR SDK (entry in SDK table)
+
+
+
   private boolean removeCompletionDuplicatesFlag = true;
 
   public HaxeSdkAdditionalDataBaseImpl() {
@@ -68,20 +70,36 @@ public class HaxeSdkAdditionalDataBaseImpl implements HaxeSdkAdditionalDataBase 
     this.hlBinPath = null == hlBinPath ? "" : hlBinPath;
   }
 
+  public String getNodeBinPath() {
+    return nodeBinPath;
+  }
+
+  public void setNodeBinPath(String nodeBinPath) {
+    this.nodeBinPath = null == nodeBinPath ? "" : nodeBinPath;
+  }
+
+  public String getFlashPlayerPath() {
+    return flashPlayerPath;
+  }
+
+  public void setFlashPlayerPath(String flashPlayerPath) {
+    this.flashPlayerPath = null == flashPlayerPath ? "" : flashPlayerPath;
+  }
+
+  public String getFlexSdkName() {
+    return flexSdkName;
+  }
+
+  public void setFlexSdkName(String flexSdkName) {
+    this.flexSdkName = null == flexSdkName ? "" : flexSdkName;
+  }
+
   public String getHaxelibPath() {
     return haxelibPath;
   }
 
   public void setHaxelibPath(String haxelibPath) {
     this.haxelibPath = null == haxelibPath ? "" : haxelibPath;
-  }
-
-  public boolean getUseCompilerCompletionFlag() {
-    return useCompilerCompletionFlag;
-  }
-
-  public void setUseCompilerCompletionFlag(boolean newState) {
-    useCompilerCompletionFlag = newState;
   }
 
   public boolean getRemoveCompletionDuplicatesFlag() {

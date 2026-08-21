@@ -25,6 +25,7 @@ import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeMethodPsiMixinImpl;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeMethodStub;
 import com.intellij.plugins.haxe.metadata.HaxeMetadataList;
+import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorCacheService;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
@@ -192,7 +193,8 @@ public class HaxeMethodModel extends HaxeMemberModel implements HaxeExposableMod
   }
 
   public ResultHolder getReturnType(@Nullable HaxeGenericResolver resolver) {
-    ResultHolder result = CachedValuesManager.getProjectPsiDependentCache(haxeMethod, HaxeMethodModel::getReturnTypeCacheProvider);
+    HaxeExpressionEvaluatorCacheService cacheService = haxeMethod.getProject().getService(HaxeExpressionEvaluatorCacheService.class);
+    ResultHolder result = cacheService.methodReturnType(haxeMethod, () -> HaxeTypeResolver.getFieldOrMethodReturnType(haxeMethod, null));
     if (resolver != null) {
       ResultHolder resolve = resolver.resolve(result);
       if(resolve != null && resolve.containsUnknownOrUnresolvedTypeParameters()){
@@ -219,10 +221,6 @@ public class HaxeMethodModel extends HaxeMemberModel implements HaxeExposableMod
     }
     return result;
 
-  }
-
-  private static ResultHolder getReturnTypeCacheProvider(HaxeMethod haxeMethod) {
-    return HaxeTypeResolver.getFieldOrMethodReturnType(haxeMethod, null);
   }
 
   public SpecificFunctionReference getFunctionType(@Nullable HaxeGenericResolver resolver) {

@@ -1,0 +1,118 @@
+package com.intellij.plugins.haxe.v2.buildtools;
+
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+
+/// The per-type dispatch for build-file actions: which built-in actions a
+/// [HaxeBuildFileType] offers, the command a named built-in action runs, and
+/// the file's selected target flag. One exhaustive switch per concern - a new
+/// build-file type extends this class only, not every caller.
+/// The dispatch lives beside the tools rather than on [HaxeBuildFileType]:
+/// the actions map types to build-tool facts (lime/nme/hxml commands), and
+/// putting them on the enum would make `buildsystem` import `buildtools` -
+/// `buildsystem` stays tool-agnostic.
+public final class HaxeBuildFileActions {
+
+  private HaxeBuildFileActions() {
+  }
+
+  /** The type's default build action NAME - the stored identifier a resolve-by-name uses (not the localized label). */
+  @NotNull
+  public static String defaultBuildActionName(@NotNull HaxeBuildFileType type) {
+    return switch (type) {
+      case HXML -> HxmlProjects.BUILD_ACTION;
+      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.BUILD_ACTION;
+      case NMML -> NmeProjects.BUILD_ACTION;
+      case HXP_SCRIPT -> HxpScriptProjects.BUILD_ACTION;
+    };
+  }
+
+  /** The type's built-in action names, in menu order (custom actions come on top of these). */
+  @NotNull
+  public static List<String> defaultActionNames(@NotNull HaxeBuildFileType type) {
+    return switch (type) {
+      case HXML -> List.of(HxmlProjects.BUILD_ACTION);
+      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.DEFAULT_ACTIONS;
+      case NMML -> NmeProjects.DEFAULT_ACTIONS;
+      case HXP_SCRIPT -> List.of(HxpScriptProjects.BUILD_ACTION);
+    };
+  }
+
+  /** The command compiling the file with the type's default build action. */
+  @NotNull
+  public static List<String> defaultCommand(@NotNull Project project,
+                                            @Nullable String environmentSdk,
+                                            @NotNull VirtualFile file,
+                                            @NotNull HaxeBuildFileType type) {
+    return switch (type) {
+      case HXML -> HxmlProjects.buildCommand(project, environmentSdk, file);
+      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.actionCommand(project, environmentSdk, file, type, LimeProjects.BUILD_ACTION);
+      case NMML -> NmeProjects.actionCommand(project, environmentSdk, file, NmeProjects.BUILD_ACTION);
+      case HXP_SCRIPT -> HxpScriptProjects.buildCommand(project, environmentSdk, file);
+    };
+  }
+
+  /** A named built-in action's command; null when the name is not one of the type's built-ins. */
+  @Nullable
+  public static List<String> defaultActionCommand(@NotNull Project project,
+                                                  @Nullable String environmentSdk,
+                                                  @NotNull VirtualFile file,
+                                                  @NotNull HaxeBuildFileType type,
+                                                  @NotNull String actionName) {
+    return switch (type) {
+      case HXML -> hxmlActionCommand(project, environmentSdk, file, actionName);
+      case OPENFL, LIME, HXP_PROJECT -> limeActionCommand(project, environmentSdk, file, type, actionName);
+      case NMML -> nmeActionCommand(project, environmentSdk, file, actionName);
+      case HXP_SCRIPT -> hxpScriptActionCommand(project, environmentSdk, file, actionName);
+    };
+  }
+
+  @Nullable
+  private static List<String> hxmlActionCommand(Project project, @Nullable String environmentSdk,
+                                                VirtualFile file, String actionName) {
+    if (!HxmlProjects.isBuildAction(actionName)) return null;
+    return HxmlProjects.buildCommand(project, environmentSdk, file);
+  }
+
+  @Nullable
+  private static List<String> limeActionCommand(Project project, @Nullable String environmentSdk,
+                                                VirtualFile file, HaxeBuildFileType type, String actionName) {
+    if (!LimeProjects.DEFAULT_ACTIONS.contains(actionName)) return null;
+    return LimeProjects.actionCommand(project, environmentSdk, file, type, actionName);
+  }
+
+  @Nullable
+  private static List<String> nmeActionCommand(Project project, @Nullable String environmentSdk,
+                                               VirtualFile file, String actionName) {
+    if (!NmeProjects.DEFAULT_ACTIONS.contains(actionName)) return null;
+    return NmeProjects.actionCommand(project, environmentSdk, file, actionName);
+  }
+
+  @Nullable
+  private static List<String> hxpScriptActionCommand(Project project, @Nullable String environmentSdk,
+                                                     VirtualFile file, String actionName) {
+    if (!HxpScriptProjects.BUILD_ACTION.equals(actionName)) return null;
+    return HxpScriptProjects.buildCommand(project, environmentSdk, file);
+  }
+
+  /**
+   * The file's currently selected target flag (e.g. "windows", "html5"); null
+   * for types without a selectable target (hxml declares its own, a plain hxp
+   * script decides in code).
+   */
+  @Nullable
+  public static String selectedTargetFlag(@NotNull Project project,
+                                          @NotNull VirtualFile file,
+                                          @NotNull HaxeBuildFileType type) {
+    return switch (type) {
+      case OPENFL, LIME, HXP_PROJECT -> LimeProjects.selectedTargetFlag(project, type, file);
+      case NMML -> NmeProjects.selectedTargetFlag(project, file);
+      case HXML, HXP_SCRIPT -> null;
+    };
+  }
+}

@@ -319,6 +319,9 @@ IDENTIFIER_PART={IDENTIFIER_START}|{mDIGIT}
 
 IDENTIFIER_NO_DOLLAR={IDENTIFIER_START}{IDENTIFIER_PART}*
 IDENTIFIER_WITH__DOLLAR="$"{IDENTIFIER_START}{IDENTIFIER_PART}*
+// compiler-internal unbound identifier as printed by -D dump=pretty (`trace);
+// the backtick guarantees no collision with source identifiers
+UNBOUND_IDENTIFIER="`"{IDENTIFIER_NO_DOLLAR}
 
 /*
     Haxe inline XML/markup literal tag names.
@@ -460,6 +463,7 @@ CONDITIONAL_ERROR="#error"[^\r\n]*
 {META}                                    {  return emitToken( META_ID); }
 {IDENTIFIER_WITH__DOLLAR}                 {  return emitToken( MACRO_ID); }
 {IDENTIFIER_NO_DOLLAR}                    {  return emitToken( ID); }
+{UNBOUND_IDENTIFIER}                      {  return emitToken( UNBOUND_ID); }
 
 "?."                                      { return emitToken( OQUEST_DOT); }
 "."                                       { return emitToken( ODOT); }

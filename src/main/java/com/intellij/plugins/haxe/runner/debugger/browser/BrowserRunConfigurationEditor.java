@@ -111,10 +111,12 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
   }
 
   private void selectBrowser(@Nullable String browserId) {
-    WebBrowser browser = browserId == null || browserId.isBlank()
-                         ? null
-                         : WebBrowserManager.getInstance().findBrowserById(browserId);
-    browserSelector.setSelected(browser);
+    browserSelector.setSelected(browserById(browserId));
+  }
+
+  private static @Nullable WebBrowser browserById(@Nullable String browserId) {
+    if (browserId == null || browserId.isBlank()) return null;
+    return WebBrowserManager.getInstance().findBrowserById(browserId);
   }
 
   private void updateContentModeEnablement() {
@@ -141,10 +143,7 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
     BrowserFamily family = selectedFamily();
     if (family == null) {
       // no browser, or a family (Safari, IE, ...) no adapter can drive
-      WebBrowser browser = browserSelector.getSelected();
-      adapterStatusLabel.setText(browser == null
-                                 ? HaxeDebuggerBundle.message("browser.runner.adapter.no.browser")
-                                 : HaxeDebuggerBundle.message("browser.runner.adapter.unsupported", browser.getName()));
+      adapterStatusLabel.setText(noAdapterStatusText(browserSelector.getSelected()));
       openStoreLink.setVisible(false);
       downloadLink.setVisible(false);
       return;
@@ -152,9 +151,7 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
     AdapterPin pin = BrowserRunConfiguration.adapterPinFor(family);
     String name = BrowserRunConfiguration.adapterDisplayName(family) + " " + pin.version();
     boolean installed = new AdapterStore(BrowserDebugBackend.adapterStoreRoot()).isInstalled(pin);
-    adapterStatusLabel.setText(installed
-                               ? HaxeDebuggerBundle.message("browser.runner.adapter.downloaded", name)
-                               : name + " —");
+    adapterStatusLabel.setText(adapterStatusText(installed, name));
     openStoreLink.setVisible(installed);
     downloadLink.setVisible(!installed);
     downloadLink.setEnabled(true);
@@ -231,10 +228,23 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
     configuration.setServeContent(serveContentCheckBox.isSelected());
     configuration.setContentRoot(FileUtil.toSystemIndependentName(contentRootField.getText().trim()));
     configuration.setUrl(urlField.getText().trim());
-    // an unchecked override means "use the default", regardless of field text
-    configuration.setNodePath(overrideNodeCheckBox.isSelected()
-                              ? FileUtil.toSystemIndependentName(nodePathField.getText().trim())
-                              : "");
+    configuration.setNodePath(nodePathOverride());
+  }
+
+  /// An unchecked override means "use the default", regardless of field text.
+  private String nodePathOverride() {
+    if (!overrideNodeCheckBox.isSelected()) return "";
+    return FileUtil.toSystemIndependentName(nodePathField.getText().trim());
+  }
+
+  private static String noAdapterStatusText(@Nullable WebBrowser browser) {
+    if (browser == null) return HaxeDebuggerBundle.message("browser.runner.adapter.no.browser");
+    return HaxeDebuggerBundle.message("browser.runner.adapter.unsupported", browser.getName());
+  }
+
+  private static String adapterStatusText(boolean installed, String name) {
+    if (installed) return HaxeDebuggerBundle.message("browser.runner.adapter.downloaded", name);
+    return name + " —";
   }
 
   @Override

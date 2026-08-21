@@ -54,6 +54,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import static com.intellij.plugins.haxe.ide.HaxeFileTemplateUtil.*;
+
 /**
  * @author dsl
  */
@@ -85,7 +87,7 @@ public class ExtractSuperClassUtil {
     String packageName = PackageIndex.getInstance(targetDirectory.getProject()).getPackageNameByDirectory(targetDirectory.getVirtualFile());
     PsiClass superclass = null;
     try {
-      HaxeFile haxeFile = (HaxeFile)HaxeFileTemplateUtil.createType(superclassName, "", packageName, targetDirectory, "HaxeClass", null);
+      HaxeFile haxeFile = (HaxeFile)HaxeFileTemplateUtil.createType(superclassName, "", packageName, targetDirectory, CLASS_TEMPLATE, null);
       PsiClass[] classes = haxeFile.getClasses();
 
       for (PsiClass psiClass : classes) {

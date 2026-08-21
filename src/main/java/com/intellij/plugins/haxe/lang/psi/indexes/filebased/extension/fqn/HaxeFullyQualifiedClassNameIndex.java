@@ -52,9 +52,13 @@ public class HaxeFullyQualifiedClassNameIndex extends HaxeComponentBaseIndex {
 
     @Override
     public @NotNull DataIndexer<String, HaxeComponentIndexData, FileContent> getIndexer() {
-        return new HaxeFullyQualifiedNameIndexer();
+        return new HaxeFullyQualifiedNameIndexer(HaxeFullyQualifiedNameIndexer.CollectType.TYPES);
     }
 
+
+    public static Collection<String> getAllKeys(@NotNull Project project) {
+        return FileBasedIndex.getInstance().getAllKeys(INDEX, project);
+    }
 
     public static Collection<HaxeClass> getByFqn(@NotNull String name, @NotNull Project project, @Nullable GlobalSearchScope scope) {
 
@@ -63,7 +67,7 @@ public class HaxeFullyQualifiedClassNameIndex extends HaxeComponentBaseIndex {
 
         for (HaxeComponentIndexData value : values) {
             FullyQualifiedInfo fqn = value.getFqn();
-            HaxeModuleModel moduleModel = resolveModule(INDEX, name, project, scope, fqn);
+            HaxeModuleModel moduleModel = resolveModule(INDEX, name, project, scope);
 
             if (moduleModel == null) continue;
 

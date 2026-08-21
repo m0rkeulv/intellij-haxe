@@ -22,15 +22,13 @@ import java.util.concurrent.atomic.AtomicReference;
 public class HaxeFqnIndexUtil {
 
 
-    static HaxeModuleModel resolveModule(ID<String, HaxeComponentIndexData> index, @NotNull String qName, @NotNull Project project, @Nullable GlobalSearchScope scope, FullyQualifiedInfo fqn) {
+    static HaxeModuleModel resolveModule(ID<String, HaxeComponentIndexData> index, @NotNull String qName, @NotNull Project project, @Nullable GlobalSearchScope scope) {
         AtomicReference<HaxeModuleModel> reference = new AtomicReference<>();
         FileBasedIndex.getInstance().getFilesWithKey(index, Set.of(qName),
                 new Processor<VirtualFile>() {
                     @Override
                     public boolean process(VirtualFile virtualFile) {
                         PsiFile file = PsiManager.getInstance(project).findFile(virtualFile);
-                        HaxeComponentIndexData data = FileBasedIndex.getInstance().getFileData(index, virtualFile, project).get(qName);
-                        String className = data.getFqn().getClassName();
                         if (file instanceof HaxeFile haxeFile) {
                             if(haxeFile.getModule().getModel() instanceof HaxeModuleModel moduleModel) {
                                 reference.set(moduleModel);

@@ -49,6 +49,8 @@ public class HaxeColorSettingsPage implements ColorSettingsPage {
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation.defined.flag"), DEFINED_VAR),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation.undefined.flag"), UNDEFINED_VAR),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.metadata"), METADATA),
+    new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.string.file.link"), STRING_FILE_LINK),
+    new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.string.code.link"), STRING_CODE_LINK),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.keyword"), KEYWORD),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.number"), NUMBER),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.string"), STRING),
@@ -91,6 +93,8 @@ public class HaxeColorSettingsPage implements ColorSettingsPage {
     ourTags.put("unparseable", UNPARSEABLE_DATA);
     ourTags.put("defined.flag", DEFINED_VAR);
     ourTags.put("undefined.flag", UNDEFINED_VAR);
+    ourTags.put("string.file.link", STRING_FILE_LINK);
+    ourTags.put("string.code.link", STRING_CODE_LINK);
     ourTags.put("interface", INTERFACE);
     ourTags.put("type.parameter", TYPE_PARAMETER);
     ourTags.put("reification", TYPE_REIFICATION);
@@ -163,6 +167,8 @@ public class HaxeColorSettingsPage implements ColorSettingsPage {
         private var <instance.member.variable>unusedField</instance.member.variable>:<class>Number</class> = 12345.67890;
         private var <instance.member.variable>anotherString</instance.member.variable>:<class>String</class> = "Another<string.escape>\\n</string.escape>String\\escape";
         public static var <static.member.variable>staticField</static.member.variable>:<class>Array<Int></class> = [0, 1, 2, 3];
+        static final VIEW = "<string.file.link>assets/myAsset.xml</string.file.link>";
+        static final TYPE = "<string.code.link>com.package.Class</string.code.link>";
             
         public function generic<<type.parameter>K</type.parameter>:String>(arg:<type.parameter>K</type.parameter>):<type.parameter>K</type.parameter> return arg;
             

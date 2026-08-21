@@ -33,4 +33,14 @@ public interface HaxeMethod extends HaxeMethodPsiMixin, HaxeStubbedElement<HaxeM
     boolean isAbstract();
 
     boolean isMacro();
+
+    /**
+     * The DECLARED visibility only — never resolves the parent chain, so it is
+     * safe where resolve is forbidden (stub building, file-based indexers).
+     * Differs from {@link #isPublic()} for an inherited-visibility override
+     * (an {@code override} without public/private), where the returned value
+     * is a public-leaning placeholder and the real visibility is deferred
+     * through the stub's visibility-inherited flag.
+     */
+    boolean isDeclaredPublic();
 }
