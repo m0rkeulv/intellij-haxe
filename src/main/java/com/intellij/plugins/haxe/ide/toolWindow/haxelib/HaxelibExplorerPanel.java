@@ -19,9 +19,13 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.*;
+import com.intellij.plugins.haxe.ide.toolWindow.HaxelibConsoleWindowFactory;
 import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.ui.content.Content;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
@@ -122,6 +126,10 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   private final AtomicBoolean refilterQueued = new AtomicBoolean();
   private ShownSelection lastShownSelection;
   private boolean restoringTree;
+  // a Show-in-Explorer reveal whose library row (or version child) has not
+  // materialized yet; refilter retries it until the row exists
+  @Nullable private String pendingRevealLibrary;
+  @Nullable private String pendingRevealVersion;
   // separate guards: a selection click must not discard an in-flight catalog
   // load's second stage (one shared counter did exactly that)
   private final AtomicInteger loadGeneration = new AtomicInteger();
@@ -331,11 +339,78 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
       }
       treeModel.reload();
       restoreTreeState(expandedLibraries, selectedKey);
+      applyPendingReveal();
     }
     finally {
       restoringTree = false;
     }
     showSelection();
+  }
+
+  // -------------------------------------------------- reveal from outside
+
+  /** Opens the Haxelib tool window and reveals the library (and version entry) in its Explorer tab. */
+  public static void reveal(@NotNull Project project, @NotNull String libraryName, @Nullable String version) {
+    ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(HaxelibConsoleWindowFactory.TOOL_WINDOW_ID);
+    if (toolWindow == null) return;
+    toolWindow.activate(() -> {
+      for (Content content : toolWindow.getContentManager().getContents()) {
+        if (content.getComponent() instanceof HaxelibExplorerPanel explorer) {
+          explorer.select(libraryName, version);
+          return;
+        }
+      }
+    });
+  }
+
+  /** Filters the tree to the library and selects it; a version entry is selected once its child materializes. */
+  private void select(@NotNull String libraryName, @Nullable String version) {
+    pendingRevealLibrary = libraryName;
+    pendingRevealVersion = version;
+    // a text CHANGE refilters (and applies the reveal) through the document
+    // listener; an unchanged query fires nothing, hence the direct call
+    searchField.setText(libraryName);
+    applyPendingReveal();
+  }
+
+  /** Selects the pending library's row when it exists; a wanted version entry not yet materialized stays pending for its lazy load. */
+  private void applyPendingReveal() {
+    if (pendingRevealLibrary == null) return;
+    DefaultMutableTreeNode node = libraryNode(pendingRevealLibrary);
+    if (node == null) return;
+    TreePath path = new TreePath(node.getPath());
+    tree.setSelectionPath(path);
+    tree.scrollPathToVisible(path);
+    if (pendingRevealVersion != null) {
+      // triggers the lazy load when needed; setVersionChildren finishes the reveal
+      tree.expandPath(path);
+      if (selectVersionChild(node, pendingRevealVersion)) {
+        pendingRevealVersion = null;
+      }
+    }
+    pendingRevealLibrary = null;
+  }
+
+  /** Finishes a reveal after the lazy load: selects the wanted version entry among the fresh children. */
+  private void applyPendingVersionSelection(@NotNull DefaultMutableTreeNode node, @NotNull LibraryRow row) {
+    if (pendingRevealVersion == null || !searchField.getText().trim().equalsIgnoreCase(row.name())) return;
+    String wanted = pendingRevealVersion;
+    pendingRevealVersion = null;
+    selectVersionChild(node, wanted);
+  }
+
+  /** Selects the library node's version child, when materialized; false leaves the library row selected. */
+  private boolean selectVersionChild(@NotNull DefaultMutableTreeNode node, @NotNull String version) {
+    for (int i = 0; i < node.getChildCount(); i++) {
+      DefaultMutableTreeNode child = (DefaultMutableTreeNode)node.getChildAt(i);
+      if (child.getUserObject() instanceof VersionEntry entry && version.equals(entry.version())) {
+        TreePath childPath = new TreePath(child.getPath());
+        tree.setSelectionPath(childPath);
+        tree.scrollPathToVisible(childPath);
+        return true;
+      }
+    }
+    return false;
   }
 
   // ------------------------------------------------- expansion preservation
@@ -530,23 +605,37 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
                                   @NotNull LibraryRow row,
                                   @Nullable HaxelibLibraryInfo info) {
     node.removeAllChildren();
-    for (VersionEntry entry : versionEntries(row, info)) {
+    for (VersionEntry entry : versionEntries(row, info, gitCheckoutNote(row))) {
       if (versionShown(entry)) {
         node.add(new DefaultMutableTreeNode(entry));
       }
     }
     treeModel.reload(node);
     tree.expandPath(new TreePath(node.getPath()));
+    applyPendingVersionSelection(node, row);
+  }
+
+  /** The git entry's gray suffix: what the checkout points at ("main @ 559b24c9a3"). */
+  @Nullable
+  private String gitCheckoutNote(@NotNull LibraryRow row) {
+    if (!row.git()) return null;
+    Path repoRoot = repositoryRoot();
+    if (repoRoot == null) return null;
+    HaxelibLocalDocs.GitCheckout checkout = HaxelibLocalDocs.gitCheckout(repoRoot, row.name());
+    return checkout == null ? null : checkout.display();
   }
 
   /** The version list under a library: dev/git and local-only versions first, then every release newest-first. */
   @NotNull
-  private static List<VersionEntry> versionEntries(@NotNull LibraryRow row, @Nullable HaxelibLibraryInfo info) {
+  private static List<VersionEntry> versionEntries(@NotNull LibraryRow row,
+                                                   @Nullable HaxelibLibraryInfo info,
+                                                   @Nullable String gitCheckoutNote) {
     List<VersionEntry> entries = new ArrayList<>();
     Set<String> covered = new LinkedHashSet<>();
     for (String pseudo : List.of(HaxelibSemVer.DEV, HaxelibSemVer.GIT_SCM)) {
       if (row.installedVersions().contains(pseudo)) {
-        entries.add(entry(row, pseudo, null, null));
+        String note = HaxelibSemVer.GIT_SCM.equals(pseudo) ? gitCheckoutNote : null;
+        entries.add(entry(row, pseudo, null, note));
         covered.add(pseudo);
       }
     }

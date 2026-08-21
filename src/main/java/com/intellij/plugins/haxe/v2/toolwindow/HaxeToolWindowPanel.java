@@ -38,6 +38,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
+import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
+import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
@@ -212,6 +214,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeSelectSectionAction(this));
     group.add(new HaxeInstallLibraryAction(this));
     group.add(new HaxeInstallAllMissingLibrariesAction(this));
+    group.add(new HaxeShowInHaxelibExplorerAction(this));
     group.add(new HaxeConfigureEnvironmentAction(this));
     group.add(new HaxeConfigureCompileCommandAction(this));
     group.add(new HaxeRunCompileCommandAction(this));
@@ -438,9 +441,15 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     for (HaxeBuildFileInfo.HaxeLibDependency library : info.libraries()) {
       String key = library.name().toLowerCase(Locale.ROOT);
       var installedLibrary = installedLibraries != null ? installedLibraries.get(key) : null;
-      // a pinned version must itself be installed - the name alone is not enough
-      boolean pinSatisfied = library.version() == null
-                             || (installedLibrary != null && installedLibrary.versions().contains(library.version()));
+      // a pinned version must itself be installed - the name alone is not
+      // enough. A git checkout is listed as version "git", never as its
+      // url#ref spec.
+      // TODO: compare a git pin's #ref against the installed checkout
+      //       (HaxelibLocalDocs.gitCheckout) and flag mismatches
+      String requiredVersion = HaxelibGitSpec.parse(library.version()) != null ? HaxelibSemVer.GIT_SCM
+                                                                               : library.version();
+      boolean pinSatisfied = requiredVersion == null
+                             || (installedLibrary != null && installedLibrary.versions().contains(requiredVersion));
       boolean installed = installedLibraries == null || (installedLibrary != null && pinSatisfied);
       String resolvedVersion = installedLibrary != null ? installedLibrary.selectedVersion() : null;
       LibraryNode libraryRow = new LibraryNode(buildFile, library.name(), library.version(), resolvedVersion, installed);

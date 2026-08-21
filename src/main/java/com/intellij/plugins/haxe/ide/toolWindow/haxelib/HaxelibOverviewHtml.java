@@ -108,17 +108,24 @@ final class HaxelibOverviewHtml {
       appendFact(html, HaxeBundle.message("haxelib.explorer.dev.path"), devPath);
     }
     if (gitCheckout != null) {
-      appendFact(html, HaxeBundle.message("haxelib.explorer.git.checkout"), gitCheckoutDisplay(gitCheckout));
+      appendGitCheckout(html, gitCheckout);
     }
     html.append("</table>");
   }
 
-  @NotNull
-  private static String gitCheckoutDisplay(@NotNull GitCheckout checkout) {
-    String commit = checkout.commit() == null ? null : StringUtil.first(checkout.commit(), 10, false);
-    if (checkout.branch() == null) return StringUtil.notNullize(commit);
-    if (commit == null) return checkout.branch();
-    return checkout.branch() + " @ " + commit;
+  /** The checkout links to its forge page (commit or branch tree) when the clone's remote is browsable. */
+  private static void appendGitCheckout(@NotNull StringBuilder html, @NotNull GitCheckout checkout) {
+    String webUrl = checkout.webUrl();
+    if (webUrl == null) {
+      appendFact(html, HaxeBundle.message("haxelib.explorer.git.checkout"), checkout.display());
+      return;
+    }
+    String checkoutRow = """
+      <tr><td>%s</td><td><a href="%s">%s</a></td></tr>\
+      """.formatted(HaxeBundle.message("haxelib.explorer.git.checkout"),
+                    StringUtil.escapeXmlEntities(webUrl),
+                    StringUtil.escapeXmlEntities(checkout.display()));
+    html.append(checkoutRow);
   }
 
   private static void appendReleases(@NotNull StringBuilder html, @NotNull List<HaxelibLibraryInfo.Release> releases) {

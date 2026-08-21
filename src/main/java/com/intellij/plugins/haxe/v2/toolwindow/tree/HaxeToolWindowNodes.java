@@ -3,6 +3,8 @@ package com.intellij.plugins.haxe.v2.toolwindow.tree;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
+import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -411,9 +413,14 @@ public final class HaxeToolWindowNodes {
                             @Nullable String resolvedVersion,
                             boolean installed) implements HaxeToolWindowNode {
 
-    /** The version to show: the pinned one when declared, otherwise haxelib's selected version. */
+    /** The version to show: the pinned one when declared, otherwise haxelib's selected version. A git pin shows as {@code git#shortref}, its url stays in the tooltip. */
     @Nullable
     public String displayVersion() {
+      HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(version);
+      if (gitSpec != null) {
+        return gitSpec.ref() == null ? HaxelibSemVer.GIT_SCM
+                                     : HaxelibSemVer.GIT_SCM + "#" + HaxelibGitSpec.shortRef(gitSpec.ref());
+      }
       return version != null ? version : resolvedVersion;
     }
 

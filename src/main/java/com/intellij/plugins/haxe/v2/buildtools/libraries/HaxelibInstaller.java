@@ -7,6 +7,7 @@ import com.intellij.execution.process.CapturingProcessHandler;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
@@ -31,11 +32,18 @@ public final class HaxelibInstaller {
    * Runs one {@code haxelib install} (restoring the previously selected version
    * when the install would hijack it); null on success, else the failure detail.
    * {@code version} is the declared/pinned version, {@code resolvedVersion} the
-   * version haxelib currently selects.
+   * version haxelib currently selects. A {@code git:URL[#ref]} pin installs
+   * through {@code haxelib git} instead - {@code haxelib install} would fetch
+   * the latest haxelib.org release and drop the pinned ref - and keeps the
+   * git selection that install makes current (it is what the pin asks for).
    */
   @Nullable
   public static String install(@NotNull Project project, @NotNull String name,
                                @Nullable String version, @Nullable String resolvedVersion) {
+    HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(version);
+    if (gitSpec != null) {
+      return run(project, gitParameters(name, gitSpec));
+    }
     String failure = run(project, installParameters(name, version));
     if (failure == null) {
       restoreSelectedVersion(project, name, version, resolvedVersion);
@@ -118,6 +126,17 @@ public final class HaxelibInstaller {
     var parameters = new ArrayList<>(List.of("install", name));
     if (HaxelibSemVer.isReleaseVersion(version)) {
       parameters.add(version);
+    }
+    parameters.add("--always");
+    return parameters;
+  }
+
+  // "haxelib git name url [ref] --always"; haxelib clones and checks out the branch/tag/commit
+  @NotNull
+  private static List<String> gitParameters(@NotNull String name, @NotNull HaxelibGitSpec gitSpec) {
+    var parameters = new ArrayList<>(List.of("git", name, gitSpec.url()));
+    if (gitSpec.ref() != null) {
+      parameters.add(gitSpec.ref());
     }
     parameters.add("--always");
     return parameters;

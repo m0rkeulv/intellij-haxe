@@ -4,6 +4,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.icons.AllIcons;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -218,11 +219,18 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
                                                                    : "haxe.toolwindow.tooltip.defines");
       case ActionsGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.actions");
       case TestsGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.tests.group");
+      case LibraryNode libraryNode -> libraryTooltip(libraryNode);
       case SectionNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.section");
       case ProgramNode programNode -> HaxeBundle.message("haxe.toolwindow.tooltip.program", programNode.kind());
       case TestRunNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.run.unit.tests");
       case null, default -> null;
     };
+  }
+
+  /** A git-pinned library shows only {@code git#ref} in the row; the tooltip carries the repository url. */
+  private static String libraryTooltip(@NotNull HaxeToolWindowNodes.LibraryNode libraryNode) {
+    HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(libraryNode.version());
+    return gitSpec == null ? null : HaxeBundle.message("haxe.toolwindow.tooltip.library.git", gitSpec.url());
   }
 
   /** Actions that only produce output get the build hammer; ones that run something keep the play icon. */

@@ -16,6 +16,9 @@ import org.jetbrains.annotations.NotNull;
  */
 public class HaxelibConsoleWindowFactory implements ToolWindowFactory, DumbAware {
 
+  /** The window's plugin.xml id — keep in sync with the {@code <toolWindow>} registration. */
+  public static final String TOOL_WINDOW_ID = "Haxelib";
+
   @Override
   public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
     HaxelibExplorerPanel explorer = new HaxelibExplorerPanel(project);

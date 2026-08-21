@@ -212,4 +212,12 @@ public class HxmlFileParserTest {
     HaxeBuildFileInfo info = HxmlFileParser.parse("-lib mylib:git:https://example.com/repo.git");
     assertEquals(List.of(new HaxeLibDependency("mylib", "git:https://example.com/repo.git")), info.libraries());
   }
+
+  @Test
+  @DisplayName("git library versions keep the ref suffix")
+  public void gitLibraryVersionsKeepTheRefSuffix() {
+    // '#' only starts a comment at line START - a mid-line ref must survive
+    HaxeBuildFileInfo info = HxmlFileParser.parse("-lib mylib:git:https://example.com/repo.git#v1.2.0");
+    assertEquals(List.of(new HaxeLibDependency("mylib", "git:https://example.com/repo.git#v1.2.0")), info.libraries());
+  }
 }

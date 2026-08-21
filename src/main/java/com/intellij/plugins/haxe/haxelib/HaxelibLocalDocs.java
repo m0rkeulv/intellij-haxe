@@ -80,8 +80,45 @@ public final class HaxelibLocalDocs {
 
   // ------------------------------------------------- dev/git pseudo-versions
 
-  /** The checkout state of a git pseudo-version; either part may be missing. */
-  public record GitCheckout(@Nullable String branch, @Nullable String commit) {
+  /** The checkout state of a git pseudo-version; any part may be missing. */
+  public record GitCheckout(@Nullable String branch, @Nullable String commit, @Nullable String remoteUrl) {
+
+    /** The short human form: {@code main @ 559b24c9a3}, either part alone when the other is missing. */
+    @NotNull
+    public String display() {
+      String shortCommit = commit == null ? null : commit.substring(0, Math.min(10, commit.length()));
+      if (branch == null) return shortCommit == null ? "" : shortCommit;
+      return shortCommit == null ? branch : branch + " @ " + shortCommit;
+    }
+
+    /**
+     * The forge page showing this checkout — the commit page, else the
+     * branch tree — or null without a browsable remote. {@code /commit/} and
+     * {@code /tree/} are the GitHub-style paths, which the other big forges
+     * accept or redirect.
+     */
+    @Nullable
+    public String webUrl() {
+      String base = webBase();
+      if (base == null) return null;
+      if (commit != null) return base + "/commit/" + commit;
+      if (branch != null) return base + "/tree/" + branch;
+      return base;
+    }
+
+    @Nullable
+    private String webBase() {
+      if (remoteUrl == null) return null;
+      String url = remoteUrl.endsWith(".git") ? remoteUrl.substring(0, remoteUrl.length() - ".git".length())
+                                              : remoteUrl;
+      // the scp-like ssh remote form (user@host:path) browses as https://host/path
+      int at = url.indexOf('@');
+      int colon = url.indexOf(':', at + 1);
+      if (at > 0 && colon > at && !url.contains("://")) {
+        return "https://" + url.substring(at + 1, colon) + "/" + url.substring(colon + 1);
+      }
+      return url.startsWith("http://") || url.startsWith("https://") ? url : null;
+    }
   }
 
   /** Where the library's dev pseudo-version points (the {@code .dev} file's directory), or null. */
@@ -103,9 +140,10 @@ public final class HaxelibLocalDocs {
     String head = readTrimmed(gitDir.resolve("HEAD"));
     if (head == null) return null;
 
+    String remoteUrl = originUrl(gitDir);
     if (!head.startsWith("ref: ")) {
       // detached checkout: HEAD is the commit itself
-      return new GitCheckout(null, head);
+      return new GitCheckout(null, head, remoteUrl);
     }
     String ref = head.substring("ref: ".length()).trim();
     // the branch is the ref's last segment (refs/heads/main -> main)
@@ -114,7 +152,30 @@ public final class HaxelibLocalDocs {
     if (commit == null) {
       commit = packedRefCommit(gitDir, ref);
     }
-    return new GitCheckout(branch, commit);
+    return new GitCheckout(branch, commit, remoteUrl);
+  }
+
+  /** The origin remote's url from the clone's {@code .git/config}, or null. */
+  @Nullable
+  private static String originUrl(@NotNull Path gitDir) {
+    try {
+      boolean inOrigin = false;
+      for (String rawLine : Files.readAllLines(gitDir.resolve("config"))) {
+        String line = rawLine.trim();
+        if (line.startsWith("[")) {
+          inOrigin = line.equals("[remote \"origin\"]");
+          continue;
+        }
+        if (inOrigin && line.startsWith("url")) {
+          int equals = line.indexOf('=');
+          if (equals > 0) return line.substring(equals + 1).trim();
+        }
+      }
+    }
+    catch (IOException | RuntimeException e) {
+      return null;
+    }
+    return null;
   }
 
   /** {@code .git} is a directory in a plain clone, but a pointer FILE ({@code gitdir: <path>}) in worktrees. */
