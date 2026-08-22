@@ -7,6 +7,7 @@ import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.ide.formatter.settings.HxformatCodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
@@ -48,136 +49,12 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   /**
-   * Our settings equivalent of a DEFAULT hxformat.json (haxe-formatter 1.18).
-   * The seed of a future hxformat.json importer: every assignment corresponds
-   * to a config default named in doc/haxe-formatter-comparison.md.
+   * The production defaults mapping ({@link HxformatCodeStyle#applyDefaults})
+   * IS the profile these parity tests run under - the byte-parity fixtures
+   * guard the hxformat.json importer's baseline.
    */
   private static void applyHxformatDefaults(CodeStyleSettings settings) {
-    CodeStyleSettings.IndentOptions indent = settings.getIndentOptions(HaxeFileType.INSTANCE);
-    // indentation.character="tab", tabWidth=4
-    indent.USE_TAB_CHARACTER = true;
-    indent.TAB_SIZE = 4;
-    indent.INDENT_SIZE = 4;
-    // a wrapped declaration header (implementsExtends) continues TWO steps in
-    indent.CONTINUATION_INDENT_SIZE = 8;
-
-    CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
-    // wrapping.maxLineLength=160
-    settings.setRightMargin(HaxeLanguage.INSTANCE, 160);
-    // lineEnds.leftCurly=After / rightCurly=Both
-    common.BRACE_STYLE = CommonCodeStyleSettings.END_OF_LINE;
-    common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.END_OF_LINE;
-    // sameLine.ifElse/elseIf/doWhile/tryCatch=Same
-    common.ELSE_ON_NEW_LINE = false;
-    common.WHILE_ON_NEW_LINE = false;
-    common.CATCH_ON_NEW_LINE = false;
-    common.SPECIAL_ELSE_IF_TREATMENT = true;
-
-    // whitespace keyword policies (After) and paren policies (none within)
-    common.SPACE_BEFORE_IF_PARENTHESES = true;
-    common.SPACE_BEFORE_WHILE_PARENTHESES = true;
-    common.SPACE_BEFORE_FOR_PARENTHESES = true;
-    common.SPACE_BEFORE_SWITCH_PARENTHESES = true;
-    common.SPACE_BEFORE_CATCH_PARENTHESES = true;
-    common.SPACE_BEFORE_METHOD_PARENTHESES = false;
-    common.SPACE_BEFORE_METHOD_CALL_PARENTHESES = false;
-    common.SPACE_WITHIN_METHOD_CALL_PARENTHESES = false;
-    common.SPACE_WITHIN_METHOD_PARENTHESES = false;
-    common.SPACE_WITHIN_IF_PARENTHESES = false;
-    common.SPACE_WITHIN_WHILE_PARENTHESES = false;
-    common.SPACE_WITHIN_FOR_PARENTHESES = false;
-    common.SPACE_WITHIN_SWITCH_PARENTHESES = false;
-    common.SPACE_WITHIN_CATCH_PARENTHESES = false;
-    // whitespace.binopPolicy=Around (ours per operator class)
-    common.SPACE_AROUND_ASSIGNMENT_OPERATORS = true;
-    common.SPACE_AROUND_LOGICAL_OPERATORS = true;
-    common.SPACE_AROUND_EQUALITY_OPERATORS = true;
-    common.SPACE_AROUND_RELATIONAL_OPERATORS = true;
-    common.SPACE_AROUND_ADDITIVE_OPERATORS = true;
-    common.SPACE_AROUND_MULTIPLICATIVE_OPERATORS = true;
-    common.SPACE_AROUND_BITWISE_OPERATORS = true;
-    common.SPACE_AROUND_SHIFT_OPERATORS = true;
-    // whitespace.ternaryPolicy=Around
-    common.SPACE_BEFORE_QUEST = true;
-    common.SPACE_AFTER_QUEST = true;
-    common.SPACE_BEFORE_COLON = true;
-    common.SPACE_AFTER_COLON = true;
-    // whitespace.commaPolicy=OnlyAfter
-    common.SPACE_BEFORE_COMMA = false;
-    common.SPACE_AFTER_COMMA = true;
-    common.SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS = true;
-    // whitespace.bracesConfig openingPolicy=Before
-    common.SPACE_BEFORE_METHOD_LBRACE = true;
-    common.SPACE_BEFORE_IF_LBRACE = true;
-    common.SPACE_BEFORE_ELSE_LBRACE = true;
-    common.SPACE_BEFORE_DO_LBRACE = true;
-    common.SPACE_BEFORE_WHILE_LBRACE = true;
-    common.SPACE_BEFORE_FOR_LBRACE = true;
-    common.SPACE_BEFORE_SWITCH_LBRACE = true;
-    common.SPACE_BEFORE_TRY_LBRACE = true;
-    common.SPACE_BEFORE_CATCH_LBRACE = true;
-    common.SPACE_BEFORE_ELSE_KEYWORD = true;
-    common.SPACE_BEFORE_WHILE_KEYWORD = true;
-    common.SPACE_BEFORE_CATCH_KEYWORD = true;
-
-    // emptyLines: maxAnywhereInFile=1, afterPackage=1, beforeType=1,
-    // betweenTypes=1, betweenVars=0, betweenFunctions=1, beginType=0,
-    // endType=0 (afterLeftCurly/beforeRightCurly=Remove)
-    common.KEEP_LINE_BREAKS = true;
-    common.KEEP_BLANK_LINES_IN_CODE = 1;
-    common.KEEP_BLANK_LINES_IN_DECLARATIONS = 1;
-    common.KEEP_BLANK_LINES_BEFORE_RBRACE = 0;
-    common.BLANK_LINES_AFTER_PACKAGE = 1;
-    common.BLANK_LINES_AFTER_IMPORTS = 1;
-    common.BLANK_LINES_AROUND_CLASS = 1;
-    common.BLANK_LINES_AFTER_CLASS_HEADER = 0;
-    common.BLANK_LINES_AROUND_FIELD = 0;
-    common.BLANK_LINES_AROUND_METHOD = 1;
-    common.BLANK_LINES_BEFORE_CLASS_END = 0;
-
-    // sameLine.ifBody/elseBody/forBody/whileBody=Next (non-block bodies break)
-    common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE = false;
-    // lineEnds.emptyCurly=NoBreak ({} collapses)
-    common.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE = true;
-    common.KEEP_SIMPLE_METHODS_IN_ONE_LINE = true;
-    common.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE = true;
-    // wrapping.arrayWrap/mapWrap/objectLiteral/methodChain: break one-per-line
-    // when the line exceeds maxLineLength
-    common.ARRAY_INITIALIZER_WRAP = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
-    common.METHOD_CALL_CHAIN_WRAP = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
-    // wrapping.implementsExtends: FillLine - break only past maxLineLength
-    common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
-    // whitespace.bracketConfig: NoSpace for access/literal/comprehension brackets
-    common.SPACE_WITHIN_BRACKETS = false;
-
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
-    // whitespace.arrowFunctionsPolicy/functionTypeHaxe4Policy=Around
-    haxe.SPACE_AROUND_ARROW = true;
-    // whitespace.typeHintColonPolicy=None
-    haxe.SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
-    haxe.SPACE_AFTER_TYPE_REFERENCE_COLON = false;
-    // whitespace.typeParamOpenPolicy/typeParamClosePolicy=None
-    haxe.SPACE_WITHIN_TYPE_PARAMETERS = false;
-    // whitespace.typeCheckColonPolicy=Around
-    haxe.SPACE_AROUND_TYPE_CHECK_COLON = true;
-    // whitespace.parenConfig.metadataParens=NoSpace
-    haxe.SPACE_WITHIN_METADATA_PARENTHESES = false;
-    // typeExtensionPolicy=After
-    haxe.STRUCTURE_EXTENSION_ON_OWN_LINE = true;
-    // indentation.conditionalPolicy=Aligned - inactive branches too
-    haxe.ALIGN_INACTIVE_CONDITIONAL_BRANCHES = true;
-    // sameLine.functionBody=Next (anonFunctionBody=Same has no flag - always inline)
-    haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
-    // sameLine.returnBodySingleLine - a broken return re-joins its value
-    haxe.RETURN_VALUE_ON_SAME_LINE = true;
-    // emptyLines.importAndUsing.beforeType=1
-    haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
-    // emptyLines.afterFileHeaderComment=1
-    haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = 1;
-    // emptyLines.betweenSingleLineTypes=0
-    haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 0;
-    // emptyLines.importAndUsing.betweenImports=0
-    haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS = 0;
+    HxformatCodeStyle.applyDefaults(settings);
   }
 
   /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
@@ -433,6 +310,18 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("string interpolation")
   public void testStringInterpolation() throws Exception {
     doParityTest("string-interpolation");
+  }
+
+  @Test
+  @DisplayName("openfl braces")
+  public void testOpenflBraces() throws Exception {
+    // lineEnds.leftCurly=both, objectLiteralCurly.leftCurly=after (fixture
+    // hxformat.json): Allman blocks with cuddled object literals
+    doParityTest("openfl-braces", settings -> {
+      CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+      common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+      common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+    });
   }
 
   @Test

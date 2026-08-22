@@ -169,6 +169,9 @@
     <lang.parserDefinition language="Haxe" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeParserDefinition"/>
     <lang.formatter language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.formatter.HaxeFormattingModelBuilder"/>
     <postFormatProcessor implementation="com.intellij.plugins.haxe.ide.formatter.HaxeConditionalPostFormatProcessor"/>
+    <schemeImporter name="hxformat.json (haxe-formatter)"
+                    schemeClass="com.intellij.psi.codeStyle.CodeStyleScheme"
+                    implementationClass="com.intellij.plugins.haxe.ide.formatter.settings.HxformatSchemeImporter"/>
     <lang.rearranger language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.rearranger.HaxeRearrangerModel" />
     <lang.ast.factory language="Haxe" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeAstFactory" />
 

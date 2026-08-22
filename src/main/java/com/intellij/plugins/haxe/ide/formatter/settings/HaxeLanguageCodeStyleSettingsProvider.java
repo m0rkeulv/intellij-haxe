@@ -231,7 +231,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
   public IndentOptionsEditor getIndentOptionsEditor() {
     return new IndentOptionsEditor(this);
   }
-
+  @org.intellij.lang.annotations.Language("Haxe")
   public static final String SPACING_CODE_SAMPLE = """
     package;
     @author("Penelope")
@@ -286,7 +286,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
          }
     }
     """;
-
+  @org.intellij.lang.annotations.Language("Haxe")
   public static final String WRAPPING_CODE_SAMPLE = """
     @author("Penelope") @:final
     class Foo extends BaseComponent implements Drawable implements Resizable implements Serializable implements Comparable implements Observable {
@@ -350,7 +350,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
          public function new() {}
     }
     """;
-
+  @org.intellij.lang.annotations.Language("Haxe")
   public static final String BLANK_LINES_CODE_SAMPLE = """
     package foo.bar;
     import a.b.SomeClass;
