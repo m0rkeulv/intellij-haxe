@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
+import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtilCore;
 import org.jetbrains.annotations.NotNull;
 
@@ -79,9 +80,11 @@ public class HaxeDocumentationEnterHandler extends EnterHandlerDelegateAdapter {
 
     private static boolean isInsideDocsWithoutCloseTag(@NotNull PsiFile file, int caretOffset) {
         PsiElement elementAtOffset = PsiUtilCore.getElementAtOffset(file, caretOffset);
-        if (elementAtOffset instanceof HaxePsiDocCommentImpl docComment) {
+        // the offset lands on a token INSIDE the lazily parsed comment - the comment is its parent
+        HaxePsiDocCommentImpl docComment = PsiTreeUtil.getParentOfType(elementAtOffset, HaxePsiDocCommentImpl.class, false);
+        if (docComment != null) {
             String text = getDocumentWithoutDocumentationBlocks(docComment);
-            if (caretOffset < elementAtOffset.getTextOffset() + DOC_COMMENT_PREFIX.length()) {
+            if (caretOffset < docComment.getTextOffset() + DOC_COMMENT_PREFIX.length()) {
                 return false;
             }
             if(text.endsWith(HaxeCommenter.BLOCK_COMMENT_SUFFIX) || text.endsWith(DOC_COMMENT_SUFFIX)) {

@@ -23,6 +23,7 @@ import com.intellij.formatting.templateLanguages.BlockWithParent;
 import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
@@ -82,6 +83,9 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   @Override
   protected List<Block> buildChildren() {
     myChildrenBuilt = true;
+    if (getNode().getElementType() == HaxeTokenTypeSets.DOC_COMMENT) {
+      return buildDocCommentChildren();
+    }
     if (isLeaf()) {
       return EMPTY;
     }
@@ -97,6 +101,26 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
       tlChildren.add(childBlock);
     }
     return tlChildren;
+  }
+
+  /**
+   * Line blocks over the lazily parsed doc sub-tree: only the managed
+   * line-leading whitespace between them is formatted (per the doc indent
+   * rules); wraps and alignments never apply inside a comment. The toggle
+   * keeps the comment one opaque block.
+   */
+  private List<Block> buildDocCommentChildren() {
+    if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_DOC_COMMENTS) {
+      return EMPTY;
+    }
+    final ArrayList<Block> children = new ArrayList<>();
+    for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
+      if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
+      HaxeBlock childBlock = new HaxeBlock(childNode, Wrap.createWrap(WrapType.NONE, false), null, mySettings);
+      childBlock.setParent(this);
+      children.add(childBlock);
+    }
+    return children;
   }
 
   public Wrap createChildWrap(ASTNode child) {

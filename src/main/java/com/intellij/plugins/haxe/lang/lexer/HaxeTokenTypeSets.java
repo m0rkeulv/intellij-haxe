@@ -33,7 +33,7 @@ public interface HaxeTokenTypeSets {
 
   IElementType MSL_COMMENT = new HaxeElementType("MSL_COMMENT");
   IElementType MML_COMMENT = new HaxeElementType("MML_COMMENT");
-  IElementType DOC_COMMENT = new HaxeElementType("DOC_COMMENT");
+  IElementType DOC_COMMENT = new HaxeDocCommentElementType();
 
   IElementType PPEXPRESSION = new HaxeElementType("PPEXPRESSION");
   IElementType PPBODY = new HaxeElementType("PPBODY");

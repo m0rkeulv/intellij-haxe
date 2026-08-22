@@ -193,9 +193,11 @@ public class HaxeElementGenerator {
   }
 
   public static PsiElement createDummyComment(Project myProject, int length) {
+    // star filler would lex as /**...*/ = a DOC_COMMENT, which parses lazily into
+    // sub-tokens and attaches to members; a plain block comment stays one leaf
     StringBuilder  builder = new StringBuilder();
     builder.append("/*");
-    builder.append("*".repeat(Math.max(0, length - 4)));
+    builder.append("x".repeat(Math.max(0, length - 4)));
     builder.append("*/");
     return HaxeElementGenerator.createDummyFile(myProject, builder.toString()).getChildren()[0];
   }

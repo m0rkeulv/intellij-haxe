@@ -106,6 +106,8 @@ public final class HxformatCodeStyle {
     // betweenTypes=1, betweenVars=0, betweenFunctions=1, beginType=0,
     // endType=0 (afterLeftCurly/beforeRightCurly=Remove)
     common.KEEP_LINE_BREAKS = true;
+    // haxe-formatter indents every comment to its scope - no first-column exception
+    common.KEEP_FIRST_COLUMN_COMMENT = false;
     common.KEEP_BLANK_LINES_IN_CODE = 1;
     common.KEEP_BLANK_LINES_IN_DECLARATIONS = 1;
     common.KEEP_BLANK_LINES_BEFORE_RBRACE = 0;

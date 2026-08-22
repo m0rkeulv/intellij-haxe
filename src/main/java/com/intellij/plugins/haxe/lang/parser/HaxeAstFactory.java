@@ -49,6 +49,9 @@ public class HaxeAstFactory extends ASTFactory {
   @Nullable
   @Override
   public LazyParseableElement createLazy(ILazyParseableElementType type, CharSequence text) {
+    if (type == DOC_COMMENT) {
+      return new HaxePsiDocCommentImpl(type, text);
+    }
     return super.createLazy(type, text);
   }
 
@@ -61,11 +64,8 @@ public class HaxeAstFactory extends ASTFactory {
   @Nullable
   @Override
   public LeafElement createLeaf(IElementType type, CharSequence text) {
+    // DOC_COMMENT never lands here: it is a lazy parseable type, built via createLazy
     if (HaxeTokenTypeSets.COMMENTS.contains(type) && !typeIsMeta(type)) {
-      // TODO need to create  types of PsiDocCommentBase (at least for docs comments)
-      if(type == DOC_COMMENT) {
-        return new HaxePsiDocCommentImpl(type, text);
-      }
       return new PsiCommentImpl(type, text);
     }
 

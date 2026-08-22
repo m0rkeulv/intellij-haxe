@@ -122,6 +122,13 @@ public class HaxeSpacingProcessor {
       return null;
     }
 
+    // inside a doc comment only line-leading indentation is managed: line breaks
+    // and blank lines are markdown content (paragraphs) and are all kept.
+    // The engine computes keepBlankLines + 1, so MAX_VALUE would overflow.
+    if (myNode.getElementType() == DOC_COMMENT) {
+      return Spacing.createSpacing(0, 9999, 0, true, 9999);
+    }
+
     final IElementType elementType = myNode.getElementType();
     final IElementType parentType = myNode.getTreeParent() == null ? null : myNode.getTreeParent().getElementType();
     final IElementType typeNext = getNextElementType();

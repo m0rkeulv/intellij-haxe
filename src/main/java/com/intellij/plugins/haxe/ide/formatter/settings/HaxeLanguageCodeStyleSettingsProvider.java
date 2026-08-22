@@ -222,6 +222,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 "Value on same line as 'return'", "'return' statement");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "ALIGN_INACTIVE_CONDITIONAL_BRANCHES",
                                 "Align inactive #if branches", "Conditional compilation '#if'");
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "FORMAT_DOC_COMMENTS",
+                                "Indent documentation comment lines", "Comments");
     }
   }
 

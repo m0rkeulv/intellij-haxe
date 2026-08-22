@@ -176,15 +176,13 @@ public class HaxeMoveDeclarationHandler extends HaxeLineMover {
     }
 
     private boolean isMetadataOrDoc(PsiElement element) {
-        if (element instanceof LazyParseablePsiElement) {
-            element = element.getFirstChild();
+        //important: Use HaxePsiDocCommentImpl not HaxePsiDocComment
+        if (element instanceof HaxePsiDocCommentImpl) return true;
+        // the embedded-meta chameleon wraps its HaxeMeta child
+        if (element instanceof LazyParseablePsiElement lazy) {
+            element = lazy.getFirstChild();
         }
-        return switch (element) {
-            //important: Use HaxePsiDocCommentImpl not HaxePsiDocComment
-            case HaxePsiDocCommentImpl e -> true;
-            case HaxeMeta e -> true;
-            case null, default -> false;
-        };
+        return element instanceof HaxeMeta;
     }
 
 

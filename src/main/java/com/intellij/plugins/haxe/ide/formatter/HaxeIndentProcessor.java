@@ -30,7 +30,9 @@ import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.Nullable;
 
+import static com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.DOC_COMMENT;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.FUNCTION_DEFINITION;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
@@ -60,9 +62,33 @@ public class HaxeIndentProcessor {
     if (parent == null || parent.getTreeParent() == null) {
       return Indent.getNoneIndent();
     }
+    if (parentType == DOC_COMMENT) {
+      if (elementType == DOC_LEADING_ASTERISK) {
+        // javadoc-style stars align under the /**'s first star
+        return Indent.getSpaceIndent(1);
+      }
+      if (elementType == DOC_END) {
+        // the starred style aligns its closer under the stars too; haxedoc
+        // puts **/ back at the comment's own indent
+        boolean starredStyle = parent.findChildByType(DOC_LEADING_ASTERISK) != null;
+        return starredStyle ? Indent.getSpaceIndent(1) : Indent.getNoneIndent();
+      }
+      if (elementType == DOC_START) {
+        return Indent.getNoneIndent();
+      }
+      // body lines sit one level inside the comment; author depth beyond the
+      // common prefix rides inside the token text (markdown) and stays untouched
+      return Indent.getNormalIndent();
+    }
     if (COMMENTS.contains(elementType)) {
-      if (settings.KEEP_FIRST_COLUMN_COMMENT && isAtFirstColumn(node)) {
+      // first-column preservation protects //-disabled code; a doc comment
+      // belongs to its member and always follows its scope (as javadoc does)
+      if (elementType != DOC_COMMENT && settings.KEEP_FIRST_COLUMN_COMMENT && isAtFirstColumn(node)) {
         return Indent.getAbsoluteNoneIndent();
+      }
+      // module-level comments sit at the file margin like their sibling declarations
+      if (parentType == MODULE) {
+        return Indent.getNoneIndent();
       }
       return Indent.getNormalIndent();
     }

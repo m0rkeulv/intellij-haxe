@@ -334,4 +334,12 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
       haxe.IMPORT_GROUP_PACKAGE_DEPTH = 1;
     });
   }
+
+  @Test
+  @DisplayName("doc comment indent")
+  public void testDocCommentIndent() throws Exception {
+    // interior doc lines: haxedoc body at comment+1 with markdown depth kept,
+    // column-0 wrap clamped to body, starred style aligned one space in
+    doParityTest("doc-comment-indent");
+  }
 }

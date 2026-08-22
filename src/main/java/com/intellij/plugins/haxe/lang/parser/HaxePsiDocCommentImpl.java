@@ -4,7 +4,7 @@ import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.util.HaxeDocumentationUtil;
 import com.intellij.psi.PsiDocCommentBase;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.impl.source.tree.PsiCommentImpl;
+import com.intellij.psi.impl.source.tree.LazyParseablePsiElement;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.CachedValuesManager;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -12,13 +12,28 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 
-
-public class HaxePsiDocCommentImpl extends PsiCommentImpl  implements PsiDocCommentBase, HaxeLazyWithOwner {
+/**
+ * A doc comment as a lazily parsed composite: consumers reading only the text
+ * never trigger the sub-tree; the formatter parses it to manage the interior
+ * line indentation. The token type stays DOC_COMMENT.
+ */
+public class HaxePsiDocCommentImpl extends LazyParseablePsiElement implements PsiDocCommentBase, HaxeLazyWithOwner {
 
     private String extractedDocs;
 
-    public HaxePsiDocCommentImpl(@NotNull IElementType type, @NotNull CharSequence text) {
+    public HaxePsiDocCommentImpl(@NotNull IElementType type, @Nullable CharSequence text) {
         super(type, text);
+    }
+
+    @Override
+    public @NotNull IElementType getTokenType() {
+        return getElementType();
+    }
+
+    // the label PsiCommentImpl used - keeps parse-tree dumps (and their test goldens) stable
+    @Override
+    public String toString() {
+        return "PsiComment(" + getElementType() + ")";
     }
 
     @Override

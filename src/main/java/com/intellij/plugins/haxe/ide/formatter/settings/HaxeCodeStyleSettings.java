@@ -40,6 +40,7 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // a structure extension hugs a one-line body ({ > Base, ... }) and takes
     // its own line in a multi-line one; off keeps it as written
     public boolean STRUCTURE_EXTENSION_ON_OWN_LINE = false;
+    public boolean FORMAT_DOC_COMMENTS = true;
 
     // reformat also re-aligns the INACTIVE #if/#elseif/#else branches (the
     // block formatter only reaches the active one). Off by default: inactive
