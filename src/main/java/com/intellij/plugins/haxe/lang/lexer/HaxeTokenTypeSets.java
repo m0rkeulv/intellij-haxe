@@ -192,12 +192,18 @@ public interface HaxeTokenTypeSets {
     MULTIPLICATIVE_EXPRESSION
   );
 
+  // binary expressions carry their operators as COMPOSITE elements
+  // (additiveOperator etc.) - the bare tokens never appear as their children
   TokenSet BINARY_OPERATORS = TokenSet.create(
     BIT_OPERATION,
     OCOND_OR, OCOND_AND,
+    LOGIC_OR_OPERATOR, LOGIC_AND_OPERATOR,
     COMPARE_OPERATION,
     OPLUS, OMINUS,
     OMUL, OQUOTIENT, OREMAINDER,
+    ADDITIVE_OPERATOR,
+    MULTIPLICATIVE_OPERATOR,
+    MODULO_OPERATOR,
     SHIFT_LEFT_OPERATOR,
     SHIFT_RIGHT_OPERATOR,
     UNSIGNED_SHIFT_RIGHT_OPERATOR

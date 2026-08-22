@@ -110,9 +110,13 @@ public class HaxeWrappingProcessor {
         && mySettings.EXTENDS_LIST_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
         && child != myNode.getFirstChildNode()) {
       if (sharedItemWrap == null) {
-        // the settings UI stores "chop down if long" as EVERY_ITEM|AS_NEEDED
-        boolean chop = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0;
-        sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(mySettings.EXTENDS_LIST_WRAP), chop);
+        // chop ("chop down if long" is stored as EVERY_ITEM|AS_NEEDED) and
+        // always must wrap the first participating clause too; only fill
+        // ("wrap if long") leaves it, so the break lands at the overflow
+        // instead of being pulled back to the first clause
+        boolean wrapFirst = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0
+                            || mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ALWAYS;
+        sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(mySettings.EXTENDS_LIST_WRAP), wrapFirst);
       }
       return sharedItemWrap;
     }
@@ -190,17 +194,17 @@ public class HaxeWrappingProcessor {
     }
 
     //
-    // Ternary expressions
+    // Ternary expressions. The grammar wraps the signs into composite
+    // QUESTION_OPERATOR/COLON_OPERATOR elements - the bare tokens never
+    // appear as children here. Signs-on-next-line wraps the SIGNS (the
+    // branch then follows its sign on the same line); otherwise the
+    // BRANCHES wrap and the signs trail the previous line.
     //
     if (elementType == TERNARY_EXPRESSION) {
+      boolean sign = childType == QUESTION_OPERATOR || childType == COLON_OPERATOR;
       if (myNode.getFirstChildNode() != child) {
-        if (mySettings.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE) {
-          if (!FormatterUtil.isPrecededBy(child, OQUEST) &&
-              !FormatterUtil.isPrecededBy(child, OCOLON)) {
-            return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.TERNARY_OPERATION_WRAP), true);
-          }
-        }
-        else if (childType != OQUEST && childType != OCOLON) {
+        boolean wraps = mySettings.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE == sign;
+        if (wraps) {
           return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.TERNARY_OPERATION_WRAP), true);
         }
       }

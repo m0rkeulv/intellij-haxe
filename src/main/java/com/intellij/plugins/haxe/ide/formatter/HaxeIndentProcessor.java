@@ -151,6 +151,11 @@ public class HaxeIndentProcessor {
     if (parentType == INHERIT_LIST) {
       return Indent.getContinuationIndent();
     }
+    // wrapped ternary parts (branches, or the signs leading them) continue
+    // the condition's line
+    if (parentType == TERNARY_EXPRESSION && prevSibling != null) {
+      return Indent.getContinuationIndent();
+    }
     return Indent.getNoneIndent();
   }
 
