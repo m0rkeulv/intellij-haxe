@@ -28,4 +28,10 @@ public class HaxeCodeStyleMainPanel extends TabbedLanguageCodeStylePanel {
   protected HaxeCodeStyleMainPanel(CodeStyleSettings currentSettings, CodeStyleSettings settings) {
     super(HaxeLanguage.INSTANCE, currentSettings, settings);
   }
+
+  @Override
+  protected void initTabs(CodeStyleSettings settings) {
+    super.initTabs(settings);
+    addTab(new HaxeImportsCodeStylePanel(settings));
+  }
 }

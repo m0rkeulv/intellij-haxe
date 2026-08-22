@@ -134,13 +134,16 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_AROUND_UNARY_OPERATOR.name(),
                                    SPACE_WITHIN_BRACKETS.name()
       );
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", "Around ->",
+      // placements and names mirror Java/Kotlin/Groovy (see
+      // doc/haxe-formatter-settings-structure.md): arrow spacing sits with
+      // the operators, colon options use Kotlin's phrasing
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", "Arrow functions and function types (->)",
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", "Before colon, after declaration name",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", "Space before type reference colon ':'",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", "After colon, before declaration type",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", "Space after type reference colon ':'",
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", "Type parameter angle brackets",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", "Angle brackets",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_STRING_INTERPOLATION", "String interpolation '${' braces",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
@@ -166,22 +169,15 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_FILE_HEADER", "After file header comment:",
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
-      // TODO: the import options are outgrowing Blank Lines - consider a
-      //  dedicated "Imports" tab (custom CodeStyleSettingsProvider panel)
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_BETWEEN_IMPORT_GROUPS", "Between import groups (0 = no grouping):",
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "IMPORT_GROUP_PACKAGE_DEPTH", "Import group package depth:",
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
                                 "Between single-line types:",
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_IMPORTS",
-                                "Between imports:",
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.WRAPPING_AND_BRACES_SETTINGS) {
       consumer.showStandardOptions(
-                      KEEP_LINE_BREAKS.name(),
+                      RIGHT_MARGIN.name(),
+                                   WRAP_ON_TYPING.name(),
+                                   KEEP_LINE_BREAKS.name(),
                                    KEEP_FIRST_COLUMN_COMMENT.name(),
                                    KEEP_CONTROL_STATEMENT_IN_ONE_LINE.name(),
                                    KEEP_SIMPLE_BLOCKS_IN_ONE_LINE.name(),
@@ -211,19 +207,21 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    PARENTHESES_EXPRESSION_LPAREN_WRAP.name(),
                                    PARENTHESES_EXPRESSION_RPAREN_WRAP.name(),
                                    ALIGN_MULTILINE_TERNARY_OPERATION.name(),
-                                   SPECIAL_ELSE_IF_TREATMENT.name()
+                                   SPECIAL_ELSE_IF_TREATMENT.name(),
+                                   ASSIGNMENT_WRAP.name(),
+                                   PLACE_ASSIGNMENT_SIGN_ON_NEXT_LINE.name()
       );
       // the platform default label says "permits" - Java sealed-class syntax
       // that does not exist in Haxe
       consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), "Extends/implements list");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE",
-                                "Expression function body on next line", "Function declarations");
+                                "Place body on next line", "Expression body functions");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "STRUCTURE_EXTENSION_ON_OWN_LINE",
                                 "Structure extension '> Base' on own line", "Anonymous structures");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "RETURN_VALUE_ON_SAME_LINE",
-                                "Value on same line as 'return'", "Return statement");
+                                "Value on same line as 'return'", "'return' statement");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "ALIGN_INACTIVE_CONDITIONAL_BRANCHES",
-                                "Align inactive #if branches", "Conditional compilation");
+                                "Align inactive #if branches", "Conditional compilation '#if'");
     }
   }
 
@@ -233,107 +231,92 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
   }
   @org.intellij.lang.annotations.Language("Haxe")
   public static final String SPACING_CODE_SAMPLE = """
-    package;
     @author("Penelope")
-    @:final
-    class Foo {
-         public var tmp:Array<Array<Int>>;
-        
-         public function foo(x:Int, z) {
-              new Foo(x, 2);
-              function absSum(a:Int, b:Int):Int {
-                   var value:Int = a + b;
-                   return value > 0 ? value : -value;
+    @:keep
+    class Foo<T> {
+         var items:Array<T>;
+         var lookup:Map<Int, String>;
+
+         function compute(a:Int, b:Int):Int {
+              var apply:Int -> Int = v -> v * 2;
+              var flag = !(a == b) && a <= b || a != 0;
+              var bits = (a & 3) ^ (b | 1) << 2 >> 1;
+              var sum = a + b * 2 - b % 3;
+              var pick = flag ? apply(sum) : -sum;
+              var name = 'value ${pick} of ${sum + 1}';
+              var head = items[0];
+              var asInt = (head : Int);
+              for (i in 0...3) {
+                   sum += i;
               }
-              var increment:Int -> Int = function(i:Int) {return ++i;}
-              var arr = ["zero", "one"];
-              var msg = 'value ${ x } of ${x + z}';
-              var asInt = (z : Int);
-              var y = (x ^ 0x123) << 2;
-              for (i in 0...10) {
-                   y = (y ^ 0x123) << 2;
+              while (sum > 9) {
+                   sum -= 2;
               }
-              var k = x % 2 == 1 ? 0 : 1;
               do {
-                   try {
-                        if (0 < x&&x < 10) {
-                             while (x != y) {
-                                  x = absSum(x * 3, 5);
-                             }
-                             z += 2;
-                        } else if (x > 20) {
-                             z = x << 1;
-                        } else {
-                             z = x | 2;
-                        }
-                        switch (k) {
-                             case 0:
-                                  var s1 = 'zero';
-                             case 2:
-                                  var s1 = 'two';
-                             default:
-                                  var s1 = 'other';
-                        }
-                   } catch (e:String) {
-                        var message = arr[0];
-                   }
-              } while (x < 0);
+                   sum++;
+              } while (sum < 5);
+              try {
+                   check(sum, name);
+              } catch (e:String) {
+                   sum = 0;
+              }
+              switch (sum) {
+                   case 0:
+                        sum = 1;
+                   default:
+                        sum = 2;
+              }
+              if (sum > 1) {
+                   sum--;
+              } else {
+                   sum++;
+              }
+              return sum;
          }
-        
-         public function new(n:Int, m:Int) {
-              tmp = new Array<Array<Int>>();
-              for (i in 0...n * m) tmp.push(new Array<Int>());
-         }
+
+         function check(v:Int, label:String) {}
     }
     """;
   @org.intellij.lang.annotations.Language("Haxe")
   public static final String WRAPPING_CODE_SAMPLE = """
-    @author("Penelope") @:final
+    // a comment kept at the first column
     class Foo extends BaseComponent implements Drawable implements Resizable implements Serializable implements Comparable implements Observable {
-         // function fBar (x,y);
-         function fOne(argA, argB, argC, argD, argE, argF, argG, argH) {
-              var numbers:Array<String> = ['one', 'two', 'three', 'four', 'five', 'six'];
-              var planets = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'ceres', 'pluto', 'haumea', 'makemake', 'eris'];
-              var shouted = numbers.filter(function(n) { return n.length > 3; }).map(function(n) { return n.toUpperCase(); }).join(', ') + planets.join('; ');
-              var x = ("" + argA) + argB + argC + argD + argE + argF + argG + argH;
-              try {
-                   this.fTwo(argA, argB, argC, this.fThree("", argE, argF, argG, argH));
-              } catch (ignored:String) {}
-              var z = argA == 'Some string' ? 'yes' : 'no';
-              var colors = ['red', 'green', 'blue', 'black', 'white', 'gray'];
-              for (colorIndex in 0...colors.length) {
-                   var colorString = numbers[colorIndex];
-              }
-              if (colors.length > 6) colors.pop();
-              var pick = if (colors.length > 3) 'many' else 'few';
-              if (colors.length == 0) {
+         function fLong(argumentAlpha:Int, argumentBravo:Int, argumentCharlie:Int, argumentDelta:Int, argumentEcho:Int, argumentFoxtrot:Int):Int {
+              var planets = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'ceres', 'pluto', 'haumea', 'makemake'];
+              var shouted = planets.filter(word -> word.length > 4).map(word -> word.toUpperCase()).join(', ') + planets.join('; ') + 'end';
+              var total = argumentAlpha + argumentBravo + argumentCharlie + argumentDelta + argumentEcho + argumentFoxtrot + planets.length;
+              total = argumentAlpha * argumentBravo + argumentCharlie * argumentDelta + argumentEcho * argumentFoxtrot - shouted.length;
+              var label = total > 100 ? 'a rather large total for such a small example' : 'a rather small total for such a large example';
+              var grouped = (argumentAlpha + argumentBravo
+                             + argumentCharlie);
+              if (total > 6) total--;
+              var pick = if (total > 3) 'many' else 'few';
+              if (total == 0) {
               }
               var emptyCallback = function() {
               };
               var arrowCallback = () -> {
               };
+              if (grouped > 1) {
+                   total += grouped;
+              } else if (label.length > 3) {
+                   total -= grouped;
+              } else {
+                   total = 0;
+              }
               do {
-                   colors.pop();
-              } while (colors.length > 0);
+                   total--;
+              } while (total > 99);
+              try {
+                   fLong(total + 100, total + 200, total + 300, total + 400, total + 500, total + 600);
+              } catch (ignored:String) {}
               #if debug
               trace('debug build');
               #else
               trace('release build');
               #end
-         }
-
-         function fTwo(strA, strB, strC, strD) {
-              if (true)
-                   return strC;
-              if (strA == 'one'||
-              strB == 'two') {
-                   return strA + strB;
-              } else if (true) return strD;
-              throw strD;
-         }
-
-         function fThree(strA, strB, strC, strD, strE) {
-              return strA + strB + strC + strD + strE;
+              return
+                   total;
          }
 
          function fEmpty() {
@@ -352,24 +335,31 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     """;
   @org.intellij.lang.annotations.Language("Haxe")
   public static final String BLANK_LINES_CODE_SAMPLE = """
+    /*
+     * File header comment.
+     */
     package foo.bar;
     import a.b.SomeClass;
-
     import a.b.SomeWidget;
-    import x.y.SomeOther as ClassAlias;
     using someUtil;
     interface Drawable {}
 
     interface Resizable {}
-
     class Foo {
+
+
+         var counter:Int = 0;
+         var total:Int = 1;
          public function new() {
          }
-
-
          public static function main() {
+
               trace("Hello!");
+
+
          }
+
     }
+    class Bar {}
     """;
 }
