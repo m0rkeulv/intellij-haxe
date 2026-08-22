@@ -188,6 +188,20 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   /**
+   * Parity against a NON-default hxformat option: the fixture directory holds
+   * the hxformat.json used to regenerate hxformat.hx, and the tweak applies
+   * the equivalent change on top of our defaults profile.
+   */
+  private void doParityTest(String rule, java.util.function.Consumer<CodeStyleSettings> tweak) throws Exception {
+    Project project = getProject();
+    CodeStyleSettings tempSettings = CodeStyleSettingsManager.getSettings(project).clone();
+    applyHxformatDefaults(tempSettings);
+    tweak.accept(tempSettings);
+    CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
+    doParityTest(rule);
+  }
+
+  /**
    * Formats input.hx and compares against the pinned plugin.hx — for rules
    * NOT yet at parity; the plugin.hx/hxformat.hx diff documents the gap.
    * A missing plugin.hx is created from the actual output and the test fails
@@ -413,5 +427,22 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("comment blanks")
   public void testCommentBlanks() throws Exception {
     doParityTest("comment-blanks");
+  }
+
+  @Test
+  @DisplayName("string interpolation")
+  public void testStringInterpolation() throws Exception {
+    doParityTest("string-interpolation");
+  }
+
+  @Test
+  @DisplayName("import grouping")
+  public void testImportGrouping() throws Exception {
+    // betweenImports=1, betweenImportsLevel=firstLevelPackage (fixture hxformat.json)
+    doParityTest("import-grouping", settings -> {
+      HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+      haxe.BLANK_LINES_BETWEEN_IMPORT_GROUPS = 1;
+      haxe.IMPORT_GROUP_PACKAGE_DEPTH = 1;
+    });
   }
 }

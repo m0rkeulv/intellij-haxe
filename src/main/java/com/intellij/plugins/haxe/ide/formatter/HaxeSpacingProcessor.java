@@ -169,8 +169,15 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AFTER_PACKAGE, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
 
-    // blanks WITHIN the import/using section keep their own cap (0 = a solid
-    // block); the section-end rules below own the blank after the section
+    // grouping on: imports from different package groups get an exact gap,
+    // same-group imports stay snug. Grouping off: the keep cap applies.
+    // Either way the section-end rules below own the blank after the section.
+    if (type1 == IMPORT_STATEMENT && type2 == IMPORT_STATEMENT
+        && myHaxeCodeStyleSettings.BLANK_LINES_BETWEEN_IMPORT_GROUPS > 0) {
+      boolean sameGroup = importGroupKey(node1).equals(importGroupKey(node2));
+      int blanks = sameGroup ? 0 : myHaxeCodeStyleSettings.BLANK_LINES_BETWEEN_IMPORT_GROUPS;
+      return Spacing.createSpacing(0, 0, 1 + blanks, false, blanks);
+    }
     if ((type1 == IMPORT_STATEMENT && type2 == IMPORT_STATEMENT)
         || (type1 == USING_STATEMENT && type2 == USING_STATEMENT)) {
       return Spacing.createSpacing(0, 0, 1, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
@@ -322,6 +329,13 @@ public class HaxeSpacingProcessor {
                            && (type1 == PLBRACK || type2 == PRBRACK);
     if (bracketInner) {
       return addSingleSpaceIf(mySettings.SPACE_WITHIN_BRACKETS);
+    }
+
+    // inside a string's ${ } interpolation braces; the embedded expression
+    // itself formats under the normal rules
+    if (elementType == LONG_TEMPLATE_ENTRY
+        && (type1 == LONG_TEMPLATE_ENTRY_START || type2 == LONG_TEMPLATE_ENTRY_END)) {
+      return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_WITHIN_STRING_INTERPOLATION);
     }
 
     // type parameter/argument angle brackets: never a space between the name
@@ -763,6 +777,24 @@ public class HaxeSpacingProcessor {
   /** Any top-level type declaration; CLASS_TYPES lacks the body-less typedef kind. */
   private static boolean isTypeDeclaration(IElementType type) {
     return CLASS_TYPES.contains(type) || type == TYPEDEF_DECLARATION;
+  }
+
+  /**
+   * The first IMPORT_GROUP_PACKAGE_DEPTH package segments of an import - the
+   * grouping key. A bare {@code import Std;} groups by its own name, like
+   * haxe-formatter's firstLevelPackage.
+   */
+  private String importGroupKey(ASTNode importStatement) {
+    // the qualified path between the "import" keyword and ';'/"as"/"in" -
+    // wildcard tails included ("a.b.*")
+    String text = importStatement.getText()
+      .replaceFirst("^import\\s+", "")
+      .replaceFirst("\\s.*$", "")
+      .replaceFirst(";$", "");
+    String[] segments = text.split("\\.");
+    int depth = Math.max(1, myHaxeCodeStyleSettings.IMPORT_GROUP_PACKAGE_DEPTH);
+    int keep = Math.min(depth, segments.length);
+    return String.join(".", Arrays.asList(segments).subList(0, keep));
   }
 
   private boolean blockBeginsWith(Block block, IElementType type) {

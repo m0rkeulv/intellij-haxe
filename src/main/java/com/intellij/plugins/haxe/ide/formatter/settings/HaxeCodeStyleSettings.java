@@ -28,6 +28,7 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public boolean SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_AFTER_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_WITHIN_TYPE_PARAMETERS = false;
+    public boolean SPACE_WITHIN_STRING_INTERPOLATION = false;
     // the (expr : Type) type-check colon is conventionally spaced, UNLIKE type hints
     public boolean SPACE_AROUND_TYPE_CHECK_COLON = true;
     public boolean SPACE_WITHIN_METADATA_PARENTHESES = false;
@@ -59,6 +60,11 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public int KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 2;
     // keep cap WITHIN the import/using section; 0 makes it one solid block
     public int KEEP_BLANK_LINES_BETWEEN_IMPORTS = 2;
+    // 0 = no grouping (the keep cap above applies); above 0, imports whose
+    // first IMPORT_GROUP_PACKAGE_DEPTH package segments differ get exactly
+    // this many blank lines between them and same-group imports stay snug
+    public int BLANK_LINES_BETWEEN_IMPORT_GROUPS = 0;
+    public int IMPORT_GROUP_PACKAGE_DEPTH = 1;
 
     protected HaxeCodeStyleSettings(CodeStyleSettings container) {
         super("HaxeCodeStyleSettings", container);

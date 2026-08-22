@@ -142,6 +142,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", "Type parameter angle brackets",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_STRING_INTERPOLATION", "String interpolation '${' braces",
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_TYPE_CHECK_COLON", "Around type check colon '(value : Type)'",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_METADATA_PARENTHESES", "Metadata parentheses",
@@ -163,6 +165,12 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", "After using:",
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_FILE_HEADER", "After file header comment:",
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+      // TODO: the import options are outgrowing Blank Lines - consider a
+      //  dedicated "Imports" tab (custom CodeStyleSettingsProvider panel)
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_BETWEEN_IMPORT_GROUPS", "Between import groups (0 = no grouping):",
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "IMPORT_GROUP_PACKAGE_DEPTH", "Import group package depth:",
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
                                 "Between single-line types:",
@@ -239,6 +247,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
               }
               var increment:Int -> Int = function(i:Int) {return ++i;}
               var arr = ["zero", "one"];
+              var msg = 'value ${ x } of ${x + z}';
               var asInt = (z : Int);
               var y = (x ^ 0x123) << 2;
               for (i in 0...10) {
@@ -346,7 +355,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     package foo.bar;
     import a.b.SomeClass;
 
-    import a.b.SomeOther as ClassAlias;
+    import a.b.SomeWidget;
+    import x.y.SomeOther as ClassAlias;
     using someUtil;
     interface Drawable {}
 
