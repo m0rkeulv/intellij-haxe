@@ -1,14 +1,12 @@
 package com.intellij.plugins.haxe.util;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
-
-import static java.util.function.Predicate.not;
 
 /**
  * Note: This util is just here to help extracting documentation for as long as we treat documentation as one single tag
@@ -32,23 +30,15 @@ public class HaxeDocumentationUtil {
   public static String removeExcessLines(String docs) {
     String[] split = docs.split("\n");
     if (split.length == 1)  return docs;
-    // multi-line docs will contain the empty lins after /**  and before */
+    // multi-line docs will contain the empty lines after /** and before */
     List<String> fragments = new ArrayList<>(List.of(split));
 
-    // remove empty lines at the beginning
-      for (int i = 0; i < split.length; i++) {
-          String fragment = split[i];
-          if (fragment.isBlank()) fragments.removeFirst();
-          break;
-      }
-
-    // remove empty lines at the end
-    for (int i = split.length - 1; i >= 0; i--) {
-      String fragment = split[i];
-      if (fragment.isBlank()) fragments.removeLast();
-      break;
+    while (!fragments.isEmpty() && fragments.getFirst().isBlank()) {
+      fragments.removeFirst();
     }
-
+    while (!fragments.isEmpty() && fragments.getLast().isBlank()) {
+      fragments.removeLast();
+    }
 
     return String.join("\n", fragments);
   }
@@ -62,18 +52,32 @@ public class HaxeDocumentationUtil {
     String[] split = docs.split("\n");
     if(javaDocStyle) {
       return Arrays.stream(split).map(s-> s.replaceFirst("\\s*\\*","")).collect(Collectors.joining("\n"));
-    }else {
-      // workaround for docs with empty lines and  "content lines" with indentations
-      Optional<Integer> min = Arrays.stream(split).filter(not(String::isBlank)).map(s -> s.stripLeading().length() - s.length()).min(Integer::compare);
-      if(min.isPresent()) {
-        Integer i = min.get();
-        return Arrays.stream(split)
-                .map(s ->  s.isBlank() ? s.indent(i) : s)
-                .collect(Collectors.joining("\n"))
-                .stripIndent();
-      }
-      return docs.stripIndent();
     }
+    // the doc lexer's rule: the common prefix is the shortest leading
+    // whitespace among non-blank lines - blank lines (whitespace-only, e.g. an
+    // indented empty line before the closer) and hard-wrapped column-0 lines
+    // must not drag it to nothing, or the surviving indentation renders every
+    // paragraph as a markdown code block
+    String prefix = null;
+    for (String line : split) {
+      if (line.isBlank()) continue;
+      String leading = line.substring(0, line.length() - line.stripLeading().length());
+      if (leading.isEmpty()) continue;
+      if (prefix == null || leading.length() < prefix.length()) {
+        prefix = leading;
+      }
+    }
+    final String strip = prefix;
+    return Arrays.stream(split)
+      .map(line -> stripPrefix(line, strip))
+      .collect(Collectors.joining("\n"));
+  }
+
+  /** Blank lines strip entirely; other lines drop the common prefix when they carry it. */
+  private static String stripPrefix(@NotNull String line, @Nullable String prefix) {
+    if (line.isBlank()) return "";
+    if (prefix != null && line.startsWith(prefix)) return line.substring(prefix.length());
+    return line;
   }
 
   public static String tryFixIndents(String extractedDocs) {
