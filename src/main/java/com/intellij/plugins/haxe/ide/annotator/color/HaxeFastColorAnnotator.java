@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.annotator.color;
 
+import com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.annotation.AnnotationHolder;
 import com.intellij.lang.annotation.Annotator;
@@ -46,6 +47,9 @@ public class HaxeFastColorAnnotator implements Annotator , DumbAware {
   public static final Key<String> PP_EXPRESSION_VALUE = Key.create("haxe.ppexpression.value");
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
+    // TODO: phase 3 of inactive-branch support replaces this with DIMMED colors;
+    //  until then the branch keeps its uniform dead-code color from the blob
+    if (AnnotatorUtil.isInInactiveBranch(element)) return;
     if(!element.isValid()) return;
 
     if (element instanceof PsiWhiteSpace) return;

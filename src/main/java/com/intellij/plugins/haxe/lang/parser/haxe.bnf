@@ -1085,6 +1085,14 @@ expression ::= assignExpression
              | valueOrPostfixExpression
              { extraRoot=true recoverWhile=expression_recover }
 
+// entry points for lazily parsing INACTIVE conditional-compilation branches
+// (the PPBODY chameleon): a branch between class members parses as members,
+// one inside a method body as statements, one at module level as module
+// content - chosen by the branch's tree context
+inactiveMemberList ::= classBodyPart* { extraRoot=true }
+inactiveStatementList ::= statementList? { extraRoot=true }
+inactiveModuleList ::= moduleBodyPart* { extraRoot=true }
+
 // normally this  expression would be private as it does not make much sense when traversing the psi tree
 // however grammarkit is not able to generate the parser correctly when using the  extra root / the Pratt algorithm
 // when made private. previously we had negative lookaheads for postfixes here, but those were problematic and caused

@@ -36,7 +36,7 @@ public interface HaxeTokenTypeSets {
   IElementType DOC_COMMENT = new HaxeDocCommentElementType();
 
   IElementType PPEXPRESSION = new HaxeElementType("PPEXPRESSION");
-  IElementType PPBODY = new HaxeElementType("PPBODY");
+  IElementType PPBODY = new HaxeInactiveBodyElementType();
 
   IElementType WSNLS = new HaxeElementType("WSNLS");
 

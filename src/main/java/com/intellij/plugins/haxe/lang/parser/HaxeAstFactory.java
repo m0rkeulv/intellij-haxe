@@ -21,6 +21,7 @@ package com.intellij.plugins.haxe.lang.parser;
 import com.intellij.lang.ASTFactory;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxePsiTokenImpl;
 import com.intellij.psi.impl.source.tree.CompositeElement;
 import com.intellij.psi.impl.source.tree.LazyParseableElement;
@@ -51,6 +52,9 @@ public class HaxeAstFactory extends ASTFactory {
   public LazyParseableElement createLazy(ILazyParseableElementType type, CharSequence text) {
     if (type == DOC_COMMENT) {
       return new HaxePsiDocCommentImpl(type, text);
+    }
+    if (type == HaxeTokenTypeSets.PPBODY) {
+      return new HaxeInactiveBody(type, text);
     }
     return super.createLazy(type, text);
   }

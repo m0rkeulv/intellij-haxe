@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.ide.annotator.semantics;
 import com.intellij.lang.injection.InjectedLanguageManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.lang.parser.HaxePsiDocCommentImpl;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
@@ -10,6 +11,7 @@ import com.intellij.plugins.haxe.model.HaxeClassReferenceModel;
 import com.intellij.plugins.haxe.v2.display.HaxeGeneratedCodePreview;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -29,7 +31,21 @@ public class AnnotatorUtil {
    * invalidated element cannot be asked for its containing file.
    */
   public static boolean shouldSkip(@NotNull PsiElement element) {
-    return !element.isValid() || isInGeneratedPreview(element) || isInDocCodeFragment(element);
+    return !element.isValid() || isInGeneratedPreview(element) || isInAnalysisExemptCode(element);
+  }
+
+  /**
+   * Code that exists for DISPLAY, not compilation: doc-comment code fences
+   * and inactive conditional-compilation branches. Semantic analysis there
+   * is noise by definition - the code does not participate in the build.
+   */
+  public static boolean isInAnalysisExemptCode(@NotNull PsiElement element) {
+    return isInDocCodeFragment(element) || isInInactiveBranch(element);
+  }
+
+  /** Inside a lazily parsed inactive conditional branch (strict - the branch element itself is not "inside"). */
+  public static boolean isInInactiveBranch(@NotNull PsiElement element) {
+    return PsiTreeUtil.getParentOfType(element, HaxeInactiveBody.class) != null;
   }
 
   /**

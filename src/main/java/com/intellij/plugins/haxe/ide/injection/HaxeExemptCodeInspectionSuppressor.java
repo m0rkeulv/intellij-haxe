@@ -8,17 +8,16 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * No inspection runs inside a doc comment's injected code fences: sample
- * snippets resolve nothing and declare unused names by design, so unresolved
- * and unused markers there would be pure noise. Covers the inspections that
- * bypass the HaxeInspection base (and its shouldSkip guard) with their own
- * visitors.
+ * No inspection runs in analysis-exempt code (doc-comment fences, inactive
+ * conditional branches): unresolved and unused markers there would be pure
+ * noise. Covers the inspections that bypass the HaxeInspection base (and its
+ * shouldSkip guard) with their own visitors.
  */
-public class HaxeDocFragmentInspectionSuppressor implements InspectionSuppressor {
+public class HaxeExemptCodeInspectionSuppressor implements InspectionSuppressor {
 
   @Override
   public boolean isSuppressedFor(@NotNull PsiElement element, @NotNull String toolId) {
-    return AnnotatorUtil.isInDocCodeFragment(element);
+    return AnnotatorUtil.isInAnalysisExemptCode(element);
   }
 
   @Override
