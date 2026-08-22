@@ -170,6 +170,8 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
     // emptyLines.importAndUsing.beforeType=1
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
+    // emptyLines.afterFileHeaderComment=1
+    haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = 1;
     // emptyLines.betweenSingleLineTypes=0
     haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 0;
     // emptyLines.importAndUsing.betweenImports=0
@@ -392,4 +394,11 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   public void testDocCommentBlanks() throws Exception {
     doParityTest("doc-comment-blanks");
   }
+
+  @Test
+  @DisplayName("file header comment")
+  public void testFileHeaderComment() throws Exception {
+    doParityTest("file-header-comment");
+  }
+
 }

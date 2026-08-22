@@ -153,6 +153,17 @@ public class HaxeSpacingProcessor {
     //  return addSingleSpaceIf(false, true);
     //}
 
+    // a block comment OPENING the file is a license header - it keeps a
+    // minimum gap to whatever follows (doc comments attach to their member
+    // and are not headers)
+    boolean fileHeaderComment = type1 == MML_COMMENT
+                                && node1.getTreePrev() == null
+                                && myNode.getTreeParent() == null;
+    if (fileHeaderComment && myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER > 0) {
+      int minimumFeeds = 1 + myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER;
+      return Spacing.createSpacing(0, 0, minimumFeeds, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
+
     // BLANK_LINES_* count blank lines; Spacing counts LINE FEEDS (one more)
     if (type1.equals(PACKAGE_STATEMENT)) {
       return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AFTER_PACKAGE, true, mySettings.KEEP_BLANK_LINES_IN_CODE);

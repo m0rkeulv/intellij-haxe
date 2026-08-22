@@ -48,6 +48,9 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
 
     // counts BLANK LINES (like the platform's BLANK_LINES_* options)
     public int MINIMUM_BLANK_LINES_AFTER_USING = 1;
+    // gap after a block comment that OPENS the file (a license header);
+    // 0 keeps whatever was written
+    public int MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = 0;
     // keep cap between ADJACENT one-line type declarations (interface One {});
     // 0 pulls them snug, hxformat-style
     public int KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 2;
