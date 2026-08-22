@@ -168,6 +168,8 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     haxe.ALIGN_INACTIVE_CONDITIONAL_BRANCHES = true;
     // sameLine.functionBody=Next (anonFunctionBody=Same has no flag - always inline)
     haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
+    // sameLine.returnBodySingleLine - a broken return re-joins its value
+    haxe.RETURN_VALUE_ON_SAME_LINE = true;
     // emptyLines.importAndUsing.beforeType=1
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
     // emptyLines.afterFileHeaderComment=1
@@ -401,4 +403,15 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     doParityTest("file-header-comment");
   }
 
+  @Test
+  @DisplayName("return join")
+  public void testReturnJoin() throws Exception {
+    doParityTest("return-join");
+  }
+
+  @Test
+  @DisplayName("comment blanks")
+  public void testCommentBlanks() throws Exception {
+    doParityTest("comment-blanks");
+  }
 }

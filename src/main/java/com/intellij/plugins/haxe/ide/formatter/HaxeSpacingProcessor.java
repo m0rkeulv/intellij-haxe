@@ -606,6 +606,13 @@ public class HaxeSpacingProcessor {
       return addSingleSpaceIf(mySettings.SPACE_WITHIN_PARENTHESES);
     }
 
+    // a return's value joins the keyword's line; the value's own internals
+    // may still break
+    if (myHaxeCodeStyleSettings.RETURN_VALUE_ON_SAME_LINE
+        && elementType == RETURN_STATEMENT && type1 == KRETURN && type2 != OSEMI) {
+      return Spacing.createSpacing(1, 1, 0, false, 0);
+    }
+
     if (type1 == OCOLON && elementType == TYPE_TAG) {
       return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_AFTER_TYPE_REFERENCE_COLON);
     }

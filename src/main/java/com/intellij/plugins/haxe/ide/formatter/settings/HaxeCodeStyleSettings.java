@@ -46,6 +46,9 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // own line; anonymous/arrow function bodies always stay inline
     public boolean FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = false;
 
+    // a hand-broken "return\n value;" is re-joined; off keeps the break
+    public boolean RETURN_VALUE_ON_SAME_LINE = false;
+
     // counts BLANK LINES (like the platform's BLANK_LINES_* options)
     public int MINIMUM_BLANK_LINES_AFTER_USING = 1;
     // gap after a block comment that OPENS the file (a license header);

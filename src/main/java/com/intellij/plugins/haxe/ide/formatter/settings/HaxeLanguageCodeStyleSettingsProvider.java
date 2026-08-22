@@ -212,6 +212,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 "Expression function body on next line", "Function declarations");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "STRUCTURE_EXTENSION_ON_OWN_LINE",
                                 "Structure extension '> Base' on own line", "Anonymous structures");
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "RETURN_VALUE_ON_SAME_LINE",
+                                "Value on same line as 'return'", "Return statement");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "ALIGN_INACTIVE_CONDITIONAL_BRANCHES",
                                 "Align inactive #if branches", "Conditional compilation");
     }
