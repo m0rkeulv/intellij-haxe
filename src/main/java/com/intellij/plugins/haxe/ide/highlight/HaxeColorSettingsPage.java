@@ -45,6 +45,7 @@ public class HaxeColorSettingsPage implements ColorSettingsPage {
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.block.comment"), BLOCK_COMMENT),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.doc.comment"), DOC_COMMENT),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.doc.code"), DOC_CODE),
+    new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.doc.tag"), DOC_TAG),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation"), CONDITIONALLY_NOT_COMPILED),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.unparseable.data"), UNPARSEABLE_DATA),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation.defined.flag"), DEFINED_VAR),

@@ -5,6 +5,7 @@ import com.intellij.lang.injection.MultiHostInjector;
 import com.intellij.lang.injection.MultiHostRegistrar;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.documentation.settings.HaxeDocSettings;
 import com.intellij.plugins.haxe.lang.parser.HaxeDocMarkdown;
 import com.intellij.plugins.haxe.lang.parser.HaxeDocMarkdown.DocLine;
 import com.intellij.plugins.haxe.lang.parser.HaxeDocMarkdown.Fence;
@@ -30,6 +31,7 @@ public class HaxeDocFenceInjector implements MultiHostInjector {
   @Override
   public void getLanguagesToInject(@NotNull MultiHostRegistrar registrar, @NotNull PsiElement context) {
     if (!(context instanceof HaxePsiDocCommentImpl docComment)) return;
+    if (!HaxeDocSettings.getInstance().getState().injectCodeFences) return;
 
     int hostStart = docComment.getTextRange().getStartOffset();
     for (Fence fence : HaxeDocMarkdown.scan(docComment).fences()) {

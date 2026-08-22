@@ -8,6 +8,7 @@ import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil;
+import com.intellij.plugins.haxe.ide.documentation.settings.HaxeDocSettings;
 import com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors;
 import com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolInspection;
 import com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedLocalVarInspection;
@@ -193,5 +194,94 @@ public class HaxeDocCodeHighlightingTest extends HaxeLightFixtureTestCase {
     int spanOffset = source.indexOf("setInterval");
     boolean spanColored = infos.stream().anyMatch(info -> covers(info, spanOffset, HaxeSyntaxHighlighterColors.DOC_CODE));
     assertTrue(spanColored, "the backtick span must get the doc-code attribute");
+  }
+
+  @Test
+  @DisplayName("doc tags get the doc tag attribute")
+  public void testDocTagsGetTheDocTagAttribute() {
+    String source = """
+      class Foo {
+      \t/**
+      \t\t@param\tx\tthe value
+      \t**/
+      \tfunction f(x:Int):Void {}
+      }""";
+    configure(source);
+    List<HighlightInfo> infos = myFixture.doHighlighting();
+
+    int tagOffset = source.indexOf("@param");
+    boolean tagColored = infos.stream().anyMatch(info -> covers(info, tagOffset, HaxeSyntaxHighlighterColors.DOC_TAG));
+    assertTrue(tagColored, "the haxedoc tag must get the doc-tag attribute");
+  }
+
+  @Test
+  @DisplayName("doc tag completion offers the known tags")
+  public void testDocTagCompletionOffersTheKnownTags() {
+    myFixture.configureByText("Doc.hx", """
+      class Foo {
+      \t/**
+      \t\t@pa<caret>
+      \t**/
+      \tfunction f(x:Int):Void {}
+      }""");
+
+    var lookupElements = myFixture.completeBasic();
+
+    // a single match (@pa -> @param) is auto-inserted and the lookup is null
+    boolean paramInserted = lookupElements == null
+                            && myFixture.getEditor().getDocument().getText().contains("@param");
+    boolean paramOffered = lookupElements != null
+                           && java.util.Arrays.stream(lookupElements).anyMatch(e -> e.getLookupString().equals("@param"));
+    assertTrue(paramInserted || paramOffered, "typing @ in doc prose must offer the haxedoc tags");
+  }
+
+  @Test
+  @DisplayName("markup toggle off leaves docs unannotated")
+  public void testMarkupToggleOffLeavesDocsUnannotated() {
+    HaxeDocSettings.State state = HaxeDocSettings.getInstance().getState();
+    state.highlightDocMarkup = false;
+    try {
+      String source = """
+        class Foo {
+        \t/**
+        \t\tCancels a `setInterval()` call.
+        \t\t@param\tx\tthe value
+        \t**/
+        \tfunction f(x:Int):Void {}
+        }""";
+      configure(source);
+      List<HighlightInfo> infos = myFixture.doHighlighting();
+
+      boolean anyMarkup = infos.stream().anyMatch(info -> info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.DOC_CODE
+                                                          || info.forcedTextAttributesKey == HaxeSyntaxHighlighterColors.DOC_TAG);
+      assertFalse(anyMarkup, "the toggle must turn all doc markup coloring off");
+    }
+    finally {
+      state.highlightDocMarkup = true;
+    }
+  }
+
+  @Test
+  @DisplayName("injection toggle off leaves fences plain")
+  public void testInjectionToggleOffLeavesFencesPlain() {
+    HaxeDocSettings.State state = HaxeDocSettings.getInstance().getState();
+    state.injectCodeFences = false;
+    try {
+      String source = """
+        class Foo {
+        \t/**
+        \t\t```haxe
+        \t\tvar x = 1;
+        \t\t```
+        \t**/
+        \tfunction f():Void {}
+        }""";
+      PsiFile file = configure(source);
+
+      assertNull(injectedAt(file, source.indexOf("var x")), "the toggle must turn fence injection off");
+    }
+    finally {
+      state.injectCodeFences = true;
+    }
   }
 }
