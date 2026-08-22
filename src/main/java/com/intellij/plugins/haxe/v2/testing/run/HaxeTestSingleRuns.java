@@ -49,7 +49,7 @@ final class HaxeTestSingleRuns {
 
   /**
    * The single-run compile, built on the container's resolved build command:
-   * the build file token is replaced by the selected section's arguments with
+   * the build file argument is replaced by the selected section's arguments with
    * the entry point swapped (see class doc), keeping the resolved haxe
    * executable, work directory and compilation-server eligibility. Null when
    * the command, section, template or generation directory cannot be
@@ -65,8 +65,8 @@ final class HaxeTestSingleRuns {
       project, buildFile.getPath(), defaultBuildAction(), extraArguments);
     if (resolved == null) return null;
 
-    int fileToken = resolved.command().indexOf(buildFile.getName());
-    if (fileToken < 0) return null;
+    int fileArgumentIndex = resolved.command().indexOf(HaxeBuildWorkDirectories.fileArgument(project, buildFile));
+    if (fileArgumentIndex < 0) return null;
 
     String section = HaxeBuildSections.selectedSectionContent(
       project, new HaxeBuildFile(buildFile, HaxeBuildFileType.HXML));
@@ -77,9 +77,9 @@ final class HaxeTestSingleRuns {
 
     List<String> sectionArguments = swapEntryPoint(
       HxmlArguments.parseLines(section.lines().toList()), generated);
-    List<String> command = new ArrayList<>(resolved.command().subList(0, fileToken));
+    List<String> command = new ArrayList<>(resolved.command().subList(0, fileArgumentIndex));
     command.addAll(sectionArguments);
-    command.addAll(resolved.command().subList(fileToken + 1, resolved.command().size()));
+    command.addAll(resolved.command().subList(fileArgumentIndex + 1, resolved.command().size()));
     command.add("-cp");
     command.add(generated.toString());
     command.add("--main");
@@ -119,8 +119,7 @@ final class HaxeTestSingleRuns {
     command.add("--main");
     command.add(MAIN_CLASS);
 
-    VirtualFile parent = buildFile.getParent();
-    String workDirectory = parent != null ? parent.getPath() : null;
+    String workDirectory = HaxeBuildWorkDirectories.workDirectory(project, buildFile);
     // never server-connected: the run must own its artifact, and swf output through the server corrupts
     return new HaxeCompileCommands.Resolved(containerId, command, workDirectory, String.join(" ", command), false);
   }

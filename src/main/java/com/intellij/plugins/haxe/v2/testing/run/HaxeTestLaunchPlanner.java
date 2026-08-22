@@ -438,7 +438,7 @@ final class HaxeTestLaunchPlanner {
     if (artifact == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
     }
-    String workDirectory = file.getParent().getPath();
+    String workDirectory = HaxeBuildWorkDirectories.workDirectory(project, file);
     List<String> command = singleRunCommand(project, file, artifact, target, nodeExecutable, debugLaunch);
     return new Plan(command, workDirectory, false, target, nodeHint(target, info));
   }
@@ -669,11 +669,15 @@ final class HaxeTestLaunchPlanner {
     if (info.targetOutput() == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.output", file.getName()));
     }
-    // resolved the way the compiler resolves it: against the build file's directory
-    Path artifact = Path.of(file.getParent().getPath())
+    // resolved the way the compiler resolves it: against the build file's work directory
+    String anchor = HaxeBuildWorkDirectories.workDirectory(project, file);
+    if (anchor == null) {
+      throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", file.getName()));
+    }
+    Path artifact = Path.of(anchor)
       .resolve(info.targetOutput())
       .normalize();
-    String workDirectory = file.getParent().getPath();
+    String workDirectory = anchor;
 
     List<String> command = switch (target) {
       case HL -> hlCommand(project, file, artifact, target);

@@ -19,7 +19,8 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * The directories a build's sources come from: the build file's own directory
- * plus its declared classpaths — hxml {@code -cp} entries of the selected
+ * plus its declared classpaths, resolved against the file's work directory
+ * ({@link HaxeBuildWorkDirectories}) — hxml {@code -cp} entries of the selected
  * section; for the lime family the raw {@code <source>}/{@code <classpath>}
  * entries of the project xml (no tool run, so haxelib-provided paths are not
  * seen). Name-based lookups scope themselves to these — test-result
@@ -49,7 +50,8 @@ public final class HaxeBuildClasspaths {
                                                @NotNull VirtualFile buildFile,
                                                @NotNull List<String> classpaths) {
     VirtualFile parent = buildFile.getParent();
-    if (parent == null) return List.of();
+    VirtualFile anchor = HaxeBuildWorkDirectories.anchor(project, buildFile);
+    if (parent == null || anchor == null) return List.of();
 
     List<String> directories = new ArrayList<>();
     directories.add(parent.getPath());
@@ -58,7 +60,7 @@ public final class HaxeBuildClasspaths {
       String normalized = FileUtil.toSystemIndependentName(classpath.trim());
       VirtualFile resolved = OSAgnosticPathUtil.isAbsolute(normalized)
                              ? localFs.findFileByPath(normalized)
-                             : parent.findFileByRelativePath(normalized);
+                             : anchor.findFileByRelativePath(normalized);
       if (resolved != null && resolved.isDirectory()) {
         directories.add(resolved.getPath());
       }

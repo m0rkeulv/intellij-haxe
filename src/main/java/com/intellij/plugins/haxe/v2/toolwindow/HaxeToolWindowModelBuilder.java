@@ -336,8 +336,7 @@ final class HaxeToolWindowModelBuilder {
     List<ActionNode> actions = new ArrayList<>();
     String ownerId = buildFile.file().getPath();
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    VirtualFile parent = buildFile.file().getParent();
-    String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
+    String workDirectory = HaxeBuildWorkDirectories.workDirectory(project, buildFile.file());
 
     addDefaultActions(actions, ownerId, buildFile, environmentSdk, workDirectory);
     for (HaxeCustomActionsStore.CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(ownerId)) {

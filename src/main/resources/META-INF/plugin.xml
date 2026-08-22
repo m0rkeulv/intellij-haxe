@@ -487,6 +487,7 @@
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore"/>
+    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeWorkDirectoryStore"/>
 
     <!-- V2 build system: "Haxe" entry in the New Project / New Module wizard, creating plain modules -->
     <newProjectWizard.languageGenerator implementation="com.intellij.plugins.haxe.v2.wizard.HaxeNewProjectWizard"/>

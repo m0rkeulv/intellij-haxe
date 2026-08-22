@@ -107,8 +107,7 @@ public final class HaxeCompileCommands {
                                         @NotNull String extraArguments) {
     List<String> command = new ArrayList<>(base);
     command.addAll(ParametersListUtil.parse(extraArguments));
-    VirtualFile parent = file.getParent();
-    String workDirectory = parent != null ? parent.getPath() : project.getBasePath();
+    String workDirectory = HaxeBuildWorkDirectories.workDirectory(project, file);
     boolean eligible = connectEligible(project, environmentSdk, command, file);
     return new Resolved(containerId, command, workDirectory, String.join(" ", command), eligible);
   }

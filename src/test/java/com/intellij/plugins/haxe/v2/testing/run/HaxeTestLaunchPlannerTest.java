@@ -359,7 +359,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     String path = fixturePath("targets/chained.hxml");
 
     // default selection is the first section (interp): a single compile-and-run
-    // process built from the section's own lines - the file token is replaced,
+    // process built from the section's own lines - the file argument is replaced,
     // so the appended reporting arguments belong to this section, and the
     // sibling hl build never compiles
     Plan interpPlan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
@@ -367,7 +367,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
     assertTrue(interpPlan.command().contains("--interp"), "section arguments expected: " + interpPlan.command());
     assertTrue(interpPlan.command().containsAll(List.of("-lib", "utest")),
                "the --each block applies to every section: " + interpPlan.command());
-    assertFalse(interpPlan.command().contains("chained.hxml"), "file token must be replaced: " + interpPlan.command());
+    assertFalse(interpPlan.command().contains("chained.hxml"), "file argument must be replaced: " + interpPlan.command());
     assertFalse(interpPlan.command().contains("-hl"), "sibling section must not compile: " + interpPlan.command());
   }
 

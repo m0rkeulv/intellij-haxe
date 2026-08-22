@@ -23,6 +23,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.runner.neko.NekoConfigurationFactory;
 import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import org.jetbrains.annotations.NotNull;
@@ -164,14 +165,15 @@ public final class HaxeProgramLaunches {
                                                            @NotNull String targetOutput) {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.neko", buildFile.file().getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, NekoConfigurationFactory.class);
-    configureNeko((NekoRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
+    configureNeko(project, (NekoRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
     return settings;
   }
 
-  private static void configureNeko(@NotNull NekoRunConfiguration configuration,
+  private static void configureNeko(@NotNull Project project,
+                                    @NotNull NekoRunConfiguration configuration,
                                     @NotNull HaxeBuildFile buildFile,
                                     @NotNull String targetOutput) {
-    Path output = resolvedOutput(buildFile.file(), targetOutput);
+    Path output = resolvedOutput(project, buildFile.file(), targetOutput);
     if (buildFile.type() == HaxeBuildFileType.HXML) {
       // empty executable = the neko RUNTIME, resolved at launch (settings/SDK/PATH)
       configuration.setExecutablePath("");
@@ -204,14 +206,15 @@ public final class HaxeProgramLaunches {
   private static void reconfigure(@NotNull RunnerAndConfigurationSettings settings,
                                   @NotNull HaxeBuildFile buildFile,
                                   @NotNull String targetOutput) {
+    Project project = settings.getConfiguration().getProject();
     switch (settings.getConfiguration()) {
-      case HashLinkRunConfiguration configuration -> configureHashLink(configuration, buildFile, targetOutput);
-      case BrowserRunConfiguration configuration -> configureBrowser(configuration, buildFile, targetOutput);
-      case FlashRunConfiguration configuration -> configureFlash(configuration, buildFile, targetOutput);
-      case AirRunConfiguration configuration -> configureAir(configuration, buildFile, targetOutput);
+      case HashLinkRunConfiguration configuration -> configureHashLink(project, configuration, buildFile, targetOutput);
+      case BrowserRunConfiguration configuration -> configureBrowser(project, configuration, buildFile, targetOutput);
+      case FlashRunConfiguration configuration -> configureFlash(project, configuration, buildFile, targetOutput);
+      case AirRunConfiguration configuration -> configureAir(project, configuration, buildFile, targetOutput);
       case HxcppIntellijRunConfiguration configuration ->
-        configureHxcppExecutable(configuration, buildFile, resolvedOutput(buildFile.file(), targetOutput));
-      case NekoRunConfiguration configuration -> configureNeko(configuration, buildFile, targetOutput);
+        configureHxcppExecutable(configuration, buildFile, resolvedOutput(project, buildFile.file(), targetOutput));
+      case NekoRunConfiguration configuration -> configureNeko(project, configuration, buildFile, targetOutput);
       default -> { }
     }
   }
@@ -222,14 +225,15 @@ public final class HaxeProgramLaunches {
                                                                @NotNull String targetOutput) {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.hashlink", buildFile.file().getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, HashLinkConfigurationFactory.class);
-    configureHashLink((HashLinkRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
+    configureHashLink(project, (HashLinkRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
     return settings;
   }
 
-  private static void configureHashLink(@NotNull HashLinkRunConfiguration configuration,
+  private static void configureHashLink(@NotNull Project project,
+                                        @NotNull HashLinkRunConfiguration configuration,
                                         @NotNull HaxeBuildFile buildFile,
                                         @NotNull String targetOutput) {
-    Path output = resolvedOutput(buildFile.file(), targetOutput);
+    Path output = resolvedOutput(project, buildFile.file(), targetOutput);
     if (buildFile.type() == HaxeBuildFileType.HXML) {
       configuration.setHlFilePath(output.toString());
     }
@@ -246,16 +250,17 @@ public final class HaxeProgramLaunches {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.browser", file.getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, BrowserConfigurationFactory.class);
     BrowserRunConfiguration configuration = (BrowserRunConfiguration)settings.getConfiguration();
-    configureBrowser(configuration, buildFile, targetOutput);
+    configureBrowser(project, configuration, buildFile, targetOutput);
     return settings;
   }
 
-  private static void configureBrowser(@NotNull BrowserRunConfiguration configuration,
+  private static void configureBrowser(@NotNull Project project,
+                                       @NotNull BrowserRunConfiguration configuration,
                                        @NotNull HaxeBuildFile buildFile,
                                        @NotNull String targetOutput) {
     // serve mode hosts the directory containing the compiled .js (plus its
     // source map and index.html); the browser is picked in the editor
-    Path outputDirectory = resolvedOutput(buildFile.file(), targetOutput).getParent();
+    Path outputDirectory = resolvedOutput(project, buildFile.file(), targetOutput).getParent();
     if (outputDirectory != null) {
       configuration.setContentRoot(outputDirectory.toString());
     }
@@ -267,14 +272,15 @@ public final class HaxeProgramLaunches {
                                                             @NotNull String targetOutput) {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.flash", buildFile.file().getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, FlashConfigurationFactory.class);
-    configureFlash((FlashRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
+    configureFlash(project, (FlashRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
     return settings;
   }
 
-  private static void configureFlash(@NotNull FlashRunConfiguration configuration,
+  private static void configureFlash(@NotNull Project project,
+                                     @NotNull FlashRunConfiguration configuration,
                                      @NotNull HaxeBuildFile buildFile,
                                      @NotNull String targetOutput) {
-    configuration.setSwfFilePath(resolvedOutput(buildFile.file(), targetOutput).toString());
+    configuration.setSwfFilePath(resolvedOutput(project, buildFile.file(), targetOutput).toString());
     // the flex SDK and player cannot be guessed - the visible config prompts for them
   }
 
@@ -295,14 +301,15 @@ public final class HaxeProgramLaunches {
                                                           @NotNull String targetOutput) {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.air", buildFile.file().getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, AirConfigurationFactory.class);
-    configureAir((AirRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
+    configureAir(project, (AirRunConfiguration)settings.getConfiguration(), buildFile, targetOutput);
     return settings;
   }
 
-  private static void configureAir(@NotNull AirRunConfiguration configuration,
+  private static void configureAir(@NotNull Project project,
+                                   @NotNull AirRunConfiguration configuration,
                                    @NotNull HaxeBuildFile buildFile,
                                    @NotNull String targetOutput) {
-    Path binDir = resolvedOutput(buildFile.file(), targetOutput).getParent();
+    Path binDir = resolvedOutput(project, buildFile.file(), targetOutput).getParent();
     if (binDir == null || binDir.getParent() == null) return;
     configuration.setDescriptorPath(binDir.getParent().resolve("application.xml").toString());
     configuration.setContentRootPath(binDir.toString());
@@ -317,7 +324,7 @@ public final class HaxeProgramLaunches {
     String name = HaxeBundle.message("haxe.toolwindow.program.configuration.name.hxcpp", file.getName());
     RunnerAndConfigurationSettings settings = createSettings(project, name, HxcppIntellijConfigurationFactory.class);
     HxcppIntellijRunConfiguration configuration = (HxcppIntellijRunConfiguration)settings.getConfiguration();
-    configureHxcppExecutable(configuration, buildFile, resolvedOutput(file, targetOutput));
+    configureHxcppExecutable(configuration, buildFile, resolvedOutput(project, file, targetOutput));
     return settings;
   }
 
@@ -378,11 +385,14 @@ public final class HaxeProgramLaunches {
 
   /**
    * The target output resolved the way the compiler would: against the build
-   * file's directory (lime display also runs there, so its paths resolve the same).
+   * file's work directory - the file's own folder for the lime family (lime
+   * display runs there, so its paths resolve the same), the hxml anchor from
+   * {@link HaxeBuildWorkDirectories} otherwise.
    */
   @NotNull
-  private static Path resolvedOutput(@NotNull VirtualFile buildFile, @NotNull String targetOutput) {
-    return Path.of(buildFile.getParent().getPath())
+  private static Path resolvedOutput(@NotNull Project project, @NotNull VirtualFile buildFile, @NotNull String targetOutput) {
+    String anchor = HaxeBuildWorkDirectories.workDirectory(project, buildFile);
+    return Path.of(anchor != null ? anchor : buildFile.getParent().getPath())
       .resolve(targetOutput)
       .normalize();
   }

@@ -25,12 +25,14 @@ public final class HxmlProjects {
     return actionName.equals(BUILD_ACTION) || actionName.equals("compile");
   }
 
-  /// The direct compile: `haxe <file>`, run in the file's directory.
+  /// The direct compile: `haxe <file>`, run in the file's work directory
+  /// (see [HaxeBuildWorkDirectories]) with the file referenced relative to it.
   @NotNull
   public static List<String> buildCommand(@NotNull Project project,
                                           @Nullable String environmentSdk,
                                           @NotNull VirtualFile file) {
-    return List.of(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk), file.getName());
+    String fileArgument = HaxeBuildWorkDirectories.fileArgument(project, file);
+    return List.of(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk), fileArgument);
   }
 
   /// Whether the command invokes the haxe compiler directly (and so takes `--connect` right after the executable).
@@ -43,25 +45,25 @@ public final class HxmlProjects {
   // TODO: --next chains: a "Build (section)" action beside the whole-file Build
   //  (which compiles every section) - this scoping method is the building block
   /// A multi-section hxml compile scoped to the SELECTED `--next` section: the
-  /// file token is replaced by that section's lines as compiler arguments.
+  /// file argument is replaced by that section's lines as compiler arguments.
   /// haxe applies trailing CLI arguments to the LAST section of a chained
   /// file, so flags appended after the file (test reporting, debug additions)
   /// would miss every other section; compiling just the one section makes the
   /// trailing flags its own — and skips the unrelated sibling builds.
-  /// Single-section files, and commands not carrying the file token, come
+  /// Single-section files, and commands not carrying the file argument, come
   /// back unchanged. Call in a read action.
   @NotNull
   public static List<String> scopeToSelectedSection(@NotNull Project project,
                                                     @NotNull VirtualFile file,
                                                     @NotNull List<String> command) {
-    int fileToken = command.indexOf(file.getName());
-    if (fileToken < 0) return command;
+    int fileArgumentIndex = command.indexOf(HaxeBuildWorkDirectories.fileArgument(project, file));
+    if (fileArgumentIndex < 0) return command;
     List<String> sectionArguments = HaxeBuildSections.selectedSectionArguments(project, file);
     if (sectionArguments == null) return command;
 
-    List<String> scoped = new ArrayList<>(command.subList(0, fileToken));
+    List<String> scoped = new ArrayList<>(command.subList(0, fileArgumentIndex));
     scoped.addAll(sectionArguments);
-    scoped.addAll(command.subList(fileToken + 1, command.size()));
+    scoped.addAll(command.subList(fileArgumentIndex + 1, command.size()));
     return scoped;
   }
 }

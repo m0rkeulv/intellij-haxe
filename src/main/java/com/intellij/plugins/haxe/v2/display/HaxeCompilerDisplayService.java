@@ -143,7 +143,10 @@ public final class HaxeCompilerDisplayService {
     HaxeDisplayConfiguration.DefineOverrides overrides = HaxeDisplayConfiguration.overridesFor(project, containerId);
 
     if (type == HaxeBuildFileType.HXML) {
-      return new DisplayContext(hxmlContextArgs(buildFile, directory), null, sdkName, overrides, containerId);
+      // hxml paths resolve against the file's work directory, not its folder
+      String hxmlDirectory = HaxeBuildWorkDirectories.workDirectory(project, buildFile);
+      if (hxmlDirectory == null) return null;
+      return new DisplayContext(hxmlContextArgs(buildFile, hxmlDirectory), null, sdkName, overrides, containerId);
     }
     if (type == HaxeBuildFileType.NMML) {
       return nmeContext(buildFile, directory, sdkName, overrides, containerId);
@@ -169,7 +172,7 @@ public final class HaxeCompilerDisplayService {
   private List<String> hxmlContextArgs(@NotNull VirtualFile buildFile, @NotNull String directory) {
     List<String> sectionArguments = HaxeBuildSections.selectedSectionArguments(project, buildFile);
     if (sectionArguments == null) {
-      return List.of("--cwd", directory, buildFile.getName());
+      return List.of("--cwd", directory, HaxeBuildWorkDirectories.fileArgument(buildFile, directory));
     }
     List<String> args = new ArrayList<>(List.of("--cwd", directory));
     args.addAll(sectionArguments);

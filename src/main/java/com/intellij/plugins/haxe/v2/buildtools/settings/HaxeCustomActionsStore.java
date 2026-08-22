@@ -13,7 +13,8 @@ import java.util.List;
 
 /**
  * User-defined actions per build file (keyed by its path): a name plus a command
- * line executed with the build file's directory as working directory.
+ * line executed in the build file's work directory
+ * ({@link com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories}).
  * Shares {@code .idea/haxeBuildConfig.xml} with the other build-config stores.
  */
 @State(name = "HaxeCustomActions", storages = @Storage("haxeBuildConfig.xml"))
