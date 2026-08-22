@@ -109,6 +109,13 @@ public class HaxeIndentProcessor {
     if (parentType == FOR_STATEMENT && prevSiblingType == PRPAREN && elementType != BLOCK_STATEMENT) {
       return Indent.getNormalIndent();
     }
+    if (parentType == TRY_STATEMENT && prevSiblingType == KTRY
+        && elementType != BLOCK_STATEMENT && elementType != CATCH_STATEMENT) {
+      return Indent.getNormalIndent();
+    }
+    if (parentType == CATCH_STATEMENT && prevSiblingType == PRPAREN && elementType != BLOCK_STATEMENT) {
+      return Indent.getNormalIndent();
+    }
     if (parentType == WHILE_STATEMENT && prevSiblingType == PRPAREN
         && elementType == DO_WHILE_BODY && firstChildType != BLOCK_STATEMENT) {
       return Indent.getNormalIndent();

@@ -11,6 +11,14 @@ class Main {
 			trace(i);
 		while (x > 0)
 			x--;
+		try
+			trace(x)
+		catch (e:Dynamic)
+			trace(e);
+		try {
+			x++;
+		} catch (e:Dynamic)
+			trace("caught");
 		trace(x);
 	}
 }

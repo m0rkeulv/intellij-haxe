@@ -297,11 +297,15 @@ public class HaxeSpacingProcessor {
     if (!mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE && !isComprehension(myNode)) {
       boolean expressionIf = elementType == IF_STATEMENT && isExpressionPosition(myNode);
       boolean expressionElse = elementType == ELSE_STATEMENT && isExpressionPosition(myNode.getTreeParent());
+      boolean expressionTry = elementType == TRY_STATEMENT && isExpressionPosition(myNode);
+      boolean expressionCatch = elementType == CATCH_STATEMENT && isExpressionPosition(myNode.getTreeParent());
       boolean nonBlockBody =
         (elementType == IF_STATEMENT && !expressionIf && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT)
         || (elementType == ELSE_STATEMENT && !expressionElse && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT)
         || (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT)
-        || (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT);
+        || (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT)
+        || (elementType == TRY_STATEMENT && !expressionTry && type1 == KTRY && type2 != BLOCK_STATEMENT && type2 != CATCH_STATEMENT)
+        || (elementType == CATCH_STATEMENT && !expressionCatch && type1 == PRPAREN && type2 != BLOCK_STATEMENT);
       if (nonBlockBody) {
         return Spacing.createSpacing(0, 0, 1, false, 0);
       }

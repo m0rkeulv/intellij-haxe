@@ -110,7 +110,8 @@ public class HaxeWrappingProcessor {
         && mySettings.EXTENDS_LIST_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
         && child != myNode.getFirstChildNode()) {
       if (sharedItemWrap == null) {
-        boolean chop = mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM;
+        // the settings UI stores "chop down if long" as EVERY_ITEM|AS_NEEDED
+        boolean chop = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0;
         sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(mySettings.EXTENDS_LIST_WRAP), chop);
       }
       return sharedItemWrap;
