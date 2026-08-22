@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.ide.annotator.semantics;
 
+import com.intellij.lang.injection.InjectedLanguageManager;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.lang.parser.HaxePsiDocCommentImpl;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
@@ -20,13 +22,27 @@ public class AnnotatorUtil {
 
   /**
    * Common entry guard for semantic annotators: skips elements that are no
-   * longer valid and elements in generated-code preview files (see
+   * longer valid, elements in generated-code preview files (see
    * {@link #isInGeneratedPreview} for why the preview gets no semantic
-   * analysis). Validity is checked first — an invalidated element cannot be
-   * asked for its containing file.
+   * analysis) and elements in doc-comment code fragments (see
+   * {@link #isInDocCodeFragment}). Validity is checked first — an
+   * invalidated element cannot be asked for its containing file.
    */
   public static boolean shouldSkip(@NotNull PsiElement element) {
-    return !element.isValid() || isInGeneratedPreview(element);
+    return !element.isValid() || isInGeneratedPreview(element) || isInDocCodeFragment(element);
+  }
+
+  /**
+   * A doc comment's markdown code fences are language-injected for
+   * KDoc-style highlighting only: sample snippets resolve nothing, so
+   * semantic errors there would be pure noise.
+   */
+  public static boolean isInDocCodeFragment(@NotNull PsiElement element) {
+    PsiFile file = element.getContainingFile();
+    if (file == null) return false;
+    InjectedLanguageManager manager = InjectedLanguageManager.getInstance(file.getProject());
+    if (!manager.isInjectedFragment(file)) return false;
+    return manager.getInjectionHost(file) instanceof HaxePsiDocCommentImpl;
   }
 
   /**

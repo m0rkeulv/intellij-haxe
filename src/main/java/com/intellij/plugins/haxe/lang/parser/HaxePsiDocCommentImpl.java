@@ -2,8 +2,11 @@ package com.intellij.plugins.haxe.lang.parser;
 
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.util.HaxeDocumentationUtil;
+import com.intellij.psi.ElementManipulators;
+import com.intellij.psi.LiteralTextEscaper;
 import com.intellij.psi.PsiDocCommentBase;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiLanguageInjectionHost;
 import com.intellij.psi.impl.source.tree.LazyParseablePsiElement;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.CachedValuesManager;
@@ -15,9 +18,11 @@ import org.jetbrains.annotations.Nullable;
 /**
  * A doc comment as a lazily parsed composite: consumers reading only the text
  * never trigger the sub-tree; the formatter parses it to manage the interior
- * line indentation. The token type stays DOC_COMMENT.
+ * line indentation. The token type stays DOC_COMMENT. As an injection host it
+ * carries the markdown code fences' injected fragments (see HaxeDocFenceInjector).
  */
-public class HaxePsiDocCommentImpl extends LazyParseablePsiElement implements PsiDocCommentBase, HaxeLazyWithOwner {
+public class HaxePsiDocCommentImpl extends LazyParseablePsiElement
+  implements PsiDocCommentBase, HaxeLazyWithOwner, PsiLanguageInjectionHost {
 
     private String extractedDocs;
 
@@ -34,6 +39,21 @@ public class HaxePsiDocCommentImpl extends LazyParseablePsiElement implements Ps
     @Override
     public String toString() {
         return "PsiComment(" + getElementType() + ")";
+    }
+
+    @Override
+    public boolean isValidHost() {
+        return true;
+    }
+
+    @Override
+    public PsiLanguageInjectionHost updateText(@NotNull String text) {
+        return ElementManipulators.handleContentChange(this, text);
+    }
+
+    @Override
+    public @NotNull LiteralTextEscaper<? extends PsiLanguageInjectionHost> createLiteralTextEscaper() {
+        return LiteralTextEscaper.createSimple(this);
     }
 
     @Override

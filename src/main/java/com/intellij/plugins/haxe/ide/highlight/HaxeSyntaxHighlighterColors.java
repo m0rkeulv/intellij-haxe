@@ -59,6 +59,8 @@ public class HaxeSyntaxHighlighterColors {
     createTextAttributesKey("HAXE_BLOCK_COMMENT", DefaultLanguageHighlighterColors.BLOCK_COMMENT);
   public static final TextAttributesKey DOC_COMMENT =
     createTextAttributesKey("HAXE_DOC_COMMENT", DefaultLanguageHighlighterColors.DOC_COMMENT);
+  public static final TextAttributesKey DOC_CODE =
+    createTextAttributesKey("HAXE_DOC_CODE", DefaultLanguageHighlighterColors.DOC_COMMENT_TAG_VALUE);
 
   public static final TextAttributesKey DEFINED_VAR = createTextAttributesKey("HAXE_DEFINED_VAR");
   public static final TextAttributesKey UNDEFINED_VAR = createTextAttributesKey("HAXE_UNDEFINED_VAR");

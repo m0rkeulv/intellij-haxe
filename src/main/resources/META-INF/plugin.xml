@@ -333,7 +333,8 @@
 
     <completion.contributor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.references.HaxeStringQnameCompletionContributor"/>
 
-    <completion.contributor id="ControllingCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeControllingCompletionContributor" order="FIRST"/>
+    <completion.contributor id="DocFragmentBlocker" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeDocFragmentCompletionBlocker" order="FIRST"/>
+    <completion.contributor id="ControllingCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeControllingCompletionContributor" order="FIRST, after DocFragmentBlocker"/>
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRuntimeCompletionContributor"/>
     <!-- opt-in via compiler diagnostics: macro-generated members of the enclosing class -->
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.v2.display.HaxeBlueprintCompletionContributor"/>
@@ -531,6 +532,12 @@
     <annotator language="Haxe" id="xmlFastColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeXmlFastColorAnnotator" order="after fastColor before slowColor"/>
     <annotator language="Haxe" id="slowColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeSlowColorAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="invalidEscape" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInvalidEscapeAnnotator" order="after fastColor"/>
+    <annotator language="Haxe" id="docCode" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeDocCodeAnnotator" order="after fastColor"/>
+    <multiHostInjector implementation="com.intellij.plugins.haxe.ide.injection.HaxeDocFenceInjector"/>
+    <highlightErrorFilter implementation="com.intellij.plugins.haxe.ide.injection.HaxeDocFragmentErrorFilter"/>
+    <lang.inspectionSuppressor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeDocFragmentInspectionSuppressor"/>
+    <lang.elementManipulator forClass="com.intellij.plugins.haxe.lang.parser.HaxePsiDocCommentImpl"
+                             implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeDocCommentManipulator"/>
     <annotator language="Haxe" id="stringLink" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeStringLinkColorAnnotator" order="after slowColor"/>
 
     <annotator language="HXML" id="hxmlFastColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeHxmlFastColorAnnotator" order="first"/>
