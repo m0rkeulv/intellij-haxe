@@ -232,6 +232,8 @@ public final class HxformatCodeStyle {
     void apply() {
       // file-exclusion globs for their CLI - no code-style meaning in the IDE
       consumed.add("excludes");
+      // editor metadata naming a JSON schema, not a formatter setting
+      consumed.add("$schema");
       acceptOnly("disableFormatting", "false");
       applyIndentation();
       applyWrapping();

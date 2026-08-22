@@ -45,7 +45,8 @@
 
   <extensions defaultExtensionNs="JavaScript">
     <JsonSchema.ProviderFactory implementation="com.intellij.plugins.haxe.buildsystem.haxelib.HaxelibJsonSchemaProviderFactory" />
-  </extensions>>
+    <JsonSchema.ProviderFactory implementation="com.intellij.plugins.haxe.ide.formatter.settings.HxformatJsonSchemaProviderFactory" />
+  </extensions>
 
   <extensions defaultExtensionNs="com.intellij">
 
@@ -169,6 +170,7 @@
     <lang.parserDefinition language="Haxe" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeParserDefinition"/>
     <lang.formatter language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.formatter.HaxeFormattingModelBuilder"/>
     <postFormatProcessor implementation="com.intellij.plugins.haxe.ide.formatter.HaxeConditionalPostFormatProcessor"/>
+    <codeStyleSettingsModifier implementation="com.intellij.plugins.haxe.ide.formatter.settings.HaxeHxformatSettingsModifier"/>
     <schemeImporter name="hxformat.json (haxe-formatter)"
                     schemeClass="com.intellij.psi.codeStyle.CodeStyleScheme"
                     implementationClass="com.intellij.plugins.haxe.ide.formatter.settings.HxformatSchemeImporter"/>

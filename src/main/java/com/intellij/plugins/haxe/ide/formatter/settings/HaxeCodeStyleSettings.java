@@ -24,6 +24,10 @@ import com.intellij.psi.codeStyle.CustomCodeStyleSettings;
  * @author: Fedor.Korotkov
  */
 public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
+    // a project's own hxformat.json (haxe-formatter config) overrides these
+    // settings per file while present, like EditorConfig support does
+    public boolean USE_PROJECT_HXFORMAT = true;
+
     public boolean SPACE_AROUND_ARROW = true;
     public boolean SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_AFTER_TYPE_REFERENCE_COLON = false;

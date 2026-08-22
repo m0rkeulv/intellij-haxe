@@ -33,5 +33,6 @@ public class HaxeCodeStyleMainPanel extends TabbedLanguageCodeStylePanel {
   protected void initTabs(CodeStyleSettings settings) {
     super.initTabs(settings);
     addTab(new HaxeImportsCodeStylePanel(settings));
+    addTab(new HaxeHxformatCodeStylePanel(settings));
   }
 }
