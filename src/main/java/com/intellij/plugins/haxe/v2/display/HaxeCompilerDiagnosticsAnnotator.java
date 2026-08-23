@@ -76,7 +76,7 @@ public class HaxeCompilerDiagnosticsAnnotator
       if (!HaxeDiagnosticMessageFilter.shouldShow(level, haxeVersion, diagnostic)) continue;
       TextRange range = HaxeDiagnosticsPass.toTextRange(document, diagnostic.range());
       if (range == null) continue;
-      annotate(holder, file, diagnostic, range);
+      annotate(holder, file, diagnostic, range, haxeVersion);
     }
   }
 
@@ -93,7 +93,8 @@ public class HaxeCompilerDiagnosticsAnnotator
   }
 
   private static void annotate(@NotNull AnnotationHolder holder, @NotNull PsiFile file,
-                               @NotNull Diagnostic diagnostic, @NotNull TextRange range) {
+                               @NotNull Diagnostic diagnostic, @NotNull TextRange range,
+                               @Nullable InitializeResult.SemVer haxeVersion) {
     AnnotationBuilder builder =
       holder.newAnnotation(HaxeDiagnosticsPass.severityOf(diagnostic), messageOf(diagnostic)).range(range);
     switch (diagnostic.kind()) {
@@ -102,7 +103,7 @@ public class HaxeCompilerDiagnosticsAnnotator
       default -> {
       }
     }
-    IntentionAction modernize = modernizeFixFor(file, diagnostic, range);
+    IntentionAction modernize = modernizeFixFor(file, diagnostic, range, haxeVersion);
     if (modernize != null) {
       builder = builder.withFix(modernize);
     }
@@ -112,15 +113,15 @@ public class HaxeCompilerDiagnosticsAnnotator
   /**
    * A syntax-migration fix when the diagnostic is a deprecation pointing at a
    * construct with a known modern spelling (@:enum abstract, @:final,
-   * @:extern, the renamed std APIs).
+   * @:extern, the renamed std APIs). Deprecation identification is
+   * {@link HaxeDiagnosticMessageFilter}'s - one rule for the filter and the
+   * fix offer.
    */
   @Nullable
   private static IntentionAction modernizeFixFor(@NotNull PsiFile file, @NotNull Diagnostic diagnostic,
-                                                 @NotNull TextRange range) {
-    boolean deprecation = diagnostic.kind() == DiagnosticKind.DEPRECATION_WARNING
-                          || diagnostic.messageArg().contains("deprecated")
-                          || (diagnostic.code() != null && diagnostic.code().startsWith("WDeprecated"));
-    if (!deprecation) return null;
+                                                 @NotNull TextRange range,
+                                                 @Nullable InitializeResult.SemVer haxeVersion) {
+    if (!HaxeDiagnosticMessageFilter.isDeprecationWarning(diagnostic, haxeVersion)) return null;
     return HaxeSyntaxMigrationFixes.modernizeFixAt(file, range);
   }
 

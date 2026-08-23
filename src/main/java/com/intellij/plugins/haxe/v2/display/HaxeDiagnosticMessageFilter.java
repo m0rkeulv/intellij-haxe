@@ -79,13 +79,15 @@ public final class HaxeDiagnosticMessageFilter {
   }
 
   /**
-   * Code-based on compilers that send ids; on a 5+ compiler an ABSENT code on
-   * a warning means "not a warning-class diagnostic", so no message sniffing.
-   * 4.x compilers route syntax deprecations through the generic warning
-   * channel, hence the message-shape fallback.
+   * The one home for "is this diagnostic a deprecation" (the level filter
+   * and the modernize-fix offer both key on it). Code-based on compilers
+   * that send ids; on a 5+ compiler an ABSENT code on a warning means "not
+   * a warning-class diagnostic", so no message sniffing. 4.x compilers
+   * route syntax deprecations through the generic warning channel, hence
+   * the message-shape fallback.
    */
-  private static boolean isDeprecationWarning(@NotNull Diagnostic diagnostic,
-                                              @Nullable InitializeResult.SemVer haxeVersion) {
+  public static boolean isDeprecationWarning(@NotNull Diagnostic diagnostic,
+                                             @Nullable InitializeResult.SemVer haxeVersion) {
     if (diagnostic.code() != null) return diagnostic.code().startsWith(DEPRECATION_CODE_PREFIX);
     if (haxeVersion != null && haxeVersion.major() >= 5) return false;
     if (diagnostic.kind() == DiagnosticKind.DEPRECATION_WARNING) return true;

@@ -1,9 +1,11 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.lang.annotation.HighlightSeverity;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -44,11 +46,25 @@ final class HaxeDiagnosticsPass {
   private record CacheEntry(int contentsHash, long timestampMillis, List<Diagnostic> diagnostics) {
   }
 
+  /**
+   * Last known diagnostics per file path, one map per PROJECT (a file open in
+   * two projects must not render the other project's diagnostics, and a
+   * per-project cache clear must not wipe every project). Entries persist
+   * past the TTL as the transient-failure fallback; the service dies with
+   * its project.
+   */
+  @Service(Service.Level.PROJECT)
+  static final class Cache {
+    private final Map<String, CacheEntry> entries = new ConcurrentHashMap<>();
+
+    @NotNull
+    static Cache getInstance(@NotNull Project project) {
+      return project.getService(Cache.class);
+    }
+  }
+
   /** Long enough to span one daemon pass over all annotators, short enough to never serve a stale edit. */
   private static final long CACHE_TTL_MILLIS = 5_000;
-
-  /** Last known diagnostics per file path; entries persist past the TTL as the transient-failure fallback. */
-  private static final Map<String, CacheEntry> CACHE = new ConcurrentHashMap<>();
 
   private static final int CACHE_MAX_FILES = 200;
 
@@ -95,9 +111,10 @@ final class HaxeDiagnosticsPass {
    */
   @Nullable
   static List<Diagnostic> fetch(@NotNull Request request) {
+    Map<String, CacheEntry> cache = Cache.getInstance(request.service().getProject()).entries;
     String key = request.filePath();
     int contentsHash = request.contents() != null ? request.contents().hashCode() : 0;
-    CacheEntry cached = CACHE.get(key);
+    CacheEntry cached = cache.get(key);
     boolean fresh = cached != null && cached.contentsHash() == contentsHash
                     && System.currentTimeMillis() - cached.timestampMillis() < CACHE_TTL_MILLIS;
     if (fresh) {
@@ -127,21 +144,21 @@ final class HaxeDiagnosticsPass {
       .filter(entry -> FileUtil.pathsEqual(entry.file(), request.filePath()))
       .flatMap(entry -> entry.diagnostics().stream())
       .toList();
-    if (CACHE.size() >= CACHE_MAX_FILES) {
-      evictOldest();
+    if (cache.size() >= CACHE_MAX_FILES) {
+      evictOldest(cache);
     }
-    CACHE.put(key, new CacheEntry(contentsHash, System.currentTimeMillis(), diagnostics));
+    cache.put(key, new CacheEntry(contentsHash, System.currentTimeMillis(), diagnostics));
     return diagnostics;
   }
 
-  static void clearCache() {
-    CACHE.clear();
+  static void clearCache(@NotNull Project project) {
+    Cache.getInstance(project).entries.clear();
   }
 
-  private static void evictOldest() {
-    CACHE.entrySet().stream()
+  private static void evictOldest(@NotNull Map<String, CacheEntry> cache) {
+    cache.entrySet().stream()
       .min(Map.Entry.comparingByValue(Comparator.comparingLong(CacheEntry::timestampMillis)))
-      .ifPresent(oldest -> CACHE.remove(oldest.getKey()));
+      .ifPresent(oldest -> cache.remove(oldest.getKey()));
   }
 
   @NotNull
