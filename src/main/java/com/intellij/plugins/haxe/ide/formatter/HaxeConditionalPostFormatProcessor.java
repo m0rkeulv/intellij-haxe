@@ -76,7 +76,7 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
       IElementType type = leaf.getElementType();
       int start = leaf.getStartOffset() + shift;
       if (PP_DIRECTIVES.contains(type)) {
-        target = lineIndentAt(working, start);
+        target = HaxeIndentText.lineIndentAt(working, start);
         continue;
       }
       boolean inRange = rangeToReformat.intersects(leaf.getStartOffset(), leaf.getStartOffset() + leaf.getTextLength());
@@ -97,15 +97,6 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
     return new TextRange(rangeToReformat.getStartOffset(), Math.max(rangeToReformat.getStartOffset(), end));
   }
 
-  /** The whitespace prefix of the line containing {@code offset}. */
-  private static String lineIndentAt(StringBuilder text, int offset) {
-    int lineStart = offset;
-    while (lineStart > 0 && text.charAt(lineStart - 1) != '\n') lineStart--;
-    int indentEnd = lineStart;
-    while (indentEnd < text.length() && (text.charAt(indentEnd) == ' ' || text.charAt(indentEnd) == '\t')) indentEnd++;
-    return text.substring(lineStart, indentEnd);
-  }
-
   /**
    * Shifts every line of the blob so its first code line sits at the target
    * indent; the trailing whitespace-only line (the NEXT directive's indent)
@@ -119,7 +110,7 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
     int referenceColumns = -1;
     for (int i = 1; i < lines.length; i++) {
       if (!lines[i].isBlank()) {
-        referenceColumns = indentWidth(leadingWhitespace(lines[i]), indent.TAB_SIZE);
+        referenceColumns = indentWidth(HaxeIndentText.leadingWhitespace(lines[i]), indent.TAB_SIZE);
         break;
       }
     }
@@ -136,19 +127,13 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
         result.append(target);
       }
       else if (!line.isBlank()) {
-        String lead = leadingWhitespace(line);
+        String lead = HaxeIndentText.leadingWhitespace(line);
         int columns = Math.max(0, indentWidth(lead, indent.TAB_SIZE) + delta);
         result.append(renderIndent(columns, indent));
         result.append(line, lead.length(), line.length());
       }
     }
     return result.toString();
-  }
-
-  private static String leadingWhitespace(String line) {
-    int end = 0;
-    while (end < line.length() && (line.charAt(end) == ' ' || line.charAt(end) == '\t')) end++;
-    return line.substring(0, end);
   }
 
   private static int indentWidth(String whitespace, int tabSize) {

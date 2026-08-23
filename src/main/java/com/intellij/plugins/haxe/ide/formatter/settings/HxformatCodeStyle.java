@@ -135,6 +135,8 @@ public final class HxformatCodeStyle {
     common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
 
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    // haxe-formatter always reindents plain /*..*/ comment interiors
+    haxe.REINDENT_MULTILINE_COMMENTS = true;
     // whitespace.arrowFunctionsPolicy/functionTypeHaxe4Policy=Around
     haxe.SPACE_AROUND_ARROW = true;
     // whitespace.typeHintColonPolicy=None

@@ -44,6 +44,13 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public boolean STRUCTURE_EXTENSION_ON_OWN_LINE = false;
     public boolean FORMAT_DOC_COMMENTS = true;
 
+    // reindent the interior lines of a plain /*..*/ comment the way
+    // hxformat does: common margin removed, one level deeper than the
+    // comment, star rails aligned. Off restores the IntelliJ convention of
+    // leaving comment interiors alone. First-column comments stay fully
+    // untouched while KEEP_FIRST_COLUMN_COMMENT pins their opener.
+    public boolean REINDENT_MULTILINE_COMMENTS = true;
+
     // reformat also re-aligns the INACTIVE #if/#elseif/#else branches (the
     // block formatter only reaches the active one). Off by default: inactive
     // code is NOT parsed, so its lines are shifted as a group - statements

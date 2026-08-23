@@ -229,6 +229,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       // breaks at once, not just wrapping
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "FORMAT_DOC_COMMENTS",
                                 "Indent documentation comment lines", "Comments");
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "REINDENT_MULTILINE_COMMENTS",
+                                "Reindent multi-line comment content (hxformat style)", "Comments");
     }
   }
 

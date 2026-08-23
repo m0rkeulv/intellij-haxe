@@ -344,6 +344,15 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("multiline comments")
+  public void testMultilineComments() throws Exception {
+    // interior lines of plain /*..*/ comments: common margin removed,
+    // middles one level deeper, star rails aligned under the opener,
+    // empty interior lines left empty
+    doParityTest("multiline-comments");
+  }
+
+  @Test
   @DisplayName("conditional inactive branches")
   public void testConditionalInactiveBranches() throws Exception {
     // inactive branches format with the SAME rules as active code (the
