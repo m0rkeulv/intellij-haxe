@@ -17,7 +17,7 @@ import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.HtmlChunk;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
-import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
+import com.intellij.plugins.haxe.util.ui.HaxePathFieldChoosers;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
 import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.JBCheckBox;
@@ -70,11 +70,11 @@ public class BrowserRunConfigurationEditor extends SettingsEditor<BrowserRunConf
 
   public BrowserRunConfigurationEditor(Project project) {
     this.project = project;
-    FileChooserDescriptor folderDescriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor();
+    FileChooserDescriptor folderDescriptor = FileChooserDescriptorFactory.singleDir();
     FileChooserDescriptor fileDescriptor = FileChooserDescriptorFactory.singleFile();
 
-    HaxeRunConfigurationEditorUtil.browseInto(project, contentRootField, folderDescriptor);
-    HaxeRunConfigurationEditorUtil.browseInto(project, nodePathField, fileDescriptor);
+    HaxePathFieldChoosers.browseInto(project, contentRootField, folderDescriptor);
+    HaxePathFieldChoosers.browseInto(project, nodePathField, fileDescriptor);
 
     serveContentCheckBox.addActionListener(e -> updateContentModeEnablement());
     overrideNodeCheckBox.addActionListener(e -> updateOverrideEnablement());

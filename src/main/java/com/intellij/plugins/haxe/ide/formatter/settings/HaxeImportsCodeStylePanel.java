@@ -1,34 +1,25 @@
 package com.intellij.plugins.haxe.ide.formatter.settings;
 
-import com.intellij.application.options.CodeStyleAbstractPanel;
-import com.intellij.openapi.editor.colors.EditorColorsScheme;
-import com.intellij.openapi.editor.highlighter.EditorHighlighter;
-import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
-import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.components.fields.IntegerField;
 import com.intellij.util.ui.FormBuilder;
-import com.intellij.util.ui.JBUI;
+import org.intellij.lang.annotations.Language;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
-import java.awt.BorderLayout;
 
 /**
  * The Imports tab of the Haxe code style: import grouping and the blank-line
  * cap within the import section. Kept out of Blank Lines because every peer
  * language (Java/Kotlin/Groovy) hosts import behavior in a dedicated tab.
  */
-public class HaxeImportsCodeStylePanel extends CodeStyleAbstractPanel {
+public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
-  private final JPanel panel;
   private final IntegerField keepBetweenImports = new IntegerField(null, 0, 99);
   private final IntegerField blanksBetweenGroups = new IntegerField(null, 0, 99);
   private final IntegerField groupPackageDepth = new IntegerField(null, 1, 99);
@@ -42,26 +33,17 @@ public class HaxeImportsCodeStylePanel extends CodeStyleAbstractPanel {
       .addComponent(new TitledSeparator(HaxeBundle.message("haxe.codestyle.imports.keep.title")))
       .addLabeledComponent(HaxeBundle.message("haxe.codestyle.imports.keep.between"), keepBetweenImports)
       .getPanel();
-    form.setBorder(JBUI.Borders.empty(10));
-    JPanel options = new JPanel(new BorderLayout());
-    options.add(form, BorderLayout.NORTH);
-    panel = new JPanel(new BorderLayout());
-    panel.add(options, BorderLayout.WEST);
-    if (getEditor() != null) {
-      panel.add(getEditor().getComponent(), BorderLayout.CENTER);
-    }
+    initPanel(form);
     installPreviewUpdater(keepBetweenImports);
     installPreviewUpdater(blanksBetweenGroups);
     installPreviewUpdater(groupPackageDepth);
   }
 
-  /** The preview reformats from the panel's settings clone - push edits into it live. */
   private void installPreviewUpdater(IntegerField field) {
     field.getDocument().addDocumentListener(new DocumentAdapter() {
       @Override
       protected void textChanged(@NotNull DocumentEvent event) {
-        apply(getSettings());
-        somethingChanged();
+        previewChanged();
       }
     });
   }
@@ -96,31 +78,11 @@ public class HaxeImportsCodeStylePanel extends CodeStyleAbstractPanel {
   }
 
   @Override
-  public @Nullable JComponent getPanel() {
-    return panel;
-  }
-
-  @Override
-  protected int getRightMargin() {
-    return 60;
-  }
-
-  @Override
-  protected @Nullable EditorHighlighter createHighlighter(@NotNull EditorColorsScheme scheme) {
-    return EditorHighlighterFactory.getInstance().createEditorHighlighter(getFileType(), scheme, null);
-  }
-
-  @Override
-  protected @NotNull FileType getFileType() {
-    return HaxeFileType.INSTANCE;
-  }
-
-  @Override
   protected @Nullable String getPreviewText() {
     return IMPORTS_CODE_SAMPLE;
   }
 
-  @org.intellij.lang.annotations.Language("Haxe")
+  @Language("Haxe")
   private static final String IMPORTS_CODE_SAMPLE = """
     package;
     import haxe.ds.StringMap;

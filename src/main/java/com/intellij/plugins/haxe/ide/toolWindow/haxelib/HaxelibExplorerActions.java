@@ -303,7 +303,7 @@ final class HaxelibExplorerActions {
     public void actionPerformed(@NotNull AnActionEvent e) {
       LibraryRow row = selectedLibrary();
       if (row == null) return;
-      FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor()
+      FileChooserDescriptor descriptor = FileChooserDescriptorFactory.singleDir()
         .withTitle(HaxeBundle.message("haxelib.explorer.action.set.dev.chooser.title", row.name()));
       VirtualFile chosen = FileChooser.chooseFile(descriptor, panel.getProject(), currentDevDirectory(row));
       if (chosen == null) return;

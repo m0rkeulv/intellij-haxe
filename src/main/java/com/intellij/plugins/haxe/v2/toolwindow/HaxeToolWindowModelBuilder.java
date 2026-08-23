@@ -341,7 +341,7 @@ final class HaxeToolWindowModelBuilder {
     addDefaultActions(actions, ownerId, buildFile, environmentSdk, workDirectory);
     for (HaxeCustomActionsStore.CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(ownerId)) {
       // the row shows the expanded command, so a ${target} action reads like the default ones
-      String expanded = HaxeCustomCommands.expandVariables(project, buildFile.file(), buildFile.type(), custom.command());
+      String expanded = HaxeCustomCommands.expandTarget(project, buildFile.file(), buildFile.type(), custom.command());
       List<String> command = HaxeCustomCommands.parse(expanded);
       actions.add(new ActionNode(ownerId, custom.name(), command, workDirectory, expanded, true));
     }

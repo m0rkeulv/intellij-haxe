@@ -195,7 +195,7 @@ public final class HaxeCompileCommands {
     return HaxeCustomActionsStore.getInstance(project).getActions(file.getPath()).stream()
       .filter(custom -> custom.name().equals(actionName))
       .findFirst()
-      .map(custom -> HaxeCustomCommands.expandVariables(project, file, type, custom.command()))
+      .map(custom -> HaxeCustomCommands.expandTarget(project, file, type, custom.command()))
       .map(HaxeCustomCommands::parse)
       .orElse(null);
   }

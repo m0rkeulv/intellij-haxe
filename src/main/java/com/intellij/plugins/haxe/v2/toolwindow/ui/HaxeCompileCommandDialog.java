@@ -5,6 +5,7 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.util.ui.HaxeDialogHints;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore.CompileCommand;
 import com.intellij.ui.components.JBTextField;

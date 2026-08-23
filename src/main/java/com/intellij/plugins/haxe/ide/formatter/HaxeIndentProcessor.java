@@ -33,6 +33,7 @@ import org.jetbrains.annotations.Nullable;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.DOC_COMMENT;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.FUNCTION_DEFINITION;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
@@ -137,10 +138,13 @@ public class HaxeIndentProcessor {
     // a named function's non-block body on its own line indents one step
     // (FUNCTION_DEFINITION lacks the module-level kind); the header's own
     // trailing parts also follow a header end and stay unindented
-    if ((FUNCTION_DEFINITION.contains(parentType) || parentType == MODULE_METHOD_DECLARATION)
-        && elementType != BLOCK_STATEMENT && elementType != TYPE_TAG
-        && elementType != PRPAREN && elementType != KUNTYPED && elementType != OSEMI
-        && (prevSiblingType == PRPAREN || prevSiblingType == TYPE_TAG || prevSiblingType == KUNTYPED)) {
+    boolean functionParent = FUNCTION_DEFINITION.contains(parentType) || parentType == MODULE_METHOD_DECLARATION;
+    boolean afterHeaderEnd = FUNCTION_HEADER_END.contains(prevSiblingType);
+    boolean headerTrailer = FUNCTION_HEADER_END.contains(elementType)
+                            || elementType == BLOCK_STATEMENT
+                            || elementType == OSEMI;
+
+    if (functionParent && afterHeaderEnd && !headerTrailer) {
       return Indent.getNormalIndent();
     }
     if (parentType == FOR_STATEMENT && prevSiblingType == PRPAREN && elementType != BLOCK_STATEMENT) {

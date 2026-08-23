@@ -21,7 +21,6 @@ import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.util.HaxeStringUtil;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
@@ -47,12 +46,7 @@ public class HaxeFastColorAnnotator implements Annotator , DumbAware {
   public static final Key<String> PP_EXPRESSION_VALUE = Key.create("haxe.ppexpression.value");
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    // inactive branches get DIMMED colors from HaxeInactiveCodeDimAnnotator;
-    // full-strength colors here would paint over the dimming
-    if (AnnotatorUtil.isInInactiveBranch(element)) return;
-    if(!element.isValid()) return;
-
-    if (element instanceof PsiWhiteSpace) return;
+    if (AnnotatorUtil.shouldSkipColorAnnotation(element)) return;
 
     if (element instanceof HaxePsiToken token) {
 

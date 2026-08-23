@@ -40,6 +40,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
@@ -322,11 +323,10 @@ public class HaxeSpacingProcessor {
     // its own line; anonymous/arrow function bodies always stay inline
     boolean namedFunction = elementType == METHOD_DECLARATION || elementType == CONSTRUCTOR_DECLARATION
                             || elementType == LOCAL_FUNCTION_DECLARATION || elementType == MODULE_METHOD_DECLARATION;
-    boolean headerEnd = type1 == PRPAREN || type1 == TYPE_TAG || type1 == KUNTYPED;
+    boolean headerEnd = FUNCTION_HEADER_END.contains(type1);
     // the header's own trailing parts also follow a headerEnd - only what
     // comes after the LAST of them is the body
-    boolean headerTrailer = type2 == PRPAREN || type2 == TYPE_TAG || type2 == KUNTYPED
-                            || type2 == OSEMI || type2 == BLOCK_STATEMENT;
+    boolean headerTrailer = FUNCTION_HEADER_END.contains(type2) || type2 == OSEMI || type2 == BLOCK_STATEMENT;
     if (myHaxeCodeStyleSettings.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE
         && namedFunction && headerEnd && !headerTrailer) {
       return Spacing.createSpacing(0, 0, 1, false, 0);

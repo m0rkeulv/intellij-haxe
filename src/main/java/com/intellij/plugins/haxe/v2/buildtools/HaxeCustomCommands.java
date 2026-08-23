@@ -19,6 +19,8 @@ import java.util.List;
  */
 public final class HaxeCustomCommands {
 
+  /** The variable {@link #expandTarget} resolves to the file's selected target flag. */
+  public static final String TARGET_VARIABLE = "${target}";
   /** The execution-time variable {@link #expandServerPort} resolves; resolve and display keep it literal. */
   public static final String SERVER_PORT_VARIABLE = "${serverPort}";
 
@@ -33,13 +35,13 @@ public final class HaxeCustomCommands {
    * making the unapplied variable visible instead of silently vanishing.
    */
   @NotNull
-  public static String expandVariables(@NotNull Project project,
-                                       @NotNull VirtualFile file,
-                                       @NotNull HaxeBuildFileType type,
-                                       @NotNull String command) {
-    if (!command.contains("${target}")) return command;
+  public static String expandTarget(@NotNull Project project,
+                                    @NotNull VirtualFile file,
+                                    @NotNull HaxeBuildFileType type,
+                                    @NotNull String command) {
+    if (!command.contains(TARGET_VARIABLE)) return command;
     String targetFlag = HaxeBuildFileActions.selectedTargetFlag(project, file, type);
-    return targetFlag == null ? command : command.replace("${target}", targetFlag);
+    return targetFlag == null ? command : command.replace(TARGET_VARIABLE, targetFlag);
   }
 
   /**

@@ -17,10 +17,7 @@ public class HaxeInvalidEscapeAnnotator implements Annotator , DumbAware {
 
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    // inactive branches get DIMMED colors from HaxeInactiveCodeDimAnnotator;
-    // full-strength colors here would paint over the dimming
-    if (AnnotatorUtil.isInInactiveBranch(element)) return;
-    if(!element.isValid()) return;
+    if (AnnotatorUtil.shouldSkipColorAnnotation(element)) return;
 
     if (element instanceof HaxeStringLiteralExpression literal) {
       ASTNode node = literal.getNode();

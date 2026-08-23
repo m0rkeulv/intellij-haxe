@@ -32,6 +32,7 @@ import com.intellij.psi.tree.ILazyParseableElementType;
 import org.jetbrains.annotations.Nullable;
 
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.DOC_COMMENT;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
 
 /**
  * Created by ebishton on 10/24/14.
@@ -53,7 +54,7 @@ public class HaxeAstFactory extends ASTFactory {
     if (type == DOC_COMMENT) {
       return new HaxePsiDocCommentImpl(type, text);
     }
-    if (type == HaxeTokenTypeSets.PPBODY) {
+    if (type == PPBODY) {
       return new HaxeInactiveBody(type, text);
     }
     return super.createLazy(type, text);

@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.debugger;
+package com.intellij.plugins.haxe.util.ui;
 
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
@@ -14,12 +14,12 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Shared browse-button wiring for path fields (run-configuration editors,
- * the haxelib add-library dialog): one place for the chooser behavior, so a
- * UX tweak reaches every field (before extraction, the "open at the current
- * path" improvement had reached only two of the three copies).
+ * tool-window dialogs): one place for the chooser behavior, so a UX tweak
+ * reaches every field (before extraction, the "open at the current path"
+ * improvement had reached only two of the three copies).
  */
-public final class HaxeRunConfigurationEditorUtil {
-  private HaxeRunConfigurationEditorUtil() {
+public final class HaxePathFieldChoosers {
+  private HaxePathFieldChoosers() {
   }
 
   /**

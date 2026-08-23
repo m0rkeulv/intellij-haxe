@@ -109,16 +109,13 @@ public class HaxeWrappingProcessor {
         && (childType == EXTENDS_DECLARATION || childType == IMPLEMENTS_DECLARATION)
         && mySettings.EXTENDS_LIST_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
         && child != myNode.getFirstChildNode()) {
-      if (sharedItemWrap == null) {
-        // chop ("chop down if long" is stored as EVERY_ITEM|AS_NEEDED) and
-        // always must wrap the first participating clause too; only fill
-        // ("wrap if long") leaves it, so the break lands at the overflow
-        // instead of being pulled back to the first clause
-        boolean wrapFirst = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0
-                            || mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ALWAYS;
-        sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(mySettings.EXTENDS_LIST_WRAP), wrapFirst);
-      }
-      return sharedItemWrap;
+      // chop ("chop down if long" is stored as EVERY_ITEM|AS_NEEDED) and
+      // always must wrap the first participating clause too; only fill
+      // ("wrap if long") leaves it, so the break lands at the overflow
+      // instead of being pulled back to the first clause
+      boolean wrapFirst = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0
+                          || mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ALWAYS;
+      return sharedItemWrap(mySettings.EXTENDS_LIST_WRAP, wrapFirst);
     }
 
     //
@@ -214,8 +211,12 @@ public class HaxeWrappingProcessor {
   }
 
   private Wrap sharedItemWrap(int wrapSetting) {
+    return sharedItemWrap(wrapSetting, true);
+  }
+
+  private Wrap sharedItemWrap(int wrapSetting, boolean wrapFirst) {
     if (sharedItemWrap == null) {
-      sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(wrapSetting), true);
+      sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(wrapSetting), wrapFirst);
     }
     return sharedItemWrap;
   }

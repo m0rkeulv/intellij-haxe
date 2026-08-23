@@ -11,7 +11,6 @@ import com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiWhiteSpace;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
@@ -22,10 +21,7 @@ public class HaxeXmlFastColorAnnotator implements Annotator, DumbAware {
 
     @Override
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-        // inactive branches get DIMMED colors from HaxeInactiveCodeDimAnnotator;
-        // full-strength colors here would paint over the dimming
-        if (AnnotatorUtil.isInInactiveBranch(element)) return;
-        if (element instanceof PsiWhiteSpace) return;
+        if (AnnotatorUtil.shouldSkipColorAnnotation(element)) return;
 
         if (isEndOfTag(element)) {
             colorize(holder, element, HaxeSyntaxHighlighterColors.INLINE_XML);

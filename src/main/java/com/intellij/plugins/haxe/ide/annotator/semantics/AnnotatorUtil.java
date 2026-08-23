@@ -11,6 +11,7 @@ import com.intellij.plugins.haxe.model.HaxeClassReferenceModel;
 import com.intellij.plugins.haxe.v2.display.HaxeGeneratedCodePreview;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 
@@ -32,6 +33,17 @@ public class AnnotatorUtil {
    */
   public static boolean shouldSkip(@NotNull PsiElement element) {
     return !element.isValid() || isInGeneratedPreview(element) || isInAnalysisExemptCode(element);
+  }
+
+  /**
+   * Common entry guard for the color annotators. Validity is checked first —
+   * an invalidated element cannot be asked about its tree. Inactive branches
+   * are skipped because they get DIMMED colors from
+   * HaxeInactiveCodeDimAnnotator; full-strength colors would paint over the
+   * dimming.
+   */
+  public static boolean shouldSkipColorAnnotation(@NotNull PsiElement element) {
+    return !element.isValid() || element instanceof PsiWhiteSpace || isInInactiveBranch(element);
   }
 
   /**

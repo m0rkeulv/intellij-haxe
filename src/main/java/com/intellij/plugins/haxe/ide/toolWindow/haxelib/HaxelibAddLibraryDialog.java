@@ -12,7 +12,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibMetadata;
-import com.intellij.plugins.haxe.runner.debugger.HaxeRunConfigurationEditorUtil;
+import com.intellij.plugins.haxe.util.ui.HaxePathFieldChoosers;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBTextField;
@@ -68,9 +68,9 @@ final class HaxelibAddLibraryDialog extends DialogWrapper {
     gitRadio.addActionListener(e -> updateMethodEnablement());
     updateMethodEnablement();
 
-    FileChooserDescriptor directories = FileChooserDescriptorFactory.createSingleFolderDescriptor()
+    FileChooserDescriptor directories = FileChooserDescriptorFactory.singleDir()
       .withTitle(HaxeBundle.message("haxelib.explorer.add.dialog.dev.chooser.title"));
-    HaxeRunConfigurationEditorUtil.browseInto(project, devDirectoryField, directories);
+    HaxePathFieldChoosers.browseInto(project, devDirectoryField, directories);
 
     devDirectoryField.getTextField().getDocument().addDocumentListener(new DocumentAdapter() {
       @Override

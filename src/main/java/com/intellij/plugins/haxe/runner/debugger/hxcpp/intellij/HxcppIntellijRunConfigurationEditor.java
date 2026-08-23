@@ -5,11 +5,11 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationEditorBase;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.HaxelibStatusRow;
+import com.intellij.plugins.haxe.util.ui.HaxeDialogHints;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions;
 import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.util.ui.UIUtil;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
@@ -42,16 +42,10 @@ public class HxcppIntellijRunConfigurationEditor
   public HxcppIntellijRunConfigurationEditor(Project project) {
     super(project);
     wireCommonChoosers();
-    styleHint(workingDirectoryHintArea);
-    styleHint(debugHintArea);
+    HaxeDialogHints.style(workingDirectoryHintArea);
+    HaxeDialogHints.style(debugHintArea);
     serverLibRow = new HaxelibStatusRow(project, HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB,
                                         serverLibStatusLabel, installServerLibLink);
-  }
-
-  private static void styleHint(JTextPane hint) {
-    hint.setForeground(UIUtil.getContextHelpForeground());
-    hint.setFont(UIUtil.getLabelFont(UIUtil.FontSize.SMALL));
-    hint.setBorder(null);
   }
 
   @Override

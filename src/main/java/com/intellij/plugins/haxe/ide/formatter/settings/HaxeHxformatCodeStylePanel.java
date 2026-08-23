@@ -1,31 +1,23 @@
 package com.intellij.plugins.haxe.ide.formatter.settings;
 
-import com.intellij.application.options.CodeStyleAbstractPanel;
-import com.intellij.openapi.editor.colors.EditorColorsScheme;
-import com.intellij.openapi.editor.highlighter.EditorHighlighter;
-import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.FormBuilder;
-import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.swing.JComponent;
 import javax.swing.JPanel;
-import java.awt.BorderLayout;
 
 /**
  * The hxformat tab: whether a project's own hxformat.json overrides the
  * scheme's Haxe formatting per file (see HaxeHxformatSettingsModifier).
+ * No preview - the tab only hosts the toggle.
  */
-public class HaxeHxformatCodeStylePanel extends CodeStyleAbstractPanel {
+public class HaxeHxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
-  private final JPanel panel;
   private final JBCheckBox useProjectConfig =
     new JBCheckBox(HaxeBundle.message("hxformat.panel.use.project.config"));
 
@@ -38,9 +30,7 @@ public class HaxeHxformatCodeStylePanel extends CodeStyleAbstractPanel {
       .addComponent(useProjectConfig)
       .addComponent(description)
       .getPanel();
-    form.setBorder(JBUI.Borders.empty(10));
-    panel = new JPanel(new BorderLayout());
-    panel.add(form, BorderLayout.NORTH);
+    initPanel(form);
   }
 
   @Override
@@ -61,26 +51,6 @@ public class HaxeHxformatCodeStylePanel extends CodeStyleAbstractPanel {
   @Override
   protected void resetImpl(@NotNull CodeStyleSettings settings) {
     useProjectConfig.setSelected(settings.getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT);
-  }
-
-  @Override
-  public @Nullable JComponent getPanel() {
-    return panel;
-  }
-
-  @Override
-  protected int getRightMargin() {
-    return 0;
-  }
-
-  @Override
-  protected @Nullable EditorHighlighter createHighlighter(@NotNull EditorColorsScheme scheme) {
-    return null;
-  }
-
-  @Override
-  protected @NotNull FileType getFileType() {
-    return HaxeFileType.INSTANCE;
   }
 
   @Override
