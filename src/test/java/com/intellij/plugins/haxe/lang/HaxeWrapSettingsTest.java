@@ -1,11 +1,7 @@
 package com.intellij.plugins.haxe.lang;
 
-import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.psi.codeStyle.CodeStyleManager;
-import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +28,15 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
   @DisplayName("ternary wrap forms")
   public void testTernaryWrapForms() {
     Consumer<CommonCodeStyleSettings> wrapAlways = common -> common.TERNARY_OPERATION_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS;
+    String source = """
+      class Main {
+      	static function main() {
+      		var total = 101;
+      		var label = total > 100 ? 'large' : 'small';
+      		trace(label);
+      	}
+      }
+      """;
 
     assertEquals("""
       class Main {
@@ -43,15 +48,7 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               trace(label);
           }
       }
-      """, reformat(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = false), """
-      class Main {
-      	static function main() {
-      		var total = 101;
-      		var label = total > 100 ? 'large' : 'small';
-      		trace(label);
-      	}
-      }
-      """));
+      """, reformat(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = false), source));
 
     assertEquals("""
       class Main {
@@ -63,15 +60,7 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               trace(label);
           }
       }
-      """, reformat(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = true), """
-      class Main {
-      	static function main() {
-      		var total = 101;
-      		var label = total > 100 ? 'large' : 'small';
-      		trace(label);
-      	}
-      }
-      """));
+      """, reformat(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = true), source));
   }
 
   @Test
@@ -124,6 +113,20 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
       common.BINARY_OPERATION_SIGN_ON_NEXT_LINE = true;
       common.ALIGN_MULTILINE_BINARY_OPERATION = true;
     };
+    String source = """
+      class Main {
+      	static function main() {
+      		var first = 1;
+      		var second = 2;
+      		var total = first + second;
+      		trace(pick(first + 1, second + 2));
+      	}
+
+      	static function pick(a:Int, b:Int):Int {
+      		return a + b;
+      	}
+      }
+      """;
 
     assertEquals("""
       class Main {
@@ -142,46 +145,30 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
                      + b;
           }
       }
-      """, reformat(configure, """
-      class Main {
-      	static function main() {
-      		var first = 1;
-      		var second = 2;
-      		var total = first + second;
-      		trace(pick(first + 1, second + 2));
-      	}
-
-      	static function pick(a:Int, b:Int):Int {
-      		return a + b;
-      	}
-      }
-      """));
+      """, reformat(configure, source));
   }
 
   /** ALWAYS must break EVERY implements clause; only fill mode leaves the first one inline. */
   @Test
   @DisplayName("extends list wrap always breaks every clause")
   public void testExtendsListWrapAlwaysBreaksEveryClause() {
+    String source = """
+      class Foo extends Base implements Drawable implements Resizable {
+      	public function new() {}
+      }
+      """;
+
     assertEquals("""
       class Foo extends Base
               implements Drawable
               implements Resizable {
           public function new() {}
       }
-      """, reformat(common -> common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS, """
-      class Foo extends Base implements Drawable implements Resizable {
-      	public function new() {}
-      }
-      """));
+      """, reformat(common -> common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS, source));
   }
 
+  /** Binds the common-settings view and the fixture file name onto the base reformat. */
   private String reformat(Consumer<CommonCodeStyleSettings> configure, String source) {
-    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(getProject()).clone();
-    configure.accept(settings.getCommonSettings(HaxeLanguage.INSTANCE));
-    CodeStyleSettingsManager.getInstance(getProject()).setTemporarySettings(settings);
-    myFixture.configureByText("Wrap.hx", source);
-    Runnable reformat = () -> CodeStyleManager.getInstance(getProject()).reformat(myFixture.getFile());
-    WriteCommandAction.runWriteCommandAction(getProject(), reformat);
-    return myFixture.getFile().getText();
+    return reformat("Wrap.hx", settings -> configure.accept(settings.getCommonSettings(HaxeLanguage.INSTANCE)), source);
   }
 }

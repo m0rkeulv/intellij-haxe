@@ -20,16 +20,6 @@ public class HaxeDocEnterActionTest extends HaxeLightFixtureTestCase {
     return "/editor/";
   }
 
-  /** The caret line's leading whitespace after typing enter at the given fixture. */
-  private String newLineIndent(String source) {
-    myFixture.configureByText("Doc.hx", source);
-    myFixture.type('\n');
-    Document document = myFixture.getEditor().getDocument();
-    int offset = myFixture.getCaretOffset();
-    int lineStart = document.getLineStartOffset(document.getLineNumber(offset));
-    return document.getText().substring(lineStart, offset);
-  }
-
   @Test
   @DisplayName("enter continues at the previous lines indentation")
   public void testEnterContinuesAtThePreviousLinesIndentation() {
@@ -79,5 +69,15 @@ public class HaxeDocEnterActionTest extends HaxeLightFixtureTestCase {
     finally {
       state.enterKeepsIndentation = true;
     }
+  }
+
+  /** The caret line's leading whitespace after typing enter at the given fixture. */
+  private String newLineIndent(String source) {
+    myFixture.configureByText("Doc.hx", source);
+    myFixture.type('\n');
+    Document document = myFixture.getEditor().getDocument();
+    int offset = myFixture.getCaretOffset();
+    int lineStart = document.getLineStartOffset(document.getLineNumber(offset));
+    return document.getText().substring(lineStart, offset);
   }
 }

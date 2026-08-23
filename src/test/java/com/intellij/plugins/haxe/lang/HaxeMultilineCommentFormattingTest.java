@@ -1,11 +1,8 @@
 package com.intellij.plugins.haxe.lang;
 
-import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -84,12 +81,6 @@ public class HaxeMultilineCommentFormattingTest extends HaxeLightFixtureTestCase
   }
 
   private String reformat(Consumer<CodeStyleSettings> configure, String source) {
-    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(getProject()).clone();
-    configure.accept(settings);
-    CodeStyleSettingsManager.getInstance(getProject()).setTemporarySettings(settings);
-    myFixture.configureByText("Comments.hx", source);
-    Runnable reformat = () -> CodeStyleManager.getInstance(getProject()).reformat(myFixture.getFile());
-    WriteCommandAction.runWriteCommandAction(getProject(), reformat);
-    return myFixture.getFile().getText();
+    return reformat("Comments.hx", configure, source);
   }
 }

@@ -28,12 +28,6 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     return "/formatter/comparison/";
   }
 
-  private CodeStyleSettings freshDefaults() {
-    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(getProject()).clone();
-    HxformatCodeStyle.applyDefaults(settings);
-    return settings;
-  }
-
   @Test
   @DisplayName("defaults plus overrides")
   public void testDefaultsPlusOverrides() throws Exception {
@@ -182,9 +176,10 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(CommonCodeStyleSettings.WRAP_AS_NEEDED, common.METHOD_PARAMETERS_WRAP);
     int uiChop = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM | CommonCodeStyleSettings.WRAP_AS_NEEDED;
     assertEquals(uiChop, common.METHOD_CALL_CHAIN_WRAP, "the exceedsMaxLineLength rule decides");
+    List<String> sortedUnsupported = unsupported.stream().sorted().toList();
     assertEquals(List.of("wrapping.methodChain.rules (rule engine approximated by one policy)",
                          "wrapping.multiVar (no wrap target on our side)"),
-                 unsupported.stream().sorted().toList());
+                 sortedUnsupported);
   }
 
   @Test
@@ -217,5 +212,11 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     List<String> unsupported = HxformatCodeStyle.applyJson(settings, root);
 
     assertTrue(unsupported.isEmpty(), "spelled-out defaults map completely, got: " + unsupported);
+  }
+
+  private CodeStyleSettings freshDefaults() {
+    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(getProject()).clone();
+    HxformatCodeStyle.applyDefaults(settings);
+    return settings;
   }
 }

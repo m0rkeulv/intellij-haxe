@@ -1,15 +1,20 @@
 package com.intellij.plugins.haxe;
 
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.util.RecursionManager;
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
+import com.intellij.psi.codeStyle.CodeStyleManager;
+import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.testFramework.LightProjectDescriptor;
 import com.intellij.testFramework.fixtures.IdeaProjectTestFixture;
 import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory;
 import com.intellij.testFramework.fixtures.TestFixtureBuilder;
 import com.intellij.testFramework.fixtures.impl.LightTempDirTestFixtureImpl;
+
+import java.util.function.Consumer;
 
 /**
  * Code-insight test over the platform's SHARED light project: one project
@@ -63,5 +68,20 @@ public abstract class HaxeLightFixtureTestCase extends HaxeCodeInsightFixtureTes
   private void dropTemporaryCodeStyleSettings() {
     if (myFixture == null) return;
     CodeStyleSettingsManager.getInstance(myFixture.getProject()).dropTemporarySettings();
+  }
+
+  /**
+   * Reformats {@code source} under a temporary copy of the project code
+   * style mutated by {@code configure}; the shared teardown drops the
+   * temporary settings. Returns the file text after the reformat.
+   */
+  protected String reformat(String fileName, Consumer<CodeStyleSettings> configure, String source) {
+    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(myFixture.getProject()).clone();
+    configure.accept(settings);
+    CodeStyleSettingsManager.getInstance(myFixture.getProject()).setTemporarySettings(settings);
+    myFixture.configureByText(fileName, source);
+    Runnable reformat = () -> CodeStyleManager.getInstance(myFixture.getProject()).reformat(myFixture.getFile());
+    WriteCommandAction.runWriteCommandAction(myFixture.getProject(), reformat);
+    return myFixture.getFile().getText();
   }
 }

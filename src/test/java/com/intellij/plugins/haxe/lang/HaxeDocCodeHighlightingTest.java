@@ -17,6 +17,7 @@ import com.intellij.psi.PsiFile;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,18 +35,6 @@ public class HaxeDocCodeHighlightingTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/parsing/";
-  }
-
-  private PsiFile configure(String source) {
-    return myFixture.configureByText("Doc.hx", source);
-  }
-
-  private PsiElement injectedAt(PsiFile file, int offset) {
-    return InjectedLanguageManager.getInstance(getProject()).findInjectedElementAt(file, offset);
-  }
-
-  private static boolean covers(HighlightInfo info, int offset, TextAttributesKey key) {
-    return info.forcedTextAttributesKey == key && info.getStartOffset() <= offset && offset < info.getEndOffset();
   }
 
   @Test
@@ -231,7 +220,7 @@ public class HaxeDocCodeHighlightingTest extends HaxeLightFixtureTestCase {
     boolean paramInserted = lookupElements == null
                             && myFixture.getEditor().getDocument().getText().contains("@param");
     boolean paramOffered = lookupElements != null
-                           && java.util.Arrays.stream(lookupElements).anyMatch(e -> e.getLookupString().equals("@param"));
+                           && Arrays.stream(lookupElements).anyMatch(e -> e.getLookupString().equals("@param"));
     assertTrue(paramInserted || paramOffered, "typing @ in doc prose must offer the haxedoc tags");
   }
 
@@ -283,5 +272,17 @@ public class HaxeDocCodeHighlightingTest extends HaxeLightFixtureTestCase {
     finally {
       state.injectCodeFences = true;
     }
+  }
+
+  private PsiFile configure(String source) {
+    return myFixture.configureByText("Doc.hx", source);
+  }
+
+  private PsiElement injectedAt(PsiFile file, int offset) {
+    return InjectedLanguageManager.getInstance(getProject()).findInjectedElementAt(file, offset);
+  }
+
+  private static boolean covers(HighlightInfo info, int offset, TextAttributesKey key) {
+    return info.forcedTextAttributesKey == key && info.getStartOffset() <= offset && offset < info.getEndOffset();
   }
 }

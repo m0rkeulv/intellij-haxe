@@ -45,10 +45,6 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
     assertEquals(2, settings.getIndentOptions(file.getFileType()).INDENT_SIZE);
   }
 
-  private TransientCodeStyleSettings transientFor(PsiFile file) {
-    return new TransientCodeStyleSettings(file.getVirtualFile(), getProject(), CodeStyle.getSettings(getProject()));
-  }
-
   @Test
   @DisplayName("toggle off keeps the scheme settings")
   public void testToggleOffKeepsTheSchemeSettings() {
@@ -104,5 +100,9 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
 
     assertNull(new HaxeHxformatSettingsModifier().getStatusBarUiContributor(transientFor(file)));
+  }
+
+  private TransientCodeStyleSettings transientFor(PsiFile file) {
+    return new TransientCodeStyleSettings(file.getVirtualFile(), getProject(), CodeStyle.getSettings(getProject()));
   }
 }

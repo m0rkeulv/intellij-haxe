@@ -12,8 +12,8 @@ Each rule directory holds:
 | `plugin.hx` | our formatter's output — present ONLY for rules that do not yet reach parity; its diff against `hxformat.hx` documents the gap |
 
 The test configures our code style to the haxe-formatter DEFAULTS (tabs,
-end-of-line braces, spaced keywords/operators, ...) — see
-`applyHxformatDefaults` in the test. Rules claiming parity assert our output
+end-of-line braces, spaced keywords/operators, ...) via
+`HxformatCodeStyle.applyDefaults` in its setUp. Rules claiming parity assert our output
 equals `hxformat.hx` byte-for-byte (modulo the trailing newline, which the
 IDE manages at save time); the rest pin `plugin.hx` as a regression baseline.
 

@@ -23,13 +23,6 @@ public class HaxeDocRenderingIndentTest extends HaxeLightFixtureTestCase {
     return "/parsing/";
   }
 
-  private String docsOf(String source) {
-    PsiFile file = myFixture.configureByText("Doc.hx", source);
-    HaxePsiDocCommentImpl docComment = PsiTreeUtil.findChildOfType(file, HaxePsiDocCommentImpl.class);
-    assertNotNull(docComment);
-    return docComment.getDocsWithoutIndents();
-  }
-
   @Test
   @DisplayName("indented blank line before the closer does not leave a code block")
   public void testIndentedBlankLineBeforeTheCloserDoesNotLeaveACodeBlock() {
@@ -44,8 +37,8 @@ public class HaxeDocRenderingIndentTest extends HaxeLightFixtureTestCase {
       \tfunction f(id:Int):Void {}
       }""");
 
-    assertFalse(docs.lines().anyMatch(line -> line.startsWith("\t") || line.startsWith("    ")),
-                "no line may keep code-block indentation:\n" + docs);
+    boolean anyIndented = docs.lines().anyMatch(line -> line.startsWith("\t") || line.startsWith("    "));
+    assertFalse(anyIndented, "no line may keep code-block indentation:\n" + docs);
     assertTrue(docs.startsWith("Creates a new instance."), "the body must strip to column 0:\n" + docs);
   }
 
@@ -94,5 +87,12 @@ public class HaxeDocRenderingIndentTest extends HaxeLightFixtureTestCase {
       }""");
 
     assertEquals("A list:\n- item\n\t- nested", docs, "author-chosen depth is markdown meaning");
+  }
+
+  private String docsOf(String source) {
+    PsiFile file = myFixture.configureByText("Doc.hx", source);
+    HaxePsiDocCommentImpl docComment = PsiTreeUtil.findChildOfType(file, HaxePsiDocCommentImpl.class);
+    assertNotNull(docComment);
+    return docComment.getDocsWithoutIndents();
   }
 }

@@ -32,24 +32,6 @@ public class HaxeDocCommentPsiTest extends HaxeLightFixtureTestCase {
     return "/parsing/";
   }
 
-  private record Token(IElementType type, String text) {
-  }
-
-  private static List<Token> lex(String docText) {
-    Lexer lexer = new HaxeDocLexer();
-    lexer.start(docText, 0, docText.length(), 0);
-    List<Token> tokens = new ArrayList<>();
-    while (lexer.getTokenType() != null) {
-      tokens.add(new Token(lexer.getTokenType(), docText.substring(lexer.getTokenStart(), lexer.getTokenEnd())));
-      lexer.advance();
-    }
-    return tokens;
-  }
-
-  private static String concat(List<Token> tokens) {
-    return tokens.stream().map(Token::text).reduce("", String::concat);
-  }
-
   @Test
   @DisplayName("tokens roundtrip to the original text")
   public void testTokensRoundtripToTheOriginalText() {
@@ -138,5 +120,23 @@ public class HaxeDocCommentPsiTest extends HaxeLightFixtureTestCase {
     }
     assertTrue(managedWhitespace, "line-leading whitespace must be real WHITE_SPACE for the formatter");
     assertTrue(tagTokenized);
+  }
+
+  private static List<Token> lex(String docText) {
+    Lexer lexer = new HaxeDocLexer();
+    lexer.start(docText, 0, docText.length(), 0);
+    List<Token> tokens = new ArrayList<>();
+    while (lexer.getTokenType() != null) {
+      tokens.add(new Token(lexer.getTokenType(), docText.substring(lexer.getTokenStart(), lexer.getTokenEnd())));
+      lexer.advance();
+    }
+    return tokens;
+  }
+
+  private static String concat(List<Token> tokens) {
+    return tokens.stream().map(Token::text).reduce("", String::concat);
+  }
+
+  private record Token(IElementType type, String text) {
   }
 }

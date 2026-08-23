@@ -1,11 +1,8 @@
 package com.intellij.plugins.haxe.lang;
 
-import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -71,6 +68,18 @@ public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("starred style aligns stars and closer one space in")
   public void testStarredStyleAlignsStarsAndCloserOneSpaceIn() {
+    String source = """
+      class Main {
+          /**
+      * Starred body.
+              * @param x value
+          */
+          static function main(x:Int) {
+              trace(x);
+          }
+      }
+      """;
+
     assertEquals("""
       class Main {
           /**
@@ -81,22 +90,26 @@ public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
               trace(x);
           }
       }
-      """, reformat(settings -> { }, """
-      class Main {
-          /**
-      * Starred body.
-              * @param x value
-          */
-          static function main(x:Int) {
-              trace(x);
-          }
-      }
-      """));
+      """, reformat(settings -> { }, source));
   }
 
   @Test
   @DisplayName("zero column doc follows its scope while plain comments keep first column")
   public void testZeroColumnDocFollowsItsScopeWhilePlainCommentsKeepFirstColumn() {
+    String source = """
+      class Main {
+      /**
+      \tdocs for main
+      **/
+          static function main() {
+              trace(1);
+          }
+
+      // disabled-code comment stays (keep-first-column default)
+          static var x:Int = 1;
+      }
+      """;
+
     assertEquals("""
       class Main {
           /**
@@ -109,28 +122,10 @@ public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
       // disabled-code comment stays (keep-first-column default)
           static var x:Int = 1;
       }
-      """, reformat(settings -> { }, """
-      class Main {
-      /**
-      \tdocs for main
-      **/
-          static function main() {
-              trace(1);
-          }
-
-      // disabled-code comment stays (keep-first-column default)
-          static var x:Int = 1;
-      }
-      """));
+      """, reformat(settings -> { }, source));
   }
 
   private String reformat(Consumer<CodeStyleSettings> configure, String source) {
-    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(getProject()).clone();
-    configure.accept(settings);
-    CodeStyleSettingsManager.getInstance(getProject()).setTemporarySettings(settings);
-    myFixture.configureByText("Doc.hx", source);
-    Runnable reformat = () -> CodeStyleManager.getInstance(getProject()).reformat(myFixture.getFile());
-    WriteCommandAction.runWriteCommandAction(getProject(), reformat);
-    return myFixture.getFile().getText();
+    return reformat("Doc.hx", configure, source);
   }
 }

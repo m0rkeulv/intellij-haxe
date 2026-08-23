@@ -1,18 +1,24 @@
 package com.intellij.plugins.haxe.lang;
 
+import com.intellij.codeInsight.lookup.LookupElement;
+import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.lexer.Lexer;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
+import com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors;
+import com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedFieldInspection;
 import com.intellij.plugins.haxe.lang.lexer.HaxeLexer;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
-import com.intellij.psi.tree.IElementType;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalVarDeclarationList;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeReferenceExpression;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
 import com.intellij.psi.PsiComment;
+import com.intellij.psi.PsiErrorElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.impl.source.PsiFileImpl;
+import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +27,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.FieldSource;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -41,19 +48,6 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/parsing/";
-  }
-
-  private List<String> ppBodyTokens(String source) {
-    Lexer lexer = new HaxeLexer(getProject());
-    lexer.start(source);
-    List<String> bodies = new ArrayList<>();
-    while (lexer.getTokenType() != null) {
-      if (lexer.getTokenType() == HaxeTokenTypeSets.PPBODY) {
-        bodies.add(lexer.getTokenText());
-      }
-      lexer.advance();
-    }
-    return bodies;
   }
 
   @Test
@@ -108,13 +102,6 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     assertTrue(ppBodies.get(0).getText().contains("function dead"));
   }
 
-  private HaxeInactiveBody inactiveBody(String source) {
-    PsiFile file = myFixture.configureByText("Foo.hx", source);
-    HaxeInactiveBody body = PsiTreeUtil.findChildOfType(file, HaxeInactiveBody.class);
-    assertNotNull(body);
-    return body;
-  }
-
   @Test
   @DisplayName("class level branch parses as members")
   public void testClassLevelBranchParsesAsMembers() {
@@ -161,7 +148,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
       }""");
 
     assertFalse(body.hasCleanParse(), "a cross-branch splice cannot parse clean - the formatter must preserve it");
-    assertNull(PsiTreeUtil.findChildOfType(body, com.intellij.psi.PsiErrorElement.class),
+    assertNull(PsiTreeUtil.findChildOfType(body, PsiErrorElement.class),
                "the soup fallback carries no error elements");
     assertTrue(body.getNode().getFirstChildNode() != null, "the soup still exposes the raw tokens");
   }
@@ -210,7 +197,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
       }""";
     myFixture.configureByText("Foo.hx", source);
 
-    var errors = myFixture.doHighlighting(com.intellij.lang.annotation.HighlightSeverity.ERROR);
+    var errors = myFixture.doHighlighting(HighlightSeverity.ERROR);
     assertTrue(errors.isEmpty(), "inactive branches are analysis-exempt: " + errors);
   }
 
@@ -236,7 +223,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("unused inspection ignores dead module fields")
   public void testUnusedInspectionIgnoresDeadModuleFields() {
-    myFixture.enableInspections(new com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedFieldInspection());
+    myFixture.enableInspections(new HaxeUnusedFieldInspection());
     String source = """
       package;
       #if never
@@ -250,71 +237,10 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
       }""";
     myFixture.configureByText("Foo.hx", source);
 
-    var warnings = myFixture.doHighlighting(com.intellij.lang.annotation.HighlightSeverity.WEAK_WARNING).stream()
+    var warnings = myFixture.doHighlighting(HighlightSeverity.WEAK_WARNING).stream()
       .filter(info -> info.getStartOffset() >= source.indexOf("#if") && info.getEndOffset() <= source.indexOf("#end"))
       .toList();
     assertTrue(warnings.isEmpty(), "dead fields get no unused markers and no usage searches: " + warnings);
-  }
-
-  private record LexStep(int start, int end, String type, int stateAfter) {}
-
-  private List<LexStep> lexFrom(String source, int offset, Supplier<Lexer> lexerFactory) {
-    Lexer lexer = lexerFactory.get();
-    lexer.start(source, offset, source.length(), 0);
-    List<LexStep> steps = new ArrayList<>();
-    while (lexer.getTokenType() != null) {
-      steps.add(new LexStep(lexer.getTokenStart(), lexer.getTokenEnd(), lexer.getTokenType().toString(), -1));
-      lexer.advance();
-    }
-    return steps;
-  }
-
-  /**
-   * The editor's incremental highlighter restarts lexing only at boundaries
-   * whose saved state equals a fresh lexer's - so at every such boundary a
-   * cold start must reproduce the remaining stream exactly. A zero state
-   * inside a conditional would make a restart lex dead code as live; the
-   * CC_BLOCK lexer state exists to prevent that.
-   */
-  private void checkRestartAtEveryZeroStateBoundary(String source, boolean expectRestartableTail) {
-    checkRestartAtEveryZeroStateBoundary(source, expectRestartableTail, () -> new HaxeLexer(getProject()));
-    checkRestartAtEveryZeroStateBoundary(source, expectRestartableTail, () -> HaxeLexer.forHighlighting(getProject()));
-  }
-
-  private void checkRestartAtEveryZeroStateBoundary(String source, boolean expectRestartableTail, Supplier<Lexer> lexerFactory) {
-    Lexer lexer = lexerFactory.get();
-    lexer.start(source);
-    List<LexStep> full = new ArrayList<>();
-    while (lexer.getTokenType() != null) {
-      String type = lexer.getTokenType().toString();
-      int start = lexer.getTokenStart();
-      int end = lexer.getTokenEnd();
-      lexer.advance();
-      full.add(new LexStep(start, end, type, lexer.getState()));
-    }
-    assertFalse(full.isEmpty(), "the source must lex to something");
-
-    int restartableBoundaries = 0;
-    for (int i = 0; i < full.size() - 1; i++) {
-      if (full.get(i).stateAfter() != 0) continue;
-      restartableBoundaries++;
-
-      int offset = full.get(i).end();
-      List<LexStep> restarted = lexFrom(source, offset, lexerFactory);
-      List<LexStep> remainder = full.subList(i + 1, full.size());
-      assertEquals(remainder.size(), restarted.size(), "restart at " + offset + ": token count diverged");
-      for (int j = 0; j < remainder.size(); j++) {
-        LexStep expected = remainder.get(j);
-        LexStep actual = restarted.get(j);
-        boolean sameToken = expected.start() == actual.start()
-                            && expected.end() == actual.end()
-                            && expected.type().equals(actual.type());
-        assertTrue(sameToken, "restart at " + offset + " diverged: expected " + expected + " but got " + actual);
-      }
-    }
-    if (expectRestartableTail) {
-      assertTrue(restartableBoundaries > 0, "expected at least one restartable boundary - otherwise this source proves nothing");
-    }
   }
 
   // (name, source, whether top-level code after the conditional must be restartable)
@@ -476,7 +402,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
                         && info.forcedTextAttributes != null);
     assertTrue(docDimmed, "the whole dead doc comment gets one dim annotation");
 
-    var docTagKey = com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors.DOC_TAG;
+    var docTagKey = HaxeSyntaxHighlighterColors.DOC_TAG;
     boolean tagAccented = infos.stream()
       .anyMatch(info -> info.getStartOffset() >= docStart && info.getEndOffset() <= docEnd
                         && docTagKey.equals(info.forcedTextAttributesKey));
@@ -637,13 +563,6 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     }
   }
 
-  private List<String> conditionErrors(String source) {
-    myFixture.configureByText("Foo.hx", source);
-    return myFixture.doHighlighting(com.intellij.lang.annotation.HighlightSeverity.ERROR).stream()
-      .map(info -> String.valueOf(info.getDescription()))
-      .toList();
-  }
-
   @Test
   @DisplayName("invalid version literal is flagged like the compiler")
   public void testInvalidVersionLiteralIsFlaggedLikeTheCompiler() {
@@ -709,7 +628,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   @DisplayName("conditions in dead regions stay quiet")
   public void testConditionsInDeadRegionsStayQuiet() {
     // the compiler never evaluates (or validates) a condition inside an
-    // inactive outer region - live-verified
+    // inactive outer region
     List<String> errors = conditionErrors("""
       class Foo {
       \t#if never
@@ -771,10 +690,10 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
       \t#end
       }""");
 
-    com.intellij.codeInsight.lookup.LookupElement[] items = myFixture.completeBasic();
+    LookupElement[] items = myFixture.completeBasic();
     assertNotNull(items, "several candidates must match the ambiguous prefix");
 
-    boolean richMembers = java.util.Arrays.stream(items)
+    boolean richMembers = Arrays.stream(items)
       .anyMatch(item -> item.getClass().getSimpleName().equals("HaxeMemberLookupElement"));
     assertTrue(richMembers, "typed member elements must appear, not just word-completion text");
   }
@@ -792,9 +711,97 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     // force the chameleon to expand BEFORE stub building - the skip must hold even then
     assertNotNull(PsiTreeUtil.findChildOfType(file, HaxeInactiveBody.class).getFirstChild());
 
-    var stubTree = ((com.intellij.psi.impl.source.PsiFileImpl)file).calcStubTree();
+    var stubTree = ((PsiFileImpl)file).calcStubTree();
     boolean deadStubbed = stubTree.getPlainList().stream()
       .anyMatch(stub -> String.valueOf(stub).contains("dead"));
     assertFalse(deadStubbed, "inactive declarations must never reach the stub tree/indexes");
   }
+
+  private List<String> ppBodyTokens(String source) {
+    Lexer lexer = new HaxeLexer(getProject());
+    lexer.start(source);
+    List<String> bodies = new ArrayList<>();
+    while (lexer.getTokenType() != null) {
+      if (lexer.getTokenType() == HaxeTokenTypeSets.PPBODY) {
+        bodies.add(lexer.getTokenText());
+      }
+      lexer.advance();
+    }
+    return bodies;
+  }
+
+  private HaxeInactiveBody inactiveBody(String source) {
+    PsiFile file = myFixture.configureByText("Foo.hx", source);
+    HaxeInactiveBody body = PsiTreeUtil.findChildOfType(file, HaxeInactiveBody.class);
+    assertNotNull(body);
+    return body;
+  }
+
+  private List<String> conditionErrors(String source) {
+    myFixture.configureByText("Foo.hx", source);
+    return myFixture.doHighlighting(HighlightSeverity.ERROR).stream()
+      .map(info -> String.valueOf(info.getDescription()))
+      .toList();
+  }
+
+  /**
+   * The editor's incremental highlighter restarts lexing only at boundaries
+   * whose saved state equals a fresh lexer's - so at every such boundary a
+   * cold start must reproduce the remaining stream exactly. A zero state
+   * inside a conditional would make a restart lex dead code as live; the
+   * CC_BLOCK lexer state exists to prevent that.
+   */
+  private void checkRestartAtEveryZeroStateBoundary(String source, boolean expectRestartableTail) {
+    checkRestartAtEveryZeroStateBoundary(source, expectRestartableTail, () -> new HaxeLexer(getProject()));
+    checkRestartAtEveryZeroStateBoundary(source, expectRestartableTail, () -> HaxeLexer.forHighlighting(getProject()));
+  }
+
+  private void checkRestartAtEveryZeroStateBoundary(String source, boolean expectRestartableTail, Supplier<Lexer> lexerFactory) {
+    Lexer lexer = lexerFactory.get();
+    lexer.start(source);
+    List<LexStep> full = new ArrayList<>();
+    while (lexer.getTokenType() != null) {
+      String type = lexer.getTokenType().toString();
+      int start = lexer.getTokenStart();
+      int end = lexer.getTokenEnd();
+      lexer.advance();
+      full.add(new LexStep(start, end, type, lexer.getState()));
+    }
+    assertFalse(full.isEmpty(), "the source must lex to something");
+
+    int restartableBoundaries = 0;
+    for (int i = 0; i < full.size() - 1; i++) {
+      if (full.get(i).stateAfter() != 0) continue;
+      restartableBoundaries++;
+
+      int offset = full.get(i).end();
+      List<LexStep> restarted = lexFrom(source, offset, lexerFactory);
+      List<LexStep> remainder = full.subList(i + 1, full.size());
+      assertEquals(remainder.size(), restarted.size(), "restart at " + offset + ": token count diverged");
+      for (int j = 0; j < remainder.size(); j++) {
+        LexStep expected = remainder.get(j);
+        LexStep actual = restarted.get(j);
+        boolean sameToken = expected.start() == actual.start()
+                            && expected.end() == actual.end()
+                            && expected.type().equals(actual.type());
+        assertTrue(sameToken, "restart at " + offset + " diverged: expected " + expected + " but got " + actual);
+      }
+    }
+    if (expectRestartableTail) {
+      assertTrue(restartableBoundaries > 0, "expected at least one restartable boundary - otherwise this source proves nothing");
+    }
+  }
+
+  private List<LexStep> lexFrom(String source, int offset, Supplier<Lexer> lexerFactory) {
+    Lexer lexer = lexerFactory.get();
+    lexer.start(source, offset, source.length(), 0);
+    List<LexStep> steps = new ArrayList<>();
+    while (lexer.getTokenType() != null) {
+      steps.add(new LexStep(lexer.getTokenStart(), lexer.getTokenEnd(), lexer.getTokenType().toString(), -1));
+      lexer.advance();
+    }
+    return steps;
+  }
+
+  private record LexStep(int start, int end, String type, int stateAfter) {}
 }

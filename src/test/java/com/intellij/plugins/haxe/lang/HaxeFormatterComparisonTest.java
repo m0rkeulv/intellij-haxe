@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.lang;
 
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -44,74 +44,10 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     super.setUp();
     Project project = getProject();
     CodeStyleSettings tempSettings = CodeStyleSettingsManager.getSettings(project).clone();
-    applyHxformatDefaults(tempSettings);
+    // the production defaults mapping IS the parity profile - the fixtures
+    // guard the hxformat.json importer's baseline
+    HxformatCodeStyle.applyDefaults(tempSettings);
     CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
-  }
-
-  /**
-   * The production defaults mapping ({@link HxformatCodeStyle#applyDefaults})
-   * IS the profile these parity tests run under - the byte-parity fixtures
-   * guard the hxformat.json importer's baseline.
-   */
-  private static void applyHxformatDefaults(CodeStyleSettings settings) {
-    HxformatCodeStyle.applyDefaults(settings);
-  }
-
-  /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
-  private void doParityTest(String rule) throws Exception {
-    String actual = formatInput(rule);
-    assertEquals(fixture(rule, "hxformat.hx"), actual,
-                 "our output must match haxe-formatter for " + rule);
-  }
-
-  /**
-   * Parity against a NON-default hxformat option: the fixture directory holds
-   * the hxformat.json used to regenerate hxformat.hx, and the tweak applies
-   * the equivalent change on top of our defaults profile.
-   */
-  private void doParityTest(String rule, java.util.function.Consumer<CodeStyleSettings> tweak) throws Exception {
-    Project project = getProject();
-    CodeStyleSettings tempSettings = CodeStyleSettingsManager.getSettings(project).clone();
-    applyHxformatDefaults(tempSettings);
-    tweak.accept(tempSettings);
-    CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
-    doParityTest(rule);
-  }
-
-  /**
-   * Formats input.hx and compares against the pinned plugin.hx — for rules
-   * NOT yet at parity; the plugin.hx/hxformat.hx diff documents the gap.
-   * A missing plugin.hx is created from the actual output and the test fails
-   * once, like the classic formatter tests.
-   */
-  @SuppressWarnings("unused") // the parity workflow flips rules here while a gap is open
-  private void doPinnedTest(String rule) throws Exception {
-    String actual = formatInput(rule);
-    Path pinned = Path.of(getTestDataPath(), rule, "plugin.hx");
-    if (!Files.exists(pinned)) {
-      Files.writeString(pinned, actual + "\n");
-      fail("No pinned output found. File " + pinned + " created.");
-    }
-    assertEquals(fixture(rule, "plugin.hx"), actual, "pinned plugin output changed for " + rule);
-  }
-
-  @NotNull
-  private String formatInput(String rule) {
-    myFixture.configureByFile(rule + "/input.hx");
-    Runnable reformat = () -> CodeStyleManager.getInstance(getProject()).reformat(myFixture.getFile());
-    WriteCommandAction.runWriteCommandAction(getProject(), reformat);
-    return normalize(myFixture.getFile().getText());
-  }
-
-  @NotNull
-  private String fixture(String rule, String name) throws IOException {
-    return normalize(Files.readString(Path.of(getTestDataPath(), rule, name)));
-  }
-
-  /** Unifies line endings and drops the trailing newline — the IDE manages end-of-file newlines at save time, not in the formatter. */
-  @NotNull
-  private static String normalize(@NotNull String text) {
-    return FileUtil.toSystemIndependentName(text).replace("\r\n", "\n").replaceAll("\n+$", "");
   }
 
   @Test
@@ -359,5 +295,62 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     // reference never distinguishes them); token-soup branches like the
     // lone-operator case are preserved verbatim - as the reference does
     doParityTest("conditional-inactive");
+  }
+
+  /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
+  private void doParityTest(String rule) throws Exception {
+    String actual = formatInput(rule);
+    assertEquals(fixture(rule, "hxformat.hx"), actual,
+                 "our output must match haxe-formatter for " + rule);
+  }
+
+  /**
+   * Parity against a NON-default hxformat option: the fixture directory holds
+   * the hxformat.json used to regenerate hxformat.hx, and the tweak applies
+   * the equivalent change on top of our defaults profile.
+   */
+  private void doParityTest(String rule, Consumer<CodeStyleSettings> tweak) throws Exception {
+    Project project = getProject();
+    CodeStyleSettings tempSettings = CodeStyleSettingsManager.getSettings(project).clone();
+    HxformatCodeStyle.applyDefaults(tempSettings);
+    tweak.accept(tempSettings);
+    CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
+    doParityTest(rule);
+  }
+
+  /**
+   * Formats input.hx and compares against the pinned plugin.hx — for rules
+   * NOT yet at parity; the plugin.hx/hxformat.hx diff documents the gap.
+   * A missing plugin.hx is created from the actual output and the test fails
+   * once, like the classic formatter tests.
+   */
+  @SuppressWarnings("unused") // the parity workflow flips rules here while a gap is open
+  private void doPinnedTest(String rule) throws Exception {
+    String actual = formatInput(rule);
+    Path pinned = Path.of(getTestDataPath(), rule, "plugin.hx");
+    if (!Files.exists(pinned)) {
+      Files.writeString(pinned, actual + "\n");
+      fail("No pinned output found. File " + pinned + " created.");
+    }
+    assertEquals(fixture(rule, "plugin.hx"), actual, "pinned plugin output changed for " + rule);
+  }
+
+  @NotNull
+  private String formatInput(String rule) {
+    myFixture.configureByFile(rule + "/input.hx");
+    Runnable reformat = () -> CodeStyleManager.getInstance(getProject()).reformat(myFixture.getFile());
+    WriteCommandAction.runWriteCommandAction(getProject(), reformat);
+    return normalize(myFixture.getFile().getText());
+  }
+
+  @NotNull
+  private String fixture(String rule, String name) throws IOException {
+    return normalize(Files.readString(Path.of(getTestDataPath(), rule, name)));
+  }
+
+  /** Unifies line endings and drops the trailing newline — the IDE manages end-of-file newlines at save time, not in the formatter. */
+  @NotNull
+  private static String normalize(@NotNull String text) {
+    return text.replace("\r\n", "\n").replaceAll("\n+$", "");
   }
 }
