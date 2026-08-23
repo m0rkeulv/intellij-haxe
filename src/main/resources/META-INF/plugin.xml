@@ -544,6 +544,7 @@
     <annotator language="Haxe" id="invalidEscape" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInvalidEscapeAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="docCode" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeDocCodeAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="inactiveDim" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInactiveCodeDimAnnotator" order="after fastColor"/>
+    <annotator language="Haxe" id="conditionalDiagnostic" implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeConditionalDiagnosticAnnotator"/>
     <!-- metadata is its own PSI language; without this registration dead @:meta
          stays uncolored (its lexer-layer yellow only exists in active code) -->
     <annotator language="HaxeMetadata" id="inactiveDimMeta" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInactiveCodeDimAnnotator"/>

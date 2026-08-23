@@ -572,6 +572,9 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     arguments("", "(version(\"1.0.0-rc.1\") < version(\"1.0.0\"))", true),
     arguments("", "(version(\"1.0.0-alpha.2\") < version(\"1.0.0-alpha.10\"))", true),
     arguments("", "(undef_thing > 3)", false),
+    // an undefined define is the compiler's TNull: != true, every other comparison false
+    arguments("", "(undef_thing == false)", false),
+    arguments("", "(undef_thing != \"x\")", true),
     arguments("hl_ver=1.12", "(hl_ver >= version(\"1.12.0\"))", false),
     arguments("", "(version(\"banana\") > version(\"1.0.0\"))", false),
     arguments("", "(version(\"1.0.0+build5\") == version(\"1.0.0\"))", false),
@@ -597,6 +600,122 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     finally {
       getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, null);
     }
+  }
+
+  private List<String> conditionErrors(String source) {
+    myFixture.configureByText("Foo.hx", source);
+    return myFixture.doHighlighting(com.intellij.lang.annotation.HighlightSeverity.ERROR).stream()
+      .map(info -> String.valueOf(info.getDescription()))
+      .toList();
+  }
+
+  @Test
+  @DisplayName("invalid version literal is flagged like the compiler")
+  public void testInvalidVersionLiteralIsFlaggedLikeTheCompiler() {
+    List<String> errors = conditionErrors("""
+      class Foo {
+      \t#if (version("banana") > version("1.0.0"))
+      \tvar marker:Int;
+      \t#end
+      }""");
+
+    assertEquals(1, errors.size(), "ONE problems entry per condition, not one per token: " + errors);
+    assertTrue(errors.get(0).contains("Should follow SemVer"), "the compiler hard-errors on this literal: " + errors);
+  }
+
+  @Test
+  @DisplayName("shortened version value suggests the full form")
+  public void testShortenedVersionValueSuggestsTheFullForm() {
+    getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, "hl_ver=1.13");
+    try {
+      List<String> errors = conditionErrors("""
+        class Foo {
+        \t#if (hl_ver >= version("1.12.0"))
+        \tvar marker:Int;
+        \t#end
+        }""");
+
+      assertEquals(1, errors.size(), "one entry for the condition: " + errors);
+      assertTrue(errors.get(0).contains("major.minor.patch") && errors.get(0).contains("\"1.13.0\""),
+                 "the message explains the missing part and suggests the fix: " + errors);
+    }
+    finally {
+      getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, null);
+    }
+  }
+
+  @Test
+  @DisplayName("unknown function is flagged like the compiler")
+  public void testUnknownFunctionIsFlaggedLikeTheCompiler() {
+    List<String> errors = conditionErrors("""
+      class Foo {
+      \t#if (foo("x"))
+      \tvar marker:Int;
+      \t#end
+      }""");
+
+    assertTrue(errors.contains("Invalid condition expression"), "unknown calls are compiler errors: " + errors);
+  }
+
+  @Test
+  @DisplayName("undefined define comparisons stay quiet")
+  public void testUndefinedDefineComparisonsStayQuiet() {
+    List<String> errors = conditionErrors("""
+      class Foo {
+      \t#if (undef_thing > 3)
+      \tvar marker:Int;
+      \t#end
+      }""");
+
+    assertTrue(errors.isEmpty(), "null-poisoned comparisons are legal: " + errors);
+  }
+
+  @Test
+  @DisplayName("conditions in dead regions stay quiet")
+  public void testConditionsInDeadRegionsStayQuiet() {
+    // the compiler never evaluates (or validates) a condition inside an
+    // inactive outer region - live-verified
+    List<String> errors = conditionErrors("""
+      class Foo {
+      \t#if never
+      \t#if (version("banana") > version("1.0.0"))
+      \tvar marker:Int;
+      \t#end
+      \t#end
+      }""");
+
+    assertTrue(errors.isEmpty(), "skipped conditions are never validated: " + errors);
+  }
+
+  @Test
+  @DisplayName("elseif after a taken branch stays quiet")
+  public void testElseifAfterATakenBranchStaysQuiet() {
+    List<String> errors = conditionErrors("""
+      class Foo {
+      \t#if (1 == 1)
+      \tvar taken:Int;
+      \t#elseif (version("banana") > version("1.0.0"))
+      \tvar skipped:Int;
+      \t#end
+      }""");
+
+    assertTrue(errors.isEmpty(), "a settled chain skips later conditions: " + errors);
+  }
+
+  @Test
+  @DisplayName("elseif after an untaken branch is flagged")
+  public void testElseifAfterAnUntakenBranchIsFlagged() {
+    List<String> errors = conditionErrors("""
+      class Foo {
+      \t#if never
+      \tvar untaken:Int;
+      \t#elseif (version("banana") > version("1.0.0"))
+      \tvar marker:Int;
+      \t#end
+      }""");
+
+    boolean flagged = errors.stream().anyMatch(error -> error.contains("Should follow SemVer"));
+    assertTrue(flagged, "the compiler evaluates and rejects this condition: " + errors);
   }
 
   @Test

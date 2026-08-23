@@ -22,6 +22,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.lang.parser.HaxeAstFactory;
+import com.intellij.psi.TokenType;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.util.containers.Stack;
 import lombok.CustomLog;
@@ -70,6 +71,8 @@ public class HaxeConditionalExpression {
   private boolean evaluated = false;    // Cleared when dirty.
   private boolean evalResult = false;   // Cleared when dirty.
   private StringBuilder builder = null;
+  // diagnose(): cross-type compare failures surface instead of degrading to false
+  private boolean strictComparisons = false;
 
   public HaxeConditionalExpression(@Nullable ArrayList<ASTNode> startTokens) {
     if (startTokens != null) {
@@ -169,6 +172,94 @@ public class HaxeConditionalExpression {
     return evalResult;
   }
 
+  /**
+   * The message the compiler would hard-error with for this condition, or
+   * null when it evaluates cleanly. Comparisons run STRICT here (cross-type
+   * failures surface instead of degrading to false); the legal null-poisoned
+   * comparisons of undefined defines stay silent.
+   */
+  @Nullable
+  public String diagnose(@Nullable Project context) {
+    this.context = context;
+    if (!isComplete()) return null;
+    strictComparisons = true;
+    try {
+      Stack<ASTNode> rpn = infixToRPN();
+      objectIsTrue(calculateRPN(rpn));
+      return rpn.isEmpty() ? null : "Invalid condition expression";
+    }
+    catch (CalculationException e) {
+      return e.getMessage();
+    }
+    finally {
+      strictComparisons = false;
+    }
+  }
+
+  /**
+   * Rebuilds a condition from the raw text of its PPEXPRESSION tokens so
+   * diagnostics can re-run it outside the lexer. The scanner mirrors the flex
+   * COMPILER_CONDITIONAL rules; null for anything they would not produce -
+   * and for hex/octal literals, which the compiler accepts but this
+   * evaluator cannot yet compute (nothing trustworthy to report there).
+   */
+  @Nullable
+  public static HaxeConditionalExpression fromCondition(@NotNull String text) {
+    HaxeConditionalExpression condition = new HaxeConditionalExpression(null);
+    int i = 0;
+    while (i < text.length()) {
+      char c = text.charAt(i);
+      if (Character.isWhitespace(c)) {
+        int start = i;
+        while (i < text.length() && Character.isWhitespace(text.charAt(i))) i++;
+        condition.extend(text.substring(start, i), TokenType.WHITE_SPACE);
+      }
+      else if (Character.isLetter(c) || c == '_') {
+        int start = i;
+        // an identifier, dotted segments included (target.sys)
+        while (i < text.length() && (Character.isLetterOrDigit(text.charAt(i)) || text.charAt(i) == '_' || text.charAt(i) == '.')) i++;
+        String word = text.substring(start, i);
+        IElementType type = switch (word) {
+          case "true" -> KTRUE;
+          case "false" -> KFALSE;
+          default -> ID;
+        };
+        condition.extend(word, type);
+      }
+      else if (Character.isDigit(c)) {
+        int start = i;
+        while (i < text.length() && (Character.isLetterOrDigit(text.charAt(i)) || text.charAt(i) == '.')) i++;
+        String number = text.substring(start, i);
+        boolean decimal = number.chars().allMatch(ch -> ch == '.' || Character.isDigit(ch));
+        if (!decimal) return null;
+        condition.extend(number, number.contains(".") ? LITFLOAT : LITINT);
+      }
+      else if (c == '"' || c == '\'') {
+        int end = text.indexOf(c, i + 1);
+        if (end < 0) return null;
+        condition.extend(String.valueOf(c), OPEN_QUOTE);
+        if (end > i + 1) condition.extend(text.substring(i + 1, end), REGULAR_STRING_PART);
+        condition.extend(String.valueOf(c), CLOSING_QUOTE);
+        i = end + 1;
+      }
+      else if (text.startsWith("==", i)) { condition.extend("==", OEQ); i += 2; }
+      else if (text.startsWith("!=", i)) { condition.extend("!=", ONOT_EQ); i += 2; }
+      else if (text.startsWith(">=", i)) { condition.extend(">=", OGREATER_OR_EQUAL); i += 2; }
+      else if (text.startsWith("<=", i)) { condition.extend("<=", OLESS_OR_EQUAL); i += 2; }
+      else if (text.startsWith("&&", i)) { condition.extend("&&", OCOND_AND); i += 2; }
+      else if (text.startsWith("||", i)) { condition.extend("||", OCOND_OR); i += 2; }
+      else if (c == '!') { condition.extend("!", ONOT); i++; }
+      else if (c == '>') { condition.extend(">", OGREATER); i++; }
+      else if (c == '<') { condition.extend("<", OLESS); i++; }
+      else if (c == '(') { condition.extend("(", PLPAREN); i++; }
+      else if (c == ')') { condition.extend(")", PRPAREN); i++; }
+      else {
+        return null;
+      }
+    }
+    return condition;
+  }
+
   public String tokensToString(List<ASTNode> nodes) {
     StringBuilder s = new StringBuilder();
     boolean first = true;
@@ -202,6 +293,14 @@ public class HaxeConditionalExpression {
   private static final String VERSION_FUNCTION_NAME = "version";
   /** Synthetic operand a folded {@code version("...")} call becomes; its text is the argument. */
   private static final IElementType VERSION_LITERAL = new IElementType("CC_VERSION_LITERAL", HaxeLanguage.INSTANCE);
+
+  /** An undefined define's value (the compiler's TNull): falsy, poisons comparisons. */
+  private static final Object NULL_VALUE = new Object() {
+    @Override
+    public String toString() {
+      return "null";
+    }
+  };
 
   private static boolean isVersionLiteral(ASTNode node) {
     return node.getElementType() == VERSION_LITERAL;
@@ -415,8 +514,7 @@ public class HaxeConditionalExpression {
   private static Object versionValue(ASTNode node) throws CalculationException {
     HaxelibSemVer version = HaxelibSemVer.parseCompilerVersion(node.getText());
     if (version == null) {
-      // the compiler hard-errors ("Should follow SemVer"); unevaluable maps to false
-      throw new CalculationException("Invalid version string: " + node.getText());
+      throw new CalculationException("Invalid version string \"" + node.getText() + "\". Should follow SemVer.");
     }
     return version;
   }
@@ -454,10 +552,10 @@ public class HaxeConditionalExpression {
   @NotNull
   private Object lookupIdentifier(ASTNode identifier) throws CalculationException {
     if (identifier == null) {
-      return Boolean.FALSE;
+      return NULL_VALUE;
     }
     if (context == null) {
-      return SDK_DEFINES.contains(identifier);
+      return SDK_DEFINES.contains(identifier.getText()) ? Boolean.TRUE : NULL_VALUE;
     }
     Map<String, String> definitionMap = new HashMap<>();
     if (ApplicationManager.getApplication().isUnitTestMode()) {
@@ -479,7 +577,7 @@ public class HaxeConditionalExpression {
         return identifierValue(value);
       }
     }
-    return Boolean.FALSE;
+    return NULL_VALUE;
   }
 
   private static Map<String, String> parseUserdataDefinitions(String userData) {
@@ -503,6 +601,7 @@ public class HaxeConditionalExpression {
   // https://github.com/HaxeFoundation/haxe/blob/development/src/syntax/parser.mly#L1596
   private boolean objectIsTrue(Object o) {
     if (o == null)            { return false; }
+    if (o == NULL_VALUE)      { return false; }
     if (o instanceof Boolean) { return (Boolean)o; }
     if (o instanceof Float)   { return !((Float)o == 0.0); }
     if (o instanceof String)  { return !((String)o).isEmpty(); }
@@ -519,7 +618,7 @@ public class HaxeConditionalExpression {
       HaxelibSemVer lhsVersion = asVersion(lhs);
       HaxelibSemVer rhsVersion = asVersion(rhs);
       if (lhsVersion == null || rhsVersion == null) {
-        throw new CompareException("Cannot compare version with '" + (lhsVersion == null ? lhs : rhs) + "'.");
+        throw new CompareException(versionCompareError(lhsVersion == null ? lhs : rhs));
       }
       return lhsVersion.compareTo(rhsVersion);
     }
@@ -565,6 +664,42 @@ public class HaxeConditionalExpression {
     return null;
   }
 
+  /**
+   * Why {@code bad} cannot stand in a version comparison. The usual mistake -
+   * a shortened numeric version like a define set to 1.13 - gets a targeted
+   * message with the completed form; everything else keeps the compiler's
+   * wording.
+   */
+  private static String versionCompareError(Object bad) {
+    String text = bad instanceof Float badFloat ? String.valueOf(badFloat) : String.valueOf(bad);
+    // a 1- or 2-part numeric version (1 / 1.13) - dots and digits only
+    if (text.matches("\\d+(\\.\\d+)?")) {
+      return "Invalid version \"" + text + "\": a version comparison needs all three major.minor.patch parts"
+             + " - did you mean \"" + padToThreeParts(text) + "\"?";
+    }
+    if (bad instanceof String) {
+      return "Invalid version string \"" + text + "\". Should follow SemVer.";
+    }
+    return "Cannot compare version and " + kindName(bad) + ".";
+  }
+
+  private static String padToThreeParts(String version) {
+    StringBuilder padded = new StringBuilder(version);
+    // count the dots that are present; a full version core has two
+    long dots = version.chars().filter(c -> c == '.').count();
+    for (long i = dots; i < 2; i++) {
+      padded.append(".0");
+    }
+    return padded.toString();
+  }
+
+  private static String kindName(Object value) {
+    if (value instanceof Float) return "float";
+    if (value instanceof Boolean) return "bool";
+    if (value instanceof String) return "string";
+    return String.valueOf(value);
+  }
+
   // Parodies Haxe parser eval function
   // https://github.com/HaxeFoundation/haxe/blob/development/src/syntax/parser.mly#L1619
   @NotNull
@@ -582,6 +717,11 @@ public class HaxeConditionalExpression {
     try {
       if (optype.equals(OCOND_AND))            { return objectIsTrue(lhs) && objectIsTrue(rhs); }
       if (optype.equals(OCOND_OR))             { return objectIsTrue(lhs) || objectIsTrue(rhs); }
+      // an undefined define poisons comparisons: != is true, everything else
+      // false (the compiler's TNull -> Exit handling) - never a compare error
+      if (lhs == NULL_VALUE || rhs == NULL_VALUE) {
+        return optype.equals(ONOT_EQ) ? Boolean.TRUE : Boolean.FALSE;
+      }
       if (optype.equals(OEQ))                  { return objectCompare(lhs, rhs) == 0; }
       if (optype.equals(ONOT_EQ))              { return objectCompare(lhs, rhs) != 0; }
       if (optype.equals(OGREATER))             { return objectCompare(lhs, rhs) >  0; }
@@ -591,7 +731,9 @@ public class HaxeConditionalExpression {
       throw new CalculationException("Unexpected operator when comparing '"
                                      + lhs.toString() + " " + optype.toString() + " " + rhs.toString() + "'.");
     } catch (CompareException e) {
-      // parser eval#1625 maps any calculation failures to false.
+      // the compiler hard-errors on these; evaluation degrades to false, but
+      // diagnose() surfaces the message instead
+      if (strictComparisons) throw new CalculationException(e.getMessage());
       return Boolean.FALSE;
     }
   }
