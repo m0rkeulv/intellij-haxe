@@ -15,7 +15,7 @@ import tools.jackson.databind.node.StringNode;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Compiler diagnostics: language level message filter")
+@DisplayName("Compiler diagnostics: message filter")
 public class HaxeDiagnosticMessageFilterTest {
 
   private static final String ENUM_ABSTRACT_DEPRECATION = "`@:enum abstract` is deprecated in favor of `enum abstract`";

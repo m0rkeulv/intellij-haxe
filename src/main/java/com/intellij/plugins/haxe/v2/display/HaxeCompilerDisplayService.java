@@ -88,13 +88,6 @@ public final class HaxeCompilerDisplayService {
   private final Set<String> compiledContexts = ConcurrentHashMap.newKeySet();
   private volatile Capability capability;
 
-  /** The connected server's haxe version; null before the first successful initialize. */
-  @Nullable
-  public InitializeResult.SemVer connectedHaxeVersion() {
-    Capability known = capability;
-    return known != null ? known.haxeVersion() : null;
-  }
-
   public HaxeCompilerDisplayService(@NotNull Project project) {
     this.project = project;
   }
@@ -107,6 +100,13 @@ public final class HaxeCompilerDisplayService {
   @NotNull
   public Project getProject() {
     return project;
+  }
+
+  /** The connected server's haxe version; null before the first successful initialize. */
+  @Nullable
+  public InitializeResult.SemVer connectedHaxeVersion() {
+    Capability known = capability;
+    return known != null ? known.haxeVersion() : null;
   }
 
   /**

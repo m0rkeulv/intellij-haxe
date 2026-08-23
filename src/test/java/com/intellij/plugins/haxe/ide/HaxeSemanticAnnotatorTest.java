@@ -173,7 +173,7 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
   @DisplayName("is keyword for haxe 4.2 - unparenthesized is allowed in 4.2")
   public void testIsKeywordFor4_2() throws Throwable {
     // the 4.1-compat option defaults to off, so 4.2 semantics apply
-    doTestSkippingAnnotators(new HashSet<>());
+    doTestNoFixWithWarnings();
   }
 
   @Test
@@ -1117,7 +1117,7 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
     @Test
     @DisplayName("type parameter constraints")
     public void testTypeParameterConstraints() throws Throwable {
-      doTestSkippingAnnotators(new HashSet<>());
+      doTestNoFixWithWarnings();
     }
 
     @Test
@@ -1456,7 +1456,7 @@ public class HaxeSemanticAnnotatorTest extends HaxeSemanticAnnotatorTestBase {
     @Test
     @DisplayName("enum has enum value members")
     public void testEnumHasEnumValueMembers() throws Throwable {
-      doTestSkippingAnnotators(new HashSet<>());
+      doTestNoFixWithWarnings();
     }
 
     @Test

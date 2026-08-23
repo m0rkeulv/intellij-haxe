@@ -1,10 +1,10 @@
 package com.intellij.plugins.haxe.model.evaluator.assign;
 
 import com.intellij.codeInsight.intention.IntentionAction;
-import com.intellij.plugins.haxe.ide.annotator.HaxeProblemReporter;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.ide.annotator.HaxeProblemReporter;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.fixer.HaxeFixer;
 import com.intellij.plugins.haxe.model.type.HaxeGenericResolver;

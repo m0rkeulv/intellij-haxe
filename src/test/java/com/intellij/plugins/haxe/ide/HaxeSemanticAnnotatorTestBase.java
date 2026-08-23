@@ -68,8 +68,8 @@ public abstract class HaxeSemanticAnnotatorTestBase extends HaxeToolkitLightFixt
   }
 
   protected void doTestReplacingInspection(InspectionProfileEntry configuredTool) throws Exception {
-    doTest(true, false, false, Set.of(configuredTool.getClass().asSubclass(LocalInspectionTool.class)),
-           new InspectionProfileEntry[]{configuredTool});
+    Set<Class<? extends LocalInspectionTool>> replacedClass = Set.of(configuredTool.getClass().asSubclass(LocalInspectionTool.class));
+    doTest(true, false, false, replacedClass, new InspectionProfileEntry[]{configuredTool});
   }
 
   protected void doTestNoFixWithWarnings(String... additionalFiles) throws Exception {

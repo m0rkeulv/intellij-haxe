@@ -17,11 +17,13 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 /** override modifier correctness: required, forbidden, visibility and shadowing rules. */
 public class HaxeMethodOverrideInspection extends HaxeInspection {
 
+  private static final String[] OVERRIDE_FORBIDDEN_MODIFIERS = {FINAL, INLINE, STATIC};
+
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     return checkVisitor(holder, HaxeMethod.class, HaxeMethodOverrideInspection::checkOverride);
   }
-  private static final String[] OVERRIDE_FORBIDDEN_MODIFIERS = {FINAL, INLINE, STATIC};
+
   public static void checkOverride(final HaxeMethod methodPsi, final HaxeProblemReporter reporter) {
     final HaxeMethodModel currentMethod = methodPsi.getModel();
     final HaxeClassModel currentClass = currentMethod.getDeclaringClass();

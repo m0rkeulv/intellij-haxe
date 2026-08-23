@@ -160,6 +160,11 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   }
 
   @Override
+  public void setDiagnosticsRemovableCodeEnabled(boolean enabled) {
+    state.compilerDiagnosticsRemovableCode = enabled;
+  }
+
+  @Override
   public boolean isUseLanguageLevelForConditionals() {
     return state.useLanguageLevelForConditionals;
   }
@@ -167,11 +172,6 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public void setUseLanguageLevelForConditionals(boolean enabled) {
     state.useLanguageLevelForConditionals = enabled;
-  }
-
-  @Override
-  public void setDiagnosticsRemovableCodeEnabled(boolean enabled) {
-    state.compilerDiagnosticsRemovableCode = enabled;
   }
 
   @Override

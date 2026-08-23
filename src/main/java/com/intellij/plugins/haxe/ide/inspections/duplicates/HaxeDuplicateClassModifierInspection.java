@@ -25,10 +25,12 @@ public class HaxeDuplicateClassModifierInspection extends HaxeInspection {
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     return checkVisitor(holder, HaxeClass.class, HaxeDuplicateClassModifierInspection::checkDuplicateModifiers);
   }
+
   public static void checkDuplicateModifiers(final HaxeClass clazzPsi, final HaxeProblemReporter reporter) {
     HaxeClassModel clazz = HaxeClassInspectionUtil.modelToCheck(clazzPsi);
     if (clazz != null) checkModifiers(clazz, reporter);
   }
+
   static private void checkModifiers(final HaxeClassModel clazz, final HaxeProblemReporter reporter) {
 
     HaxeClassModifierList modifiers = clazz.getModifiersList();
@@ -48,6 +50,7 @@ public class HaxeDuplicateClassModifierInspection extends HaxeInspection {
       }
     }
   }
+
   private static void checkForDuplicateModifier(@NotNull HaxeProblemReporter reporter,
                                                 @NotNull String modifier,
                                                 @Nullable List<? extends PsiElement> elements) {
@@ -57,6 +60,7 @@ public class HaxeDuplicateClassModifierInspection extends HaxeInspection {
       }
     }
   }
+
   private static void reportDuplicateModifier(HaxeProblemReporter reporter, String modifier, final PsiElement element) {
     final HaxeDocumentModel document = HaxeDocumentModel.fromElement(element);
     String message = HaxeBundle.message("haxe.semantic.key.must.not.be.repeated.for.class.declaration", modifier);

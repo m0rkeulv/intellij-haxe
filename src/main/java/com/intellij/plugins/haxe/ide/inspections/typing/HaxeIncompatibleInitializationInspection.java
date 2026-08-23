@@ -24,6 +24,8 @@ import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
+import java.util.List;
+
 /**
  * Initializer/operand type compatibility at every initialization-shaped site:
  * local variables, fields, and the null-coalescing operator's operands.
@@ -68,7 +70,7 @@ public class HaxeIncompatibleInitializationInspection extends HaxeInspection {
 
   /** Operand type compatibility of {@code a ?? b}; the 4.3 level gate stays in HaxeNullCoalescingAnnotator. */
   public static void checkCoalescing(@NotNull HaxeCoalescingExpression coalescingExpression, @NotNull HaxeProblemReporter reporter) {
-    java.util.List<HaxeExpression> expressionList = coalescingExpression.getExpressionList();
+    List<HaxeExpression> expressionList = coalescingExpression.getExpressionList();
     if (expressionList.size() == 2) {
       HaxeExpression left = expressionList.getFirst();
       HaxeExpression right = expressionList.getLast();

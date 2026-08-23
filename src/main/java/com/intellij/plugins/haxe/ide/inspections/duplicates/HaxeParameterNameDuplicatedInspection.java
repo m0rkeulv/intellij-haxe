@@ -16,11 +16,12 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 /** The same parameter name used twice in one signature. */
 public class HaxeParameterNameDuplicatedInspection extends HaxeInspection {
 
+  public static final String DEFAULT_ARG_NAME = "_";
+
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     return checkVisitor(holder, HaxeMethod.class, HaxeParameterNameDuplicatedInspection::checkDuplicatedParameterNames);
   }
-  public static final String DEFAULT_ARG_NAME = "_";
 
   public static void checkDuplicatedParameterNames(final HaxeMethod methodPsi, final HaxeProblemReporter reporter) {
     HashMap<String, PsiElement> argumentNames = new HashMap<String, PsiElement>();

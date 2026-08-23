@@ -28,10 +28,16 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 /** Implemented interface members whose signature or type does not conform. */
 public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
 
+  private static final String ACCESSOR_DEFAULT = HaxeAccessorType.DEFAULT.text;
+  private static final String ACCESSOR_NEVER = HaxeAccessorType.NEVER.text;
+  private static final String ACCESSOR_NULL = HaxeAccessorType.NULL.text;
+  private static final String ACCESSOR_DYNAMIC = HaxeAccessorType.DYNAMIC.text;
+
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     return checkVisitor(holder, HaxeClass.class, HaxeInterfaceMethodSignatureInspection::checkInterfaceMethodSignatures);
   }
+
   /** Interface method signature conformance, plus interface FIELD conformance. */
   public static void checkInterfaceMethodSignatures(final HaxeClass clazzPsi, final HaxeProblemReporter reporter) {
     HaxeClassModel clazz = HaxeClassInspectionUtil.modelToCheck(clazzPsi);
@@ -39,6 +45,7 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
     HaxeClassInspectionUtil.checkImplementedInterfaces(clazz, reporter, false, true, false);
     checkInterfacesFields(clazz, reporter);
   }
+
   private static void checkInterfacesFields(final HaxeClassModel clazz, final HaxeProblemReporter reporter) {
     //TODO add settings for this feature
 
@@ -46,6 +53,7 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
       checkInterfaceFields(clazz, reference, reporter);
     }
   }
+
   private static void checkInterfaceFields(
     final HaxeClassModel clazz,
     final HaxeClassReferenceModel intReference,
@@ -172,6 +180,7 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
       }
     }
   }
+
   private static void annotateDifferentType(HaxeClassReferenceModel intReference, HaxeProblemReporter reporter, HaxeFieldDeclaration fieldDeclaration) {
     boolean macroCodegen = hasMacroCodeGen(fieldDeclaration);
 
@@ -182,6 +191,7 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
       .create();
 
   }
+
   private static boolean hasMacroCodeGen(HaxeFieldDeclaration fieldDeclaration) {
     HaxeClass containingClass = (HaxeClass)fieldDeclaration.getContainingClass();
     if (containingClass == null) return false;
@@ -189,6 +199,7 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
     HaxeClassModel model = containingClass.getModel();
     return  AnnotatorUtil.hasMacroForCodeGeneration(model);
   }
+
   private static void annotateDifferentAccess(HaxeClassReferenceModel intReference,
                                               HaxeProblemReporter reporter,
                                               HaxeFieldDeclaration fieldDeclaration,
@@ -204,9 +215,4 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
       .range(rangeElement)
       .create();
   }
-  private static final String ACCESSOR_DEFAULT = HaxeAccessorType.DEFAULT.text;
-  private static final String ACCESSOR_NEVER = HaxeAccessorType.NEVER.text;
-  private static final String ACCESSOR_NULL =HaxeAccessorType.NULL.text;
-  private static final String ACCESSOR_DYNAMIC =HaxeAccessorType.DYNAMIC.text;
-
 }

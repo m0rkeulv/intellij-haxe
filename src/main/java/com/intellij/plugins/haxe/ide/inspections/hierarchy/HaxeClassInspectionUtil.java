@@ -42,6 +42,7 @@ public final class HaxeClassInspectionUtil {
     }
     return clazz;
   }
+
   static boolean isAnonymousType(HaxeClassModel clazz) {
     if (clazz != null && clazz.haxeClass != null) {
       HaxeClass haxeClass = clazz.haxeClass;
@@ -57,6 +58,7 @@ public final class HaxeClassInspectionUtil {
     }
     return false;
   }
+
   static void checkImplementedInterfaces(final HaxeClassModel clazz, final HaxeProblemReporter reporter,
                                                  boolean checkMissingInterfaceMethods,
                                                  boolean checkInterfaceMethodSignature,
@@ -70,6 +72,7 @@ public final class HaxeClassInspectionUtil {
       }
     }
   }
+
   private static void checkInterfaceMethods(
     final HaxeClassModel classModel,
     final HaxeClassReferenceModel intReference,
@@ -152,20 +155,24 @@ public final class HaxeClassInspectionUtil {
       }
     }
   }
+
   private static @NotNull Optional<HaxeMethodModel> findInterfaceDeclarationForMethod(HaxeMethodModel intMethod, List<HaxeMethodModel> implementedMethods) {
     return implementedMethods.stream()
             .filter(method -> intMethod.getName().equals(method.getName()))
             .findFirst();
   }
+
   private static List<HaxeMethodModel> getAllInterfaceMethodDeclarations(HaxeClassReferenceModel intReference) {
     return intReference.getHaxeClassModel().getMethods(null);
   }
+
   private static @NotNull List<HaxeMethodModel> getAllMethodsExcludingAbstractAndInterfaces(HaxeClassModel clazz) {
     return clazz.haxeClass.getHaxeMethodsAll(HaxeComponentType.INTERFACE).stream()
             .map(HaxeMethodPsiMixin::getModel)
             .filter(not(HaxeMethodModel::isAbstract))
             .toList();
   }
+
   @NotNull
   static HaxeFixer implementMissingMethodsFix(HaxeClassModel clazz, List<HaxeMethodModel> missingMethods) {
     String popupText = HaxeBundle.message("haxe.quickfix.implement.methods");

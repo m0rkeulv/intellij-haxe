@@ -6,7 +6,6 @@ import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-
 import static com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -19,7 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 @DisplayName("Annotation: language level features")
 public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
-
 
   @Override
   public void tearDown() throws Exception {

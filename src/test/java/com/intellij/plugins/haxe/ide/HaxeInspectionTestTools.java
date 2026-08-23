@@ -2,16 +2,11 @@ package com.intellij.plugins.haxe.ide;
 
 import com.intellij.codeInspection.InspectionProfileEntry;
 import com.intellij.codeInspection.LocalInspectionTool;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import com.intellij.plugins.haxe.ide.inspections.members.*;
-import com.intellij.plugins.haxe.ide.inspections.hierarchy.*;
 import com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateClassModifierInspection;
 import com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateFieldInspection;
 import com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeParameterNameDuplicatedInspection;
+import com.intellij.plugins.haxe.ide.inspections.hierarchy.*;
+import com.intellij.plugins.haxe.ide.inspections.members.*;
 import com.intellij.plugins.haxe.ide.inspections.operators.HaxeBinaryOperatorApplicabilityInspection;
 import com.intellij.plugins.haxe.ide.inspections.operators.HaxeIsTypeExpressionInspection;
 import com.intellij.plugins.haxe.ide.inspections.operators.HaxeUnaryOperatorApplicabilityInspection;
@@ -22,6 +17,11 @@ import com.intellij.plugins.haxe.ide.inspections.style.HaxeStringInterpolationQu
 import com.intellij.plugins.haxe.ide.inspections.typing.HaxeAssignmentTypeCompatibilityInspection;
 import com.intellij.plugins.haxe.ide.inspections.typing.HaxeIncompatibleInitializationInspection;
 import com.intellij.plugins.haxe.ide.inspections.typing.HaxeIncompatibleTypeChecksInspection;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /**
  * The semantic inspections a highlighting test enables as a block — the

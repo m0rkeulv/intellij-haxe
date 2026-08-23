@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,9 +21,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import com.intellij.plugins.haxe.display.protocol.Diagnostic;
-import com.intellij.plugins.haxe.display.protocol.Range;
-import java.util.ArrayList;
 
 /**
  * The full flow against a real {@code haxe --wait} server. Self-skips when no

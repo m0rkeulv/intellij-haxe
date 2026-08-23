@@ -20,6 +20,7 @@ public class HaxeMethodSignatureCompatibilityInspection extends HaxeInspection {
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     return checkVisitor(holder, HaxeMethod.class, HaxeMethodSignatureCompatibilityInspection::checkSignatureAgainstAncestor);
   }
+
   /**
    * Signature compatibility of an {@code override} method against its
    * ancestor. Abstract-base and interface conformance is class-side checking
@@ -38,11 +39,13 @@ public class HaxeMethodSignatureCompatibilityInspection extends HaxeInspection {
     if (parentClass != null && parentClass.isInterface()) return;
     checkMethodsSignatureCompatibility(currentMethod, parentMethod, reporter, true);
   }
+
   public static boolean checkMethodsSignatureCompatibility(
     @NotNull final HaxeMethodModel currentMethod,
     @NotNull final HaxeMethodModel parentMethod ) {
     return checkMethodsSignatureCompatibility(currentMethod,parentMethod, null, false);
   }
+
   public static boolean checkMethodsSignatureCompatibility(
     @NotNull final HaxeMethodModel currentMethod,
     @NotNull final HaxeMethodModel parentMethod,

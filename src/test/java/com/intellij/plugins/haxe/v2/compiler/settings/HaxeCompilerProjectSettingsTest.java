@@ -170,6 +170,7 @@ public class HaxeCompilerProjectSettingsTest {
     assertNull(settings.getModuleLanguageLevelOverride("app"));
     assertTrue(settings.getModuleLanguageLevelOverrides().isEmpty());
   }
+
   @Test
   @DisplayName("diagnostics feature toggles default to errors only")
   public void diagnosticsFeatureTogglesDefaultToErrorsOnly() {
@@ -201,5 +202,4 @@ public class HaxeCompilerProjectSettingsTest {
     assertTrue(reloaded.isDiagnosticsUnusedImportsEnabled());
     assertTrue(reloaded.isDiagnosticsRemovableCodeEnabled());
   }
-
 }
