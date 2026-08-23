@@ -162,16 +162,21 @@ import com.intellij.openapi.diagnostic.LogLevel;
             yybegin(state.state);
         }
 
+        // The parser wants inactive branches as PPBODY (they merge into lazily
+        // parsed blobs); the editor highlighter wants real token types there,
+        // so token-stream mechanics (brace matching/auto-close, enter between
+        // braces) work in dead code too - its colors dim via annotator.
+        protected boolean remapInactiveToPpbody = true;
+
         /** Map output within conditional blocks to comments if the condition is false. */
         private IElementType emitToken(IElementType tokenType) {
-            if (ccsupport.currentContextIsActive()) {
-               if (tokenType != null && !WHITESPACES.contains(tokenType) && !COMMENTS.contains(tokenType)) {
-                   lastSignificantToken = tokenType;
-               }
-               return tokenType;
-            } else {
+            if (remapInactiveToPpbody && !ccsupport.currentContextIsActive()) {
                 return ccsupport.mapToken(tokenType);
             }
+            if (tokenType != null && !WHITESPACES.contains(tokenType) && !COMMENTS.contains(tokenType)) {
+                lastSignificantToken = tokenType;
+            }
+            return tokenType;
         }
 
         /** Deal with compiler conditional block constructs (e.g. #if...#end). */

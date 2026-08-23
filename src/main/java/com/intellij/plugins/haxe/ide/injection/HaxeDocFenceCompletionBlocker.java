@@ -7,16 +7,17 @@ import com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * No completion runs in analysis-exempt code: doc-comment fences are
+ * No completion runs inside a doc comment's injected code fences - they are
  * highlight-only (item insertion through the fragment's DocumentWindow is
- * not supported), and inactive conditional branches behaved as comments
- * before they were lazily parsed - typing there stays quiet.
+ * not supported). Inactive conditional branches are NOT blocked: their
+ * parsed PSI takes best-effort completion under the current defines - the
+ * compiler arbitrates when the branch goes live.
  */
-public class HaxeExemptCodeCompletionBlocker extends CompletionContributor {
+public class HaxeDocFenceCompletionBlocker extends CompletionContributor {
 
   @Override
   public void fillCompletionVariants(@NotNull CompletionParameters parameters, @NotNull CompletionResultSet result) {
-    if (AnnotatorUtil.isInAnalysisExemptCode(parameters.getPosition())) {
+    if (AnnotatorUtil.isInDocCodeFragment(parameters.getPosition())) {
       result.stopHere();
     }
   }

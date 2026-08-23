@@ -43,7 +43,21 @@ public class HaxeLexer extends LookAheadLexer {
   private Project myProject;
 
   public HaxeLexer(Project project) {
-    super(new HaxeMetaCoalescingLexerAdapter(new MergingLexerAdapter(new HaxeFlexLexer(project), tokensToMerge)));
+    this(project, true);
+  }
+
+  private HaxeLexer(Project project, boolean remapInactiveToPpbody) {
+    super(new HaxeMetaCoalescingLexerAdapter(new MergingLexerAdapter(new HaxeFlexLexer(project, remapInactiveToPpbody), tokensToMerge)));
     myProject = project;
+  }
+
+  /**
+   * Lexes inactive conditional branches with their REAL token types instead
+   * of PPBODY, so the editor's token-stream mechanics (brace matching and
+   * auto-close, enter between braces) work in dead code. Only for the editor
+   * highlighter - the parser needs the PPBODY blobs.
+   */
+  public static HaxeLexer forHighlighting(Project project) {
+    return new HaxeLexer(project, false);
   }
 }

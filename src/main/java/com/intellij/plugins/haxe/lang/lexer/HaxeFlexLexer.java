@@ -34,8 +34,8 @@ public class HaxeFlexLexer extends FlexAdapter {
    */
   static final int VALUE_CONTEXT_STATE_FLAG = 0x100;
 
-  public HaxeFlexLexer(Project context) {
-    super(new HaxeGeneratedLexerWrapper(context));
+  public HaxeFlexLexer(Project context, boolean remapInactiveToPpbody) {
+    super(new HaxeGeneratedLexerWrapper(context, remapInactiveToPpbody));
   }
 
   @Override

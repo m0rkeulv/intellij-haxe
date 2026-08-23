@@ -77,6 +77,12 @@ public class HaxeSmartEnterTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("if fixer in dead branch")
+  public void testIfFixerInDeadBranch() {
+    doTest();
+  }
+
+  @Test
   @DisplayName("semicolon fixer fix return")
   public void testSemicolonFixerFixReturn() {
     doTest();

@@ -64,6 +64,23 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("if statements in dead branches get brace spacing")
+  public void testIfStatementsInDeadBranchesGetBraceSpacing() {
+    String source = """
+      class Main {
+          static function main() {
+              #if js
+              if(true)  {   trace("dead"); }
+              #end
+          }
+      }
+      """;
+
+    String result = reformat(settings -> { }, source);
+    assertTrue(result.contains("if (true) {"), "dead if statements take the same brace spacing as live ones:\n" + result);
+  }
+
+  @Test
   @DisplayName("token soup branches are preserved verbatim")
   public void testTokenSoupBranchesArePreservedVerbatim() {
     String source = """

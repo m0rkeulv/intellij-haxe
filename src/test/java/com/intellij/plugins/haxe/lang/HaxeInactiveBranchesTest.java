@@ -4,6 +4,8 @@ import com.intellij.lexer.Lexer;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.lexer.HaxeLexer;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
+import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
+import com.intellij.psi.tree.IElementType;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalVarDeclarationList;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
@@ -18,19 +20,22 @@ import org.junit.jupiter.params.provider.FieldSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
- * An inactive conditional branch lexes as ONE PPBODY blob per region between
- * directives (the flex lexer fully lexes dead code and remaps each token;
- * HaxeLexer merges the contiguous run) - the unit inactive-branch handling
- * operates on.
+ * Behavior of INACTIVE conditional branches. The parser lexes a dead region
+ * as ONE PPBODY blob (lazily parsed into real PSI), the editor highlighter
+ * keeps real token types there instead - and everything downstream builds on
+ * that split: analysis exemption, dimmed colors, best-effort completion,
+ * token-stream editing mechanics and incremental-relex restartability.
  */
-@DisplayName("Lexing: inactive conditional branches")
-public class HaxeConditionalLexingTest extends HaxeLightFixtureTestCase {
+@DisplayName("Conditional compilation: inactive branches")
+public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
 
+  // required by the base; every fixture here is inline configureByText
   @Override
   protected String getBasePath() {
     return "/parsing/";
@@ -217,8 +222,8 @@ public class HaxeConditionalLexingTest extends HaxeLightFixtureTestCase {
 
   private record LexStep(int start, int end, String type, int stateAfter) {}
 
-  private List<LexStep> lexFrom(String source, int offset) {
-    Lexer lexer = new HaxeLexer(getProject());
+  private List<LexStep> lexFrom(String source, int offset, Supplier<Lexer> lexerFactory) {
+    Lexer lexer = lexerFactory.get();
     lexer.start(source, offset, source.length(), 0);
     List<LexStep> steps = new ArrayList<>();
     while (lexer.getTokenType() != null) {
@@ -236,7 +241,12 @@ public class HaxeConditionalLexingTest extends HaxeLightFixtureTestCase {
    * CC_BLOCK lexer state exists to prevent that.
    */
   private void checkRestartAtEveryZeroStateBoundary(String source, boolean expectRestartableTail) {
-    Lexer lexer = new HaxeLexer(getProject());
+    checkRestartAtEveryZeroStateBoundary(source, expectRestartableTail, () -> new HaxeLexer(getProject()));
+    checkRestartAtEveryZeroStateBoundary(source, expectRestartableTail, () -> HaxeLexer.forHighlighting(getProject()));
+  }
+
+  private void checkRestartAtEveryZeroStateBoundary(String source, boolean expectRestartableTail, Supplier<Lexer> lexerFactory) {
+    Lexer lexer = lexerFactory.get();
     lexer.start(source);
     List<LexStep> full = new ArrayList<>();
     while (lexer.getTokenType() != null) {
@@ -254,7 +264,7 @@ public class HaxeConditionalLexingTest extends HaxeLightFixtureTestCase {
       restartableBoundaries++;
 
       int offset = full.get(i).end();
-      List<LexStep> restarted = lexFrom(source, offset);
+      List<LexStep> restarted = lexFrom(source, offset, lexerFactory);
       List<LexStep> remainder = full.subList(i + 1, full.size());
       assertEquals(remainder.size(), restarted.size(), "restart at " + offset + ": token count diverged");
       for (int j = 0; j < remainder.size(); j++) {
@@ -435,6 +445,113 @@ public class HaxeConditionalLexingTest extends HaxeLightFixtureTestCase {
       .anyMatch(info -> info.getStartOffset() >= docStart && info.getEndOffset() <= docEnd
                         && docTagKey.equals(info.forcedTextAttributesKey));
     assertFalse(tagAccented, "@param markup must not punch through the dimmed dead doc");
+  }
+
+  @Test
+  @DisplayName("highlighting lexer keeps real token types in dead code")
+  public void testHighlightingLexerKeepsRealTokenTypesInDeadCode() {
+    // the editor's token-stream mechanics (brace matching/auto-close, enter
+    // between braces) are blind wherever the lexer flattens to PPBODY
+    String source = """
+      class Foo {
+      \t#if never
+      \tfunction dead():Void {}
+      \t#end
+      }""";
+    Lexer lexer = HaxeLexer.forHighlighting(getProject());
+    lexer.start(source);
+    List<IElementType> types = new ArrayList<>();
+    while (lexer.getTokenType() != null) {
+      types.add(lexer.getTokenType());
+      lexer.advance();
+    }
+
+    assertFalse(types.contains(HaxeTokenTypeSets.PPBODY), "dead code must keep real token types: " + types);
+    assertTrue(types.contains(HaxeTokenTypes.PPIF), "directives keep their identity");
+    long curlies = types.stream().filter(t -> t == HaxeTokenTypes.PLCURLY).count();
+    assertEquals(2, curlies, "brace tokens must be visible to the brace matcher");
+  }
+
+  @Test
+  @DisplayName("typing a brace in a dead branch auto closes it")
+  public void testTypingABraceInADeadBranchAutoClosesIt() {
+    myFixture.configureByText("Foo.hx", """
+      class Foo {
+      \tfunction f():Void {
+      \t\t#if never
+      \t\tif (true)<caret>
+      \t\t#end
+      \t}
+      }""");
+
+    myFixture.type('{');
+
+    String text = myFixture.getEditor().getDocument().getText();
+    assertTrue(text.contains("if (true){}"), "the closing brace must auto-insert:\n" + text);
+  }
+
+  @Test
+  @DisplayName("enter between dead braces splits and indents")
+  public void testEnterBetweenDeadBracesSplitsAndIndents() {
+    myFixture.configureByText("Foo.hx", """
+      class Foo {
+      \tfunction f():Void {
+      \t\t#if never
+      \t\tif (true){<caret>}
+      \t\t#end
+      \t}
+      }""");
+
+    myFixture.type('\n');
+
+    String text = myFixture.getEditor().getDocument().getText();
+    assertFalse(text.contains("{}"), "the brace pair must split across lines:\n" + text);
+    int caretOffset = myFixture.getCaretOffset();
+    int caretLineStart = text.lastIndexOf('\n', caretOffset - 1) + 1;
+    String caretIndent = text.substring(caretLineStart, caretOffset);
+    assertTrue(caretIndent.isBlank() && caretIndent.length() > "\t\t".length(),
+               "the new line indents deeper than the if line, got '" + caretIndent + "' in:\n" + text);
+  }
+
+  @Test
+  @DisplayName("keyword completion works inside a dead branch")
+  public void testKeywordCompletionWorksInsideADeadBranch() {
+    myFixture.configureByText("Foo.hx", """
+      class Foo {
+      \tfunction f():Void {
+      \t\t#if never
+      \t\ti<caret>
+      \t\t#end
+      \t}
+      }""");
+
+    myFixture.completeBasic();
+    List<String> lookups = myFixture.getLookupElementStrings();
+    assertNotNull(lookups, "completion must run inside the parsed dead branch");
+    // keyword items carry template text ("if (<CARET>)"), so match by prefix
+    boolean ifOffered = lookups.stream().anyMatch(lookup -> lookup.startsWith("if"));
+    assertTrue(ifOffered, "statement keywords must be offered: " + lookups);
+    assertTrue(lookups.contains("function "), "member keywords must be offered: " + lookups);
+  }
+
+  @Test
+  @DisplayName("local variables complete inside a dead branch")
+  public void testLocalVariablesCompleteInsideADeadBranch() {
+    myFixture.configureByText("Foo.hx", """
+      class Foo {
+      \tfunction f():Void {
+      \t\t#if never
+      \t\tvar counter = 1;
+      \t\tcou<caret>
+      \t\t#end
+      \t}
+      }""");
+
+    myFixture.completeBasic();
+    // the local is the single match, so completion auto-inserts it - the
+    // second occurrence in the document is the proof it resolved
+    long occurrences = myFixture.getEditor().getDocument().getText().split("counter", -1).length - 1;
+    assertEquals(2, occurrences, "same-tree locals must resolve for completion");
   }
 
   @Test

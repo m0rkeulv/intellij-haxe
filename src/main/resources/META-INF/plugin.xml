@@ -333,8 +333,8 @@
 
     <completion.contributor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.references.HaxeStringQnameCompletionContributor"/>
 
-    <completion.contributor id="ExemptCodeBlocker" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeExemptCodeCompletionBlocker" order="FIRST"/>
-    <completion.contributor id="DocTagCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeDocTagCompletionContributor" order="FIRST, after ExemptCodeBlocker"/>
+    <completion.contributor id="DocFenceBlocker" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeDocFenceCompletionBlocker" order="FIRST"/>
+    <completion.contributor id="DocTagCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeDocTagCompletionContributor" order="FIRST, after DocFenceBlocker"/>
     <completion.contributor id="ControllingCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeControllingCompletionContributor" order="FIRST, after DocTagCompletion"/>
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRuntimeCompletionContributor"/>
     <!-- opt-in via compiler diagnostics: macro-generated members of the enclosing class -->

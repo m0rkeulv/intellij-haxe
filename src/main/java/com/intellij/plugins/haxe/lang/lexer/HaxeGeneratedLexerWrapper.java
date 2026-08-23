@@ -34,8 +34,9 @@ public class HaxeGeneratedLexerWrapper extends _HaxeLexer {
   // before lexing each token - the pair must describe the same instant
   private boolean valueContextAtTokenStart;
 
-  public HaxeGeneratedLexerWrapper(Project project) {
+  public HaxeGeneratedLexerWrapper(Project project, boolean remapInactiveToPpbody) {
     super(project);
+    this.remapInactiveToPpbody = remapInactiveToPpbody;
   }
 
   /**
