@@ -5,6 +5,7 @@ import com.intellij.lang.PsiBuilder;
 import com.intellij.lang.PsiBuilderFactory;
 import com.intellij.lang.parser.GeneratedParserUtilBase;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Key;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.lang.parser.HaxeParser;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
@@ -45,15 +46,24 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
     return new HaxeInactiveBody(this, text);
   }
 
+  /**
+   * The entry that graded the branch, or null for the token-soup fallback.
+   * Recorded on the chameleon node because the parsed tree's ROOT type is not
+   * reliable - the expression root collapses into the concrete expression.
+   */
+  public static final Key<IElementType> PARSED_GRADE = Key.create("haxe.inactive.parsed.grade");
+
   @Override
   protected ASTNode doParseContents(@NotNull ASTNode chameleon, @NotNull PsiElement psi) {
     Project project = psi.getProject();
     for (IElementType entry : entryLadder(chameleon)) {
       ASTNode parsed = tryParse(project, chameleon, entry);
       if (parsed != null) {
+        chameleon.putUserData(PARSED_GRADE, entry);
         return parsed;
       }
     }
+    chameleon.putUserData(PARSED_GRADE, null);
     return tokenSoup(project, chameleon);
   }
 

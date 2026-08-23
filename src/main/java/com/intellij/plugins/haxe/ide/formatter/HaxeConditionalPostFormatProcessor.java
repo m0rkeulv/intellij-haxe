@@ -6,6 +6,7 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -51,7 +52,9 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
   @Override
   public @NotNull TextRange processText(@NotNull PsiFile source, @NotNull TextRange rangeToReformat, @NotNull CodeStyleSettings settings) {
     if (!(source instanceof HaxeFile)) return rangeToReformat;
-    if (!settings.getCustomSettings(HaxeCodeStyleSettings.class).ALIGN_INACTIVE_CONDITIONAL_BRANCHES) return rangeToReformat;
+    HaxeCodeStyleSettings haxeSettings = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    if (!haxeSettings.ALIGN_INACTIVE_CONDITIONAL_BRANCHES) return rangeToReformat;
+    boolean formatInactive = haxeSettings.FORMAT_INACTIVE_BRANCHES;
     Document document = source.getViewProvider().getDocument();
     if (document == null) return rangeToReformat;
 
@@ -78,6 +81,9 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
       }
       boolean inRange = rangeToReformat.intersects(leaf.getStartOffset(), leaf.getStartOffset() + leaf.getTextLength());
       if (target == null || !inRange) continue;
+      // block formatting owns branches with parsed structure; alignment only
+      // serves the token-soup blobs the formatter preserves verbatim
+      if (formatInactive && leaf.getPsi() instanceof HaxeInactiveBody body && body.hasParsedStructure()) continue;
       String blob = working.substring(start, start + leaf.getTextLength());
       String reindented = reindentBlob(blob, target, indent);
       working.replace(start, start + blob.length(), reindented);

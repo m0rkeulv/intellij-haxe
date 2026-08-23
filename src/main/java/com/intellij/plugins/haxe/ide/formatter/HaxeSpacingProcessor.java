@@ -471,6 +471,16 @@ public class HaxeSpacingProcessor {
       }
     }
 
+    // object literal field colon ({a: 1}) - hxformat's objectFieldColonPolicy
+    if (elementType == OBJECT_LITERAL_ELEMENT) {
+      if (type2 == OCOLON) {
+        return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_BEFORE_OBJECT_FIELD_COLON);
+      }
+      if (type1 == OCOLON) {
+        return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_AFTER_OBJECT_FIELD_COLON);
+      }
+    }
+
     if (elementType == TERNARY_EXPRESSION) {
       if (typeType2 == OQUEST) {
         return addSingleSpaceIf(mySettings.SPACE_BEFORE_QUEST);

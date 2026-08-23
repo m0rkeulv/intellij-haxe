@@ -25,6 +25,7 @@ import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.formatter.FormatterUtil;
@@ -86,6 +87,9 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     if (getNode().getElementType() == HaxeTokenTypeSets.DOC_COMMENT) {
       return buildDocCommentChildren();
     }
+    if (getNode().getElementType() == HaxeTokenTypeSets.PPBODY) {
+      return buildInactiveBranchChildren();
+    }
     if (isLeaf()) {
       return EMPTY;
     }
@@ -118,6 +122,30 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
       if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
       HaxeBlock childBlock = new HaxeBlock(childNode, Wrap.createWrap(WrapType.NONE, false), null, mySettings);
       childBlock.setParent(this);
+      children.add(childBlock);
+    }
+    return children;
+  }
+
+  /**
+   * Blocks over an inactive conditional branch's lazily parsed sub-tree: the
+   * children are ordinary Haxe PSI, so the normal indent and spacing rules
+   * apply inside. A branch that only graded to raw token soup stays one
+   * opaque block - preserved verbatim, like haxe-formatter's own fallback.
+   */
+  private List<Block> buildInactiveBranchChildren() {
+    if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES) {
+      return EMPTY;
+    }
+    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || !body.hasParsedStructure()) {
+      return EMPTY;
+    }
+    final ArrayList<Block> children = new ArrayList<>();
+    for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
+      if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
+      HaxeBlock childBlock = new HaxeBlock(childNode, createChildWrap(childNode), null, mySettings);
+      childBlock.setParent(this);
+      childBlock.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
       children.add(childBlock);
     }
     return children;

@@ -498,7 +498,13 @@ public final class HxformatCodeStyle {
       acceptOnly("whitespace.dotPolicy", "none");
       acceptOnly("whitespace.colonPolicy", "none");
       acceptOnly("whitespace.caseColonPolicy", "onlyAfter");
-      acceptOnly("whitespace.objectFieldColonPolicy", "after");
+      String objectFieldColon = str("whitespace.objectFieldColonPolicy");
+      if (objectFieldColon != null) {
+        haxe.SPACE_BEFORE_OBJECT_FIELD_COLON = "before".equals(objectFieldColon) || "around".equals(objectFieldColon)
+                                               || "onlyBefore".equals(objectFieldColon);
+        haxe.SPACE_AFTER_OBJECT_FIELD_COLON = "after".equals(objectFieldColon) || "around".equals(objectFieldColon)
+                                              || "onlyAfter".equals(objectFieldColon);
+      }
       acceptOnly("whitespace.semicolonPolicy", "onlyAfter");
       acceptOnly("whitespace.intervalPolicy", "none");
       acceptOnly("whitespace.compressSuccessiveParenthesis", "true");

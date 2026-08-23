@@ -151,6 +151,10 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_METADATA_PARENTHESES", "Metadata parentheses",
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_OBJECT_FIELD_COLON", "Before object field colon",
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_OBJECT_FIELD_COLON", "After object field colon",
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
       consumer.showStandardOptions(
@@ -220,8 +224,9 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 "Structure extension '> Base' on own line", "Anonymous structures");
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "RETURN_VALUE_ON_SAME_LINE",
                                 "Value on same line as 'return'", "'return' statement");
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "ALIGN_INACTIVE_CONDITIONAL_BRANCHES",
-                                "Align inactive #if branches", "Conditional compilation '#if'");
+      // inactive-branch treatment lives in the dedicated Conditional
+      // Compilation tab - its options span indentation, spacing and line
+      // breaks at once, not just wrapping
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "FORMAT_DOC_COMMENTS",
                                 "Indent documentation comment lines", "Comments");
     }

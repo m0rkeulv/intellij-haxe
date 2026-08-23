@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.lang.psi.impl;
 
+import com.intellij.plugins.haxe.lang.lexer.HaxeInactiveBodyElementType;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.impl.source.tree.LazyParseablePsiElement;
 import com.intellij.psi.tree.IElementType;
@@ -27,5 +28,16 @@ public class HaxeInactiveBody extends LazyParseablePsiElement implements PsiComm
   @Override
   public String toString() {
     return "PsiComment(" + getElementType() + ")";
+  }
+
+  /**
+   * Whether grading produced real structure or fell back to raw token soup.
+   * Formatting reaches inside structured branches; soup is preserved
+   * verbatim, like haxe-formatter does. Touching the first child forces the
+   * lazy parse that records the grade.
+   */
+  public boolean hasParsedStructure() {
+    return getNode().getFirstChildNode() != null
+           && getNode().getUserData(HaxeInactiveBodyElementType.PARSED_GRADE) != null;
   }
 }

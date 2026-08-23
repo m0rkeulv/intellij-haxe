@@ -342,4 +342,13 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     // column-0 wrap clamped to body, starred style aligned one space in
     doParityTest("doc-comment-indent");
   }
+
+  @Test
+  @DisplayName("conditional inactive branches")
+  public void testConditionalInactiveBranches() throws Exception {
+    // inactive branches format with the SAME rules as active code (the
+    // reference never distinguishes them); token-soup branches like the
+    // lone-operator case are preserved verbatim - as the reference does
+    doParityTest("conditional-inactive");
+  }
 }

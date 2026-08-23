@@ -34,6 +34,7 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.DOC_COMMENT;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.FUNCTION_DEFINITION;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
@@ -60,6 +61,16 @@ public class HaxeIndentProcessor {
     final int braceStyle = FUNCTION_DEFINITION.contains(superParentType) ? settings.METHOD_BRACE_STYLE : settings.BRACE_STYLE;
 
     if (parent == null || parent.getTreeParent() == null) {
+      return Indent.getNoneIndent();
+    }
+    // an inactive branch's block already sits at the right indent (it is a
+    // comment-shaped sibling); the chameleon wrapper layers are transparent,
+    // so the content aligns with the directives and inner elements use the
+    // normal rules relative to their own parents
+    if (parentType == PPBODY
+        || parentType == INACTIVE_MEMBER_LIST
+        || parentType == INACTIVE_STATEMENT_LIST
+        || parentType == INACTIVE_MODULE_LIST) {
       return Indent.getNoneIndent();
     }
     if (parentType == DOC_COMMENT) {

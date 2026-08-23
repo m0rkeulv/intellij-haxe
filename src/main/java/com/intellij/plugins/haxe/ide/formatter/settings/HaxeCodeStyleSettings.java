@@ -35,6 +35,8 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public boolean SPACE_WITHIN_STRING_INTERPOLATION = false;
     // the (expr : Type) type-check colon is conventionally spaced, UNLIKE type hints
     public boolean SPACE_AROUND_TYPE_CHECK_COLON = true;
+    public boolean SPACE_BEFORE_OBJECT_FIELD_COLON = false;
+    public boolean SPACE_AFTER_OBJECT_FIELD_COLON = true;
     public boolean SPACE_WITHIN_METADATA_PARENTHESES = false;
 
     // a structure extension hugs a one-line body ({ > Base, ... }) and takes
@@ -47,6 +49,7 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // code is NOT parsed, so its lines are shifted as a group - statements
     // nested inside the branch do not get their own indent steps
     public boolean ALIGN_INACTIVE_CONDITIONAL_BRANCHES = false;
+    public boolean FORMAT_INACTIVE_BRANCHES = true;
 
     // a NAMED function's non-block body (function f() return x;) moves to its
     // own line; anonymous/arrow function bodies always stay inline
