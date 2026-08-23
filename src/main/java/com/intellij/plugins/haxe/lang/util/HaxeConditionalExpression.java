@@ -231,7 +231,10 @@ public class HaxeConditionalExpression {
         while (i < text.length() && (Character.isLetterOrDigit(text.charAt(i)) || text.charAt(i) == '.')) i++;
         String number = text.substring(start, i);
         boolean decimal = number.chars().allMatch(ch -> ch == '.' || Character.isDigit(ch));
-        if (!decimal) return null;
+        // the flex rules never yield a multi-dot number as one LITFLOAT
+        // (1.2.3) - and Float.valueOf would throw on it during evaluation
+        boolean multiDot = number.indexOf('.') != number.lastIndexOf('.');
+        if (!decimal || multiDot) return null;
         condition.extend(number, number.contains(".") ? LITFLOAT : LITINT);
       }
       else if (c == '"' || c == '\'') {

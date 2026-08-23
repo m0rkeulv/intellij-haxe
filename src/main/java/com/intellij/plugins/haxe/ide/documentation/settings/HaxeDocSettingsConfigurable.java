@@ -72,7 +72,7 @@ public class HaxeDocSettingsConfigurable implements Configurable {
   private static void rehighlightOpenProjects() {
     for (Project project : ProjectManager.getInstance().getOpenProjects()) {
       ApplicationManager.getApplication().runWriteAction(() -> PsiManager.getInstance(project).dropPsiCaches());
-      DaemonCodeAnalyzer.getInstance(project).restart();
+      DaemonCodeAnalyzer.getInstance(project).restart("haxe: doc settings changed");
     }
   }
 

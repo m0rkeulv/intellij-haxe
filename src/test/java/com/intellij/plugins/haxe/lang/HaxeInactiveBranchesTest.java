@@ -673,6 +673,22 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("multi dot number condition stays quiet")
+  public void testMultiDotNumberConditionStaysQuiet() {
+    // the diagnostic scanner must decline a multi-dot number (no flex rule
+    // produces one as a single token) instead of accepting it and crashing
+    // on Float.valueOf during evaluation
+    List<String> errors = conditionErrors("""
+      class Foo {
+      \t#if (foo == 1.2.3)
+      \tvar marker:Int;
+      \t#end
+      }""");
+
+    assertTrue(errors.isEmpty(), "an unscannable condition reports nothing: " + errors);
+  }
+
+  @Test
   @DisplayName("dead branch completion offers rich member elements")
   public void testDeadBranchCompletionOffersRichMemberElements() {
     // completion runs on a COPY with a dummy identifier at the caret, which

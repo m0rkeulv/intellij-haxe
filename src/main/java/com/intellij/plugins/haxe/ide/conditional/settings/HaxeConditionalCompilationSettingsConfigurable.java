@@ -47,7 +47,7 @@ public class HaxeConditionalCompilationSettingsConfigurable implements Configura
   /** Dim colors are computed at annotation time - re-analyze to repaint. */
   private static void rehighlightOpenProjects() {
     for (Project project : ProjectManager.getInstance().getOpenProjects()) {
-      DaemonCodeAnalyzer.getInstance(project).restart();
+      DaemonCodeAnalyzer.getInstance(project).restart("haxe: conditional compilation settings changed");
     }
   }
 
