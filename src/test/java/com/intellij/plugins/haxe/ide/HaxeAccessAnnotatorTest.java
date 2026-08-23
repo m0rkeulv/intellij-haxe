@@ -1,24 +1,12 @@
 package com.intellij.plugins.haxe.ide;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import com.intellij.codeInspection.InspectionToolProvider;
 import com.intellij.codeInspection.LocalInspectionTool;
-import com.intellij.codeInspection.ex.InspectionProfileImpl;
-import com.intellij.codeInspection.ex.InspectionToolWrapper;
-import com.intellij.codeInspection.ex.LocalInspectionToolWrapper;
-import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
-import com.intellij.profile.codeInspection.InspectionProfileManager;
 import com.intellij.util.ArrayUtil;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 

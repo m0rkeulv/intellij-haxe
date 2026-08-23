@@ -9,12 +9,10 @@ import com.intellij.plugins.haxe.ide.annotator.semantics.HaxeSemanticsUtil;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.*;
-import com.intellij.plugins.haxe.model.fixer.*;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import java.util.Collection;
-import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.*;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** Parameter default values must be constant and match the declared type. */

@@ -9,10 +9,8 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.*;
-import com.intellij.plugins.haxe.model.fixer.*;
 import com.intellij.psi.PsiElement;
 import java.util.HashMap;
-import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.*;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** The same parameter name used twice in one signature. */

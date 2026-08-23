@@ -11,7 +11,6 @@ import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.fixer.*;
 import static com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil.hasMacroForCodeGeneration;
 import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.*;
-import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.OVERRIDE;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** override modifier correctness: required, forbidden, visibility and shadowing rules. */
@@ -98,7 +97,6 @@ public class HaxeMethodOverrideInspection extends HaxeInspection {
       }
     }
 
-    //System.out.println(aClass);
     if (currentModifiers.hasModifier(OVERRIDE) && !requiredOverride) {
       if (!hasMacroForCodeGeneration(currentMethod.getDeclaringClass())) {
         reporter.problem(HighlightSeverity.ERROR, "Overriding nothing").range(currentModifiers.getModifierPsi(OVERRIDE))

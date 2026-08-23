@@ -11,7 +11,6 @@ import com.intellij.plugins.haxe.model.evaluator.assign.HaxeFunctionCompatible;
 import com.intellij.plugins.haxe.model.evaluator.assign.HaxeOverrideOrImplementEvaluation;
 import com.intellij.plugins.haxe.model.fixer.*;
 import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.*;
-import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.OVERRIDE;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** Signature compatibility against the overridden or implemented ancestor method. */

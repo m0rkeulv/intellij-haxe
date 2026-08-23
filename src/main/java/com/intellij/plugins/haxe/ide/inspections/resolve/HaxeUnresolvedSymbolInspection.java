@@ -42,34 +42,19 @@ import java.util.List;
 import java.util.Objects;
 
 import static com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolQuickFixes.*;
-import static com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolQuickFixes.createMethodQuickfix;
 import static com.intellij.plugins.haxe.ide.inspections.intentions.HaxeUnresolvedSymbolIntentionBase.guessElementType;
 
 /**
  * Created by fedorkorotkov.
  */
 public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
-  @NotNull
-  public String getGroupDisplayName() {
-    return HaxeBundle.message("inspections.group.name");
-  }
 
+  /** Doubles as the problem message on the descriptors below. */
   @Nls
   @NotNull
   @Override
   public String getDisplayName() {
     return HaxeBundle.message("haxe.inspection.unresolved.symbol");
-  }
-
-  @Override
-  public boolean isEnabledByDefault() {
-    return true;
-  }
-
-  @NotNull
-  @Override
-  public String getShortName() {
-    return "HaxeUnresolvedSymbol";
   }
 
   @Nullable

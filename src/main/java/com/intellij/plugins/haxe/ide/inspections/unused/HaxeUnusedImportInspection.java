@@ -44,27 +44,13 @@ import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
  * Created by fedorkorotkov.
  */
 public class HaxeUnusedImportInspection extends LocalInspectionTool {
-  @NotNull
-  public String getGroupDisplayName() {
-    return HaxeBundle.message("inspections.group.name");
-  }
 
+  /** Doubles as the problem message on the descriptors below. */
   @Nls
   @NotNull
   @Override
   public String getDisplayName() {
     return HaxeBundle.message("haxe.inspection.unused.import.name");
-  }
-
-  @Override
-  public boolean isEnabledByDefault() {
-    return true;
-  }
-
-  @NotNull
-  @Override
-  public String getShortName() {
-    return "HaxeUnusedImport";
   }
 
   @Nullable

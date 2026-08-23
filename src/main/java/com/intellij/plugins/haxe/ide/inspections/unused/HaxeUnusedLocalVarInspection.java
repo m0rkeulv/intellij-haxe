@@ -11,7 +11,6 @@ import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.SearchScope;
 import com.intellij.util.ArrayUtil;
-import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -23,23 +22,6 @@ import static com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedDeclara
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 
 public class HaxeUnusedLocalVarInspection extends LocalInspectionTool {
-    @NotNull
-    public String getGroupDisplayName() {
-        return HaxeBundle.message("inspections.group.name");
-    }
-
-    @Nls
-    @NotNull
-    @Override
-    public String getDisplayName() {
-        return HaxeBundle.message("haxe.inspections.unused.var.name");
-    }
-
-    @Override
-    public boolean isEnabledByDefault() {
-        return true;
-    }
-
 
     @Nullable
     @Override

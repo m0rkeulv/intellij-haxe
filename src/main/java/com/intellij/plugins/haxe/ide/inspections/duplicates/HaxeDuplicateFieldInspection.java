@@ -46,9 +46,6 @@ public class HaxeDuplicateFieldInspection extends HaxeInspection {
         .range(member.getNameOrBasePsi())
         .create();
     }
-
-
-    //Duplicate class field declaration
   }
 
 }

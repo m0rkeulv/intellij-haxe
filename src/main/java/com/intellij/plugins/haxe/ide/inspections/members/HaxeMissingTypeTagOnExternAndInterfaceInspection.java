@@ -9,8 +9,6 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.*;
-import com.intellij.plugins.haxe.model.fixer.*;
-import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.*;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** Extern-class and interface methods must declare parameter and return types. */
