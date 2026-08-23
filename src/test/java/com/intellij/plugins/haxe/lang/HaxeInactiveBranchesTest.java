@@ -719,6 +719,32 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("dead branch completion offers rich member elements")
+  public void testDeadBranchCompletionOffersRichMemberElements() {
+    // completion runs on a COPY with a dummy identifier at the caret, which
+    // breaks the strict parse grading - the copy must take the best grade
+    // errors-and-all or the rich reference pipeline finds no reference and
+    // only the flat word-completion fallback fills the popup
+    myFixture.configureByText("Foo.hx", """
+      class Foo {
+      \t#if never
+      \tpublic static function setClipboardText(text:String):Bool {
+      \t\tt<caret>
+      \t\treturn false;
+      \t}
+      \tpublic static function getClipboardText():String { return ""; }
+      \t#end
+      }""");
+
+    com.intellij.codeInsight.lookup.LookupElement[] items = myFixture.completeBasic();
+    assertNotNull(items, "several candidates must match the ambiguous prefix");
+
+    boolean richMembers = java.util.Arrays.stream(items)
+      .anyMatch(item -> item.getClass().getSimpleName().equals("HaxeMemberLookupElement"));
+    assertTrue(richMembers, "typed member elements must appear, not just word-completion text");
+  }
+
+  @Test
   @DisplayName("dead members stay out of the stub tree")
   public void testDeadMembersStayOutOfTheStubTree() {
     PsiFile file = myFixture.configureByText("Foo.hx", """

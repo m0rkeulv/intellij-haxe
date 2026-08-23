@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.lang.lexer;
 
+import com.intellij.codeInsight.completion.CompletionUtilCore;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.PsiBuilder;
 import com.intellij.lang.PsiBuilderFactory;
@@ -14,7 +15,6 @@ import com.intellij.psi.TokenType;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.ILazyParseableElementType;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -56,12 +56,22 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
   @Override
   protected ASTNode doParseContents(@NotNull ASTNode chameleon, @NotNull PsiElement psi) {
     Project project = psi.getProject();
-    for (IElementType entry : entryLadder(chameleon)) {
-      ASTNode parsed = tryParse(project, chameleon, entry);
-      if (parsed != null) {
+    List<IElementType> ladder = entryLadder(chameleon);
+    for (IElementType entry : ladder) {
+      ASTNode parsed = parse(project, chameleon, entry);
+      if (!containsErrors(parsed)) {
         chameleon.putUserData(PARSED_GRADE, entry);
         return parsed;
       }
+    }
+    // a completion COPY carries the dummy identifier at the caret, which
+    // near-always breaks the clean parse (missing semicolon); soup would
+    // leave no reference at the caret and kill rich completion, so the copy
+    // takes the context's best grade errors-and-all. Real files stay strict.
+    if (chameleon.getChars().toString().contains(CompletionUtilCore.DUMMY_IDENTIFIER_TRIMMED)) {
+      IElementType entry = ladder.get(0);
+      chameleon.putUserData(PARSED_GRADE, entry);
+      return parse(project, chameleon, entry);
     }
     chameleon.putUserData(PARSED_GRADE, null);
     return tokenSoup(project, chameleon);
@@ -86,13 +96,11 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
     return EXPRESSION_CONTEXT;
   }
 
-  /** The branch parsed under one entry, or null when the result carries any error - the ladder moves on. */
-  @Nullable
-  private static ASTNode tryParse(@NotNull Project project, @NotNull ASTNode chameleon, @NotNull IElementType entry) {
+  @NotNull
+  private static ASTNode parse(@NotNull Project project, @NotNull ASTNode chameleon, @NotNull IElementType entry) {
     PsiBuilder builder = PsiBuilderFactory.getInstance()
       .createBuilder(project, chameleon, new HaxeLexer(project), HaxeLanguage.INSTANCE, chameleon.getChars());
-    ASTNode root = new HaxeParser().parse(entry, builder);
-    return containsErrors(root) ? null : root;
+    return new HaxeParser().parse(entry, builder);
   }
 
   private static boolean containsErrors(@NotNull ASTNode node) {
