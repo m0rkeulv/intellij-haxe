@@ -12,7 +12,7 @@ public final class HaxeDocTags {
   public static final String TAG_EVENT = "@event";
   public static final String TAG_THROWS = "@throws";
 
-  // TODO @example ?
+  // TODO: decide whether @example is a supported haxedoc tag (rendering + completion)
   public static final List<String> ALL = List.of(
     TAG_SINCE,
     TAG_SEE,

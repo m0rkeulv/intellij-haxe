@@ -23,7 +23,7 @@ import java.util.Set;
  * real language fragments, so they get the language's own highlighting.
  * Semantic errors inside the fragments are suppressed separately - sample
  * snippets are not expected to resolve (see AnnotatorUtil.shouldSkip and
- * HaxeDocFragmentErrorFilter).
+ * {@link HaxeExemptCodeErrorFilter}).
  */
 public class HaxeDocFenceInjector implements MultiHostInjector {
 

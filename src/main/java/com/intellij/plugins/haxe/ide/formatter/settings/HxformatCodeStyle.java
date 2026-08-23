@@ -21,9 +21,8 @@ import java.util.function.IntConsumer;
 /**
  * Maps haxe-formatter (HaxeCheckstyle) configuration onto our code style
  * settings. {@link #applyDefaults} is the settings image of a DEFAULT
- * hxformat.json (verified byte-for-byte by HaxeFormatterComparisonTest);
- * {@link #applyJson} lays a config file's overrides on top and reports the
- * keys it could not honor.
+ * hxformat.json; {@link #applyJson} lays a config file's overrides on top
+ * and reports the keys it could not honor.
  */
 public final class HxformatCodeStyle {
 

@@ -31,8 +31,8 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.MML_COMMENT
  * under the opener), and the closing line returns to the comment's level.
  * A comment's interior is INSIDE its token, out of block formatting's reach -
  * hence a text pass. Doc comments have their own line-structured blocks;
- * single-line comments carry no interior. Off by default (IntelliJ convention
- * leaves comment interiors alone); the hxformat.json profile enables it.
+ * single-line comments carry no interior. Disable to restore the IntelliJ
+ * convention of leaving comment interiors alone.
  */
 public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProcessor {
 

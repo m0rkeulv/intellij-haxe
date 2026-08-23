@@ -200,8 +200,9 @@ public class HaxeConditionalExpression {
    * Rebuilds a condition from the raw text of its PPEXPRESSION tokens so
    * diagnostics can re-run it outside the lexer. The scanner mirrors the flex
    * COMPILER_CONDITIONAL rules; null for anything they would not produce -
-   * and for hex/octal literals, which the compiler accepts but this
-   * evaluator cannot yet compute (nothing trustworthy to report there).
+   * and for hex/octal literals and strings containing escape sequences,
+   * which the compiler accepts but this evaluator cannot yet compute
+   * (nothing trustworthy to report there).
    */
   @Nullable
   public static HaxeConditionalExpression fromCondition(@NotNull String text) {
@@ -240,8 +241,12 @@ public class HaxeConditionalExpression {
       else if (c == '"' || c == '\'') {
         int end = text.indexOf(c, i + 1);
         if (end < 0) return null;
+        String content = text.substring(i + 1, end);
+        // an escape in the string (flex lexes it as ESCAPED_STRING_PART, and a
+        // \" would mis-terminate this scan) - decline rather than mis-scan
+        if (content.indexOf('\\') >= 0) return null;
         condition.extend(String.valueOf(c), OPEN_QUOTE);
-        if (end > i + 1) condition.extend(text.substring(i + 1, end), REGULAR_STRING_PART);
+        if (!content.isEmpty()) condition.extend(content, REGULAR_STRING_PART);
         condition.extend(String.valueOf(c), CLOSING_QUOTE);
         i = end + 1;
       }
@@ -342,14 +347,6 @@ public class HaxeConditionalExpression {
   }
 
   /**
-   * Converts an infix expression into an RPN expression.  (Re-orders and removes parenthesis.)
-   * For example: !(cpp && js) -> cpp js && !
-   *         and: (( cpp || js ) && (haxe-ver < 3))  -> cpp js || haxe-ver 3 < &&
-   * See https://en.wikipedia.org/wiki/Reverse_Polish_notation
-   * @return
-   * @throws CalculationException
-   */
-  /**
    * The single function conditions support is {@code version("literal")}
    * (per the compiler's parserEntry.ml). Each such call folds into ONE
    * synthetic operand so the shunting-yard sees a plain value; any other
@@ -397,6 +394,12 @@ public class HaxeConditionalExpression {
     return -1;
   }
 
+  /**
+   * Converts an infix expression into an RPN expression.  (Re-orders and removes parenthesis.)
+   * For example: !(cpp && js) -> cpp js && !
+   *         and: (( cpp || js ) && (haxe-ver < 3))  -> cpp js || haxe-ver 3 < &&
+   * See https://en.wikipedia.org/wiki/Reverse_Polish_notation
+   */
   private Stack<ASTNode> infixToRPN() throws CalculationException {
     // This is a simplified shunting-yard algorithm: http://https://en.wikipedia.org/wiki/Shunting-yard_algorithm
     Stack<ASTNode> rpnOutput = new Stack<ASTNode>();

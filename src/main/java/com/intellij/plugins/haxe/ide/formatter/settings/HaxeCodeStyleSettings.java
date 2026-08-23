@@ -51,10 +51,10 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // untouched while KEEP_FIRST_COLUMN_COMMENT pins their opener.
     public boolean REINDENT_MULTILINE_COMMENTS = true;
 
-    // reformat also re-aligns the INACTIVE #if/#elseif/#else branches (the
-    // block formatter only reaches the active one). Off by default: inactive
-    // code is NOT parsed, so its lines are shifted as a group - statements
-    // nested inside the branch do not get their own indent steps
+    // reformat also aligns inactive branches that failed to parse cleanly
+    // (parsed branches are block-formatted under FORMAT_INACTIVE_BRANCHES).
+    // Off by default: an unparsable blob's lines shift as a group, so
+    // statements nested inside it do not get their own indent steps
     public boolean ALIGN_INACTIVE_CONDITIONAL_BRANCHES = false;
     public boolean FORMAT_INACTIVE_BRANCHES = true;
 

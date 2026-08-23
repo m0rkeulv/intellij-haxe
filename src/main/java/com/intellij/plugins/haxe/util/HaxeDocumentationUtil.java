@@ -9,8 +9,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Note: This util is just here to help extracting documentation for as long as we treat documentation as one single tag
- * if at some point start lazy parsing it these  util methods probably wont  work or be nessesary
+ * Text-level documentation extraction for rendering: operates on a doc
+ * comment's raw text (delimiter stripping, indent removal, blank-line
+ * normalization), independent of the lazily parsed doc sub-tree.
  */
 public class HaxeDocumentationUtil {
 

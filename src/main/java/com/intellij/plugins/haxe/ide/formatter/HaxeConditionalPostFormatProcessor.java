@@ -24,17 +24,13 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
- * Re-indents the INACTIVE branches of #if/#elseif/#else regions after a
- * reformat. The lexer folds an inactive branch - its code AND the line indent
- * of the directive that follows it - into one PPBODY token, so block
- * formatting cannot reach inside; this pass aligns each such token's lines
- * with the region's nearest preceding directive, preserving the branch's own
- * relative nesting. Single-line (inline expression) regions are untouched.
- *
- * TODO: inactive code is shifted as a group, never re-formatted - a
- *  statement nested in an unparsed branch keeps whatever relative indent it
- *  was written with. True formatting needs the inactive branches parsed;
- *  until then the option defaults to off.
+ * Aligns the INACTIVE branches of #if/#elseif/#else regions after a reformat.
+ * Branches that parse cleanly are block-formatted like active code
+ * (FORMAT_INACTIVE_BRANCHES owns those); this pass serves only the
+ * unparsable token-soup blobs, whose lines it aligns as a group - the
+ * branch's own relative nesting preserved - to the region's nearest
+ * preceding directive. Single-line (inline expression) regions are
+ * untouched.
  */
 public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
 
