@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.lang.lexer;
 
-import com.intellij.codeInsight.completion.CompletionUtilCore;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.PsiBuilder;
 import com.intellij.lang.PsiBuilderFactory;
@@ -14,6 +13,7 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.TokenType;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.ILazyParseableElementType;
+import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -26,9 +26,13 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * lazily parsed with a GRADED ladder of entry points chosen by where the
  * branch sits - members between class members, statements inside a body,
  * module content at top level, an expression for inline branches. A branch
- * that parses cleanly under no entry (a lone operator, half a construct)
- * falls back to a flat run of raw tokens; consumers treat that soup as
- * opaque, which matches haxe-formatter's own preserve-verbatim fallback.
+ * that parses cleanly under no entry keeps the context's best entry WITH the
+ * parser's own error recovery when that recovery pinned real structure (a
+ * broken statement stays a local error, the rest keeps real PSI); fragments
+ * that recover into nothing but error shells fall back to a flat run of raw
+ * tokens. The formatter preserves both verbatim (only clean parses
+ * reformat), matching haxe-formatter's own refusal to touch what it cannot
+ * parse.
  */
 public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
 
@@ -47,7 +51,8 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
   }
 
   /**
-   * The entry that graded the branch, or null for the token-soup fallback.
+   * The entry that graded the branch ERROR-FREE, or null for a recovered
+   * (error-carrying) parse - which the formatter preserves verbatim.
    * Recorded on the chameleon node because the parsed tree's ROOT type is not
    * reliable - the expression root collapses into the concrete expression.
    */
@@ -64,17 +69,79 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
         return parsed;
       }
     }
-    // a completion COPY carries the dummy identifier at the caret, which
-    // near-always breaks the clean parse (missing semicolon); soup would
-    // leave no reference at the caret and kill rich completion, so the copy
-    // takes the context's best grade errors-and-all. Real files stay strict.
-    if (chameleon.getChars().toString().contains(CompletionUtilCore.DUMMY_IDENTIFIER_TRIMMED)) {
-      IElementType entry = ladder.get(0);
-      chameleon.putUserData(PARSED_GRADE, entry);
-      return parse(project, chameleon, entry);
-    }
+    // no entry parses clean - keep the context's best recovery when it PINNED
+    // real structure (a broken statement inside otherwise-parseable members:
+    // the error stays local, the rest keeps real PSI for references and
+    // completion). Trivial fragments - a spliced keyword, half an operator -
+    // recover into nothing but error shells and read better as flat soup.
+    // Either way the null grade keeps the formatter preserving the text.
     chameleon.putUserData(PARSED_GRADE, null);
+    ASTNode recovered = parse(project, chameleon, ladder.get(0));
+    if (hasMeaningfulStructure(recovered)) {
+      return recovered;
+    }
     return tokenSoup(project, chameleon);
+  }
+
+  private static final TokenSet STRUCTURE_WRAPPERS = TokenSet.create(
+    INACTIVE_MEMBER_LIST,
+    INACTIVE_STATEMENT_LIST,
+    INACTIVE_MODULE_LIST,
+    EXPRESSION);
+
+  /**
+   * Whether recovery produced NESTED real structure: a non-shell composite
+   * containing another non-shell composite (a declaration with its name, a
+   * statement with its expression). Error elements, dummy blocks and the
+   * bare entry wrappers are shells; so is a lone concrete node whose only
+   * content is an error husk around raw tokens.
+   */
+  private static boolean hasMeaningfulStructure(@NotNull ASTNode node) {
+    IElementType type = node.getElementType();
+    // collapsed nested chameleons must not be touched in a detached tree
+    if (type instanceof ILazyParseableElementType) {
+      return false;
+    }
+    if (!isShell(type) && hasRealCompositeChild(node)) {
+      return true;
+    }
+    for (ASTNode child = node.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      if (hasMeaningfulStructure(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean isShell(@NotNull IElementType type) {
+    return type == TokenType.ERROR_ELEMENT
+           || type == GeneratedParserUtilBase.DUMMY_BLOCK
+           || STRUCTURE_WRAPPERS.contains(type);
+  }
+
+  private static boolean hasRealCompositeChild(@NotNull ASTNode node) {
+    for (ASTNode child = node.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      IElementType type = child.getElementType();
+      if (type instanceof ILazyParseableElementType) continue;
+      if (isShell(type)) continue;
+      if (child.getFirstChildNode() != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** The opaque fallback: the branch's raw tokens as flat leaves, structure-free. */
+  @NotNull
+  private ASTNode tokenSoup(@NotNull Project project, @NotNull ASTNode chameleon) {
+    PsiBuilder builder = PsiBuilderFactory.getInstance()
+      .createBuilder(project, chameleon, new HaxeLexer(project), HaxeLanguage.INSTANCE, chameleon.getChars());
+    PsiBuilder.Marker root = builder.mark();
+    while (!builder.eof()) {
+      builder.advanceLexer();
+    }
+    root.done(this);
+    return builder.getTreeBuilt().getFirstChildNode();
   }
 
   /** Entries in context order: what the branch's surroundings say its content most likely is. */
@@ -122,16 +189,4 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
     return false;
   }
 
-  /** The opaque fallback: the branch's raw tokens as flat leaves, structure-free. */
-  @NotNull
-  private ASTNode tokenSoup(@NotNull Project project, @NotNull ASTNode chameleon) {
-    PsiBuilder builder = PsiBuilderFactory.getInstance()
-      .createBuilder(project, chameleon, new HaxeLexer(project), HaxeLanguage.INSTANCE, chameleon.getChars());
-    PsiBuilder.Marker root = builder.mark();
-    while (!builder.eof()) {
-      builder.advanceLexer();
-    }
-    root.done(this);
-    return builder.getTreeBuilt().getFirstChildNode();
-  }
 }

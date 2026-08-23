@@ -19,7 +19,9 @@
 package com.intellij.plugins.haxe.lang.parser;
 
 import com.intellij.lang.LanguageASTFactory;
+import com.intellij.lang.LanguageBraceMatching;
 import com.intellij.lang.LanguageParserDefinitions;
+import com.intellij.plugins.haxe.ide.HaxeBraceMatcher;
 import com.intellij.lang.injection.MultiHostInjector;
 import com.intellij.lang.injection.MultiHostRegistrar;
 import com.intellij.openapi.extensions.ExtensionPointName;
@@ -116,6 +118,11 @@ abstract public class HaxeParsingTestBase {
       HaxeAstFactory astFactory = new HaxeAstFactory();
       addExplicitExtension(LanguageASTFactory.INSTANCE, HaxeLanguage.INSTANCE, astFactory);
       addExplicitExtension(LanguageASTFactory.INSTANCE, HaxeMetadataLanguage.INSTANCE, astFactory);
+      // GeneratedParserUtilBase's error recovery groups stray tokens into
+      // DUMMY_BLOCKs only when a brace matcher is registered - without this
+      // the tree dumps differ between a solo parsing run and a full-suite
+      // JVM where earlier fixture tests loaded the real plugin descriptor
+      addExplicitExtension(LanguageBraceMatching.INSTANCE, HaxeLanguage.INSTANCE, new HaxeBraceMatcher());
       registerMetadataParser();
     }
 

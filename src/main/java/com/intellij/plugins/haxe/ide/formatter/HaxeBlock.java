@@ -137,7 +137,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES) {
       return EMPTY;
     }
-    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || !body.hasParsedStructure()) {
+    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || !body.hasCleanParse()) {
       return EMPTY;
     }
     final ArrayList<Block> children = new ArrayList<>();

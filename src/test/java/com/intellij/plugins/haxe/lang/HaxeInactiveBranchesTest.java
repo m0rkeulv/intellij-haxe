@@ -8,6 +8,7 @@ import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalVarDeclarationList;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
+import com.intellij.plugins.haxe.lang.psi.HaxeReferenceExpression;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
 import com.intellij.psi.PsiComment;
@@ -148,8 +149,10 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("token soup fallback for partial constructs")
-  public void testTokenSoupFallbackForPartialConstructs() {
+  @DisplayName("trivial fragments stay error-free token soup")
+  public void testTrivialFragmentsStayErrorFreeTokenSoup() {
+    // recovery that pins no real structure (half an operator, a spliced
+    // keyword) reads better as flat soup - no error shells in the tree
     HaxeInactiveBody body = inactiveBody("""
       class Foo {
       \tfunction f():Void {
@@ -157,9 +160,41 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
       \t}
       }""");
 
+    assertFalse(body.hasCleanParse(), "a cross-branch splice cannot parse clean - the formatter must preserve it");
     assertNull(PsiTreeUtil.findChildOfType(body, com.intellij.psi.PsiErrorElement.class),
                "the soup fallback carries no error elements");
     assertTrue(body.getNode().getFirstChildNode() != null, "the soup still exposes the raw tokens");
+  }
+
+  @Test
+  @DisplayName("broken statement keeps the rest of the branch navigable")
+  public void testBrokenStatementKeepsTheRestOfTheBranchNavigable() {
+    // a missing semicolon must stay a LOCAL error: the sibling method keeps
+    // real PSI and its references keep resolving (previously the whole
+    // branch degraded to token soup and every reference died)
+    PsiFile file = myFixture.configureByText("Foo.hx", """
+      class Helper {}
+      class Foo {
+      \t#if never
+      \tfunction broken():Void {
+      \t\tvar x = 1
+      \t\treturn;
+      \t}
+      \tfunction sibling(arg:Helper):Void {}
+      \t#end
+      }""");
+    HaxeInactiveBody body = PsiTreeUtil.findChildOfType(file, HaxeInactiveBody.class);
+    assertNotNull(body);
+
+    assertFalse(body.hasCleanParse(), "the missing semicolon rules out a clean parse");
+    assertEquals(2, PsiTreeUtil.findChildrenOfType(body, HaxeMethodDeclaration.class).size(),
+                 "recovery keeps BOTH methods as real PSI");
+    HaxeReferenceExpression helperReference = PsiTreeUtil.findChildrenOfType(body, HaxeReferenceExpression.class).stream()
+      .filter(reference -> reference.textMatches("Helper"))
+      .findFirst()
+      .orElse(null);
+    assertNotNull(helperReference, "the parameter's type stays a real reference");
+    assertNotNull(helperReference.resolve(), "and it resolves to the same-file class");
   }
 
   @Test

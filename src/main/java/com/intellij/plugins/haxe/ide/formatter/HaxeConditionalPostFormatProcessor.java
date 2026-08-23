@@ -83,7 +83,7 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
       if (target == null || !inRange) continue;
       // block formatting owns branches with parsed structure; alignment only
       // serves the token-soup blobs the formatter preserves verbatim
-      if (formatInactive && leaf.getPsi() instanceof HaxeInactiveBody body && body.hasParsedStructure()) continue;
+      if (formatInactive && leaf.getPsi() instanceof HaxeInactiveBody body && body.hasCleanParse()) continue;
       String blob = working.substring(start, start + leaf.getTextLength());
       String reindented = reindentBlob(blob, target, indent);
       working.replace(start, start + blob.length(), reindented);

@@ -10,8 +10,9 @@ import org.jetbrains.annotations.Nullable;
 /**
  * An inactive conditional-compilation branch: still a PsiComment to every
  * existing consumer (dead code stays comment-like), but lazily parseable into
- * a real sub-tree for formatting and highlighting. Whether the content parsed
- * or fell back to raw token soup shows in the children's element types.
+ * a real sub-tree for formatting, highlighting, references and completion.
+ * Content that cannot parse cleanly keeps the parser's error recovery, so
+ * only the broken spot loses structure - never the whole branch.
  */
 public class HaxeInactiveBody extends LazyParseablePsiElement implements PsiComment {
 
@@ -31,12 +32,12 @@ public class HaxeInactiveBody extends LazyParseablePsiElement implements PsiComm
   }
 
   /**
-   * Whether grading produced real structure or fell back to raw token soup.
-   * Formatting reaches inside structured branches; soup is preserved
-   * verbatim, like haxe-formatter does. Touching the first child forces the
-   * lazy parse that records the grade.
+   * Whether the branch parsed ERROR-FREE under a graded entry. Formatting
+   * rebuilds only clean branches; a recovered (error-carrying) parse is
+   * preserved verbatim, like haxe-formatter's own fallback. Touching the
+   * first child forces the lazy parse that records the grade.
    */
-  public boolean hasParsedStructure() {
+  public boolean hasCleanParse() {
     return getNode().getFirstChildNode() != null
            && getNode().getUserData(HaxeInactiveBodyElementType.PARSED_GRADE) != null;
   }

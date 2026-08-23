@@ -107,7 +107,7 @@ public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProces
   private static boolean inPreservedInactiveBranch(ASTNode comment, HaxeCodeStyleSettings settings) {
     HaxeInactiveBody body = PsiTreeUtil.getParentOfType(comment.getPsi(), HaxeInactiveBody.class);
     if (body == null) return false;
-    return !settings.FORMAT_INACTIVE_BRANCHES || !body.hasParsedStructure();
+    return !settings.FORMAT_INACTIVE_BRANCHES || !body.hasCleanParse();
   }
 
   private static String reindent(String text, String baseIndent, CommonCodeStyleSettings.IndentOptions options) {
