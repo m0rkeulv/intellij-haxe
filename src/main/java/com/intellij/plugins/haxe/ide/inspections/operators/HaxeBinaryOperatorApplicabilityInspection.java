@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.inspections.operators;
 
-import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeBinaryExpression;
 import com.intellij.psi.PsiElementVisitor;
@@ -18,12 +17,6 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** Binary operators that cannot be applied to their operand types. */
 public class HaxeBinaryOperatorApplicabilityInspection extends HaxeInspection {
-
-  // must match the plugin.xml level attribute (checkVisitor keys on it)
-  @Override
-  public @NotNull HighlightDisplayLevel getDefaultLevel() {
-    return HighlightDisplayLevel.ERROR;
-  }
 
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
@@ -59,7 +52,7 @@ public class HaxeBinaryOperatorApplicabilityInspection extends HaxeInspection {
       ResultHolder rhsType = HaxeTypeResolver.getPsiElementType(rightChild, binaryExpression, rhsResolver);
 
       ResultHolder nonNullLhsType = lhsType.tryUnwrapNullType();
-      ResultHolder nonNullRhsType = lhsType.tryUnwrapNullType();
+      ResultHolder nonNullRhsType = rhsType.tryUnwrapNullType();
       String operatorText = operator.getText();
 
       // warning for operators on dynamic that are not simple equals expresions

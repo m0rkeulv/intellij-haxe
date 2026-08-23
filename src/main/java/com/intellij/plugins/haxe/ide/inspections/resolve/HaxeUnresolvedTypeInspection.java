@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.inspections.resolve;
 
-import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.project.Project;
@@ -36,12 +35,6 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
  * expression-level unresolved references are {@link HaxeUnresolvedSymbolInspection}.
  */
 public class HaxeUnresolvedTypeInspection extends HaxeInspection {
-
-  // must match the plugin.xml level attribute
-  @Override
-  public @NotNull HighlightDisplayLevel getDefaultLevel() {
-    return HighlightDisplayLevel.ERROR;
-  }
 
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {

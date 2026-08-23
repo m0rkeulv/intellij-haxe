@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.inspections.style;
 
-import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxePackageStatement;
 import com.intellij.psi.PsiElementVisitor;
@@ -24,12 +23,6 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** Package naming conventions: lower-case parts, name matching the directory. */
 public class HaxePackageNameInspection extends HaxeInspection {
-
-  // must match the plugin.xml level attribute (checkVisitor keys on it)
-  @Override
-  public @NotNull HighlightDisplayLevel getDefaultLevel() {
-    return HighlightDisplayLevel.ERROR;
-  }
 
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {

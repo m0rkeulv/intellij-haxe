@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.inspections.operators;
 
-import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.codeInspection.options.OptPane;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -33,12 +32,6 @@ public class HaxeIsTypeExpressionInspection extends HaxeInspection {
 
   @SuppressWarnings("WeakerAccess") // made public for options serialization
   public boolean enforce41Semantics = false;
-
-  // must match the plugin.xml level attribute (checkVisitor keys on it)
-  @Override
-  public @NotNull HighlightDisplayLevel getDefaultLevel() {
-    return HighlightDisplayLevel.ERROR;
-  }
 
   @Override
   public @NotNull OptPane getOptionsPane() {

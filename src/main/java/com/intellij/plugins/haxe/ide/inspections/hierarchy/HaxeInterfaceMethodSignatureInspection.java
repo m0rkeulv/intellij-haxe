@@ -100,7 +100,7 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
                   // never is just restricting visibility for interface (class may use different access)
                   // null only specifies access allowed from within the defining class (class may use different access)
                   // dynamic: Like get/set access, but does not verify the existence of the accessor field.
-                  if (!ACCESSOR_NEVER.equals(intGetterText) && !ACCESSOR_NULL.equals(intGetterText) && ACCESSOR_DYNAMIC.equals(intGetterText)) {
+                  if (!ACCESSOR_NEVER.equals(intGetterText) && !ACCESSOR_NULL.equals(intGetterText) && !ACCESSOR_DYNAMIC.equals(intGetterText)) {
                     if (!intGetterText.equals(getter.getText())) {
                       annotateDifferentAccess(intReference, reporter, fieldDeclaration, getter.getElement());
                     }

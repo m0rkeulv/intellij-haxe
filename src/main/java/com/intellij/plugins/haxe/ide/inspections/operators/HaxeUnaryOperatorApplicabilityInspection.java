@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.inspections.operators;
 
-import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeUnaryExpression;
 import com.intellij.psi.PsiElementVisitor;
@@ -22,12 +21,6 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** Increment/decrement applied to expressions that cannot be written to. */
 public class HaxeUnaryOperatorApplicabilityInspection extends HaxeInspection {
-
-  // must match the plugin.xml level attribute (checkVisitor keys on it)
-  @Override
-  public @NotNull HighlightDisplayLevel getDefaultLevel() {
-    return HighlightDisplayLevel.ERROR;
-  }
 
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {

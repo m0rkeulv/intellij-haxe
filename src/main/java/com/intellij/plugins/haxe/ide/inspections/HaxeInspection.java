@@ -1,5 +1,7 @@
 package com.intellij.plugins.haxe.ide.inspections;
 
+import com.intellij.codeHighlighting.HighlightDisplayLevel;
+import com.intellij.codeInspection.LocalInspectionEP;
 import com.intellij.codeInspection.LocalInspectionTool;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.ide.annotator.HaxeProblemReporter;
@@ -20,12 +22,36 @@ import java.util.function.BiConsumer;
  */
 public abstract class HaxeInspection extends LocalInspectionTool {
 
+  private volatile HighlightDisplayLevel registeredLevel;
+
+  /**
+   * The plugin.xml {@code level} attribute, resolved through the tool's own
+   * registration so it is declared in ONE place. The platform reads the
+   * attribute only via the registration bean and never hands it to the tool
+   * instance, while {@link #checkVisitor} needs the tool-side value to
+   * decide which reported severity follows the profile's choice. A tool
+   * instantiated without a registration keeps the platform default.
+   */
+  @Override
+  public @NotNull HighlightDisplayLevel getDefaultLevel() {
+    HighlightDisplayLevel level = registeredLevel;
+    if (level == null) {
+      String className = getClass().getName();
+      level = LocalInspectionEP.LOCAL_INSPECTION.getExtensionList().stream()
+        .filter(ep -> className.equals(ep.implementationClass))
+        .findFirst()
+        .map(LocalInspectionEP::getDefaultLevel)
+        .orElseGet(super::getDefaultLevel);
+      registeredLevel = level;
+    }
+    return level;
+  }
+
   /**
    * The visitor shape most checks share: one element type, one check method
    * reporting through {@link HaxeProblemReporter}. A problem at the severity
-   * of {@link #getDefaultLevel()} follows the profile's severity choice —
-   * override it to match the plugin.xml {@code level} attribute, or the two
-   * defaults diverge.
+   * of {@link #getDefaultLevel()} — the registered default — follows the
+   * profile's severity choice; other severities render verbatim.
    */
   protected final <T extends PsiElement> PsiElementVisitor checkVisitor(@NotNull ProblemsHolder holder,
                                                                         @NotNull Class<T> elementType,

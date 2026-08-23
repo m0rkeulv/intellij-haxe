@@ -602,79 +602,113 @@
     <localInspection language="Haxe" shortName="HaxeDuplicateClassModifier" bundle="messages.HaxeBundle"
                      key="haxe.inspections.duplicate.class.modifier.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateClassModifierInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateClassModifierInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeDuplicateField" bundle="messages.HaxeBundle"
                      key="haxe.inspections.duplicated.field.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateFieldInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeDuplicateFieldInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeFieldRedefinition" bundle="messages.HaxeBundle"
                      key="haxe.inspections.field.redefinition.inspection.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeFieldRedefinitionInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeFieldRedefinitionInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeFinalFieldIsInitialized" bundle="messages.HaxeBundle"
                      key="haxe.inspections.final.field.is.initialized.inspection.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeFinalFieldIsInitializedInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeFinalFieldIsInitializedInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeInheritedInterfaceMethodSignature" bundle="messages.HaxeBundle"
                      key="haxe.inspections.inherited.interface.method.signature.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
                      implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeInheritedInterfaceMethodSignatureInspection"/>
+
     <localInspection language="Haxe" shortName="HaxeInterfaceMethodSignature" bundle="messages.HaxeBundle"
                      key="haxe.inspections.interface.methods.signature.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeInterfaceMethodSignatureInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeInterfaceMethodSignatureInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeInvalidTypeName" bundle="messages.HaxeBundle"
                      key="haxe.inspections.type.name.casing.name"
                      groupPath="Haxe" groupKey="inspections.group.naming.conventions" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.style.HaxeInvalidTypeNameInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.style.HaxeInvalidTypeNameInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeMethodOverride" bundle="messages.HaxeBundle"
                      key="haxe.inspections.method.override.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMethodOverrideInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMethodOverrideInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeMethodSignatureCompatibility" bundle="messages.HaxeBundle"
                      key="haxe.inspections.method.signature.compatibility.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
                      implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMethodSignatureCompatibilityInspection"/>
+
     <localInspection language="Haxe" shortName="HaxeMissingInterfaceMethod" bundle="messages.HaxeBundle"
                      key="haxe.inspections.missing.interface.methods.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMissingInterfaceMethodInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeMissingInterfaceMethodInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeMissingTypeTagOnExternAndInterface" bundle="messages.HaxeBundle"
                      key="haxe.inspections.missing.type.tag.on.extern.or.interface.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeMissingTypeTagOnExternAndInterfaceInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeMissingTypeTagOnExternAndInterfaceInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeParameterInitializerType" bundle="messages.HaxeBundle"
                      key="haxe.inspections.parameter.initializer.type.name"
                      groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeParameterInitializerTypeInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxeParameterInitializerTypeInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeParameterNameDuplicated" bundle="messages.HaxeBundle"
                      key="haxe.inspections.parameter.name.duplicated.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
                      implementationClass="com.intellij.plugins.haxe.ide.inspections.duplicates.HaxeParameterNameDuplicatedInspection"/>
+
     <localInspection language="Haxe" shortName="HaxePropertyAccessorExistence" bundle="messages.HaxeBundle"
                      key="haxe.inspections.property.accessor.existence.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyAccessorExistenceInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyAccessorExistenceInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxePropertyAccessorValid" bundle="messages.HaxeBundle"
                      key="haxe.inspections.property.accessor.valid.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyAccessorValidInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyAccessorValidInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxePropertyCannotBeFinal" bundle="messages.HaxeBundle"
                      key="haxe.inspections.property.cannot.be.final.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyCannotBeFinalInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyCannotBeFinalInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxePropertyIsNotARealVariable" bundle="messages.HaxeBundle"
                      key="haxe.inspections.property.is.not.a.real.variable.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyIsNotARealVariableInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.members.HaxePropertyIsNotARealVariableInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeSuperclassTypeCompatibility" bundle="messages.HaxeBundle"
                      key="haxe.inspections.superclass.type.compatibility.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeSuperclassTypeCompatibilityInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeSuperclassTypeCompatibilityInspection"
+                     level="ERROR"/>
+
     <localInspection language="Haxe" shortName="HaxeSuperInterfaceTypeCompatibility" bundle="messages.HaxeBundle"
                      key="haxe.inspections.superinterface.type.compatibility.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
-                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeSuperInterfaceTypeCompatibilityInspection"/>
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeSuperInterfaceTypeCompatibilityInspection"
+                     level="ERROR"/>
 
     <spellchecker.support language="Haxe" implementationClass="com.intellij.plugins.haxe.spellchecker.HaxeSpellcheckingStrategy"/>
 

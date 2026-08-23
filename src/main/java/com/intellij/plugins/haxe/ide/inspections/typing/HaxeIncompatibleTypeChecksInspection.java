@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.inspections.typing;
 
-import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeCheckExpr;
 import com.intellij.psi.PsiElementVisitor;
@@ -19,12 +18,6 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** (expr : Type) assertions whose expression does not unify with the asserted type. */
 public class HaxeIncompatibleTypeChecksInspection extends HaxeInspection {
-
-  // must match the plugin.xml level attribute (checkVisitor keys on it)
-  @Override
-  public @NotNull HighlightDisplayLevel getDefaultLevel() {
-    return HighlightDisplayLevel.ERROR;
-  }
 
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
