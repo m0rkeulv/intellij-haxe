@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.ide.formatter.settings;
 
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.TitledSeparator;
@@ -27,11 +27,11 @@ public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
   protected HaxeImportsCodeStylePanel(CodeStyleSettings settings) {
     super(settings);
     JPanel form = FormBuilder.createFormBuilder()
-      .addComponent(new TitledSeparator(HaxeBundle.message("haxe.codestyle.imports.grouping.title")))
-      .addLabeledComponent(HaxeBundle.message("haxe.codestyle.imports.grouping.blanks"), blanksBetweenGroups)
-      .addLabeledComponent(HaxeBundle.message("haxe.codestyle.imports.grouping.depth"), groupPackageDepth)
-      .addComponent(new TitledSeparator(HaxeBundle.message("haxe.codestyle.imports.keep.title")))
-      .addLabeledComponent(HaxeBundle.message("haxe.codestyle.imports.keep.between"), keepBetweenImports)
+      .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.imports.grouping.title")))
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.imports.grouping.blanks"), blanksBetweenGroups)
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.imports.grouping.depth"), groupPackageDepth)
+      .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.imports.keep.title")))
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.imports.keep.between"), keepBetweenImports)
       .getPanel();
     initPanel(form);
     installPreviewUpdater(keepBetweenImports);
@@ -50,7 +50,7 @@ public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   @Override
   protected String getTabTitle() {
-    return HaxeBundle.message("haxe.codestyle.imports.tab.title");
+    return HaxeCodeStyleBundle.message("haxe.codestyle.imports.tab.title");
   }
 
   @Override

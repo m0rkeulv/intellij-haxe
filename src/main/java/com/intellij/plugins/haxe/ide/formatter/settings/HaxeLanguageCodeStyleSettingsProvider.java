@@ -20,6 +20,7 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.intellij.application.options.IndentOptionsEditor;
 import com.intellij.lang.Language;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.psi.codeStyle.*;
 import org.jetbrains.annotations.NotNull;
@@ -137,23 +138,23 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       // placements and names mirror Java/Kotlin/Groovy (see
       // doc/haxe-formatter-settings-structure.md): arrow spacing sits with
       // the operators, colon options use Kotlin's phrasing
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", "Arrow functions and function types (->)",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.arrow"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", "Before colon, after declaration name",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.type.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", "After colon, before declaration type",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.after.type.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", "Angle brackets",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.type.parameters"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_STRING_INTERPOLATION", "String interpolation '${' braces",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_STRING_INTERPOLATION", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.string.interpolation"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_TYPE_CHECK_COLON", "Around type check colon '(value : Type)'",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_TYPE_CHECK_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.type.check.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_METADATA_PARENTHESES", "Metadata parentheses",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_METADATA_PARENTHESES", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.metadata.parentheses"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_OBJECT_FIELD_COLON", "Before object field colon",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.object.field.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_OBJECT_FIELD_COLON", "After object field colon",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.after.object.field.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
@@ -169,12 +170,12 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
         BLANK_LINES_AROUND_METHOD.name(),
         BLANK_LINES_BEFORE_CLASS_END.name()
       );
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", "After using:",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.using"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_FILE_HEADER", "After file header comment:",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_FILE_HEADER", HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.file.header"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
-                                "Between single-line types:",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.between.single.line.types"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.WRAPPING_AND_BRACES_SETTINGS) {
@@ -217,20 +218,20 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       );
       // the platform default label says "permits" - Java sealed-class syntax
       // that does not exist in Haxe
-      consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), "Extends/implements list");
+      consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.extends.list"));
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE",
-                                "Place body on next line", "Expression body functions");
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.expression.body.on.next.line"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.expression.body.group"));
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "STRUCTURE_EXTENSION_ON_OWN_LINE",
-                                "Structure extension '> Base' on own line", "Anonymous structures");
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.structure.extension.own.line"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.structure.extension.group"));
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "RETURN_VALUE_ON_SAME_LINE",
-                                "Value on same line as 'return'", "'return' statement");
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.return.value.same.line"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.return.group"));
       // inactive-branch treatment lives in the dedicated Conditional
       // Compilation tab - its options span indentation, spacing and line
       // breaks at once, not just wrapping
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "FORMAT_DOC_COMMENTS",
-                                "Indent documentation comment lines", "Comments");
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.format.doc.comments"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.comments.group"));
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "REINDENT_MULTILINE_COMMENTS",
-                                "Reindent multi-line comment content (hxformat style)", "Comments");
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.reindent.multiline.comments"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.comments.group"));
     }
   }
 

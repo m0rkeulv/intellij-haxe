@@ -8,7 +8,7 @@ import com.intellij.openapi.options.SchemeImportException;
 import com.intellij.openapi.options.SchemeImporter;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.psi.codeStyle.CodeStyleScheme;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -53,14 +53,14 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
   @Override
   public @Nullable String getAdditionalImportInfo(@NotNull CodeStyleScheme scheme) {
     if (lastUnsupported.isEmpty()) {
-      return HaxeBundle.message("hxformat.import.complete");
+      return HaxeCodeStyleBundle.message("hxformat.import.complete");
     }
     List<String> shown = lastUnsupported.subList(0, Math.min(REPORTED_KEYS_LIMIT, lastUnsupported.size()));
     String keys = String.join(", ", shown);
     if (lastUnsupported.size() > shown.size()) {
       keys += ", …";
     }
-    return HaxeBundle.message("hxformat.import.partial", lastUnsupported.size(), keys);
+    return HaxeCodeStyleBundle.message("hxformat.import.partial", lastUnsupported.size(), keys);
   }
 
   @NotNull
@@ -70,7 +70,7 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
       return new ObjectMapper().readTree(text);
     }
     catch (IOException e) {
-      throw new SchemeImportException(HaxeBundle.message("hxformat.import.parse.error", e.getMessage()));
+      throw new SchemeImportException(HaxeCodeStyleBundle.message("hxformat.import.parse.error", e.getMessage()));
     }
   }
 }

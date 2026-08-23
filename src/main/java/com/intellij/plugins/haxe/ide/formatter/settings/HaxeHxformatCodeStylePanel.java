@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.ide.formatter.settings;
 
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
@@ -19,11 +19,11 @@ import javax.swing.JPanel;
 public class HaxeHxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   private final JBCheckBox useProjectConfig =
-    new JBCheckBox(HaxeBundle.message("hxformat.panel.use.project.config"));
+    new JBCheckBox(HaxeCodeStyleBundle.message("hxformat.panel.use.project.config"));
 
   protected HaxeHxformatCodeStylePanel(CodeStyleSettings settings) {
     super(settings);
-    JBLabel description = new JBLabel(HaxeBundle.message("hxformat.panel.description"));
+    JBLabel description = new JBLabel(HaxeCodeStyleBundle.message("hxformat.panel.description"));
     description.setComponentStyle(UIUtil.ComponentStyle.SMALL);
     description.setForeground(UIUtil.getContextHelpForeground());
     JPanel form = FormBuilder.createFormBuilder()
@@ -35,7 +35,7 @@ public class HaxeHxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   @Override
   protected String getTabTitle() {
-    return HaxeBundle.message("hxformat.panel.tab.title");
+    return HaxeCodeStyleBundle.message("hxformat.panel.tab.title");
   }
 
   @Override

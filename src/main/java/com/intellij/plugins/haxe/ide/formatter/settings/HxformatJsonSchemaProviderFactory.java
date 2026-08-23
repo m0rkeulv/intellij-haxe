@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.jetbrains.jsonSchema.extension.JsonSchemaFileProvider;
 import com.jetbrains.jsonSchema.extension.JsonSchemaProviderFactory;
 import com.jetbrains.jsonSchema.extension.SchemaType;
@@ -34,7 +34,7 @@ public class HxformatJsonSchemaProviderFactory implements JsonSchemaProviderFact
 
     @Override
     public @NotNull String getName() {
-      return HaxeBundle.message("hxformat.schema.name");
+      return HaxeCodeStyleBundle.message("hxformat.schema.name");
     }
 
     @Override

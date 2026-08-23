@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.ide.formatter.settings;
 
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.components.JBCheckBox;
@@ -20,14 +20,14 @@ import javax.swing.JPanel;
 public class HaxeConditionalCompilationPanel extends HaxeOptionsPreviewPanelBase {
 
   private final JBCheckBox formatInactive =
-    new JBCheckBox(HaxeBundle.message("haxe.codestyle.cc.format.inactive"));
+    new JBCheckBox(HaxeCodeStyleBundle.message("haxe.codestyle.cc.format.inactive"));
   private final JBCheckBox alignInactive =
-    new JBCheckBox(HaxeBundle.message("haxe.codestyle.cc.align.inactive"));
+    new JBCheckBox(HaxeCodeStyleBundle.message("haxe.codestyle.cc.align.inactive"));
 
   protected HaxeConditionalCompilationPanel(CodeStyleSettings settings) {
     super(settings);
     JPanel form = FormBuilder.createFormBuilder()
-      .addComponent(new TitledSeparator(HaxeBundle.message("haxe.codestyle.cc.inactive.title")))
+      .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.cc.inactive.title")))
       .addComponent(formatInactive)
       .addComponent(alignInactive)
       .getPanel();
@@ -42,7 +42,7 @@ public class HaxeConditionalCompilationPanel extends HaxeOptionsPreviewPanelBase
 
   @Override
   protected String getTabTitle() {
-    return HaxeBundle.message("haxe.codestyle.cc.tab.title");
+    return HaxeCodeStyleBundle.message("haxe.codestyle.cc.tab.title");
   }
 
   @Override

@@ -3,7 +3,7 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.application.options.CodeStyle;
@@ -52,7 +52,7 @@ public class HaxeHxformatSettingsModifier implements CodeStyleSettingsModifier {
 
   @Override
   public String getName() {
-    return HaxeBundle.message("hxformat.modifier.name");
+    return HaxeCodeStyleBundle.message("hxformat.modifier.name");
   }
 
   @Override

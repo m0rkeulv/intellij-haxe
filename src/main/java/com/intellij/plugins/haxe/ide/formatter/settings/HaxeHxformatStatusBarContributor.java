@@ -6,7 +6,7 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.modifier.CodeStyleStatusBarUIContributor;
@@ -37,19 +37,19 @@ class HaxeHxformatStatusBarContributor implements CodeStyleStatusBarUIContributo
   @Override
   public AnAction @Nullable [] getActions(@NotNull PsiFile file) {
     Project project = file.getProject();
-    AnAction openConfig = DumbAwareAction.create(HaxeBundle.message("hxformat.status.bar.open.config"),
+    AnAction openConfig = DumbAwareAction.create(HaxeCodeStyleBundle.message("hxformat.status.bar.open.config"),
                                                  e -> new OpenFileDescriptor(project, configFile).navigate(true));
     return new AnAction[]{openConfig};
   }
 
   @Override
   public @Nullable String getTooltip() {
-    return HaxeBundle.message("hxformat.status.bar.tooltip", configFile.getPresentableUrl());
+    return HaxeCodeStyleBundle.message("hxformat.status.bar.tooltip", configFile.getPresentableUrl());
   }
 
   @Override
   public @NotNull String getStatusText(@NotNull PsiFile psiFile) {
-    return HaxeBundle.message("hxformat.status.bar.text");
+    return HaxeCodeStyleBundle.message("hxformat.status.bar.text");
   }
 
   @Override
@@ -59,7 +59,7 @@ class HaxeHxformatStatusBarContributor implements CodeStyleStatusBarUIContributo
 
   @Override
   public @Nullable AnAction createDisableAction(@NotNull Project project) {
-    return DumbAwareAction.create(HaxeBundle.message("hxformat.status.bar.disable"), e -> disable(project));
+    return DumbAwareAction.create(HaxeCodeStyleBundle.message("hxformat.status.bar.disable"), e -> disable(project));
   }
 
   private static void disable(@NotNull Project project) {

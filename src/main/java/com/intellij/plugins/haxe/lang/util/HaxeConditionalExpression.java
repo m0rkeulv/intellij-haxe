@@ -19,6 +19,7 @@ import com.intellij.lang.ASTNode;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.lang.parser.HaxeAstFactory;
@@ -677,16 +678,16 @@ public class HaxeConditionalExpression {
    * wording.
    */
   private static String versionCompareError(Object bad) {
-    String text = bad instanceof Float badFloat ? String.valueOf(badFloat) : String.valueOf(bad);
+    String text = String.valueOf(bad);
     // a 1- or 2-part numeric version (1 / 1.13) - dots and digits only
     if (text.matches("\\d+(\\.\\d+)?")) {
-      return "Invalid version \"" + text + "\": a version comparison needs all three major.minor.patch parts"
-             + " - did you mean \"" + padToThreeParts(text) + "\"?";
+      return HaxeBundle.message("haxe.cc.diagnostic.version.needs.three.parts", text, padToThreeParts(text));
     }
     if (bad instanceof String) {
+      // mirrors the compiler's exact wording for an unparsable version literal
       return "Invalid version string \"" + text + "\". Should follow SemVer.";
     }
-    return "Cannot compare version and " + kindName(bad) + ".";
+    return HaxeBundle.message("haxe.cc.diagnostic.version.compare.kind", kindName(bad));
   }
 
   private static String padToThreeParts(String version) {
