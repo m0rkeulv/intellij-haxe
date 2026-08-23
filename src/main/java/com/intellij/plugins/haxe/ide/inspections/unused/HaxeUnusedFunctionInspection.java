@@ -27,7 +27,7 @@ public class HaxeUnusedFunctionInspection extends LocalInspectionTool {
         HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(file.getProject());
         // the compiler's removable-code annotator owns unused-code analysis while its toggle is on
         if (settings.isCompilerDiagnosticsEnabled() && settings.isDiagnosticsRemovableCodeEnabled()) return null;
-        List<HaxeLocalFunctionDeclaration> LocalFunctionDeclarations = new ArrayList<>();
+        List<HaxeLocalFunctionDeclaration> localFunctionDeclarations = new ArrayList<>();
         new HaxeAnnotatingVisitor() {
 
 
@@ -35,7 +35,7 @@ public class HaxeUnusedFunctionInspection extends LocalInspectionTool {
             public void visitLocalFunctionDeclaration(@NotNull HaxeLocalFunctionDeclaration functionDeclaration) {
                 SearchScope searchScope = HaxeExpressionEvaluatorSearchUtil.getSmallestPossibleSearchScope(functionDeclaration, null);
                 if (!HaxeUsageSearch.isConsideredUsed(functionDeclaration, searchScope)) {
-                    LocalFunctionDeclarations.add(functionDeclaration);
+                    localFunctionDeclarations.add(functionDeclaration);
                 }
             }
 
@@ -43,7 +43,7 @@ public class HaxeUnusedFunctionInspection extends LocalInspectionTool {
 
 
         final List<ProblemDescriptor> result = new ArrayList<>();
-        for (HaxeLocalFunctionDeclaration unusedFunction : LocalFunctionDeclarations) {
+        for (HaxeLocalFunctionDeclaration unusedFunction : localFunctionDeclarations) {
             HaxeComponentName componentName = unusedFunction.getComponentName();
             // note: @:overload(...) may contain unnamed functions
             if (componentName != null) {

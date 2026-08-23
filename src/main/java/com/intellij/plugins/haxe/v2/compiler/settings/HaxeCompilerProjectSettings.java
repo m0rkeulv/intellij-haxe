@@ -24,6 +24,8 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
 
   public static final class State {
     public String defaultLanguageLevel = USE_COMPILER_LEVEL;
+    // keys are CONTAINER ids (module name, or /project-root); the field
+    // name predates non-module containers and stays for storage compatibility
     public Map<String, String> moduleLanguageLevels = new TreeMap<>();
     public boolean compilerDiagnostics = false;
     public boolean compilerDiagnosticsErrors = true;
@@ -60,8 +62,8 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   }
 
   @Override
-  public @NotNull HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String moduleName) {
-    return defaultLevelFor(moduleName);
+  public @NotNull HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String containerId) {
+    return defaultLevelFor(containerId);
   }
 
   @Override
@@ -77,20 +79,20 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   // In "use compiler level" mode (also the fallback for unparsable stored
   // values) the container's SDK decides; latest() when no SDK is registered.
   @NotNull
-  private HaxeLanguageLevel defaultLevelFor(@Nullable String moduleName) {
+  private HaxeLanguageLevel defaultLevelFor(@Nullable String containerId) {
     HaxeLanguageLevel explicit = getExplicitDefaultLanguageLevel();
     if (explicit != null) return explicit;
-    HaxeLanguageLevel fromCompiler = project == null ? null : HaxeLanguageLevelUtil.fromCompiler(project, moduleName);
+    HaxeLanguageLevel fromCompiler = project == null ? null : HaxeLanguageLevelUtil.fromCompiler(project, containerId);
     return fromCompiler != null ? fromCompiler : HaxeLanguageLevel.latest();
   }
 
   @Override
   public @NotNull Map<String, HaxeLanguageLevel> getModuleLanguageLevelOverrides() {
     Map<String, HaxeLanguageLevel> result = new LinkedHashMap<>();
-    state.moduleLanguageLevels.forEach((moduleName, version) -> {
+    state.moduleLanguageLevels.forEach((containerId, version) -> {
       HaxeLanguageLevel level = HaxeLanguageLevel.fromVersionString(version);
       if (level != null) {
-        result.put(moduleName, level);
+        result.put(containerId, level);
       }
     });
     return result;
@@ -99,29 +101,29 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public void setModuleLanguageLevelOverrides(@NotNull Map<String, HaxeLanguageLevel> overrides) {
     Map<String, String> serialized = new TreeMap<>();
-    overrides.forEach((moduleName, level) -> serialized.put(moduleName, level.getVersionString()));
+    overrides.forEach((containerId, level) -> serialized.put(containerId, level.getVersionString()));
     state.moduleLanguageLevels = serialized;
   }
 
   @Override
-  public @Nullable HaxeLanguageLevel getModuleLanguageLevelOverride(@NotNull String moduleName) {
-    return HaxeLanguageLevel.fromVersionString(state.moduleLanguageLevels.get(moduleName));
+  public @Nullable HaxeLanguageLevel getModuleLanguageLevelOverride(@NotNull String containerId) {
+    return HaxeLanguageLevel.fromVersionString(state.moduleLanguageLevels.get(containerId));
   }
 
   @Override
-  public void setModuleLanguageLevelOverride(@NotNull String moduleName, @Nullable HaxeLanguageLevel level) {
+  public void setModuleLanguageLevelOverride(@NotNull String containerId, @Nullable HaxeLanguageLevel level) {
     if (level == null) {
-      state.moduleLanguageLevels.remove(moduleName);
+      state.moduleLanguageLevels.remove(containerId);
     }
     else {
-      state.moduleLanguageLevels.put(moduleName, level.getVersionString());
+      state.moduleLanguageLevels.put(containerId, level.getVersionString());
     }
   }
 
   @Override
-  public @NotNull HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String moduleName) {
-    HaxeLanguageLevel override = getModuleLanguageLevelOverride(moduleName);
-    return override != null ? override : defaultLevelFor(moduleName);
+  public @NotNull HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String containerId) {
+    HaxeLanguageLevel override = getModuleLanguageLevelOverride(containerId);
+    return override != null ? override : defaultLevelFor(containerId);
   }
 
   @Override

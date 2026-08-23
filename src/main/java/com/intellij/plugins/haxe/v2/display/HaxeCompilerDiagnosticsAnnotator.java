@@ -4,9 +4,7 @@ import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.codeInspection.ProblemHighlightType;
 import com.intellij.lang.annotation.AnnotationBuilder;
 import com.intellij.lang.annotation.AnnotationHolder;
-import com.intellij.lang.annotation.ExternalAnnotator;
 import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.protocol.Diagnostic;
@@ -30,36 +28,16 @@ import org.jetbrains.annotations.Nullable;
  * Haxe Compiler settings page; requires the compilation server and a haxe
  * with the JSON-RPC diagnostics method (4.3+).
  */
-public class HaxeCompilerDiagnosticsAnnotator
-  extends ExternalAnnotator<HaxeDiagnosticsPass.Request, List<Diagnostic>> {
+public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
   @Override
-  @Nullable
-  public HaxeDiagnosticsPass.Request collectInformation(@NotNull PsiFile file, @NotNull Editor editor, boolean hasErrors) {
-    return enabled(file) ? HaxeDiagnosticsPass.collect(file, editor) : null;
-  }
-
-  /** Batch (Inspect Code) entry, reached through the paired inspection. */
-  @Override
-  @Nullable
-  public HaxeDiagnosticsPass.Request collectInformation(@NotNull PsiFile file) {
-    return enabled(file) ? HaxeDiagnosticsPass.collect(file) : null;
+  protected boolean featureEnabled(@NotNull HaxeCompilerSettings settings) {
+    return settings.isDiagnosticsErrorsEnabled();
   }
 
   @Override
   public String getPairedBatchInspectionShortName() {
     return HaxeCompilerDiagnosticsBatchInspections.ERRORS_SHORT_NAME;
-  }
-
-  private static boolean enabled(@NotNull PsiFile file) {
-    HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(file.getProject());
-    return settings.isCompilerDiagnosticsEnabled() && settings.isDiagnosticsErrorsEnabled();
-  }
-
-  @Override
-  @Nullable
-  public List<Diagnostic> doAnnotate(HaxeDiagnosticsPass.Request request) {
-    return HaxeDiagnosticsPass.fetch(request);
   }
 
   @Override
@@ -74,7 +52,7 @@ public class HaxeCompilerDiagnosticsAnnotator
     for (Diagnostic diagnostic : diagnostics) {
       if (!handles(diagnostic.kind())) continue;
       if (!HaxeDiagnosticMessageFilter.shouldShow(level, haxeVersion, diagnostic)) continue;
-      TextRange range = HaxeDiagnosticsPass.toTextRange(document, diagnostic.range());
+      TextRange range = HaxeDiagnosticsFetcher.toTextRange(document, diagnostic.range());
       if (range == null) continue;
       annotate(holder, file, diagnostic, range, haxeVersion);
     }
@@ -96,7 +74,7 @@ public class HaxeCompilerDiagnosticsAnnotator
                                @NotNull Diagnostic diagnostic, @NotNull TextRange range,
                                @Nullable InitializeResult.SemVer haxeVersion) {
     AnnotationBuilder builder =
-      holder.newAnnotation(HaxeDiagnosticsPass.severityOf(diagnostic), messageOf(diagnostic)).range(range);
+      holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), messageOf(diagnostic)).range(range);
     switch (diagnostic.kind()) {
       case UNRESOLVED_IDENTIFIER -> builder = builder.highlightType(ProblemHighlightType.LIKE_UNKNOWN_SYMBOL);
       case DEPRECATION_WARNING -> builder = builder.highlightType(ProblemHighlightType.LIKE_DEPRECATED);

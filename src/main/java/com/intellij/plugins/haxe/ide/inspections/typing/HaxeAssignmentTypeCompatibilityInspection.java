@@ -86,7 +86,7 @@ public class HaxeAssignmentTypeCompatibilityInspection extends HaxeInspection {
             .create();
         }
         if(messages.hasWrongTypeMembers()) {
-          HaxeStandardAnnotation.addtypeMismatchWrongTypeMembersAnnotations(reporter, rhs, messages);
+          HaxeStandardAnnotation.addTypeMismatchWrongTypeMembersAnnotations(reporter, rhs, messages);
         }
       }else {
         if (assignEvaluation.explanations.hasMissingModel()) {

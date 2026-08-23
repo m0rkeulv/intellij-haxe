@@ -69,7 +69,7 @@ public class HaxeStandardAnnotation {
     return reporter.problem(HighlightSeverity.ERROR, message).range(incompatibleElement);
   }
 
-  public static void addtypeMismatchWrongTypeMembersAnnotations(@NotNull HaxeProblemReporter reporter,
+  public static void addTypeMismatchWrongTypeMembersAnnotations(@NotNull HaxeProblemReporter reporter,
                                                                 @NotNull PsiElement incompatibleElement,
                                                                 AssignExplanation context) {
     TextRange expectedRange = incompatibleElement.getTextRange();
@@ -146,7 +146,7 @@ public class HaxeStandardAnnotation {
                                         context.createMissingMembersMessage());
     return holder.newAnnotation(HighlightSeverity.ERROR, message).range(incompatibleElement);
   }
-  public static @NotNull void addtypeMismatchWrongTypeMembersAnnotations(@NotNull AnnotationHolder holder,
+  public static @NotNull void addTypeMismatchWrongTypeMembersAnnotations(@NotNull AnnotationHolder holder,
                                                                          @NotNull PsiElement incompatibleElement,
                                                                          AssignExplanation context) {
 

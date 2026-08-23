@@ -101,7 +101,7 @@ public final class DisplayJson {
     }
     return new Diagnostic(
       DiagnosticKind.fromCode(entry.path("kind").asInt(-1)),
-      decodeRange(entry.path("range")),
+      Range.fromJson(entry.path("range")),
       DiagnosticSeverity.fromCode(entry.path("severity").asInt(-1)),
       entry.path("args"),
       entry.path("code").isString() ? entry.path("code").asString() : null,
@@ -117,15 +117,7 @@ public final class DisplayJson {
   }
 
   private static Location decodeLocation(JsonNode node) {
-    return new Location(node.path("file").asString(""), decodeRange(node.path("range")));
-  }
-
-  private static Range decodeRange(JsonNode node) {
-    return new Range(decodePosition(node.path("start")), decodePosition(node.path("end")));
-  }
-
-  private static Position decodePosition(JsonNode node) {
-    return new Position(node.path("line").asInt(0), node.path("character").asInt(0));
+    return new Location(node.path("file").asString(""), Range.fromJson(node.path("range")));
   }
 
   /** Null when there is nothing under the cursor (hover result is nullable). */
@@ -133,7 +125,7 @@ public final class DisplayJson {
     if (data.isNull() || data.isMissingNode()) return null;
     JsonNode item = data.path("item");
     return new HoverInfo(
-      decodeRange(data.path("range")),
+      Range.fromJson(data.path("range")),
       item.path("kind").asString(""),
       JsonTypeRef.of(item.path("type")),
       data.path("documentation").asString(null));

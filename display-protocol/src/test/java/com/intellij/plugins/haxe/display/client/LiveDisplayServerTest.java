@@ -72,16 +72,33 @@ public class LiveDisplayServerTest {
     System.out.println("[live] driving haxe " + serverVersion);
   }
 
+  /// The capability helpers below name the haxe 5 behavior changes one by
+  /// one - a test gates on the capability it exercises, never on a bare
+  /// version check borrowed from an unrelated capability.
+  private static boolean isHaxe5OrNewer() {
+    return serverVersion.major() >= 5;
+  }
+
   /// Haxe 5+ populates the LSP-style diagnostic code with -w warning identifiers.
   private static boolean sendsDiagnosticCodes() {
-    return serverVersion.major() >= 5;
+    return isHaxe5OrNewer();
+  }
+
+  /// Haxe 5 renames the removable-code kind to ReplaceableCode and may supply newCode.
+  private static boolean sendsReplaceableCode() {
+    return isHaxe5OrNewer();
+  }
+
+  /// Haxe 5 answers server/module for defineType-created modules too.
+  private static boolean servesDefinedModuleInfo() {
+    return isHaxe5OrNewer();
   }
 
   /// Haxe 5 (preview) serializes server/type member types BEFORE forcing lazy
   /// typing, so fields arrive as unresolved TMono; 4.x answers concrete types.
   /// Names and shapes are reliable on both - only type resolution differs.
   private static boolean blueprintTypesResolved() {
-    return serverVersion.major() < 5;
+    return !isHaxe5OrNewer();
   }
 
   @AfterAll
@@ -204,8 +221,7 @@ public class LiveDisplayServerTest {
     // initializer expression - `var x = sideEffect();` must not lose the call.
     Range removal = removable.removableRangeArg();
     assertNotNull(removal, "removable-code args must carry the removal range");
-    if (sendsDiagnosticCodes()) {
-      // haxe 5 renames the kind to ReplaceableCode and may add newCode
+    if (sendsReplaceableCode()) {
       System.out.println("[live] haxe5 replaceable newCode = " + removable.args().path("newCode"));
       return;
     }
@@ -329,8 +345,7 @@ public class LiveDisplayServerTest {
     assertTrue(userInfo.dependencies().contains("gen.GeneratedThing"),
                "the using module's dependencies expose the defined module");
     assertFalse(userInfo.sign().isEmpty(), "sign drives the catalog's incremental refresh");
-    if (sendsDiagnosticCodes()) {
-      // haxe 5 answers server/module for defineType-created modules too
+    if (servesDefinedModuleInfo()) {
       ModuleInfo definedInfo = client.module(genArgs, context.signature(), "gen.GeneratedThing");
       assertFalse(definedInfo.sign().isEmpty(), "haxe 5 serves ModuleInfo for a defined module");
     }

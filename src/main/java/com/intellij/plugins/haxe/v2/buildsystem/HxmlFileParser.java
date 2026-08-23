@@ -186,13 +186,19 @@ public final class HxmlFileParser {
 
     List<String> descriptors = new ArrayList<>();
     for (int i = 0; i < sections.size(); i++) {
-      HaxeTarget target = infos.get(i).target();
-      String main = mains.get(i);
-      descriptors.add(target != null ? target.toString() : main != null ? simpleClassName(main) : "");
+      descriptors.add(baseDescriptor(infos.get(i).target(), mains.get(i)));
     }
     extendCollidingDescriptors(descriptors, i -> infos.get(i).targetOutput());
     extendCollidingDescriptors(descriptors, i -> mains.get(i) == null ? null : simpleClassName(mains.get(i)));
     return descriptors;
+  }
+
+  /** The target's display name, else the main class's simple name, else empty. */
+  @NotNull
+  private static String baseDescriptor(@Nullable HaxeTarget target, @Nullable String main) {
+    if (target != null) return target.toString();
+    if (main != null) return simpleClassName(main);
+    return "";
   }
 
   /**

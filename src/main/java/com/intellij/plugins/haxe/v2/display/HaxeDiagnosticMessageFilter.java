@@ -31,7 +31,7 @@ public final class HaxeDiagnosticMessageFilter {
   /** haxe 5 deprecation codes share this prefix; specific ids extend it (WDeprecatedEnumAbstract). */
   private static final String DEPRECATION_CODE_PREFIX = "WDeprecated";
 
-  /// haxe 5 SPECIFIC deprecation codes -> the level the replacement arrived (live-verified ids).
+  /// haxe 5 SPECIFIC deprecation codes -> the level the replacement arrived.
   private static final Map<String, HaxeLanguageLevel> CODE_RULES = Map.of(
     "WDeprecatedEnumAbstract", HaxeLanguageLevel.HAXE_4_0);
 

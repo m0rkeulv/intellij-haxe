@@ -28,7 +28,7 @@ import java.util.Set;
  * fixture-side equivalent of their plugin.xml registrations. Kept as one
  * list so sibling test classes stay in sync.
  */
-final class HaxeInspectionTestTools {
+public final class HaxeInspectionTestTools {
 
   private static final List<Class<? extends LocalInspectionTool>> SEMANTIC_INSPECTIONS = List.of(
     HaxeAssignmentTypeCompatibilityInspection.class,
@@ -64,7 +64,7 @@ final class HaxeInspectionTestTools {
   }
 
   /** All semantic inspections minus the unset ones, freshly instantiated. */
-  static InspectionProfileEntry[] semanticInspections(@Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections)
+  public static InspectionProfileEntry[] semanticInspections(@Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections)
     throws Exception {
     List<InspectionProfileEntry> tools = new ArrayList<>();
     for (Class<? extends LocalInspectionTool> c : SEMANTIC_INSPECTIONS) {

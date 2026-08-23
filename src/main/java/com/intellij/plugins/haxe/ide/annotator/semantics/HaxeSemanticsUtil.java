@@ -48,7 +48,7 @@ public class HaxeSemanticsUtil {
         if(messages.hasMissingMembers()) {
           typeMismatchMissingMembers(reporter, erroredElement, messages).create();
         }else if(messages.hasWrongTypeMembers()) {
-          addtypeMismatchWrongTypeMembersAnnotations(reporter, erroredElement, messages);
+          addTypeMismatchWrongTypeMembersAnnotations(reporter, erroredElement, messages);
         }else if (messages.hasMissingModel()) {
           typeModelMissing(reporter, erroredElement, messages.getMissingModel().getFirst());
         }else{

@@ -111,7 +111,7 @@ public class HaxeReturnStatementAnnotator implements Annotator {
                                 .create();
                     }
                     if(messages.hasWrongTypeMembers()) {
-                        HaxeStandardAnnotation.addtypeMismatchWrongTypeMembersAnnotations(holder, returnStatement, messages);
+                        HaxeStandardAnnotation.addTypeMismatchWrongTypeMembersAnnotations(holder, returnStatement, messages);
                     }
                 }
                 else {

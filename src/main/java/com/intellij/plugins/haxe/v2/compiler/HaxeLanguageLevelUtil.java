@@ -115,6 +115,15 @@ public final class HaxeLanguageLevelUtil {
     else {
       settings.setDefaultLanguageLevel(level);
     }
+    notifyLanguageLevelChanged(project);
+  }
+
+  /**
+   * The one home for the after-a-level-change refresh: the tool window's
+   * Language level rows re-read (build config topic) and highlighting
+   * re-runs. Every path that mutates a level setting calls this.
+   */
+  public static void notifyLanguageLevelChanged(@NotNull Project project) {
     project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
     DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
   }

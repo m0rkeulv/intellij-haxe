@@ -34,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
  * re-highlight then still renders the last known diagnostics instead of
  * silently wiping them until the next edit.
  */
-final class HaxeDiagnosticsPass {
+final class HaxeDiagnosticsFetcher {
 
   /** Collected under the read lock; the network half runs on it unlocked. */
   record Request(@NotNull HaxeCompilerDisplayService.DisplayContext context,
@@ -68,7 +68,7 @@ final class HaxeDiagnosticsPass {
 
   private static final int CACHE_MAX_FILES = 200;
 
-  private HaxeDiagnosticsPass() {
+  private HaxeDiagnosticsFetcher() {
   }
 
   /** The request when compiler diagnostics can run for this file, else null (feature toggles are the caller's gate). */

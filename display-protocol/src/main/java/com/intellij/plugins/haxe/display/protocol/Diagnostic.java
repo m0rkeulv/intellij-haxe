@@ -52,7 +52,7 @@ public record Diagnostic(DiagnosticKind kind,
     if (args == null) return null;
     JsonNode range = args.path("range");
     if (range.isMissingNode() || range.isNull()) return null;
-    return new Range(positionOf(range.path("start")), positionOf(range.path("end")));
+    return Range.fromJson(range);
   }
 
   /**
@@ -64,9 +64,5 @@ public record Diagnostic(DiagnosticKind kind,
     if (args == null) return null;
     String newCode = args.path("newCode").asString("");
     return newCode.isEmpty() ? null : newCode;
-  }
-
-  private static Position positionOf(JsonNode node) {
-    return new Position(node.path("line").asInt(0), node.path("character").asInt(0));
   }
 }

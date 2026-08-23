@@ -38,7 +38,8 @@ public class HaxeBinaryOperatorApplicabilityInspection extends HaxeInspection {
 
     PsiElement[] children = binaryExpression.getChildren();
     if (children.length == 3) {
-      // skip Null Coalescing here, it's handled in "HaxeNullCoalescingAnnotator"
+      // skip ??: operand types are HaxeIncompatibleInitializationInspection's
+      // checkCoalescing (the 4.3 level gate stays in HaxeNullCoalescingAnnotator)
       PsiElement operator = children[1];
       if (operator.textMatches("??")) return;
 

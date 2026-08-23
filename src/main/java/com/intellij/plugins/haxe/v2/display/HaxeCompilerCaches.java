@@ -34,7 +34,7 @@ public final class HaxeCompilerCaches {
     HaxeGeneratedDumpService.getInstance(project).clearCaches();
 
     HaxeGeneratedCodePreview.clearCaches();
-    HaxeDiagnosticsPass.clearCache(project);
+    HaxeDiagnosticsFetcher.clearCache(project);
 
     PsiManager.getInstance(project).dropPsiCaches();
     DaemonCodeAnalyzer.getInstance(project).restart(reason);

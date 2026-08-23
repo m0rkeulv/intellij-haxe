@@ -63,7 +63,7 @@ public abstract class HaxeSemanticAnnotatorTestBase extends HaxeToolkitLightFixt
     myFixture.testHighlighting(checkWarnings, checkInfos, checkWeakWarnings);
   }
 
-  protected void doTestSkippingAnnotators(Set<Class<? extends LocalInspectionTool>> unsetInspections) throws Exception {
+  protected void doTestSkippingInspections(Set<Class<? extends LocalInspectionTool>> unsetInspections) throws Exception {
     doTest(true, false, false, unsetInspections);
   }
 

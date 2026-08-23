@@ -19,6 +19,7 @@ package com.intellij.plugins.haxe;
 
 import com.intellij.codeInsight.daemon.impl.HighlightVisitorBasedInspection;
 import com.intellij.codeInspection.InspectionProfileEntry;
+import com.intellij.codeInspection.LocalInspectionTool;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.DefaultLogger;
@@ -29,6 +30,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.RecursionManager;
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
+import com.intellij.plugins.haxe.ide.HaxeInspectionTestTools;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
@@ -45,8 +47,10 @@ import com.intellij.testFramework.fixtures.*;
 import com.intellij.testFramework.fixtures.impl.ModuleFixtureBuilderImpl;
 import com.intellij.testFramework.fixtures.impl.ModuleFixtureImpl;
 import com.intellij.testFramework.junit5.RunInEdt;
+import com.intellij.util.ArrayUtil;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -56,6 +60,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -242,6 +247,24 @@ abstract public class HaxeCodeInsightFixtureTestCase {
     inspection.setHighlightErrorElements(false);
     inspection.setRunAnnotators(true);
     return inspection;
+  }
+
+  /** Fixture prefix inside the base path; suites whose fixtures sit in a subfolder override. */
+  protected String fixturePrefix() {
+    return "";
+  }
+
+  /**
+   * Highlighting over the test-named fixture: the annotator-based inspection
+   * plus the semantic-inspection block, minus {@code unsetInspections}.
+   */
+  protected void doHighlightingTest(boolean checkWarnings, boolean checkInfos, boolean checkWeakWarnings,
+                                    @Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections,
+                                    String... additionalFiles) throws Exception {
+    myFixture.configureByFiles(ArrayUtil.mergeArrays(new String[]{fixturePrefix() + getTestName(false) + ".hx"}, additionalFiles));
+    myFixture.enableInspections(getAnnotatorBasedInspection());
+    myFixture.enableInspections(HaxeInspectionTestTools.semanticInspections(unsetInspections));
+    myFixture.testHighlighting(checkWarnings, checkInfos, checkWeakWarnings);
   }
 
   public void setTestStyleSettings() {

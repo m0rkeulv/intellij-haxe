@@ -11,7 +11,9 @@ import java.util.Map;
 /**
  * Project-level Haxe compiler configuration (v2).
  * <p>
- * Modules are identified by name so that the settings can be read and tested
+ * Level overrides are keyed by CONTAINER id: a module's name, or a
+ * non-module container id like {@code /project-root} for files outside
+ * every module. Plain strings so the settings can be read and tested
  * without a live {@link Module} instance.
  */
 public interface HaxeCompilerSettings {
@@ -35,7 +37,7 @@ public interface HaxeCompilerSettings {
    * containers with different Environment SDKs get different levels.
    */
   @NotNull
-  HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String moduleName);
+  HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String containerId);
 
   /** The explicitly chosen default level, or null in "use compiler level" mode. */
   @Nullable
@@ -44,20 +46,20 @@ public interface HaxeCompilerSettings {
   /** Null selects "use compiler level" mode (the default for new projects). */
   void setDefaultLanguageLevel(@Nullable HaxeLanguageLevel level);
 
-  /** Explicit per-module overrides, keyed by module name. Modules without an entry use the default. */
+  /** Explicit per-container overrides, keyed by container id. Containers without an entry use the default. */
   @NotNull
   Map<String, HaxeLanguageLevel> getModuleLanguageLevelOverrides();
 
   void setModuleLanguageLevelOverrides(@NotNull Map<String, HaxeLanguageLevel> overrides);
 
   @Nullable
-  HaxeLanguageLevel getModuleLanguageLevelOverride(@NotNull String moduleName);
+  HaxeLanguageLevel getModuleLanguageLevelOverride(@NotNull String containerId);
 
-  /** Sets or clears (when {@code level} is null) the override for a single module. */
-  void setModuleLanguageLevelOverride(@NotNull String moduleName, @Nullable HaxeLanguageLevel level);
+  /** Sets or clears (when {@code level} is null) the override for a single container. */
+  void setModuleLanguageLevelOverride(@NotNull String containerId, @Nullable HaxeLanguageLevel level);
 
   @NotNull
-  HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String moduleName);
+  HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String containerId);
 
   /**
    * The master toggle: whether editor highlighting uses the compilation

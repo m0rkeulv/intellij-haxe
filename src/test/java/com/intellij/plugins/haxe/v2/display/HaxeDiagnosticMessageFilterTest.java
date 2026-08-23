@@ -36,7 +36,7 @@ public class HaxeDiagnosticMessageFilterTest {
   @Test
   @DisplayName("specific code wins over the message")
   public void specificCodeWinsOverTheMessage() {
-    // the haxe 5 wire fact: the code is the SPECIFIC id (live-verified); the
+    // a haxe 5 compiler sends the SPECIFIC warning id in "code"; the
     // message is irrelevant when a code rule matches
     Diagnostic coded = warning(DiagnosticKind.COMPILER_ERROR, "any prose at all", "WDeprecatedEnumAbstract");
 

@@ -1,13 +1,11 @@
 package com.intellij.plugins.haxe.v2.compiler.settings.ui;
 
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
@@ -79,9 +77,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     settings.setDiagnosticsUnusedImportsEnabled(panel.isDiagnosticsUnusedImportsEnabled());
     settings.setDiagnosticsRemovableCodeEnabled(panel.isDiagnosticsRemovableCodeEnabled());
     settings.setCompletionMode(panel.getCompletionMode());
-    // the tool window's Language level rows mirror these settings
-    project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
-    DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
+    HaxeLanguageLevelUtil.notifyLanguageLevelChanged(project);
   }
 
   @Override

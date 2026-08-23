@@ -26,18 +26,8 @@ public class HaxeAccessAnnotatorTest extends HaxeCodeInsightFixtureTestCase {
         return "/annotation.access/";
     }
 
-    private void doTest(boolean checkWarnings, boolean checkInfos, boolean checkWeakWarnings,
-                        @Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections,
-                        String... additionalFiles)
-            throws Exception {
-        myFixture.configureByFiles(ArrayUtil.mergeArrays(new String[]{getTestName(false) + ".hx"}, additionalFiles));
-        myFixture.enableInspections(getAnnotatorBasedInspection());
-        myFixture.enableInspections(HaxeInspectionTestTools.semanticInspections(unsetInspections));
-        myFixture.testHighlighting(checkWarnings, checkInfos, checkWeakWarnings);
-    }
-
     private void doTest(String... additionalFiles) throws Exception {
-        doTest(true, false, true, null, additionalFiles);
+        doHighlightingTest(true, false, true, null, additionalFiles);
     }
 
     // KEYWORD access control

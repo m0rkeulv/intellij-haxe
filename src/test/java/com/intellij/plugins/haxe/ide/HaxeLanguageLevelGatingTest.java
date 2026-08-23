@@ -39,7 +39,7 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
     setLevel(level);
     // pre-4.2 `is` semantics are driven by the LEVEL; the 4.1-compat
     // inspection option defaults to off
-    doTestSkippingAnnotators(null);
+    doTestSkippingInspections(null);
   }
 
   private void doFixTestAtLevel(HaxeLanguageLevel level, String fixText) throws Exception {

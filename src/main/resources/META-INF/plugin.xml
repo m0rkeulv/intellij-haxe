@@ -598,7 +598,7 @@
     <!-- opts haxe files into problem-file tracking (wavy file names in the Project view) -->
     <problemFileHighlightFilter implementation="com.intellij.plugins.haxe.ide.HaxeProblemFileHighlightFilter"/>
 
-    <!-- Semantic inspections converted from the class/method/field annotators -->
+    <!-- Semantic inspections: per-check tools with profile toggles and severities -->
     <localInspection language="Haxe" shortName="HaxeDuplicateClassModifier" bundle="messages.HaxeBundle"
                      key="haxe.inspections.duplicate.class.modifier.name"
                      groupPath="Haxe" groupKey="inspections.group.validity.issues" enabledByDefault="true"
@@ -742,8 +742,8 @@
                      groupPath="Haxe" groupKey="inspections.group.declaration.redundancy" enabledByDefault="true"
                      implementationClass="com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedFunctionInspection"/>
 
-    <!-- Converted semantic inspections: metadata lives here, the check
-         logic in ide.inspections.checks -->
+    <!-- Semantic inspections: metadata lives here, the check logic in the
+         inspection classes under ide.inspections -->
     <localInspection language="Haxe" shortName="HaxeAssignmentTypeCompatibility" bundle="messages.HaxeBundle"
                      key="haxe.inspections.assignment.type.compatibility.name"
                      groupPath="Haxe" groupKey="inspections.group.type.compatibility" enabledByDefault="true"

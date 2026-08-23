@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.execution.Executor;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.RunManager;
@@ -57,6 +56,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.toolwindow.actions.*;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.ContainerEntry;
@@ -569,10 +569,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .setRenderer(BuilderKt.textListCellRenderer("", LevelChoice::display))
       .setItemChosenCallback(choice -> {
         compilerSettings.setModuleLanguageLevelOverride(levelNode.containerId(), choice.level());
-        // the define context derives haxe_ver from the level; the daemon
-        // restart refreshes level-gated highlighting
-        project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
-        DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
+        HaxeLanguageLevelUtil.notifyLanguageLevelChanged(project);
         refreshTree();
       })
       .createPopup()
