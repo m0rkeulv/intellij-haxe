@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * Manage semantic versioning according to Haxe library rules.  (See the 'haxelib' tool
  * and conditional compilation comparison rules.)
  */
-public class HaxelibSemVer {
+public class HaxelibSemVer implements Comparable<HaxelibSemVer> {
 
   public static class ConstantVer extends HaxelibSemVer {
     public final String name;
@@ -174,16 +174,58 @@ public class HaxelibSemVer {
   }
 
   /**
-   * Converts this version into a float for comparison according to Haxe's rules.
-   * TODO: Hook this up to the #if...#endif processing.
+   * The compiler's {@code #if version("...")} parse: exactly
+   * {@code major.minor.patch} with an optional {@code -prerelease} - build
+   * metadata and shorter forms are rejected (the compiler hard-errors on
+   * them; callers map null to an unevaluable condition).
    */
-  public Float toCompareValue() {
-    StringBuilder v = new StringBuilder();
-    v.append(major);
-    v.append('.');
-    v.append(minor);
-    v.append(patch);
-    return Float.valueOf(v.toString());
+  @Nullable
+  public static HaxelibSemVer parseCompilerVersion(@NotNull String version) {
+    Matcher matcher = SEMVER_PATTERN.matcher(version);
+    if (!matcher.matches() || matcher.group("buildmetadata") != null) {
+      return null;
+    }
+    return new HaxelibSemVer(Integer.parseInt(matcher.group("major")),
+                             Integer.parseInt(matcher.group("minor")),
+                             Integer.parseInt(matcher.group("patch")),
+                             matcher.group("prerelease"),
+                             null);
+  }
+
+  /**
+   * semver.org 2.0.0 precedence: numeric parts first; a release outranks any
+   * of its prereleases; prerelease segments compare pairwise (numeric pairs
+   * as numbers, numeric below alphanumeric, otherwise ASCII) with the longer
+   * list winning a shared prefix. Build metadata never counts.
+   */
+  @Override
+  public int compareTo(@NotNull HaxelibSemVer other) {
+    if (major != other.major) return Integer.compare(major, other.major);
+    if (minor != other.minor) return Integer.compare(minor, other.minor);
+    if (patch != other.patch) return Integer.compare(patch, other.patch);
+    if (prerelease == null && other.prerelease == null) return 0;
+    if (prerelease == null) return 1;
+    if (other.prerelease == null) return -1;
+    return comparePrereleases(prerelease, other.prerelease);
+  }
+
+  private static int comparePrereleases(String left, String right) {
+    // prerelease segments are separated by literal dots
+    String[] leftSegments = left.split("\\.");
+    String[] rightSegments = right.split("\\.");
+    for (int i = 0; i < Math.min(leftSegments.length, rightSegments.length); i++) {
+      int order = comparePrereleaseSegment(leftSegments[i], rightSegments[i]);
+      if (order != 0) return order;
+    }
+    return Integer.compare(leftSegments.length, rightSegments.length);
+  }
+
+  private static int comparePrereleaseSegment(String left, String right) {
+    boolean leftNumeric = left.chars().allMatch(Character::isDigit);
+    boolean rightNumeric = right.chars().allMatch(Character::isDigit);
+    if (leftNumeric && rightNumeric) return Long.compare(Long.parseLong(left), Long.parseLong(right));
+    if (leftNumeric != rightNumeric) return leftNumeric ? -1 : 1;
+    return left.compareTo(right);
   }
 
   /** Haxelib's on-disk directory name for this version: every dot becomes a comma ({@code 1,0,0-rc,1}). */

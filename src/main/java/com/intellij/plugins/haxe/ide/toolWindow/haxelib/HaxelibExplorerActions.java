@@ -261,9 +261,8 @@ final class HaxelibExplorerActions {
     }
 
     @NotNull
-    private static Float releaseOrder(@NotNull String version) {
-      HaxelibSemVer semVer = HaxelibSemVer.create(version);
-      return semVer != null ? semVer.toCompareValue() : Float.valueOf(0);
+    private static HaxelibSemVer releaseOrder(@NotNull String version) {
+      return HaxelibSemVer.create(version);
     }
   }
 

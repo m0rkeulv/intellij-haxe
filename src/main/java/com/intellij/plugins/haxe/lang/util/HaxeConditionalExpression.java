@@ -19,6 +19,7 @@ import com.intellij.lang.ASTNode;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
+import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.lang.parser.HaxeAstFactory;
 import com.intellij.psi.tree.IElementType;
@@ -197,6 +198,14 @@ public class HaxeConditionalExpression {
   private final static Set<String> SDK_DEFINES = new HashSet<String>(List.of(
     "macro"
   ));
+
+  private static final String VERSION_FUNCTION_NAME = "version";
+  /** Synthetic operand a folded {@code version("...")} call becomes; its text is the argument. */
+  private static final IElementType VERSION_LITERAL = new IElementType("CC_VERSION_LITERAL", HaxeLanguage.INSTANCE);
+
+  private static boolean isVersionLiteral(ASTNode node) {
+    return node.getElementType() == VERSION_LITERAL;
+  }
   /** Used for setting defines in the test bed. */
   public static Key<Object> DEFINES_KEY = Key.create("haxe.test.defines");
 
@@ -219,6 +228,9 @@ public class HaxeConditionalExpression {
           throw new CalculationException("Invalid Expression: Tokens left after calculating: " + rpn.toString());
         }
       } catch (CalculationException e) {
+        // unevaluable conditions (the compiler hard-errors on them) are false;
+        // a partial result computed before leftover tokens surfaced must not survive
+        ret = false;
         String msg = "Error calculating conditional compiler expression '" + toString() + "'";
         // Add stack info if in debug mode.
         log.info( msg, log.isDebugEnabled() ? e : null );
@@ -235,17 +247,65 @@ public class HaxeConditionalExpression {
    * @return
    * @throws CalculationException
    */
+  /**
+   * The single function conditions support is {@code version("literal")}
+   * (per the compiler's parserEntry.ml). Each such call folds into ONE
+   * synthetic operand so the shunting-yard sees a plain value; any other
+   * call shape stays untouched and later fails evaluation to FALSE -
+   * mirroring the compiler's hard error as an inactive branch.
+   */
+  private static ArrayList<ASTNode> foldVersionCalls(ArrayList<ASTNode> source) {
+    ArrayList<ASTNode> folded = new ArrayList<>(source.size());
+    int i = 0;
+    while (i < source.size()) {
+      int argIndex = versionCallArgumentAt(source, i);
+      if (argIndex > 0) {
+        folded.add(HaxeAstFactory.leaf(VERSION_LITERAL, source.get(argIndex).getText()));
+        i = nextNonWhitespace(source, argIndex + 1) + 1;  // consume through ')'
+      }
+      else {
+        folded.add(source.get(i));
+        i++;
+      }
+    }
+    return folded;
+  }
+
+  /**
+   * When {@code start} opens the call shape ID "version", '(', one coalesced
+   * string, ')' (whitespace between tokens allowed), returns the string
+   * argument's index; -1 otherwise.
+   */
+  private static int versionCallArgumentAt(ArrayList<ASTNode> tokens, int start) {
+    ASTNode name = tokens.get(start);
+    if (!isIdentifier(name) || !VERSION_FUNCTION_NAME.equals(name.getText())) return -1;
+    int open = nextNonWhitespace(tokens, start + 1);
+    if (open < 0 || !isLeftParen(tokens.get(open))) return -1;
+    int argument = nextNonWhitespace(tokens, open + 1);
+    if (argument < 0 || !isString(tokens.get(argument))) return -1;
+    int close = nextNonWhitespace(tokens, argument + 1);
+    if (close < 0 || !isRightParen(tokens.get(close))) return -1;
+    return argument;
+  }
+
+  private static int nextNonWhitespace(ArrayList<ASTNode> tokens, int start) {
+    for (int i = start; i < tokens.size(); i++) {
+      if (!isWhitespace(tokens.get(i))) return i;
+    }
+    return -1;
+  }
+
   private Stack<ASTNode> infixToRPN() throws CalculationException {
     // This is a simplified shunting-yard algorithm: http://https://en.wikipedia.org/wiki/Shunting-yard_algorithm
     Stack<ASTNode> rpnOutput = new Stack<ASTNode>();
     Stack<ASTNode> operatorStack = new Stack<ASTNode>();
 
     try {
-      for (ASTNode token : tokens) {
+      for (ASTNode token : foldVersionCalls(tokens)) {
         if (isWhitespace(token)) {
           continue;
         }
-        if (isLiteral(token) || isStringQuote(token) || isString(token)) {
+        if (isLiteral(token) || isStringQuote(token) || isString(token) || isVersionLiteral(token)) {
           rpnOutput.push(token);
         }
         else if (isLeftParen(token)) {
@@ -317,6 +377,8 @@ public class HaxeConditionalExpression {
             return applyBinary(node, lhs, rhs);
           }
         }
+      } else if (isVersionLiteral(node)) {
+        return versionValue(node);
       } else if (isConstant(node)) {
         return constantValue(node);
       } else if (isIdentifier(node)) {
@@ -347,6 +409,16 @@ public class HaxeConditionalExpression {
         throw new CalculationException(msg);
     }
     return arity;
+  }
+
+  @NotNull
+  private static Object versionValue(ASTNode node) throws CalculationException {
+    HaxelibSemVer version = HaxelibSemVer.parseCompilerVersion(node.getText());
+    if (version == null) {
+      // the compiler hard-errors ("Should follow SemVer"); unevaluable maps to false
+      throw new CalculationException("Invalid version string: " + node.getText());
+    }
+    return version;
   }
 
   @NotNull
@@ -441,6 +513,16 @@ public class HaxeConditionalExpression {
   // https://github.com/HaxeFoundation/haxe/blob/development/src/syntax/parser.mly#L1600
   private int objectCompare(Object lhs, Object rhs) throws CompareException, CalculationException {
     if (lhs == null && rhs == null) { return 0; }
+    // a version compares with another version or a strict version string;
+    // anything else the compiler rejects - unevaluable maps to false
+    if (lhs instanceof HaxelibSemVer || rhs instanceof HaxelibSemVer) {
+      HaxelibSemVer lhsVersion = asVersion(lhs);
+      HaxelibSemVer rhsVersion = asVersion(rhs);
+      if (lhsVersion == null || rhsVersion == null) {
+        throw new CompareException("Cannot compare version with '" + (lhsVersion == null ? lhs : rhs) + "'.");
+      }
+      return lhsVersion.compareTo(rhsVersion);
+    }
     if (lhs instanceof Boolean && rhs instanceof Boolean) { return ((Boolean)lhs).compareTo((Boolean)rhs); }
     if (lhs instanceof String && rhs instanceof String)   { return ((String)lhs).compareTo((String)rhs); }
 
@@ -468,12 +550,19 @@ public class HaxeConditionalExpression {
     if (rhs instanceof String rhsString) rhsSemVer = HaxelibSemVer.create(rhsString);
 
     if (lhsSemVer != null && rhsSemVer != null) {
-      return lhsSemVer.toCompareValue().compareTo(rhsSemVer.toCompareValue());
+      return lhsSemVer.compareTo(rhsSemVer);
     }
 
 
     throw new CompareException("Invalid value comparison between '"
                                    + lhs.toString() + "' and '" + rhs.toString() + "'.");
+  }
+
+  @Nullable
+  private static HaxelibSemVer asVersion(Object value) {
+    if (value instanceof HaxelibSemVer version) return version;
+    if (value instanceof String string) return HaxelibSemVer.parseCompilerVersion(string);
+    return null;
   }
 
   // Parodies Haxe parser eval function

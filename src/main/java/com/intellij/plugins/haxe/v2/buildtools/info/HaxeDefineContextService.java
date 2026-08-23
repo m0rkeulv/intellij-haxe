@@ -12,11 +12,15 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.OrderRootType;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.util.HaxeUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.util.text.SemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
@@ -25,6 +29,7 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -216,6 +221,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
     String containerId = HaxeContainers.containerIdFor(project, file);
     putCompilerIdentityDefines(defines, containerId);
+    putHashlinkVersionDefine(defines, containerId);
     for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
       if (override.effect() == DefineEffect.REMOVE) {
         defines.remove(override.name());
@@ -263,6 +269,42 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       if (semVer.getMajor() >= 4) defines.put("haxe4", version);
       if (semVer.getMajor() >= 5) defines.put("haxe5", version);
     }
+  }
+
+  /**
+   * The compiler defaults {@code hl_ver} by reading {@code std/hl/hl_version}
+   * from its standard library when the define is absent; mirror that so
+   * {@code #if (hl_ver >= version("1.12.0"))} blocks activate correctly out
+   * of the box. Synthesized for EVERY target - the value is a static property
+   * of the configured toolchain, target membership is what {@code #if hl}
+   * answers, and a target-dependent define would flicker with the selection.
+   * A build-file {@code -D hl-ver} keeps precedence (absence-guarded), and
+   * the container's environment overrides still apply on top.
+   */
+  private void putHashlinkVersionDefine(@NotNull Map<String, String> defines, @NotNull String containerId) {
+    if (defines.containsKey("hl_ver") || defines.containsKey("hl-ver")) return;
+    String version = readStdHlVersion(containerId);
+    if (version != null) {
+      defines.put("hl_ver", version);
+    }
+  }
+
+  @Nullable
+  private String readStdHlVersion(@NotNull String containerId) {
+    Sdk sdk = HaxeToolPathResolver.resolveSdk(project, containerId);
+    if (sdk == null) return null;
+    for (VirtualFile root : sdk.getRootProvider().getFiles(OrderRootType.SOURCES)) {
+      VirtualFile versionFile = root.findFileByRelativePath("hl/hl_version");
+      if (versionFile == null) continue;
+      try {
+        String version = VfsUtilCore.loadText(versionFile).trim();
+        return version.isEmpty() ? null : version;
+      }
+      catch (IOException e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   /**

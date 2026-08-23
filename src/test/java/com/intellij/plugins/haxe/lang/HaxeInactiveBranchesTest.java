@@ -9,6 +9,7 @@ import com.intellij.psi.tree.IElementType;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalVarDeclarationList;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
+import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -552,6 +553,50 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     // second occurrence in the document is the proof it resolved
     long occurrences = myFixture.getEditor().getDocument().getText().split("counter", -1).length - 1;
     assertEquals(2, occurrences, "same-tree locals must resolve for completion");
+  }
+
+  // (defines, condition, whether the #if branch is active) - every row was
+  // verified against haxe 4.3.7; rows the compiler hard-errors on (invalid
+  // version literal, unknown function, non-literal argument, float-vs-version
+  // compare) evaluate to an inactive branch here
+  static final List<Arguments> CONDITION_EVALUATIONS = List.of(
+    arguments("hl_ver=1.12.0", "(hl_ver >= version(\"1.12.0\"))", true),
+    arguments("hl_ver=1.13.0", "(hl_ver >= version(\"1.12.0\"))", true),
+    // a define VALUE wrapped in quotes (as typed into the overrides UI) de-quotes
+    arguments("hl_ver=\"1.13.1\"", "(hl_ver >= version(\"1.12.0\"))", true),
+    arguments("hl_ver=1.11.0", "(hl_ver >= version(\"1.12.0\"))", false),
+    arguments("haxe=4.3.7", "(haxe >= version(\"4.1.0\"))", true),
+    arguments("haxe_ver=4.307", "(haxe_ver >= 4.1)", true),
+    arguments("v=1.2", "(v == 1.2)", true),
+    arguments("", "(version(\"1.10.0\") > version(\"1.9.0\"))", true),
+    arguments("", "(version(\"1.0.0-rc.1\") < version(\"1.0.0\"))", true),
+    arguments("", "(version(\"1.0.0-alpha.2\") < version(\"1.0.0-alpha.10\"))", true),
+    arguments("", "(undef_thing > 3)", false),
+    arguments("hl_ver=1.12", "(hl_ver >= version(\"1.12.0\"))", false),
+    arguments("", "(version(\"banana\") > version(\"1.0.0\"))", false),
+    arguments("", "(version(\"1.0.0+build5\") == version(\"1.0.0\"))", false),
+    arguments("", "(foo(\"x\"))", false),
+    arguments("hl_ver=1.12.0", "(version(hl_ver) > version(\"1.0.0\"))", false));
+
+  @ParameterizedTest(name = "{1} with [{0}]")
+  @FieldSource("CONDITION_EVALUATIONS")
+  @DisplayName("condition evaluation matches the compiler")
+  public void testConditionEvaluationMatchesTheCompiler(String defines, String condition, boolean active) {
+    getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, defines);
+    try {
+      PsiFile file = myFixture.configureByText("Foo.hx", """
+        class Foo {
+        \t#if %s
+        \tvar marker:Int;
+        \t#end
+        }""".formatted(condition));
+
+      boolean branchLive = PsiTreeUtil.findChildOfType(file, HaxeInactiveBody.class) == null;
+      assertEquals(active, branchLive, "wrong activeness for " + condition + " with defines [" + defines + "]");
+    }
+    finally {
+      getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, null);
+    }
   }
 
   @Test
