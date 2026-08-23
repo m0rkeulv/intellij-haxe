@@ -542,7 +542,7 @@
     <annotator language="Haxe" id="xmlFastColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeXmlFastColorAnnotator" order="after fastColor before slowColor"/>
     <annotator language="Haxe" id="slowColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeSlowColorAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="invalidEscape" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInvalidEscapeAnnotator" order="after fastColor"/>
-    <annotator language="Haxe" id="docCode" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeDocCodeAnnotator" order="after fastColor"/>
+    <annotator language="Haxe" id="docMarkup" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeDocMarkupAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="inactiveDim" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInactiveCodeDimAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="conditionalDiagnostic" implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeConditionalDiagnosticAnnotator"/>
     <!-- metadata is its own PSI language; without this registration dead @:meta

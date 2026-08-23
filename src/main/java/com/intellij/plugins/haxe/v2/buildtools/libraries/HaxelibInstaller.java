@@ -148,7 +148,6 @@ public final class HaxelibInstaller {
     return parameters;
   }
 
-
   /**
    * Installing a pinned version makes it haxelib's SELECTED version as a side
    * effect, silently switching every unpinned project. Restore the previous

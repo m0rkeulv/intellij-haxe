@@ -18,6 +18,7 @@ import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
@@ -68,6 +69,7 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
     // next blob's alignment target
     int shift = 0;
     String target = null;
+    List<Replacement> replacements = new ArrayList<>();
     for (ASTNode leaf : ppLeaves) {
       IElementType type = leaf.getElementType();
       int start = leaf.getStartOffset() + shift;
@@ -84,12 +86,19 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
       String reindented = reindentBlob(blob, target, indent);
       working.replace(start, start + blob.length(), reindented);
       shift += reindented.length() - blob.length();
+      if (!reindented.equals(blob)) {
+        replacements.add(new Replacement(leaf.getStartOffset(), leaf.getTextLength(), reindented));
+      }
     }
 
-    if (shift == 0 && working.toString().equals(original)) return rangeToReformat;
-    document.replaceString(0, original.length(), working);
+    if (replacements.isEmpty()) return rangeToReformat;
+    // applied LAST first so the original-coordinate offsets stay valid; the
+    // localized edits keep range markers/folding/undo outside the blobs alive
+    for (Replacement replacement : replacements.reversed()) {
+      document.replaceString(replacement.start, replacement.start + replacement.length, replacement.text);
+    }
     PsiDocumentManager.getInstance(source.getProject()).commitDocument(document);
-    int end = Math.min(rangeToReformat.getEndOffset() + shift, working.length());
+    int end = Math.min(rangeToReformat.getEndOffset() + shift, document.getTextLength());
     return new TextRange(rangeToReformat.getStartOffset(), Math.max(rangeToReformat.getStartOffset(), end));
   }
 
@@ -143,5 +152,9 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
   private static String renderIndent(int columns, CommonCodeStyleSettings.IndentOptions indent) {
     if (!indent.USE_TAB_CHARACTER) return " ".repeat(columns);
     return "\t".repeat(columns / indent.TAB_SIZE) + " ".repeat(columns % indent.TAB_SIZE);
+  }
+
+  /** A pending document edit in ORIGINAL (pre-edit) coordinates. */
+  private record Replacement(int start, int length, String text) {
   }
 }

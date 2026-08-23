@@ -12,11 +12,11 @@ import org.commonmark.parser.PostProcessor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
-
-import static com.intellij.plugins.haxe.ide.documentation.HaxeDocTags.*;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static com.intellij.plugins.haxe.ide.documentation.HaxeDocTags.*;
 
 public class HaxeDocumentationTagsExtension implements Parser.ParserExtension {
 
@@ -282,7 +282,7 @@ class HaxeDocumentationTagsVisitor extends AbstractVisitor {
             Matcher matcher1 = docTagPattern.matcher(literal);
             if(matcher1.find()) {
                 String group = matcher1.group(1);
-                return HaxeDocTags.ALL.contains(group);
+                return ALL.contains(group);
             }
         }
         return false;

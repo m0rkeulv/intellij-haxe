@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.lang.lexer;
 
 import com.intellij.lexer.LexerBase;
+import com.intellij.plugins.haxe.util.HaxeDocumentationUtil;
 import com.intellij.psi.TokenType;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.NotNull;
@@ -157,7 +158,7 @@ public class HaxeDocLexer extends LexerBase {
       String line = lines[i];
       boolean lastLine = i == lines.length - 1;
       if (lastLine && line.isBlank()) break;
-      String ws = leadingWhitespace(line);
+      String ws = HaxeDocumentationUtil.leadingWhitespace(line);
       if (ws.isEmpty()) continue;
       if (prefix == null || prefix.length() > ws.length()) {
         prefix = ws;
@@ -182,9 +183,8 @@ public class HaxeDocLexer extends LexerBase {
     int cursor = lineStart;
     String rest = line;
     if (!firstLine) {
-      String ws = leadingWhitespace(line);
-      String managed = starStyle ? ws
-                                 : commonPrefix != null && ws.startsWith(commonPrefix) ? commonPrefix : "";
+      String ws = HaxeDocumentationUtil.leadingWhitespace(line);
+      String managed = managedPrefix(starStyle, ws, commonPrefix);
       if (!managed.isEmpty()) {
         addOrMergeWhitespace(segments, cursor, cursor + managed.length());
         cursor += managed.length();
@@ -232,10 +232,11 @@ public class HaxeDocLexer extends LexerBase {
     segments.add(new Segment(TokenType.WHITE_SPACE, start, end));
   }
 
+  /** The whitespace this lexer manages at a line start: the whole run in star style, the common prefix when the line carries it. */
   @NotNull
-  private static String leadingWhitespace(@NotNull String line) {
-    int i = 0;
-    while (i < line.length() && (line.charAt(i) == ' ' || line.charAt(i) == '\t' || line.charAt(i) == '\r')) i++;
-    return line.substring(0, i);
+  private static String managedPrefix(boolean starStyle, @NotNull String leadingWhitespace, @Nullable String commonPrefix) {
+    if (starStyle) return leadingWhitespace;
+    if (commonPrefix == null) return "";
+    return leadingWhitespace.startsWith(commonPrefix) ? commonPrefix : "";
   }
 }

@@ -16,6 +16,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import java.util.ArrayList;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The directories a build's sources come from: the build file's own directory
@@ -30,6 +31,25 @@ import org.jetbrains.annotations.NotNull;
 public final class HaxeBuildClasspaths {
 
   private HaxeBuildClasspaths() {
+  }
+
+  /** An hxml classpath entry trimmed and normalized to VFS (forward-slash) separators. */
+  @NotNull
+  static String normalizeEntry(@NotNull String entry) {
+    return FileUtil.toSystemIndependentName(entry.trim());
+  }
+
+  /**
+   * The entry resolved to an existing DIRECTORY - absolute entries directly,
+   * relative ones against the anchor - or null.
+   */
+  @Nullable
+  static VirtualFile resolveClasspathEntry(@NotNull VirtualFile anchor, @NotNull String entry) {
+    String normalized = normalizeEntry(entry);
+    VirtualFile resolved = OSAgnosticPathUtil.isAbsolute(normalized)
+                           ? LocalFileSystem.getInstance().findFileByPath(normalized)
+                           : anchor.findFileByRelativePath(normalized);
+    return resolved != null && resolved.isDirectory() ? resolved : null;
   }
 
   /** Absolute directory paths (VFS separators), or empty when the build file cannot be inspected. Call in a read action. */
@@ -55,13 +75,9 @@ public final class HaxeBuildClasspaths {
 
     List<String> directories = new ArrayList<>();
     directories.add(parent.getPath());
-    LocalFileSystem localFs = LocalFileSystem.getInstance();
     for (String classpath : classpaths) {
-      String normalized = FileUtil.toSystemIndependentName(classpath.trim());
-      VirtualFile resolved = OSAgnosticPathUtil.isAbsolute(normalized)
-                             ? localFs.findFileByPath(normalized)
-                             : anchor.findFileByRelativePath(normalized);
-      if (resolved != null && resolved.isDirectory()) {
+      VirtualFile resolved = resolveClasspathEntry(anchor, classpath);
+      if (resolved != null) {
         directories.add(resolved.getPath());
       }
     }

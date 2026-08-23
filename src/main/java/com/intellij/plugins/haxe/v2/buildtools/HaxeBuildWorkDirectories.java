@@ -77,10 +77,10 @@ public final class HaxeBuildWorkDirectories {
 
   private static boolean anyClasspathUnder(@NotNull VirtualFile directory, @NotNull List<String> classpaths) {
     for (String classpath : classpaths) {
-      String normalized = FileUtil.toSystemIndependentName(classpath.trim());
-      if (OSAgnosticPathUtil.isAbsolute(normalized)) continue;
-      VirtualFile resolved = directory.findFileByRelativePath(normalized);
-      if (resolved != null && resolved.isDirectory()) {
+      // an absolute entry resolves the same everywhere - it says nothing
+      // about which directory the file's relative paths anchor to
+      if (OSAgnosticPathUtil.isAbsolute(HaxeBuildClasspaths.normalizeEntry(classpath))) continue;
+      if (HaxeBuildClasspaths.resolveClasspathEntry(directory, classpath) != null) {
         return true;
       }
     }

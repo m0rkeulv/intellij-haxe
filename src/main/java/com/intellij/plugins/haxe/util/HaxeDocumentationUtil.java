@@ -54,15 +54,16 @@ public class HaxeDocumentationUtil {
     if(javaDocStyle) {
       return Arrays.stream(split).map(s-> s.replaceFirst("\\s*\\*","")).collect(Collectors.joining("\n"));
     }
-    // the doc lexer's rule: the common prefix is the shortest leading
-    // whitespace among non-blank lines - blank lines (whitespace-only, e.g. an
-    // indented empty line before the closer) and hard-wrapped column-0 lines
-    // must not drag it to nothing, or the surviving indentation renders every
-    // paragraph as a markdown code block
+    // the RENDERING indent rule: shortest leading whitespace among lines with
+    // content - hard-wrapped column-0 lines must not drag it to nothing, and
+    // blank lines (even indented ones) never count, or surviving indentation
+    // renders every paragraph as a markdown code block. Deliberately stricter
+    // than HaxeDocLexer.commonPrefix, whose reference-formatter mirror counts
+    // whitespace-only interior lines.
     String prefix = null;
     for (String line : split) {
       if (line.isBlank()) continue;
-      String leading = line.substring(0, line.length() - line.stripLeading().length());
+      String leading = leadingWhitespace(line);
       if (leading.isEmpty()) continue;
       if (prefix == null || leading.length() < prefix.length()) {
         prefix = leading;
@@ -72,6 +73,14 @@ public class HaxeDocumentationUtil {
     return Arrays.stream(split)
       .map(line -> stripPrefix(line, strip))
       .collect(Collectors.joining("\n"));
+  }
+
+  /** The line's leading run of spaces, tabs and carriage returns. */
+  @NotNull
+  public static String leadingWhitespace(@NotNull String line) {
+    int i = 0;
+    while (i < line.length() && (line.charAt(i) == ' ' || line.charAt(i) == '\t' || line.charAt(i) == '\r')) i++;
+    return line.substring(0, i);
   }
 
   /** Blank lines strip entirely; other lines drop the common prefix when they carry it. */

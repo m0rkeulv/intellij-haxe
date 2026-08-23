@@ -256,13 +256,8 @@ final class HaxelibExplorerActions {
       if (row == null) return null;
       return row.installedVersions().stream()
         .filter(version -> !HaxelibSemVer.isPseudoVersion(version) && !version.equals(removedVersion))
-        .max(Comparator.comparing(RemoveVersion::releaseOrder))
+        .max(Comparator.comparing(HaxelibSemVer::create))
         .orElse(null);
-    }
-
-    @NotNull
-    private static HaxelibSemVer releaseOrder(@NotNull String version) {
-      return HaxelibSemVer.create(version);
     }
   }
 
@@ -365,9 +360,9 @@ final class HaxelibExplorerActions {
       LibraryRow row = selectedLibrary();
       if (row == null) return;
       HaxelibLocalDocs.GitCheckout existing = panel.gitCheckoutOf(row);
-      HaxelibGitInstallDialog dialog = new HaxelibGitInstallDialog(panel.getProject(), row.name(),
-                                                                  existing == null ? null : existing.remoteUrl(),
-                                                                  existing == null ? null : existing.branch());
+      String initialUrl = existing == null ? null : existing.remoteUrl();
+      String initialRef = existing == null ? null : existing.branch();
+      HaxelibGitInstallDialog dialog = new HaxelibGitInstallDialog(panel.getProject(), row.name(), initialUrl, initialRef);
       if (!dialog.showAndGet()) return;
       String url = dialog.getUrl();
       String ref = dialog.getRef();

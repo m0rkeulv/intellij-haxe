@@ -134,8 +134,7 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
   /** The opaque fallback: the branch's raw tokens as flat leaves, structure-free. */
   @NotNull
   private ASTNode tokenSoup(@NotNull Project project, @NotNull ASTNode chameleon) {
-    PsiBuilder builder = PsiBuilderFactory.getInstance()
-      .createBuilder(project, chameleon, new HaxeLexer(project), HaxeLanguage.INSTANCE, chameleon.getChars());
+    PsiBuilder builder = newBuilder(project, chameleon);
     PsiBuilder.Marker root = builder.mark();
     while (!builder.eof()) {
       builder.advanceLexer();
@@ -165,9 +164,14 @@ public class HaxeInactiveBodyElementType extends ILazyParseableElementType {
 
   @NotNull
   private static ASTNode parse(@NotNull Project project, @NotNull ASTNode chameleon, @NotNull IElementType entry) {
-    PsiBuilder builder = PsiBuilderFactory.getInstance()
-      .createBuilder(project, chameleon, new HaxeLexer(project), HaxeLanguage.INSTANCE, chameleon.getChars());
+    PsiBuilder builder = newBuilder(project, chameleon);
     return new HaxeParser().parse(entry, builder);
+  }
+
+  @NotNull
+  private static PsiBuilder newBuilder(@NotNull Project project, @NotNull ASTNode chameleon) {
+    return PsiBuilderFactory.getInstance()
+      .createBuilder(project, chameleon, new HaxeLexer(project), HaxeLanguage.INSTANCE, chameleon.getChars());
   }
 
   private static boolean containsErrors(@NotNull ASTNode node) {

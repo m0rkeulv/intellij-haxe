@@ -18,6 +18,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtilCore;
+import com.intellij.util.text.CharArrayUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.regex.Pattern;
@@ -102,22 +103,17 @@ public class HaxeDocumentationEnterHandler extends EnterHandlerDelegateAdapter {
         if (line <= commentLine) return Result.Continue;
 
         CharSequence text = document.getCharsSequence();
-        String previousIndent = leadingWhitespace(text, document.getLineStartOffset(line - 1), document.getLineEndOffset(line - 1));
+        int previousLineStart = document.getLineStartOffset(line - 1);
+        int previousIndentEnd = CharArrayUtil.shiftForward(text, previousLineStart, document.getLineEndOffset(line - 1), " \t");
+        String previousIndent = text.subSequence(previousLineStart, previousIndentEnd).toString();
         int lineStart = document.getLineStartOffset(line);
-        int indentEnd = lineStart + leadingWhitespace(text, lineStart, document.getLineEndOffset(line)).length();
+        int indentEnd = CharArrayUtil.shiftForward(text, lineStart, document.getLineEndOffset(line), " \t");
         // only replace leading whitespace the enter produced - never text the caret sits past
         if (offset > indentEnd) return Result.Continue;
 
         document.replaceString(lineStart, indentEnd, previousIndent);
         editor.getCaretModel().moveToOffset(lineStart + previousIndent.length());
         return Result.Continue;
-    }
-
-    @NotNull
-    private static String leadingWhitespace(@NotNull CharSequence text, int start, int end) {
-        int i = start;
-        while (i < end && (text.charAt(i) == ' ' || text.charAt(i) == '\t')) i++;
-        return text.subSequence(start, i).toString();
     }
 
     private static boolean isInsideDocsWithoutCloseTag(@NotNull PsiFile file, int caretOffset) {

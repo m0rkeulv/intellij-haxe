@@ -38,12 +38,13 @@ public class HaxeDocFenceInjector implements MultiHostInjector {
     if (AnnotatorUtil.isInInactiveBranch(docComment)) return;
 
     int hostStart = docComment.getTextRange().getStartOffset();
-    for (Fence fence : HaxeDocMarkdown.scan(docComment).fences()) {
+    List<Fence> fences = HaxeDocMarkdown.scan(docComment).fences();
+    for (Fence fence : fences) {
       Language language = fenceLanguage(fence.tag());
-      if (language == null || fence.lines().isEmpty()) continue;
+      List<DocLine> lines = fence.lines();
+      if (language == null || lines.isEmpty()) continue;
 
       registrar.startInjecting(language);
-      List<DocLine> lines = fence.lines();
       for (int i = 0; i < lines.size(); i++) {
         DocLine line = lines.get(i);
         // gaps of blank doc lines carry no tokens - restore them as prefix newlines

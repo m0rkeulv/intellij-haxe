@@ -8,15 +8,17 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.ModificationTracker;
 import com.intellij.openapi.util.SimpleModificationTracker;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
+import com.intellij.util.PathUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +34,8 @@ public final class HaxeHxformatConfigCache {
 
   public static final String HXFORMAT_FILE_NAME = "hxformat.json";
   private static final Logger LOG = Logger.getInstance(HaxeHxformatConfigCache.class);
+  // jackson mappers are thread-safe once configured; one per parse is waste
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final Map<String, CachedConfig> parsedByPath = new ConcurrentHashMap<>();
   private final SimpleModificationTracker tracker = new SimpleModificationTracker();
@@ -45,7 +49,8 @@ public final class HaxeHxformatConfigCache {
       @Override
       public void after(@NotNull List<? extends @NotNull VFileEvent> events) {
         for (VFileEvent event : events) {
-          if (!event.getPath().endsWith(HXFORMAT_FILE_NAME)) continue;
+          // match the file NAME - a path ending in "myhxformat.json" is unrelated
+          if (!HXFORMAT_FILE_NAME.equals(PathUtil.getFileName(event.getPath()))) continue;
           parsedByPath.clear();
           tracker.incModificationCount();
           CodeStyleSettingsManager.getInstance(project).notifyCodeStyleSettingsChanged();
@@ -85,14 +90,19 @@ public final class HaxeHxformatConfigCache {
     }
     JsonNode root = null;
     try {
-      String text = new String(configFile.contentsToByteArray(), StandardCharsets.UTF_8);
-      root = new ObjectMapper().readTree(text);
+      root = readJsonTree(configFile);
     }
     catch (Exception e) {
       LOG.warn("cannot parse " + configFile.getPath() + ": " + e.getMessage());
     }
     parsedByPath.put(configFile.getPath(), new CachedConfig(configFile.getModificationStamp(), root));
     return root;
+  }
+
+  /** The file's JSON tree; loadText honors the file's detected charset/BOM. */
+  @NotNull
+  static JsonNode readJsonTree(@NotNull VirtualFile file) throws IOException {
+    return MAPPER.readTree(VfsUtilCore.loadText(file));
   }
 
   private record CachedConfig(long stamp, @Nullable JsonNode root) {

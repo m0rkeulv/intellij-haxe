@@ -19,7 +19,7 @@ import java.util.List;
  */
 @State(name = "HaxeWorkDirectories", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeWorkDirectoryStore implements PersistentStateComponent<HaxeWorkDirectoryStore.State> {
-  private final @Nullable Project project;
+  private final @NotNull Project project;
 
   public HaxeWorkDirectoryStore(@NotNull Project project) {
     this.project = project;
@@ -77,8 +77,6 @@ public final class HaxeWorkDirectoryStore implements PersistentStateComponent<Ha
   }
 
   private void notifyChanged() {
-    if (project != null) {
-      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
-    }
+    project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
   }
 }

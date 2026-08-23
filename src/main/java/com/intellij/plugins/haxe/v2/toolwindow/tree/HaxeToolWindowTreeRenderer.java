@@ -228,7 +228,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
   }
 
   /** A git-pinned library shows only {@code git#ref} in the row; the tooltip carries the repository url. */
-  private static String libraryTooltip(@NotNull HaxeToolWindowNodes.LibraryNode libraryNode) {
+  private static String libraryTooltip(@NotNull LibraryNode libraryNode) {
     HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(libraryNode.version());
     return gitSpec == null ? null : HaxeBundle.message("haxe.toolwindow.tooltip.library.git", gitSpec.url());
   }

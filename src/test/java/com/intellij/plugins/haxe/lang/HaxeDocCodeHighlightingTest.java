@@ -82,6 +82,25 @@ public class HaxeDocCodeHighlightingTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("multi word info string injects by its first word")
+  public void testMultiWordInfoStringInjectsByItsFirstWord() {
+    String source = """
+      class Foo {
+      \t/**
+      \t\t```haxe linenos
+      \t\tvar first = 1;
+      \t\t```
+      \t**/
+      \tfunction f():Void {}
+      }""";
+    PsiFile file = configure(source);
+
+    PsiElement injected = injectedAt(file, source.indexOf("var first"));
+    assertNotNull(injected, "the tag is the info string's first word");
+    assertEquals(HaxeLanguage.INSTANCE, injected.getContainingFile().getLanguage());
+  }
+
+  @Test
   @DisplayName("unknown fence tag injects nothing")
   public void testUnknownFenceTagInjectsNothing() {
     String source = """

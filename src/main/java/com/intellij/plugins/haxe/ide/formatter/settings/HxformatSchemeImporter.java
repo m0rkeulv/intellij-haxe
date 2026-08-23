@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.options.SchemeFactory;
 import com.intellij.openapi.options.SchemeImportException;
@@ -14,7 +13,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -27,6 +25,8 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
   private static final Logger LOG = Logger.getInstance(HxformatSchemeImporter.class);
   private static final int REPORTED_KEYS_LIMIT = 10;
 
+  // the extension is a singleton: this carries the LAST import's result from
+  // importScheme to the immediately following getAdditionalImportInfo call
   private List<String> lastUnsupported = List.of();
 
   @Override
@@ -39,6 +39,7 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
                                                @NotNull VirtualFile selectedFile,
                                                @NotNull CodeStyleScheme currentScheme,
                                                @NotNull SchemeFactory<? extends CodeStyleScheme> schemeFactory) throws SchemeImportException {
+    lastUnsupported = List.of();
     JsonNode root = readJson(selectedFile);
     CodeStyleScheme scheme = schemeFactory.createNewScheme(selectedFile.getNameWithoutExtension());
     HxformatCodeStyle.applyDefaults(scheme.getCodeStyleSettings());
@@ -66,8 +67,7 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
   @NotNull
   private static JsonNode readJson(@NotNull VirtualFile file) throws SchemeImportException {
     try {
-      String text = new String(file.contentsToByteArray(), StandardCharsets.UTF_8);
-      return new ObjectMapper().readTree(text);
+      return HaxeHxformatConfigCache.readJsonTree(file);
     }
     catch (IOException e) {
       throw new SchemeImportException(HaxeCodeStyleBundle.message("hxformat.import.parse.error", e.getMessage()));

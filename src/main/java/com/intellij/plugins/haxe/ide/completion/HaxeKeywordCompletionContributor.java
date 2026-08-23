@@ -92,8 +92,7 @@ public class HaxeKeywordCompletionContributor extends CompletionContributor {
 
 
   private static void suggestKeywords(PsiElement position, @NotNull CompletionResultSet result, ProcessingContext context) {
-    List<String> keywordsFromParser = new ArrayList<>();
-    final HaxeFile cloneFile = createCopyWithFakeIdentifierAsComment(position, keywordsFromParser);
+    final HaxeFile cloneFile = createCopyWithFakeIdentifierAsComment(position);
     PsiElement completionElementAsComment = cloneFile.findElementAt(position.getTextOffset());
 
     List<LookupElement> lookupElements = new ArrayList<>();
@@ -265,7 +264,7 @@ public class HaxeKeywordCompletionContributor extends CompletionContributor {
   }
 
 
-  private static HaxeFile createCopyWithFakeIdentifierAsComment(PsiElement position, List<String> keywordsFromParser) {
+  private static HaxeFile createCopyWithFakeIdentifierAsComment(PsiElement position) {
 
     final HaxeFile posFile = (HaxeFile)position.getContainingFile();
     final TextRange posRange = position.getTextRange();

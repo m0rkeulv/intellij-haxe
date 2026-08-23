@@ -73,30 +73,33 @@ public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProces
 
     CommonCodeStyleSettings.IndentOptions indent = settings.getIndentOptions(HaxeFileType.INSTANCE);
     boolean keepFirstColumn = settings.getCommonSettings(HaxeLanguage.INSTANCE).KEEP_FIRST_COLUMN_COMMENT;
-    String original = document.getText();
-    StringBuilder working = new StringBuilder(original);
+    String documentText = document.getText();
 
-    int shift = 0;
-    for (ASTNode comment : comments) {
+    // replace per comment, LAST first: earlier offsets stay valid, and range
+    // markers/folding/undo outside the touched blobs survive the reformat
+    int totalShift = 0;
+    boolean changed = false;
+    for (ASTNode comment : comments.reversed()) {
       boolean inRange = rangeToReformat.intersects(comment.getStartOffset(), comment.getStartOffset() + comment.getTextLength());
       if (!inRange) continue;
       if (inPreservedInactiveBranch(comment, haxeSettings)) continue;
-      int start = comment.getStartOffset() + shift;
+      int start = comment.getStartOffset();
       // block formatting left this opener pinned at the first column - the
       // comment is intentionally at the margin, so its interior stays put too
-      boolean pinnedAtFirstColumn = keepFirstColumn && (start == 0 || working.charAt(start - 1) == '\n');
+      boolean pinnedAtFirstColumn = keepFirstColumn && (start == 0 || documentText.charAt(start - 1) == '\n');
       if (pinnedAtFirstColumn) continue;
-      String text = working.substring(start, start + comment.getTextLength());
-      String baseIndent = HaxeIndentText.lineIndentAt(working, start);
+      String text = documentText.substring(start, start + comment.getTextLength());
+      String baseIndent = HaxeIndentText.lineIndentAt(documentText, start);
       String reindented = reindent(text, baseIndent, indent);
-      working.replace(start, start + text.length(), reindented);
-      shift += reindented.length() - text.length();
+      if (reindented.equals(text)) continue;
+      document.replaceString(start, start + text.length(), reindented);
+      totalShift += reindented.length() - text.length();
+      changed = true;
     }
 
-    if (shift == 0 && working.toString().equals(original)) return rangeToReformat;
-    document.replaceString(0, original.length(), working);
+    if (!changed) return rangeToReformat;
     PsiDocumentManager.getInstance(source.getProject()).commitDocument(document);
-    int end = Math.min(rangeToReformat.getEndOffset() + shift, working.length());
+    int end = Math.min(rangeToReformat.getEndOffset() + totalShift, document.getTextLength());
     return new TextRange(rangeToReformat.getStartOffset(), Math.max(rangeToReformat.getStartOffset(), end));
   }
 
@@ -115,11 +118,7 @@ public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProces
     String content = text.substring(2, text.length() - 2);
     String[] lines = content.split("\n", -1);
     if (lines.length < 2) return text;
-
-    boolean startsWithStar = lines.length >= 3;
-    for (int i = 1; i < lines.length - 1 && startsWithStar; i++) {
-      startsWithStar = STAR_RAIL_LINE.matcher(lines[i]).find();
-    }
+    boolean starRailed = starRailed(lines);
 
     for (int i = 0; i < lines.length; i++) {
       lines[i] = convertLeadingIndent(lines[i], options);
@@ -130,38 +129,58 @@ public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProces
     StringBuilder out = new StringBuilder("/*").append(lines[0]);
     for (int i = 1; i < lines.length; i++) {
       out.append('\n');
+      if (i == lines.length - 1) {
+        out.append(formatClosingLine(lines[i], baseIndent, unit));
+        continue;
+      }
       String line = lines[i];
-      boolean lastLine = i == lines.length - 1;
-      String lineIndent = lastLine || startsWithStar ? baseIndent : baseIndent + unit;
-      if (!lastLine && line.isEmpty()) {
+      String lineIndent = starRailed ? baseIndent : baseIndent + unit;
+      if (line.isEmpty()) {
         lineIndent = "";
       }
-      if (!lastLine && startsWithStar) {
+      if (starRailed) {
         line = " " + line;
-      }
-      if (lastLine) {
-        if (CLOSING_STAR_TEXT.matcher(line).find()) {
-          line = " " + line;
-        }
-        if (CLOSING_BRACE.matcher(line).find()) {
-          line = line.trim();
-        }
-        else {
-          if (CLOSING_PLAIN_TEXT.matcher(line).find()) {
-            lineIndent = baseIndent + unit;
-          }
-          line = line.stripTrailing();
-          if (!line.endsWith("*")) {
-            line = line + " ";
-          }
-        }
-        if (line.isBlank()) {
-          line = " ";
-        }
       }
       out.append(lineIndent).append(line);
     }
     return out.append("*/").toString();
+  }
+
+  /** Every middle line rides a "*" rail - the style whose stars align under the opener. */
+  private static boolean starRailed(String[] lines) {
+    if (lines.length < 3) return false;
+    for (int i = 1; i < lines.length - 1; i++) {
+      if (!STAR_RAIL_LINE.matcher(lines[i]).find()) return false;
+    }
+    return true;
+  }
+
+  /**
+   * The closing line, indent included: railed text and braces keep the base
+   * indent, plain text sits one level in, and a "*"-less closer gets the
+   * space that separates it from the trailing star pair.
+   */
+  private static String formatClosingLine(String line, String baseIndent, String unit) {
+    String lineIndent = baseIndent;
+    if (CLOSING_STAR_TEXT.matcher(line).find()) {
+      line = " " + line;
+    }
+    if (CLOSING_BRACE.matcher(line).find()) {
+      line = line.trim();
+    }
+    else {
+      if (CLOSING_PLAIN_TEXT.matcher(line).find()) {
+        lineIndent = baseIndent + unit;
+      }
+      line = line.stripTrailing();
+      if (!line.endsWith("*")) {
+        line = line + " ";
+      }
+    }
+    if (line.isBlank()) {
+      line = " ";
+    }
+    return lineIndent + line;
   }
 
   /**

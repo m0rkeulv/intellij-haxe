@@ -18,7 +18,8 @@ import javax.swing.*;
  */
 public class HaxeConditionalCompilationSettingsConfigurable implements Configurable {
 
-  private final JBIntSpinner dimIntensity = new JBIntSpinner(40, 0, 100);
+  private final JBIntSpinner dimIntensity =
+    new JBIntSpinner(new HaxeConditionalCompilationSettings.State().dimIntensityPercent, 0, 100);
 
   @Override
   public @Nls String getDisplayName() {

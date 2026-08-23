@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
  * blocks are handled by language injection instead (see HaxeDocFenceInjector),
  * so this only touches prose lines.
  */
-public class HaxeDocCodeAnnotator implements Annotator, DumbAware {
+public class HaxeDocMarkupAnnotator implements Annotator, DumbAware {
 
   // an inline code span on one line: `content` without inner backticks
   private static final Pattern INLINE_SPAN = Pattern.compile("`[^`\r\n]+`");

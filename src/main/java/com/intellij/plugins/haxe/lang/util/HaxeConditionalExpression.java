@@ -185,9 +185,9 @@ public class HaxeConditionalExpression {
     if (!isComplete()) return null;
     strictComparisons = true;
     try {
-      Stack<ASTNode> rpn = infixToRPN();
-      objectIsTrue(calculateRPN(rpn));
-      return rpn.isEmpty() ? null : "Invalid condition expression";
+      Stack<ASTNode> postfix = infixToPostfix();
+      evaluatePostfixTokens(postfix);
+      return postfix.isEmpty() ? null : "Invalid condition expression";
     }
     catch (CalculationException e) {
       return e.getMessage();
@@ -326,14 +326,14 @@ public class HaxeConditionalExpression {
     boolean ret = false;
     if (isComplete()) {
       try {
-        Stack<ASTNode> rpn = infixToRPN();
-        String rpnString = log.isDebugEnabled() ? tokensToString(rpn) : null;
-        ret = objectIsTrue(calculateRPN(rpn));
+        Stack<ASTNode> postfix = infixToPostfix();
+        String postfixString = log.isDebugEnabled() ? tokensToString(postfix) : null;
+        ret = objectIsTrue(evaluatePostfixTokens(postfix));
         if (log.isDebugEnabled()) {  // Don't create the strings unless we are debugging them...
-          log.debug(toString() + " --> " + rpnString + " ==> " + (ret ? "true" : "false"));
+          log.debug(toString() + " --> " + postfixString + " ==> " + (ret ? "true" : "false"));
         }
-        if (!rpn.isEmpty()) {
-          throw new CalculationException("Invalid Expression: Tokens left after calculating: " + rpn.toString());
+        if (!postfix.isEmpty()) {
+          throw new CalculationException("Invalid Expression: Tokens left after calculating: " + postfix.toString());
         }
       } catch (CalculationException e) {
         // unevaluable conditions (the compiler hard-errors on them) are false;
@@ -396,14 +396,14 @@ public class HaxeConditionalExpression {
   }
 
   /**
-   * Converts an infix expression into an RPN expression.  (Re-orders and removes parenthesis.)
+   * Converts an infix expression into postfix (Reverse Polish) order.  (Re-orders and removes parenthesis.)
    * For example: !(cpp && js) -> cpp js && !
    *         and: (( cpp || js ) && (haxe-ver < 3))  -> cpp js || haxe-ver 3 < &&
    * See https://en.wikipedia.org/wiki/Reverse_Polish_notation
    */
-  private Stack<ASTNode> infixToRPN() throws CalculationException {
+  private Stack<ASTNode> infixToPostfix() throws CalculationException {
     // This is a simplified shunting-yard algorithm: http://https://en.wikipedia.org/wiki/Shunting-yard_algorithm
-    Stack<ASTNode> rpnOutput = new Stack<ASTNode>();
+    Stack<ASTNode> postfixOutput = new Stack<ASTNode>();
     Stack<ASTNode> operatorStack = new Stack<ASTNode>();
 
     try {
@@ -412,7 +412,7 @@ public class HaxeConditionalExpression {
           continue;
         }
         if (isLiteral(token) || isStringQuote(token) || isString(token) || isVersionLiteral(token)) {
-          rpnOutput.push(token);
+          postfixOutput.push(token);
         }
         else if (isLeftParen(token)) {
           operatorStack.push(token);
@@ -422,7 +422,7 @@ public class HaxeConditionalExpression {
           while (!operatorStack.isEmpty()) {
             ASTNode op = operatorStack.pop();
             if (!isLeftParen(op)) {
-              rpnOutput.push(op);
+              postfixOutput.push(op);
             }
             else {
               foundLeftParen = true;
@@ -439,12 +439,12 @@ public class HaxeConditionalExpression {
           while (!operatorStack.isEmpty()
                  && !isLeftParen(operatorStack.peek())  // Parens have the highest priority, but should not be considered for comparison.
                  && HaxeOperatorPrecedenceTable.shuntingYardCompare(token.getElementType(), operatorStack.peek().getElementType())) {
-            rpnOutput.push(operatorStack.pop());
+            postfixOutput.push(operatorStack.pop());
           }
           operatorStack.push(token);
         }
         else {
-          throw new CalculationException("Couldn't process token '" + token.toString() + "' when converting to RPN.");
+          throw new CalculationException("Couldn't process token '" + token.toString() + "' when converting to postfix.");
         }
       }
     } catch (HaxeOperatorPrecedenceTable.OperatorNotFoundException e) {
@@ -461,25 +461,34 @@ public class HaxeConditionalExpression {
         // TODO: Report errors back through a reporter class.
         throw new CalculationException("Mismatched left parenthesis.");
       } else {
-        rpnOutput.push(node);
+        postfixOutput.push(node);
       }
     }
 
-    return rpnOutput;
+    return postfixOutput;
   }
 
-  private Object calculateRPN(Stack<ASTNode> rpn) throws CalculationException {
-    while (!rpn.isEmpty()) {
-      ASTNode node = rpn.tryPop();
+  /**
+   * Computes the value of a postfix expression - the condition's tokens
+   * reordered so every operator FOLLOWS its operands ({@code cpp js &&} for
+   * {@code cpp && js}), a shape that needs no parentheses or precedence
+   * rules. (No relation to the PSI type HaxePostfixExpression - the language's
+   * ++/-- suffix form.) The stack's top holds the expression's OUTERMOST operator; each
+   * operator recursively evaluates its operand sub-expressions from the
+   * tokens beneath it.
+   */
+  private Object evaluatePostfixTokens(Stack<ASTNode> postfix) throws CalculationException {
+    while (!postfix.isEmpty()) {
+      ASTNode node = postfix.tryPop();
       if (isCCOperator(node)) {
         switch (getArity(node)) {
           case UNARY: {
-            Object rhs = calculateRPN(rpn);
+            Object rhs = evaluatePostfixTokens(postfix);
             return applyUnary(node, rhs);
           }
           case BINARY: {
-            Object rhs = calculateRPN(rpn);
-            Object lhs = calculateRPN(rpn);
+            Object rhs = evaluatePostfixTokens(postfix);
+            Object lhs = evaluatePostfixTokens(postfix);
             return applyBinary(node, lhs, rhs);
           }
         }

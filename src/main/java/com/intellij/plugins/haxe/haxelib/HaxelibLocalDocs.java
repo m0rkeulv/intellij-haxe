@@ -86,7 +86,7 @@ public final class HaxelibLocalDocs {
     /** The short human form: {@code main @ 559b24c9a3}, either part alone when the other is missing. */
     @NotNull
     public String display() {
-      String shortCommit = commit == null ? null : commit.substring(0, Math.min(10, commit.length()));
+      String shortCommit = commit == null ? null : HaxelibGitSpec.shortRef(commit);
       if (branch == null) return shortCommit == null ? "" : shortCommit;
       return shortCommit == null ? branch : branch + " @ " + shortCommit;
     }

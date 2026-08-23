@@ -18,8 +18,10 @@ import java.util.regex.Pattern;
  */
 public final class HaxeDocMarkdown {
 
-  // a fence marker line: three or more backticks, then an optional info string (```haxe)
-  private static final Pattern FENCE_MARKER = Pattern.compile("`{3,}\\s*(\\S*)\\s*");
+  // a fence marker line: three or more backticks plus an optional info string
+  // (```haxe, or multi-word ```haxe linenos - the FIRST word becomes the tag);
+  // backticks in the info string disqualify the marker, per CommonMark
+  private static final Pattern FENCE_MARKER = Pattern.compile("`{3,}([^`]*)");
 
   /** One content line: absolute start offset, its text, and the newlines separating it from the previous content line. */
   public record DocLine(int startOffset, @NotNull String text, int newlinesBefore) {
@@ -44,13 +46,21 @@ public final class HaxeDocMarkdown {
     for (DocLine line : contentLines(docComment)) {
       Matcher marker = FENCE_MARKER.matcher(line.text().strip());
       if (marker.matches()) {
+        String info = marker.group(1).strip();
         if (fenceTag != null) {
+          // a CLOSING fence is bare backticks (CommonMark); a marker carrying
+          // an info string inside an open fence is content
+          if (!info.isEmpty()) {
+            fenceLines.add(line);
+            continue;
+          }
           fences.add(new Fence(fenceTag, List.copyOf(fenceLines)));
           fenceLines.clear();
           fenceTag = null;
         }
         else {
-          fenceTag = marker.group(1).toLowerCase(Locale.ROOT);
+          // the tag is the info string's first whitespace-separated word
+          fenceTag = info.split("\\s+", 2)[0].toLowerCase(Locale.ROOT);
         }
         continue;
       }
