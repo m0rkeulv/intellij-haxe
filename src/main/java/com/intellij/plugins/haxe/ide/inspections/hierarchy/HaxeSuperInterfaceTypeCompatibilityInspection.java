@@ -44,10 +44,10 @@ public class HaxeSuperInterfaceTypeCompatibilityInspection extends HaxeInspectio
       if (interfazeClass != null) {
         if (clazz.isInterface()) {
           HaxeProblemReporter.Problem builder =
-            reporter.problem(HighlightSeverity.ERROR, " Interfaces cannot implement another interface (use extends instead)")
+            reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.interfaces.cannot.implement.interface"))
               .range(interfaze.getPsi());
           if (interfazeClass.isInterface()) {
-            builder.withFix(HaxeFixer.create("Change to extends", () -> clazz.changeToExtends(interfazeModel.getName())));
+            builder.withFix(HaxeFixer.create(HaxeBundle.message("haxe.quickfix.change.to.extends"), () -> clazz.changeToExtends(interfazeModel.getName())));
           }
           builder.create();
         } else {
@@ -57,7 +57,7 @@ public class HaxeSuperInterfaceTypeCompatibilityInspection extends HaxeInspectio
               reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.interface.error.message"))
                 .range(interfaze.getPsi());
             if (interfazeModel.isClass() || interfazeModel.isAbstractClass()) {
-              builder.withFix(HaxeFixer.create("Change to extends", () -> clazz.changeToExtends(interfazeModel.getName())));
+              builder.withFix(HaxeFixer.create(HaxeBundle.message("haxe.quickfix.change.to.extends"), () -> clazz.changeToExtends(interfazeModel.getName())));
             }
             builder.create();
           }

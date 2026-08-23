@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.duplicates;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.psi.PsiElementVisitor;
@@ -42,7 +43,7 @@ public class HaxeDuplicateFieldInspection extends HaxeInspection {
     }
 
     for (HaxeBaseMemberModel member : repeatedMembers) {
-      reporter.problem(HighlightSeverity.ERROR, "Duplicate class field declaration : " + member.getName())
+      reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.duplicate.class.field.declaration", member.getName()))
         .range(member.getNameOrBasePsi())
         .create();
     }

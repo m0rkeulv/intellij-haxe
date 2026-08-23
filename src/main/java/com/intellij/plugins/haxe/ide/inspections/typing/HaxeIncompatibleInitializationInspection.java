@@ -77,11 +77,11 @@ public class HaxeIncompatibleInitializationInspection extends HaxeInspection {
       ResultHolder rightType = HaxeExpressionEvaluator.evaluate(right).result;
 
       if(leftType.isVoid()) {
-        reporter.problem(HighlightSeverity.ERROR,"Cannot use Void as value").range(left).create();
+        reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.cannot.use.void.as.value")).range(left).create();
         return;
       }
       if(rightType.isVoid()) {
-        reporter.problem(HighlightSeverity.ERROR,"Cannot use Void as value").range(right).create();
+        reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.cannot.use.void.as.value")).range(right).create();
         return;
       }
 

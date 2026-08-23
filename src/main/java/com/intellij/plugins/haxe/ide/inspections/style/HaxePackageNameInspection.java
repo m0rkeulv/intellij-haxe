@@ -51,10 +51,10 @@ public class HaxePackageNameInspection extends HaxeInspection {
     }
 
     if (!packageName.equals(actualPackage)) {
-      reporter.problem(HighlightSeverity.ERROR, "Invalid package name! '" + packageName + "' should be '" + actualPackage + "'")
+      reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.package.name", packageName, actualPackage))
         .range(element)
         .withFix(
-          new HaxeFixer("Fix package") {
+          new HaxeFixer(HaxeBundle.message("haxe.quickfix.fix.package")) {
             @Override
             public void run() {
               Document document =

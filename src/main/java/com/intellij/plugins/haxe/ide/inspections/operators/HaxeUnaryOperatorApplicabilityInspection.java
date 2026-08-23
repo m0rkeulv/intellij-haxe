@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.operators;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeUnaryExpression;
 import com.intellij.psi.PsiElementVisitor;
@@ -38,11 +39,11 @@ public class HaxeUnaryOperatorApplicabilityInspection extends HaxeInspection {
     if (operator.textMatches("++") || operator.textMatches("--")) {
 
         if (expression instanceof HaxeLiteralExpression || expression instanceof HaxeStringLiteralExpression) {
-            reporter.problem(HighlightSeverity.ERROR, "Invalid assign").range(unaryExpression).create();
+            reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.assign")).range(unaryExpression).create();
             return;
         }
         if (expression instanceof HaxeCallExpression ) {
-            reporter.problem(HighlightSeverity.ERROR, "Invalid assign").range(unaryExpression).create();
+            reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.assign")).range(unaryExpression).create();
             return;
         }
         if (expression instanceof HaxeNewExpression  newExpression) {
@@ -51,7 +52,7 @@ public class HaxeUnaryOperatorApplicabilityInspection extends HaxeInspection {
                 // abstract types can have operator overloads, a "new BigInt(0)++" (abstract) might be allowed
                 // but other classes does not support that and  "a new MyClass()++" does not make sense
                 if(!resultHolder.getType().isAbstractType()) {
-                    reporter.problem(HighlightSeverity.ERROR, "Invalid assign").range(unaryExpression).create();
+                    reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.assign")).range(unaryExpression).create();
                 }
             }
             return;
@@ -69,7 +70,7 @@ public class HaxeUnaryOperatorApplicabilityInspection extends HaxeInspection {
 
             boolean isWritable = checkIfPropertyWritable(referenceExpression);
             if (!isWritable) {
-                reporter.problem(HighlightSeverity.ERROR, "This expression cannot be accessed for writing")
+                reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.expression.not.writable"))
                         .range(unaryExpression)
                         .create();
                 return;
@@ -95,26 +96,29 @@ public class HaxeUnaryOperatorApplicabilityInspection extends HaxeInspection {
       }
 
       if (result.isImmutable()) {
-          reporter.problem(HighlightSeverity.ERROR, "Cannot assign to immutable reference").range(unaryExpression).create();
+          reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.cannot.assign.immutable.reference"))
+            .range(unaryExpression).create();
       } else if (!type.isAbstractType()) {
-          reporter.problem(HighlightSeverity.ERROR, type.toPresentationString() + " should be Int").range(unaryExpression).create();
+          reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.unary.type.should.be.int", type.toPresentationString()))
+            .range(unaryExpression).create();
       } else {
 
           if (type.isBool()) {
-              reporter.problem(HighlightSeverity.ERROR, "This expression cannot be accessed for writing").range(unaryExpression).create();
+              reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.expression.not.writable")).range(unaryExpression).create();
           }
           if (type.isString()) {
-              reporter.problem(HighlightSeverity.ERROR, "Invalid assign").range(unaryExpression).create();
+              reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.assign")).range(unaryExpression).create();
           }
           if (!type.isAbstractType()) {
-              reporter.problem(HighlightSeverity.ERROR, "Invalid assign").range(unaryExpression).create();
+              reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.assign")).range(unaryExpression).create();
           }
           if(type instanceof SpecificHaxeClassReference classReference && classReference.isAbstractType()) {
               if (!classReference.isCoreType()) {
                   List<HaxeMethodModel> overloads = classReference.getOperatorOverloads(unaryExpression.getOperator());
                   if (overloads.isEmpty()) {
                       String operator = unaryExpression.getOperator().getText();
-                      reporter.problem(HighlightSeverity.ERROR, "No overload for " + operator + " found").range(unaryExpression).create();
+                      reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.no.unary.overload.found", operator))
+                        .range(unaryExpression).create();
                   }
               }
           }

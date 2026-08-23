@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.style;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.ide.annotator.HaxeProblemReporter;
 import com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil;
@@ -43,9 +44,9 @@ public class HaxeInvalidTypeNameInspection extends HaxeInspection {
 
     final String typeName = identifier.getText();
     if (!HaxeClassModel.isValidClassName(typeName)) {
-      reporter.problem(HighlightSeverity.ERROR, "Type name must start by upper case")
+      reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.type.name.must.start.upper.case"))
         .range(identifier)
-        .withFix(new HaxeFixer("Change name") {
+        .withFix(new HaxeFixer(HaxeBundle.message("haxe.quickfix.change.name")) {
           @Override
           public void run() {
             HaxeDocumentModel.fromElement(identifier).replaceElementText(

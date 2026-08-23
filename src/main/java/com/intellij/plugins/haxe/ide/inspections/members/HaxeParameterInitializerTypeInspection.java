@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.members;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.psi.PsiElementVisitor;
@@ -78,7 +79,7 @@ public class HaxeParameterInitializerTypeInspection extends HaxeInspection {
     }
   }
   private static void annotateNotConstant(PsiElement element, HaxeProblemReporter reporter) {
-    reporter.problem(HighlightSeverity.ERROR, "Default argument value should be constant")
+    reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.default.argument.value.should.be.constant"))
             .range(element)
             .create();
   }

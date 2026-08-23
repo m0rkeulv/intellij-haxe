@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.members;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.ide.annotator.HaxeProblemReporter;
 import com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil;
@@ -47,7 +48,7 @@ public class HaxePropertyIsNotARealVariableInspection extends HaxeInspection {
     if (!field.isRealVar() && null != initializerPsi) {
 
       HaxeProblemReporter.Problem builder =
-        reporter.problem(HighlightSeverity.ERROR, "This field cannot be initialized because it is not a real variable")
+        reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.property.not.real.variable.cannot.initialize"))
           .range(initializerPsi)
           .withFix(removeInitFix(document, initializerPsi))
           .withFix(addIsVarFix(field));
@@ -83,7 +84,7 @@ public class HaxePropertyIsNotARealVariableInspection extends HaxeInspection {
         boolean isWriteExpression = HaxeExpressionUtil.isInWriteOperation(expression);
         boolean isReadExpression = HaxeExpressionUtil.isInReadOperation(expression);
         if((inGetterMethod && isReadExpression) || (inSetterMethod && isWriteExpression)) {
-          reporter.problem(HighlightSeverity.ERROR, "This field cannot be accessed because it is not a real variable")
+          reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.property.not.real.variable.cannot.access"))
                   .range(expression)
                   .withFix(addIsVarFix(fieldModel))
                   .create();
@@ -94,7 +95,7 @@ public class HaxePropertyIsNotARealVariableInspection extends HaxeInspection {
 
   @NotNull
   private static HaxeFixer makeSetterNullFix(HaxeFieldModel field, HaxeDocumentModel document) {
-    return new HaxeFixer("Make setter null") {
+    return new HaxeFixer(HaxeBundle.message("haxe.quickfix.make.setter.null")) {
       @Override
       public void run() {
         document.replaceElementText(field.getSetterPsi(), "null");
@@ -104,7 +105,7 @@ public class HaxePropertyIsNotARealVariableInspection extends HaxeInspection {
 
   @NotNull
   private static HaxeFixer addIsVarFix(HaxeFieldModel field) {
-    return new HaxeFixer("Add @:isVar") {
+    return new HaxeFixer(HaxeBundle.message("haxe.quickfix.add.isvar.meta")) {
       @Override
       public void run() {
         field.getModifiers().addModifier(IS_VAR_META);
@@ -114,7 +115,7 @@ public class HaxePropertyIsNotARealVariableInspection extends HaxeInspection {
 
   @NotNull
   private static HaxeFixer removeInitFix(HaxeDocumentModel document, HaxeVarInit initializerPsi) {
-    return new HaxeFixer("Remove init") {
+    return new HaxeFixer(HaxeBundle.message("haxe.quickfix.remove.init")) {
       @Override
       public void run() {
         document.replaceElementText(initializerPsi, "", StripSpaces.BEFORE);

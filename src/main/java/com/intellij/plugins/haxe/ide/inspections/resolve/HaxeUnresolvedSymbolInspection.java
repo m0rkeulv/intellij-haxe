@@ -83,7 +83,7 @@ public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
         result.add(manager.createProblemDescriptor(
                 reference,
                 reference.getRangeInElement(),
-                "Module must start by upper case",
+                HaxeBundle.message("haxe.semantic.module.must.start.upper.case"),
                 ProblemHighlightType.GENERIC_ERROR,
                 isOnTheFly
         ));

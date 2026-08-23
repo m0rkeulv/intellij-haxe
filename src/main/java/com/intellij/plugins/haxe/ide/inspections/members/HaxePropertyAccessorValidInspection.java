@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.members;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeFieldDeclaration;
 import com.intellij.psi.PsiElementVisitor;
@@ -26,14 +27,14 @@ public class HaxePropertyAccessorValidInspection extends HaxeInspection {
     // flagged as removed at 4.0+ by HaxeLanguageFeatureAnnotator
     if (field.getGetterPsi() != null && field.getGetterPsi().getReferenceExpression() == null
         && !field.getGetterType().isValidGetAccessor()) {
-      reporter.problem(HighlightSeverity.ERROR, "Invalid getter accessor")
+      reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.getter.accessor"))
         .range(field.getGetterPsi())
         .create();
     }
 
     if (field.getSetterPsi() != null && field.getSetterPsi().getReferenceExpression() == null
         && !field.getSetterType().isValidSetAccessor()) {
-      reporter.problem(HighlightSeverity.ERROR, "Invalid setter accessor")
+      reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.invalid.setter.accessor"))
         .range(field.getSetterPsi())
         .create();
     }

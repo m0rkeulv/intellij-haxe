@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.members;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeFieldDeclaration;
 import com.intellij.psi.PsiElementVisitor;
@@ -36,7 +37,7 @@ public class HaxePropertyAccessorExistenceInspection extends HaxeInspection {
     if (field.getGetterType().isGetter()) {
       HaxeMethodModel getterMethod = field.getGetterMethod();
       if (getterMethod == null && field.getGetterPsi() != null) {
-        reporter.problem(HighlightSeverity.ERROR, "Can't find getter method")
+        reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.cannot.find.getter.method"))
           .range(field.getGetterPsi())
           .withFix(new CreateGetterSetterQuickfix(membersModel, field, true))
           .create();
@@ -46,7 +47,7 @@ public class HaxePropertyAccessorExistenceInspection extends HaxeInspection {
     if (field.getSetterType().isSetter()) {
       HaxeMethodModel setterMethod = field.getSetterMethod();
       if (setterMethod == null && field.getSetterPsi() != null) {
-        reporter.problem(HighlightSeverity.ERROR, "Can't find setter method")
+        reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.cannot.find.setter.method"))
           .range(field.getSetterPsi())
           .withFix(new CreateGetterSetterQuickfix(membersModel, field, false))
           .create();

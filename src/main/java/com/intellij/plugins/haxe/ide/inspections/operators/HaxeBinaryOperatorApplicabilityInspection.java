@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.operators;
 
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.plugins.haxe.lang.psi.HaxeBinaryExpression;
 import com.intellij.psi.PsiElementVisitor;
@@ -58,7 +59,7 @@ public class HaxeBinaryOperatorApplicabilityInspection extends HaxeInspection {
       // warning for operators on dynamic that are not simple equals expresions
       if (!operatorText.equals("==") && !operatorText.equals("!=")) {
         if (nonNullLhsType.isDynamic() || nonNullRhsType.isDynamic()) {
-          String error = "Applying " + operatorText + " operator to a Dynamic value may cause Runtime exceptions on static targets if the value does not support the operation";
+          String error = HaxeBundle.message("haxe.semantic.binary.operator.on.dynamic", operatorText);
           reporter.problem(HighlightSeverity.WEAK_WARNING, error)
                   .range(binaryExpression)
                   .create();
@@ -83,7 +84,8 @@ public class HaxeBinaryOperatorApplicabilityInspection extends HaxeInspection {
         }
 
 
-        String error = "Unable to apply operator " + operatorText + " for types " + lhsType.getType() + " and " + rhsType.getType();
+        String error = HaxeBundle.message("haxe.semantic.binary.operator.not.applicable",
+                                          operatorText, lhsType.getType(), rhsType.getType());
         reporter.problem(HighlightSeverity.ERROR, error)
                 .range(binaryExpression)
                 .create();

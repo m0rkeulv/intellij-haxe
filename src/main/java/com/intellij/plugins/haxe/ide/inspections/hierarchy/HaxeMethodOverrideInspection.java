@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.inspections.hierarchy;
 
 import com.intellij.codeInspection.ProblemsHolder;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.psi.PsiElementVisitor;
 import org.jetbrains.annotations.NotNull;
@@ -41,8 +42,8 @@ public class HaxeMethodOverrideInspection extends HaxeInspection {
     }
     else if (parentMethod != null) {
       if (parentMethod.isStatic()) {
-        reporter.problem(HighlightSeverity.WEAK_WARNING, "Method '" + currentMethod.getName()
-                                                        + "' shadows a static method of a superclass")
+        reporter.problem(HighlightSeverity.WEAK_WARNING,
+                         HaxeBundle.message("haxe.semantic.method.shadows.static", currentMethod.getName()))
           .range(currentMethod.getNameOrBasePsi())
           .create();
       }
@@ -55,14 +56,14 @@ public class HaxeMethodOverrideInspection extends HaxeInspection {
         }
 
         if (parentModifiers.hasAnyModifier(OVERRIDE_FORBIDDEN_MODIFIERS) && !parentClass.isInterface()) {
-          HaxeProblemReporter.Problem builder = reporter.problem(HighlightSeverity.ERROR, "Can't override static, inline or final methods")
-           .range(currentMethod.getNameOrBasePsi());
+          HaxeProblemReporter.Problem builder =
+            reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.cannot.override.static.inline.final"))
+              .range(currentMethod.getNameOrBasePsi());
 
           for (String modifier : OVERRIDE_FORBIDDEN_MODIFIERS) {
             if (parentModifiers.hasModifier(modifier)) {
-              builder.withFix(
-                new HaxeModifierRemoveFixer(parentModifiers, modifier, "Remove " + modifier + " from " + parentMethod.getFullName())
-              );
+              String fixLabel = HaxeBundle.message("haxe.quickfix.remove.modifier.from", modifier, parentMethod.getFullName());
+              builder.withFix(new HaxeModifierRemoveFixer(parentModifiers, modifier, fixLabel));
             }
           }
           builder.create();
@@ -70,11 +71,14 @@ public class HaxeMethodOverrideInspection extends HaxeInspection {
         // ignore if empty (override inherits from parent)
         if(!currentModifiers.getVisibility().equals(EMPTY)) {
           if (HaxePsiModifier.hasLowerVisibilityThan(currentModifiers.getVisibility(), parentModifiers.getVisibility())) {
-            HaxeModifierReplaceVisibilityFixer changeCurrentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(currentModifiers, parentModifiers.getVisibility(), "Change current method visibility to '"+parentModifiers.getVisibility()+"'");
-            HaxeModifierReplaceVisibilityFixer changeParentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(parentModifiers, currentModifiers.getVisibility(), "Change parent method visibility '"+currentModifiers.getVisibility()+"'");
-            reporter.problem(HighlightSeverity.ERROR, "Field " +
-                                                            currentMethod.getName() +
-                                                            " has less visibility (public/private) than superclass one.")
+            HaxeModifierReplaceVisibilityFixer changeCurrentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(
+              currentModifiers, parentModifiers.getVisibility(),
+              HaxeBundle.message("haxe.quickfix.change.method.visibility.current", parentModifiers.getVisibility()));
+            HaxeModifierReplaceVisibilityFixer changeParentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(
+              parentModifiers, currentModifiers.getVisibility(),
+              HaxeBundle.message("haxe.quickfix.change.method.visibility.parent", currentModifiers.getVisibility()));
+            String message = HaxeBundle.message("haxe.semantic.method.visibility.lower.than.parent", currentMethod.getName());
+            reporter.problem(HighlightSeverity.ERROR, message)
                     .range(currentMethod.getNameOrBasePsi())
                     .withFix(changeCurrentVisibilityFix)
                     .withFix(changeParentVisibilityFix)
@@ -82,12 +86,15 @@ public class HaxeMethodOverrideInspection extends HaxeInspection {
           }
         }else {
           if (HaxePsiModifier.hasLowerVisibilityThan(currentModifiers.getVisibility(), parentModifiers.getVisibility())) {
-            HaxeModifierReplaceVisibilityFixer changeCurrentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(currentModifiers, parentModifiers.getVisibility(), "Add current method visibility to '"+parentModifiers.getVisibility()+"'");
-            HaxeModifierReplaceVisibilityFixer changeParentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(parentModifiers, currentModifiers.getVisibility(), "Add parent method visibility '"+currentModifiers.getVisibility()+"'");
-            reporter.problem(HighlightSeverity.WEAK_WARNING, "Field " +
-                                                                 currentMethod.getName() +
-                                                                 " has no visibility modifier but overrides parent with '" +
-                                                                 parentModifiers.getVisibility() + "'")
+            HaxeModifierReplaceVisibilityFixer changeCurrentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(
+              currentModifiers, parentModifiers.getVisibility(),
+              HaxeBundle.message("haxe.quickfix.add.method.visibility.current", parentModifiers.getVisibility()));
+            HaxeModifierReplaceVisibilityFixer changeParentVisibilityFix = new HaxeModifierReplaceVisibilityFixer(
+              parentModifiers, currentModifiers.getVisibility(),
+              HaxeBundle.message("haxe.quickfix.add.method.visibility.parent", currentModifiers.getVisibility()));
+            String message = HaxeBundle.message("haxe.semantic.method.visibility.missing.overrides.parent",
+                                                currentMethod.getName(), parentModifiers.getVisibility());
+            reporter.problem(HighlightSeverity.WEAK_WARNING, message)
                     .range(currentMethod.getNameOrBasePsi())
                     .withFix(changeCurrentVisibilityFix)
                     .withFix(changeParentVisibilityFix)
@@ -99,7 +106,8 @@ public class HaxeMethodOverrideInspection extends HaxeInspection {
 
     if (currentModifiers.hasModifier(OVERRIDE) && !requiredOverride) {
       if (!hasMacroForCodeGeneration(currentMethod.getDeclaringClass())) {
-        reporter.problem(HighlightSeverity.ERROR, "Overriding nothing").range(currentModifiers.getModifierPsi(OVERRIDE))
+        reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.overriding.nothing"))
+          .range(currentModifiers.getModifierPsi(OVERRIDE))
           .withFix(new HaxeModifierRemoveFixer(currentModifiers, OVERRIDE))
           .create();
       }
@@ -107,12 +115,13 @@ public class HaxeMethodOverrideInspection extends HaxeInspection {
     else if (requiredOverride) {
       if (!currentModifiers.hasModifier(OVERRIDE)) {
         if (hasMacroForCodeGeneration(currentMethod.getDeclaringClass())) {
-          reporter.problem(HighlightSeverity.WEAK_WARNING, "Positionally missing override")
+          reporter.problem(HighlightSeverity.WEAK_WARNING, HaxeBundle.message("haxe.semantic.positionally.missing.override"))
             .range(currentMethod.getNameOrBasePsi())
             .withFix(new HaxeModifierAddFixer(currentModifiers, OVERRIDE))
             .create();
         } else {
-          reporter.problem(HighlightSeverity.ERROR, "Must override").range(currentMethod.getNameOrBasePsi())
+          reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.must.override"))
+            .range(currentMethod.getNameOrBasePsi())
             .withFix(new HaxeModifierAddFixer(currentModifiers, OVERRIDE))
             .create();
         }
