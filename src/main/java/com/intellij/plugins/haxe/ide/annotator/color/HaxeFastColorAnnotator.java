@@ -47,8 +47,8 @@ public class HaxeFastColorAnnotator implements Annotator , DumbAware {
   public static final Key<String> PP_EXPRESSION_VALUE = Key.create("haxe.ppexpression.value");
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    // TODO: phase 3 of inactive-branch support replaces this with DIMMED colors;
-    //  until then the branch keeps its uniform dead-code color from the blob
+    // inactive branches get DIMMED colors from HaxeInactiveCodeDimAnnotator;
+    // full-strength colors here would paint over the dimming
     if (AnnotatorUtil.isInInactiveBranch(element)) return;
     if(!element.isValid()) return;
 
@@ -83,10 +83,6 @@ public class HaxeFastColorAnnotator implements Annotator , DumbAware {
     if (tt == HaxeTokenTypeSets.CONDITIONAL_ERROR) {
       holder.newSilentAnnotation(HighlightSeverity.INFORMATION).range(node)
               .textAttributes(HaxeSyntaxHighlighterColors.CONDITIONAL_ERROR).create();
-    }
-    else if (tt == HaxeTokenTypeSets.PPBODY) {
-      holder.newSilentAnnotation(HighlightSeverity.INFORMATION).range(node)
-        .textAttributes(HaxeSyntaxHighlighterColors.CONDITIONALLY_NOT_COMPILED).create();
     }
     else if (tt == GeneratedParserUtilBase.DUMMY_BLOCK) {
       holder.newAnnotation(HighlightSeverity.INFORMATION, "Unparseable data").range(node)

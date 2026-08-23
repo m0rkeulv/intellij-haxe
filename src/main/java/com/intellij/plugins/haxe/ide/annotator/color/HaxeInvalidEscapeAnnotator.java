@@ -17,8 +17,8 @@ public class HaxeInvalidEscapeAnnotator implements Annotator , DumbAware {
 
   @Override
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-    // TODO: phase 3 of inactive-branch support replaces this with DIMMED colors;
-    //  until then the branch keeps its uniform dead-code color from the blob
+    // inactive branches get DIMMED colors from HaxeInactiveCodeDimAnnotator;
+    // full-strength colors here would paint over the dimming
     if (AnnotatorUtil.isInInactiveBranch(element)) return;
     if(!element.isValid()) return;
 

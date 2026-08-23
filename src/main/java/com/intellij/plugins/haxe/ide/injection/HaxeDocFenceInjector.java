@@ -5,6 +5,7 @@ import com.intellij.lang.injection.MultiHostInjector;
 import com.intellij.lang.injection.MultiHostRegistrar;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil;
 import com.intellij.plugins.haxe.ide.documentation.settings.HaxeDocSettings;
 import com.intellij.plugins.haxe.lang.parser.HaxeDocMarkdown;
 import com.intellij.plugins.haxe.lang.parser.HaxeDocMarkdown.DocLine;
@@ -32,6 +33,9 @@ public class HaxeDocFenceInjector implements MultiHostInjector {
   public void getLanguagesToInject(@NotNull MultiHostRegistrar registrar, @NotNull PsiElement context) {
     if (!(context instanceof HaxePsiDocCommentImpl docComment)) return;
     if (!HaxeDocSettings.getInstance().getState().injectCodeFences) return;
+    // fences in a dead branch would render full-color injected code inside
+    // otherwise dimmed content - the whole doc stays one dimmed comment
+    if (AnnotatorUtil.isInInactiveBranch(docComment)) return;
 
     int hostStart = docComment.getTextRange().getStartOffset();
     for (Fence fence : HaxeDocMarkdown.scan(docComment).fences()) {

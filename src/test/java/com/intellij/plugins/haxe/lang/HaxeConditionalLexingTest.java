@@ -212,6 +212,81 @@ public class HaxeConditionalLexingTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("dead code gets dimmed per token colors")
+  public void testDeadCodeGetsDimmedPerTokenColors() {
+    String source = """
+      class Foo {
+      \tfunction f():Void {
+      \t\t#if never
+      \t\tvar x = "dead";
+      \t\t#end
+      \t}
+      }""";
+    myFixture.configureByText("Foo.hx", source);
+
+    int varStart = source.indexOf("var x");
+    var dimmed = myFixture.doHighlighting().stream()
+      .filter(info -> info.getStartOffset() == varStart && info.getEndOffset() == varStart + 3)
+      .filter(info -> info.forcedTextAttributes != null)
+      .toList();
+    assertFalse(dimmed.isEmpty(), "the dead 'var' keyword must carry dimmed enforced attributes");
+    assertNotNull(dimmed.get(0).forcedTextAttributes.getForegroundColor(), "dimming blends the foreground");
+  }
+
+  @Test
+  @DisplayName("dead identifiers without a dedicated color dim too")
+  public void testDeadIdentifiersWithoutADedicatedColorDimToo() {
+    // plainRef has no syntax-highlighter key; it must still get dimmed
+    // default-text attributes instead of the flat dead-code color
+    String source = """
+      class Foo {
+      \tfunction f():Void {
+      \t\t#if never
+      \t\ttrace(plainRef);
+      \t\t#end
+      \t}
+      }""";
+    myFixture.configureByText("Foo.hx", source);
+
+    int refStart = source.indexOf("plainRef");
+    boolean refDimmed = myFixture.doHighlighting().stream()
+      .anyMatch(info -> info.getStartOffset() == refStart
+                        && info.getEndOffset() == refStart + "plainRef".length()
+                        && info.forcedTextAttributes != null);
+    assertTrue(refDimmed, "every dead leaf gets dim attributes - nothing may keep the flat CC color");
+  }
+
+  @Test
+  @DisplayName("dead doc comment dims as one block without markup accents")
+  public void testDeadDocCommentDimsAsOneBlockWithoutMarkupAccents() {
+    String source = """
+      class Foo {
+      \t#if never
+      \t/**
+      \t\tDead docs.
+      \t\t@param value ignored
+      \t**/
+      \tfunction dead(value:Int):Void {}
+      \t#end
+      }""";
+    myFixture.configureByText("Foo.hx", source);
+    var infos = myFixture.doHighlighting();
+
+    int docStart = source.indexOf("/**");
+    int docEnd = source.indexOf("**/") + 3;
+    boolean docDimmed = infos.stream()
+      .anyMatch(info -> info.getStartOffset() == docStart && info.getEndOffset() == docEnd
+                        && info.forcedTextAttributes != null);
+    assertTrue(docDimmed, "the whole dead doc comment gets one dim annotation");
+
+    var docTagKey = com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors.DOC_TAG;
+    boolean tagAccented = infos.stream()
+      .anyMatch(info -> info.getStartOffset() >= docStart && info.getEndOffset() <= docEnd
+                        && docTagKey.equals(info.forcedTextAttributesKey));
+    assertFalse(tagAccented, "@param markup must not punch through the dimmed dead doc");
+  }
+
+  @Test
   @DisplayName("dead members stay out of the stub tree")
   public void testDeadMembersStayOutOfTheStubTree() {
     PsiFile file = myFixture.configureByText("Foo.hx", """

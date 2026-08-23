@@ -511,6 +511,10 @@
                              parentId="settings.haxe"
                              id="settings.haxe.docs"
                              key="haxe.settings.docs.name" bundle="messages.HaxeBundle"/>
+    <applicationConfigurable instance="com.intellij.plugins.haxe.ide.conditional.settings.HaxeConditionalCompilationSettingsConfigurable"
+                             parentId="settings.haxe"
+                             id="settings.haxe.cc"
+                             key="haxe.settings.cc.name" bundle="messages.HaxeBundle"/>
     <applicationConfigurable instance="com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeFrameworkConfigurables$Frameworks"
                              parentId="settings.haxe"
                              id="settings.haxe.frameworks"
@@ -538,6 +542,7 @@
     <annotator language="Haxe" id="slowColor" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeSlowColorAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="invalidEscape" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInvalidEscapeAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="docCode" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeDocCodeAnnotator" order="after fastColor"/>
+    <annotator language="Haxe" id="inactiveDim" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInactiveCodeDimAnnotator" order="after fastColor"/>
     <multiHostInjector implementation="com.intellij.plugins.haxe.ide.injection.HaxeDocFenceInjector"/>
     <highlightErrorFilter implementation="com.intellij.plugins.haxe.ide.injection.HaxeExemptCodeErrorFilter"/>
     <lang.inspectionSuppressor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeExemptCodeInspectionSuppressor"/>

@@ -7,6 +7,7 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.util.TextRange;
+import com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil;
 import com.intellij.plugins.haxe.ide.documentation.settings.HaxeDocSettings;
 import com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterColors;
 import com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes;
@@ -36,6 +37,9 @@ public class HaxeDocCodeAnnotator implements Annotator, DumbAware {
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
     if (!(element instanceof HaxePsiDocCommentImpl docComment)) return;
     if (!HaxeDocSettings.getInstance().getState().highlightDocMarkup) return;
+    // a doc comment in a dead branch keeps its uniform dimmed doc color
+    // (HaxeInactiveCodeDimAnnotator) - markup accents would punch through it
+    if (AnnotatorUtil.isInInactiveBranch(docComment)) return;
 
     for (ASTNode tag : docComment.getNode().getChildren(DOC_TAG_TOKEN)) {
       annotate(holder, tag.getTextRange(), HaxeSyntaxHighlighterColors.DOC_TAG);
