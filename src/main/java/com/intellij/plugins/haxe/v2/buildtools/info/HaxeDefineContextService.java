@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG_DEFINE_VALUE;
+
 /**
  * The IDE's conditional-compilation define context, derived from the v2 build
  * configuration: the project's ACTIVE build file's defines (via `lime display`
@@ -227,7 +229,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
         defines.remove(override.name());
       }
       else {
-        defines.put(override.name(), override.value().isEmpty() ? "true" : override.value());
+        defines.put(override.name(), override.value().isEmpty() ? FLAG_DEFINE_VALUE : override.value());
       }
     }
     return defines;
@@ -241,12 +243,12 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
     Map<String, String> defines = new LinkedHashMap<>();
     for (HaxeBuildFileInfo.HaxeDefine define : info.defines()) {
-      defines.put(define.name(), define.value() != null ? define.value() : "true");
+      defines.put(define.name(), define.value() != null ? define.value() : FLAG_DEFINE_VALUE);
     }
     // the compiler implicitly defines the target (hl, js, sys, ...) - the std
     // library's per-target sources are gated on exactly these
     if (info.target() != null) {
-      info.target().getDefinitions().forEach(definition -> defines.putIfAbsent(definition, "true"));
+      info.target().getDefinitions().forEach(definition -> defines.putIfAbsent(definition, FLAG_DEFINE_VALUE));
     }
     return defines;
   }

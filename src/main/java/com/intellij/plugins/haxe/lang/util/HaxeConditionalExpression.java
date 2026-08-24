@@ -571,7 +571,7 @@ public class HaxeConditionalExpression {
       return NULL_VALUE;
     }
     if (context == null) {
-      return SDK_DEFINES.contains(identifier.getText()) ? Boolean.TRUE : NULL_VALUE;
+      return SDK_DEFINES.contains(identifier.getText()) ? identifierValue(FLAG_DEFINE_VALUE) : NULL_VALUE;
     }
     Map<String, String> definitionMap = new HashMap<>();
     if (ApplicationManager.getApplication().isUnitTestMode()) {
@@ -587,14 +587,25 @@ public class HaxeConditionalExpression {
     String name = identifier.getText();
     if (definitionMap.containsKey(name)) {
       String value = definitionMap.get(name);
+      // a define set without a value carries "1" in the compiler.
+      // that way flags stay comparable: `#if (myVersion < "9.0.0")` should evaluate
+      // just fine even if we do not provide a value and just use myVersion as a flag.
       if (null == value || value.isEmpty()) {
-        return Boolean.TRUE;
+        return identifierValue(FLAG_DEFINE_VALUE);
       } else {
         return identifierValue(value);
       }
     }
     return NULL_VALUE;
   }
+
+  /**
+   * The value the compiler gives a define set without one (`-D flag` ==
+   * `-D flag=1`). Every define-collection site uses this for valueless
+   * defines: a define is never a boolean, so flags stay comparable
+   * (`#if (myVersion < "9.0.0")` must evaluate, not error).
+   */
+  public static final String FLAG_DEFINE_VALUE = "1";
 
   private static Map<String, String> parseUserdataDefinitions(String userData) {
     Map<String, String> definitionMap = new HashMap<>();

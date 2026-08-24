@@ -62,6 +62,22 @@ public class ConditionalCompilationTest extends StatementTestBase {
   }
 
   @Test
+  @DisplayName("flag define compares as its compiler value 1")
+  public void testFlagDefineVersionComparison() throws Throwable {
+    // a bare flag carries "1" (never a boolean): 1 < 9.0.0 - first branch active
+    setDefines("myVersion");
+    doTest(true);
+  }
+
+  @Test
+  @DisplayName("valued define compares against a version string")
+  public void testValuedDefineVersionComparison() throws Throwable {
+    // "9.2.0" < "9.0.0" is false - else branch active
+    setDefines("myVersion=9.2.0");
+    doTest(true);
+  }
+
+  @Test
   @DisplayName("if true block")
   public void testTrue() throws Throwable {
     // #if true

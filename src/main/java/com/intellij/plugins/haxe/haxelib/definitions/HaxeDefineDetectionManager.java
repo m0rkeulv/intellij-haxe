@@ -29,6 +29,7 @@ import java.util.*;
 import static com.intellij.plugins.haxe.haxelib.definitions.HxmlDefinitionsUtil.findHxml;
 import static com.intellij.plugins.haxe.haxelib.definitions.HxmlDefinitionsUtil.processHxml;
 import static com.intellij.plugins.haxe.haxelib.definitions.ProjectXmlDefinitionsUtil.*;
+import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG_DEFINE_VALUE;
 import static java.util.function.Predicate.not;
 
 
@@ -149,7 +150,7 @@ public class HaxeDefineDetectionManager implements Disposable {
 
     HaxeTarget target = settings.getCompilationTarget();
     // add default definitions for target
-    target.getDefinitions().forEach(def -> detectedDefines.put(def, "true"));
+    target.getDefinitions().forEach(def -> detectedDefines.put(def, FLAG_DEFINE_VALUE));
 
     // buildsystems
     switch (settings.getBuildConfiguration()) {
@@ -181,14 +182,14 @@ public class HaxeDefineDetectionManager implements Disposable {
 
   private static void proccessNmmlModule(Module module, HaxeModuleSettings settings, Map<String, String> detectedDefines) {
     String[] flags = settings.getNmeTarget().getFlags();
-    Arrays.stream(flags).forEach(def -> detectedDefines.put(def, "true"));
+    Arrays.stream(flags).forEach(def -> detectedDefines.put(def, FLAG_DEFINE_VALUE));
     XmlFile projectXml = findProjectXml(module, settings.getNmmlPath());
     processProjectXml(module, detectedDefines, projectXml);
   }
 
   private static void processOpenFlModule(Module module, HaxeModuleSettings settings, Map<String, String> detectedDefines) {
     String[] flags = settings.getOpenFLTarget().getFlags();
-    Arrays.stream(flags).forEach(def -> detectedDefines.put(def, "true"));
+    Arrays.stream(flags).forEach(def -> detectedDefines.put(def, FLAG_DEFINE_VALUE));
     XmlFile projectXml = findProjectXml(module, settings.getOpenFLPath());
     //todo look for include xml &  include xml in openfl lib
     processProjectXml(module, detectedDefines, projectXml);
@@ -202,13 +203,13 @@ public class HaxeDefineDetectionManager implements Disposable {
     List<ProjectXmlDefineValue> defines = getDefinesFromProjectXmlFile(projectXml);
     defines.forEach( value -> {
       if (value.getEnabled(detectedDefines)) {
-        detectedDefines.put(value.getName(), "true");
+        detectedDefines.put(value.getName(), FLAG_DEFINE_VALUE);
       }
     });
     List<ProjectXmlHaxedefValue> haxedef = getHaxeDefFromProjectXmlFile(projectXml);
     haxedef.forEach( value -> {
       if (value.getEnabled(detectedDefines)) {
-        detectedDefines.put(value.getName(), "true");
+        detectedDefines.put(value.getName(), FLAG_DEFINE_VALUE);
       }
     });
 
@@ -236,8 +237,8 @@ public class HaxeDefineDetectionManager implements Disposable {
       HaxelibSemVer version = library.getVersion();
       return version.toString();
     }else {
-      // unknown version, setting true to make the define active (might not work well with compiler, som might have to change this)
-      return "true";
+      // unknown version: the bare-flag value keeps the define active AND comparable
+      return FLAG_DEFINE_VALUE;
     }
   }
 
