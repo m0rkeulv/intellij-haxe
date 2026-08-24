@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.Location;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.psi.PsiElement;
@@ -20,10 +20,13 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 /**
  * Resolves the names utest's TeamCity reporter emits back to PSI:
  * {@code pack_with_underscores.Class[.method]}, with an empty leading segment
- * for the default package.
+ * for the default package. The {@code ?build=} tie-break lives in
+ * {@link HaxeTestLocatorBuildTieBreakTest}: its classpath containment needs
+ * build files on the real filesystem, which this class's light project
+ * cannot provide.
  */
 @DisplayName("Test runner: locator")
-public class HaxeTestLocatorTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeTestLocatorTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
@@ -65,31 +68,6 @@ public class HaxeTestLocatorTest extends HaxeCodeInsightFixtureTestCase {
       String name = element instanceof HaxeMethod method ? method.getName() : ((HaxeClass)element).getQualifiedName();
       assertEquals(expectedName, name);
     }
-  }
-
-  @Test
-  @DisplayName("build suffix breaks same name ties between sibling projects")
-  public void testBuildSuffixBreaksSameNameTiesBetweenSiblingProjects() {
-    // one module can hold several sub-projects declaring the SAME
-    // default-package class - the run's tests build file picks its own
-    myFixture.addFileToProject("alpha/test/CalculatorTest.hx",
-                               "class CalculatorTest {\n  public function testAdd():Void {}\n}\n");
-    myFixture.addFileToProject("beta/test/CalculatorTest.hx",
-                               "class CalculatorTest {\n  public function testAdd():Void {}\n}\n");
-    String alphaBuild = myFixture.addFileToProject("alpha/test.hxml", "-cp test\n--main TestMain\n--interp\n")
-      .getVirtualFile().getPath();
-    String betaBuild = myFixture.addFileToProject("beta/test.hxml", "-cp test\n--main TestMain\n--interp\n")
-      .getVirtualFile().getPath();
-
-    PsiElement alpha = locate("CalculatorTest.testAdd?build=" + alphaBuild);
-    assertInstanceOf(HaxeMethod.class, alpha);
-    String alphaPath = alpha.getContainingFile().getVirtualFile().getPath();
-    assertTrue(alphaPath.contains("/alpha/"), "the alpha build resolves its own class, got: " + alphaPath);
-
-    PsiElement beta = locate("CalculatorTest.testAdd?build=" + betaBuild);
-    assertInstanceOf(HaxeMethod.class, beta);
-    String betaPath = beta.getContainingFile().getVirtualFile().getPath();
-    assertTrue(betaPath.contains("/beta/"), "the beta build resolves its own class, got: " + betaPath);
   }
 
   @Test

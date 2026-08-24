@@ -1,9 +1,11 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.ExecutionException;
+import com.intellij.openapi.util.io.NioFiles;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
@@ -15,8 +17,11 @@ import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,16 +32,52 @@ import static org.junit.jupiter.api.Assertions.*;
  * {@code targets/} exist purely to be parsed.
  */
 @DisplayName("Test runner: launch planner")
-public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
+
+  // the planner reads and writes REAL files (LocalFileSystem lookups,
+  // generated mains, redirected artifacts) which the light project's
+  // in-memory temp filesystem cannot back: each test copies its fixtures
+  // into a real scratch directory instead
+  private Path fixturesRoot;
+
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
+    fixturesRoot = Files.createTempDirectory("haxe-planner-fixtures");
+    VfsRootAccess.allowRootAccess(getTestRootDisposable(), fixturesRoot.toString());
+  }
+
+  @Override
+  protected void tearDown() throws Exception {
+    try {
+      // the shared light project keeps service state between tests
+      HaxeTargetSelectionStore.getInstance(getProject()).loadState(new HaxeTargetSelectionStore.State());
+      HaxeSectionSelectionStore.getInstance(getProject()).loadState(new HaxeSectionSelectionStore.State());
+      NioFiles.deleteRecursively(fixturesRoot);
+    }
+    finally {
+      super.tearDown();
+    }
+  }
 
   @Override
   protected String getBasePath() {
     return "/testing/runner/";
   }
 
+  /** Copies the named fixture into the scratch directory and returns its real path. */
   private String fixturePath(String relativePath) {
-    VirtualFile file = myFixture.copyFileToProject(relativePath);
-    return file.getPath();
+    try {
+      Path target = fixturesRoot.resolve(relativePath);
+      Files.createDirectories(target.getParent());
+      Files.copy(Path.of(getTestDataPath(), relativePath), target, StandardCopyOption.REPLACE_EXISTING);
+      VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(target);
+      assertNotNull(file, "fixture must be visible to the vfs: " + target);
+      return file.getPath();
+    }
+    catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   @Test
@@ -202,11 +243,15 @@ public class HaxeTestLaunchPlannerTest extends HaxeCodeInsightFixtureTestCase {
 
   @Test
   @DisplayName("lime html5 build plans a browser hosted run over the packaged web root")
-  public void testLimeHtml5BuildPlansABrowserHostedRunOverThePackagedWebRoot() throws ExecutionException {
+  public void testLimeHtml5BuildPlansABrowserHostedRunOverThePackagedWebRoot() throws Exception {
     String path = fixturePath("targets/lime-project.xml");
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "HTML5");
-    myFixture.addFileToProject("targets/export/html5/bin/index.html", "<html></html>");
+
+    Path indexHtml = fixturesRoot.resolve("targets/export/html5/bin/index.html");
+    Files.createDirectories(indexHtml.getParent());
+    Files.writeString(indexHtml, "<html></html>");
+    LocalFileSystem.getInstance().refreshAndFindFileByNioFile(indexHtml);
 
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
     assertTrue(plan.browserHosted(), "html5 tests run in a served browser page");

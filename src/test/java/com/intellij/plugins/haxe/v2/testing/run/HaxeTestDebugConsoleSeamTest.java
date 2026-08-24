@@ -7,7 +7,7 @@ import com.intellij.execution.testframework.sm.runner.SMTestProxy;
 import com.intellij.execution.testframework.sm.runner.ui.SMTRunnerConsoleView;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.openapi.util.Disposer;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapTestConsoles;
 import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * SM test tree with pass/fail states and injected navigation locations.
  */
 @DisplayName("Test runner: debugged console seam")
-public class HaxeTestDebugConsoleSeamTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeTestDebugConsoleSeamTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
