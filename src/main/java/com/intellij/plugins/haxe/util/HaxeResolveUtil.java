@@ -46,6 +46,7 @@ import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeReferenceExpressionStub
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorContext;
+import com.intellij.plugins.haxe.model.evaluator.HaxeSwitchSubjectTypeCache;
 import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.tree.LeafPsiElement;
@@ -1598,18 +1599,11 @@ public class HaxeResolveUtil {
 
   public static SpecificHaxeClassReference resolveExtractorEnum(HaxeEnumArgumentExtractor extractor) {
     HaxeSwitchStatement switchStatement = PsiTreeUtil.getParentOfType(extractor, HaxeSwitchStatement.class);
-    if (switchStatement != null) {
-      HaxeExpression expression = switchStatement.getExpression();
-      if (expression == null) return null;
-      if (expression instanceof  HaxeParenthesizedExpression parenthesizedExpression){
-        expression = parenthesizedExpression.getExpression();
-      }
-      HaxeGenericResolver resolver = HaxeGenericResolverUtil.generateResolverFromScopeParents(expression);
-      ResultHolder switchExpressionResult = evaluate(expression, new HaxeExpressionEvaluatorContext(expression), resolver).result;
+    ResultHolder switchExpressionResult = HaxeSwitchSubjectTypeCache.subjectType(switchStatement);
+    if (switchExpressionResult != null) {
       if (!switchExpressionResult.isUnknown() && switchExpressionResult.getClassType() != null) {
         switchExpressionResult = switchExpressionResult.getClassType().fullyResolveTypeDefAndUnwrapNullTypeReference().createHolder();
       }
-
 
       if (switchExpressionResult.isEnum() && switchExpressionResult.getClassType() != null) {
         return switchExpressionResult.getClassType();

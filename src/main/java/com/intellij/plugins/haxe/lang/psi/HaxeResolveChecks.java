@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCacheService;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
+import com.intellij.plugins.haxe.model.evaluator.HaxeSwitchSubjectTypeCache;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorContext;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionContextContainer;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionEvaluation;
@@ -699,11 +700,6 @@ public class HaxeResolveChecks {
           }
           HaxeSwitchStatement parentSwitch = PsiTreeUtil.getParentOfType(reference, HaxeSwitchStatement.class);
           if (parentSwitch != null) {
-            HaxeExpression expression = parentSwitch.getExpression();
-            while (expression instanceof HaxeParenthesizedExpression parenthesizedExpression) {
-              expression = parenthesizedExpression.getExpression();
-            }
-
             PsiElement fromPath = enumMemberTraverseUsagePath(reference);
             if (fromPath instanceof HaxeEnumDeclaration enumDeclaration) {
               HaxeBaseMemberModel member = enumDeclaration.getModel().getMember(reference.getText(), null);
@@ -715,8 +711,11 @@ public class HaxeResolveChecks {
               if (components != null) return components;
             }
 
-            List<HaxeComponentName> components = evaluateAndFindEnumMember(reference, expression);
-            if (components != null) return components;
+            ResultHolder subjectType = HaxeSwitchSubjectTypeCache.subjectType(parentSwitch);
+            if (subjectType != null) {
+              List<HaxeComponentName> components = findEnumMemberInType(reference, subjectType);
+              if (components != null) return components;
+            }
           }
         }
       }
@@ -946,7 +945,11 @@ public class HaxeResolveChecks {
   @Nullable
   private static List<HaxeComponentName> evaluateAndFindEnumMember(HaxeReference reference, HaxeExpression haxeExpression) {
     HaxeExpressionEvaluatorContext evaluate = HaxeExpressionEvaluator.evaluate(haxeExpression, null);
-    ResultHolder result = evaluate.result;
+    return findEnumMemberInType(reference, evaluate.result);
+  }
+
+  @Nullable
+  private static List<HaxeComponentName> findEnumMemberInType(HaxeReference reference, ResultHolder result) {
     if (result.getClassType() != null) {
       SpecificTypeReference typeReference = result.getClassType().fullyResolveTypeDefAndUnwrapNullTypeReference();
       return findEnumMember(reference, typeReference);
