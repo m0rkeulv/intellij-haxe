@@ -155,6 +155,44 @@ public class HaxeExpressionUsageUtil {
    return searchReferencesForTypeParameters(componentName,context,resolver,resultHolder,0);
   }
 
+  /**
+   * True when every type parameter in {@code holder} is an unresolved
+   * TypeParameter declared by a method or class that is a parent of
+   * {@code usageSite}.
+   *
+   * Such TypeParameters only get their types substituted in from usage sites
+   * outside the parents' scope, so searching usages inside it can never
+   * refine them.
+   */
+  public static boolean containsOnlyEnclosingTypeParameters(@Nullable ResultHolder holder, @NotNull PsiElement usageSite) {
+    if (holder == null || holder.isUnknown()) return false;
+    SpecificTypeReference type = holder.getType();
+    if (type instanceof SpecificHaxeClassReference classReference) {
+      if (classReference.isTypeParameter()) return declaredByEnclosingClassOrMethod(classReference, usageSite);
+      for (ResultHolder specific : classReference.getSpecifics()) {
+        if (specific.isUnknown()) return false;
+        if (!containsOnlyEnclosingTypeParameters(specific, usageSite)) return false;
+      }
+      return true;
+    }
+
+    if (type instanceof SpecificFunctionReference function) {
+      for (HaxeArgument argument : function.arguments) {
+        if (!containsOnlyEnclosingTypeParameters(argument.getType(), usageSite)) return false;
+      }
+      return containsOnlyEnclosingTypeParameters(function.returnValue, usageSite);
+    }
+    return false;
+  }
+
+  private static boolean declaredByEnclosingClassOrMethod(SpecificHaxeClassReference typeParameter, PsiElement usageSite) {
+    HaxeClassModel model = typeParameter.getHaxeClassReference().classModel;
+    if (model == null) return false;
+    if (!(model.getBasePsi() instanceof HaxeTypeParameterDeclaration parameterDeclaration)) return false;
+    PsiElement owner = parameterDeclaration.getOwner();
+    return owner != null && PsiTreeUtil.isAncestor(owner, usageSite, false);
+  }
+
   private static final RecursionGuard<PsiElement> searchReferencesForTypeParametersRecursionGuard = RecursionManager.createGuard("searchReferencesForTypeParametersRecursionGuard");
 
   @NotNull

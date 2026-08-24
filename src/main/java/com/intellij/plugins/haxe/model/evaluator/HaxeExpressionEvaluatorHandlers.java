@@ -2053,8 +2053,11 @@ public class HaxeExpressionEvaluatorHandlers {
     if (isUnknownLiteralArray(result) && result.containsUnknownOrUnresolvedTypeParameters()) {
       result = searchReferencesForTypeParameters(name, context, resolver, result);
     }
+
     if (result != null && result.containsUnknownOrUnresolvedTypeParameters()) {
-      result = searchReferencesForTypeParameters(name, context, resolver, result);
+      if (!HaxeExpressionUsageUtil.containsOnlyEnclosingTypeParameters(result, varDeclaration)) {
+        result = searchReferencesForTypeParameters(name, context, resolver, result);
+      }
     }
 
     result = tryGetEnumValuesDeclaringClass(result);

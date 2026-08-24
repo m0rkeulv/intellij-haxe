@@ -27,7 +27,6 @@ import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeObjectLiteralImpl;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionContext;
-import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionContextContainer;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionEvaluation;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionUtil;
 import com.intellij.plugins.haxe.model.type.*;
@@ -605,9 +604,11 @@ public class HaxeExpressionEvaluator {
       }
     }
     if (lastValue != null && !lastValue.isUnknown()) {
-      if(lastValue.isOrContainsTypeParameters()) {
-        ResultHolder holder = searchReferencesForTypeParameters(componentName, context, resolver, lastValue, continueFrom);
-        if (!holder.isUnknown()) return holder;
+      if (lastValue.isOrContainsTypeParameters()) {
+        if (!HaxeExpressionUsageUtil.containsOnlyEnclosingTypeParameters(lastValue, componentName)) {
+          ResultHolder holder = searchReferencesForTypeParameters(componentName, context, resolver, lastValue, continueFrom);
+          if (!holder.isUnknown()) return holder;
+        }
       }
 
       if(lastValue.isEnumValueType()) {
