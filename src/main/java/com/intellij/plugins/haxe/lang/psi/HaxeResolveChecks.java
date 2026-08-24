@@ -2018,7 +2018,7 @@ public class HaxeResolveChecks {
                 .map(HaxeMethodPsiMixin::getModel)
                 .map(HaxeBaseMemberModel.class::cast)
                 .toList();
-        List<HaxeNamedComponent> components = checkMethodOverloads(reference, methodModels);
+        List<? extends PsiElement> components = checkMethodOverloads(reference, methodModels);
         if(components != null) return components;
       }
     }
@@ -2466,7 +2466,7 @@ public class HaxeResolveChecks {
               }
             }
           } else {
-            List<HaxeNamedComponent> member = checkMethodOverloads(reference, members);
+            List<? extends PsiElement> member = checkMethodOverloads(reference, members);
             if (member != null) return member;
           }
         }
@@ -2628,7 +2628,7 @@ public class HaxeResolveChecks {
     HaxeBaseMemberModel member = model.getMember(name, null);
     if (member != null) {
       LogResolution(reference, "via simple chain against module members.");
-      return List.of(member.getNamedComponentPsi());
+      return List.of(member.getNameOrBasePsi()); // ComponentName
     }
     HaxeClassModel aClass = model.getClass(name);
     if (aClass != null) {
@@ -2644,7 +2644,7 @@ public class HaxeResolveChecks {
     }
   }
 
-  private static @Nullable List<HaxeNamedComponent> checkMethodOverloads(HaxeReference reference, List<HaxeBaseMemberModel> members) {
+  private static @Nullable List<? extends PsiElement> checkMethodOverloads(HaxeReference reference, List<HaxeBaseMemberModel> members) {
     // this is probably far from the best solution for method overloads but it seems to work for method calls
     // it wont work for function type assign, but might attempt to add that later if its necessary (mlo).
     for (HaxeBaseMemberModel member : members) {
@@ -2652,7 +2652,7 @@ public class HaxeResolveChecks {
         if (reference.getParent() instanceof HaxeCallExpression callExpression) {
           HaxeCallExpressionEvaluation evaluate = cachedHaxeCallExpressionEvaluation(methodModel.getMethod(), callExpression);
           if (evaluate != null && evaluate.isValid()) {
-            return Collections.singletonList(member.getNamedComponentPsi());
+            return Collections.singletonList(member.getNameOrBasePsi()); // should be ComponentName
           }
         } else if (reference.getParent() instanceof HaxeCallExpressionList argumentList) {
           int argIndex = argumentList.getExpressionList().indexOf(reference);
@@ -2667,7 +2667,7 @@ public class HaxeResolveChecks {
                     if (parameterType != null) {
                       SpecificFunctionReference functionType = methodModel.getFunctionType(null);
                       if (functionType.canAssign(parameterType)) {
-                        return Collections.singletonList(member.getNamedComponentPsi());
+                        return Collections.singletonList(member.getNameOrBasePsi());// // should be ComponentName
                       }
                     }
                   }
@@ -2687,7 +2687,7 @@ public class HaxeResolveChecks {
             if(expected  != null) {
               ResultHolder functionType = methodModel.getFunctionType(null).createHolder();
               if(functionType.canAssign(expected)){
-                return Collections.singletonList(member.getNamedComponentPsi());
+                return Collections.singletonList(member.getNameOrBasePsi()); // should be ComponentName
               }
             }
           }
@@ -2697,12 +2697,13 @@ public class HaxeResolveChecks {
     return null;
   }
 
-  private static @Nullable List<HaxeNamedComponent> checkConstructorOverloads(HaxeNewExpression newExpression, List<HaxeMethodModel> constructors) {
+
+  private static @Nullable List<? extends PsiElement> checkConstructorOverloads(HaxeNewExpression newExpression, List<HaxeMethodModel> constructors) {
     for (HaxeMethodModel constructor : constructors) {
       HaxeCallExpressionContextContainer contextContainer = createContextForConstructorCall(newExpression, constructor.getMethod().getModel());
       HaxeCallExpressionEvaluation evaluation = contextContainer.evaluateContexts();
       if (evaluation != null && evaluation.isValid()) {
-        return Collections.singletonList(constructor.getNamedComponentPsi());
+        return Collections.singletonList(constructor.getNameOrBasePsi()); // should be ComponentName
       }
     }
     return null;
@@ -2852,9 +2853,11 @@ public class HaxeResolveChecks {
         }else if (matches.size()> 1) {
           // probably method overloads ?
           // best effort to get a match, if more then one we just pick one as we probably cant tell wich is the correct one.
-          List<HaxeNamedComponent> components = checkMethodOverloads(identifierRef, members);
-          if(components != null && !components.isEmpty()) {
-            return components.getFirst().getComponentName();
+          List<? extends PsiElement> components = checkMethodOverloads(identifierRef, members);
+          if (components != null && !components.isEmpty()) {
+            if (components.getFirst() instanceof HaxeComponentName name) {
+              return name;
+            }
           }
         }
       }

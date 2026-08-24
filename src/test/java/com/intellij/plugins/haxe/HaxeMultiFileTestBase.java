@@ -64,7 +64,7 @@ public abstract class HaxeMultiFileTestBase {
     engine.start();
     // Same opt-outs as HaxeCodeInsightFixtureTestCase: type inference fires
     // recursion preventions by design, and the resolver deliberately
-    // suppresses ResolveCache writes for uncertain empty resolves (see
+    // suppresses ResolveCache writes for uncertain resolves (see
     // HaxeResolveFrames.suppressCacheWrite) - the platform's missed-cache
     // assertion would turn both into test failures.
     RecursionManager.disableAssertOnRecursionPrevention(engine.getTestRootDisposable());
