@@ -248,6 +248,38 @@ public class SpecificHaxeClassReference extends SpecificTypeReference {
 
 
 
+  @Override
+  public void appendCacheKey(@NotNull StringBuilder out, @NotNull Set<SpecificTypeReference> walkPath) {
+    if (isUnknown()) {
+      out.append(UNKNOWN);
+      return;
+    }
+    if (!walkPath.add(this)) {
+      out.append(CACHE_KEY_CYCLE);
+      return;
+    }
+    try {
+      out.append(getHaxeClassReference().getCacheKey());
+      ResultHolder[] specifics = getSpecifics();
+      if (specifics.length > 0) {
+        out.append('<');
+        for (ResultHolder specific : specifics) {
+          if (specific == null) {
+            out.append(UNKNOWN);
+          }
+          else {
+            specific.appendCacheKey(out, walkPath);
+          }
+          out.append(',');
+        }
+        out.append('>');
+      }
+    }
+    finally {
+      walkPath.remove(this);
+    }
+  }
+
   public String toPresentationStringNoResolve() {
     StringBuilder out = new StringBuilder(this.getHaxeClassReference().getName());
     if (!(this instanceof  SpecificHaxeAnonymousReference)) {

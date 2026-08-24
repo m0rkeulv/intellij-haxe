@@ -30,6 +30,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 @EqualsAndHashCode
 public class ResultHolder {
@@ -186,6 +187,10 @@ public class ResultHolder {
   }
   public String toPresentationString(boolean showOnlyConstraintForTypeParam) {
     return this.getType().toPresentationString(showOnlyConstraintForTypeParam);
+  }
+
+  public void appendCacheKey(StringBuilder out, Set<SpecificTypeReference> walkPath) {
+    getType().appendCacheKey(out, walkPath);
   }
 
   public ResultHolder duplicate() {

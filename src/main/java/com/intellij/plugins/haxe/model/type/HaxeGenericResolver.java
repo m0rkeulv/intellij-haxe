@@ -545,25 +545,35 @@ public class HaxeGenericResolver {
     }
   }
 
+  /**
+   *  key used for caching evaluation results
+   */
   public String toCacheString() {
     if (isEmpty()) return "EMPTY";
-
     StringBuilder builder = new StringBuilder(128);
 
     builder.append("resolvers:[");
-    for (ResolverEntry resolver : resolvers) {
-      builder.append(resolver.name()).append(":").append(resolver.type().toPresentationString()).append(":")
-        .append(resolver.scope());
-    }
+    appendEntryKeys(builder, resolvers);
+    builder.append("], ");
 
-    builder.append("], constraints: [");
-    for (ResolverEntry entry : constraints) {
-      builder.append(entry.name()).append(":").append(entry.type().toPresentationString()).append(":").append(entry.scope());
-    }
-    builder.append("]");
-    //TODO assign hint ?
+    builder.append("constraints:[");
+    appendEntryKeys(builder, constraints);
+    builder.append(']');
 
     return builder.toString();
+  }
+
+  private static void appendEntryKeys(StringBuilder builder, List<ResolverEntry> entries) {
+    // simpler form of concurrency guard, used to check if we have the same object references stored.
+    Set<SpecificTypeReference> walkPath = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    for (ResolverEntry entry : entries) {
+      builder.append(entry.name()).append(':');
+      entry.type().appendCacheKey(builder, walkPath);
+      builder.append(':').append(entry.scope());
+      if (entry.index() >= 0) builder.append('@').append(entry.index());
+      builder.append(';');
+    }
 
   }
 
