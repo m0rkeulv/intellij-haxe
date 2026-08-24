@@ -158,14 +158,12 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
     List<? extends PsiElement> foundElements = frames.runFullPipeline(reference, () -> {
       long taintMark = HaxeEvaluationTaint.mark();
       List<? extends PsiElement> resolved = doResolveInner(reference, incompleteCode, referenceText, false);
-      // A result is only cacheable when it is CERTAIN: anything computed on
-      // truncated data (visible via the taint counter) may come out different
-      // on recomputation - an empty may succeed later, and an overload pick
-      // whose call evaluation was cut short falls back to a different element -
-      // so the platform's cache write (and the IdempotenceChecker comparison
-      // that guards it) is suppressed. Certain results stay cacheable - a
-      // definitively-broken reference must not re-resolve every query.
-      if (HaxeEvaluationTaint.taintedSince(taintMark)) {
+      // A miss is only cacheable when it is CERTAIN: an empty computed on
+      // truncated data (visible via the taint counter) may succeed on
+      // recomputation and must not be frozen until the next code change, so the
+      // platform's cache write is suppressed. Certain misses stay cacheable
+      // - a definitively-broken reference must not re-resolve every query.
+      if ((resolved == null || resolved.isEmpty()) && HaxeEvaluationTaint.taintedSince(taintMark)) {
         frames.suppressCacheWrite(reference);
       }
       return resolved == null ? EMPTY_LIST : resolved;
