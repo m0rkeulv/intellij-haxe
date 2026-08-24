@@ -399,7 +399,7 @@ externClassDeclaration ::= externClassModifierList 'class' componentName generic
 
 externClassDeclarationBody ::= '{' externClassDeclarationBodyPart* '}'
 private externClassDeclarationBodyPart ::= fieldDeclaration | methodDeclaration | constructorDeclaration {recoverWhile="extern_class_body_part_recover"}
-private extern_class_body_part_recover ::= !('public' | 'extern' | 'function' | 'var' | 'final' | 'inline' | 'static' | 'private' | '}' | 'override' | 'dynamic' | macroKeyword | metaKeyWord | ppToken)
+private extern_class_body_part_recover ::= !('public' | 'extern' | 'function' | 'var' | 'final' | 'inline' | 'static' | 'private' | '}' | 'override' | 'overload' | 'dynamic' | macroKeyword | metaKeyWord | ppToken)
 
 macroExternInterfaceDeclaration ::= externAndMaybePrivate? 'interface' componentName? genericParam? inheritList? interfaceBody
 {
@@ -478,7 +478,7 @@ private abstractBodyPart ::= fieldDeclaration | methodDeclaration | constructorD
 
 classBody ::= '{' classBodyPart* '}' {pin=1}
 private classBodyPart ::= fieldDeclaration | methodDeclaration | constructorDeclaration {recoverWhile="class_body_part_recover"}
-private class_body_part_recover ::= !('public' | 'private' | 'function' | 'var' | '}' | 'final' | 'static' | 'dynamic' | 'inline' | 'override' | 'macro' | 'class' | 'enum' | 'abstract' | 'typedef' | 'extern' | 'interface' | metaKeyWord | ppToken)
+private class_body_part_recover ::= !('public' | 'private' | 'function' | 'var' | '}' | 'final' | 'static' | 'dynamic' | 'inline' | 'override' | 'overload' | 'macro' | 'class' | 'enum' | 'abstract' | 'typedef' | 'extern' | 'interface' | metaKeyWord | ppToken)
 
 macroInterfaceDeclaration ::= privateKeyWord? 'interface' componentName? genericParam? inheritList? interfaceBody
 {
@@ -497,7 +497,7 @@ interfaceDeclaration ::= privateKeyWord? 'interface' componentName genericParam?
 interfaceBody ::= '{' interfaceBodyList? '}'
 private interfaceBodyList ::= interfaceBodyPart+
 private interfaceBodyPart ::= fieldDeclaration | methodDeclaration {recoverWhile="interface_body_part_recover"}
-private interface_body_part_recover ::= !('function' | 'var' | '}' | 'public' | 'static' | 'private' | 'final' | 'dynamic' | 'inline' | 'override' | 'class' | 'enum' | 'abstract' | 'typedef' | 'extern' | 'interface'| macroKeyword | metaKeyWord| ppToken)
+private interface_body_part_recover ::= !('function' | 'var' | '}' | 'public' | 'static' | 'private' | 'final' | 'dynamic' | 'inline' | 'override' | 'overload' | 'class' | 'enum' | 'abstract' | 'typedef' | 'extern' | 'interface'| macroKeyword | metaKeyWord| ppToken)
 
 macroEnumDeclaration ::= externOrPrivate? 'enum' componentName? genericParam? enumBody
 {
