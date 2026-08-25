@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
@@ -17,6 +18,7 @@ import org.jetbrains.annotations.TestOnly;
  * against one define context, and that context comes from the active build file.
  * Stored in {@code .idea/haxeBuildConfig.xml}.
  */
+@Service(Service.Level.PROJECT)
 @State(name = "HaxeActiveBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeActiveBuildFileStore implements PersistentStateComponent<HaxeActiveBuildFileStore.State> {
   private final @Nullable Project project;

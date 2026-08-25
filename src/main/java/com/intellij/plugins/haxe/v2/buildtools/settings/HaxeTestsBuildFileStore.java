@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
@@ -24,6 +25,7 @@ import java.util.function.Predicate;
  * runs. A container may hold SEVERAL — one per sub-project or framework.
  * Shares {@code .idea/haxeBuildConfig.xml} with the other build-settings stores.
  */
+@Service(Service.Level.PROJECT)
 @State(name = "HaxeTestsBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeTestsBuildFileStore implements PersistentStateComponent<HaxeTestsBuildFileStore.State> {
   private final @Nullable Project project;

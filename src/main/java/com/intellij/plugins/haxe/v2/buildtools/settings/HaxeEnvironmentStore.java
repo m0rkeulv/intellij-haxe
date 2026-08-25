@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
@@ -20,6 +21,7 @@ import org.jetbrains.annotations.TestOnly;
  * removes a define the build file declares. Shares {@code .idea/haxeBuildConfig.xml}
  * with the active-build-file selection.
  */
+@Service(Service.Level.PROJECT)
 @State(name = "HaxeEnvironments", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeEnvironmentStore implements PersistentStateComponent<HaxeEnvironmentStore.State> {
   private final @Nullable Project project;

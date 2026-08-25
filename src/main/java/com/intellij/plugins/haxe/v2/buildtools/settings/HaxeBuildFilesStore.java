@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
@@ -16,6 +17,7 @@ import java.util.List;
  * the user hid. Shares {@code .idea/haxeBuildConfig.xml} with the other build-config
  * stores.
  */
+@Service(Service.Level.PROJECT)
 @State(name = "HaxeBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeBuildFilesStore.State> {
 

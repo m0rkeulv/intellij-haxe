@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
@@ -17,6 +18,7 @@ import java.util.List;
  * {@link com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories}.
  * Shares {@code .idea/haxeBuildConfig.xml} with the other build-config stores.
  */
+@Service(Service.Level.PROJECT)
 @State(name = "HaxeWorkDirectories", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeWorkDirectoryStore implements PersistentStateComponent<HaxeWorkDirectoryStore.State> {
   private final @NotNull Project project;

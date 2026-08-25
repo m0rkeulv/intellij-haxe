@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.components.StoragePathMacros;
@@ -18,6 +19,7 @@ import org.jetbrains.annotations.TestOnly;
  * window. Stored in the workspace file: target choice is a per-developer setting,
  * not project configuration. Will fold into the planned profiles concept.
  */
+@Service(Service.Level.PROJECT)
 @State(name = "HaxeToolWindowTargets", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class HaxeTargetSelectionStore implements PersistentStateComponent<HaxeTargetSelectionStore.State> {
   private final @Nullable Project project;

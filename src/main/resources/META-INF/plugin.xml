@@ -483,15 +483,8 @@
     <!-- V2 build system: build tool settings (Settings | Build, Execution, Deployment | Build Tools | Haxe) -->
     <projectService serviceInterface="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings"
                     serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolProjectSettings"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeSectionSelectionStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeWorkDirectoryStore"/>
-    <projectService serviceImplementation="com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowUiState"/>
+    <!-- the v2 settings stores are @Service light services - no registration entries -->
+
 
     <!-- V2 build system: "Haxe" entry in the New Project / New Module wizard, creating plain modules -->
     <newProjectWizard.languageGenerator implementation="com.intellij.plugins.haxe.v2.wizard.HaxeNewProjectWizard"/>

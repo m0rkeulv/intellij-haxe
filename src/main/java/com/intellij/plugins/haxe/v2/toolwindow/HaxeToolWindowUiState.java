@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.components.StoragePathMacros;
@@ -21,6 +22,7 @@ import java.util.Set;
  * their rendered text, which here carries volatile parts (counts, the active
  * marker).
  */
+@Service(Service.Level.PROJECT)
 @State(name = "HaxeToolWindowUiState", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class HaxeToolWindowUiState implements PersistentStateComponent<HaxeToolWindowUiState.State> {
 
