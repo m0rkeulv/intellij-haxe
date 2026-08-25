@@ -22,10 +22,26 @@ val haxeAvailable: Boolean by lazy {
 
 val parserJar = layout.buildDirectory.file("libs/LimeProjectParser.jar")
 
+// `haxelib path lib:version` is version-exact and never touches the machine's
+// selected ("current") version - the probe that lets an installed lib be left alone
+val hxjavaInstalled: Boolean by lazy {
+    try {
+        ProcessBuilder("haxelib", "path", "hxjava:$hxjavaVersion")
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start().waitFor() == 0
+    } catch (e: Exception) {
+        false
+    }
+}
+
 tasks.register<Exec>("installHxJava") {
     group = "build"
-    description = "Installs the pinned hxjava haxelib the JVM target compiles through"
-    onlyIf { haxeAvailable }
+    description = "Provisions the pinned hxjava haxelib when missing; an installed one is left untouched"
+    // `haxelib install` switches the current-version selection as a side effect,
+    // so it must only ever run when the pinned version is absent (buildParser
+    // pins the compile itself with `-lib hxjava:<version>` on the command line)
+    onlyIf { haxeAvailable && !hxjavaInstalled }
     commandLine = listOf("haxelib", "install", "hxjava", hxjavaVersion, "--quiet", haxeLibChangeVersion)
 }
 
