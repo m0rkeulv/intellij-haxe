@@ -160,14 +160,6 @@ public class HaxeSyntheticDeclarations {
       
       }
       
-      // TODO: not consumed yet - wire into @:analyzer argument completion and documentation
-      /**
-          The arguments the compiler accepts in `@:analyzer(...)` metadata, applied
-          to a class or field to tune the static analyzer. Several may be combined:
-          `@:analyzer(no_fusion, no_local_dce)`; an unrecognized argument is a
-          compiler warning. The `analyzer-*` defines set the same switches
-          project-wide, and the metadata overrides them per class or field.
-      **/
       enum abstract AnalyzerOptions(String) {
           /** Enables the analyzer's optimizations for the annotated class or field. **/
           var optimize;
