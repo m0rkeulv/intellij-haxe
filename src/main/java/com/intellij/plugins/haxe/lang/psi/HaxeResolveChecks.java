@@ -4,6 +4,7 @@ import com.intellij.openapi.progress.ProgressIndicatorProvider;
 import com.intellij.openapi.util.RecursionGuard;
 import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
+import com.intellij.plugins.haxe.lang.psi.fakes.HaxeSyntheticDeclarations;
 import com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentBindMethod;
 import com.intellij.plugins.haxe.lang.psi.fakes.HaxeFakePsiElement;
 import com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentStringCode;
@@ -36,6 +37,7 @@ import java.util.*;
 
 import static com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentStringCode.FAKE_PSI_KEY;
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.*;
+import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.ANALYZER;
 import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.NULL_SAFETY;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.findObjectLiteralType;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorHandlers.getArrayAccessTypeFromClass;
@@ -139,6 +141,11 @@ public class HaxeResolveChecks {
             HaxeBaseMemberModel member = NullSafetyMode.getModel().getMember(reference.getText(), null);
             if(member != null) return List.of(member.getBasePsi());
           }
+        }
+        else if (parentMeta.isType(ANALYZER)) {
+          HaxeClassModel analyzerOptions = HaxeSyntheticDeclarations.getAnalyzerOptions(reference.getProject());
+          HaxeBaseMemberModel member = analyzerOptions.getMember(reference.getText(), null);
+          if(member != null) return List.of(member.getBasePsi());
         }
       }
 

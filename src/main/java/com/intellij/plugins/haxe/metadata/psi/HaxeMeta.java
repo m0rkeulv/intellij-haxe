@@ -58,6 +58,7 @@ public interface HaxeMeta extends HaxePsiCompositeElement {
 
   HaxeMetadataTypeName ACCESS = new HaxeMetadataTypeName("access"); // <Target path>
   HaxeMetadataTypeName ALLOW = new HaxeMetadataTypeName("allow"); // <Target path>
+  HaxeMetadataTypeName ANALYZER = new HaxeMetadataTypeName("analyzer"); // <Target path>
   HaxeMetadataTypeName ARRAY_ACCESS = new HaxeMetadataTypeName("arrayAccess");
   HaxeMetadataTypeName AUTO_BUILD = new HaxeMetadataTypeName("autoBuild"); // <Build macro call>
   HaxeMetadataTypeName BIND = new HaxeMetadataTypeName("bind");
