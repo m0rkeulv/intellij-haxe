@@ -13,7 +13,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeLocalVarDeclarationList;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeReferenceExpression;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
-import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
+import com.intellij.plugins.haxe.util.HaxeTestDefines;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiErrorElement;
 import com.intellij.psi.PsiFile;
@@ -546,7 +546,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   @FieldSource("CONDITION_EVALUATIONS")
   @DisplayName("condition evaluation matches the compiler")
   public void testConditionEvaluationMatchesTheCompiler(String defines, String condition, boolean active) {
-    getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, defines);
+    HaxeTestDefines.set(getProject(), defines);
     try {
       PsiFile file = myFixture.configureByText("Foo.hx", """
         class Foo {
@@ -559,7 +559,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
       assertEquals(active, branchLive, "wrong activeness for " + condition + " with defines [" + defines + "]");
     }
     finally {
-      getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, null);
+      HaxeTestDefines.set(getProject(), null);
     }
   }
 
@@ -580,7 +580,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("shortened version value suggests the full form")
   public void testShortenedVersionValueSuggestsTheFullForm() {
-    getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, "hl_ver=1.13");
+    HaxeTestDefines.set(getProject(), "hl_ver=1.13");
     try {
       List<String> errors = conditionErrors("""
         class Foo {
@@ -594,7 +594,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
                  "the message explains the missing part and suggests the fix: " + errors);
     }
     finally {
-      getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, null);
+      HaxeTestDefines.set(getProject(), null);
     }
   }
 

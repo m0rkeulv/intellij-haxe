@@ -155,6 +155,15 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         append(HaxeBundle.message("haxe.toolwindow.node.environment.defines"));
         append(" (" + definesNode.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
+      case EnvCustomTargetNode customTargetNode -> {
+        setIcon(AllIcons.Nodes.Property);
+        append(HaxeBundle.message("haxe.toolwindow.node.environment.custom.target"));
+        String display = customTargetNode.customTarget() != null
+                         ? customTargetNode.customTarget()
+                         : HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
+        append("  " + display, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      }
       case EnvDefineNode defineNode -> {
         setIcon(AllIcons.Nodes.Property);
         if (defineNode.effect() == DefineEffect.REMOVE) {
@@ -210,6 +219,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       case EnvSdkNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.sdk");
       case EnvLanguageLevelNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.language.level");
       case EnvDefinesNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.defines");
+      case EnvCustomTargetNode ignored -> HaxeBundle.message("haxe.environment.dialog.custom.target.tooltip");
       case BuildGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.build.files");
       case TargetNode targetNode ->
         HaxeBundle.message(targetNode.selectable() ? "haxe.toolwindow.tooltip.target.selectable"

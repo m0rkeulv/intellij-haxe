@@ -74,7 +74,8 @@ final class HaxeToolWindowModelBuilder {
 
   /** The container's environment as shown in the tree, resolved during the scan read action. */
   record EnvironmentData(String sdkDisplay, boolean sdkMissing, String languageLevelDisplay,
-                         List<EnvDefineNode> defines, Set<String> activeBuildFileDefines) {
+                         List<EnvDefineNode> defines, Set<String> activeBuildFileDefines,
+                         @Nullable String customTarget) {
   }
 
   /** A container before global active-file resolution. */
@@ -464,7 +465,8 @@ final class HaxeToolWindowModelBuilder {
       .map(define -> new EnvDefineNode(containerId, define.name(), define.value(), define.effect(),
                                        activeFileDefines.contains(define.name())))
       .toList();
-    return new EnvironmentData(sdkDisplay, sdkMissing, levelDisplay, defines, activeFileDefines);
+    String customTarget = environmentStore.getCustomTarget(containerId);
+    return new EnvironmentData(sdkDisplay, sdkMissing, levelDisplay, defines, activeFileDefines, customTarget);
   }
 
   /** The "Project default (X)" label following the compiler settings' per-container default level. */

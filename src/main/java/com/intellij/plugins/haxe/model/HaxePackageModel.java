@@ -18,7 +18,9 @@ package com.intellij.plugins.haxe.model;
 
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.util.HaxeFileUtil;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.util.HaxeNameUtils;
+import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiElement;
@@ -32,6 +34,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.stream.Collectors;
 import com.intellij.openapi.project.IndexNotReadyException;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiManager;
 import org.jspecify.annotations.NonNull;
@@ -130,18 +133,33 @@ public class HaxePackageModel implements HaxeExposableModel {
 
   protected HaxeFile getFile(String filePath) {
     List<String> parts = HaxeFileUtil.splitPath(filePath);
-    String fname = parts.get(parts.size() - 1);
+    String fname = parts.getLast();
     if (fname == null || fname.isEmpty()) return null;
 
     String packagePath = HaxeFileUtil.joinPath(parts.subList(0, parts.size() - 1));
     String accessPath = null != packagePath && !packagePath.isEmpty() ? HaxeFileUtil.joinPath(path, packagePath) : path;
     try {
+
+      // target-specific files ("MyClass.js.hx") can shadow plain normal files ("MyClass.hx") when a target is active.
+      HaxeFile variantFile = findActiveVariantFileByIndex(fname, accessPath);
+      if (variantFile != null) return variantFile;
+
       return findFileByIndex(fname, accessPath);
     }
     catch (IndexNotReadyException e) {
       // dumb mode: indexes unavailable, walk the directories instead
       return findFileByDirectoryWalk(fname, accessPath);
     }
+  }
+
+  @Nullable
+  private HaxeFile findActiveVariantFileByIndex(String fname, String accessPath) {
+    if (project == null) return null;
+    for (String variant : HaxeModuleVariants.activeVariants(project.getProject())) {
+      HaxeFile file = findFileByIndex(fname + '.' + variant, accessPath);
+      if (file != null) return file;
+    }
+    return null;
   }
 
   /**
@@ -272,15 +290,40 @@ public class HaxePackageModel implements HaxeExposableModel {
   }
 
   private static CachedValueProvider.Result<List<HaxeModel>> modulesMainClassResult(PsiDirectory directory) {
-    List<HaxeModel> result = new ArrayList<>();
+    // one entry per module: a target-specific file and its plain sibling both
+    // declare the same module, so only the ladder's winner is that module here
+    Map<String, HaxeClassModel> winners = new LinkedHashMap<>();
+    Map<String, Integer> ranks = new HashMap<>();
     for (PsiFile file : directory.getFiles()) {
       if (!(file instanceof HaxeFile haxeFile)) continue;
+
       HaxeFileModel fileModel = HaxeFileModel.fromElement(haxeFile);
       if (fileModel == null) continue;
+
       HaxeClassModel mainClassModel = fileModel.getMainClassModel();
-      if (mainClassModel != null) result.add(mainClassModel);
+      if (mainClassModel == null) continue;
+
+      String module = fileModel.getName();
+      int rank = variantRank(haxeFile);
+      Integer existing = ranks.get(module);
+      if (existing == null || rank > existing) {
+        winners.put(module, mainClassModel);
+        ranks.put(module, rank);
+      }
     }
+    List<HaxeModel> result = List.copyOf(winners.values());
     return CachedValueProvider.Result.create(result, PsiModificationTracker.MODIFICATION_COUNT);
+  }
+
+  /**
+   * The compiler's platform file selection as a rank: an ACTIVE target-specific
+   * file ("Net.js.hx" while js compiles) shadows the plain "Net.hx"; an
+   * inactive one only stands in when no other file declares the module.
+   */
+  private static int variantRank(@NotNull HaxeFile file) {
+    String variant = HaxeModuleVariants.variantOf(file);
+    if (variant == null) return 1;
+    return HaxeModuleVariants.isActive(variant, file.getProject()) ? 2 : 0;
   }
 
   @Override

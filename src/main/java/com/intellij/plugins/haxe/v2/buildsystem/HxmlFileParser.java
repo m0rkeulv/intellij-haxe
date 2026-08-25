@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import org.jetbrains.annotations.NotNull;
@@ -135,6 +136,9 @@ public final class HxmlFileParser {
   /** The define flag's two spellings; the flag's value is {@code name} or {@code name=value}. */
   public static final Set<String> DEFINE_FLAGS = Set.of("-D", "--define");
 
+  /** Haxe 5's {@code --custom-target name[=path]}: the name becomes the platform name. */
+  private static final String CUSTOM_TARGET_FLAG = "--custom-target";
+
   private static final Set<String> LIBRARY_FLAGS = Set.of("-lib", "--library", "-L");
   private static final Set<String> CLASSPATH_FLAGS = Set.of("-cp", "-p", "--class-path");
   private static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
@@ -259,6 +263,12 @@ public final class HxmlFileParser {
           accumulator.targetOutput = value;
         }
       }
+      else if (CUSTOM_TARGET_FLAG.equals(flag) && value != null) {
+        if (accumulator.customTarget == null) {
+          // "name" or "name=path" - the path is the generator, irrelevant here
+          accumulator.customTarget = value.split("=", 2)[0].trim();
+        }
+      }
     }
     return accumulator.toInfo();
   }
@@ -356,9 +366,16 @@ public final class HxmlFileParser {
 
     @Nullable HaxeTarget target;
     @Nullable String targetOutput;
+    @Nullable String customTarget;
 
     @NotNull
     HaxeBuildFileInfo toInfo() {
+      // a custom target surfaces as the defines the compiler sets for it, so
+      // define consumers (CC evaluation, variant activation) need no extra field
+      if (customTarget != null && !customTarget.isEmpty()) {
+        defines.add(new HaxeDefine(HaxeModuleVariants.CUSTOM_TARGET_DEFINE, null));
+        defines.add(new HaxeDefine(HaxeModuleVariants.TARGET_NAME_DEFINE, customTarget));
+      }
       return new HaxeBuildFileInfo(target, targetOutput,
                                    List.copyOf(defines),
                                    List.copyOf(libraries),

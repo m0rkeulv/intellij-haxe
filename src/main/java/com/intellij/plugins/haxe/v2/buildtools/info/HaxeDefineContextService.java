@@ -18,6 +18,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.util.HaxeUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
@@ -209,12 +210,15 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   private String cacheKey(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
     Document document = FileDocumentManager.getInstance().getCachedDocument(file);
     long stamp = document != null ? document.getModificationStamp() : file.getModificationStamp();
+
     String containerId = HaxeContainers.containerIdFor(project, file);
     String targetId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file);
     String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    List<EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
+    String customTarget = HaxeEnvironmentStore.getInstance(project).getCustomTarget(containerId);
     String compilerIdentity = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
-    return file.getPath() + '|' + type + '|' + stamp + '|' + targetId + '|' + sdkName + '|' + compilerIdentity + '|' + overrides;
+    List<EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
+
+    return file.getPath() + '|' + type + '|' + stamp + '|' + targetId + '|' + sdkName + '|' + customTarget + '|' + compilerIdentity + '|' + overrides;
   }
 
   @NotNull
@@ -224,11 +228,12 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     String containerId = HaxeContainers.containerIdFor(project, file);
     putCompilerIdentityDefines(defines, containerId);
     putHashlinkVersionDefine(defines, containerId);
+    putCustomTargetDefines(defines, containerId);
+
     for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
       if (override.effect() == DefineEffect.REMOVE) {
         defines.remove(override.name());
-      }
-      else {
+      } else {
         defines.put(override.name(), override.value().isEmpty() ? FLAG_DEFINE_VALUE : override.value());
       }
     }
@@ -271,6 +276,21 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       if (semVer.getMajor() >= 4) defines.put("haxe4", version);
       if (semVer.getMajor() >= 5) defines.put("haxe5", version);
     }
+  }
+
+  /**
+   * The container's Custom target setting, mirrored as the defines
+   * {@code --custom-target} sets: {@code custom_target} and
+   * {@code target.name=<name>} (never the bare name — a custom target does
+   * NOT define itself the way stock targets do). Wins over an hxml-declared
+   * custom target, which arrives through the build file's defines; the
+   * container's explicit Define overrides still apply on top.
+   */
+  private void putCustomTargetDefines(@NotNull Map<String, String> defines, @NotNull String containerId) {
+    String customTarget = HaxeEnvironmentStore.getInstance(project).getCustomTarget(containerId);
+    if (customTarget == null) return;
+    defines.put(HaxeModuleVariants.CUSTOM_TARGET_DEFINE, FLAG_DEFINE_VALUE);
+    defines.put(HaxeModuleVariants.TARGET_NAME_DEFINE, customTarget);
   }
 
   /**

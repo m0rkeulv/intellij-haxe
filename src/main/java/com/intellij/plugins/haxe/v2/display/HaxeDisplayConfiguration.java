@@ -44,6 +44,10 @@ public final class HaxeDisplayConfiguration {
   }
 
   /// The container's overrides as arguments: SETs become `-D name[=value]`, REMOVEs name the defines to strip.
+  // TODO: the container's Custom target setting is not forwarded as
+  //       "--custom-target" here - the flag exists only in Haxe 5, so it must
+  //       be gated on the container's compiler version first (an hxml-declared
+  //       custom target reaches the display server through the hxml itself).
   @NotNull
   public static DefineOverrides overridesFor(@NotNull Project project, @NotNull String containerId) {
     Set<String> removed = new LinkedHashSet<>();

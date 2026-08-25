@@ -318,6 +318,20 @@ public final class HaxeToolWindowNodes {
     }
   }
 
+  /** Environment "Custom target" row ({@code --custom-target} name, null when unset); clicking opens an input dialog. */
+  public record EnvCustomTargetNode(@NotNull String containerId, @Nullable String customTarget)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "envcustomtarget";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.environment.custom.target");
+    }
+  }
+
   /** "Compilation" grouping row: the compile command and compilation server rows. */
   public record CompilationGroupNode(@NotNull String containerId) implements HaxeToolWindowNode {
     @Override

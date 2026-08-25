@@ -17,7 +17,7 @@
  */
 package com.intellij.plugins.haxe.lang.parser.statements;
 
-import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
+import com.intellij.plugins.haxe.util.HaxeTestDefines;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +31,7 @@ public class ConditionalCompilationTest extends StatementTestBase {
   }
 
   private void setDefines(String defines) {
-    getProject().putUserData(HaxeConditionalExpression.DEFINES_KEY, defines);
+    HaxeTestDefines.set(getProject(), defines);
   }
 
   @Test

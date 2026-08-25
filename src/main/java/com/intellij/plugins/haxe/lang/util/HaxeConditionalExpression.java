@@ -31,6 +31,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.intellij.plugins.haxe.haxelib.definitions.HaxeDefineDetectionManager;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.*;
 
@@ -314,8 +315,13 @@ public class HaxeConditionalExpression {
   private static boolean isVersionLiteral(ASTNode node) {
     return node.getElementType() == VERSION_LITERAL;
   }
-  /** Used for setting defines in the test bed. */
-  public static Key<Object> DEFINES_KEY = Key.create("haxe.test.defines");
+  /**
+   * Test-only define injection: {@link #projectDefinitions} reads this map in
+   * unit-test mode instead of the detection manager. Production code never
+   * writes it — tests set it through {@code HaxeTestDefines}.
+   */
+  @TestOnly
+  public static final Key<Map<String, String>> DEFINES_KEY = Key.create("haxe.test.defines");
 
   /** Evaluation Context */
   @Nullable
@@ -573,18 +579,9 @@ public class HaxeConditionalExpression {
     if (context == null) {
       return SDK_DEFINES.contains(identifier.getText()) ? identifierValue(FLAG_DEFINE_VALUE) : NULL_VALUE;
     }
-    Map<String, String> definitionMap = new HashMap<>();
-    if (ApplicationManager.getApplication().isUnitTestMode()) {
-      final Object userData = context.getUserData(DEFINES_KEY);
-      if (userData instanceof String) {
-        definitionMap = parseUserdataDefinitions((String)userData);
-      }
-    }
-    else {
-      definitionMap = HaxeDefineDetectionManager.getInstance(context).getAllDefinitions();
-      //definitionMap = HaxeProjectSettings.getInstance(context).getUserAndBuildSystemCompilerDefinitions(context);
-    }
     String name = identifier.getText();
+
+    Map<String, String> definitionMap = projectDefinitions(context);
     if (definitionMap.containsKey(name)) {
       String value = definitionMap.get(name);
       // a define set without a value carries "1" in the compiler.
@@ -607,22 +604,21 @@ public class HaxeConditionalExpression {
    */
   public static final String FLAG_DEFINE_VALUE = "1";
 
-  private static Map<String, String> parseUserdataDefinitions(String userData) {
-    Map<String, String> definitionMap = new HashMap<>();
-    String[] definitions = userData.split(",");
-    for (String def : definitions) {
-      String[] split = def.split("=", 2);
-
-      // Dashes are subtraction operators, so definitions (on the command line) that
-      // contain dashes are mapped to an equivalent using underscores (when looking up definitions).
-      String possible = split.length > 0 ? split[0].replaceAll("-","_") : null;
-      String value = split.length > 1 ? split[1] : null;
-
-      definitionMap.put(possible, value == null ? "" : value);
+  /**
+   * The project's compiler defines exactly as conditional-compilation
+   * evaluation sees them: the {@link #DEFINES_KEY} test injection in
+   * unit-test mode, the detected build context otherwise. Every feature
+   * keyed on "is X defined" (module-variant activation, CC) reads this one
+   * source so they can never disagree.
+   */
+  @NotNull
+  public static Map<String, String> projectDefinitions(@NotNull Project project) {
+    if (ApplicationManager.getApplication().isUnitTestMode()) {
+      Map<String, String> userData = project.getUserData(DEFINES_KEY);
+      return userData != null ? userData : Map.of();
     }
-    return definitionMap;
+    return HaxeDefineDetectionManager.getInstance(project).getAllDefinitions();
   }
-
 
   // Parodies Haxe parser is_true function
   // https://github.com/HaxeFoundation/haxe/blob/development/src/syntax/parser.mly#L1596

@@ -31,8 +31,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * "Configure Environment" dialog for one container: the Haxe SDK to use and the
- * define entries. The Effect column shows what an entry does against the
+ * "Configure Environment" dialog for one container: the Haxe SDK to use, the
+ * define entries and the custom compilation target.
+ * The Effect column shows what an entry does against the
  * container's active build file: Add (new name), Override (name exists there)
  * or Remove (unsets the build file's define). The layout lives in the matching
  * .form; the defines table plus its toolbar is the form's custom-created panel
@@ -54,6 +55,7 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
   private JPanel panel;
   private ComboBox<String> sdkCombo;
   private JPanel definesPanel;
+  private JTextField customTargetField;
   private ListTableModel<DefineRow> tableModel;
   private TableView<DefineRow> table;
 
@@ -115,6 +117,8 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
       rows.add(row);
     }
     tableModel.setItems(rows);
+
+    customTargetField.setText(StringUtil.notNullize(store.getCustomTarget(containerId)));
   }
 
   private void addRow() {
@@ -142,6 +146,7 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
     store.setSdkName(containerId, sdkName);
     HaxeModuleSdkApplier.getInstance(project).applyAsync(containerId, sdkName);
     store.setDefines(containerId, defines);
+    store.setCustomTarget(containerId, customTargetField.getText());
     super.doOKAction();
   }
 

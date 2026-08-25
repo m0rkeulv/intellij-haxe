@@ -103,6 +103,19 @@ public class HaxeEnvironmentStoreTest {
   }
 
   @Test
+  @DisplayName("custom target can be set trimmed and cleared")
+  public void customTargetCanBeSetTrimmedAndCleared() {
+    HaxeEnvironmentStore store = new HaxeEnvironmentStore();
+    assertNull(store.getCustomTarget(MODULE));
+
+    store.setCustomTarget(MODULE, " go ");
+    assertEquals("go", store.getCustomTarget(MODULE));
+
+    store.setCustomTarget(MODULE, "   ");
+    assertNull(store.getCustomTarget(MODULE));
+  }
+
+  @Test
   @DisplayName("compilation server participation defaults on and can be toggled")
   public void compilationServerParticipationDefaultsOnAndCanBeToggled() {
     HaxeEnvironmentStore store = new HaxeEnvironmentStore();
@@ -136,6 +149,7 @@ public class HaxeEnvironmentStoreTest {
     store.setSdkName(MODULE, "Haxe 4.3.7");
     store.setDefines(MODULE, List.of(new EnvironmentDefine("analyzer-optimize", "", DefineEffect.SET),
                                      new EnvironmentDefine("no-traces", "", DefineEffect.REMOVE)));
+    store.setCustomTarget(MODULE, "go");
     store.setCompileCommand(MODULE, new HaxeEnvironmentStore.CompileCommand("/p/build.hxml", "compile", "-debug"));
 
     Element serialized = XmlSerializer.serialize(store.getState());
@@ -148,6 +162,7 @@ public class HaxeEnvironmentStoreTest {
     assertEquals(List.of(new EnvironmentDefine("analyzer-optimize", "", DefineEffect.SET),
                          new EnvironmentDefine("no-traces", "", DefineEffect.REMOVE)),
                  reloaded.getDefines(MODULE));
+    assertEquals("go", reloaded.getCustomTarget(MODULE));
     assertEquals(new HaxeEnvironmentStore.CompileCommand("/p/build.hxml", "compile", "-debug"), reloaded.getCompileCommand(MODULE));
   }
 }

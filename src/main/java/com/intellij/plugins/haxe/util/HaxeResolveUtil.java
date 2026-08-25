@@ -41,7 +41,6 @@ import com.intellij.plugins.haxe.lang.psi.indexes.unified.fqn.HaxeFullyQualified
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.fqn.HaxeFullyQualifiedMemberNameUnifiedIndex;
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.specialized.HaxeImportHxFileUnifiedIndex;
 import com.intellij.plugins.haxe.lang.psi.stubs.StubPsiTreeUtil;
-import com.intellij.plugins.haxe.lang.psi.stubs.index.specialized.HaxeImportHxStubIndex;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeReferenceExpressionStub;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
@@ -51,7 +50,6 @@ import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.tree.LeafPsiElement;
 import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.psi.stubs.StubIndex;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.Function;
@@ -64,7 +62,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.*;
-import java.util.regex.Pattern;
 
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.canBeQname;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.evaluate;
@@ -200,22 +197,39 @@ public class HaxeResolveUtil {
    * bare name mean a MAIN (module-named) type or a StdTypes member (the
    * implicitly imported primitives) — a project file declaring an ancillary
    * {@code Void} must not hijack the primitive (imports resolve before this
-   * lookup ever runs). Order: exact module-qualified match, then StdTypes,
-   * then main types, then the first remaining candidate.
+   * lookup ever runs). A target-specific file ({@code String.go.hx}) is the
+   * module's main type only while its variant is active, and then SHADOWS a
+   * plain {@code String.hx} — the compiler's platform-specific file selection.
+   * Order: exact module-qualified match, then StdTypes, then active-variant
+   * main types, then plain main types, then the first remaining candidate.
    */
   @Nullable
   private static HaxeClass selectVisibleCandidate(@NotNull String qName, @NotNull List<HaxeClass> candidates) {
     if (candidates.size() == 1) return candidates.getFirst();
+
     HaxeClass stdType = null;
-    HaxeClass mainType = null;
+    HaxeClass activeVariantMain = null;
+    HaxeClass plainMain = null;
+
     for (HaxeClass candidate : candidates) {
-      String moduleName = moduleNameOf(candidate);
+      String moduleFileName = moduleFileNameOf(candidate);
+      String moduleName = moduleFileName == null ? null : HaxeModuleVariants.moduleNameOf(moduleFileName);
+
       if (isModuleQualifiedMatch(qName, candidate, moduleName)) return candidate;
       if (stdType == null && "StdTypes".equals(moduleName)) stdType = candidate;
-      if (mainType == null && moduleName != null && moduleName.equals(candidate.getName())) mainType = candidate;
+      if (moduleName == null || !moduleName.equals(candidate.getName())) continue;
+
+      String variant = HaxeModuleVariants.variantOf(moduleFileName);
+      if (variant == null) {
+        if (plainMain == null) plainMain = candidate;
+      } else if (activeVariantMain == null && HaxeModuleVariants.isActive(variant, candidate.getProject())) {
+        activeVariantMain = candidate;
+      }
     }
+
     if (stdType != null) return stdType;
-    if (mainType != null) return mainType;
+    if (activeVariantMain != null) return activeVariantMain;
+    if (plainMain != null) return plainMain;
     return candidates.getFirst();
   }
 
@@ -229,8 +243,9 @@ public class HaxeResolveUtil {
     return requestedType.equals(candidate.getName()) && requestedModule.equals(moduleName);
   }
 
+  /** The candidate's file name without its extension — a variant's suffix still attached ("String.go"). */
   @Nullable
-  private static String moduleNameOf(@NotNull HaxeClass haxeClass) {
+  private static String moduleFileNameOf(@NotNull HaxeClass haxeClass) {
     PsiFile file = haxeClass.getContainingFile();
     if (file == null) return null;
     String fileName = file.getName();

@@ -16,11 +16,11 @@
  */
 package com.intellij.plugins.haxe.model;
 
-import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxePackageStub;
 import com.intellij.plugins.haxe.util.HaxeAddImportHelper;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.stubs.StubElement;
@@ -157,9 +157,10 @@ public class HaxeFileModel implements HaxeExposableModel {
     return file;
   }
 
+  //The module name (no target or extension)
   @NotNull
   public String getName() {
-    return FileUtil.getNameWithoutExtension(file.getName());
+    return HaxeModuleVariants.moduleNameOf(file);
   }
 
   @NotNull

@@ -30,6 +30,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.ui.InputValidator;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -88,6 +89,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeExpansionListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
@@ -142,6 +145,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     TreeSpeedSearch.installOn(tree, true, HaxeToolWindowPanel::speedSearchText);
     new TreeEnterAction().registerCustomShortcutSet(CommonShortcuts.ENTER, tree, this);
     new TreeDeleteAction().registerCustomShortcutSet(CommonShortcuts.getDelete(), tree, this);
+    tree.addTreeExpansionListener(new ExpansionPersister());
 
     setToolbar(createToolbar());
     setContent(ScrollPaneFactory.createScrollPane(tree));
@@ -393,6 +397,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       definesNode.add(new DefaultMutableTreeNode(define));
     }
     environmentNode.add(definesNode);
+
+    EnvCustomTargetNode customTargetRow = new EnvCustomTargetNode(container.id(), environment.customTarget());
+    environmentNode.add(new DefaultMutableTreeNode(customTargetRow));
     return environmentNode;
   }
 
@@ -578,6 +585,33 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   private record LevelChoice(@Nullable HaxeLanguageLevel level, @NotNull String display) {
   }
+
+  /** Edits the container's {@code --custom-target} name; an empty entry clears it. */
+  private void editCustomTarget(@NotNull EnvCustomTargetNode customTargetNode) {
+    String entered = Messages.showInputDialog(project,
+                                              HaxeBundle.message("haxe.toolwindow.custom.target.prompt"),
+                                              HaxeBundle.message("haxe.toolwindow.custom.target.title"),
+                                              null,
+                                              customTargetNode.customTarget(),
+                                              CUSTOM_TARGET_VALIDATOR);
+    if (entered == null) return;
+    HaxeEnvironmentStore.getInstance(project).setCustomTarget(customTargetNode.containerId(), entered);
+    refreshTree();
+  }
+
+  private static final InputValidator CUSTOM_TARGET_VALIDATOR = new InputValidator() {
+    @Override
+    public boolean checkInput(String input) {
+      // a lowercase-start identifier - the only shape variant activation
+      // matches in file names (see HaxeModuleVariants) - or empty to clear
+      return input.isBlank() || input.trim().matches("[a-z_][a-zA-Z0-9_]*");
+    }
+
+    @Override
+    public boolean canClose(String input) {
+      return checkInput(input);
+    }
+  };
 
   /** User object of the tree's selected node, or null. */
   @Nullable
@@ -785,7 +819,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   /**
    * Replaces the model while preserving the user's expansion and selection state.
    * Rows are matched by stable identity (file path, module name), so volatile parts
-   * of a row - counts, the active marker, versions - do not reset the view.
+   * of a row - counts, the active marker, versions - do not reset the view. The
+   * first fill restores the expansion persisted in the workspace file, so the view
+   * survives an IDE restart the way the Maven/Gradle tool windows do.
    */
   private void applyTreeUpdate(@NotNull DefaultMutableTreeNode newRoot) {
     Set<String> expandedKeys = collectExpandedKeys();
@@ -794,11 +830,23 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     treeModel.setRoot(newRoot);
     if (!initialExpansionDone) {
       initialExpansionDone = true;
-      // project node, modules, Environment/Build groups and build files visible; deeper rows stay collapsed
-      TreeUtil.expand(tree, 4);
+      Set<String> savedKeys = HaxeToolWindowUiState.getInstance(project).getExpandedKeys();
+      if (savedKeys.isEmpty()) {
+        // nothing saved yet: project node, modules, Environment/Build groups and build files visible
+        TreeUtil.expand(tree, 4);
+      }
+      else {
+        expandAndSelect(newRoot, savedKeys, null);
+      }
       return;
     }
-    forEachNode(newRoot, node -> {
+    expandAndSelect(newRoot, expandedKeys, selectedKey);
+  }
+
+  private void expandAndSelect(@NotNull DefaultMutableTreeNode root,
+                               @NotNull Set<String> expandedKeys,
+                               @Nullable String selectedKey) {
+    forEachNode(root, node -> {
       TreePath path = new TreePath(node.getPath());
       String key = chainKey(path);
       if (expandedKeys.contains(key)) {
@@ -808,6 +856,23 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
         tree.setSelectionPath(path);
       }
     });
+  }
+
+  /** Mirrors every expand/collapse into the workspace-file state; the last write holds the full current set. */
+  private final class ExpansionPersister implements TreeExpansionListener {
+    @Override
+    public void treeExpanded(TreeExpansionEvent event) {
+      persist();
+    }
+
+    @Override
+    public void treeCollapsed(TreeExpansionEvent event) {
+      persist();
+    }
+
+    private void persist() {
+      HaxeToolWindowUiState.getInstance(project).setExpandedKeys(collectExpandedKeys());
+    }
   }
 
   @NotNull
@@ -935,6 +1000,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       case SectionNode sectionNode -> showSectionPopup(sectionNode, point);
       case EnvSdkNode sdkNode -> showEnvironmentSdkPopup(sdkNode, point);
       case EnvLanguageLevelNode levelNode -> showLanguageLevelPopup(levelNode, point);
+      case EnvCustomTargetNode customTargetNode -> editCustomTarget(customTargetNode);
       case EnvCompileCommandNode buildCommand -> configureCompileCommand(buildCommand);
       case CompilationServerNode serverNode -> {
         // the red failure text links to the server console's status view;

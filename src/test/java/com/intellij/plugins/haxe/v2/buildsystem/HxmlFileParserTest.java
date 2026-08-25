@@ -76,6 +76,21 @@ public class HxmlFileParserTest {
   }
 
   @Test
+  @DisplayName("custom target surfaces as the defines the compiler sets")
+  public void customTargetSurfacesAsTheDefinesTheCompilerSets() {
+    HaxeBuildFileInfo bare = HxmlFileParser.parse("--custom-target go");
+    assertNull(bare.target());
+    assertEquals(List.of(new HaxeDefine("custom_target", null), new HaxeDefine("target.name", "go")), bare.defines());
+
+    // "name=path" carries the generator path, which the defines do not; first declaration wins
+    HaxeBuildFileInfo withPath = HxmlFileParser.parse("""
+      --custom-target go=gen/go-target
+      --custom-target rust
+      """);
+    assertEquals(List.of(new HaxeDefine("custom_target", null), new HaxeDefine("target.name", "go")), withPath.defines());
+  }
+
+  @Test
   @DisplayName("flatten expands a reference trailing the next separator")
   public void flattenExpandsAReferenceTrailingTheNextSeparator() {
     // "--next other.hxml" inside a file: the rest of the line is the next

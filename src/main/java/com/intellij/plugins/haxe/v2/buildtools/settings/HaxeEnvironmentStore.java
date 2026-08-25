@@ -49,6 +49,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     public String containerId;
     public String sdkName;
     public List<DefineState> defines = new ArrayList<>();
+    public String customTarget;
     public String compileFilePath;
     public String compileActionName;
     public String compileArguments = "";
@@ -153,6 +154,22 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   public void setUsingCompilationServer(@NotNull String containerId, boolean use) {
     getOrCreate(containerId).useCompilationServer = use;
+    notifyChanged();
+  }
+
+  /**
+   * The container's custom compilation target ({@code --custom-target} name), or
+   * null when unset. Activates the target's {@code <Module>.<name>.hx} variant
+   * files and wins over an hxml-declared custom target.
+   */
+  @Nullable
+  public String getCustomTarget(@NotNull String containerId) {
+    ContainerEnvironment environment = find(containerId);
+    return environment == null ? null : StringUtil.nullize(environment.customTarget, true);
+  }
+
+  public void setCustomTarget(@NotNull String containerId, @Nullable String customTarget) {
+    getOrCreate(containerId).customTarget = customTarget == null ? null : StringUtil.nullize(customTarget.trim());
     notifyChanged();
   }
 
