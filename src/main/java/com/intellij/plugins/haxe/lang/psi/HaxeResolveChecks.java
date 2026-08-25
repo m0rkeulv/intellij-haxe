@@ -39,6 +39,7 @@ import static com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentStr
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.*;
 import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.ANALYZER;
 import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.NULL_SAFETY;
+import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.MULTI_TYPE;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.findObjectLiteralType;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorHandlers.getArrayAccessTypeFromClass;
 import static com.intellij.plugins.haxe.model.evaluator.callexpression.EnumValueMatchUtil.isInsidePatternMatcher;
@@ -146,9 +147,30 @@ public class HaxeResolveChecks {
           HaxeClassModel analyzerOptions = HaxeSyntheticDeclarations.getAnalyzerOptions(reference.getProject());
           HaxeBaseMemberModel member = analyzerOptions.getMember(reference.getText(), null);
           if(member != null) return List.of(member.getBasePsi());
+
+        } else if (parentMeta.isType(MULTI_TYPE)) {
+          HaxeAbstractTypeDeclaration typeDeclaration = null;
+          // check if metadata is on first module member  first as matadatas are currently parsed as outside the module
+          PsiElement metaParent = parentMeta.getParent();
+          HaxeModule module = PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeModule.class);
+          if(module != null) {
+            typeDeclaration = PsiTreeUtil.getChildOfType(module, HaxeAbstractTypeDeclaration.class);
+          }else {
+            typeDeclaration = PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeAbstractTypeDeclaration.class);
+          }
+          if(typeDeclaration != null) {
+            HaxeGenericParam param = typeDeclaration.getGenericParam();
+            if(param != null) {
+              for (HaxeGenericListPart part : param.getGenericListPartList()) {
+                HaxeComponentName name = part.getComponentName();
+                if(name != null && name.textMatches(reference)) {
+                  return List.of(name);
+                }
+              }
+            }
+          }
         }
       }
-
         return null;
     }
 
@@ -1616,7 +1638,7 @@ public class HaxeResolveChecks {
 
       HaxeNamedComponent lastElement = null;
       Collections.reverse(objectPath);
-      
+
       for (int i = 0; i < objectPath.size(); i++) {
         Object path = objectPath.get(i);
         if (pathElement instanceof HaxeReferenceExpression referenceExpression) {
@@ -1644,7 +1666,7 @@ public class HaxeResolveChecks {
         } else if (pathElement instanceof HaxeObjectLiteral objectLiteral && path instanceof String member) {
           List<HaxeNamedComponent> members = objectLiteral.findHaxeMemberByName(member, null);
           lastElement = members.isEmpty() ? null : members.getFirst();
-          
+
         } else if(switchStatement != null){
           HaxeExpression switchExpression = switchStatement.getExpression();
           if (switchExpression == null) {
