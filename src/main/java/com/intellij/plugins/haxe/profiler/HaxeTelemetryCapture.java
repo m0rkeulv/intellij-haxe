@@ -25,15 +25,15 @@ public interface HaxeTelemetryCapture {
     return ApplicationManager.getApplication().getService(HaxeTelemetryCapture.class);
   }
 
-  /** One run's capture, or null when the listener cannot open. */
+  /** One run's capture, named after the run configuration in the profiler UI; null when the listener cannot open. */
   @Nullable
-  Handle start(@NotNull Project project, @NotNull Path sessionFile);
+  Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile);
 
   /** Null-safe form of {@link #start}: null without the profiler module too. */
   @Nullable
-  static Handle startCapture(@NotNull Project project, @NotNull Path sessionFile) {
+  static Handle startCapture(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile) {
     HaxeTelemetryCapture capture = getInstance();
-    return capture == null ? null : capture.start(project, sessionFile);
+    return capture == null ? null : capture.start(project, displayName, sessionFile);
   }
 
   interface Handle {

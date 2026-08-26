@@ -34,15 +34,15 @@ public interface HaxeTracyCapture {
     return ApplicationManager.getApplication().getService(HaxeTracyCapture.class);
   }
 
-  /** One run's capture, or null when no port could be allocated. */
+  /** One run's capture, named after the run configuration in the profiler UI; null when no port could be allocated. */
   @Nullable
-  Handle start(@NotNull Project project, @NotNull Path sessionFile);
+  Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile);
 
   /** Null-safe form of {@link #start}: null without the profiler module too. */
   @Nullable
-  static Handle startCapture(@NotNull Project project, @NotNull Path sessionFile) {
+  static Handle startCapture(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile) {
     HaxeTracyCapture capture = getInstance();
-    return capture == null ? null : capture.start(project, sessionFile);
+    return capture == null ? null : capture.start(project, displayName, sessionFile);
   }
 
   interface Handle {

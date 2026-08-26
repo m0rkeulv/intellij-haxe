@@ -18,6 +18,8 @@
     <profiler.profilerConfigurationType
       implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxcppTracyProfilerConfigurationType"/>
     <programRunner implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerRunner"/>
+    <profiler.performanceHints.listener
+      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuPerformanceHints"/>
     <applicationService
       serviceInterface="com.intellij.plugins.haxe.profiler.HaxeProfilerSnapshotOpener"
       serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuSnapshotOpener"/>
@@ -30,5 +32,8 @@
     <applicationService
       serviceInterface="com.intellij.plugins.haxe.profiler.HaxeTracyCapture"
       serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuTracyCapture"/>
+    <applicationService
+      serviceInterface="com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi"
+      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerProcessUi"/>
   </extensions>
 </idea-plugin>

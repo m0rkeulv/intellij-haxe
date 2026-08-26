@@ -14,7 +14,6 @@ import com.intellij.profiler.api.ProfilerProcess;
 import com.intellij.profiler.api.configurations.ProfilerAttacher;
 import com.intellij.profiler.api.configurations.ProfilerConfigurationType;
 import com.intellij.profiler.api.configurations.ProfilerStarter;
-import com.intellij.ui.components.JBLabel;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -22,7 +21,6 @@ import org.jetbrains.concurrency.Promise;
 import org.jetbrains.concurrency.Promises;
 
 import javax.swing.Icon;
-import javax.swing.JComponent;
 
 /**
  * The "hxcpp Tracy" entry of the IU Run-with-Profiler executor: builds the
@@ -35,6 +33,7 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
 
   public static final String ID = "HaxeHxcppTracyProfilerConfiguration";
   private static final String NAME_ATTRIBUTE = "name";
+  private static final String COMPRESSION_ATTRIBUTE = "compressionLevel";
 
   @Override
   public @NotNull String getId() {
@@ -68,7 +67,9 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
 
   @Override
   public @NotNull HaxeHxcppTracyProfilerConfigurationState copyState(@NotNull HaxeHxcppTracyProfilerConfigurationState state) {
-    return new HaxeHxcppTracyProfilerConfigurationState(state.getDisplayName());
+    HaxeHxcppTracyProfilerConfigurationState copy = new HaxeHxcppTracyProfilerConfigurationState(state.getDisplayName());
+    copy.setCompressionLevel(state.getCompressionLevel());
+    return copy;
   }
 
   @Override
@@ -76,6 +77,12 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
     HaxeHxcppTracyProfilerConfigurationState state = getTemplateState();
     String name = element.getAttributeValue(NAME_ATTRIBUTE);
     if (name != null) state.setDisplayName(name);
+    try {
+      state.setCompressionLevel(Integer.parseInt(element.getAttributeValue(COMPRESSION_ATTRIBUTE, "")));
+    }
+    catch (NumberFormatException ignored) {
+      // keep the template default
+    }
     return state;
   }
 
@@ -83,26 +90,13 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
   public @NotNull Element writeState(@NotNull HaxeHxcppTracyProfilerConfigurationState state) {
     Element element = new Element("haxeHxcppTracyProfiler");
     element.setAttribute(NAME_ATTRIBUTE, state.getDisplayName());
+    element.setAttribute(COMPRESSION_ATTRIBUTE, String.valueOf(state.getCompressionLevel()));
     return element;
   }
 
   @Override
   public @NotNull UnnamedConfigurable createConfigurable(@NotNull HaxeHxcppTracyProfilerConfigurationState state) {
-    return new UnnamedConfigurable() {
-      @Override
-      public @Nullable JComponent createComponent() {
-        return new JBLabel(HaxeProfilerBundle.message("haxe.profiler.hxcpp.tracy.settings.note"));
-      }
-
-      @Override
-      public boolean isModified() {
-        return false;
-      }
-
-      @Override
-      public void apply() {
-      }
-    };
+    return new HaxeHxcppTracyProfilerConfigurable(state);
   }
 
   @Override

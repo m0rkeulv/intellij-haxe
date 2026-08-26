@@ -82,10 +82,14 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
     // HXCPP_STACK_LINE is REQUIRED, not optional: TelemetryTracy.cpp reads
     // StackFrame::lineNumber unconditionally, and that member only exists
     // with the define - a tracy build without it fails to compile.
+    // HXCPP_TRACY_MEMORY adds the GC alloc/free hooks feeding the memory
+    // curves ("Small Object Heap" / "Large Object Heap").
     if (limeFamily) {
-      return List.of("-DHXCPP_TELEMETRY", "-DHXCPP_TRACY", "-DHXCPP_STACK_TRACE", "-DHXCPP_STACK_LINE");
+      return List.of("-DHXCPP_TELEMETRY", "-DHXCPP_TRACY", "-DHXCPP_TRACY_MEMORY",
+                     "-DHXCPP_STACK_TRACE", "-DHXCPP_STACK_LINE");
     }
-    return List.of("-D", "HXCPP_TELEMETRY", "-D", "HXCPP_TRACY", "-D", "HXCPP_STACK_TRACE", "-D", "HXCPP_STACK_LINE");
+    return List.of("-D", "HXCPP_TELEMETRY", "-D", "HXCPP_TRACY", "-D", "HXCPP_TRACY_MEMORY",
+                   "-D", "HXCPP_STACK_TRACE", "-D", "HXCPP_STACK_LINE");
   }
 
   @Override

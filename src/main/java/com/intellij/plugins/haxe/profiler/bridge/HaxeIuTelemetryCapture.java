@@ -8,6 +8,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerSnapshotOpener;
 import com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture;
 import org.jetbrains.annotations.NotNull;
@@ -41,9 +42,9 @@ public class HaxeIuTelemetryCapture implements HaxeTelemetryCapture {
   private static final long DRAIN_TIMEOUT_SECONDS = 3;
 
   @Override
-  public @Nullable Handle start(@NotNull Project project, @NotNull Path sessionFile) {
+  public @Nullable Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile) {
     try {
-      return new Capture(project, sessionFile);
+      return new Capture(project, displayName, sessionFile);
     }
     catch (IOException e) {
       LOG.warn("could not open a telemetry listener", e);
@@ -53,14 +54,17 @@ public class HaxeIuTelemetryCapture implements HaxeTelemetryCapture {
 
   private static final class Capture implements Handle {
     private final Project project;
+    private final String displayName;
     private final Path sessionFile;
     private final ServerSocket listener;
     private final CountDownLatch drained = new CountDownLatch(1);
     private volatile long receivedBytes;
+    private volatile HaxeProfilerProcessUi.Session session;
 
-    Capture(Project project, Path sessionFile) throws IOException {
+    Capture(Project project, String displayName, Path sessionFile) throws IOException {
       this.project = project;
-      this.sessionFile = sessionFile;
+      this.displayName = displayName;
+      this.sessionFile = HaxeCaptureFiles.perCaptureSessionPath(sessionFile);
       listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
       listener.setSoTimeout(ACCEPT_TIMEOUT_MS);
       Thread spooler = new Thread(this::spool, "haxe-telemetry-capture");
@@ -77,13 +81,17 @@ public class HaxeIuTelemetryCapture implements HaxeTelemetryCapture {
     private void spool() {
       try (ServerSocket server = listener;
            Socket client = server.accept();
-           InputStream in = client.getInputStream();
-           OutputStream out = Files.newOutputStream(sessionFile)) {
-        byte[] buffer = new byte[64 * 1024];
-        int read;
-        while ((read = in.read(buffer)) >= 0) {
-          out.write(buffer, 0, read);
-          receivedBytes += read;
+           InputStream in = client.getInputStream()) {
+        session = HaxeIuProfilerProcessUi.open(project, displayName, sessionFile,
+                                               HaxeHxcppProfilerConfigurationType.ID);
+        Files.createDirectories(sessionFile.getParent());
+        try (OutputStream out = Files.newOutputStream(sessionFile)) {
+          byte[] buffer = new byte[64 * 1024];
+          int read;
+          while ((read = in.read(buffer)) >= 0) {
+            out.write(buffer, 0, read);
+            receivedBytes += read;
+          }
         }
       }
       catch (SocketTimeoutException neverConnected) {
@@ -119,7 +127,16 @@ public class HaxeIuTelemetryCapture implements HaxeTelemetryCapture {
     private void notifyOutcome() {
       if (receivedBytes < MINIMUM_SESSION_BYTES) {
         String content = HaxeProfilerBundle.message("haxe.profiler.telemetry.none");
-        group().createNotification(content, NotificationType.WARNING).notify(project);
+        if (session != null) {
+          session.failed(content);
+        }
+        else {
+          group().createNotification(content, NotificationType.WARNING).notify(project);
+        }
+        return;
+      }
+      if (session != null) {
+        session.dataReady();
         return;
       }
       String content = HaxeProfilerBundle.message("haxe.profiler.telemetry.captured",

@@ -20,6 +20,7 @@ import javax.swing.ToolTipManager;
 import java.awt.Adjustable;
 import java.awt.Color;
 import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
@@ -33,10 +34,14 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * A Chrome/Android-style call chart over one thread's time-ordered flame
@@ -58,11 +63,44 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   /**
    * A named row of spans above the chart; even/odd colors alternate so span
-   * boundaries stay visible. {@code spanKind} names ONE span for the detail
-   * view ("Frame", "Major GC collection").
+   * boundaries stay visible. {@code spanTitle} names ONE span for the detail
+   * view ("Frame 428", "GC sweep"); {@code spanInfo} may add one per-span
+   * detail line ("Freed 1.2 MB in 300 objects").
    */
-  record MarkerLane(@NotNull String name, @NotNull String spanKind, @NotNull List<UsSpan> spans,
-                    @NotNull Color evenColor, @NotNull Color oddColor) {
+  record MarkerLane(@NotNull String name, @NotNull Function<UsSpan, String> spanTitle, @NotNull List<UsSpan> spans,
+                    @NotNull Color evenColor, @NotNull Color oddColor,
+                    @Nullable Function<UsSpan, String> spanInfo) {
+  }
+
+  record CurvePoint(long timeUs, double value) {
+  }
+
+  /** Told after every view mutation (zoom, pan, scroll, resize, new tree) — the minimap and window loader feed off it. */
+  interface ViewListener {
+    void viewChanged(long viewStartUs, long visibleUs, boolean wholeSession);
+  }
+
+  /**
+   * A selected reading on a curve band: the clicked instant, and the sample
+   * whose value holds there (the last change at or before it).
+   */
+  record CurveSelection(@NotNull CurveLane lane, long instantUs, @NotNull CurvePoint lastChange) {
+  }
+
+  /** One instant mark on the events row — a user-emitted message with an optional color. */
+  record TimeEvent(long timeUs, @NotNull String text, @Nullable Color color) {
+  }
+
+  /**
+   * A named value-over-time band above the chart (memory pools, plots),
+   * drawn as a step curve scaled to its own peak: each sample's value holds
+   * until the next one.
+   */
+  record CurveLane(@NotNull String name, @NotNull List<CurvePoint> points, @NotNull Color color, double peak) {
+    static CurveLane of(@NotNull String name, @NotNull List<CurvePoint> points, @NotNull Color color) {
+      double peak = points.stream().mapToDouble(CurvePoint::value).max().orElse(0);
+      return new CurveLane(name, points, color, peak);
+    }
   }
 
   /** Stable per-symbol pastels (light theme) with muted dark-theme partners. */
@@ -82,6 +120,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private static final Color RULER_TICK = new JBColor(0xC8C8C8, 0x515151);
   private static final Color SELECTION = new JBColor(0x3574F0, 0x66A3E0);
   private static final Color SELECTION_INNER = new JBColor(0xFFFFFF, 0x1E1E1E);
+  /** Fallback mark color for events that sent none. */
+  private static final Color EVENT_MARK = new JBColor(0x3574F0, 0x66A3E0);
   private static final long[] STEP_FACTORS = {1, 2, 5};
   private static final double ZOOM_STEP = 1.3;
   /** One zoom-button press doubles or halves the scale. */
@@ -96,12 +136,28 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private final Consumer<List<FlameNode>> selectionListener;
   /** Told the selected marker-lane span; deselection goes through the run listener's empty list. */
   private final BiConsumer<MarkerLane, UsSpan> spanSelectionListener;
+  /** Told the selected curve reading (a memory value at the clicked instant). */
+  private final Consumer<CurveSelection> curveSelectionListener;
+  /** Told the selected events-row mark. */
+  private final Consumer<TimeEvent> eventSelectionListener;
   private FlameNode root = new FlameNode(null, 0, 0, 0, List.of(), false);
   private List<MarkerLane> lanes = List.of();
+  private List<CurveLane> curveLanes = List.of();
+  /** Time-ordered instant marks; empty hides the events row. */
+  private List<TimeEvent> events = List.of();
+  private @Nullable TimeEvent selectedEvent;
+  /** User-dragged curve band heights, kept by lane name so they survive thread switches. */
+  private final Map<String, Integer> curveHeights = new HashMap<>();
   private @Nullable FlameNode selected;
   private @Nullable UsSpan selectedSpan;
   private @Nullable MarkerLane selectedSpanLane;
+  private @Nullable CurveSelection selectedCurve;
+  /** Index of the curve band being resized by a divider drag; -1 = none. */
+  private int resizingCurveLane = -1;
+  private int resizeStartY;
+  private int resizeStartHeight;
   private int rowCount;
+  private @Nullable ViewListener viewListener;
   /** Microseconds one pixel covers; 0 = fit the whole capture to the viewport. */
   private double usPerPixel;
   /** The time at the panel's left edge while zoomed; fit mode pins it to the tree start. */
@@ -112,10 +168,14 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   HaxeCallChartPanel(@NotNull Consumer<StackFrame> navigator,
                      @NotNull Consumer<List<FlameNode>> selectionListener,
-                     @NotNull BiConsumer<MarkerLane, UsSpan> spanSelectionListener) {
+                     @NotNull BiConsumer<MarkerLane, UsSpan> spanSelectionListener,
+                     @NotNull Consumer<CurveSelection> curveSelectionListener,
+                     @NotNull Consumer<TimeEvent> eventSelectionListener) {
     this.navigator = navigator;
     this.selectionListener = selectionListener;
     this.spanSelectionListener = spanSelectionListener;
+    this.curveSelectionListener = curveSelectionListener;
+    this.eventSelectionListener = eventSelectionListener;
     setOpaque(false);
     ToolTipManager.sharedInstance().registerComponent(this);
     addMouseListener(new MouseAdapter() {
@@ -128,6 +188,35 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
           navigateAt(event.getPoint());
         }
       }
+
+      @Override
+      public void mousePressed(MouseEvent event) {
+        int divider = curveDividerAt(event.getY());
+        if (divider >= 0) {
+          resizingCurveLane = divider;
+          resizeStartY = event.getY();
+          resizeStartHeight = curveLaneHeight(curveLanes.get(divider));
+        }
+      }
+
+      @Override
+      public void mouseReleased(MouseEvent event) {
+        resizingCurveLane = -1;
+      }
+    });
+    addMouseMotionListener(new MouseAdapter() {
+      @Override
+      public void mouseDragged(MouseEvent event) {
+        if (resizingCurveLane >= 0 && resizingCurveLane < curveLanes.size()) {
+          resizeCurveLane(curveLanes.get(resizingCurveLane), resizeStartHeight + event.getY() - resizeStartY);
+        }
+      }
+
+      @Override
+      public void mouseMoved(MouseEvent event) {
+        boolean onDivider = curveDividerAt(event.getY()) >= 0;
+        setCursor(onDivider ? Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR) : Cursor.getDefaultCursor());
+      }
     });
     addMouseWheelListener(this::onWheel);
     addComponentListener(new ComponentAdapter() {
@@ -137,6 +226,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
           setViewStart(viewStartUs);
         }
         syncScrollBar();
+        fireViewChanged();
       }
     });
   }
@@ -165,10 +255,90 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     viewStartUs = tree.startUs();
     selected = null;
     clearSpanSelection();
+    clearCurveSelection();
+    selectedEvent = null;
     selectionListener.accept(List.of());
     syncScrollBar();
     revalidate();
     repaint();
+    fireViewChanged();
+  }
+
+  /**
+   * Swaps in a reloaded tree (a finer or shifted window over the same
+   * session) WITHOUT touching the view; the selected run carries over when
+   * the new tree still holds a node with the same bounds and symbol.
+   */
+  void updateTree(@NotNull FlameNode tree) {
+    FlameNode previousSelection = selected;
+    root = tree;
+    rowCount = ProfilerTimeline.treeDepth(tree);
+    selected = previousSelection == null ? null : reselect(previousSelection);
+    if (previousSelection != null && selected == null) {
+      selectionListener.accept(List.of());
+    }
+    revalidate();
+    repaint();
+  }
+
+  /** The new tree's node matching the old selection's bounds and symbol, or null. */
+  @Nullable
+  private FlameNode reselect(FlameNode old) {
+    long midUs = (old.startUs() + old.endUs()) / 2;
+    FlameNode candidate = null;
+    FlameNode node = root;
+    while (node != null) {
+      FlameNode next = null;
+      for (FlameNode child : node.children()) {
+        if (midUs >= child.startUs() && midUs < child.endUs()) {
+          next = child;
+          break;
+        }
+      }
+      if (next != null && next.startUs() == old.startUs() && next.endUs() == old.endUs()
+          && sameSymbol(next, old)) {
+        candidate = next;
+      }
+      node = next;
+    }
+    return candidate;
+  }
+
+  private static boolean sameSymbol(FlameNode left, FlameNode right) {
+    String a = left.frame() == null ? null : left.frame().symbol();
+    String b = right.frame() == null ? null : right.frame().symbol();
+    return Objects.equals(a, b);
+  }
+
+  void setViewListener(@Nullable ViewListener listener) {
+    viewListener = listener;
+    fireViewChanged();
+  }
+
+  /** Shows [startUs, endUs]; a span covering the whole session falls back to fit. */
+  void setView(long startUs, long endUs) {
+    long spanUs = Math.max(endUs - startUs, 1);
+    int width = Math.max(1, getWidth());
+    if (spanUs >= root.durationUs()) {
+      usPerPixel = 0;
+      viewStartUs = root.startUs();
+    }
+    else {
+      usPerPixel = Math.max(spanUs / (double)width, MIN_US_PER_PIXEL);
+      setViewStart(startUs);
+    }
+    syncScrollBar();
+    repaint();
+    fireViewChanged();
+  }
+
+  private void fireViewChanged() {
+    if (viewListener == null) return;
+    boolean wholeSession = usPerPixel <= 0;
+    long visibleUs = wholeSession
+                     ? Math.max(root.durationUs(), 1)
+                     : (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+    viewListener.viewChanged(viewLeftUs(), visibleUs, wholeSession);
   }
 
   void setLanes(@NotNull List<MarkerLane> lanes) {
@@ -177,6 +347,21 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
       clearSpanSelection();
       selectionListener.accept(List.of());
     }
+    revalidate();
+    repaint();
+  }
+
+  void setCurveLanes(@NotNull List<CurveLane> lanes) {
+    curveLanes = lanes;
+    clearCurveSelection();
+    revalidate();
+    repaint();
+  }
+
+  /** Time-ordered instant marks for the events row; empty hides it. */
+  void setEvents(@NotNull List<TimeEvent> events) {
+    this.events = events;
+    selectedEvent = null;
     revalidate();
     repaint();
   }
@@ -195,6 +380,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
       Rectangle clip = g.getClipBounds();
       if (clip == null) clip = new Rectangle(0, 0, getWidth(), getHeight());
       paintRuler(g, clip);
+      paintCurves(g, clip);
+      paintEvents(g, clip);
       paintLanes(g, clip);
       for (FlameNode child : root.children()) {
         paintNode(g, child, 0, clip);
@@ -275,11 +462,161 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     }
   }
 
+  /** The curve bands between the ruler and the marker lanes, one per lane, each scaled to its own peak. */
+  private void paintCurves(Graphics2D g, Rectangle clip) {
+    FontMetrics metrics = g.getFontMetrics();
+    for (int index = 0; index < curveLanes.size(); index++) {
+      CurveLane lane = curveLanes.get(index);
+      int top = curveLaneTop(index);
+      int height = curveLaneHeight(lane) - 1;
+      paintCurve(g, lane, top, height, clip);
+      if (selectedCurve != null && selectedCurve.lane() == lane) {
+        paintCurveSelection(g, selectedCurve, top, height);
+      }
+
+      g.setColor(RULER_TEXT);
+      String label = lane.name() + " — peak " + formatBytes(lane.peak());
+      g.drawString(label, JBUI.scale(4), top + metrics.getAscent() + JBUI.scale(2));
+      // the divider doubles as the band's resize grip
+      g.setColor(RULER_TICK);
+      g.drawLine(clip.x, top + height, clip.x + clip.width, top + height);
+    }
+  }
+
+  /** An accent line at the CLICKED instant with a dot at the value holding there. */
+  private void paintCurveSelection(Graphics2D g, CurveSelection selection, int top, int height) {
+    CurveLane lane = selection.lane();
+    if (lane.peak() <= 0) return;
+    int x = xOf(selection.instantUs());
+    int dot = JBUI.scale(3);
+    double value = selection.lastChange().value();
+    int valueY = top + height - (int)Math.ceil(value / lane.peak() * (height - JBUI.scale(2)));
+    g.setColor(SELECTION);
+    g.drawLine(x, top, x, top + height - 1);
+    g.fillOval(x - dot, valueY - dot, dot * 2, dot * 2);
+  }
+
+  /**
+   * Step semantics: a sample's value holds until the next sample. Sub-pixel
+   * steps coalesce keeping the tallest, so allocation spikes stay visible at
+   * any zoom; the last sample's value holds to the right edge.
+   */
+  private void paintCurve(Graphics2D g, CurveLane lane, int top, int height, Rectangle clip) {
+    List<CurvePoint> points = lane.points();
+    if (points.isEmpty() || lane.peak() <= 0) return;
+    g.setColor(lane.color());
+    int baseline = top + height;
+    int maxBarHeight = height - JBUI.scale(2);
+    int clipRight = clip.x + clip.width;
+
+    int i = lastIndexAtOrBefore(points, timeAt(clip.x));
+    while (i < points.size()) {
+      int x0 = xOf(points.get(i).timeUs());
+      if (x0 > clipRight) break;
+      double value = points.get(i).value();
+      int j = i + 1;
+      int x1 = j < points.size() ? xOf(points.get(j).timeUs()) : clipRight;
+      while (j < points.size() && x1 <= x0 + 1) {
+        value = Math.max(value, points.get(j).value());
+        j++;
+        x1 = j < points.size() ? xOf(points.get(j).timeUs()) : clipRight;
+      }
+      int barHeight = (int)Math.ceil(value / lane.peak() * maxBarHeight);
+      if (barHeight > 0) {
+        g.fillRect(Math.max(x0, clip.x), baseline - barHeight, Math.max(1, x1 - Math.max(x0, clip.x)), barHeight);
+      }
+      i = j;
+    }
+  }
+
+  /** The greatest index whose time is at or before {@code timeUs}; 0 when all lie after it. */
+  private static int lastIndexAtOrBefore(List<CurvePoint> points, long timeUs) {
+    int low = 0;
+    int high = points.size() - 1;
+    int result = 0;
+    while (low <= high) {
+      int middle = (low + high) >>> 1;
+      if (points.get(middle).timeUs() <= timeUs) {
+        result = middle;
+        low = middle + 1;
+      }
+      else {
+        high = middle - 1;
+      }
+    }
+    return result;
+  }
+
+  /** The events row: one small diamond per mark, in the event's own color when it sent one. */
+  private void paintEvents(Graphics2D g, Rectangle clip) {
+    if (events.isEmpty()) return;
+    int y = curvesBottom();
+    int height = rowHeight() - 1;
+    int centerY = y + height / 2;
+    int radius = JBUI.scale(3);
+
+    int from = firstEventAtOrAfter(timeAt(clip.x) - 1);
+    for (int i = from; i < events.size(); i++) {
+      TimeEvent event = events.get(i);
+      int x = xOf(event.timeUs());
+      if (x > clip.x + clip.width) break;
+      g.setColor(event.color() != null ? event.color() : EVENT_MARK);
+      g.fillOval(x - radius, centerY - radius, radius * 2, radius * 2);
+      if (event == selectedEvent) {
+        g.setColor(SELECTION);
+        g.drawOval(x - radius - 2, centerY - radius - 2, radius * 2 + 4, radius * 2 + 4);
+      }
+    }
+
+    FontMetrics metrics = g.getFontMetrics();
+    g.setColor(RULER_TEXT);
+    String label = HaxeProfilerBundle.message("haxe.profiler.callchart.lane.events");
+    g.drawString(label, JBUI.scale(4), y + (height + metrics.getAscent() - metrics.getDescent()) / 2);
+    g.setColor(RULER_TICK);
+    g.drawLine(clip.x, y + height, clip.x + clip.width, y + height);
+  }
+
+  /** The first event index whose time is at or after {@code timeUs}. */
+  private int firstEventAtOrAfter(long timeUs) {
+    int low = 0;
+    int high = events.size() - 1;
+    int result = events.size();
+    while (low <= high) {
+      int middle = (low + high) >>> 1;
+      if (events.get(middle).timeUs() >= timeUs) {
+        result = middle;
+        high = middle - 1;
+      }
+      else {
+        low = middle + 1;
+      }
+    }
+    return result;
+  }
+
+  /** The mark within a few pixels of the point on the events row, or null. */
+  @Nullable
+  private TimeEvent eventAt(Point point) {
+    if (events.isEmpty() || point.y < curvesBottom() || point.y >= lanesTop()) return null;
+    int grip = JBUI.scale(4);
+    TimeEvent best = null;
+    int bestDistance = grip + 1;
+    for (int i = Math.max(firstEventAtOrAfter(timeAt(point.x - grip)) - 1, 0); i < events.size(); i++) {
+      int distance = Math.abs(xOf(events.get(i).timeUs()) - point.x);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = events.get(i);
+      }
+      if (xOf(events.get(i).timeUs()) > point.x + grip) break;
+    }
+    return best;
+  }
+
   private void paintLanes(Graphics2D g, Rectangle clip) {
     FontMetrics metrics = g.getFontMetrics();
     for (int index = 0; index < lanes.size(); index++) {
       MarkerLane lane = lanes.get(index);
-      int y = rulerHeight() + index * rowHeight();
+      int y = lanesTop() + index * rowHeight();
       int height = rowHeight() - 1;
 
       List<UsSpan> spans = lane.spans();
@@ -297,6 +634,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
       g.setColor(RULER_TEXT);
       g.drawString(lane.name(), JBUI.scale(4), y + (height + metrics.getAscent() - metrics.getDescent()) / 2);
+      g.setColor(RULER_TICK);
+      g.drawLine(clip.x, y + height, clip.x + clip.width, y + height);
     }
   }
 
@@ -308,6 +647,15 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   @Override
   public @Nullable String getToolTipText(@NotNull MouseEvent event) {
+    TimeEvent mark = eventAt(event.getPoint());
+    if (mark != null) {
+      return mark.text();
+    }
+    CurveLane curveLane = curveLaneAt(event.getPoint());
+    if (curveLane != null && !curveLane.points().isEmpty()) {
+      int index = lastIndexAtOrBefore(curveLane.points(), timeAt(event.getX()));
+      return curveLane.name() + " — " + formatBytes(curveLane.points().get(index).value());
+    }
     MarkerLane lane = laneAt(event.getPoint());
     if (lane != null) {
       UsSpan span = spanAt(lane, timeAt(event.getX()));
@@ -328,14 +676,51 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   }
 
   /**
-   * Selects the clicked run or marker-lane span and reports it; empty space,
-   * an idle filler or the gap between spans clears the selection.
+   * Selects the clicked run, marker-lane span or curve sample and reports
+   * it; empty space, an idle filler or the gap between spans clears the
+   * selection.
    */
   private void selectAt(Point point) {
+    if (!events.isEmpty() && point.y >= curvesBottom() && point.y < lanesTop()) {
+      TimeEvent event = eventAt(point);
+      selected = null;
+      clearSpanSelection();
+      clearCurveSelection();
+      selectedEvent = event;
+      if (event != null) {
+        eventSelectionListener.accept(event);
+      }
+      else {
+        selectionListener.accept(List.of());
+      }
+      repaint();
+      return;
+    }
+
+    CurveLane curveLane = curveLaneAt(point);
+    if (curveLane != null) {
+      selected = null;
+      clearSpanSelection();
+      long instantUs = timeAt(point.x);
+      CurvePoint lastChange = lastChangeAt(curveLane, instantUs);
+      if (lastChange == null) {
+        // before the pool's first event there is no reading to select
+        clearCurveSelection();
+        selectionListener.accept(List.of());
+      }
+      else {
+        selectedCurve = new CurveSelection(curveLane, instantUs, lastChange);
+        curveSelectionListener.accept(selectedCurve);
+      }
+      repaint();
+      return;
+    }
+
     MarkerLane lane = laneAt(point);
     if (lane != null) {
       UsSpan span = spanAt(lane, timeAt(point.x));
       selected = null;
+      clearCurveSelection();
       selectedSpan = span;
       selectedSpanLane = span == null ? null : lane;
       if (span != null) {
@@ -351,8 +736,21 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     List<FlameNode> path = pathAt(point);
     selected = path.isEmpty() ? null : path.getLast();
     clearSpanSelection();
+    clearCurveSelection();
     selectionListener.accept(path);
     repaint();
+  }
+
+  private void clearCurveSelection() {
+    selectedCurve = null;
+  }
+
+  /** The sample whose value holds at {@code instantUs}; null before the lane's first sample. */
+  @Nullable
+  private static CurvePoint lastChangeAt(CurveLane lane, long instantUs) {
+    if (lane.points().isEmpty()) return null;
+    CurvePoint floor = lane.points().get(lastIndexAtOrBefore(lane.points(), instantUs));
+    return floor.timeUs() <= instantUs ? floor : null;
   }
 
   private List<FlameNode> pathAt(Point point) {
@@ -379,8 +777,17 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   @Nullable
   private MarkerLane laneAt(Point point) {
-    if (point.y < rulerHeight() || point.y >= chartTop()) return null;
-    return lanes.get((point.y - rulerHeight()) / rowHeight());
+    if (point.y < lanesTop() || point.y >= chartTop()) return null;
+    return lanes.get((point.y - lanesTop()) / rowHeight());
+  }
+
+  @Nullable
+  private CurveLane curveLaneAt(Point point) {
+    if (point.y < rulerHeight() || point.y >= curvesBottom()) return null;
+    for (int index = 0; index < curveLanes.size(); index++) {
+      if (point.y < curveLaneTop(index + 1)) return curveLanes.get(index);
+    }
+    return null;
   }
 
   /** Binary search over a lane's time-ordered spans; null between spans. */
@@ -418,6 +825,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
       setViewStart(viewStartUs + (long)(deltaPx * usPerPixel));
       syncScrollBar();
       repaint();
+      fireViewChanged();
       return;
     }
     Container parent = getParent();
@@ -454,6 +862,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     }
     syncScrollBar();
     repaint();
+    fireViewChanged();
   }
 
   /** Moves the zoomed view's left edge, clamped so the view never leaves the session. */
@@ -493,6 +902,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     long offsetUs = (long)((double)value / SCROLL_RESOLUTION * root.durationUs());
     setViewStart(root.startUs() + offsetUs);
     repaint();
+    fireViewChanged();
   }
 
   private int rowHeight() {
@@ -503,9 +913,53 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     return JBUI.scale(20);
   }
 
-  /** Where the run rows start: below the ruler and the marker lanes. */
+  private int curveLaneHeight(CurveLane lane) {
+    return curveHeights.getOrDefault(lane.name(), JBUI.scale(40));
+  }
+
+  /** The y where the curve band at {@code index} starts. */
+  private int curveLaneTop(int index) {
+    int top = rulerHeight();
+    for (int i = 0; i < index; i++) {
+      top += curveLaneHeight(curveLanes.get(i));
+    }
+    return top;
+  }
+
+  /** Where the marker lanes start: below the ruler and the curve bands. */
+  private int curvesBottom() {
+    return curveLaneTop(curveLanes.size());
+  }
+
+  private int eventsRowHeight() {
+    return events.isEmpty() ? 0 : rowHeight();
+  }
+
+  /** Where the marker lanes start: below the events row (present only when the capture has events). */
+  private int lanesTop() {
+    return curvesBottom() + eventsRowHeight();
+  }
+
+  /** Where the run rows start: below the ruler, curve bands, events row and marker lanes. */
   private int chartTop() {
-    return rulerHeight() + lanes.size() * rowHeight();
+    return lanesTop() + lanes.size() * rowHeight();
+  }
+
+  /** The curve band whose bottom divider is under {@code y}; -1 when none is. */
+  private int curveDividerAt(int y) {
+    int grip = JBUI.scale(3);
+    for (int index = 0; index < curveLanes.size(); index++) {
+      int bottom = curveLaneTop(index + 1);
+      if (Math.abs(y - bottom) <= grip) return index;
+    }
+    return -1;
+  }
+
+  private void resizeCurveLane(CurveLane lane, int height) {
+    int clamped = Math.max(JBUI.scale(20), Math.min(JBUI.scale(200), height));
+    curveHeights.put(lane.name(), clamped);
+    revalidate();
+    repaint();
   }
 
   private double scale() {
@@ -572,6 +1026,19 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     if (durationUs < 10_000) return 2;
     if (durationUs < 100_000) return 1;
     return 0;
+  }
+
+  /** One instant on the chart's axis, in the ruler's milliseconds: "3288.617 ms". */
+  static String formatInstant(long us) {
+    return String.format(Locale.ROOT, "%.3f ms", us / 1000.0);
+  }
+
+  /** 0 B, 512 B, 34.5 KB, 3.2 MB, 1.5 GB - the shortest form for the magnitude. */
+  static String formatBytes(double bytes) {
+    if (bytes < 1024) return (long)bytes + " B";
+    if (bytes < 1024 * 1024) return trimTrailingZero(bytes / 1024) + " KB";
+    if (bytes < 1024L * 1024 * 1024) return trimTrailingZero(bytes / (1024 * 1024)) + " MB";
+    return trimTrailingZero(bytes / (1024L * 1024 * 1024)) + " GB";
   }
 
   /** 0, 250 us, 1.5 ms, 320 ms, 4.2 s - the shortest form for the magnitude. */

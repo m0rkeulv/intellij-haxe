@@ -10,7 +10,8 @@ import com.intellij.plugins.haxe.profiler.model.StackSample;
 import com.intellij.profiler.DummyCallTreeBuilder;
 import com.intellij.profiler.api.BaseCallStackElement;
 import com.intellij.profiler.api.CallTreeBuildingData;
-import com.intellij.profiler.api.SingleCallTreeProfilerData;
+import com.intellij.profiler.api.MultipleCallTreesProfilerData;
+import com.intellij.profiler.api.ProfilerData;
 import com.intellij.profiler.model.ThreadInfo;
 import com.intellij.profiler.ui.MainCallTreeDataComponent;
 import com.intellij.ui.tabs.TabInfo;
@@ -24,23 +25,31 @@ import java.util.Map;
 
 /**
  * A parsed Haxe profiling capture for the IU profiler views: the standard
- * flamegraph/call-tree/method-list tabs from the sample-built call tree
- * (via the {@link SingleCallTreeProfilerData} base — the sealed
- * {@code SamplingProfilerData} hierarchy is only enterable through it), plus
- * the Call Chart tab built from the same snapshot's time data.
+ * flamegraph/call-tree/method-list tabs with two states — CPU time
+ * (samples × the capture's tick period, in microseconds) and raw sample
+ * counts — plus the Call Chart tab built from the same snapshot's time
+ * data. Wraps a {@link MultipleCallTreesProfilerData} rather than
+ * subclassing (the sampling hierarchy is sealed).
  */
 // TODO: range selection on the timeline filtering the call tree to [t1,t2]
 //       (rebuild a DummyCallTreeBuilder from the samples inside the range).
-public final class HaxeSamplingProfilerData extends SingleCallTreeProfilerData {
+public final class HaxeSamplingProfilerData implements ProfilerData {
 
   /** Synthetic leaf frame of samples taken inside a collector pause. */
   private static final String GC_SYMBOL = "GC Major";
 
   private final ProfilerSnapshot snapshot;
+  private final MultipleCallTreesProfilerData trees;
 
-  private HaxeSamplingProfilerData(CallTreeBuildingData tree, ProfilerSnapshot snapshot) {
-    super(tree);
+  private HaxeSamplingProfilerData(MultipleCallTreesProfilerData trees, ProfilerSnapshot snapshot) {
+    this.trees = trees;
     this.snapshot = snapshot;
+  }
+
+  /** The parsed capture — the gutter hints aggregate their line times from it. */
+  @NotNull
+  public ProfilerSnapshot snapshot() {
+    return snapshot;
   }
 
   @NotNull
@@ -53,7 +62,10 @@ public final class HaxeSamplingProfilerData extends SingleCallTreeProfilerData {
     // interned so identical frames merge into one tree node per thread
     Map<StackFrame, HaxeCallStackElement> elements = new HashMap<>();
     HaxeCallStackElement inGc = new HaxeCallStackElement(GC_SYMBOL, null, StackFrame.NO_LINE);
-    DummyCallTreeBuilder<BaseCallStackElement> builder = new DummyCallTreeBuilder<>();
+    DummyCallTreeBuilder<BaseCallStackElement> timeBuilder = new DummyCallTreeBuilder<>();
+    timeBuilder.setMetric(HaxeValueMetrics.TIME_MICROSECONDS);
+    DummyCallTreeBuilder<BaseCallStackElement> samplesBuilder = new DummyCallTreeBuilder<>();
+    long periodUs = samplePeriodUs(snapshot);
     for (StackSample sample : snapshot.samples()) {
       List<BaseCallStackElement> stack = new ArrayList<>(sample.frames().size() + 1);
       for (StackFrame frame : sample.frames()) {
@@ -64,14 +76,24 @@ public final class HaxeSamplingProfilerData extends SingleCallTreeProfilerData {
       }
       ThreadInfo thread = threads.computeIfAbsent(sample.threadId(),
                                                   id -> new HaxeProfilerThreadInfo("Thread " + id, String.valueOf(id)));
-      builder.addStack(thread, stack, sample.weight());
+      timeBuilder.addStack(thread, stack, sample.weight() * periodUs);
+      samplesBuilder.addStack(thread, stack, sample.weight());
     }
 
-    CallTreeBuildingData tree = new CallTreeBuildingData(HaxeProfilerBundle.message("haxe.profiler.tree.name"),
-                                                        new HaxeCallStackElementRenderer(),
-                                                        builder,
-                                                        "haxe.hashlink.cpu");
-    return new HaxeSamplingProfilerData(tree, snapshot);
+    CallTreeBuildingData timeTree = new CallTreeBuildingData(HaxeProfilerBundle.message("haxe.profiler.tree.name"),
+                                                            new HaxeCallStackElementRenderer(),
+                                                            timeBuilder,
+                                                            "haxe.hashlink.cpu");
+    CallTreeBuildingData samplesTree = new CallTreeBuildingData(HaxeProfilerBundle.message("haxe.profiler.tree.samples"),
+                                                               new HaxeCallStackElementRenderer(),
+                                                               samplesBuilder,
+                                                               "haxe.hashlink.samples");
+    return new HaxeSamplingProfilerData(new MultipleCallTreesProfilerData(List.of(timeTree, samplesTree)), snapshot);
+  }
+
+  /** One sample's worth of time; the sample rate is validated at parse time. */
+  static long samplePeriodUs(ProfilerSnapshot snapshot) {
+    return Math.max(1_000_000L / Math.max(snapshot.samplesPerSecond(), 1), 1);
   }
 
   @NotNull
@@ -79,10 +101,15 @@ public final class HaxeSamplingProfilerData extends SingleCallTreeProfilerData {
     return new HaxeCallStackElement(frame.symbol(), frame.file(), frame.line());
   }
 
+  @Override
+  public boolean isEmpty() {
+    return snapshot.samples().isEmpty();
+  }
+
   /** The standard tabs plus our Call Chart (non-closable, not auto-selected, no event-state controller). */
   @Override
   public @NotNull JComponent doCreateTopLevelComponent(@NotNull Project project, @NotNull Disposable parent) {
-    MainCallTreeDataComponent main = new MainCallTreeDataComponent(project, this, parent, null, false);
+    MainCallTreeDataComponent main = new MainCallTreeDataComponent(project, trees, parent, null, false);
     if (!snapshot.samples().isEmpty()) {
       TabInfo callChartTab = new TabInfo(HaxeCallChartTab.create(project, snapshot));
       callChartTab.setText(HaxeProfilerBundle.message("haxe.profiler.callchart.tab"));

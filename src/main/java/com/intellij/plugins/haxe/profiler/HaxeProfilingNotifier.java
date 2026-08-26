@@ -12,6 +12,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,25 +29,40 @@ public final class HaxeProfilingNotifier {
   private HaxeProfilingNotifier() {
   }
 
-  /** {@code missingMessageKey}: a HaxeProfilerBundle key taking the exit code as {0} — each lane explains its own dump rules. */
+  /**
+   * {@code missingMessageKey}: a HaxeProfilerBundle key taking the exit code
+   * as {0} — each lane explains its own dump rules. With a {@code session}
+   * the outcome lands in its profiler tab instead of a notification.
+   */
   public static void watch(@NotNull Project project, @NotNull ProcessHandler handler,
-                           @NotNull Path dumpPath, @NotNull String missingMessageKey) {
+                           @NotNull Path dumpPath, @NotNull String missingMessageKey,
+                           @Nullable HaxeProfilerProcessUi.Session session) {
     long startedAt = System.currentTimeMillis();
     handler.addProcessListener(new ProcessListener() {
       @Override
       public void processTerminated(@NotNull ProcessEvent event) {
-        notifyOutcome(project, dumpPath, startedAt, missingMessageKey, event.getExitCode());
+        notifyOutcome(project, dumpPath, startedAt, missingMessageKey, event.getExitCode(), session);
       }
     });
   }
 
-  private static void notifyOutcome(Project project, Path dumpPath, long startedAt, String missingMessageKey, int exitCode) {
+  private static void notifyOutcome(Project project, Path dumpPath, long startedAt, String missingMessageKey,
+                                    int exitCode, @Nullable HaxeProfilerProcessUi.Session session) {
     // a dump left behind by an EARLIER run must not read as this run's result
     if (writtenSince(dumpPath, startedAt)) {
-      notifySnapshotWritten(project, dumpPath);
+      if (session != null) {
+        session.dataReady();
+      }
+      else {
+        notifySnapshotWritten(project, dumpPath);
+      }
+      return;
+    }
+    String content = HaxeProfilerBundle.message(missingMessageKey, exitCode);
+    if (session != null) {
+      session.failed(content);
     }
     else {
-      String content = HaxeProfilerBundle.message(missingMessageKey, exitCode);
       group().createNotification(content, NotificationType.WARNING).notify(project);
     }
   }

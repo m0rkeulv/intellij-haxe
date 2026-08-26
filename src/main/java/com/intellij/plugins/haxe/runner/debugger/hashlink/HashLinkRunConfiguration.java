@@ -21,6 +21,7 @@ import com.intellij.openapi.project.DumbService;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
 import com.intellij.plugins.haxe.profiler.HaxeProfilingNotifier;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
@@ -163,7 +164,10 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
       protected @NotNull ProcessHandler startProcess() throws ExecutionException {
         ProcessHandler handler = super.startProcess();
         if (profilerSamples != null) {
-          HaxeProfilingNotifier.watch(getProject(), handler, expectedDumpPath(), "haxe.profiler.dump.missing");
+          // the sampler is in-process and live from launch
+          Path dumpPath = expectedDumpPath();
+          HaxeProfilerProcessUi.Session session = HaxeProfilerProcessUi.notifyAttached(getProject(), getName(), dumpPath);
+          HaxeProfilingNotifier.watch(getProject(), handler, dumpPath, "haxe.profiler.dump.missing", session);
         }
         return handler;
       }

@@ -13,11 +13,8 @@ import com.intellij.profiler.api.Success;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 
 /**
  * Registers captured HXTS sessions ({@code .hxtsession}) with the IU
@@ -50,17 +47,19 @@ public class HaxeHxtSessionParserProvider implements ProfilerDumpParserProvider 
   private static final class HxtSessionFileParser implements ProfilerDumpFileParser {
     @Override
     public @NotNull ProfilerDumpFileParsingResult parse(@NotNull File file, @NotNull ProgressIndicator indicator) {
+      // zone captures are served FROM the file (they are too big to load
+      // whole), so the translator takes the path rather than a stream
       HxtCapture capture;
-      try (InputStream in = new CancellableStream(new BufferedInputStream(new FileInputStream(file)), indicator)) {
-        capture = HxtSessionTranslator.translateCapture(in);
+      try {
+        capture = HxtSessionTranslator.translateCapture(file.toPath());
+        return new Success(switch (capture) {
+          case HxtCapture.Samples samples -> HaxeSamplingProfilerData.from(samples.snapshot());
+          case HxtCapture.Zones zones -> HaxeTracyProfilerData.from(zones.store());
+        });
       }
       catch (IOException e) {
         return new Failure(HaxeProfilerBundle.message("haxe.profiler.parse.failed", e.getMessage()));
       }
-      return new Success(switch (capture) {
-        case HxtCapture.Samples samples -> HaxeSamplingProfilerData.from(samples.snapshot());
-        case HxtCapture.Zones zones -> HaxeTracyProfilerData.from(zones.session());
-      });
     }
 
     @Override

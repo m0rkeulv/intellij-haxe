@@ -15,6 +15,7 @@ import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
 import com.intellij.plugins.haxe.profiler.HaxeProfilingNotifier;
 import com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture;
 import com.intellij.plugins.haxe.profiler.HaxeTracyCapture;
@@ -87,13 +88,13 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
     // the telemetry capture (samples with a time axis) supersedes the text
     // report when the receiver opens; the report stays the fallback outcome
     HaxeTelemetryCapture.Handle capture = profiling
-                                          ? HaxeTelemetryCapture.startCapture(getProject(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
+                                          ? HaxeTelemetryCapture.startCapture(getProject(), getName(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
                                           : null;
     // the tracy entry: exact zones, no bootstrap - the receiver connects to
     // the client listening on the port we assign
     boolean tracy = dumpPath != null && HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, false) != null;
     HaxeTracyCapture.Handle tracyCapture = tracy
-                                           ? HaxeTracyCapture.startCapture(getProject(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
+                                           ? HaxeTracyCapture.startCapture(getProject(), getName(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
                                            : null;
     return new DapCommandLineRunningState(env, getProject(), () -> profiledCommandLine(capture, tracyCapture)) {
       @Override
@@ -109,7 +110,10 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
           });
         }
         else if (profiling) {
-          HaxeProfilingNotifier.watch(getProject(), handler, dumpPath, "haxe.profiler.hxcpp.dump.missing");
+          // the telemetry receiver could not open - the text report written
+          // at exit is still a full profiling result
+          HaxeProfilerProcessUi.Session session = HaxeProfilerProcessUi.notifyAttached(getProject(), getName(), dumpPath);
+          HaxeProfilingNotifier.watch(getProject(), handler, dumpPath, "haxe.profiler.hxcpp.dump.missing", session);
         }
         return handler;
       }
