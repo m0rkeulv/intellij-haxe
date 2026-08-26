@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.tracy;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -26,6 +27,7 @@ import java.util.function.BooleanSupplier;
 public final class TracyLiveCapture {
 
   // ServerQuery wire values (TracyProtocol.hpp, v74)
+  private static final int QUERY_STRING = 1;
   private static final int QUERY_THREAD_STRING = 2;
   private static final int QUERY_PLOT_NAME = 4;
   private static final int QUERY_DISCONNECT = 9;
@@ -74,6 +76,16 @@ public final class TracyLiveCapture {
   /** Handshakes and reads the whole session; returns when the client's stream ends. */
   @NotNull
   public TracySession capture() throws IOException {
+    return capture(null);
+  }
+
+  /**
+   * The streaming form: zones go to the sink as they close and stay out of
+   * the returned session, so a minutes-long capture spools to disk instead
+   * of filling the heap.
+   */
+  @NotNull
+  public TracySession capture(TracyEventReader.@Nullable ZoneSink zoneSink) throws IOException {
     try (socket) {
       TracyWelcome welcome = TracyHandshake.perform(socket.getInputStream(), queries);
       TracyEventReader.Hooks hooks = new TracyEventReader.Hooks() {
@@ -88,13 +100,21 @@ public final class TracyLiveCapture {
         }
 
         @Override
+        public void memPoolSeen(long namePointer) {
+          query(QUERY_STRING, namePointer);
+        }
+
+        @Override
         public boolean terminateSeen() {
           boolean drained = disconnectSent.get();
           requestDisconnect();
           return drained;
         }
       };
-      return TracyEventReader.read(new TracyLz4Stream(socket.getInputStream()), welcome, hooks);
+      TracyLz4Stream decompressed = new TracyLz4Stream(socket.getInputStream());
+      return zoneSink == null
+             ? TracyEventReader.read(decompressed, welcome, hooks)
+             : TracyEventReader.read(decompressed, welcome, hooks, zoneSink);
     }
   }
 

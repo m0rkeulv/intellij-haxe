@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.tracy;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -36,6 +37,8 @@ public final class TracyEventReader {
   private final double timerMul;
 
   private Hooks hooks = NO_HOOKS;
+  /** Null = collect zones into the session (small captures and tests). */
+  private @Nullable ZoneSink zoneSink;
   private long refThread;
   private long refSerial;
   private int currentThread = -1;
@@ -49,11 +52,31 @@ public final class TracyEventReader {
   private final Map<Long, String> plotNames = new HashMap<>();
   private final Map<Integer, String> threadNames = new HashMap<>();
   private final List<TracySession.PlotPoint> cpuUsage = new ArrayList<>();
+  /** The pool the last MemNamePayload named; consumed by the next mem event (0 = the unnamed pool). */
+  private long pendingMemName;
+  private final Map<Long, MemPool> memPools = new HashMap<>();
+  private final Map<Long, String> strings = new HashMap<>();
+  private final List<TracySession.GcSweep> gcSweeps = new ArrayList<>();
+  private final List<TimelineEvent> events = new ArrayList<>();
+  /** The string a SingleStringData payload announced; the next fat item (a message) owns it. */
+  private @Nullable String pendingSingleString;
+  private long burstStartNs = -1;
+  private long burstEndNs;
+  private long burstBytes;
+  private int burstObjects;
   private int unmatchedZoneEnds;
   private long minNs = Long.MAX_VALUE;
   private long maxNs = Long.MIN_VALUE;
 
   private record OpenZone(long startNs, TracySourceLocation location) {
+  }
+
+  /** One allocation pool's running state: live pointers with sizes, and the sampled live-bytes curve. */
+  private static final class MemPool {
+    final Map<Long, Long> liveSizes = new HashMap<>();
+    final List<TracySession.PlotPoint> points = new ArrayList<>();
+    long liveBytes;
+    long lastBucket = Long.MIN_VALUE;
   }
 
   private TracyEventReader(InputStream decompressed, TracyWelcome welcome) {
@@ -62,11 +85,11 @@ public final class TracyEventReader {
   }
 
   /**
-   * Live-capture callbacks: first sight of a plot or thread lets the caller
-   * request its name over the query channel (the answers integrate as
-   * ordinary stream items), and Terminate drives the shutdown handshake —
-   * returning true stops the read. Replays pass none (a replay ends at EOF,
-   * so its Terminates never stop it).
+   * Live-capture callbacks: first sight of a plot, thread or memory pool
+   * lets the caller request its name over the query channel (the answers
+   * integrate as ordinary stream items), and Terminate drives the shutdown
+   * handshake — returning true stops the read. Replays pass none (a replay
+   * ends at EOF, so its Terminates never stop it).
    */
   public interface Hooks {
     default void plotSeen(long namePointer) {
@@ -75,8 +98,26 @@ public final class TracyEventReader {
     default void threadSeen(int threadId) {
     }
 
+    default void memPoolSeen(long namePointer) {
+    }
+
     default boolean terminateSeen() {
       return false;
+    }
+  }
+
+  /**
+   * Receives every zone as it CLOSES (per thread that is a post-order walk
+   * of the zone tree; depth is the zone's nesting level), letting a capture
+   * spool zones to disk instead of accumulating minutes of them on the
+   * heap. Times are RAW nanoseconds — the session's zero is only known at
+   * the end and arrives via {@link #finished}. Without an external sink the
+   * reader collects, sorts and rebases the zones into the session itself.
+   */
+  public interface ZoneSink {
+    void zone(int threadId, int depth, long startNs, long endNs, @NotNull TracySourceLocation location);
+
+    default void finished(long baseNs) {
     }
   }
 
@@ -93,6 +134,21 @@ public final class TracyEventReader {
                                   @NotNull Hooks hooks) throws IOException {
     TracyEventReader reader = new TracyEventReader(decompressed, welcome);
     reader.hooks = hooks;
+    reader.readAll();
+    return reader.freeze(welcome);
+  }
+
+  /**
+   * The streaming form: zones go to {@code zoneSink} (raw times, close
+   * order) and the returned session's zone list stays empty; everything
+   * else (curves, sweeps, frames, names) is in the session as usual.
+   */
+  @NotNull
+  public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome,
+                                  @NotNull Hooks hooks, @NotNull ZoneSink zoneSink) throws IOException {
+    TracyEventReader reader = new TracyEventReader(decompressed, welcome);
+    reader.hooks = hooks;
+    reader.zoneSink = zoneSink;
     reader.readAll();
     return reader.freeze(welcome);
   }
@@ -137,15 +193,24 @@ public final class TracyEventReader {
           cpuUsage.add(new TracySession.PlotPoint(timeNs, Float.intBitsToFloat(readIntLe())));
           track(timeNs);
         }
-        case MemAlloc, MemAllocNamed, MemAllocCallstack, MemAllocCallstackNamed,
-             MemFree, MemFreeNamed, MemFreeCallstack, MemFreeCallstackNamed -> {
-          // not surfaced yet, but their delta keeps the serial reference honest
-          refSerial += readLongLe();
-          skip(type.wireSize() - 1 - 8);
+        // precedes the fat item owning it (a message's text)
+        case SingleStringData -> pendingSingleString = new String(readPayload(readU16Le()), StandardCharsets.UTF_8);
+        // message times are ABSOLUTE - the client's dequeue has no delta case for them
+        case Message, MessageCallstack -> readMessage(false);
+        case MessageColor, MessageColorCallstack -> readMessage(true);
+        // sent under the serial lock directly before the mem event it names
+        case MemNamePayload -> pendingMemName = readLongLe();
+        case MemAlloc, MemAllocNamed, MemAllocCallstack, MemAllocCallstackNamed -> readMemAlloc();
+        case MemFree, MemFreeNamed, MemFreeCallstack, MemFreeCallstackNamed -> readMemFree();
+        case MemDiscard, MemDiscardCallstack -> {
+          // hxcpp never discards a pool, but the delta keeps the serial reference honest
+          advanceSerialTime();
+          skip(12);
         }
         // answers to the live query channel; absent in plain replays
         case PlotName -> plotNames.put(readLongLe(), new String(readPayload(readU16Le()), StandardCharsets.UTF_8));
         case ThreadName -> threadNames.put((int)readLongLe(), new String(readPayload(readU16Le()), StandardCharsets.UTF_8));
+        case StringData -> strings.put(readLongLe(), new String(readPayload(readU16Le()), StandardCharsets.UTF_8));
         // announces shutdown; buffered items may still follow, so only the
         // hook (owning the disconnect handshake) may declare the stream done
         case Terminate -> {
@@ -183,6 +248,104 @@ public final class TracyEventReader {
     track(timeNs);
   }
 
+  /**
+   * The smallest free run that counts as a collection: a stray large-object
+   * free should not paint a GC marker.
+   */
+  private static final int MIN_SWEEP_FREES = 4;
+
+  /** Wire order: serial-delta time, owning thread u32, pointer u64, 48-bit size. */
+  private void readMemAlloc() throws IOException {
+    long timeNs = advanceSerialTime();
+    skip(4); // owning thread - the heap curves are process-wide
+    long pointer = readLongLe();
+    long size = readU48Le();
+    closeSweep(); // an alloc means the mutator runs again - any free burst ended
+    MemPool pool = memPool();
+    pool.liveBytes += size;
+    pool.liveSizes.put(pointer, size);
+    samplePool(pool, timeNs);
+    track(timeNs);
+  }
+
+  /** Wire order: serial-delta time, owning thread u32, pointer u64. */
+  private void readMemFree() throws IOException {
+    long timeNs = advanceSerialTime();
+    skip(4);
+    long pointer = readLongLe();
+    MemPool pool = memPool();
+    Long size = pool.liveSizes.remove(pointer);
+    // an unknown pointer was allocated before the capture attached
+    if (size != null) {
+      pool.liveBytes -= size;
+      samplePool(pool, timeNs);
+    }
+    extendSweep(timeNs, size);
+    track(timeNs);
+  }
+
+  /** Wire order: absolute time, then b/g/r for the colored kinds; the text arrived as the preceding SingleStringData. */
+  private void readMessage(boolean colored) throws IOException {
+    long timeNs = toNs(readLongLe());
+    int color = 0;
+    if (colored) {
+      int b = data.readUnsignedByte();
+      int g = data.readUnsignedByte();
+      int r = data.readUnsignedByte();
+      color = r << 16 | g << 8 | b;
+    }
+    String text = pendingSingleString == null ? "" : pendingSingleString;
+    pendingSingleString = null;
+    events.add(new TimelineEvent(currentThread, timeNs, text, color));
+    track(timeNs);
+  }
+
+  /** Frees only come from the collector (see {@link TracySession.GcSweep}), so each one extends the current burst. */
+  private void extendSweep(long timeNs, @Nullable Long freedSize) {
+    if (burstStartNs < 0) burstStartNs = timeNs;
+    burstEndNs = timeNs;
+    burstObjects++;
+    if (freedSize != null) burstBytes += freedSize;
+  }
+
+  private void closeSweep() {
+    if (burstStartNs >= 0 && burstObjects >= MIN_SWEEP_FREES) {
+      gcSweeps.add(new TracySession.GcSweep(burstStartNs, burstEndNs, burstBytes, burstObjects));
+    }
+    burstStartNs = -1;
+    burstBytes = 0;
+    burstObjects = 0;
+  }
+
+  /** The pool the preceding MemNamePayload named, or the unnamed default pool. */
+  private MemPool memPool() {
+    long name = pendingMemName;
+    pendingMemName = 0;
+    MemPool pool = memPools.get(name);
+    if (pool == null) {
+      pool = new MemPool();
+      memPools.put(name, pool);
+      if (name != 0) hooks.memPoolSeen(name);
+    }
+    return pool;
+  }
+
+  /**
+   * One curve point per 65 µs bucket keeps a busy allocator's curve
+   * compact; within a bucket the LAST value stands, so a GC's free burst
+   * still lands as a visible drop.
+   */
+  private static void samplePool(MemPool pool, long timeNs) {
+    long bucket = timeNs >> 16;
+    if (bucket == pool.lastBucket && !pool.points.isEmpty()) {
+      pool.points.set(pool.points.size() - 1, new TracySession.PlotPoint(timeNs, pool.liveBytes));
+    }
+    else {
+      pool.points.add(new TracySession.PlotPoint(timeNs, pool.liveBytes));
+      pool.lastBucket = bucket;
+    }
+  }
+
   private void beginZone(TracySourceLocation location) throws IOException {
     long begin = advanceThreadTime();
     openStack().push(new OpenZone(begin, location));
@@ -198,7 +361,16 @@ public final class TracyEventReader {
       return;
     }
     OpenZone open = stack.pop();
-    zones.add(new TracyZone(currentThread, open.startNs(), end, open.location()));
+    emitZone(currentThread, stack.size(), open.startNs(), end, open.location());
+  }
+
+  private void emitZone(int threadId, int depth, long startNs, long endNs, TracySourceLocation location) {
+    if (zoneSink != null) {
+      zoneSink.zone(threadId, depth, startNs, endNs, location);
+    }
+    else {
+      zones.add(new TracyZone(threadId, startNs, endNs, location));
+    }
   }
 
   private TracySourceLocation consumePendingSourceLocation() throws IOException {
@@ -224,6 +396,12 @@ public final class TracyEventReader {
     return toNs(refThread);
   }
 
+  /** Applies one serial-stream delta (memory events) and returns the new time in nanoseconds. */
+  private long advanceSerialTime() throws IOException {
+    refSerial += readLongLe();
+    return toNs(refSerial);
+  }
+
   private long toNs(long ticks) {
     return (long)(ticks * timerMul);
   }
@@ -234,13 +412,18 @@ public final class TracyEventReader {
   }
 
   private TracySession freeze(TracyWelcome welcome) {
-    // unclosed zones (capture cut mid-zone) end at the last seen instant
+    // unclosed zones (capture cut mid-zone) end at the last seen instant;
+    // popping keeps the sink's post-order (deepest first)
     zoneStacks.forEach((thread, stack) -> {
-      for (OpenZone open : stack) {
-        zones.add(new TracyZone(thread, open.startNs(), Math.max(maxNs, open.startNs()), open.location()));
+      while (!stack.isEmpty()) {
+        OpenZone open = stack.pop();
+        emitZone(thread, stack.size(), open.startNs(), Math.max(maxNs, open.startNs()), open.location());
       }
     });
-    long base = zones.isEmpty() && minNs == Long.MAX_VALUE ? 0 : minNs;
+    long base = minNs == Long.MAX_VALUE ? 0 : minNs;
+    if (zoneSink != null) {
+      zoneSink.finished(base);
+    }
 
     List<TracyZone> ordered = zones.stream()
       .map(zone -> new TracyZone(zone.threadId(), zone.startNs() - base, zone.endNs() - base, zone.location()))
@@ -252,10 +435,25 @@ public final class TracyEventReader {
       String name = plotNames.getOrDefault(pointer, "plot@" + Long.toHexString(pointer));
       rebasedPlots.put(name, rebase(points, base));
     });
+    Map<String, List<TracySession.PlotPoint>> memoryCurves = new HashMap<>();
+    memPools.forEach((pointer, pool) -> {
+      String name = pointer == 0 ? "Memory" : strings.getOrDefault(pointer, "pool@" + Long.toHexString(pointer));
+      memoryCurves.put(name, rebase(pool.points, base));
+    });
+    closeSweep(); // a capture cut mid-sweep still keeps the burst
+    List<TracySession.GcSweep> sweeps = gcSweeps.stream()
+      .map(sweep -> new TracySession.GcSweep(sweep.startNs() - base, sweep.endNs() - base,
+                                             sweep.freedBytes(), sweep.freedObjects()))
+      .toList();
+    List<TimelineEvent> orderedEvents = events.stream()
+      .map(event -> new TimelineEvent(event.threadId(), event.timeNs() - base, event.text(), event.color()))
+      .sorted(Comparator.comparingLong(TimelineEvent::timeNs))
+      .toList();
     long duration = maxNs == Long.MIN_VALUE ? 0 : maxNs - base;
 
-    return new TracySession(welcome, ordered, frames, Map.copyOf(rebasedPlots), rebase(cpuUsage, base),
-                            Map.copyOf(threadNames), duration, unmatchedZoneEnds);
+    return new TracySession(welcome, ordered, frames, Map.copyOf(rebasedPlots), Map.copyOf(memoryCurves),
+                            sweeps, orderedEvents, rebase(cpuUsage, base), Map.copyOf(threadNames),
+                            duration, unmatchedZoneEnds);
   }
 
   private static List<TracySession.PlotPoint> rebase(List<TracySession.PlotPoint> points, long base) {
@@ -300,6 +498,14 @@ public final class TracyEventReader {
   private long readLongLe() throws IOException {
     long value = 0;
     for (int i = 0; i < 8; i++) {
+      value |= (long)data.readUnsignedByte() << (8 * i);
+    }
+    return value;
+  }
+
+  private long readU48Le() throws IOException {
+    long value = 0;
+    for (int i = 0; i < 6; i++) {
       value |= (long)data.readUnsignedByte() << (8 * i);
     }
     return value;

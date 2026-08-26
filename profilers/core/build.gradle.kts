@@ -20,7 +20,10 @@ dependencies {
     }
 
     // tracy streams LZ4 with a cross-frame dictionary window; commons-compress's
-    // block reader + prefill() is the one Java implementation that decodes it
+    // block reader + prefill() is the one Java implementation that decodes it.
+    // Session-file chunks deliberately use the JDK's own Deflater instead:
+    // this compressor hits a pathological slow path on real zone data
+    // (~6 s per 1.7 MB chunk, measured), and deflate 6 also compresses better
     implementation(libs.commonsCompress)
 
     testImplementation(libs.junitJupiter)

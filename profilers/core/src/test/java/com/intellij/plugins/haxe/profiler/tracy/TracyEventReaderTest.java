@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.tracy;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -138,6 +139,87 @@ public class TracyEventReaderTest {
     assertEquals(50, points.get(1).timeNs(), "the second point is 50 ticks after the first");
   }
 
+  @Test
+  @DisplayName("named memory pools accumulate live bytes curves on the serial stream")
+  public void testNamedMemoryPoolsAccumulateLiveBytesCurvesOnTheSerialStream() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.threadContext(1);
+    items.memName(0xBEEF);
+    items.memAlloc(100, 0x1000, 4096);
+    items.memName(0xBEEF);
+    items.memAlloc(200_000, 0x2000, 1024);
+    items.memName(0xBEEF);
+    items.memFree(100_000, 0x1000);
+    items.stringData(0xBEEF, "Small Object Heap");
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS);
+
+    List<TracySession.PlotPoint> curve = session.memoryCurves().get("Small Object Heap");
+    assertEquals(List.of(new TracySession.PlotPoint(0, 4096.0),
+                         new TracySession.PlotPoint(200_000, 5120.0),
+                         new TracySession.PlotPoint(300_000, 1024.0)),
+                 curve, "alloc, alloc, free - rebased to the first event");
+  }
+
+  @Test
+  @DisplayName("messages become timeline events with absolute times and their preceding text")
+  public void testMessagesBecomeTimelineEventsWithAbsoluteTimesAndTheirPrecedingText() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.threadContext(1);
+    items.sourceLocation("Main.main", "Main.hx", 1);
+    items.zoneBeginAlloc(1000);
+    items.singleString("level loaded");
+    items.messageColor(1200, 0xFF, 0x99, 0x00); // absolute ticks, like frame marks
+    items.zoneEnd(500); // delta from the zone begin, unaffected by the message
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS);
+
+    assertEquals(List.of(new TimelineEvent(1, 200, "level loaded", 0xFF9900)), session.events());
+    assertEquals(500, session.zones().getFirst().endNs(), "the zone delta stream ignores the message");
+  }
+
+  @Test
+  @DisplayName("a free burst between allocs becomes one GC sweep with its reclaim")
+  public void testAFreeBurstBetweenAllocsBecomesOneGcSweepWithItsReclaim() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.threadContext(1);
+    for (int i = 0; i < 5; i++) {
+      items.memName(0xBEEF);
+      items.memAlloc(100, 0x1000 + i, 256);
+    }
+    for (int i = 0; i < 4; i++) {
+      items.memName(0xBEEF);
+      items.memFree(50, 0x1000 + i);
+    }
+    items.memName(0xBEEF);
+    items.memAlloc(100, 0x2000, 64); // the mutator resumes - the sweep is over
+    items.memName(0xBEEF);
+    items.memFree(10, 0x2000); // a lone free stays below the sweep threshold
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS);
+
+    // allocs at 100..500, frees at 550/600/650/700, all rebased to the first alloc
+    assertEquals(List.of(new TracySession.GcSweep(450, 600, 4 * 256, 4)), session.gcSweeps());
+  }
+
+  @Test
+  @DisplayName("same bucket samples coalesce and unknown frees are ignored")
+  public void testSameBucketSamplesCoalesceAndUnknownFreesAreIgnored() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.threadContext(1);
+    items.memName(0xBEEF);
+    items.memAlloc(100, 0x1000, 100);
+    items.memName(0xBEEF);
+    items.memAlloc(10, 0x2000, 50); // same 65 us bucket - replaces the previous point
+    items.memName(0xBEEF);
+    items.memFree(10, 0x9999); // allocated before the capture attached - no effect
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS);
+
+    List<TracySession.PlotPoint> curve = session.memoryCurves().get("pool@beef");
+    assertEquals(List.of(new TracySession.PlotPoint(10, 150.0)), curve);
+  }
+
   /** Writes decompressed tracy items the way the client's dequeue emits them. */
   private static final class ItemBuilder {
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -182,6 +264,49 @@ public class TracyEventReaderTest {
       writeLong(namePointer);
       writeLong(deltaTicks);
       writeLong(Double.doubleToLongBits(value));
+    }
+
+    void memName(long namePointer) {
+      out.write(TracyQueueType.MemNamePayload.ordinal());
+      writeLong(namePointer);
+    }
+
+    void memAlloc(long deltaTicks, long pointer, long size) {
+      out.write(TracyQueueType.MemAllocNamed.ordinal());
+      writeLong(deltaTicks);
+      writeInt(1); // owning thread
+      writeLong(pointer);
+      for (int i = 0; i < 6; i++) out.write((int)(size >> (8 * i) & 0xFF));
+    }
+
+    void memFree(long deltaTicks, long pointer) {
+      out.write(TracyQueueType.MemFreeNamed.ordinal());
+      writeLong(deltaTicks);
+      writeInt(1); // owning thread
+      writeLong(pointer);
+    }
+
+    void singleString(String text) {
+      out.write(TracyQueueType.SingleStringData.ordinal());
+      byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
+      writeU16(utf8.length);
+      out.writeBytes(utf8);
+    }
+
+    void messageColor(long absoluteTicks, int r, int g, int b) {
+      out.write(TracyQueueType.MessageColor.ordinal());
+      writeLong(absoluteTicks);
+      out.write(b);
+      out.write(g);
+      out.write(r);
+    }
+
+    void stringData(long pointer, String text) {
+      out.write(TracyQueueType.StringData.ordinal());
+      writeLong(pointer);
+      byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
+      writeU16(utf8.length);
+      out.writeBytes(utf8);
     }
 
     InputStream stream() {

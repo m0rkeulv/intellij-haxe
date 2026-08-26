@@ -32,10 +32,18 @@ public final class TracyZoneTrees {
    */
   @NotNull
   public static FlameNode threadTree(@NotNull TracySession session, int threadId) {
-    Builder root = new Builder(null, 0, Math.max(session.durationNs() / 1000, 1));
+    List<TracyZone> ordered = session.zones().stream()
+      .filter(zone -> zone.threadId() == threadId)
+      .toList();
+    return treeFromOrdered(ordered, session.durationNs());
+  }
+
+  /** Builds the flame tree from one thread's START-ORDERED zones (windowed loads sort before calling). */
+  @NotNull
+  public static FlameNode treeFromOrdered(@NotNull List<TracyZone> ordered, long durationNs) {
+    Builder root = new Builder(null, 0, Math.max(durationNs / 1000, 1));
     Deque<Builder> open = new ArrayDeque<>();
-    for (TracyZone zone : session.zones()) {
-      if (zone.threadId() != threadId) continue;
+    for (TracyZone zone : ordered) {
       long startUs = zone.startNs() / 1000;
       long endUs = Math.max(zone.endNs() / 1000, startUs + 1);
       while (!open.isEmpty() && startUs >= open.peek().endUs) {

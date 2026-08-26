@@ -8,12 +8,15 @@ import com.intellij.plugins.haxe.profiler.model.StackFrame;
 import com.intellij.plugins.haxe.profiler.model.StackSample;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -52,30 +55,56 @@ public final class HxtSessionTranslator {
 
   /**
    * Reads any HXTS file: v1 headers dispatch to the sampled-capture path,
-   * v2 to the zone-capture records ({@link HxtZoneCodec}).
+   * v5 to the disk-served zone store ({@link HxtZoneStore} — zone captures
+   * are too big to load whole, so they need the file, not a stream).
+   * v2-v4 headers are zone captures from older in-progress layouts;
+   * recapture.
    */
   @NotNull
-  public static HxtCapture translateCapture(@NotNull InputStream in) throws IOException {
+  public static HxtCapture translateCapture(@NotNull Path file) throws IOException {
+    int version;
+    try (InputStream in = new BufferedInputStream(Files.newInputStream(file))) {
+      DataInputStream data = new DataInputStream(in);
+      readMagic(data);
+      version = readU16(data);
+    }
+    return switch (version) {
+      case 1 -> {
+        try (InputStream in = new BufferedInputStream(Files.newInputStream(file))) {
+          yield new HxtCapture.Samples(translate(in));
+        }
+      }
+      case HxtZoneWriter.VERSION -> new HxtCapture.Zones(HxtZoneStore.open(file));
+      case 2, 3, 4 -> throw new ProfilerFormatException("this zone capture uses an older in-progress layout - capture it again");
+      default -> throw new ProfilerFormatException("unsupported HXTS version " + version);
+    };
+  }
+
+  /** The v1 (sampled) view of a stream; zone captures need {@link #translateCapture} with the file. */
+  @NotNull
+  public static ProfilerSnapshot translate(@NotNull InputStream in) throws IOException {
     DataInputStream data = new DataInputStream(in);
     readMagic(data);
     int version = readU16(data);
     int tickHz = readInt(data);
     double startStamp = readDouble(data);
     String target = readString(data, readU16(data));
-    return switch (version) {
-      case 1 -> new HxtCapture.Samples(readSampleRecords(data, tickHz, startStamp, target, version));
-      case 2 -> new HxtCapture.Zones(HxtZoneCodec.readRecords(data, startStamp));
-      default -> throw new ProfilerFormatException("unsupported HXTS version " + version);
-    };
+    if (version != 1) {
+      throw new ProfilerFormatException("this HXTS file holds a zone capture, not samples");
+    }
+    return readSampleRecords(data, tickHz, startStamp, target, version);
   }
 
-  /** The v1 (sampled) view; a v2 file fails here — use {@link #translateCapture} to accept both. */
-  @NotNull
-  public static ProfilerSnapshot translate(@NotNull InputStream in) throws IOException {
-    if (translateCapture(in) instanceof HxtCapture.Samples samples) {
-      return samples.snapshot();
+  /** Consumes a v3 header up to the records; the store's index pass starts here. */
+  static void readZoneHeader(@NotNull DataInputStream data) throws IOException {
+    readMagic(data);
+    int version = readU16(data);
+    if (version != HxtZoneWriter.VERSION) {
+      throw new ProfilerFormatException("unsupported HXTS zone version " + version);
     }
-    throw new ProfilerFormatException("this HXTS file holds a zone capture, not samples");
+    readInt(data); // tick rate
+    readDouble(data); // epoch - INFO carries the authoritative copy
+    readString(data, readU16(data)); // target
   }
 
   @NotNull

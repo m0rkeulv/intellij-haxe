@@ -114,7 +114,9 @@ public enum TracyQueueType {
   CpuTopology(17),
   SingleStringData(1, Payload.U16),
   SecondStringData(1, Payload.U16),
-  MemNamePayload(9, Payload.U16),
+  // fixed 9 bytes (u64 name pointer) - NOT a string transfer; the C++
+  // table's transfer group starts below at StringData
+  MemNamePayload(9),
   ThreadGroupHint(9),
   StringData(9, Payload.U16),
   ThreadName(9, Payload.U16),
