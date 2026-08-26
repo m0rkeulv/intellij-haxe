@@ -4,7 +4,6 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.CommandLineState;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
-import com.intellij.execution.process.ColoredProcessHandler;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.project.Project;
@@ -41,6 +40,6 @@ public class DapCommandLineRunningState extends CommandLineState {
   protected ProcessHandler startProcess() throws ExecutionException {
     GeneralCommandLine commandLine = commandLineSupplier.get();
     setConsoleBuilder(TextConsoleBuilderFactory.getInstance().createBuilder(project));
-    return new ColoredProcessHandler(commandLine.createProcess(), commandLine.getCommandLineString());
+    return new MostlySilentColoredProcessHandler(commandLine);
   }
 }

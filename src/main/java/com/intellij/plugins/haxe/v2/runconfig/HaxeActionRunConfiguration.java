@@ -24,6 +24,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.util.PathUtil;
+import com.intellij.util.io.BaseOutputReader;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -118,7 +119,13 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
         GeneralCommandLine commandLine = new GeneralCommandLine(command)
           .withWorkDirectory(resolved.workDirectory())
           .withEnvironment(LimeProjects.commandEnvironment(command));
-        KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine);
+        KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine) {
+          // a run action wraps the app - long-running, sparse output; the default reader busy-polls it
+          @Override
+          protected @NotNull BaseOutputReader.Options readerOptions() {
+            return BaseOutputReader.Options.forMostlySilentProcess();
+          }
+        };
         ProcessTerminatedListener.attach(processHandler);
         return processHandler;
       }
