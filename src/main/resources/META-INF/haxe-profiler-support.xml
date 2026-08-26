@@ -35,5 +35,8 @@
     <applicationService
       serviceInterface="com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi"
       serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerProcessUi"/>
+    <applicationConfigurable parentId="profiler" id="profiler.haxe"
+                             bundle="messages.HaxeProfilerBundle" key="haxe.profiler.configurable.name"
+                             provider="com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerConfigurableProvider"/>
   </extensions>
 </idea-plugin>
