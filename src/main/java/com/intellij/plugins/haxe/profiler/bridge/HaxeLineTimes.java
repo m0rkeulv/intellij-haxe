@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,7 +29,7 @@ import java.util.Set;
  */
 final class HaxeLineTimes {
 
-  /** {@code enclosing} is null for per-function (tracy) attribution. */
+  /** {@code enclosing} is the method's displayable name ("get", "setup.2"); null for per-function (tracy) attribution. */
   record LineTime(long totalUs, long selfUs, @Nullable String enclosing, long enclosingTotalUs) {
   }
 
@@ -90,7 +91,11 @@ final class HaxeLineTimes {
   /**
    * Sampled captures, attributed like the Java hints: every frame's line is
    * a call site inside that frame's own method, the leaf line gets the self
-   * time, and each line remembers its method and the method's total.
+   * time, and each line remembers its method and the method's total. The
+   * hints are SOURCE-level while HL compiles a generic into one function
+   * per type argument (`ObjectPool_geom_Point.get`), so methods are keyed
+   * by file + displayed name — a line's "% of method" denominator covers
+   * every specialization of the source method, never just its own.
    */
   @NotNull
   static HaxeLineTimes fromSnapshot(@NotNull ProfilerSnapshot snapshot) {
@@ -108,22 +113,40 @@ final class HaxeLineTimes {
       List<StackFrame> frames = sample.frames();
       for (int i = 0; i < frames.size(); i++) {
         StackFrame frame = frames.get(i);
-        // recursion charges a method once per sample, not once per frame
-        if (chargedMethods.add(frame.symbol())) {
-          methodTotalsNs.merge(frame.symbol(), timeNs, Long::sum);
-        }
         if (frame.file() == null || frame.line() <= 0) continue;
         String file = frame.file().replace('\\', '/');
+        String methodName = displayMethodName(frame.symbol());
+        // recursion (and same-line siblings across specializations) charge
+        // a method once per sample, not once per frame
+        if (chargedMethods.add(file + "#" + methodName)) {
+          methodTotalsNs.merge(file + "#" + methodName, timeNs, Long::sum);
+        }
         if (!chargedLines.add(file + ":" + frame.line())) continue;
         Accumulator line = byFile
           .computeIfAbsent(file, key -> new HashMap<>())
           .computeIfAbsent(frame.line(), key -> new Accumulator());
         line.totalNs += timeNs;
-        line.enclosing = frame.symbol();
+        line.enclosing = methodName;
         if (i == frames.size() - 1) line.selfNs += timeNs;
       }
     }
     return new HaxeLineTimes(freeze(byFile, methodTotalsNs), sessionNs / 1000);
+  }
+
+  /**
+   * The symbol's last name segment, extended left across purely numeric
+   * segments so a closure ("Main.setup.2") reads "setup.2" rather than a
+   * bare "2" that names nothing. This is both the tooltip text and (with
+   * the file) the method-total key, so the shown name and the shown share
+   * always describe the same thing.
+   */
+  static String displayMethodName(String symbol) {
+    // split on dots - HL symbols are Class.method with one numeric segment
+    // appended per closure nesting level
+    String[] segments = symbol.split("\\.");
+    int first = segments.length - 1;
+    while (first > 0 && segments[first].chars().allMatch(Character::isDigit)) first--;
+    return String.join(".", Arrays.asList(segments).subList(first, segments.length));
   }
 
   /** Converts to µs once, drops sub-µs lines, and resolves each line's enclosing-method total. */
@@ -137,7 +160,7 @@ final class HaxeLineTimes {
         if (totalUs <= 0) return;
         long enclosingTotalUs = accumulator.enclosing == null
                                 ? 0
-                                : methodTotalsNs.getOrDefault(accumulator.enclosing, 0L) / 1000;
+                                : methodTotalsNs.getOrDefault(file + "#" + accumulator.enclosing, 0L) / 1000;
         frozenLines.put(line, new LineTime(totalUs, accumulator.selfNs / 1000,
                                            accumulator.enclosing, enclosingTotalUs));
       });

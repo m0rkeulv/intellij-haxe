@@ -39,4 +39,11 @@
                              bundle="messages.HaxeProfilerBundle" key="haxe.profiler.configurable.name"
                              provider="com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerConfigurableProvider"/>
   </extensions>
+
+  <actions>
+    <action id="Haxe.Profiler.ToggleHints"
+            class="com.intellij.plugins.haxe.profiler.bridge.HaxeToggleProfilerHintsAction">
+      <add-to-group group-id="EditorGutterPopupMenu" anchor="first"/>
+    </action>
+  </actions>
 </idea-plugin>

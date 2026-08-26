@@ -1,8 +1,10 @@
 package com.intellij.plugins.haxe.profiler.bridge;
 
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
@@ -33,11 +35,29 @@ import java.util.WeakHashMap;
 public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
 
   private static final Logger LOG = Logger.getInstance(HaxeIuPerformanceHints.class);
+  private static final ExtensionPointName<PerformanceHintsManagerListener> EP_NAME =
+    ExtensionPointName.create("com.intellij.profiler.performanceHints.listener");
+  private static final String HINTS_VISIBLE_PROPERTY = "haxe.profiler.hints.visible";
 
   private final Map<Object, HaxeLineTimes> byTab = new HashMap<>();
   private final Map<Project, HaxeLineTimes> activeByProject = new HashMap<>();
   private final Map<Project, MessageBusConnection> connections = new HashMap<>();
   private final Map<Editor, HaxeLineChipGutter.Installed> annotated = new WeakHashMap<>();
+
+  /** The registered listener instance, for the gutter show/hide action. */
+  @Nullable
+  static HaxeIuPerformanceHints getInstance() {
+    return EP_NAME.findExtension(HaxeIuPerformanceHints.class);
+  }
+
+  /** The user's show/hide choice, kept across sessions and captures. */
+  static boolean hintsVisible() {
+    return PropertiesComponent.getInstance().getBoolean(HINTS_VISIBLE_PROPERTY, true);
+  }
+
+  static void setHintsVisible(boolean visible) {
+    PropertiesComponent.getInstance().setValue(HINTS_VISIBLE_PROPERTY, visible, true);
+  }
 
   @Override
   public boolean isAvailable() {
@@ -90,15 +110,36 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
     return null;
   }
 
+  /** Whether the active capture has times for this file — drives the gutter action's visibility. */
+  boolean hasHintsFor(@NotNull Project project, @NotNull VirtualFile file) {
+    HaxeLineTimes active = activeByProject.get(project);
+    if (active == null) return false;
+    Map<Integer, HaxeLineTimes.LineTime> lines = active.forEditorPath(file.getPath());
+    return lines != null && !lines.isEmpty();
+  }
+
+  /** Re-applies the show/hide choice to every open editor of every project with an active capture. */
+  void applyHintsVisibility() {
+    clearAnnotations();
+    if (!hintsVisible()) return;
+    activeByProject.forEach((project, lineTimes) -> {
+      if (!project.isDisposed()) annotateOpenEditors(project, lineTimes);
+    });
+  }
+
   private void activate(Project project, HaxeLineTimes lineTimes) {
     activeByProject.put(project, lineTimes);
     clearAnnotations();
+    annotateOpenEditors(project, lineTimes);
+    connections.computeIfAbsent(project, this::listenForNewEditors);
+  }
+
+  private void annotateOpenEditors(Project project, HaxeLineTimes lineTimes) {
     for (var fileEditor : FileEditorManager.getInstance(project).getAllEditors()) {
       if (fileEditor instanceof TextEditor textEditor) {
         annotate(textEditor.getEditor(), fileEditor.getFile(), lineTimes);
       }
     }
-    connections.computeIfAbsent(project, this::listenForNewEditors);
   }
 
   /** Editors opened while a capture is active get their column on open. */
@@ -117,13 +158,22 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
   }
 
   private void annotate(Editor editor, @Nullable VirtualFile file, HaxeLineTimes lineTimes) {
+    if (!hintsVisible()) return;
     if (file == null || annotated.containsKey(editor)) return;
     Map<Integer, HaxeLineTimes.LineTime> lines = lineTimes.forEditorPath(file.getPath());
     if (lines == null || lines.isEmpty()) return;
-    HaxeLineChipGutter.Installed installed = HaxeLineChipGutter.install(editor, lines, lineTimes.sessionUs());
+    HaxeLineChipGutter.Installed installed =
+      HaxeLineChipGutter.install(editor, lines, lineTimes.sessionUs(), this::hintsClosedFromGutter);
     if (installed != null) {
       annotated.put(editor, installed);
     }
+  }
+
+  /** The gutter's own "Close Annotations" removed a chip column — honor it as Hide Performance Hints. */
+  private void hintsClosedFromGutter() {
+    if (!hintsVisible()) return;
+    setHintsVisible(false);
+    applyHintsVisibility();
   }
 
   private void clearAnnotations() {
