@@ -11,11 +11,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
+import javax.swing.JScrollBar;
 import javax.swing.JViewport;
 import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
+import java.awt.Adjustable;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
@@ -26,6 +28,8 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
@@ -41,8 +45,13 @@ import java.util.function.Consumer;
  * ruler and the runs carry named span sources on the same axis (frames, GC
  * collections — any provider). Runs too narrow for a pixel paint as
  * 1&nbsp;px slivers so activity stays visible at any zoom; idle spans stay
- * unpainted. Ctrl+wheel zooms around the pointer, plain wheel keeps
- * scrolling the pane; a click selects a run and reports its call chain to
+ * unpainted. The horizontal axis is VIRTUAL: the panel always fills the
+ * viewport and paints the window given by a view-start time and scale, so
+ * the deepest zoom does not depend on session length (a session-wide
+ * component would overflow int pixel coordinates); its own scrollbar
+ * ({@link #createHorizontalScrollBar()}) scrolls that axis. Ctrl+wheel
+ * zooms around the pointer, shift+wheel pans, plain wheel keeps scrolling
+ * the pane vertically; a click selects a run and reports its call chain to
  * the selection listener, double-click opens its Haxe source.
  */
 final class HaxeCallChartPanel extends JComponent implements Scrollable {
@@ -77,8 +86,10 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private static final double ZOOM_STEP = 1.3;
   /** One zoom-button press doubles or halves the scale. */
   private static final double BUTTON_ZOOM_STEP = 2.0;
-  /** Zoom-in floor: a 100 us sampling period still spans several hundred px. */
-  private static final double MIN_US_PER_PIXEL = 0.25;
+  /** Zoom-in floor: a 1 us tracy zone (the model's finest grain) spans 500 px — room for its label. */
+  private static final double MIN_US_PER_PIXEL = 0.002;
+  /** The horizontal scrollbar's fixed position count; values map linearly onto the session. */
+  private static final int SCROLL_RESOLUTION = 1_000_000_000;
 
   private final Consumer<StackFrame> navigator;
   /** Told the selected run's call chain, outermost first; an empty list on deselection. */
@@ -93,6 +104,11 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private int rowCount;
   /** Microseconds one pixel covers; 0 = fit the whole capture to the viewport. */
   private double usPerPixel;
+  /** The time at the panel's left edge while zoomed; fit mode pins it to the tree start. */
+  private long viewStartUs;
+  private @Nullable JScrollBar horizontalScrollBar;
+  /** Guards against the scrollbar's own change events while this panel updates its model. */
+  private boolean syncingScrollBar;
 
   HaxeCallChartPanel(@NotNull Consumer<StackFrame> navigator,
                      @NotNull Consumer<List<FlameNode>> selectionListener,
@@ -114,15 +130,43 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
       }
     });
     addMouseWheelListener(this::onWheel);
+    addComponentListener(new ComponentAdapter() {
+      @Override
+      public void componentResized(ComponentEvent event) {
+        if (usPerPixel > 0) {
+          setViewStart(viewStartUs);
+        }
+        syncScrollBar();
+      }
+    });
+  }
+
+  /**
+   * The scroller for the virtual horizontal axis, placed by the tab below
+   * the chart's scroll pane (whose own horizontal bar stays off).
+   */
+  @NotNull
+  JScrollBar createHorizontalScrollBar() {
+    JScrollBar scrollBar = new JScrollBar(Adjustable.HORIZONTAL);
+    scrollBar.addAdjustmentListener(event -> {
+      if (!syncingScrollBar) {
+        applyScrollValue(event.getValue());
+      }
+    });
+    horizontalScrollBar = scrollBar;
+    syncScrollBar();
+    return scrollBar;
   }
 
   void setTree(@NotNull FlameNode tree) {
     root = tree;
     rowCount = ProfilerTimeline.treeDepth(tree);
     usPerPixel = 0;
+    viewStartUs = tree.startUs();
     selected = null;
     clearSpanSelection();
     selectionListener.accept(List.of());
+    syncScrollBar();
     revalidate();
     repaint();
   }
@@ -251,10 +295,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
         }
       }
 
-      // the label follows the scrolled view so it stays readable at any position
       g.setColor(RULER_TEXT);
-      int labelX = getVisibleRect().x + JBUI.scale(4);
-      g.drawString(lane.name(), labelX, y + (height + metrics.getAscent() - metrics.getDescent()) / 2);
+      g.drawString(lane.name(), JBUI.scale(4), y + (height + metrics.getAscent() - metrics.getDescent()) / 2);
     }
   }
 
@@ -363,17 +405,25 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     return null;
   }
 
-  /** Ctrl+wheel zooms around the pointer; anything else scrolls the pane as usual. */
+  /** Ctrl+wheel zooms around the pointer, shift+wheel pans; anything else scrolls the pane vertically as usual. */
   private void onWheel(MouseWheelEvent event) {
-    if (!event.isControlDown()) {
-      Container parent = getParent();
-      if (parent != null) {
-        parent.dispatchEvent(SwingUtilities.convertMouseEvent(this, event, parent));
-      }
+    if (event.isControlDown()) {
+      event.consume();
+      zoomTo(scale() * Math.pow(ZOOM_STEP, event.getPreciseWheelRotation()), timeAt(event.getX()), event.getX());
       return;
     }
-    event.consume();
-    zoomTo(scale() * Math.pow(ZOOM_STEP, event.getPreciseWheelRotation()), timeAt(event.getX()), event.getX());
+    if (event.isShiftDown() && usPerPixel > 0) {
+      event.consume();
+      int deltaPx = (int)Math.round(event.getPreciseWheelRotation() * getWidth() * 0.1);
+      setViewStart(viewStartUs + (long)(deltaPx * usPerPixel));
+      syncScrollBar();
+      repaint();
+      return;
+    }
+    Container parent = getParent();
+    if (parent != null) {
+      parent.dispatchEvent(SwingUtilities.convertMouseEvent(this, event, parent));
+    }
   }
 
   void zoomIn() {
@@ -392,27 +442,57 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     zoomTo(scale() * factor, anchorUs, centerX);
   }
 
+  /** Applies the target scale keeping {@code anchorUs} under pixel {@code mouseX}; zooming past the session falls back to fit. */
   private void zoomTo(double targetUsPerPixel, long anchorUs, int mouseX) {
-    JViewport viewport = (JViewport)SwingUtilities.getAncestorOfClass(JViewport.class, this);
-    if (viewport == null) return;
-    if (targetUsPerPixel >= fitScale(viewport.getWidth())) {
+    if (targetUsPerPixel >= fitScale(getWidth())) {
       usPerPixel = 0;
-      revalidate();
-      repaint();
-      return;
+      viewStartUs = root.startUs();
     }
-    usPerPixel = Math.max(targetUsPerPixel, MIN_US_PER_PIXEL);
+    else {
+      usPerPixel = Math.max(targetUsPerPixel, MIN_US_PER_PIXEL);
+      setViewStart(anchorUs - (long)(mouseX * usPerPixel));
+    }
+    syncScrollBar();
+    repaint();
+  }
 
-    // keep the time under the pointer in place; the viewport clamps view
-    // positions against its OLD extent until the revalidate lays out
-    int mouseInViewport = mouseX - viewport.getViewPosition().x;
-    double appliedScale = usPerPixel;
-    revalidate();
-    SwingUtilities.invokeLater(() -> {
-      int anchorX = (int)Math.round((anchorUs - root.startUs()) / appliedScale);
-      viewport.setViewPosition(new Point(Math.max(0, anchorX - mouseInViewport), viewport.getViewPosition().y));
-      repaint();
-    });
+  /** Moves the zoomed view's left edge, clamped so the view never leaves the session. */
+  private void setViewStart(long startUs) {
+    long visibleUs = (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+    long maxStartUs = root.startUs() + Math.max(0, root.durationUs() - visibleUs);
+    viewStartUs = Math.max(root.startUs(), Math.min(startUs, maxStartUs));
+  }
+
+  /** Mirrors the view into the scrollbar: proportional thumb, disabled in fit mode. */
+  private void syncScrollBar() {
+    JScrollBar scrollBar = horizontalScrollBar;
+    if (scrollBar == null) return;
+    syncingScrollBar = true;
+    try {
+      long durationUs = root.durationUs();
+      if (usPerPixel <= 0 || durationUs <= 0) {
+        scrollBar.setEnabled(false);
+        scrollBar.setValues(0, SCROLL_RESOLUTION, 0, SCROLL_RESOLUTION);
+        return;
+      }
+      long visibleUs = (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+      int extent = (int)Math.min(SCROLL_RESOLUTION, Math.max(1, (long)(SCROLL_RESOLUTION * (double)visibleUs / durationUs)));
+      int value = (int)Math.round((viewStartUs - root.startUs()) / (double)durationUs * SCROLL_RESOLUTION);
+      scrollBar.setEnabled(extent < SCROLL_RESOLUTION);
+      scrollBar.setValues(Math.min(value, SCROLL_RESOLUTION - extent), extent, 0, SCROLL_RESOLUTION);
+      scrollBar.setUnitIncrement(Math.max(1, extent / 20));
+      scrollBar.setBlockIncrement(Math.max(1, extent * 9 / 10));
+    }
+    finally {
+      syncingScrollBar = false;
+    }
+  }
+
+  private void applyScrollValue(int value) {
+    if (usPerPixel <= 0) return;
+    long offsetUs = (long)((double)value / SCROLL_RESOLUTION * root.durationUs());
+    setViewStart(root.startUs() + offsetUs);
+    repaint();
   }
 
   private int rowHeight() {
@@ -436,12 +516,24 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     return Math.max(1, root.durationUs()) / (double)Math.max(1, width);
   }
 
+  /** The time at the panel's left edge — the view start while zoomed, the tree start in fit mode. */
+  private long viewLeftUs() {
+    return usPerPixel > 0 ? viewStartUs : root.startUs();
+  }
+
+  /**
+   * Clamped far outside any viewport: at deep zoom a session-distant time
+   * maps to billions of pixels, and a raw int cast would wrap negative and
+   * break the painters' culling. The clamp keeps ordering, so culling and
+   * fill widths stay correct.
+   */
   private int xOf(long timeUs) {
-    return (int)Math.round((timeUs - root.startUs()) / scale());
+    double x = (timeUs - viewLeftUs()) / scale();
+    return (int)Math.round(Math.max(-10_000_000, Math.min(10_000_000, x)));
   }
 
   private long timeAt(double x) {
-    return root.startUs() + (long)(x * scale());
+    return viewLeftUs() + (long)(x * scale());
   }
 
   /** The smallest 1/2/5 x 10^k microsecond step at least minUs wide. */
@@ -497,8 +589,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   @Override
   public Dimension getPreferredSize() {
-    int width = usPerPixel > 0 ? (int)Math.ceil(root.durationUs() / usPerPixel) : 0;
-    return new Dimension(width, chartTop() + rowCount * rowHeight());
+    // width always tracks the viewport (the horizontal axis is virtual); only the height is real
+    return new Dimension(0, chartTop() + rowCount * rowHeight());
   }
 
   @Override
@@ -518,7 +610,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   @Override
   public boolean getScrollableTracksViewportWidth() {
-    return usPerPixel <= 0;
+    return true;
   }
 
   @Override

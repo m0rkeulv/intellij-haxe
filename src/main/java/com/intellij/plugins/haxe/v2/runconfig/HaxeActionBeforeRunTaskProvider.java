@@ -402,10 +402,11 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   }
 
   /**
-   * The compile additions an hxcpp PROFILING launch injects (profiler defines
-   * plus the start/stop bootstrap), or null on every non-profiling launch.
-   * The launched configuration knows the dump path; the build file's type
-   * picks the tool spelling (lime {@code --haxeflag=} against plain haxe).
+   * The compile additions an hxcpp PROFILING launch injects — the telemetry
+   * entry's defines plus its start/stop bootstrap, or the tracy entry's
+   * plain defines — null on every non-profiling launch. The launched
+   * configuration knows the dump path; the build file's type picks the
+   * tool spelling (lime {@code --haxeflag=} against plain haxe).
    */
   @Nullable
   private static List<String> profilingAdditions(@NotNull Project project,
@@ -418,7 +419,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     HaxeBuildFile buildFile = resolveBuildFile(project, task.getBuildFilePath());
     if (buildFile == null) return null;
     boolean limeFamily = buildFile.type() != HaxeBuildFileType.HXML;
-    return HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, limeFamily, dumpPath);
+    List<String> telemetry = HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, limeFamily, dumpPath);
+    if (telemetry != null) return telemetry;
+    return HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, limeFamily);
   }
 
   /** The build system's debug compile additions for the file's current selection, or null when it has none. */

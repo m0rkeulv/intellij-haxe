@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Resolves profiler child executors back to their Haxe profiler
@@ -72,26 +73,42 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
   }
 
   @Override
+  public @Nullable List<String> hxcppTracyAdditionsFor(@NotNull Executor executor, boolean limeFamily) {
+    RunExecutorSettings settings = registeredSettings(executor.getId());
+    if (!(settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings)) return null;
+    if (!(profilerSettings.getState() instanceof HaxeHxcppTracyProfilerConfigurationState)) return null;
+    // HXCPP_TELEMETRY is the master switch, HXCPP_TRACY picks the tracy
+    // implementation, and the zones need the stack-frame instrumentation.
+    // HXCPP_STACK_LINE is REQUIRED, not optional: TelemetryTracy.cpp reads
+    // StackFrame::lineNumber unconditionally, and that member only exists
+    // with the define - a tracy build without it fails to compile.
+    if (limeFamily) {
+      return List.of("-DHXCPP_TELEMETRY", "-DHXCPP_TRACY", "-DHXCPP_STACK_TRACE", "-DHXCPP_STACK_LINE");
+    }
+    return List.of("-D", "HXCPP_TELEMETRY", "-D", "HXCPP_TRACY", "-D", "HXCPP_STACK_TRACE", "-D", "HXCPP_STACK_LINE");
+  }
+
+  @Override
   public @Nullable Executor profilerExecutorFor(@NotNull RunConfiguration configuration) {
     if (!(configuration instanceof HaxeProfilableRunConfiguration profilable)) return null;
     DefaultProfilerExecutorGroup group = DefaultProfilerExecutorGroup.Companion.getInstance();
     if (group == null) return null;
-    String typeId = typeIdFor(profilable.profilingLane());
+    Set<String> typeIds = typeIdsFor(profilable.profilingLane());
 
     for (Executor child : group.childExecutors()) {
       RunExecutorSettings settings = group.getRegisteredSettings(child.getId());
       if (settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings
-          && typeId.equals(profilerSettings.getState().getConfigurationTypeId())) {
+          && typeIds.contains(profilerSettings.getState().getConfigurationTypeId())) {
         return child;
       }
     }
     return null;
   }
 
-  private static String typeIdFor(Lane lane) {
+  private static Set<String> typeIdsFor(Lane lane) {
     return switch (lane) {
-      case HASHLINK -> HaxeHlProfilerConfigurationType.ID;
-      case HXCPP -> HaxeHxcppProfilerConfigurationType.ID;
+      case HASHLINK -> Set.of(HaxeHlProfilerConfigurationType.ID);
+      case HXCPP -> Set.of(HaxeHxcppProfilerConfigurationType.ID, HaxeHxcppTracyProfilerConfigurationType.ID);
     };
   }
 

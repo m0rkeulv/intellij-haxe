@@ -50,15 +50,38 @@ public final class HxtSessionTranslator {
   private HxtSessionTranslator() {
   }
 
+  /**
+   * Reads any HXTS file: v1 headers dispatch to the sampled-capture path,
+   * v2 to the zone-capture records ({@link HxtZoneCodec}).
+   */
   @NotNull
-  public static ProfilerSnapshot translate(@NotNull InputStream in) throws IOException {
+  public static HxtCapture translateCapture(@NotNull InputStream in) throws IOException {
     DataInputStream data = new DataInputStream(in);
     readMagic(data);
     int version = readU16(data);
     int tickHz = readInt(data);
-    if (tickHz <= 0) throw new ProfilerFormatException("invalid tick rate: " + tickHz);
     double startStamp = readDouble(data);
     String target = readString(data, readU16(data));
+    return switch (version) {
+      case 1 -> new HxtCapture.Samples(readSampleRecords(data, tickHz, startStamp, target, version));
+      case 2 -> new HxtCapture.Zones(HxtZoneCodec.readRecords(data, startStamp));
+      default -> throw new ProfilerFormatException("unsupported HXTS version " + version);
+    };
+  }
+
+  /** The v1 (sampled) view; a v2 file fails here — use {@link #translateCapture} to accept both. */
+  @NotNull
+  public static ProfilerSnapshot translate(@NotNull InputStream in) throws IOException {
+    if (translateCapture(in) instanceof HxtCapture.Samples samples) {
+      return samples.snapshot();
+    }
+    throw new ProfilerFormatException("this HXTS file holds a zone capture, not samples");
+  }
+
+  @NotNull
+  private static ProfilerSnapshot readSampleRecords(DataInputStream data, int tickHz, double startStamp,
+                                                    String target, int version) throws IOException {
+    if (tickHz <= 0) throw new ProfilerFormatException("invalid tick rate: " + tickHz);
 
     List<String> names = new ArrayList<>();
     names.add(""); // the table is 1-indexed

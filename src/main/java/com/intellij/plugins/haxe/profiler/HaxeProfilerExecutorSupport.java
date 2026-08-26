@@ -41,6 +41,14 @@ public interface HaxeProfilerExecutorSupport {
   List<String> hxcppProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily, @NotNull Path dumpPath);
 
   /**
+   * The compile additions an hxcpp TRACY launch must add to its build (the
+   * tracy defines — no bootstrap: the runtime instruments every function
+   * itself), or null when the executor is not the hxcpp tracy one.
+   */
+  @Nullable
+  List<String> hxcppTracyAdditionsFor(@NotNull Executor executor, boolean limeFamily);
+
+  /**
    * The profiler child executor that would launch this configuration (the
    * lane's registered profiler entry), or null without one — what a
    * tool-window "Profile" action executes with.
@@ -60,6 +68,13 @@ public interface HaxeProfilerExecutorSupport {
   static List<String> hxcppProfilingAdditions(@NotNull Executor executor, boolean limeFamily, @NotNull Path dumpPath) {
     HaxeProfilerExecutorSupport support = getInstance();
     return support == null ? null : support.hxcppProfilingAdditionsFor(executor, limeFamily, dumpPath);
+  }
+
+  /** Null-safe form of {@link #hxcppTracyAdditionsFor}. */
+  @Nullable
+  static List<String> hxcppTracyAdditions(@NotNull Executor executor, boolean limeFamily) {
+    HaxeProfilerExecutorSupport support = getInstance();
+    return support == null ? null : support.hxcppTracyAdditionsFor(executor, limeFamily);
   }
 
   /** Null-safe form of {@link #profilerExecutorFor}. */

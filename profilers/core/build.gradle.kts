@@ -19,6 +19,10 @@ dependencies {
         intellijIdea(providers.gradleProperty("platformVersion"))
     }
 
+    // tracy streams LZ4 with a cross-frame dictionary window; commons-compress's
+    // block reader + prefill() is the one Java implementation that decodes it
+    implementation(libs.commonsCompress)
+
     testImplementation(libs.junitJupiter)
     testRuntimeOnly(libs.junitPlatformLauncher)
 }

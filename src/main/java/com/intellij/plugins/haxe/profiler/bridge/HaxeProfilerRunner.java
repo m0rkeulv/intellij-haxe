@@ -16,6 +16,7 @@ import com.intellij.profiler.DefaultProfilerExecutorGroup;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Runs a Haxe profilable configuration under the IU "Run with Profiler"
@@ -28,10 +29,10 @@ public class HaxeProfilerRunner extends GenericProgramRunner<RunnerSettings> {
 
   public static final String RUNNER_ID = "HaxeHlProfilerRunner";
 
-  /** Which profiler configuration type serves each lane. */
-  private static final Map<Lane, String> LANE_TYPE_IDS = Map.of(
-    Lane.HASHLINK, HaxeHlProfilerConfigurationType.ID,
-    Lane.HXCPP, HaxeHxcppProfilerConfigurationType.ID);
+  /** Which profiler configuration types serve each lane. */
+  private static final Map<Lane, Set<String>> LANE_TYPE_IDS = Map.of(
+    Lane.HASHLINK, Set.of(HaxeHlProfilerConfigurationType.ID),
+    Lane.HXCPP, Set.of(HaxeHxcppProfilerConfigurationType.ID, HaxeHxcppTracyProfilerConfigurationType.ID));
 
   @NotNull
   @Override
@@ -48,7 +49,7 @@ public class HaxeProfilerRunner extends GenericProgramRunner<RunnerSettings> {
     if (group == null) return false;
     RunExecutorSettings settings = group.getRegisteredSettings(executorId);
     return settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings
-           && profilerSettings.getState().getConfigurationTypeId().equals(LANE_TYPE_IDS.get(configuration.profilingLane()));
+           && LANE_TYPE_IDS.get(configuration.profilingLane()).contains(profilerSettings.getState().getConfigurationTypeId());
   }
 
   @Override

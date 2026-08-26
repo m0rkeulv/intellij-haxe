@@ -19,6 +19,8 @@ import com.intellij.plugins.haxe.profiler.model.StackFrame;
 import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline;
 import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline.FlameNode;
 import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline.UsSpan;
+import com.intellij.plugins.haxe.profiler.tracy.TracySession;
+import com.intellij.plugins.haxe.profiler.tracy.TracyZoneTrees;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.components.JBScrollPane;
@@ -28,6 +30,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.Icon;
 import javax.swing.JComponent;
+import javax.swing.ScrollPaneConstants;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,12 +40,13 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * The Call Chart tab: one thread's samples explorable over a time axis, the
- * concept Chrome DevTools and the Android profiler render for a sampled
- * capture ({@link HaxeCallChartPanel} over {@link ProfilerTimeline#flameTree}).
- * A thread picker on top switches the charted thread; clicking a run fills
- * the detail panel on the right with its time range and call stack; the
- * toolbar on the left zooms and toggles the marker lanes (frames, GC).
+ * The Call Chart tab: one thread's capture explorable over a time axis, the
+ * concept Chrome DevTools and the Android profiler render
+ * ({@link HaxeCallChartPanel} over a per-thread flame tree). Two data
+ * sources feed the same UI: sampled snapshots (reconstructed runs) and
+ * tracy zone sessions (exact measured intervals). A thread picker on top
+ * switches the charted thread; clicking a run fills the detail panel on
+ * the right; the toolbar on the left zooms and toggles the marker lanes.
  */
 final class HaxeCallChartTab {
 
@@ -53,41 +57,70 @@ final class HaxeCallChartTab {
   private static final Color FRAME_LANE_EVEN = new JBColor(0x9CB8D6, 0x53687D);
   private static final Color FRAME_LANE_ODD = new JBColor(0xC4D4E4, 0x3E4E5E);
 
+  /** The per-thread chart inputs one capture kind provides. */
+  private interface ChartData {
+    List<ProfilerThread> threads();
+
+    FlameNode treeFor(int threadId);
+
+    GcSpans gcSpansFor(int threadId);
+
+    List<UsSpan> frameSpansFor(int threadId);
+  }
+
+  private record GcSpans(@NotNull List<UsSpan> spans, boolean frameAccurate) {
+  }
+
   private HaxeCallChartTab() {
   }
 
   @NotNull
   static JComponent create(@NotNull Project project, @NotNull ProfilerSnapshot snapshot) {
+    return create(project, new SnapshotData(snapshot));
+  }
+
+  @NotNull
+  static JComponent create(@NotNull Project project, @NotNull TracySession session) {
+    return create(project, new ZoneData(session));
+  }
+
+  @NotNull
+  private static JComponent create(@NotNull Project project, @NotNull ChartData data) {
     HaxeStackDetailPanel details = new HaxeStackDetailPanel(project);
     HaxeCallChartPanel chart = new HaxeCallChartPanel(frame -> HaxeCallStackElement.navigateToFrame(project, frame),
                                                       path -> showRunDetails(details, path),
                                                       (lane, span) -> showSpanDetails(details, lane, span));
     LaneState lanes = new LaneState();
 
-    ComboBox<ProfilerThread> threadPicker = new ComboBox<>(snapshot.threads().toArray(new ProfilerThread[0]));
+    ComboBox<ProfilerThread> threadPicker = new ComboBox<>(data.threads().toArray(new ProfilerThread[0]));
     threadPicker.setRenderer(BuilderKt.textListCellRenderer("", ProfilerThread::name));
     Runnable applyThread = () -> {
       ProfilerThread thread = (ProfilerThread)threadPicker.getSelectedItem();
       if (thread != null) {
-        chart.setTree(ProfilerTimeline.flameTree(snapshot, thread.id(), MAX_DEPTH));
-        // sample-flagged spans (HL) first; telemetry captures carry GC as
-        // per-frame time events instead - stop-the-world, so not per-thread
-        lanes.gcSpans = ProfilerTimeline.gcSpans(snapshot, thread.id());
-        lanes.gcFrameAccurate = lanes.gcSpans.isEmpty();
-        if (lanes.gcFrameAccurate) {
-          lanes.gcSpans = ProfilerTimeline.gcSpansFromEvents(snapshot);
-        }
-        lanes.frameSpans = frameSpansFor(snapshot, thread.id());
+        chart.setTree(data.treeFor(thread.id()));
+        GcSpans gc = data.gcSpansFor(thread.id());
+        lanes.gcSpans = gc.spans();
+        lanes.gcFrameAccurate = gc.frameAccurate();
+        lanes.frameSpans = data.frameSpansFor(thread.id());
         applyLanes(chart, lanes);
       }
     };
     threadPicker.addActionListener(event -> applyThread.run());
     applyThread.run();
 
+    // the chart's horizontal axis is virtual (it always fills the viewport
+    // and scrolls via its own bar); the scroll pane only handles vertical
+    JBScrollPane scrollPane = new JBScrollPane(chart,
+                                               ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                                               ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+    BorderLayoutPanel chartArea = new BorderLayoutPanel();
+    chartArea.addToCenter(scrollPane);
+    chartArea.addToBottom(chart.createHorizontalScrollBar());
+
     BorderLayoutPanel chartSide = new BorderLayoutPanel();
     chartSide.addToTop(threadPicker);
     chartSide.addToLeft(chartToolbar(chart, lanes));
-    chartSide.addToCenter(new JBScrollPane(chart));
+    chartSide.addToCenter(chartArea);
 
     OnePixelSplitter splitter = new OnePixelSplitter(false, 0.72f);
     splitter.setFirstComponent(chartSide);
@@ -95,15 +128,61 @@ final class HaxeCallChartTab {
     return splitter;
   }
 
-  /** The charted thread's frames; when it emits none, the first thread with end-of-frame markers carries the app rhythm. */
-  private static List<UsSpan> frameSpansFor(ProfilerSnapshot snapshot, int threadId) {
-    List<UsSpan> own = ProfilerTimeline.frameSpans(snapshot, threadId);
-    if (!own.isEmpty()) return own;
-    for (ProfilerThread thread : snapshot.threads()) {
-      List<UsSpan> spans = ProfilerTimeline.frameSpans(snapshot, thread.id());
-      if (!spans.isEmpty()) return spans;
+  /** Sampled captures: reconstructed runs, GC from sample flags (per-frame events as fallback), frames from events. */
+  private record SnapshotData(@NotNull ProfilerSnapshot snapshot) implements ChartData {
+    @Override
+    public List<ProfilerThread> threads() {
+      return snapshot.threads();
     }
-    return List.of();
+
+    @Override
+    public FlameNode treeFor(int threadId) {
+      return ProfilerTimeline.flameTree(snapshot, threadId, MAX_DEPTH);
+    }
+
+    @Override
+    public GcSpans gcSpansFor(int threadId) {
+      // sample-flagged spans (HL) first; telemetry captures carry GC as
+      // per-frame time events instead - stop-the-world, so not per-thread
+      List<UsSpan> flagged = ProfilerTimeline.gcSpans(snapshot, threadId);
+      if (!flagged.isEmpty()) return new GcSpans(flagged, false);
+      return new GcSpans(ProfilerTimeline.gcSpansFromEvents(snapshot), true);
+    }
+
+    @Override
+    public List<UsSpan> frameSpansFor(int threadId) {
+      List<UsSpan> own = ProfilerTimeline.frameSpans(snapshot, threadId);
+      if (!own.isEmpty()) return own;
+      // the first thread with end-of-frame markers carries the app rhythm
+      for (ProfilerThread thread : snapshot.threads()) {
+        List<UsSpan> spans = ProfilerTimeline.frameSpans(snapshot, thread.id());
+        if (!spans.isEmpty()) return spans;
+      }
+      return List.of();
+    }
+  }
+
+  /** Tracy sessions: exact zone trees; no GC source (upstream emits no GC zones yet); frames from marks. */
+  private record ZoneData(@NotNull TracySession session) implements ChartData {
+    @Override
+    public List<ProfilerThread> threads() {
+      return TracyZoneTrees.threads(session);
+    }
+
+    @Override
+    public FlameNode treeFor(int threadId) {
+      return TracyZoneTrees.threadTree(session, threadId);
+    }
+
+    @Override
+    public GcSpans gcSpansFor(int threadId) {
+      return new GcSpans(List.of(), false);
+    }
+
+    @Override
+    public List<UsSpan> frameSpansFor(int threadId) {
+      return TracyZoneTrees.frameSpans(session);
+    }
   }
 
   /** Rebuilds the chart's marker lanes from the toggle state; a lane with no data stays off regardless. */

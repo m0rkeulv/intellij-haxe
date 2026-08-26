@@ -1,17 +1,20 @@
 package com.intellij.plugins.haxe.profiler.bridge;
 
 import com.intellij.ide.util.EditSourceUtil;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.profiler.model.StackFrame;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.pom.Navigatable;
 import com.intellij.profiler.api.BaseCallStackElement;
 import com.intellij.psi.NavigatablePsiElement;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -49,25 +52,32 @@ public final class HaxeCallStackElement extends BaseCallStackElement {
 
   @Override
   public NavigatablePsiElement @NotNull [] calcNavigatables(@NotNull Project project) {
-    return ReadAction.compute(() -> resolve(project));
+    // the IU profiler calls this from either kind of thread
+    return HaxeReadActions.compute(() -> resolve(project));
   }
 
   /**
    * Opens the frame's source from a UI event. The PSI work (resolve and
-   * descriptor building) runs under a read action — a raw EDT mouse event
-   * carries no implicit read access; the descriptor then navigates PSI-free.
+   * descriptor building) hits indexes and the resolver, so it runs as a
+   * non-blocking read action on a pooled thread once indexes are ready —
+   * the EDT only performs the final PSI-free navigation. Repeat clicks on
+   * the same frame coalesce into one computation.
    */
   static void navigateToFrame(@NotNull Project project, @NotNull StackFrame frame) {
     HaxeCallStackElement element = new HaxeCallStackElement(frame.symbol(), frame.file(), frame.line());
-    Navigatable descriptor = ReadAction.compute(() -> element.descriptor(project));
-    if (descriptor != null) {
-      descriptor.navigate(true);
-    }
+    ReadAction.nonBlocking(() -> element.descriptor(project))
+      .inSmartMode(project)
+      .coalesceBy(element)
+      .finishOnUiThread(ModalityState.defaultModalityState(), descriptor -> {
+        if (descriptor != null) descriptor.navigate(true);
+      })
+      .submit(AppExecutorUtil.getAppExecutorService());
   }
 
+  /** Runs inside the non-blocking read action, which already holds read access. */
   @Nullable
   private Navigatable descriptor(Project project) {
-    NavigatablePsiElement[] navigatables = calcNavigatables(project);
+    NavigatablePsiElement[] navigatables = resolve(project);
     return navigatables.length > 0 ? EditSourceUtil.getDescriptor(navigatables[0]) : null;
   }
 

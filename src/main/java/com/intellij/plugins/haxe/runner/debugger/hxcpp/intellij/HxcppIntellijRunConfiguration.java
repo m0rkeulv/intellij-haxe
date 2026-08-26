@@ -17,6 +17,7 @@ import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
 import com.intellij.plugins.haxe.profiler.HaxeProfilingNotifier;
 import com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture;
+import com.intellij.plugins.haxe.profiler.HaxeTracyCapture;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationBase;
 import org.jetbrains.annotations.NotNull;
@@ -88,15 +89,22 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
     HaxeTelemetryCapture.Handle capture = profiling
                                           ? HaxeTelemetryCapture.startCapture(getProject(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
                                           : null;
-    return new DapCommandLineRunningState(env, getProject(), () -> telemetryCommandLine(capture)) {
+    // the tracy entry: exact zones, no bootstrap - the receiver connects to
+    // the client listening on the port we assign
+    boolean tracy = dumpPath != null && HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, false) != null;
+    HaxeTracyCapture.Handle tracyCapture = tracy
+                                           ? HaxeTracyCapture.startCapture(getProject(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
+                                           : null;
+    return new DapCommandLineRunningState(env, getProject(), () -> profiledCommandLine(capture, tracyCapture)) {
       @Override
       protected @NotNull ProcessHandler startProcess() throws ExecutionException {
         ProcessHandler handler = super.startProcess();
-        if (capture != null) {
+        if (capture != null || tracyCapture != null) {
           handler.addProcessListener(new ProcessListener() {
             @Override
             public void processTerminated(@NotNull ProcessEvent event) {
-              capture.processExited();
+              if (capture != null) capture.processExited();
+              if (tracyCapture != null) tracyCapture.processExited();
             }
           });
         }
@@ -108,11 +116,16 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
     };
   }
 
-  /** The run command line, with the telemetry endpoint handed to the injected collector when a capture listens. */
-  private GeneralCommandLine telemetryCommandLine(@Nullable HaxeTelemetryCapture.Handle capture) throws ExecutionException {
+  /** The run command line, handing each active capture its endpoint through the lane's env var. */
+  private GeneralCommandLine profiledCommandLine(@Nullable HaxeTelemetryCapture.Handle telemetry,
+                                                 @Nullable HaxeTracyCapture.Handle tracy) throws ExecutionException {
     GeneralCommandLine commandLine = createCommandLine();
-    if (capture != null) {
-      commandLine.withEnvironment(HaxeTelemetryCapture.ENDPOINT_ENV_VAR, "127.0.0.1:" + capture.port());
+    if (telemetry != null) {
+      commandLine.withEnvironment(HaxeTelemetryCapture.ENDPOINT_ENV_VAR, "127.0.0.1:" + telemetry.port());
+    }
+    if (tracy != null) {
+      commandLine.withEnvironment(HaxeTracyCapture.PORT_ENV_VAR, String.valueOf(tracy.port()));
+      commandLine.withEnvironment(HaxeTracyCapture.NO_EXIT_ENV_VAR, "1");
     }
     return commandLine;
   }
