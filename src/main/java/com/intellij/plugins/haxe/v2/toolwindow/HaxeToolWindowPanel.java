@@ -40,6 +40,7 @@ import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
@@ -203,6 +204,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeRunActionNodeAction(this));
     group.add(new HaxeRunProgramAction(this, false));
     group.add(new HaxeRunProgramAction(this, true));
+    group.add(new HaxeProfileProgramAction(this));
     group.add(new HaxeRunUnitTestsAction(this));
     group.add(new HaxeDebugUnitTestsAction(this));
     group.add(new HaxeSetAsCompileCommandAction(this));
@@ -751,6 +753,18 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
    * under the Debug executor).
    */
   public void executeProgram(@NotNull ProgramNode programNode, boolean debug) {
+    Executor executor = debug ? DefaultDebugExecutor.getDebugExecutorInstance()
+                              : DefaultRunExecutor.getRunExecutorInstance();
+    executeProgramWith(programNode, executor);
+  }
+
+  /** The Profile row: launches through the lane's IU profiler entry; without one the launch is refused with a notice. */
+  public void executeProgramWithProfiler(@NotNull ProgramNode programNode) {
+    executeProgramWith(programNode, null);
+  }
+
+  /** {@code executor} null = resolve the configuration's profiler executor after the settings exist. */
+  private void executeProgramWith(@NotNull ProgramNode programNode, @Nullable Executor executor) {
     VirtualFile file = programNode.buildFile().file();
     // the file index needs a read action - the EDT has no implicit read access
     Module module = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).getModuleForFile(file));
@@ -765,9 +779,14 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       notifyUser(HaxeBundle.message("haxe.toolwindow.program.unsupported", file.getName()));
       return;
     }
+    if (executor == null) {
+      executor = HaxeProfilerExecutorSupport.profilerExecutor(settings.getConfiguration());
+      if (executor == null) {
+        notifyUser(HaxeBundle.message("haxe.toolwindow.program.profiler.unavailable", file.getName()));
+        return;
+      }
+    }
     RunManager.getInstance(project).setSelectedConfiguration(settings);
-    Executor executor = debug ? DefaultDebugExecutor.getDebugExecutorInstance()
-                              : DefaultRunExecutor.getRunExecutorInstance();
     // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,
     // which enforces single-instance configurations with the stop-and-rerun dialog
     ExecutionUtil.runConfiguration(settings, executor);

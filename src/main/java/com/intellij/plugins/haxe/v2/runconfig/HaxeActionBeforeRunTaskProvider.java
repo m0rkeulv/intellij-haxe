@@ -9,6 +9,7 @@ import com.intellij.build.progress.BuildProgressDescriptor;
 import com.intellij.execution.BeforeRunTask;
 import com.intellij.execution.BeforeRunTaskProvider;
 import com.intellij.execution.ExecutionException;
+import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.executors.DefaultDebugExecutor;
@@ -33,6 +34,8 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
@@ -47,6 +50,7 @@ import org.jetbrains.concurrency.Promises;
 
 import javax.swing.*;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -242,6 +246,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
         command.addAll(additions);
       }
     }
+    if (!singleRun) {
+      List<String> profilingAdditions = profilingAdditions(project, configuration, environment.getExecutor(), task);
+      if (profilingAdditions != null) {
+        command.addAll(profilingAdditions);
+      }
+    }
     command = HaxeCompileCommands.connectIfEnabled(project, resolved.containerId(), resolved.connectEligible(), command);
 
     // the compile streams into the Build tool window (activated on start) -
@@ -389,6 +399,26 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     if (buildFilePath == null) return List.of();
     return ReadAction.computeBlocking(
       () -> HaxeBuildClasspaths.sourceDirectories(configuration.getProject(), buildFilePath));
+  }
+
+  /**
+   * The compile additions an hxcpp PROFILING launch injects (profiler defines
+   * plus the start/stop bootstrap), or null on every non-profiling launch.
+   * The launched configuration knows the dump path; the build file's type
+   * picks the tool spelling (lime {@code --haxeflag=} against plain haxe).
+   */
+  @Nullable
+  private static List<String> profilingAdditions(@NotNull Project project,
+                                                 @NotNull RunConfiguration configuration,
+                                                 @NotNull Executor executor,
+                                                 @NotNull Task task) {
+    if (!(configuration instanceof HxcppIntellijRunConfiguration hxcpp)) return null;
+    Path dumpPath = hxcpp.expectedDumpPath();
+    if (dumpPath == null) return null;
+    HaxeBuildFile buildFile = resolveBuildFile(project, task.getBuildFilePath());
+    if (buildFile == null) return null;
+    boolean limeFamily = buildFile.type() != HaxeBuildFileType.HXML;
+    return HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, limeFamily, dumpPath);
   }
 
   /** The build system's debug compile additions for the file's current selection, or null when it has none. */

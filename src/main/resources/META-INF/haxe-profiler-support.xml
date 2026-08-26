@@ -1,0 +1,29 @@
+<!--
+  ~ Loaded only when the IU profiler module (com.intellij.modules.profiler) is
+  ~ present. EVERY profiler.* registration lives here and the bridge classes
+  ~ are referenced from nowhere else, so nothing IU-specific loads on IC.
+  -->
+<idea-plugin>
+  <extensions defaultExtensionNs="com.intellij">
+    <profiler.api.ProfilerDumpParserProvider
+      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHlDumpParserProvider"/>
+    <profiler.api.ProfilerDumpParserProvider
+      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxcppDumpParserProvider"/>
+    <profiler.api.ProfilerDumpParserProvider
+      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxtSessionParserProvider"/>
+    <profiler.profilerConfigurationType
+      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHlProfilerConfigurationType"/>
+    <profiler.profilerConfigurationType
+      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxcppProfilerConfigurationType"/>
+    <programRunner implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerRunner"/>
+    <applicationService
+      serviceInterface="com.intellij.plugins.haxe.profiler.HaxeProfilerSnapshotOpener"
+      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuSnapshotOpener"/>
+    <applicationService
+      serviceInterface="com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport"
+      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerExecutorSupport"/>
+    <applicationService
+      serviceInterface="com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture"
+      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuTelemetryCapture"/>
+  </extensions>
+</idea-plugin>

@@ -11,6 +11,7 @@ import com.intellij.openapi.util.io.OSAgnosticPathUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestNameLocation;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.psi.PsiManager;
@@ -113,7 +114,9 @@ final class HaxeTestOutputAttributor {
   private VirtualFile resolveFile(@NotNull String path) {
     if (workDirectory == null || OSAgnosticPathUtil.isAbsolute(path)) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(workDirectory + "/" + path);
-    if (file == null || !ProjectFileIndex.getInstance(project).isInContent(file)) return null;
-    return file;
+    if (file == null) return null;
+    // the file index needs a read action - output processing runs on a pooled thread without one
+    boolean inContent = HaxeReadActions.compute(() -> ProjectFileIndex.getInstance(project).isInContent(file));
+    return inContent ? file : null;
   }
 }

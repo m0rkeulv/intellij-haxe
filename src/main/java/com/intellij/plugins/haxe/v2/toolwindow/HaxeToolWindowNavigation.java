@@ -17,6 +17,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileNavigation;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
@@ -110,8 +111,14 @@ public final class HaxeToolWindowNavigation {
       }
     }
 
+    /** Order-entry walks need a read action - navigate/canNavigate arrive on raw EDT clicks. */
     @Nullable
     private VirtualFile findLibraryRoot() {
+      return HaxeReadActions.compute(this::findLibraryRootUnderLock);
+    }
+
+    @Nullable
+    private VirtualFile findLibraryRootUnderLock() {
       for (Module module : ModuleManager.getInstance(project).getModules()) {
         for (OrderEntry orderEntry : ModuleRootManager.getInstance(module).getOrderEntries()) {
           if (orderEntry instanceof LibraryOrderEntry libraryEntry

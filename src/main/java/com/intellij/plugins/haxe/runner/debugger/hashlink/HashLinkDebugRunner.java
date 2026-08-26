@@ -55,6 +55,9 @@ public class HashLinkDebugRunner extends DapDebugRunnerBase<HashLinkRunConfigura
                                HaxeActionBeforeRunTaskProvider.buildStepSourceDirectories(configuration));
   }
 
+  // TODO: profiling during debug - add --profile here (co-exists with --debug)
+  //       and a "Get profiler snapshot" session action injecting
+  //       hl.Profile.event(Dump) through the adapter's call-injection machinery.
   @Override
   protected GeneralCommandLine createCommandLine(HashLinkRunConfiguration configuration, HashLinkBackend backend)
     throws ExecutionException {

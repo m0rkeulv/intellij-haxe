@@ -34,6 +34,8 @@
   <depends optional="true" config-file="flex-debugger-support.xml">com.intellij.flex</depends>
   <depends optional="true" config-file="glsl-support.xml">OpenGL-Plugin</depends>
   <depends optional="true" config-file="haxe-grazie.xml">tanvd.grazi</depends>
+  <!-- IU-only: the Profiler tool window integration (snapshot parsers, jump-to-source) -->
+  <depends optional="true" config-file="haxe-profiler-support.xml">com.intellij.modules.profiler</depends>
 
   <!-- Leave the '999' at the start of unreleased version numbers so that it's always newer than any released version. -->
   <version>DEV @plugin.dev.version@ for @plugin.compatibility.description@</version>
@@ -922,6 +924,7 @@
     <notificationGroup id="haxe.command" displayType="BALLOON" bundle="messages.HaxeBundle" key="haxe.command.notification.group"/>
     <notificationGroup id="haxe.debugger.legacy" displayType="BALLOON" bundle="messages.HaxeDebuggerBundle" key="legacy.hxcpp.notification.group"/>
     <notificationGroup id="haxe.v1.migration" displayType="STICKY_BALLOON" bundle="messages.HaxeProjectBundle" key="haxe.v1.migration.group"/>
+    <notificationGroup id="haxe.profiler" displayType="BALLOON" bundle="messages.HaxeProfilerBundle" key="haxe.profiler.notification.group"/>
 
 
     <vfs.asyncListener implementation="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"/>

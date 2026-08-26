@@ -1,11 +1,28 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij;
 
+import com.intellij.execution.ExecutionException;
+import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.ConfigurationFactory;
+import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
+import com.intellij.execution.configurations.RunProfileState;
+import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessHandler;
+import com.intellij.execution.process.ProcessListener;
+import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.options.SettingsEditor;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.profiler.HaxeProfilingNotifier;
+import com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture;
+import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationBase;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.nio.file.Path;
 
 /**
  * An HXCPP (IntelliJ debug server) run/debug configuration: exactly the
@@ -17,7 +34,12 @@ import org.jetbrains.annotations.NotNull;
  * collide. A build with the library runs normally outside the debugger (the
  * server makes one quick connect attempt and stays out of the way).
  */
-public class HxcppIntellijRunConfiguration extends DapExecutableRunConfigurationBase {
+public class HxcppIntellijRunConfiguration extends DapExecutableRunConfigurationBase implements HaxeProfilableRunConfiguration {
+
+  /** The report the injected profiling bootstrap writes beside the executable. */
+  public static final String PROFILER_DUMP_FILE_NAME = "hxcppprofile.hxcppprof";
+  /** The telemetry session the IDE receiver persists beside the executable. */
+  public static final String TELEMETRY_SESSION_FILE_NAME = "hxcppprofile.hxtsession";
 
   public HxcppIntellijRunConfiguration(String name, Project project, ConfigurationFactory factory) {
     super(name, project, factory);
@@ -26,5 +48,72 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
   @Override
   public @NotNull SettingsEditor<? extends RunConfiguration> getConfigurationEditor() {
     return new HxcppIntellijRunConfigurationEditor(getProject());
+  }
+
+  @Override
+  public @NotNull Lane profilingLane() {
+    return Lane.HXCPP;
+  }
+
+  @Override
+  public boolean isProfilingReady() {
+    return !DumbService.isDumb(getProject()) && expectedDumpPath() != null;
+  }
+
+  /**
+   * Where a profiling run's report appears: the before-launch compile bakes
+   * this ABSOLUTE path into the injected bootstrap, so the executable's
+   * working directory cannot displace it. Null while no executable is
+   * configured yet.
+   */
+  @Nullable
+  public Path expectedDumpPath() {
+    String executable = getExecutablePath();
+    if (executable.isBlank()) return null;
+    Path parent = Path.of(executable).getParent();
+    return parent == null ? null : parent.resolve(PROFILER_DUMP_FILE_NAME);
+  }
+
+  @Override
+  public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
+    requireModule();
+    Path dumpPath = expectedDumpPath();
+    // non-null exactly when the IU "Run with Profiler" executor launched us
+    // with the hxcpp profiler configuration selected (the additions themselves
+    // go into the before-launch compile, not this command line)
+    boolean profiling = dumpPath != null
+                        && HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, false, dumpPath) != null;
+    // the telemetry capture (samples with a time axis) supersedes the text
+    // report when the receiver opens; the report stays the fallback outcome
+    HaxeTelemetryCapture.Handle capture = profiling
+                                          ? HaxeTelemetryCapture.startCapture(getProject(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
+                                          : null;
+    return new DapCommandLineRunningState(env, getProject(), () -> telemetryCommandLine(capture)) {
+      @Override
+      protected @NotNull ProcessHandler startProcess() throws ExecutionException {
+        ProcessHandler handler = super.startProcess();
+        if (capture != null) {
+          handler.addProcessListener(new ProcessListener() {
+            @Override
+            public void processTerminated(@NotNull ProcessEvent event) {
+              capture.processExited();
+            }
+          });
+        }
+        else if (profiling) {
+          HaxeProfilingNotifier.watch(getProject(), handler, dumpPath, "haxe.profiler.hxcpp.dump.missing");
+        }
+        return handler;
+      }
+    };
+  }
+
+  /** The run command line, with the telemetry endpoint handed to the injected collector when a capture listens. */
+  private GeneralCommandLine telemetryCommandLine(@Nullable HaxeTelemetryCapture.Handle capture) throws ExecutionException {
+    GeneralCommandLine commandLine = createCommandLine();
+    if (capture != null) {
+      commandLine.withEnvironment(HaxeTelemetryCapture.ENDPOINT_ENV_VAR, "127.0.0.1:" + capture.port());
+    }
+    return commandLine;
   }
 }

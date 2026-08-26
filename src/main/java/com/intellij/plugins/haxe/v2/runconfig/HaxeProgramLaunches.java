@@ -84,6 +84,11 @@ public final class HaxeProgramLaunches {
     };
   }
 
+  /** True when the target's launch configuration can run under a Haxe profiler entry (see HaxeProfilableRunConfiguration). */
+  public static boolean supportsProgramProfiling(@NotNull HaxeTarget target) {
+    return target == HaxeTarget.HL || target == HaxeTarget.CPP;
+  }
+
   /** Display name of the configuration kind that launches this build ("HashLink Application", …), or null when unsupported. */
   @Nullable
   public static String launchKind(@NotNull HaxeBuildFileInfo info, @NotNull HaxeBuildFileType type) {

@@ -21,6 +21,9 @@ include(":debuggers:hxcpp-debugger-protocol-legacy")
 // Test matrix only used to verify that all debuggers work as expected across different haxe version and runtimes.
 include(":debuggers:compat-matrix")
 
+// profilers: neutral snapshot model + per-format translators (no IDE dependencies)
+include(":profilers:core")
+
 // haxe JSON-RPC display protocol (allow the IDE to communicate with Haxe Compiler)
 include(":display-protocol")
 

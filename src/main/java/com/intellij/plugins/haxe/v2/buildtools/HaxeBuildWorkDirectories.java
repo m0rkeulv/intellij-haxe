@@ -8,6 +8,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeWorkDirectoryStore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -23,7 +24,8 @@ import java.util.List;
  * root, and generated configs follow that convention (OpenFL's
  * scripts/completion.hxml declares root-relative classpaths) — else the folder
  * again. The xml-family tools (lime, nme) anchor at the project file's own
- * folder themselves. Call in a read action.
+ * folder themselves. Safe from any thread — the sniff takes its own read
+ * action.
  */
 public final class HaxeBuildWorkDirectories {
 
@@ -53,6 +55,11 @@ public final class HaxeBuildWorkDirectories {
   /** The sniffed default, ignoring any override (what clearing the override falls back to). */
   @Nullable
   public static VirtualFile defaultAnchor(@NotNull Project project, @NotNull VirtualFile buildFile) {
+    return HaxeReadActions.compute(() -> sniffAnchor(project, buildFile));
+  }
+
+  @Nullable
+  private static VirtualFile sniffAnchor(Project project, VirtualFile buildFile) {
     VirtualFile parent = buildFile.getParent();
     if (parent == null || HaxeBuildFileScanner.detectType(project, buildFile) != HaxeBuildFileType.HXML) {
       return parent;
