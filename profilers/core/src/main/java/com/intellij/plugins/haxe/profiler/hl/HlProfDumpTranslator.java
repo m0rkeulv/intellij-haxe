@@ -249,8 +249,9 @@ public final class HlProfDumpTranslator {
     for (RawSample raw : parse.rawSamples) {
       samples.add(freeze(raw, frozen));
     }
+    // the PROF dump carries no heap readings
     return new ProfilerSnapshot(TARGET, version, samplesPerSecond,
-                                List.copyOf(threads), List.copyOf(samples), List.copyOf(parse.events));
+                                List.copyOf(threads), List.copyOf(samples), List.copyOf(parse.events), List.of());
   }
 
   /** Reverses the dump's leaf-first order into the model's root-first one. */

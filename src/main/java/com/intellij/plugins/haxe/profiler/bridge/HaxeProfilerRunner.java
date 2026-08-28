@@ -5,18 +5,13 @@ import com.intellij.execution.ExecutionResult;
 import com.intellij.execution.configurations.RunProfile;
 import com.intellij.execution.configurations.RunProfileState;
 import com.intellij.execution.configurations.RunnerSettings;
-import com.intellij.execution.executors.RunExecutorSettings;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.GenericProgramRunner;
 import com.intellij.execution.ui.ExecutionUiService;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
-import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration.Lane;
-import com.intellij.profiler.DefaultProfilerExecutorGroup;
+import com.intellij.profiler.api.configurations.ProfilerConfigurationState;
 import org.jetbrains.annotations.NotNull;
-
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Runs a Haxe profilable configuration under the IU "Run with Profiler"
@@ -29,11 +24,6 @@ public class HaxeProfilerRunner extends GenericProgramRunner<RunnerSettings> {
 
   public static final String RUNNER_ID = "HaxeHlProfilerRunner";
 
-  /** Which profiler configuration types serve each lane. */
-  private static final Map<Lane, Set<String>> LANE_TYPE_IDS = Map.of(
-    Lane.HASHLINK, Set.of(HaxeHlProfilerConfigurationType.ID),
-    Lane.HXCPP, Set.of(HaxeHxcppProfilerConfigurationType.ID, HaxeHxcppTracyProfilerConfigurationType.ID));
-
   @NotNull
   @Override
   public String getRunnerId() {
@@ -45,11 +35,9 @@ public class HaxeProfilerRunner extends GenericProgramRunner<RunnerSettings> {
     if (!(profile instanceof HaxeProfilableRunConfiguration configuration) || !configuration.isProfilingReady()) {
       return false;
     }
-    DefaultProfilerExecutorGroup group = DefaultProfilerExecutorGroup.Companion.getInstance();
-    if (group == null) return false;
-    RunExecutorSettings settings = group.getRegisteredSettings(executorId);
-    return settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings
-           && LANE_TYPE_IDS.get(configuration.profilingLane()).contains(profilerSettings.getState().getConfigurationTypeId());
+    ProfilerConfigurationState state = HaxeProfilerConfigurations.stateForExecutor(executorId);
+    return state != null
+           && HaxeProfilerConfigurations.typeIdsFor(configuration.profilingLane()).contains(state.getConfigurationTypeId());
   }
 
   @Override

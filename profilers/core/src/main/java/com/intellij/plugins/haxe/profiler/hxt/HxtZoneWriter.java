@@ -47,6 +47,9 @@ import java.util.zip.Deflater;
  * FRAMES(4): i32 count, count * i64 ns                  — rebased ns
  * PLOT  (5): u16+utf8 name, i32 count, count * (i64 ns, f64 value)
  * CPU   (6): i32 count, count * (i64 ns, f64 percent)
+ * PCPU (12): i32 count, count * (i64 ns, f64 percentOfOneCore) — the
+ *            profiled process's scheduler-exact CPU use; absent unless the
+ *            run had the privileges system tracing needs
  * THREAD(8): i32 threadId, u16+utf8 name, i64 zoneCount
  * MEMORY(9): u16+utf8 poolName, i32 count, count * (i64 ns, f64 liveBytes)
  * GC   (10): i32 count, count * (i64 startNs, i64 endNs, i64 freedBytes,
@@ -72,6 +75,7 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
   static final int MEMORY_RECORD = 9;
   static final int GC_RECORD = 10;
   static final int EVENTS_RECORD = 11;
+  static final int PROCESS_CPU_RECORD = 12;
 
   static final int ZONE_BYTES = 4 + 2 + 8 + 8 + 4;
   private static final int CHUNK_ZONES = 65_536;
@@ -179,6 +183,12 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
     Payload cpu = new Payload();
     cpu.points(session.cpuUsage());
     record(CPU_RECORD, cpu);
+
+    if (!session.processCpu().isEmpty()) {
+      Payload processCpu = new Payload();
+      processCpu.points(session.processCpu());
+      record(PROCESS_CPU_RECORD, processCpu);
+    }
 
     // every thread that closed zones gets a record, answered name or not -
     // the picker must list it either way

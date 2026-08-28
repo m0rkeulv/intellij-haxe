@@ -5,9 +5,14 @@ import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.executors.RunExecutorSettings;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.SystemInfo;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
-import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration.Lane;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.profiler.bridge.flash.HaxeFlashProfilerConfigurationState;
+import com.intellij.plugins.haxe.profiler.bridge.hashlink.HaxeHlProfilerConfigurationState;
+import com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeHxcppProfilerConfigurationState;
+import com.intellij.plugins.haxe.profiler.bridge.js.HaxeJsProfilerConfigurationState;
+import com.intellij.plugins.haxe.profiler.bridge.tracy.HaxeHxcppTracyProfilerConfigurationState;
 import com.intellij.profiler.DefaultProfilerExecutorGroup;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -16,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -30,7 +36,7 @@ import java.util.Set;
 public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSupport {
 
   private static final Logger LOG = Logger.getInstance(HaxeIuProfilerExecutorSupport.class);
-  /** The bundled bootstrap: the init macro wrapping main/System.exit, its idempotent-stop runtime, and the telemetry collector. */
+  /** The bundled bootstrap: the init macro wrapping main/System.exit, its idempotent-stop runtime, and the collectors. */
   private static final List<String> BOOT_RESOURCES = List.of(
     "/haxe/profilerboot/ijhaxe/ProfilerBoot.hx",
     "/haxe/profilerboot/ijhaxe/ProfilerRun.hx",
@@ -39,17 +45,13 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
 
   @Override
   public @Nullable Integer hashlinkSamplesPerSecondFor(@NotNull Executor executor) {
-    RunExecutorSettings settings = registeredSettings(executor.getId());
-    if (!(settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings)) return null;
-    if (!(profilerSettings.getState() instanceof HaxeHlProfilerConfigurationState state)) return null;
+    if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHlProfilerConfigurationState state)) return null;
     return state.getSamplesPerSecond();
   }
 
   @Override
   public @Nullable List<String> hxcppProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily, @NotNull Path dumpPath) {
-    RunExecutorSettings settings = registeredSettings(executor.getId());
-    if (!(settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings)) return null;
-    if (!(profilerSettings.getState() instanceof HaxeHxcppProfilerConfigurationState)) return null;
+    if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHxcppProfilerConfigurationState)) return null;
     Path macroRoot = extractBootMacro();
     if (macroRoot == null) return null;
 
@@ -74,22 +76,70 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
 
   @Override
   public @Nullable List<String> hxcppTracyAdditionsFor(@NotNull Executor executor, boolean limeFamily) {
-    RunExecutorSettings settings = registeredSettings(executor.getId());
-    if (!(settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings)) return null;
-    if (!(profilerSettings.getState() instanceof HaxeHxcppTracyProfilerConfigurationState)) return null;
+    if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHxcppTracyProfilerConfigurationState state)) return null;
     // HXCPP_TELEMETRY is the master switch, HXCPP_TRACY picks the tracy
     // implementation, and the zones need the stack-frame instrumentation.
     // HXCPP_STACK_LINE is REQUIRED, not optional: TelemetryTracy.cpp reads
     // StackFrame::lineNumber unconditionally, and that member only exists
     // with the define - a tracy build without it fails to compile.
     // HXCPP_TRACY_MEMORY adds the GC alloc/free hooks feeding the memory
-    // curves ("Small Object Heap" / "Large Object Heap").
-    if (limeFamily) {
-      return List.of("-DHXCPP_TELEMETRY", "-DHXCPP_TRACY", "-DHXCPP_TRACY_MEMORY",
-                     "-DHXCPP_STACK_TRACE", "-DHXCPP_STACK_LINE");
+    // curves and GC lane; the settings page toggles it (runtime cost).
+    List<String> additions = new ArrayList<>();
+    List<String> defines = new ArrayList<>(List.of("HXCPP_TELEMETRY", "HXCPP_TRACY",
+                                                   "HXCPP_STACK_TRACE", "HXCPP_STACK_LINE"));
+    if (state.isCaptureMemory()) {
+      defines.add(2, "HXCPP_TRACY_MEMORY");
     }
-    return List.of("-D", "HXCPP_TELEMETRY", "-D", "HXCPP_TRACY", "-D", "HXCPP_TRACY_MEMORY",
-                   "-D", "HXCPP_STACK_TRACE", "-D", "HXCPP_STACK_LINE");
+    for (String define : defines) {
+      if (limeFamily) {
+        additions.add("-D" + define);
+      }
+      else {
+        additions.add("-D");
+        additions.add(define);
+      }
+    }
+    return additions;
+  }
+
+  @Override
+  public @Nullable List<String> flashProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily) {
+    if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeFlashProfilerConfigurationState)) return null;
+    // advanced-telemetry embeds the EnableTelemetry swf tag (swf-version 17+):
+    // the runtime then streams its own Scout telemetry - frames, render
+    // spans, sampler stacks, memory, GC - to the address in ~/.telemetry.cfg,
+    // which the capture points at itself. No code is injected; the sampler
+    // ticks only on the debugger runtime, so adl launches in debug mode.
+    return limeFamily
+           ? List.of("--haxeflag=-D advanced-telemetry")
+           : List.of("-D", "advanced-telemetry");
+  }
+
+  @Override
+  public @Nullable Integer jsSamplingIntervalUsFor(@NotNull Executor executor) {
+    if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeJsProfilerConfigurationState state)) return null;
+    return state.getSamplingIntervalUs();
+  }
+
+  @Override
+  public @Nullable List<String> jsProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily) {
+    if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeJsProfilerConfigurationState)) return null;
+    // the sampled positions map back to .hx through the compiler's js
+    // source map; both define spellings cover haxe versions before and
+    // after the js-source-map -> source-map rename (an unknown define is
+    // inert, so shipping both is safe)
+    return limeFamily
+           ? List.of("--haxeflag=-D js-source-map", "--haxeflag=-D source-map")
+           : List.of("-D", "js-source-map", "-D", "source-map");
+  }
+
+  @Override
+  public boolean hxcppTracyElevatedFor(@NotNull Executor executor) {
+    // tracy's system tracing has Windows (ETW) and Linux (ftrace/perf)
+    // backends only - elevating on macOS would gain nothing
+    if (!SystemInfo.isWindows && !SystemInfo.isLinux) return false;
+    return HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHxcppTracyProfilerConfigurationState state
+           && state.isCollectProcessCpu();
   }
 
   @Override
@@ -97,7 +147,7 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
     if (!(configuration instanceof HaxeProfilableRunConfiguration profilable)) return null;
     DefaultProfilerExecutorGroup group = DefaultProfilerExecutorGroup.Companion.getInstance();
     if (group == null) return null;
-    Set<String> typeIds = typeIdsFor(profilable.profilingLane());
+    Set<String> typeIds = HaxeProfilerConfigurations.typeIdsFor(profilable.profilingLane());
 
     for (Executor child : group.childExecutors()) {
       RunExecutorSettings settings = group.getRegisteredSettings(child.getId());
@@ -107,19 +157,6 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
       }
     }
     return null;
-  }
-
-  private static Set<String> typeIdsFor(Lane lane) {
-    return switch (lane) {
-      case HASHLINK -> Set.of(HaxeHlProfilerConfigurationType.ID);
-      case HXCPP -> Set.of(HaxeHxcppProfilerConfigurationType.ID, HaxeHxcppTracyProfilerConfigurationType.ID);
-    };
-  }
-
-  @Nullable
-  private static RunExecutorSettings registeredSettings(String executorId) {
-    DefaultProfilerExecutorGroup group = DefaultProfilerExecutorGroup.Companion.getInstance();
-    return group == null ? null : group.getRegisteredSettings(executorId);
   }
 
   /**

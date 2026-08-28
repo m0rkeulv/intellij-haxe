@@ -8,10 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /** Lets the platform's cancel button interrupt a large-dump parse. */
-final class CancellableStream extends FilterInputStream {
+public final class CancellableStream extends FilterInputStream {
   private final ProgressIndicator indicator;
 
-  CancellableStream(@NotNull InputStream in, @NotNull ProgressIndicator indicator) {
+  public CancellableStream(@NotNull InputStream in, @NotNull ProgressIndicator indicator) {
     super(in);
     this.indicator = indicator;
   }

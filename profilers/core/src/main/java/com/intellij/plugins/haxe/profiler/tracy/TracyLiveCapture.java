@@ -21,7 +21,9 @@ import java.util.function.BooleanSupplier;
  * So: a Terminate with no disconnect requested yet triggers
  * {@link #requestDisconnect()}; one arriving after it means drained — the
  * read stops and closing our socket is what lets the client's process
- * exit. Queries are a handful of name lookups, far below the client's
+ * exit. A capture can also end by the stream TEARING (the process killed,
+ * or dead without the handshake): everything received before the tear is
+ * kept. Queries are a handful of name lookups, far below the client's
  * query budget, so no flow-control bookkeeping is needed.
  */
 public final class TracyLiveCapture {
@@ -112,9 +114,11 @@ public final class TracyLiveCapture {
         }
       };
       TracyLz4Stream decompressed = new TracyLz4Stream(socket.getInputStream());
-      return zoneSink == null
-             ? TracyEventReader.read(decompressed, welcome, hooks)
-             : TracyEventReader.read(decompressed, welcome, hooks, zoneSink);
+      // salvaging: a killed client tears the stream mid-item - the capture
+      // keeps everything received up to that point (tracy's client exit
+      // wedges before its shutdown handshake when system tracing is
+      // active, so killing the process is a NORMAL way to end a capture)
+      return TracyEventReader.readSalvaging(decompressed, welcome, hooks, zoneSink);
     }
   }
 

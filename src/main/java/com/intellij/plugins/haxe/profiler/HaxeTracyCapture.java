@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.profiler;
 
+import com.intellij.execution.Executor;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
@@ -34,15 +35,22 @@ public interface HaxeTracyCapture {
     return ApplicationManager.getApplication().getService(HaxeTracyCapture.class);
   }
 
-  /** One run's capture, named after the run configuration in the profiler UI; null when no port could be allocated. */
+  /**
+   * One run's capture, named after the run configuration in the profiler
+   * UI; null when no port could be allocated. {@code executor} is the
+   * launching Run-with-Profiler entry — each named profiler configuration
+   * is one, and the capture takes ITS settings.
+   */
   @Nullable
-  Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile);
+  Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile,
+               @NotNull Executor executor);
 
   /** Null-safe form of {@link #start}: null without the profiler module too. */
   @Nullable
-  static Handle startCapture(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile) {
+  static Handle startCapture(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile,
+                             @NotNull Executor executor) {
     HaxeTracyCapture capture = getInstance();
-    return capture == null ? null : capture.start(project, displayName, sessionFile);
+    return capture == null ? null : capture.start(project, displayName, sessionFile, executor);
   }
 
   interface Handle {

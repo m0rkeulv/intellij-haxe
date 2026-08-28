@@ -17,12 +17,19 @@ import haxe.io.BytesOutput;
 	usually dies in Sys.exit right after.
 **/
 class TelemetryRun {
+	/** A tick can fail transiently (landing badly against a major collection); only a persistent failure stops the collector. */
+	static inline var MAX_TICK_FAILURES = 5;
+
 	static var threadNum = -1;
 	static var socket:sys.net.Socket;
 	static var queue:sys.thread.Deque<Bytes>;
 	static var drained:sys.thread.Lock;
 	static var timer:haxe.Timer;
 	static var stopped = false;
+	static var tickFailures = 0;
+	static var emptyDumps = 0;
+	/** The previous window's end stamp — the wall span the next window's deltas normalize against. */
+	static var lastStampSeconds:Float = -1;
 
 	public static function tryStart():Void {
 		var endpoint = Sys.getEnv("IJ_HAXE_TELEMETRY");
@@ -74,20 +81,43 @@ class TelemetryRun {
 		if (stopped) return;
 		try {
 			CppTelemetry.stash();
-			shipFrame();
+			if (shipFrame()) {
+				emptyDumps = 0;
+			} else {
+				// not an error by itself, but a long silent stretch is the
+				// third way the stream can freeze - say so once
+				emptyDumps++;
+				if (emptyDumps == 60) logError("telemetry dump returned no frame for 60 ticks");
+			}
+			tickFailures = 0;
 		} catch (e:Dynamic) {
-			stopped = true;
+			tickFailures++;
+			logError("telemetry tick failed (" + tickFailures + "/" + MAX_TICK_FAILURES + "): " + Std.string(e));
+			if (tickFailures >= MAX_TICK_FAILURES) {
+				logError("telemetry collector stopped - the session keeps what was streamed");
+				stopped = true;
+				if (timer != null) timer.stop();
+				queue.add(Bytes.alloc(0)); // sentinel: writer drains and closes - the IDE sees a clean end
+			}
 		}
 	}
 
-	static function shipFrame():Void {
+	/** The run console shows stderr, so a dying collector explains itself there. */
+	static function logError(message:String):Void {
+		try Sys.stderr().writeString("[ijhaxe] " + message + "\n") catch (e:Dynamic) {}
+	}
+
+	/** Ships the stashed frame; false when the runtime had nothing stashed to dump. */
+	static function shipFrame():Bool {
 		var gcTimes = new Array<Int>();
 		var names = new Array<String>();
 		var samples = new Array<Int>();
-		if (!CppTelemetry.dumpInto(threadNum, gcTimes, names, samples)) return;
+		if (!CppTelemetry.dumpInto(threadNum, gcTimes, names, samples)) return false;
 
+		var stamp = haxe.Timer.stamp();
+		normalizeDeltas(samples, stamp);
 		var payload = output();
-		payload.writeDouble(haxe.Timer.stamp());
+		payload.writeDouble(stamp);
 		payload.writeInt32(gcTimes[0]);
 		payload.writeInt32(gcTimes[1]);
 		payload.writeInt32(CppTelemetry.usedBytes());
@@ -105,14 +135,52 @@ class TelemetryRun {
 		record.writeInt32(bytes.length);
 		record.write(bytes);
 		queue.add(record.getBytes());
+		lastStampSeconds = stamp;
+		return true;
+	}
+
+	/**
+		Rescales the window's sample deltas from profiler-clock ticks to
+		MICROSECONDS summing to the window's wall span. The runtime's ~1 ms
+		clock is a Sleep(1) loop whose real period follows the OS timer
+		state, so raw tick counts over- or under-run the wall window (130 %
+		frames observed) — while the stamps bounding the window are exact.
+		Cumulative rounding keeps the rescaled total exact.
+	**/
+	static function normalizeDeltas(samples:Array<Int>, stampSeconds:Float):Void {
+		var totalTicks = 0;
+		var i = 0;
+		while (i < samples.length) {
+			i += samples[i] + 1; // [depth, ids..., delta]
+			totalTicks += samples[i];
+			i++;
+		}
+		if (totalTicks <= 0 || lastStampSeconds < 0) return;
+		var windowUs = (stampSeconds - lastStampSeconds) * 1000000.0;
+		if (windowUs <= 0) return;
+
+		var scale = windowUs / totalTicks;
+		var cumulativeTicks = 0;
+		var previousUs = 0;
+		i = 0;
+		while (i < samples.length) {
+			i += samples[i] + 1;
+			cumulativeTicks += samples[i];
+			var cumulativeUs = Math.round(cumulativeTicks * scale);
+			samples[i] = cumulativeUs - previousUs;
+			previousUs = cumulativeUs;
+			i++;
+		}
 	}
 
 	static function header():Bytes {
 		var out = output();
 		out.writeString("HXTS");
 		out.writeUInt16(1);
-		out.writeInt32(1000); // the hxcpp sampler's fixed 1 ms tick
-		out.writeDouble(haxe.Timer.stamp());
+		out.writeInt32(1000000); // deltas ship normalized to microseconds
+		var now = haxe.Timer.stamp();
+		out.writeDouble(now);
+		lastStampSeconds = now;
 		writeName(out, "hxcpp");
 		return out.getBytes();
 	}
@@ -136,6 +204,7 @@ class TelemetryRun {
 			try {
 				socket.output.write(chunk);
 			} catch (e:Dynamic) {
+				logError("telemetry send failed - collector stopped: " + Std.string(e));
 				stopped = true;
 				break;
 			}

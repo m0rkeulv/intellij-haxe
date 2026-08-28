@@ -15,9 +15,12 @@ import java.util.Map;
  * accumulated from the client's memory alloc/free events (hxcpp names its
  * pools "Small Object Heap" and "Large Object Heap"); keyed like plots —
  * resolved name or {@code pool@<pointer>}. {@code cpuUsage} carries the
- * client's periodic system-load reports (percent). Unmatched zone ends
- * happen when the connection started mid-zone; they are counted, not
- * errors.
+ * client's periodic system-load reports (percent). {@code processCpu} is
+ * the profiled process's own scheduler-exact CPU use folded from the
+ * client's context-switch stream (percent of ONE core, so several busy
+ * threads exceed 100); empty unless the process ran with the privileges
+ * system tracing needs. Unmatched zone ends happen when the connection
+ * started mid-zone; they are counted, not errors.
  */
 public record TracySession(@NotNull TracyWelcome welcome,
                            @NotNull List<TracyZone> zones,
@@ -27,6 +30,7 @@ public record TracySession(@NotNull TracyWelcome welcome,
                            @NotNull List<GcSweep> gcSweeps,
                            @NotNull List<TimelineEvent> events,
                            @NotNull List<PlotPoint> cpuUsage,
+                           @NotNull List<PlotPoint> processCpu,
                            @NotNull Map<Integer, String> threadNames,
                            long durationNs,
                            int unmatchedZoneEnds) {

@@ -84,9 +84,15 @@ public final class HaxeProgramLaunches {
     };
   }
 
-  /** True when the target's launch configuration can run under a Haxe profiler entry (see HaxeProfilableRunConfiguration). */
-  public static boolean supportsProgramProfiling(@NotNull HaxeTarget target) {
-    return target == HaxeTarget.HL || target == HaxeTarget.CPP;
+  /**
+   * True when the target's launch configuration can run under a Haxe
+   * profiler entry (see HaxeProfilableRunConfiguration). Flash profiles
+   * only as AIR: adl's debugger runtime has the sampler and its invoke
+   * arguments carry the port; the standalone player launch has neither.
+   */
+  public static boolean supportsProgramProfiling(@NotNull HaxeTarget target, @NotNull String targetOutput) {
+    if (target == HaxeTarget.FLASH) return isAirOutput(targetOutput.toLowerCase(Locale.ROOT));
+    return target == HaxeTarget.HL || target == HaxeTarget.CPP || target == HaxeTarget.JAVA_SCRIPT;
   }
 
   /** Display name of the configuration kind that launches this build ("HashLink Application", …), or null when unsupported. */

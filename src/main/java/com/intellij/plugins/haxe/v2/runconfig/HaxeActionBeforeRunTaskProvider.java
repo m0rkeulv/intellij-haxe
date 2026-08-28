@@ -35,6 +35,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration;
+import com.intellij.plugins.haxe.runner.debugger.flash.AirRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
@@ -402,26 +404,35 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   }
 
   /**
-   * The compile additions an hxcpp PROFILING launch injects — the telemetry
-   * entry's defines plus its start/stop bootstrap, or the tracy entry's
-   * plain defines — null on every non-profiling launch. The launched
-   * configuration knows the dump path; the build file's type picks the
-   * tool spelling (lime {@code --haxeflag=} against plain haxe).
+   * The compile additions a PROFILING launch injects — the hxcpp telemetry
+   * entry's defines plus its start/stop bootstrap, the tracy entry's plain
+   * defines, the flash entry's telemetry opt-in, or the browser entry's
+   * source-map emission — null on every non-profiling launch. The build
+   * file's type picks the tool spelling (lime {@code --haxeflag=} against
+   * plain haxe).
    */
   @Nullable
   private static List<String> profilingAdditions(@NotNull Project project,
                                                  @NotNull RunConfiguration configuration,
                                                  @NotNull Executor executor,
                                                  @NotNull Task task) {
-    if (!(configuration instanceof HxcppIntellijRunConfiguration hxcpp)) return null;
-    Path dumpPath = hxcpp.expectedDumpPath();
-    if (dumpPath == null) return null;
     HaxeBuildFile buildFile = resolveBuildFile(project, task.getBuildFilePath());
     if (buildFile == null) return null;
     boolean limeFamily = buildFile.type() != HaxeBuildFileType.HXML;
-    List<String> telemetry = HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, limeFamily, dumpPath);
-    if (telemetry != null) return telemetry;
-    return HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, limeFamily);
+    if (configuration instanceof HxcppIntellijRunConfiguration hxcpp) {
+      Path dumpPath = hxcpp.expectedDumpPath();
+      if (dumpPath == null) return null;
+      List<String> telemetry = HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, limeFamily, dumpPath);
+      if (telemetry != null) return telemetry;
+      return HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, limeFamily);
+    }
+    if (configuration instanceof AirRunConfiguration) {
+      return HaxeProfilerExecutorSupport.flashProfilingAdditions(executor, limeFamily);
+    }
+    if (configuration instanceof BrowserRunConfiguration) {
+      return HaxeProfilerExecutorSupport.jsProfilingAdditions(executor, limeFamily);
+    }
+    return null;
   }
 
   /** The build system's debug compile additions for the file's current selection, or null when it has none. */

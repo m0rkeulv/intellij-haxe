@@ -11,9 +11,9 @@ import org.jetbrains.annotations.NotNull;
  * process runs long and prints sparsely, and the default output reader
  * busy-polls it (the platform logs a warning naming this override).
  */
-class MostlySilentColoredProcessHandler extends ColoredProcessHandler {
+public class MostlySilentColoredProcessHandler extends ColoredProcessHandler {
 
-  MostlySilentColoredProcessHandler(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
+  public MostlySilentColoredProcessHandler(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
     super(commandLine.createProcess(), commandLine.getCommandLineString());
   }
 

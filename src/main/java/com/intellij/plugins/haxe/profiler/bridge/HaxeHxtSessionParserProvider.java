@@ -3,6 +3,8 @@ package com.intellij.plugins.haxe.profiler.bridge;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
+import com.intellij.plugins.haxe.profiler.bridge.data.HaxeSamplingProfilerData;
+import com.intellij.plugins.haxe.profiler.bridge.data.HaxeTracyProfilerData;
 import com.intellij.plugins.haxe.profiler.hxt.HxtCapture;
 import com.intellij.plugins.haxe.profiler.hxt.HxtSessionTranslator;
 import com.intellij.profiler.api.Failure;
@@ -53,7 +55,8 @@ public class HaxeHxtSessionParserProvider implements ProfilerDumpParserProvider 
       try {
         capture = HxtSessionTranslator.translateCapture(file.toPath());
         return new Success(switch (capture) {
-          case HxtCapture.Samples samples -> HaxeSamplingProfilerData.from(samples.snapshot());
+          // the file rides along: a still-live capture of it renders the self-refreshing view
+          case HxtCapture.Samples samples -> HaxeSamplingProfilerData.from(samples.snapshot(), file.toPath());
           case HxtCapture.Zones zones -> HaxeTracyProfilerData.from(zones.store());
         });
       }

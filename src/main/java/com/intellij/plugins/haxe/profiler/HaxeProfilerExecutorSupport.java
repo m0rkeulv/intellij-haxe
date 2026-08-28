@@ -49,6 +49,39 @@ public interface HaxeProfilerExecutorSupport {
   List<String> hxcppTracyAdditionsFor(@NotNull Executor executor, boolean limeFamily);
 
   /**
+   * True when an hxcpp TRACY launch under this executor should start the
+   * program ELEVATED so the client's system tracing can stream the
+   * scheduler's context switches (the Process CPU curve). False for other
+   * executors, when the setting is off, and on OSes where tracy has no
+   * system-tracing backend (macOS).
+   */
+  boolean hxcppTracyElevatedFor(@NotNull Executor executor);
+
+  /**
+   * The compile additions a FLASH/AIR profiling build must carry (the
+   * injected flash.sampler collector and its boot macro), or null when the
+   * executor is not the flash profiler one.
+   */
+  @Nullable
+  List<String> flashProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily);
+
+  /**
+   * Compile additions for a JS-profiling launch (source-map emission, so
+   * sampled positions map back to the .hx sources); null when the launch
+   * is not a JS-profiling one.
+   */
+  @Nullable
+  List<String> jsProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily);
+
+  /**
+   * V8's sampling interval (microseconds) a browser launch under this
+   * executor should profile with, or null when the executor is not the
+   * JavaScript profiler one.
+   */
+  @Nullable
+  Integer jsSamplingIntervalUsFor(@NotNull Executor executor);
+
+  /**
    * The profiler child executor that would launch this configuration (the
    * lane's registered profiler entry), or null without one — what a
    * tool-window "Profile" action executes with.
@@ -75,6 +108,33 @@ public interface HaxeProfilerExecutorSupport {
   static List<String> hxcppTracyAdditions(@NotNull Executor executor, boolean limeFamily) {
     HaxeProfilerExecutorSupport support = getInstance();
     return support == null ? null : support.hxcppTracyAdditionsFor(executor, limeFamily);
+  }
+
+  /** Null-safe form of {@link #hxcppTracyElevatedFor}. */
+  static boolean hxcppTracyElevated(@NotNull Executor executor) {
+    HaxeProfilerExecutorSupport support = getInstance();
+    return support != null && support.hxcppTracyElevatedFor(executor);
+  }
+
+  /** Null-safe form of {@link #flashProfilingAdditionsFor}. */
+  @Nullable
+  static List<String> flashProfilingAdditions(@NotNull Executor executor, boolean limeFamily) {
+    HaxeProfilerExecutorSupport support = getInstance();
+    return support == null ? null : support.flashProfilingAdditionsFor(executor, limeFamily);
+  }
+
+  /** Null-safe form of {@link #jsSamplingIntervalUsFor}. */
+  @Nullable
+  static Integer jsSamplingIntervalUs(@NotNull Executor executor) {
+    HaxeProfilerExecutorSupport support = getInstance();
+    return support == null ? null : support.jsSamplingIntervalUsFor(executor);
+  }
+
+  /** Null-safe form of {@link #jsProfilingAdditionsFor}. */
+  @Nullable
+  static List<String> jsProfilingAdditions(@NotNull Executor executor, boolean limeFamily) {
+    HaxeProfilerExecutorSupport support = getInstance();
+    return support == null ? null : support.jsProfilingAdditionsFor(executor, limeFamily);
   }
 
   /** Null-safe form of {@link #profilerExecutorFor}. */

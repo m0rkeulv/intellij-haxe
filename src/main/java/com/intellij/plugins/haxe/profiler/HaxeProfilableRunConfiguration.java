@@ -15,7 +15,9 @@ public interface HaxeProfilableRunConfiguration {
 
   enum Lane {
     HASHLINK,
-    HXCPP
+    HXCPP,
+    FLASH,
+    JS
   }
 
   @NotNull

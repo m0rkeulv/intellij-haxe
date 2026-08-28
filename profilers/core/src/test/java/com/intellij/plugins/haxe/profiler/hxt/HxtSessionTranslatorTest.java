@@ -2,7 +2,9 @@ package com.intellij.plugins.haxe.profiler.hxt;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerEvent;
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.model.ProfilerMemorySample;
 import com.intellij.plugins.haxe.profiler.model.ProfilerSnapshot;
+import com.intellij.plugins.haxe.profiler.model.StackFrame;
 import com.intellij.plugins.haxe.profiler.model.StackSample;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,6 +66,40 @@ public class HxtSessionTranslatorTest {
   }
 
   @Test
+  @DisplayName("name entries with a source suffix parse into file and line")
+  public void testNameEntriesWithASourceSuffixParseIntoFileAndLine() throws IOException {
+    SessionBuilder session = new SessionBuilder(1000, 2.0);
+    session.beginFrame(2.016, 0, List.of("Main.main(src/Main.hx:12)", "Game.update", "odd(name)"));
+    session.sample(new int[]{1, 2, 3}, 1);
+    session.endFrame();
+
+    ProfilerSnapshot snapshot = HxtSessionTranslator.translate(session.stream());
+
+    List<StackFrame> stack = snapshot.samples().get(0).frames();
+    assertEquals(new StackFrame("Main.main", "src/Main.hx", 12), stack.get(0));
+    assertEquals(new StackFrame("Game.update", null, StackFrame.NO_LINE), stack.get(1), "bare names stay bare");
+    assertEquals(new StackFrame("odd(name)", null, StackFrame.NO_LINE), stack.get(2),
+                 "a paren suffix without a position stays part of the symbol");
+  }
+
+  @Test
+  @DisplayName("frame heap readings surface as memory samples")
+  public void testFrameHeapReadingsSurfaceAsMemorySamples() throws IOException {
+    SessionBuilder session = new SessionBuilder(1000, 10.0);
+    session.beginFrame(10.016, 0, 4096, 8192, List.of("Main.main"));
+    session.sample(new int[]{1}, 1);
+    session.endFrame();
+    session.beginFrame(10.032, 0, 6144, 8192, List.of());
+    session.endFrame();
+
+    ProfilerSnapshot snapshot = HxtSessionTranslator.translate(session.stream());
+
+    assertEquals(List.of(new ProfilerMemorySample(10.016, 4096, 8192),
+                         new ProfilerMemorySample(10.032, 6144, 8192)),
+                 snapshot.memory());
+  }
+
+  @Test
   @DisplayName("frames become frame events and gc time becomes a gc event")
   public void testFramesBecomeFrameEventsAndGcTimeBecomesAGcEvent() throws IOException {
     SessionBuilder session = new SessionBuilder(1000, 5.0);
@@ -86,6 +122,23 @@ public class HxtSessionTranslatorTest {
       .toList();
     assertEquals(1, gcEvents.size(), "only the frame with gc time carries a gc event");
     assertEquals("2500", gcEvents.get(0).data());
+  }
+
+  @Test
+  @DisplayName("trailing allocation fields surface and records without them read as zero")
+  public void testTrailingAllocationFieldsSurfaceAndRecordsWithoutThemReadAsZero() throws IOException {
+    SessionBuilder session = new SessionBuilder(1000, 10.0);
+    session.beginFrame(10.016, 0, 4096, 0, List.of("Main.main"));
+    session.sample(new int[]{1}, 1);
+    session.endFrameWithAllocations(2048, 512);
+    session.beginFrame(10.032, 0, 4096, 0, List.of());
+    session.endFrame();
+
+    ProfilerSnapshot snapshot = HxtSessionTranslator.translate(session.stream());
+
+    assertEquals(List.of(new ProfilerMemorySample(10.016, 4096, 0, 2048, 512),
+                         new ProfilerMemorySample(10.032, 4096, 0)),
+                 snapshot.memory());
   }
 
   @Test
@@ -145,12 +198,16 @@ public class HxtSessionTranslatorTest {
     }
 
     void beginFrame(double stamp, int gcTimeUs, List<String> newNames) {
+      beginFrame(stamp, gcTimeUs, 0, 0, newNames);
+    }
+
+    void beginFrame(double stamp, int gcTimeUs, int usedBytes, int reservedBytes, List<String> newNames) {
       frame = new ByteArrayOutputStream();
       writeDouble(frame, stamp);
       writeInt(frame, gcTimeUs);
       writeInt(frame, 0);
-      writeInt(frame, 0);
-      writeInt(frame, 0);
+      writeInt(frame, usedBytes);
+      writeInt(frame, reservedBytes);
       writeInt(frame, newNames.size());
       for (String name : newNames) {
         byte[] utf8 = name.getBytes(StandardCharsets.UTF_8);
@@ -174,6 +231,18 @@ public class HxtSessionTranslatorTest {
       frame.writeBytes(samples.toByteArray());
       samples.reset();
       sampleInts = 0;
+      rawRecord(HxtSessionTranslator.FRAME_RECORD, frame.toByteArray());
+      frame = null;
+    }
+
+    /** The extended record shape: the optional allocation counters trail the sample ints. */
+    void endFrameWithAllocations(int allocatedBytes, int freedBytes) {
+      writeInt(frame, sampleInts);
+      frame.writeBytes(samples.toByteArray());
+      samples.reset();
+      sampleInts = 0;
+      writeInt(frame, allocatedBytes);
+      writeInt(frame, freedBytes);
       rawRecord(HxtSessionTranslator.FRAME_RECORD, frame.toByteArray());
       frame = null;
     }

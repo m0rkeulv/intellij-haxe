@@ -21,6 +21,8 @@ public class TracyEventReaderTest {
 
   private static final TracyWelcome TICKS_ARE_NS =
     new TracyWelcome(1.0, 0, 0, 0, 0, 0, 0, 1, 0, false, "synthetic");
+  private static final TracyEventReader.Hooks NO_HOOKS = new TracyEventReader.Hooks() {
+  };
 
   @Test
   @DisplayName("replays the live captured session into nested zones")
@@ -179,6 +181,85 @@ public class TracyEventReaderTest {
   }
 
   @Test
+  @DisplayName("a torn stream salvages everything decoded before the tear")
+  public void testATornStreamSalvagesEverythingDecodedBeforeTheTear() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.threadContext(1);
+    items.sourceLocation("Main.main", "Main.hx", 10);
+    items.zoneBeginAlloc(100);
+    items.zoneEnd(50);
+    items.sourceLocation("Main.helper", "Main.hx", 20);
+    items.zoneBeginAlloc(10);
+    byte[] whole = items.bytes();
+    // the tear lands inside the final zone begin's time field
+    InputStream torn = new ByteArrayInputStream(whole, 0, whole.length - 4);
+
+    TracySession session = TracyEventReader.readSalvaging(torn, TICKS_ARE_NS, NO_HOOKS, null);
+
+    assertEquals(1, session.zones().size(), "the closed zone before the tear survives");
+    assertEquals(0, session.zones().getFirst().startNs());
+    assertEquals(50, session.zones().getFirst().endNs());
+  }
+
+  @Test
+  @DisplayName("the strict replay forms still fail on a torn stream")
+  public void testTheStrictReplayFormsStillFailOnATornStream() {
+    ItemBuilder items = new ItemBuilder();
+    items.threadContext(1);
+    items.sourceLocation("Main.main", "Main.hx", 10);
+    items.zoneBeginAlloc(100);
+    byte[] whole = items.bytes();
+    InputStream torn = new ByteArrayInputStream(whole, 0, whole.length - 4);
+
+    assertThrows(IOException.class, () -> TracyEventReader.read(torn, TICKS_ARE_NS));
+  }
+
+  @Test
+  @DisplayName("own context-switch intervals fold into the process CPU curve")
+  public void testOwnContextSwitchIntervalsFoldIntoTheProcessCpuCurve() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.tidToPid(7, 1); // the welcome's pid is 1 - thread 7 is ours
+    items.contextSwitch(1_000, 0, 7, 0);
+    items.threadWakeup(1_000_000, 42); // advances the shared ctx reference
+    items.callstackSample(1_000_000, 7); // so does a sampled callstack
+    items.contextSwitch(23_000_000, 7, 99, 0); // out 25 ms after the in
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS);
+
+    assertEquals(List.of(new TracySession.PlotPoint(0, 25.0)), session.processCpu(),
+                 "25 ms of the 100 ms bucket; wakeup and sample deltas count into the out time");
+  }
+
+  @Test
+  @DisplayName("an interval crossing the bucket edge splits between the buckets")
+  public void testAnIntervalCrossingTheBucketEdgeSplitsBetweenTheBuckets() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.tidToPid(7, 1);
+    items.contextSwitch(90_000_000, 0, 7, 0);
+    items.contextSwitch(30_000_000, 7, 0, 0); // out at 120 ms - 10 ms in the first bucket, 20 in the second
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS);
+
+    assertEquals(List.of(new TracySession.PlotPoint(0, 10.0),
+                         new TracySession.PlotPoint(10_000_000, 20.0)),
+                 session.processCpu(), "bucket starts rebased to the first busy edge");
+  }
+
+  @Test
+  @DisplayName("only closed intervals of own threads count toward process CPU")
+  public void testOnlyClosedIntervalsOfOwnThreadsCountTowardProcessCpu() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.tidToPid(7, 1);
+    items.contextSwitch(1_000, 0, 42, 0); // another process's thread
+    items.contextSwitch(10_000_000, 42, 7, 1); // ours schedules in but never out
+    items.contextSwitch(5_000_000, 55, 66, 0); // closes the foreign interval on core 0
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS);
+
+    assertEquals(List.of(), session.processCpu());
+  }
+
+  @Test
   @DisplayName("a free burst between allocs becomes one GC sweep with its reclaim")
   public void testAFreeBurstBetweenAllocsBecomesOneGcSweepWithItsReclaim() throws IOException {
     ItemBuilder items = new ItemBuilder();
@@ -301,6 +382,34 @@ public class TracyEventReaderTest {
       out.write(r);
     }
 
+    void tidToPid(long tid, long pid) {
+      out.write(TracyQueueType.TidToPid.ordinal());
+      writeLong(tid);
+      writeLong(pid);
+    }
+
+    void contextSwitch(long deltaTicks, int oldThread, int newThread, int cpu) {
+      out.write(TracyQueueType.ContextSwitch.ordinal());
+      writeLong(deltaTicks);
+      writeInt(oldThread);
+      writeInt(newThread);
+      out.write(cpu);
+      out.write(new byte[5], 0, 5); // wait reason, state, c-state, priorities
+    }
+
+    void threadWakeup(long deltaTicks, int thread) {
+      out.write(TracyQueueType.ThreadWakeup.ordinal());
+      writeLong(deltaTicks);
+      writeInt(thread);
+      out.write(new byte[3], 0, 3); // cpu, adjust reason + increment
+    }
+
+    void callstackSample(long deltaTicks, int thread) {
+      out.write(TracyQueueType.CallstackSample.ordinal());
+      writeLong(deltaTicks);
+      writeInt(thread);
+    }
+
     void stringData(long pointer, String text) {
       out.write(TracyQueueType.StringData.ordinal());
       writeLong(pointer);
@@ -311,6 +420,10 @@ public class TracyEventReaderTest {
 
     InputStream stream() {
       return new ByteArrayInputStream(out.toByteArray());
+    }
+
+    byte[] bytes() {
+      return out.toByteArray();
     }
 
     private void writeU16(int value) {

@@ -6,20 +6,26 @@
 <idea-plugin>
   <extensions defaultExtensionNs="com.intellij">
     <profiler.api.ProfilerDumpParserProvider
-      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHlDumpParserProvider"/>
+      implementation="com.intellij.plugins.haxe.profiler.bridge.hashlink.HaxeHlDumpParserProvider"/>
     <profiler.api.ProfilerDumpParserProvider
-      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxcppDumpParserProvider"/>
+      implementation="com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeHxcppDumpParserProvider"/>
     <profiler.api.ProfilerDumpParserProvider
       implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxtSessionParserProvider"/>
+    <profiler.api.ProfilerDumpParserProvider
+      implementation="com.intellij.plugins.haxe.profiler.bridge.js.HaxeJsCpuProfileParserProvider"/>
     <profiler.profilerConfigurationType
-      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHlProfilerConfigurationType"/>
+      implementation="com.intellij.plugins.haxe.profiler.bridge.hashlink.HaxeHlProfilerConfigurationType"/>
     <profiler.profilerConfigurationType
-      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxcppProfilerConfigurationType"/>
+      implementation="com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeHxcppProfilerConfigurationType"/>
     <profiler.profilerConfigurationType
-      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeHxcppTracyProfilerConfigurationType"/>
+      implementation="com.intellij.plugins.haxe.profiler.bridge.tracy.HaxeHxcppTracyProfilerConfigurationType"/>
+    <profiler.profilerConfigurationType
+      implementation="com.intellij.plugins.haxe.profiler.bridge.flash.HaxeFlashProfilerConfigurationType"/>
+    <profiler.profilerConfigurationType
+      implementation="com.intellij.plugins.haxe.profiler.bridge.js.HaxeJsProfilerConfigurationType"/>
     <programRunner implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerRunner"/>
     <profiler.performanceHints.listener
-      implementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuPerformanceHints"/>
+      implementation="com.intellij.plugins.haxe.profiler.bridge.hints.HaxeIuPerformanceHints"/>
     <applicationService
       serviceInterface="com.intellij.plugins.haxe.profiler.HaxeProfilerSnapshotOpener"
       serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuSnapshotOpener"/>
@@ -28,10 +34,13 @@
       serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerExecutorSupport"/>
     <applicationService
       serviceInterface="com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture"
-      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuTelemetryCapture"/>
+      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeIuTelemetryCapture"/>
     <applicationService
       serviceInterface="com.intellij.plugins.haxe.profiler.HaxeTracyCapture"
-      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuTracyCapture"/>
+      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.tracy.HaxeIuTracyCapture"/>
+    <applicationService
+      serviceInterface="com.intellij.plugins.haxe.profiler.HaxeJsProfilerCapture"
+      serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.js.HaxeIuJsProfilerCapture"/>
     <applicationService
       serviceInterface="com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi"
       serviceImplementation="com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerProcessUi"/>
@@ -42,7 +51,7 @@
 
   <actions>
     <action id="Haxe.Profiler.ToggleHints"
-            class="com.intellij.plugins.haxe.profiler.bridge.HaxeToggleProfilerHintsAction">
+            class="com.intellij.plugins.haxe.profiler.bridge.hints.HaxeToggleProfilerHintsAction">
       <add-to-group group-id="EditorGutterPopupMenu" anchor="first"/>
     </action>
   </actions>

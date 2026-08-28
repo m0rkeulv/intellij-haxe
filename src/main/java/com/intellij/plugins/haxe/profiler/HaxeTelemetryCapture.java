@@ -17,7 +17,12 @@ import java.nio.file.Path;
  */
 public interface HaxeTelemetryCapture {
 
-  /** The env var the injected collector reads: {@code host:port} to stream to. */
+  /**
+   * The env var the injected hxcpp collector reads: {@code host:port} to
+   * stream to. The flash lane needs no handover — its runtime reads the
+   * receiver's address from {@code ~/.telemetry.cfg}, which the capture
+   * installs for the session.
+   */
   String ENDPOINT_ENV_VAR = "IJ_HAXE_TELEMETRY";
 
   @Nullable
@@ -25,15 +30,21 @@ public interface HaxeTelemetryCapture {
     return ApplicationManager.getApplication().getService(HaxeTelemetryCapture.class);
   }
 
-  /** One run's capture, named after the run configuration in the profiler UI; null when the listener cannot open. */
+  /**
+   * One run's capture, named after the run configuration in the profiler
+   * UI; null when the listener cannot open. {@code lane} attributes the
+   * session to its profiler entry and phrases the nothing-arrived notice.
+   */
   @Nullable
-  Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile);
+  Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile,
+               HaxeProfilableRunConfiguration.@NotNull Lane lane);
 
   /** Null-safe form of {@link #start}: null without the profiler module too. */
   @Nullable
-  static Handle startCapture(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile) {
+  static Handle startCapture(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile,
+                             HaxeProfilableRunConfiguration.@NotNull Lane lane) {
     HaxeTelemetryCapture capture = getInstance();
-    return capture == null ? null : capture.start(project, displayName, sessionFile);
+    return capture == null ? null : capture.start(project, displayName, sessionFile, lane);
   }
 
   interface Handle {

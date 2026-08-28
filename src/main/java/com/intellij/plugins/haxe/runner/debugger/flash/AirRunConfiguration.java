@@ -9,8 +9,12 @@ import com.intellij.execution.configurations.RunProfileState;
 import com.intellij.execution.configurations.RuntimeConfigurationError;
 import com.intellij.execution.configurations.RuntimeConfigurationException;
 import com.intellij.execution.configurations.RuntimeConfigurationWarning;
+import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessHandler;
+import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.openapi.options.SettingsEditor;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
@@ -20,6 +24,9 @@ import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
+import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
@@ -42,7 +49,9 @@ import org.jetbrains.annotations.Nullable;
  * A lime/openfl {@code air} build exports the descriptor at the export root
  * with the content (swf) in {@code bin/} beside it.
  */
-public class AirRunConfiguration extends DapRunConfigurationBase {
+public class AirRunConfiguration extends DapRunConfigurationBase implements HaxeProfilableRunConfiguration {
+  /** The telemetry session the IDE receiver persists beside the descriptor. */
+  public static final String PROFILER_SESSION_FILE_NAME = "flashprofile.hxtsession";
   private static final String DESCRIPTOR = "descriptorFile";
   private static final String CONTENT_ROOT = "contentRoot";
   private static final String FLEX_SDK = "flexSdk";
@@ -129,13 +138,61 @@ public class AirRunConfiguration extends DapRunConfigurationBase {
     }
   }
 
+  @Override
+  public @NotNull Lane profilingLane() {
+    return Lane.FLASH;
+  }
+
+  @Override
+  public boolean isProfilingReady() {
+    return !DumbService.isDumb(getProject()) && !descriptorPath.isBlank();
+  }
+
   // Plain Run: adl launches the app. Resolution stays inside the supplier -
   // getState runs before before-launch tasks, so the descriptor a build step
   // produces may not exist yet.
   @Override
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
     requireModule();
-    return new DapCommandLineRunningState(env, getProject(), () -> createAdlCommandLine(false));
+    // non-null exactly when the IU "Run with Profiler" executor launched us
+    // with the Flash Profiler entry selected (the collector itself goes into
+    // the before-launch compile, not this command line)
+    boolean profiling = !descriptorPath.isBlank()
+                        && HaxeProfilerExecutorSupport.flashProfilingAdditions(executor, false) != null;
+    HaxeTelemetryCapture.Handle capture = profiling
+                                          ? HaxeTelemetryCapture.startCapture(getProject(), getName(), profilerSessionPath(), Lane.FLASH)
+                                          : null;
+    return new DapCommandLineRunningState(env, getProject(), () -> profiledAdlCommandLine(capture)) {
+      @Override
+      protected @NotNull ProcessHandler startProcess() throws ExecutionException {
+        ProcessHandler handler = super.startProcess();
+        if (capture != null) {
+          handler.addProcessListener(new ProcessListener() {
+            @Override
+            public void processTerminated(@NotNull ProcessEvent event) {
+              capture.processExited();
+            }
+          });
+        }
+        return handler;
+      }
+    };
+  }
+
+  @NotNull
+  private Path profilerSessionPath() {
+    return resolveAgainstProject(descriptorPath).resolveSibling(PROFILER_SESSION_FILE_NAME);
+  }
+
+  /**
+   * The profiling launch runs the DEBUGGER runtime (no -nodebug — the
+   * telemetry sampler only ticks on it; trace output goes to the debug
+   * channel and is lost, the data arrives over the telemetry socket
+   * instead). The runtime finds the receiver through {@code ~/.telemetry.cfg},
+   * installed by the capture, so the command line carries nothing extra.
+   */
+  private GeneralCommandLine profiledAdlCommandLine(@Nullable HaxeTelemetryCapture.Handle capture) throws ExecutionException {
+    return createAdlCommandLine(capture != null);
   }
 
   /**

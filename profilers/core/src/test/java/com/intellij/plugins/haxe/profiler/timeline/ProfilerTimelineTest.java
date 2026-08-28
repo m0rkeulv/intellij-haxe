@@ -340,6 +340,6 @@ public class ProfilerTimelineTest {
 
   private static ProfilerSnapshot snapshot(int samplesPerSecond, List<StackSample> samples, List<ProfilerEvent> events) {
     List<ProfilerThread> threads = List.of(new ProfilerThread(MAIN_TID, "Main"), new ProfilerThread(WORKER_TID, "worker"));
-    return new ProfilerSnapshot("hashlink", 115, samplesPerSecond, threads, samples, events);
+    return new ProfilerSnapshot("hashlink", 115, samplesPerSecond, threads, samples, events, List.of());
   }
 }

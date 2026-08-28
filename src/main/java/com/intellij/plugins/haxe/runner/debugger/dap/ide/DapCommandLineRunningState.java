@@ -40,6 +40,12 @@ public class DapCommandLineRunningState extends CommandLineState {
   protected ProcessHandler startProcess() throws ExecutionException {
     GeneralCommandLine commandLine = commandLineSupplier.get();
     setConsoleBuilder(TextConsoleBuilderFactory.getInstance().createBuilder(project));
+    return createProcessHandler(commandLine);
+  }
+
+  /** The handler the run tab attaches to; overridable for launches that need a different start (an elevated one). */
+  @NotNull
+  protected ProcessHandler createProcessHandler(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
     return new MostlySilentColoredProcessHandler(commandLine);
   }
 }

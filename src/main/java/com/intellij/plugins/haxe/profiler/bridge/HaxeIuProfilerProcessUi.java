@@ -2,6 +2,9 @@ package com.intellij.plugins.haxe.profiler.bridge;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
+import com.intellij.plugins.haxe.profiler.bridge.hashlink.HaxeHlProfilerConfigurationType;
+import com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeHxcppProfilerConfigurationType;
+import com.intellij.plugins.haxe.profiler.bridge.tracy.HaxeHxcppTracyProfilerConfigurationType;
 import com.intellij.profiler.ProfilerToolWindowManager;
 import com.intellij.profiler.ToolWindowActivationProperties;
 import org.jetbrains.annotations.NotNull;
@@ -24,8 +27,8 @@ public class HaxeIuProfilerProcessUi implements HaxeProfilerProcessUi {
   }
 
   /** Direct entry for the bridge captures, which know their configuration type exactly. */
-  static Session open(@NotNull Project project, @NotNull String displayName,
-                      @NotNull Path dumpFile, @NotNull String configurationTypeId) {
+  public static Session open(@NotNull Project project, @NotNull String displayName,
+                             @NotNull Path dumpFile, @NotNull String configurationTypeId) {
     HaxeIuProfilerProcess process = new HaxeIuProfilerProcess(project, displayName, dumpFile.toFile(), configurationTypeId);
     process.markAttached();
     ToolWindowActivationProperties properties = new ToolWindowActivationProperties(false, true, () -> true);

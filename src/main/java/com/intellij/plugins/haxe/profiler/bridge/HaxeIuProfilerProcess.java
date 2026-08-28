@@ -3,6 +3,8 @@ package com.intellij.plugins.haxe.profiler.bridge;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
+import com.intellij.plugins.haxe.profiler.bridge.hashlink.HaxeHlDumpParserProvider;
+import com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeHxcppDumpParserProvider;
 import com.intellij.profiler.FileBasedProfilerProcess;
 import com.intellij.profiler.api.Attached;
 import com.intellij.profiler.api.CopyFileDumpWriter;

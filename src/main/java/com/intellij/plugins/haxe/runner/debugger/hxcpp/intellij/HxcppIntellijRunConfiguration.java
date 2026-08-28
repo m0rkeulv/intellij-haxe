@@ -6,13 +6,16 @@ import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.configurations.RunProfileState;
+import com.intellij.execution.process.ElevationService;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
@@ -88,15 +91,23 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
     // the telemetry capture (samples with a time axis) supersedes the text
     // report when the receiver opens; the report stays the fallback outcome
     HaxeTelemetryCapture.Handle capture = profiling
-                                          ? HaxeTelemetryCapture.startCapture(getProject(), getName(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
+                                          ? HaxeTelemetryCapture.startCapture(getProject(), getName(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME), Lane.HXCPP)
                                           : null;
     // the tracy entry: exact zones, no bootstrap - the receiver connects to
     // the client listening on the port we assign
     boolean tracy = dumpPath != null && HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, false) != null;
     HaxeTracyCapture.Handle tracyCapture = tracy
-                                           ? HaxeTracyCapture.startCapture(getProject(), getName(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME))
+                                           ? HaxeTracyCapture.startCapture(getProject(), getName(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME), executor)
                                            : null;
+    // the Process CPU curve needs the scheduler's context switches, which
+    // tracy's system tracing only streams from a privileged process
+    boolean elevated = tracy && HaxeProfilerExecutorSupport.hxcppTracyElevated(executor);
     return new DapCommandLineRunningState(env, getProject(), () -> profiledCommandLine(capture, tracyCapture)) {
+      @Override
+      protected @NotNull ProcessHandler createProcessHandler(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
+        return elevated ? elevatedProcessHandler(commandLine) : super.createProcessHandler(commandLine);
+      }
+
       @Override
       protected @NotNull ProcessHandler startProcess() throws ExecutionException {
         ProcessHandler handler = super.startProcess();
@@ -118,6 +129,22 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
         return handler;
       }
     };
+  }
+
+  /**
+   * Starts the command through the platform's elevation service (UAC on
+   * Windows, pkexec/sudo on Linux; the prompt appears at launch and the
+   * agent proxies stdio, so console and kill work as in a plain run).
+   * Declining the prompt fails the launch the same way any start failure
+   * does.
+   */
+  @NotNull
+  private static ProcessHandler elevatedProcessHandler(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
+    ElevationService elevation = ApplicationManager.getApplication().getService(ElevationService.class);
+    if (elevation == null || !elevation.isAvailable()) {
+      throw new ExecutionException(HaxeProfilerBundle.message("haxe.profiler.tracy.elevation.unavailable"));
+    }
+    return elevation.createProcessHandler(commandLine);
   }
 
   /** The run command line, handing each active capture its endpoint through the lane's env var. */

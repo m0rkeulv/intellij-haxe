@@ -38,7 +38,7 @@ public final class HaxeProfileProgramAction extends DumbAwareAction {
   public void update(@NotNull AnActionEvent e) {
     boolean applicable = panel.getSelectedUserObject() instanceof ProgramNode programNode
                          && HaxeProfilerExecutorSupport.getInstance() != null
-                         && HaxeProgramLaunches.supportsProgramProfiling(programNode.target());
+                         && HaxeProgramLaunches.supportsProgramProfiling(programNode.target(), programNode.targetOutput());
     e.getPresentation().setEnabledAndVisible(applicable);
   }
 

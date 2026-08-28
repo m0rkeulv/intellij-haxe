@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /** Where the IDE-side capture receivers persist their session files. */
-final class HaxeCaptureFiles {
+public final class HaxeCaptureFiles {
 
   private static final DateTimeFormatter CAPTURE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
@@ -25,7 +25,7 @@ final class HaxeCaptureFiles {
    * from other projects working.
    */
   @NotNull
-  static Path perCaptureSessionPath(@NotNull Path base) {
+  public static Path perCaptureSessionPath(@NotNull Path base) {
     Path captures = base.resolveSibling("captures");
     String stamp = LocalDateTime.now().format(CAPTURE_STAMP);
     Path directory = captures.resolve(stamp);

@@ -46,6 +46,7 @@ public class HxtZoneStoreTest {
       List.of(new TracySession.GcSweep(250, 290, 2048, 17)),
       List.of(new TimelineEvent(1, 320, "level loaded", 0xFF9900)),
       List.of(new TracySession.PlotPoint(500, 12.5)),
+      List.of(new TracySession.PlotPoint(0, 87.5)),
       Map.of(1, "Main", 2, "worker"),
       5_000_000,
       3);
@@ -90,6 +91,7 @@ public class HxtZoneStoreTest {
     assertEquals(small.gcSweeps(), reopened.gcSweeps());
     assertEquals(small.events(), reopened.events());
     assertEquals(small.cpuUsage(), reopened.cpuUsage());
+    assertEquals(small.processCpu(), reopened.processCpu());
     assertEquals(small.threadNames(), reopened.threadNames());
     assertEquals(small.durationNs(), reopened.durationNs());
     assertEquals(small.unmatchedZoneEnds(), reopened.unmatchedZoneEnds());
@@ -245,6 +247,6 @@ public class HxtZoneStoreTest {
   private static TracySession emptySmallSession() {
     TracyWelcome welcome = new TracyWelcome(1.0, 0, 0, 0, 0, 0, 0, 1, 0, false, "x");
     return new TracySession(welcome, List.of(), List.of(), Map.of(), Map.of(),
-                            List.of(), List.of(), List.of(), Map.of(1, "Main"), 0, 0);
+                            List.of(), List.of(), List.of(), List.of(), Map.of(1, "Main"), 0, 0);
   }
 }

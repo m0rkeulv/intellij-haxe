@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
@@ -25,8 +26,9 @@ import java.util.Set;
  * hxcpp client emits. Wire rules, verified against the client sources:
  * zone and plot times are DELTAS against a running reference that every
  * ThreadContext item RESETS to zero; memory events delta against a separate
- * serial reference; frame marks and system-load reports carry ABSOLUTE
- * times (the client's dequeue has no case for them). Every
+ * serial reference; context switches, thread wakeups and sampled callstacks
+ * against a THIRD one (never reset); frame marks and system-load reports
+ * carry ABSOLUTE times (the client's dequeue has no case for them). Every
  * ZoneBeginAllocSrcLoc is immediately preceded by its
  * SourceLocationPayload. Unknown item types are consumed by the size table
  * so future traffic degrades to being ignored, never misparsed.
@@ -39,8 +41,11 @@ public final class TracyEventReader {
   private Hooks hooks = NO_HOOKS;
   /** Null = collect zones into the session (small captures and tests). */
   private @Nullable ZoneSink zoneSink;
+  /** Live captures: a torn stream ends the read and keeps what was decoded, instead of failing the capture. */
+  private boolean salvageTornStream;
   private long refThread;
   private long refSerial;
+  private long refCtx;
   private int currentThread = -1;
   private @Nullable TracySourceLocation pendingSourceLocation;
 
@@ -58,6 +63,13 @@ public final class TracyEventReader {
   private final Map<Long, String> strings = new HashMap<>();
   private final List<TracySession.GcSweep> gcSweeps = new ArrayList<>();
   private final List<TimelineEvent> events = new ArrayList<>();
+  /** The profiled process's own pid (from the welcome) and its thread ids as TidToPid maps them. */
+  private final long ownPid;
+  private final Set<Long> ownTids = new HashSet<>();
+  /** Per core (the wire's u8 cpu id): the thread scheduled on it and since when; -1 = not seen yet. */
+  private final long[] coreTid = new long[256];
+  private final long[] coreInNs = new long[256];
+  private final Map<Long, Long> processBusyNsByBucket = new HashMap<>();
   /** The string a SingleStringData payload announced; the next fat item (a message) owns it. */
   private @Nullable String pendingSingleString;
   private long burstStartNs = -1;
@@ -82,6 +94,9 @@ public final class TracyEventReader {
   private TracyEventReader(InputStream decompressed, TracyWelcome welcome) {
     this.data = new DataInputStream(decompressed);
     this.timerMul = welcome.timerMul();
+    this.ownPid = welcome.pid();
+    Arrays.fill(coreTid, -1);
+    Arrays.fill(coreInNs, -1);
   }
 
   /**
@@ -153,7 +168,38 @@ public final class TracyEventReader {
     return reader.freeze(welcome);
   }
 
+  /**
+   * The LIVE-capture form: a torn stream — the profiled process killed
+   * mid-run, or dead without the shutdown handshake (tracy's client exit
+   * wedges when system tracing is active) — ends the read and keeps
+   * everything decoded before the tear, instead of failing the whole
+   * capture. Replays use the strict {@code read} forms so corrupt files
+   * still fail loud.
+   */
+  @NotNull
+  public static TracySession readSalvaging(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome,
+                                           @NotNull Hooks hooks,
+                                           TracyEventReader.@Nullable ZoneSink zoneSink) throws IOException {
+    TracyEventReader reader = new TracyEventReader(decompressed, welcome);
+    reader.hooks = hooks;
+    reader.zoneSink = zoneSink;
+    reader.salvageTornStream = true;
+    reader.readAll();
+    return reader.freeze(welcome);
+  }
+
   private void readAll() throws IOException {
+    try {
+      readItems();
+    }
+    catch (IOException torn) {
+      // covers connection resets, streams cut mid-item and desyncs alike:
+      // everything decoded before the fault is intact and worth keeping
+      if (!salvageTornStream) throw torn;
+    }
+  }
+
+  private void readItems() throws IOException {
     int typeByte;
     while ((typeByte = data.read()) >= 0) {
       TracyQueueType type = TracyQueueType.of(typeByte);
@@ -192,6 +238,24 @@ public final class TracyEventReader {
           long timeNs = toNs(readLongLe());
           cpuUsage.add(new TracySession.PlotPoint(timeNs, Float.intBitsToFloat(readIntLe())));
           track(timeNs);
+        }
+        // system-tracing traffic, present only when the process ran with
+        // the privileges the OS backend needs (Windows ETW: elevated).
+        // Switches, wakeups and sampled callstacks share a THIRD delta
+        // reference - each must advance it even where its payload is
+        // discarded, or every later ctx time is wrong.
+        case ContextSwitch -> readContextSwitch();
+        case ThreadWakeup -> {
+          advanceCtxTime();
+          skip(7); // thread, cpu, adjust reason + increment
+        }
+        case CallstackSample, CallstackSampleContextSwitch -> {
+          advanceCtxTime();
+          skip(4); // thread - the sampled native stacks are not charted
+        }
+        case TidToPid -> {
+          long tid = readLongLe();
+          if (readLongLe() == ownPid) ownTids.add(tid);
         }
         // precedes the fat item owning it (a message's text)
         case SingleStringData -> pendingSingleString = new String(readPayload(readU16Le()), StandardCharsets.UTF_8);
@@ -300,6 +364,42 @@ public final class TracyEventReader {
     track(timeNs);
   }
 
+  /** One process-CPU point per 100 ms of scheduler time: coarse enough to stay tiny, fine enough to zoom into. */
+  private static final long PROCESS_CPU_BUCKET_NS = 100_000_000;
+
+  /**
+   * Wire order: ctx-delta time, old thread u32, new thread u32, cpu u8,
+   * then wait reason/state/c-state/priorities (5 bytes). The per-core
+   * tracked state closes the outgoing thread's on-core interval; only OWN
+   * threads accumulate, so nothing about other processes is ever kept.
+   */
+  private void readContextSwitch() throws IOException {
+    long timeNs = advanceCtxTime();
+    skip(4); // old thread - the tracked core state already knows it
+    long newThread = Integer.toUnsignedLong(readIntLe());
+    int cpu = data.readUnsignedByte();
+    skip(5);
+    if (coreInNs[cpu] >= 0 && ownTids.contains(coreTid[cpu])) {
+      accumulateProcessBusy(coreInNs[cpu], timeNs);
+    }
+    coreTid[cpu] = newThread;
+    coreInNs[cpu] = timeNs;
+  }
+
+  /** Splits one own-thread on-core interval over the fixed buckets; the edges count as session activity. */
+  private void accumulateProcessBusy(long fromNs, long toNs) {
+    if (toNs <= fromNs) return;
+    track(fromNs);
+    track(toNs);
+    long bucket = fromNs / PROCESS_CPU_BUCKET_NS;
+    while (fromNs < toNs) {
+      long bucketEndNs = (bucket + 1) * PROCESS_CPU_BUCKET_NS;
+      processBusyNsByBucket.merge(bucket, Math.min(toNs, bucketEndNs) - fromNs, Long::sum);
+      fromNs = bucketEndNs;
+      bucket++;
+    }
+  }
+
   /** Frees only come from the collector (see {@link TracySession.GcSweep}), so each one extends the current burst. */
   private void extendSweep(long timeNs, @Nullable Long freedSize) {
     if (burstStartNs < 0) burstStartNs = timeNs;
@@ -402,6 +502,12 @@ public final class TracyEventReader {
     return toNs(refSerial);
   }
 
+  /** Applies one ctx-stream delta (switches, wakeups, sampled callstacks) and returns the new time in nanoseconds. */
+  private long advanceCtxTime() throws IOException {
+    refCtx += readLongLe();
+    return toNs(refCtx);
+  }
+
   private long toNs(long ticks) {
     return (long)(ticks * timerMul);
   }
@@ -452,8 +558,17 @@ public final class TracyEventReader {
     long duration = maxNs == Long.MIN_VALUE ? 0 : maxNs - base;
 
     return new TracySession(welcome, ordered, frames, Map.copyOf(rebasedPlots), Map.copyOf(memoryCurves),
-                            sweeps, orderedEvents, rebase(cpuUsage, base), Map.copyOf(threadNames),
-                            duration, unmatchedZoneEnds);
+                            sweeps, orderedEvents, rebase(cpuUsage, base), processCpuPoints(base),
+                            Map.copyOf(threadNames), duration, unmatchedZoneEnds);
+  }
+
+  /** The folded process-CPU curve: one point per bucket, percent of ONE core (several busy threads exceed 100). */
+  private List<TracySession.PlotPoint> processCpuPoints(long base) {
+    return processBusyNsByBucket.entrySet().stream()
+      .sorted(Map.Entry.comparingByKey())
+      .map(entry -> new TracySession.PlotPoint(Math.max(entry.getKey() * PROCESS_CPU_BUCKET_NS - base, 0),
+                                               entry.getValue() * 100.0 / PROCESS_CPU_BUCKET_NS))
+      .toList();
   }
 
   private static List<TracySession.PlotPoint> rebase(List<TracySession.PlotPoint> points, long base) {

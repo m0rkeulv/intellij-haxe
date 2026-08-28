@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.profiler.hxt;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerEvent;
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.model.ProfilerMemorySample;
 import com.intellij.plugins.haxe.profiler.model.ProfilerSnapshot;
 import com.intellij.plugins.haxe.profiler.model.ProfilerThread;
 import com.intellij.plugins.haxe.profiler.model.StackFrame;
@@ -38,7 +39,14 @@ import java.util.Map;
  *          i32 nameCount, nameCount * (u16 len + utf8)   — appended to the
  *              session's accumulated name table (1-indexed, index 0 unused),
  *          i32 sampleIntCount, that many i32s: groups of
- *              [depth, depth * nameIndex (root-first), deltaTicks]
+ *              [depth, depth * nameIndex (root-first), deltaTicks],
+ *          OPTIONAL trailing u32 allocatedBytes, u32 freedBytes — the
+ *              window's allocation traffic from collectors that track it;
+ *              records without them read as 0,
+ *          OPTIONAL trailing u8 flags — bit 0 marks a COLLECTION-SEGMENT
+ *              window (a transcoder's flush boundary, not a display frame:
+ *              no frame event), bit 1 a record without a heap reading (no
+ *              memory sample)
  * </pre>
  *
  * Sample times are reconstructed inside each frame's window: the previous
@@ -117,6 +125,7 @@ public final class HxtSessionTranslator {
     Map<Integer, StackFrame> frames = new HashMap<>();
     List<StackSample> samples = new ArrayList<>();
     List<ProfilerEvent> events = new ArrayList<>();
+    List<ProfilerMemorySample> memory = new ArrayList<>();
     double windowStart = startStamp;
 
     while (true) {
@@ -136,7 +145,7 @@ public final class HxtSessionTranslator {
       }
       if (type == FRAME_RECORD) {
         try {
-          windowStart = readFrame(payload, tickHz, windowStart, names, frames, samples, events);
+          windowStart = readFrame(payload, tickHz, windowStart, names, frames, samples, events, memory);
         }
         catch (EOFException truncated) {
           break;
@@ -145,19 +154,21 @@ public final class HxtSessionTranslator {
     }
 
     List<ProfilerThread> threads = List.of(new ProfilerThread(0, "Main"));
-    return new ProfilerSnapshot(target, version, tickHz, threads, List.copyOf(samples), List.copyOf(events));
+    return new ProfilerSnapshot(target, version, tickHz, threads, List.copyOf(samples),
+                                List.copyOf(events), List.copyOf(memory));
   }
 
-  /** Reads one frame payload; returns the next window's start (this frame's stamp). */
-  private static double readFrame(byte[] payload, int tickHz, double windowStart,
-                                  List<String> names, Map<Integer, StackFrame> frames,
-                                  List<StackSample> samples, List<ProfilerEvent> events) throws IOException {
+  /** Reads one frame payload; returns the next window's start (this frame's stamp). Shared with {@link HxtLiveSession}. */
+  static double readFrame(byte[] payload, int tickHz, double windowStart,
+                          List<String> names, Map<Integer, StackFrame> frames,
+                          List<StackSample> samples, List<ProfilerEvent> events,
+                          List<ProfilerMemorySample> memory) throws IOException {
     DataInputStream data = new DataInputStream(new ByteArrayInputStream(payload));
     double stamp = readDouble(data);
     int gcTimeUs = readInt(data);
     readInt(data); // gcOverheadUs - not surfaced yet
-    readInt(data); // usedBytes - future memory chart source
-    readInt(data); // reservedBytes
+    long usedBytes = Integer.toUnsignedLong(readInt(data));
+    long reservedBytes = Integer.toUnsignedLong(readInt(data));
 
     int nameCount = readInt(data);
     for (int i = 0; i < nameCount; i++) {
@@ -184,7 +195,16 @@ public final class HxtSessionTranslator {
       samples.add(new StackSample(time, 0, List.copyOf(stack), Math.max(deltaTicks, 1), false));
     }
 
-    events.add(new ProfilerEvent(stamp, 0, ProfilerEvent.FRAME_CODE, ""));
+    // optional trailing fields - records written before them read as 0
+    long allocatedBytes = data.available() >= 8 ? Integer.toUnsignedLong(readInt(data)) : 0;
+    long freedBytes = data.available() >= 4 ? Integer.toUnsignedLong(readInt(data)) : 0;
+    int flags = data.available() >= 1 ? data.readUnsignedByte() : 0;
+    if ((flags & HxtSessionWriter.FLAG_NO_HEAP_READING) == 0) {
+      memory.add(new ProfilerMemorySample(stamp, usedBytes, reservedBytes, allocatedBytes, freedBytes));
+    }
+    if ((flags & HxtSessionWriter.FLAG_SEGMENT_WINDOW) == 0) {
+      events.add(new ProfilerEvent(stamp, 0, ProfilerEvent.FRAME_CODE, ""));
+    }
     if (gcTimeUs > 0) {
       events.add(new ProfilerEvent(stamp, 0, ProfilerEvent.GC_TIME_CODE, Integer.toString(gcTimeUs)));
     }
@@ -195,7 +215,32 @@ public final class HxtSessionTranslator {
     if (nameIndex <= 0 || nameIndex >= names.size()) {
       throw new ProfilerFormatException("sample references unknown name index " + nameIndex);
     }
-    return frames.computeIfAbsent(nameIndex, index -> new StackFrame(names.get(index), null, StackFrame.NO_LINE));
+    return frames.computeIfAbsent(nameIndex, index -> parseFrame(names.get(index)));
+  }
+
+  /**
+   * A name entry is {@code symbol} or {@code symbol(path/File.hx:123)} —
+   * collectors that know source positions (flash) append them the way the
+   * HL dump spells its descriptions; the hxcpp collector sends bare names.
+   * A malformed suffix stays part of the symbol rather than failing.
+   */
+  private static StackFrame parseFrame(String name) {
+    if (name.isEmpty() || name.charAt(name.length() - 1) != ')') {
+      return new StackFrame(name, null, StackFrame.NO_LINE);
+    }
+    int open = name.lastIndexOf('(');
+    int separator = name.lastIndexOf(':');
+    if (open <= 0 || separator <= open) {
+      return new StackFrame(name, null, StackFrame.NO_LINE);
+    }
+    try {
+      int line = Integer.parseInt(name.substring(separator + 1, name.length() - 1).trim());
+      String file = name.substring(open + 1, separator).replace('\\', '/');
+      return new StackFrame(name.substring(0, open), file, line);
+    }
+    catch (NumberFormatException notAPosition) {
+      return new StackFrame(name, null, StackFrame.NO_LINE);
+    }
   }
 
   private static void readMagic(DataInputStream data) throws IOException {

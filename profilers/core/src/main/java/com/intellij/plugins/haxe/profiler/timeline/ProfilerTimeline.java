@@ -123,6 +123,19 @@ public final class ProfilerTimeline {
    */
   @NotNull
   public static FlameNode flameTree(@NotNull ProfilerSnapshot snapshot, int threadId, int maxDepth) {
+    return flameTree(snapshot, threadId, maxDepth, Long.MIN_VALUE / 2, Long.MAX_VALUE / 2);
+  }
+
+  /**
+   * The windowed form for LIVE views: only samples inside
+   * [{@code fromUs}, {@code toUs}] build runs — a follow-mode refresh then
+   * costs the window, not the session — while the ROOT still spans the
+   * thread's whole sampled range, so the chart's axis and scroll bounds
+   * stay session-wide.
+   */
+  @NotNull
+  public static FlameNode flameTree(@NotNull ProfilerSnapshot snapshot, int threadId, int maxDepth,
+                                    long fromUs, long toUs) {
     long periodUs = periodUs(snapshot.samplesPerSecond());
     long gapUs = Math.max(5 * periodUs, 20_000);
     double start = captureStartSeconds(snapshot);
@@ -130,14 +143,19 @@ public final class ProfilerTimeline {
     NodeBuilder root = new NodeBuilder(null, 0);
     List<NodeBuilder> open = new ArrayList<>(); // the currently running path, root's child first
     long previousUs = Long.MIN_VALUE;
+    long firstUs = 0;
+    long lastEndUs = 0;
     boolean any = false;
     for (StackSample sample : snapshot.samples()) {
       if (sample.threadId() != threadId) continue;
       long timeUs = Math.round((sample.time() - start) * 1_000_000);
       if (!any) {
-        root.startUs = timeUs;
+        firstUs = timeUs;
         any = true;
       }
+      lastEndUs = Math.max(lastEndUs, timeUs + periodUs);
+      if (timeUs < fromUs || timeUs > toUs) continue;
+      // a stretch skipped by the window reads as a sampling gap and closes runs
       boolean gapBroken = previousUs != Long.MIN_VALUE && timeUs - previousUs > gapUs;
       previousUs = timeUs;
 
@@ -159,12 +177,13 @@ public final class ProfilerTimeline {
       }
       long endUs = timeUs + periodUs;
       root.samples++;
-      root.endUs = endUs;
       for (NodeBuilder builder : open) {
         builder.samples++;
         builder.endUs = endUs;
       }
     }
+    root.startUs = any ? firstUs : 0;
+    root.endUs = lastEndUs;
     return root.freeze();
   }
 

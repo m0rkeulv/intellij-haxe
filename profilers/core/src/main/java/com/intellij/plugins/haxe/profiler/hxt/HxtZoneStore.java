@@ -92,6 +92,7 @@ public final class HxtZoneStore {
     List<TracySession.GcSweep> gcSweeps = new ArrayList<>();
     List<TimelineEvent> events = new ArrayList<>();
     List<TracySession.PlotPoint> cpu = new ArrayList<>();
+    List<TracySession.PlotPoint> processCpu = new ArrayList<>();
     Map<Integer, String> threadNames = new HashMap<>();
     Map<Integer, Long> threadZones = new HashMap<>();
 
@@ -142,6 +143,7 @@ public final class HxtZoneStore {
           }
           case HxtZoneWriter.PLOT_RECORD -> plots.put(readString(payload), readPoints(payload));
           case HxtZoneWriter.CPU_RECORD -> cpu.addAll(readPoints(payload));
+          case HxtZoneWriter.PROCESS_CPU_RECORD -> processCpu.addAll(readPoints(payload));
           case HxtZoneWriter.THREAD_RECORD -> {
             int id = readI32(payload);
             threadNames.put(id, readString(payload));
@@ -184,7 +186,8 @@ public final class HxtZoneStore {
     TracyWelcome welcome = new TracyWelcome(1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
     TracySession session = new TracySession(welcome, List.of(), List.copyOf(frames), Map.copyOf(plots),
                                             Map.copyOf(memoryCurves), List.copyOf(gcSweeps), List.copyOf(events),
-                                            List.copyOf(cpu), Map.copyOf(threadNames), durationNs, unmatched);
+                                            List.copyOf(cpu), List.copyOf(processCpu), Map.copyOf(threadNames),
+                                            durationNs, unmatched);
     List<ThreadEntry> threads = threadZones.entrySet().stream()
       .sorted(Map.Entry.<Integer, Long>comparingByValue(Comparator.reverseOrder()))
       .map(entry -> new ThreadEntry(entry.getKey(), threadName(threadNames, entry.getKey()), entry.getValue()))

@@ -26,6 +26,9 @@ dependencies {
     // (~6 s per 1.7 MB chunk, measured), and deflate 6 also compresses better
     implementation(libs.commonsCompress)
 
+    // the V8 .cpuprofile translator reads JSON
+    implementation(libs.jacksonDatabind)
+
     testImplementation(libs.junitJupiter)
     testRuntimeOnly(libs.junitPlatformLauncher)
 }
