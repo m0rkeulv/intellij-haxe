@@ -29,6 +29,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
@@ -46,10 +47,13 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntFunction;
+import javax.swing.AbstractAction;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JScrollBar;
 import javax.swing.JViewport;
+import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -233,6 +237,9 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private @Nullable ViewPreferencesListener viewPreferenceListener;
   /** Opens the Configure View dialog; the tab owns it (lane visibility lives there). */
   private @Nullable Runnable configureViewOpener;
+  /** What a run's count means in the shown capture; the tab overrides it for exact-zone data. */
+  private IntFunction<String> runCountText =
+    count -> HaxeProfilerBundle.message("haxe.profiler.callchart.samples", count);
   /** Index of the band being drag-reordered by its grip; -1 = none. */
   private int draggingBand = -1;
   private int dragY;
@@ -276,11 +283,14 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     this.curveSelectionListener = curveSelectionListener;
     this.eventSelectionListener = eventSelectionListener;
     setOpaque(false);
+    setFocusable(true); // arrow keys walk the selection (see installKeyboardNavigation)
+    installKeyboardNavigation();
     ToolTipManager.sharedInstance().registerComponent(this);
     addMouseListener(new MouseAdapter() {
       @Override
       public void mouseClicked(MouseEvent event) {
         if (!SwingUtilities.isLeftMouseButton(event)) return;
+        requestFocusInWindow();
         if (event.getClickCount() == 1) {
           // a click in a divider's grip zone is a (no-op) resize, not a toggle of the band below
           int headerBand = dividerKeyAt(event.getY()) == null ? headerBandAt(event.getPoint()) : -1;
@@ -591,6 +601,11 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   /** Wires the context menu's Configure View entry to the tab's dialog. */
   void setConfigureViewOpener(@NotNull Runnable opener) {
     configureViewOpener = opener;
+  }
+
+  /** What a run's count means in the shown capture (samples vs invocations), for the hover tooltip. */
+  void setRunCountText(@NotNull IntFunction<String> formatter) {
+    runCountText = formatter;
   }
 
   /** Shows or hides the calls lane (header included); hiding clears a selected run. */
@@ -1012,7 +1027,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     FlameNode node = nodeAt(event.getPoint());
     if (node == null || node.frame() == null) return null;
     return node.frame().symbol() + " — " + HaxeProfilerFormats.formatUs(node.durationUs()) + ", "
-           + HaxeProfilerBundle.message("haxe.profiler.callchart.samples", node.samples());
+           + runCountText.apply(node.samples());
   }
 
   private void navigateAt(Point point) {
@@ -1091,6 +1106,156 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   private void clearCurveSelection() {
     selectedCurve = null;
+  }
+
+  private void installKeyboardNavigation() {
+    bindKey("LEFT", () -> navigateSelection(-1, 0));
+    bindKey("RIGHT", () -> navigateSelection(1, 0));
+    bindKey("UP", () -> navigateSelection(0, -1));
+    bindKey("DOWN", () -> navigateSelection(0, 1));
+    // the zoom anchors on the selection (selectionAnchorUs), so ctrl+plus
+    // dives onto the selected node; EQUALS is the main-row plus key,
+    // ADD/SUBTRACT the numpad pair
+    bindKey("control EQUALS", this::zoomIn);
+    bindKey("control shift EQUALS", this::zoomIn);
+    bindKey("control ADD", this::zoomIn);
+    bindKey("control MINUS", this::zoomOut);
+    bindKey("control SUBTRACT", this::zoomOut);
+  }
+
+  private void bindKey(String stroke, Runnable navigation) {
+    getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(stroke), stroke);
+    getActionMap().put(stroke, new AbstractAction() {
+      @Override
+      public void actionPerformed(ActionEvent event) {
+        navigation.run();
+      }
+    });
+  }
+
+  /**
+   * Arrow-key selection walking: a marker-lane span (frame, GC) steps
+   * left/right through its lane; a call-chart run steps to its time
+   * neighbors at the SAME depth (crossing into the next stack where the
+   * flame splits), up to its caller and down into its first callee. The
+   * chart's edges stop the walk.
+   */
+  private void navigateSelection(int dx, int dy) {
+    if (selectedSpanLane != null && selectedSpan != null) {
+      if (dx != 0) stepSpanSelection(dx);
+    }
+    else if (selected != null) {
+      stepFlameSelection(dx, dy);
+    }
+  }
+
+  private void stepSpanSelection(int direction) {
+    List<UsSpan> spans = selectedSpanLane.spans();
+    int index = spans.indexOf(selectedSpan) + direction;
+    if (index < 0 || index >= spans.size()) return;
+    selectedSpan = spans.get(index);
+    spanSelectionListener.accept(selectedSpanLane, selectedSpan);
+    revealTime(selectedSpan.startUs(), selectedSpan.endUs());
+    repaint();
+  }
+
+  private void stepFlameSelection(int dx, int dy) {
+    List<FlameNode> path = pathOfNode(selected);
+    if (path.isEmpty()) return; // a live refresh replaced the tree under the selection
+    FlameNode next;
+    if (dy < 0) {
+      next = path.size() >= 2 ? path.get(path.size() - 2) : null;
+    }
+    else if (dy > 0) {
+      next = firstRunChild(selected);
+    }
+    else {
+      next = dx > 0 ? nextAtDepth(root, 0, path.size(), selected.startUs())
+                    : previousAtDepth(root, 0, path.size(), selected.startUs());
+    }
+    if (next == null) return;
+    selected = next;
+    selectionListener.accept(pathOfNode(next));
+    revealTime(next.startUs(), next.endUs());
+    repaint();
+  }
+
+  /** The root path to {@code target} (outermost first, the synthetic root excluded), empty when it left the tree. */
+  private List<FlameNode> pathOfNode(FlameNode target) {
+    List<FlameNode> path = new ArrayList<>();
+    FlameNode node = root;
+    while (node != target) {
+      FlameNode next = null;
+      for (FlameNode child : node.children()) {
+        if (child.startUs() <= target.startUs() && target.startUs() < child.endUs()) {
+          next = child;
+          break;
+        }
+      }
+      if (next == null) return List.of();
+      path.add(next);
+      node = next;
+    }
+    return path;
+  }
+
+  @Nullable
+  private static FlameNode firstRunChild(FlameNode node) {
+    for (FlameNode child : node.children()) {
+      if (!child.idle()) return child;
+    }
+    return null;
+  }
+
+  /** The earliest run at {@code targetDepth} starting after {@code fromStartUs} — same-depth runs never overlap, so time order is walk order. */
+  @Nullable
+  private static FlameNode nextAtDepth(FlameNode node, int depth, int targetDepth, long fromStartUs) {
+    if (depth == targetDepth) {
+      return !node.idle() && node.startUs() > fromStartUs ? node : null;
+    }
+    for (FlameNode child : node.children()) {
+      if (child.endUs() <= fromStartUs) continue; // its whole subtree starts earlier
+      FlameNode found = nextAtDepth(child, depth + 1, targetDepth, fromStartUs);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  /** The latest run at {@code targetDepth} starting before {@code fromStartUs}. */
+  @Nullable
+  private static FlameNode previousAtDepth(FlameNode node, int depth, int targetDepth, long fromStartUs) {
+    if (depth == targetDepth) {
+      return !node.idle() && node.startUs() < fromStartUs ? node : null;
+    }
+    FlameNode best = null;
+    for (FlameNode child : node.children()) {
+      if (child.startUs() >= fromStartUs) break; // no descendant starts before its parent
+      FlameNode found = previousAtDepth(child, depth + 1, targetDepth, fromStartUs);
+      if (found != null) best = found; // later children hold closer predecessors
+    }
+    return best;
+  }
+
+  /** Scrolls just enough to bring a keyboard selection into view; scrolling away counts as leaving live-follow. */
+  private void revealTime(long startUs, long endUs) {
+    if (usPerPixel <= 0) return; // the whole session is on screen
+    long visibleUs = (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+    long marginUs = visibleUs / 10;
+    long newStartUs;
+    if (startUs < viewStartUs) {
+      newStartUs = startUs - marginUs;
+    }
+    else if (endUs > viewStartUs + visibleUs) {
+      // a span wider than the view aligns its start instead of its end
+      newStartUs = endUs - startUs > visibleUs ? startUs - marginUs : endUs + marginUs - visibleUs;
+    }
+    else {
+      return;
+    }
+    followLive = false;
+    setViewStart(newStartUs);
+    syncScrollBar();
+    fireViewChanged();
   }
 
   /** The sample whose value holds at {@code instantUs}; null before the lane's first sample. */
@@ -1242,8 +1407,16 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private void zoomAtCenter(double factor) {
     Rectangle visible = getVisibleRect();
     int centerX = visible.x + visible.width / 2;
-    long anchorUs = selected != null ? (selected.startUs() + selected.endUs()) / 2 : timeAt(centerX);
-    zoomTo(scale() * factor, anchorUs, centerX);
+    zoomTo(scale() * factor, selectionAnchorUs(timeAt(centerX)), centerX);
+  }
+
+  /** The instant a selection-anchored zoom centers on: whatever is selected, else the view's own center. */
+  private long selectionAnchorUs(long fallbackUs) {
+    if (selected != null) return (selected.startUs() + selected.endUs()) / 2;
+    if (selectedSpan != null) return (selectedSpan.startUs() + selectedSpan.endUs()) / 2;
+    if (selectedEvent != null) return selectedEvent.timeUs();
+    if (selectedCurve != null) return selectedCurve.instantUs();
+    return fallbackUs;
   }
 
   /** Applies the target scale keeping {@code anchorUs} under pixel {@code mouseX}; zooming past the session falls back to fit. */

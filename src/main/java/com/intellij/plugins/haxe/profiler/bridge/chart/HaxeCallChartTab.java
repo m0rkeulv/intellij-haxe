@@ -48,10 +48,12 @@ import java.awt.Dimension;
 import java.awt.Image;
 import java.awt.event.ActionListener;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -153,6 +155,11 @@ public final class HaxeCallChartTab {
     default @Nullable Image frameImage(UsSpan frame) {
       return null;
     }
+
+    /** What a run's count means in this capture: samples for sampled data, invocations for exact zones. */
+    default String runCountText(int count) {
+      return HaxeProfilerBundle.message("haxe.profiler.callchart.samples", count);
+    }
   }
 
   /** The curve-lane categories a capture may fill, in display order. */
@@ -195,28 +202,214 @@ public final class HaxeCallChartTab {
 
   /**
    * The LIVE form for a still-streaming v1 capture: re-reads the growing
-   * session file every second, follows the tail until the user moves the
-   * view, refreshes once more when the capture completes.
+   * session file, follows the tail until the user moves the view,
+   * refreshes once more when the capture completes.
    */
   @NotNull
   public static JComponent createLive(@NotNull Project project, @NotNull ProfilerSnapshot initial,
                                       @NotNull Path sessionFile, HaxeLiveCaptures.@NotNull Entry live,
                                       @NotNull Disposable parent) {
-    return create(project, new SnapshotData(initial), sessionFile, live, parent);
+    return create(project, new SnapshotData(initial), v1LiveReader(sessionFile), live, parent);
+  }
+
+  /** The LIVE form for a still-streaming zone capture: reopens the growing store as it grows. */
+  @NotNull
+  public static JComponent createLiveZones(@NotNull Project project, @NotNull HxtZoneStore initial,
+                                           HaxeLiveCaptures.@NotNull Entry live, @NotNull Disposable parent) {
+    return create(project, new ZoneData(initial), zoneLiveReader(initial.file()), live, parent);
+  }
+
+  /** One live capture kind's pooled re-read: fresh data when the file grew (null otherwise), and its windowed tree. */
+  private interface LiveReader {
+    @Nullable
+    ChartData reload(boolean force) throws IOException;
+
+    @NotNull
+    FlameNode treeFor(ChartData data, int threadId, long fromUs, long toUs);
+
+    /** The polling period; a store that rescans its whole record index per reload polls slower. */
+    default int refreshMs() {
+      return LIVE_REFRESH_MS;
+    }
+  }
+
+  /** v1 sample streams: an incremental reader consumes only the newly appended records. */
+  private static LiveReader v1LiveReader(Path sessionFile) {
+    return new LiveReader() {
+      private HxtLiveSession reader;
+
+      @Override
+      public @Nullable ChartData reload(boolean force) throws IOException {
+        if (reader == null) {
+          reader = HxtLiveSession.open(sessionFile);
+        }
+        boolean grew = reader.poll();
+        return force || grew ? new SnapshotData(reader.snapshot()) : null;
+      }
+
+      @Override
+      public @NotNull FlameNode treeFor(ChartData data, int threadId, long fromUs, long toUs) {
+        return ProfilerTimeline.flameTree(((SnapshotData)data).snapshot(), threadId, MAX_DEPTH, fromUs, toUs);
+      }
+    };
+  }
+
+  /**
+   * Zone captures: the record index rescans from scratch (headers only —
+   * payloads are seeked over), growth gates on the file size, the poll
+   * runs slower, and the activity curve folds INCREMENTALLY from the
+   * newly appended chunks — the whole-file fold made each refresh dearer
+   * than the last until the live view fell behind.
+   */
+  private static LiveReader zoneLiveReader(Path sessionFile) {
+    return new LiveReader() {
+      private long lastSize = -1;
+      private final LiveZoneActivity activity = new LiveZoneActivity();
+
+      @Override
+      public @Nullable ChartData reload(boolean force) throws IOException {
+        long size = Files.size(sessionFile);
+        if (!force && size == lastSize) return null;
+        lastSize = size;
+        HxtZoneStore store = HxtZoneStore.open(sessionFile);
+        activity.foldNewChunks(store);
+        return new LiveZoneData(new ZoneData(store), activity);
+      }
+
+      @Override
+      public @NotNull FlameNode treeFor(ChartData data, int threadId, long fromUs, long toUs) {
+        return data.treeFor(threadId, fromUs, toUs, data.durationUs() / WindowLoader.RESOLUTION);
+      }
+
+      @Override
+      public int refreshMs() {
+        return ZONE_LIVE_REFRESH_MS;
+      }
+    };
+  }
+
+  /** Per-thread busy buckets grown only from chunks not folded before, so a live tick's cost stays flat. */
+  private static final class LiveZoneActivity {
+    private static final long BUCKET_NS = 50_000_000;
+
+    private final Map<Integer, long[]> busyByThread = new HashMap<>();
+    private int foldedChunks;
+
+    void foldNewChunks(HxtZoneStore store) throws IOException {
+      if (store.chunkCount() <= foldedChunks) return;
+      store.scanZonesFromChunk(foldedChunks, (thread, depth, startNs, endNs, location) -> {
+        if (depth != 0) return; // top-level zones are the busy time; children nest inside them
+        long[] busy = bucketsFor(thread, endNs);
+        int first = (int)Math.max(startNs / BUCKET_NS, 0);
+        int last = (int)Math.min(endNs / BUCKET_NS, busy.length - 1);
+        for (int bucket = first; bucket <= last; bucket++) {
+          long bucketStart = bucket * BUCKET_NS;
+          long overlap = Math.min(endNs, bucketStart + BUCKET_NS) - Math.max(startNs, bucketStart);
+          if (overlap > 0) busy[bucket] += overlap;
+        }
+      });
+      foldedChunks = store.chunkCount();
+    }
+
+    private long[] bucketsFor(int thread, long endNs) {
+      long[] busy = busyByThread.computeIfAbsent(thread, key -> new long[64]);
+      int needed = (int)(endNs / BUCKET_NS) + 1;
+      if (needed > busy.length) {
+        busy = Arrays.copyOf(busy, Math.max(needed, busy.length + busy.length / 2));
+        busyByThread.put(thread, busy);
+      }
+      return busy;
+    }
+
+    List<TracySession.PlotPoint> series(int threadId) {
+      long[] busy = busyByThread.get(threadId);
+      if (busy == null) return List.of();
+      List<TracySession.PlotPoint> points = new ArrayList<>(busy.length);
+      for (int bucket = 0; bucket < busy.length; bucket++) {
+        double percent = Math.min(busy[bucket] * 100.0 / BUCKET_NS, 100.0);
+        points.add(new TracySession.PlotPoint(bucket * BUCKET_NS, percent));
+      }
+      return points;
+    }
+  }
+
+  /** A live zone view: everything the store serves, except the activity curve comes from the incremental fold. */
+  private record LiveZoneData(@NotNull ZoneData zones, @NotNull LiveZoneActivity activity) implements ChartData {
+
+    @Override
+    public List<ProfilerThread> threads() {
+      return zones.threads();
+    }
+
+    @Override
+    public FlameNode treeFor(int threadId, long fromUs, long toUs, long minDurationUs) {
+      return zones.treeFor(threadId, fromUs, toUs, minDurationUs);
+    }
+
+    @Override
+    public boolean windowedLoads() {
+      return true;
+    }
+
+    @Override
+    public long durationUs() {
+      return zones.durationUs();
+    }
+
+    @Override
+    public List<UsSpan> coarseActivity(int threadId) {
+      return zones.coarseActivity(threadId);
+    }
+
+    @Override
+    public List<TimelineEvent> events() {
+      return zones.events();
+    }
+
+    @Override
+    public GcSpans gcSpansFor(int threadId) {
+      return zones.gcSpansFor(threadId);
+    }
+
+    @Override
+    public List<UsSpan> frameSpansFor(int threadId) {
+      return zones.frameSpansFor(threadId);
+    }
+
+    @Override
+    public Map<String, List<TracySession.PlotPoint>> curveSeries(CurveCategory category, int threadId) {
+      if (category != CurveCategory.CPU_LOAD) {
+        return zones.curveSeries(category, threadId);
+      }
+      // the store's whole-file activity scan is too dear per live tick -
+      // the incremental fold stands in for it
+      return zones.cpuSeriesWith(activity.series(threadId));
+    }
+
+    @Override
+    public List<FrameSlice> frameBreakdown(int threadId, UsSpan frame) {
+      return zones.frameBreakdown(threadId, frame);
+    }
+
+    @Override
+    public String runCountText(int count) {
+      return zones.runCountText(count);
+    }
   }
 
   @NotNull
   private static JComponent create(@NotNull Project project, @NotNull ChartData initialData,
-                                   @Nullable Path sessionFile, HaxeLiveCaptures.@Nullable Entry live,
+                                   @Nullable LiveReader liveReader, HaxeLiveCaptures.@Nullable Entry live,
                                    @Nullable Disposable parent) {
     ChartData[] data = {initialData};
     HaxeStackDetailPanel details = new HaxeStackDetailPanel(project);
     LaneState lanes = new LaneState();
     HaxeCallChartPanel chart = new HaxeCallChartPanel(frame -> HaxeCallStackElement.navigateToFrame(project, frame),
-                                                      path -> showRunDetails(details, path),
+                                                      path -> showRunDetails(details, data[0], path),
                                                       (lane, span) -> showSpanDetails(details, lanes, lane, span),
                                                       selection -> showCurveDetails(details, selection),
                                                       event -> showEventDetails(details, event));
+    chart.setRunCountText(count -> data[0].runCountText(count));
     HaxeChartViewSettings viewSettings = HaxeChartViewSettings.getInstance(project);
     chart.setViewPreferences(viewSettings.bandOrder(), viewSettings.bandHeights(), viewSettings.collapsedBands(),
                              viewSettings::update);
@@ -252,9 +445,9 @@ public final class HaxeCallChartTab {
     threadPicker.addActionListener(threadListener);
     applyThread.run();
 
-    if (live != null && sessionFile != null) {
+    if (live != null && liveReader != null) {
       chart.setFollowLive(true);
-      installLiveRefresh(sessionFile, live, parent, data, lanes, chart, minimap, loader,
+      installLiveRefresh(liveReader, live, parent, data, lanes, chart, minimap, loader,
                          threadPicker, threadListener, viewSettings, liveView);
     }
 
@@ -593,8 +786,12 @@ public final class HaxeCallChartTab {
      * usage across all cores and processes, so it is labeled as such.
      */
     private Map<String, List<TracySession.PlotPoint>> cpuSeries(int threadId) {
+      return cpuSeriesWith(threadActivity(threadId));
+    }
+
+    /** The CPU lane composed around the given activity series — the live view supplies its incremental fold. */
+    Map<String, List<TracySession.PlotPoint>> cpuSeriesWith(List<TracySession.PlotPoint> activity) {
       Map<String, List<TracySession.PlotPoint>> series = new LinkedHashMap<>();
-      List<TracySession.PlotPoint> activity = threadActivity(threadId);
       if (!activity.isEmpty()) {
         series.put(HaxeProfilerBundle.message("haxe.profiler.callchart.series.thread.activity"), activity);
       }
@@ -683,6 +880,12 @@ public final class HaxeCallChartTab {
     public List<TimelineEvent> events() {
       return store.session().events();
     }
+
+    @Override
+    public String runCountText(int count) {
+      // zones are measured, not sampled - a run's count is its invocations
+      return HaxeProfilerBundle.message("haxe.profiler.callchart.invocations", count);
+    }
   }
 
   /** One thread's lane inputs, computable OFF the EDT (several linear scans over the capture). */
@@ -718,6 +921,8 @@ public final class HaxeCallChartTab {
 
   /** How often a live tab polls its growing session file; a tick that finds nothing new costs one incremental poll. */
   private static final int LIVE_REFRESH_MS = 250;
+  /** Zone captures rescan their record index per reload, so they poll at a gentler cadence. */
+  private static final int ZONE_LIVE_REFRESH_MS = 1_000;
   /** The live starting view: a sliding window this wide pinned to the tail. */
   private static final long LIVE_WINDOW_US = 2_000_000;
 
@@ -729,13 +934,12 @@ public final class HaxeCallChartTab {
    * the tail. Everything heavy runs on a pooled thread; the EDT only swaps
    * the results in. One final tick when the capture completes.
    */
-  private static void installLiveRefresh(Path sessionFile, HaxeLiveCaptures.Entry live, @Nullable Disposable parent,
+  private static void installLiveRefresh(LiveReader liveReader, HaxeLiveCaptures.Entry live, @Nullable Disposable parent,
                                          ChartData[] data, LaneState lanes, HaxeCallChartPanel chart,
                                          HaxeChartMinimapPanel minimap, WindowLoader loader,
                                          ComboBox<ProfilerThread> threadPicker, ActionListener threadListener,
                                          HaxeChartViewSettings viewSettings, long[] liveView) {
     AtomicBoolean busy = new AtomicBoolean();
-    HxtLiveSession[] reader = new HxtLiveSession[1];
     boolean[] windowStarted = {false};
     Consumer<Boolean> tick = force -> {
       if (!busy.compareAndSet(false, true)) return;
@@ -743,28 +947,30 @@ public final class HaxeCallChartTab {
       long viewFromUs = liveView[2] != 0 ? Long.MIN_VALUE / 2 : liveView[0] - liveView[1];
       long viewToUs = liveView[2] != 0 ? Long.MAX_VALUE / 2 : liveView[0] + 2 * liveView[1];
       ApplicationManager.getApplication().executeOnPooledThread(() -> {
-        SnapshotData fresh = null;
+        ChartData fresh = null;
         FlameNode tree = null;
         ThreadLaneData computed = null;
         try {
-          if (reader[0] == null) {
-            reader[0] = HxtLiveSession.open(sessionFile);
-          }
-          boolean grew = reader[0].poll();
-          if (!force && !grew) {
+          fresh = liveReader.reload(force);
+          if (fresh == null) {
             busy.set(false);
             return; // nothing new landed since the last tick
           }
-          fresh = new SnapshotData(reader[0].snapshot());
           if (threadId >= 0) {
-            tree = ProfilerTimeline.flameTree(fresh.snapshot(), threadId, MAX_DEPTH, viewFromUs, viewToUs);
+            tree = liveReader.treeFor(fresh, threadId, viewFromUs, viewToUs);
             computed = computeThreadData(fresh, threadId);
           }
         }
         catch (IOException midWrite) {
           fresh = null; // a torn read of a growing file - the next tick retries
         }
-        SnapshotData parsed = fresh;
+        catch (RuntimeException broken) {
+          // an escaped exception must not strand the busy flag - that
+          // freezes every later tick INCLUDING the completion one
+          Logger.getInstance(HaxeCallChartTab.class).warn("live refresh failed", broken);
+          fresh = null;
+        }
+        ChartData parsed = fresh;
         FlameNode parsedTree = tree;
         ThreadLaneData parsedLanes = computed;
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -789,7 +995,7 @@ public final class HaxeCallChartTab {
         });
       });
     };
-    Timer refresh = new Timer(LIVE_REFRESH_MS, event -> tick.accept(false));
+    Timer refresh = new Timer(liveReader.refreshMs(), event -> tick.accept(false));
     refresh.start();
     live.onCompletion(() -> {
       tick.accept(true);
@@ -1117,7 +1323,7 @@ public final class HaxeCallChartTab {
   }
 
   /** The selected run's summary above its call chain; an empty path restores the hint. */
-  private static void showRunDetails(HaxeStackDetailPanel details, List<FlameNode> path) {
+  private static void showRunDetails(HaxeStackDetailPanel details, ChartData data, List<FlameNode> path) {
     if (path.isEmpty()) {
       details.showText(HaxeProfilerBundle.message("haxe.profiler.callchart.details.hint"));
       return;
@@ -1125,9 +1331,9 @@ public final class HaxeCallChartTab {
     FlameNode run = path.getLast();
     String symbol = run.frame() == null ? "" : run.frame().symbol();
     String timeRange = HaxeProfilerFormats.formatRange(run.startUs(), run.endUs());
-    String samples = HaxeProfilerBundle.message("haxe.profiler.callchart.samples", run.samples());
+    String runCount = data.runCountText(run.samples());
     List<StackFrame> stack = path.stream().map(FlameNode::frame).filter(Objects::nonNull).toList();
-    details.showStack(List.of(symbol, timeRange, samples), stack);
+    details.showStack(List.of(symbol, timeRange, runCount), stack);
   }
 
   /**

@@ -1,9 +1,14 @@
 package com.intellij.plugins.haxe.profiler.bridge.data;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
+import com.intellij.plugins.haxe.profiler.bridge.HaxeLiveCaptures;
+import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerTabContent;
 import com.intellij.plugins.haxe.profiler.bridge.chart.HaxeCallChartTab;
+import com.intellij.plugins.haxe.profiler.bridge.hints.HaxeIuPerformanceHints;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneStore;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import com.intellij.profiler.DummyCallTreeBuilder;
@@ -15,8 +20,10 @@ import com.intellij.profiler.model.ThreadInfo;
 import com.intellij.profiler.ui.MainCallTreeDataComponent;
 import com.intellij.ui.tabs.TabInfo;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -113,11 +120,63 @@ public final class HaxeTracyProfilerData implements ProfilerData {
   /** The standard tabs plus our Call Chart (non-closable, not auto-selected, no event-state controller). */
   @Override
   public @NotNull JComponent doCreateTopLevelComponent(@NotNull Project project, @NotNull Disposable parent) {
+    HaxeLiveCaptures.Entry live = HaxeLiveCaptures.find(store.file());
+    if (live != null && live.isLive()) {
+      return liveComponent(project, parent, live);
+    }
+    return buildComponent(project, parent, null, false, null);
+  }
+
+  /**
+   * The live phase: tree tabs from the partial scan, the Call Chart
+   * self-refreshing off the growing store; when the capture completes the
+   * WHOLE component rebuilds once from the final file (after its
+   * recompression), so the tree tabs stop being an early partial
+   * snapshot. The component goes to the platform UNWRAPPED and the
+   * completion swap happens in place ({@link HaxeProfilerTabContent}) —
+   * the process panel's tab lookup casts its content to
+   * MainCallTreeDataComponent and a wrapper makes every tab action throw.
+   */
+  private JComponent liveComponent(Project project, Disposable parent, HaxeLiveCaptures.Entry live) {
+    JComponent[] liveChart = new JComponent[1];
+    JComponent liveMain = buildComponent(project, parent, live, false, liveChart);
+    Path file = store.file();
+    live.onCompletion(() -> ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      HaxeTracyProfilerData finalData;
+      try {
+        finalData = from(HxtZoneStore.open(file));
+      }
+      catch (IOException | RuntimeException e) {
+        // the live chart keeps showing the last good refresh - but a
+        // rebuild that silently dies leaves the STALE live component up,
+        // so say why in the log
+        Logger.getInstance(HaxeTracyProfilerData.class).warn("tracy completion rebuild failed", e);
+        return;
+      }
+      ApplicationManager.getApplication().invokeLater(() -> {
+        // the rebuild must not steal the user's place: a chart being
+        // watched stays the selected tab afterwards
+        boolean chartShowing = liveChart[0] != null && liveChart[0].isShowing();
+        JComponent finalMain = finalData.buildComponent(project, parent, null, chartShowing, null);
+        HaxeProfilerTabContent.swap(liveMain, finalMain);
+        HaxeIuPerformanceHints.captureDataReplaced(project, this, finalData);
+      });
+    }));
+    return liveMain;
+  }
+
+  private JComponent buildComponent(Project project, Disposable parent, HaxeLiveCaptures.@Nullable Entry live,
+                                    boolean selectChart, JComponent @Nullable [] chartOut) {
     MainCallTreeDataComponent main = new MainCallTreeDataComponent(project, trees, parent, null, false);
-    if (store.zoneCount() > 0) {
-      TabInfo callChartTab = new TabInfo(HaxeCallChartTab.create(project, store));
+    // a live tab renders even before the first chunk lands - it fills itself
+    if (live != null || store.zoneCount() > 0) {
+      JComponent chart = live != null
+                         ? HaxeCallChartTab.createLiveZones(project, store, live, parent)
+                         : HaxeCallChartTab.create(project, store);
+      if (chartOut != null) chartOut[0] = chart;
+      TabInfo callChartTab = new TabInfo(chart);
       callChartTab.setText(HaxeProfilerBundle.message("haxe.profiler.callchart.tab"));
-      main.addTab(callChartTab, false, false, false);
+      main.addTab(callChartTab, false, selectChart, false);
     }
     return main;
   }

@@ -2,10 +2,13 @@ package com.intellij.plugins.haxe.profiler.bridge.data;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeLiveCaptures;
+import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerTabContent;
 import com.intellij.plugins.haxe.profiler.bridge.chart.HaxeCallChartTab;
+import com.intellij.plugins.haxe.profiler.bridge.hints.HaxeIuPerformanceHints;
 import com.intellij.plugins.haxe.profiler.hxt.HxtSessionTranslator;
 import com.intellij.plugins.haxe.profiler.model.ProfilerSnapshot;
 import com.intellij.plugins.haxe.profiler.model.ProfilerThread;
@@ -19,7 +22,6 @@ import com.intellij.profiler.api.ProfilerData;
 import com.intellij.profiler.model.ThreadInfo;
 import com.intellij.profiler.ui.MainCallTreeDataComponent;
 import com.intellij.ui.tabs.TabInfo;
-import com.intellij.util.ui.components.BorderLayoutPanel;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -140,12 +142,15 @@ public final class HaxeSamplingProfilerData implements ProfilerData {
    * The live phase: tree tabs from the partial parse, the Call Chart
    * self-refreshing off the growing file; when the capture completes the
    * WHOLE component rebuilds once from the final file, so the tree tabs
-   * stop being an early partial snapshot.
+   * stop being an early partial snapshot. The component goes to the
+   * platform UNWRAPPED and the completion swap happens in place
+   * ({@link HaxeProfilerTabContent}) — the process panel's tab lookup
+   * casts its content to MainCallTreeDataComponent and a wrapper makes
+   * every tab action throw.
    */
   private JComponent liveComponent(Project project, Disposable parent, HaxeLiveCaptures.Entry live) {
-    BorderLayoutPanel wrapper = new BorderLayoutPanel();
     JComponent[] liveChart = new JComponent[1];
-    wrapper.addToCenter(buildComponent(project, parent, live, false, liveChart));
+    JComponent liveMain = buildComponent(project, parent, live, false, liveChart);
     Path file = sourceFile;
     live.onCompletion(() -> ApplicationManager.getApplication().executeOnPooledThread(() -> {
       ProfilerSnapshot finalSnapshot;
@@ -153,21 +158,24 @@ public final class HaxeSamplingProfilerData implements ProfilerData {
       try (InputStream in = new BufferedInputStream(Files.newInputStream(file))) {
         finalSnapshot = HxtSessionTranslator.translate(in);
       }
-      catch (IOException e) {
-        return; // the live chart already shows the last good refresh
+      catch (IOException | RuntimeException e) {
+        // the live chart keeps showing the last good refresh - but a
+        // rebuild that silently dies leaves the STALE live component up,
+        // so say why in the log
+        Logger.getInstance(HaxeSamplingProfilerData.class).warn("completion rebuild failed", e);
+        return;
       }
       HaxeSamplingProfilerData finalData = from(finalSnapshot, file);
       ApplicationManager.getApplication().invokeLater(() -> {
         // the rebuild must not steal the user's place: a chart being
         // watched stays the selected tab afterwards
         boolean chartShowing = liveChart[0] != null && liveChart[0].isShowing();
-        wrapper.removeAll();
-        wrapper.addToCenter(finalData.buildComponent(project, parent, null, chartShowing, null));
-        wrapper.revalidate();
-        wrapper.repaint();
+        JComponent finalMain = finalData.buildComponent(project, parent, null, chartShowing, null);
+        HaxeProfilerTabContent.swap(liveMain, finalMain);
+        HaxeIuPerformanceHints.captureDataReplaced(project, this, finalData);
       });
     }));
-    return wrapper;
+    return liveMain;
   }
 
   private JComponent buildComponent(Project project, Disposable parent, HaxeLiveCaptures.@Nullable Entry live,

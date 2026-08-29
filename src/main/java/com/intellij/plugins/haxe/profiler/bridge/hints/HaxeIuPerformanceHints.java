@@ -41,7 +41,11 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
     ExtensionPointName.create("com.intellij.profiler.performanceHints.listener");
   private static final String HINTS_VISIBLE_PROPERTY = "haxe.profiler.hints.visible";
 
-  private final Map<Object, HaxeLineTimes> byTab = new HashMap<>();
+  /** One open profiler tab's data and the line times aggregated from it. */
+  private record TabCapture(ProfilerData data, HaxeLineTimes lineTimes) {
+  }
+
+  private final Map<Object, TabCapture> byTab = new HashMap<>();
   private final Map<Project, HaxeLineTimes> activeByProject = new HashMap<>();
   private final Map<Project, MessageBusConnection> connections = new HashMap<>();
   private final Map<Editor, HaxeLineChipGutter.Installed> annotated = new WeakHashMap<>();
@@ -73,7 +77,7 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
       if (lineTimes == null) return;
       ApplicationManager.getApplication().invokeLater(() -> {
         if (project.isDisposed()) return;
-        byTab.put(tab, lineTimes);
+        byTab.put(tab, new TabCapture(data, lineTimes));
         activate(project, lineTimes);
       });
     });
@@ -81,8 +85,8 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
 
   @Override
   public void onProfilerDumpClosed(@NotNull Project project, @NotNull Object tab) {
-    HaxeLineTimes removed = byTab.remove(tab);
-    if (removed != null && activeByProject.get(project) == removed) {
+    TabCapture removed = byTab.remove(tab);
+    if (removed != null && activeByProject.get(project) == removed.lineTimes()) {
       activeByProject.remove(project);
       clearAnnotations();
     }
@@ -90,10 +94,45 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
 
   @Override
   public void onProfilerDumpSelectionChange(@NotNull Project project, @NotNull Object tab, boolean selected) {
-    HaxeLineTimes lineTimes = byTab.get(tab);
-    if (selected && lineTimes != null && activeByProject.get(project) != lineTimes) {
-      activate(project, lineTimes);
+    TabCapture capture = byTab.get(tab);
+    if (selected && capture != null && activeByProject.get(project) != capture.lineTimes()) {
+      activate(project, capture.lineTimes());
     }
+  }
+
+  /**
+   * A live capture completed and its tab content was rebuilt from the
+   * final file: the chips were aggregated from the PARTIAL file the tab
+   * opened with, so they must be recomputed. The platform fires
+   * {@code onProfilerDumpOpen} only once per tab — this is its completion
+   * counterpart, called by the data classes' completion rebuild.
+   */
+  public static void captureDataReplaced(@NotNull Project project, @NotNull ProfilerData replaced,
+                                         @NotNull ProfilerData replacement) {
+    HaxeIuPerformanceHints instance = getInstance();
+    if (instance != null) {
+      instance.dataReplaced(project, replaced, replacement);
+    }
+  }
+
+  private void dataReplaced(Project project, ProfilerData replaced, ProfilerData replacement) {
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      HaxeLineTimes lineTimes = lineTimesOf(replacement);
+      if (lineTimes == null) return;
+      ApplicationManager.getApplication().invokeLater(() -> {
+        if (project.isDisposed()) return;
+        for (Map.Entry<Object, TabCapture> entry : byTab.entrySet()) {
+          if (entry.getValue().data() != replaced) continue;
+          boolean wasActive = activeByProject.get(project) == entry.getValue().lineTimes();
+          entry.setValue(new TabCapture(replacement, lineTimes));
+          if (wasActive) {
+            activate(project, lineTimes);
+          }
+          return;
+        }
+        // the tab closed before the capture completed - nothing to refresh
+      });
+    });
   }
 
   @Override
