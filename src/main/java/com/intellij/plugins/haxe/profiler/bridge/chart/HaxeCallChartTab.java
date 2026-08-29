@@ -410,6 +410,7 @@ public final class HaxeCallChartTab {
                                                       selection -> showCurveDetails(details, selection),
                                                       event -> showEventDetails(details, event));
     chart.setRunCountText(count -> data[0].runCountText(count));
+    chart.setRangeSelectionListener(range -> showRangeDetails(details, range));
     HaxeChartViewSettings viewSettings = HaxeChartViewSettings.getInstance(project);
     chart.setViewPreferences(viewSettings.bandOrder(), viewSettings.bandHeights(), viewSettings.collapsedBands(),
                              viewSettings::update);
@@ -1297,6 +1298,118 @@ public final class HaxeCallChartTab {
           details.showBreakdown(headerLines, rows);
         }
         details.showImage(image);
+      });
+    });
+  }
+
+  /**
+   * A dragged lane range: aggregate statistics for the covered stretch. A
+   * curve range reads min/average/max (time-weighted — the curve is a step
+   * function); a marker range counts its spans, their rate and extremes,
+   * and a lane with a breakdown (frames) also aggregates what the whole
+   * range's time went to. Null restores the hint.
+   */
+  private static void showRangeDetails(HaxeStackDetailPanel details,
+                                       HaxeCallChartPanel.@Nullable RangeSelection range) {
+    if (range == null) {
+      details.showText(HaxeProfilerBundle.message("haxe.profiler.callchart.details.hint"));
+    }
+    else if (range.curveLane() != null) {
+      showCurveRangeDetails(details, range.curveLane(), range.fromUs(), range.toUs());
+    }
+    else if (range.markerLane() != null) {
+      showMarkerRangeDetails(details, range.markerLane(), range.fromUs(), range.toUs());
+    }
+  }
+
+  private static void showCurveRangeDetails(HaxeStackDetailPanel details, HaxeCallChartPanel.CurveLane lane,
+                                            long fromUs, long toUs) {
+    List<String> lines = new ArrayList<>();
+    lines.add(lane.name());
+    lines.add(HaxeProfilerFormats.formatRange(fromUs, toUs));
+    CurveRangeStats stats = curveRangeStats(lane.points(), fromUs, toUs);
+    if (stats == null) {
+      lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.no.data"));
+    }
+    else {
+      lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.range.min", lane.formatted(stats.min())));
+      lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.range.average", lane.formatted(stats.average())));
+      lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.range.max", lane.formatted(stats.max())));
+    }
+    details.showStack(lines, List.of());
+  }
+
+  /** Min/average/max a step curve holds across a range, the average time-weighted. */
+  private record CurveRangeStats(double min, double max, double average) {
+  }
+
+  private static @Nullable CurveRangeStats curveRangeStats(List<HaxeCallChartPanel.CurvePoint> points,
+                                                           long fromUs, long toUs) {
+    double held = Double.NaN;
+    long heldSinceUs = fromUs;
+    double min = Double.MAX_VALUE;
+    double max = -Double.MAX_VALUE;
+    double weightedSum = 0;
+    long coveredUs = 0;
+    for (HaxeCallChartPanel.CurvePoint point : points) {
+      if (point.timeUs() >= toUs) break;
+      if (point.timeUs() <= fromUs) {
+        held = point.value(); // the value entering the range still holds
+        continue;
+      }
+      if (!Double.isNaN(held)) {
+        long heldForUs = point.timeUs() - heldSinceUs;
+        weightedSum += held * heldForUs;
+        coveredUs += heldForUs;
+        min = Math.min(min, held);
+        max = Math.max(max, held);
+      }
+      held = point.value();
+      heldSinceUs = point.timeUs();
+    }
+    if (Double.isNaN(held)) return null;
+    long tailUs = toUs - heldSinceUs;
+    weightedSum += held * tailUs;
+    coveredUs += tailUs;
+    min = Math.min(min, held);
+    max = Math.max(max, held);
+    return coveredUs > 0 ? new CurveRangeStats(min, max, weightedSum / coveredUs) : null;
+  }
+
+  private static void showMarkerRangeDetails(HaxeStackDetailPanel details, MarkerLane lane, long fromUs, long toUs) {
+    List<UsSpan> covered = lane.spans().stream()
+      .filter(span -> span.endUs() > fromUs && span.startUs() < toUs)
+      .toList();
+    List<String> lines = new ArrayList<>();
+    lines.add(lane.name());
+    lines.add(HaxeProfilerFormats.formatRange(fromUs, toUs));
+    if (covered.isEmpty()) {
+      lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.no.data"));
+      details.showStack(lines, List.of());
+      return;
+    }
+    UsSpan fastest = covered.stream().min(Comparator.comparingLong(UsSpan::durationUs)).orElseThrow();
+    UsSpan slowest = covered.stream().max(Comparator.comparingLong(UsSpan::durationUs)).orElseThrow();
+    String perSecond = String.format(Locale.ROOT, "%.1f", covered.size() * 1_000_000.0 / (toUs - fromUs));
+    lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.range.count", covered.size()));
+    lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.range.rate", perSecond));
+    lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.range.fastest",
+                                         HaxeProfilerFormats.formatUs(fastest.durationUs())));
+    lines.add(HaxeProfilerBundle.message("haxe.profiler.callchart.range.slowest",
+                                         HaxeProfilerFormats.formatUs(slowest.durationUs())));
+    details.showStack(lines, List.of());
+
+    Function<UsSpan, HaxeFrameBreakdownView.Rows> breakdown = lane.breakdown();
+    if (breakdown == null) return;
+    int expected = details.revision();
+    UsSpan wholeRange = new UsSpan(fromUs, toUs);
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      HaxeFrameBreakdownView.Rows rows = breakdown.apply(wholeRange);
+      ApplicationManager.getApplication().invokeLater(() -> {
+        if (details.revision() != expected) return; // a newer selection took the panel
+        if (!rows.isEmpty()) {
+          details.showBreakdown(lines, rows);
+        }
       });
     });
   }

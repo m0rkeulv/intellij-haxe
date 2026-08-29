@@ -113,6 +113,14 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   record CurveSelection(@NotNull CurveLane lane, long instantUs, @NotNull CurvePoint lastChange) {
   }
 
+  /**
+   * A dragged time range on one lane, for aggregate statistics in the
+   * details panel. Exactly one of {@code curveLane}/{@code markerLane} is
+   * set — the lane the drag started on.
+   */
+  record RangeSelection(@Nullable CurveLane curveLane, @Nullable MarkerLane markerLane, long fromUs, long toUs) {
+  }
+
   /** One instant mark on the events row — a user-emitted message with an optional color. */
   record TimeEvent(long timeUs, @NotNull String text, @Nullable Color color) {
   }
@@ -197,6 +205,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private static final Color HEADER_BACKGROUND = new JBColor(0xEDEDED, 0x393B40);
   private static final Color SELECTION = new JBColor(0x3574F0, 0x66A3E0);
   private static final Color SELECTION_INNER = new JBColor(0xFFFFFF, 0x1E1E1E);
+  /** The dragged range's translucent fill over its lane body. */
+  private static final Color RANGE_FILL = new JBColor(new Color(0x35, 0x74, 0xF0, 45), new Color(0x66, 0xA3, 0xE0, 55));
   /** Fallback mark color for events that sent none. */
   private static final Color EVENT_MARK = new JBColor(0x3574F0, 0x66A3E0);
   private static final long[] STEP_FACTORS = {1, 2, 5};
@@ -250,6 +260,20 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private @Nullable UsSpan selectedSpan;
   private @Nullable MarkerLane selectedSpanLane;
   private @Nullable CurveSelection selectedCurve;
+  /** Told a completed lane-range drag; null clears the range. */
+  private @Nullable Consumer<@Nullable RangeSelection> rangeSelectionListener;
+  /** The band a finished (or in-flight) range drag covers, keyed by name so it survives live lane rebuilds. */
+  private @Nullable String rangeBandKey;
+  private long rangeFromUs;
+  private long rangeToUs;
+  /** Armed on a lane-body press; a drag past the threshold turns it into a range selection. */
+  private @Nullable String armedRangeBandKey;
+  private long rangeAnchorUs;
+  private int armedPressX;
+  private boolean rangeDragging;
+  /** The last lane click (or completed drag's start) — a shift+click on the same lane ranges from here. */
+  private @Nullable String anchorBandKey;
+  private long anchorUs;
   /** Key of the band (curve, events row or marker lane) being resized by a divider drag; null = none. */
   private @Nullable String resizingBandKey;
   private int resizeStartY;
@@ -298,6 +322,9 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
             toggleCollapsed(bands.get(headerBand).key());
             return;
           }
+          if (event.isShiftDown() && extendRangeTo(event.getPoint())) {
+            return;
+          }
           selectAt(event.getPoint());
         }
         else if (event.getClickCount() == 2) {
@@ -321,6 +348,10 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
         if (event.getX() <= gripWidth()) {
           draggingBand = bandIndexAt(event.getY());
           dragY = event.getY();
+          return;
+        }
+        if (SwingUtilities.isLeftMouseButton(event)) {
+          armRangeDrag(event);
         }
       }
 
@@ -333,6 +364,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
         if (draggingBand >= 0) {
           dropDraggedBand(event.getY());
         }
+        finishRangeDrag();
         if (event.isPopupTrigger()) {
           showContextMenu(event);
         }
@@ -347,6 +379,9 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
         else if (draggingBand >= 0) {
           dragY = event.getY();
           repaint();
+        }
+        else if (armedRangeBandKey != null) {
+          dragRangeTo(event.getX());
         }
       }
 
@@ -404,6 +439,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     selected = null;
     clearSpanSelection();
     clearCurveSelection();
+    rangeBandKey = null;
+    anchorBandKey = null;
     selectedEvent = null;
     selectionListener.accept(List.of());
     syncScrollBar();
@@ -608,6 +645,11 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     runCountText = formatter;
   }
 
+  /** Told a completed lane-range drag (curve or marker lane); null when the range is cleared. */
+  void setRangeSelectionListener(@NotNull Consumer<@Nullable RangeSelection> listener) {
+    rangeSelectionListener = listener;
+  }
+
   /** Shows or hides the calls lane (header included); hiding clears a selected run. */
   void setCallsVisible(boolean visible) {
     if (callsVisible == visible) return;
@@ -676,10 +718,27 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
       if (clip == null) clip = new Rectangle(0, 0, getWidth(), getHeight());
       paintRuler(g, clip);
       paintBands(g, clip);
+      paintRangeSelection(g);
     }
     finally {
       g.dispose();
     }
+  }
+
+  /** The dragged range over its lane's body: a translucent fill with accent edges. */
+  private void paintRangeSelection(Graphics2D g) {
+    if (rangeBandKey == null || collapsedBands.contains(rangeBandKey)) return;
+    int index = bands.indexOf(bandByKey(rangeBandKey));
+    if (index < 0) return;
+    int x0 = xOf(rangeFromUs);
+    int x1 = Math.max(xOf(rangeToUs), x0 + 1);
+    int top = bandTop(index) + headerHeight();
+    int height = bodyHeight(rangeBandKey);
+    g.setColor(RANGE_FILL);
+    g.fillRect(x0, top, x1 - x0, height);
+    g.setColor(SELECTION);
+    g.drawLine(x0, top, x0, top + height - 1);
+    g.drawLine(x1 - 1, top, x1 - 1, top + height - 1);
   }
 
   private void paintNode(Graphics2D g, FlameNode node, int row, int baseY, Rectangle clip) {
@@ -1044,6 +1103,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
    * selection.
    */
   private void selectAt(Point point) {
+    clearRangeSelection(); // a plain click hands the details panel back to point selections
+    rememberRangeAnchor(point);
     if (onEventsBand(point.y)) {
       TimeEvent event = eventAt(point);
       selected = null;
@@ -1108,6 +1169,114 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     selectedCurve = null;
   }
 
+  /** A lane-body click becomes the anchor a later shift+click on the same lane ranges from. */
+  private void rememberRangeAnchor(Point point) {
+    int index = bandBodyIndexAt(point.y);
+    Band band = index < 0 ? null : bands.get(index);
+    if (band instanceof Band.CurveBand || band instanceof Band.MarkerBand) {
+      anchorBandKey = band.key();
+      anchorUs = Math.max(timeAt(point.x), 0);
+    }
+  }
+
+  /**
+   * Shift+click: the range from the last lane click (or a completed
+   * drag's start) to this point. False — no anchor on this lane — falls
+   * back to a plain click.
+   */
+  private boolean extendRangeTo(Point point) {
+    int index = bandBodyIndexAt(point.y);
+    if (index < 0 || anchorBandKey == null) return false;
+    Band band = bands.get(index);
+    if (!band.key().equals(anchorBandKey)) return false;
+    long clickUs = Math.max(timeAt(point.x), 0);
+    if (clickUs == anchorUs) return false;
+    rangeBandKey = band.key();
+    rangeFromUs = Math.min(anchorUs, clickUs);
+    rangeToUs = Math.max(anchorUs, clickUs);
+    // the range replaces any point selection - two selections would fight over the details panel
+    selected = null;
+    clearSpanSelection();
+    clearCurveSelection();
+    selectedEvent = null;
+    fireRangeSelected();
+    repaint();
+    return true;
+  }
+
+  /** Arms a possible range drag when the press lands on a curve or marker lane's body. */
+  private void armRangeDrag(MouseEvent event) {
+    int index = bandBodyIndexAt(event.getY());
+    if (index < 0) return;
+    Band band = bands.get(index);
+    if (!(band instanceof Band.CurveBand) && !(band instanceof Band.MarkerBand)) return;
+    armedRangeBandKey = band.key();
+    rangeAnchorUs = Math.max(timeAt(event.getX()), 0);
+    armedPressX = event.getX();
+  }
+
+  private void dragRangeTo(int x) {
+    if (!rangeDragging && Math.abs(x - armedPressX) < JBUI.scale(4)) return;
+    if (!rangeDragging) {
+      rangeDragging = true;
+      rangeBandKey = armedRangeBandKey;
+      // the range replaces any point selection - two selections would fight over the details panel
+      selected = null;
+      clearSpanSelection();
+      clearCurveSelection();
+      selectedEvent = null;
+    }
+    long draggedUs = Math.max(timeAt(x), 0);
+    rangeFromUs = Math.min(rangeAnchorUs, draggedUs);
+    rangeToUs = Math.max(rangeAnchorUs, draggedUs);
+    repaint();
+  }
+
+  private void finishRangeDrag() {
+    boolean started = rangeDragging;
+    boolean completed = started && rangeToUs > rangeFromUs;
+    rangeDragging = false;
+    armedRangeBandKey = null;
+    if (completed) {
+      anchorBandKey = rangeBandKey;
+      anchorUs = rangeAnchorUs;
+      fireRangeSelected();
+    }
+    else if (started) {
+      // a sub-microsecond drag at deep zoom rounds to nothing selectable
+      rangeBandKey = null;
+      repaint();
+    }
+  }
+
+  private void fireRangeSelected() {
+    Consumer<@Nullable RangeSelection> listener = rangeSelectionListener;
+    if (listener == null || rangeBandKey == null) return;
+    switch (bandByKey(rangeBandKey)) {
+      case Band.CurveBand(CurveLane lane) -> listener.accept(new RangeSelection(lane, null, rangeFromUs, rangeToUs));
+      case Band.MarkerBand(MarkerLane lane) -> listener.accept(new RangeSelection(null, lane, rangeFromUs, rangeToUs));
+      case null, default -> {
+      }
+    }
+  }
+
+  private void clearRangeSelection() {
+    if (rangeBandKey == null) return;
+    rangeBandKey = null;
+    Consumer<@Nullable RangeSelection> listener = rangeSelectionListener;
+    if (listener != null) {
+      listener.accept(null);
+    }
+    repaint();
+  }
+
+  private @Nullable Band bandByKey(String key) {
+    for (Band band : bands) {
+      if (band.key().equals(key)) return band;
+    }
+    return null;
+  }
+
   private void installKeyboardNavigation() {
     bindKey("LEFT", () -> navigateSelection(-1, 0));
     bindKey("RIGHT", () -> navigateSelection(1, 0));
@@ -1121,6 +1290,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     bindKey("control ADD", this::zoomIn);
     bindKey("control MINUS", this::zoomOut);
     bindKey("control SUBTRACT", this::zoomOut);
+    bindKey("ESCAPE", this::clearRangeSelection);
   }
 
   private void bindKey(String stroke, Runnable navigation) {
