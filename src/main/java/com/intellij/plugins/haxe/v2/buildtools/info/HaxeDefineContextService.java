@@ -1,0 +1,396 @@
+package com.intellij.plugins.haxe.v2.buildtools.info;
+
+import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.components.Service;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.OrderRootType;
+import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants;
+import com.intellij.plugins.haxe.util.HaxeUtil;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
+import com.intellij.util.text.SemVer;
+import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildtools.settings.*;
+import com.intellij.util.concurrency.AppExecutorUtil;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG_DEFINE_VALUE;
+
+/**
+ * The IDE's conditional-compilation define context, derived from the v2 build
+ * configuration: the project's ACTIVE build file's defines (via `lime display`
+ * for xml projects — conditionals evaluated, toolchain defines included)
+ * overlaid with the owning container's IDE Define overrides. Feeds
+ * {@code HaxeDefineDetectionManager.getAllDefinitions()}, i.e. the parsing and
+ * indexing of every haxe file — which is why a context change triggers a
+ * project-wide reparse.
+ */
+@Service(Service.Level.PROJECT)
+public final class HaxeDefineContextService implements Disposable, HaxeBuildSettingsListener {
+
+  private record Snapshot(@NotNull String key, @NotNull Map<String, String> defines) {
+  }
+
+  private final Project project;
+  private volatile Snapshot snapshot;
+
+  public HaxeDefineContextService(@NotNull Project project) {
+    this.project = project;
+    // any build-settings mutation invalidates the derived define context;
+    // config changes (language level, compiler settings) feed haxe_ver so
+    // they invalidate it too
+    project.getMessageBus().connect().subscribe(HaxeBuildSettingsListener.TOPIC, this);
+    project.getMessageBus().connect().subscribe(HaxeBuildConfigListener.TOPIC,
+                                                (HaxeBuildConfigListener)this::buildSettingsChanged);
+  }
+
+  /**
+   * Drops the derived context and recomputes in the background — a settings
+   * mutation must reach parsing (reparse) and highlighting WITHOUT relying on
+   * the tool window being open to call {@link #refreshAsync()}.
+   */
+  @Override
+  public void buildSettingsChanged() {
+    snapshot = null;
+    fastState = null;
+    effectiveActivePathComputed = false;
+    activeContainerIdComputed = false;
+    refreshAsync();
+  }
+
+  public static HaxeDefineContextService getInstance(@NotNull Project project) {
+    return project.getService(HaxeDefineContextService.class);
+  }
+
+  /**
+   * Lock-free identity of every input reachable without VFS or read-action
+   * work: the active path, the file's content stamp and the three stores'
+   * modification counters. A match short-circuits the whole computation -
+   * this runs per candidate inside index lookups, so the fast path must not
+   * touch findFileByPath or take a read action.
+   */
+  private record FastState(@NotNull String path, @NotNull VirtualFile file, long contentStamp,
+                           @Nullable Map<String, String> defines) {
+  }
+
+  /**
+   * Sentinel for {@link #lastComputed}: no consumer has been handed a define
+   * context yet, so nothing was parsed against one and no reparse is owed.
+   * Identity-compared, never handed out.
+   */
+  private static final Map<String, String> NEVER_HANDED_OUT = new LinkedHashMap<>();
+
+  private volatile FastState fastState;
+  /** The defines most recently handed to a consumer — what current PSI state was parsed against. */
+  private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
+
+  // the implicit single-file fallback behind HaxeKnownBuildFiles sweeps every
+  // module under the read lock - far too heavy for getActiveDefines, which
+  // runs per candidate inside index lookups. Resolved once per build-settings
+  // change instead of per call (a module set change without a settings event
+  // keeps the stale answer until the next one).
+  private volatile String effectiveActivePath;
+  private volatile boolean effectiveActivePathComputed;
+  private volatile String activeContainerId;
+  private volatile boolean activeContainerIdComputed;
+
+  @Nullable
+  private String effectiveActivePath() {
+    if (!effectiveActivePathComputed) {
+      effectiveActivePath = ReadAction.computeBlocking(() -> HaxeKnownBuildFiles.effectiveActivePath(project));
+      effectiveActivePathComputed = true;
+    }
+    return effectiveActivePath;
+  }
+
+  private static long contentStamp(@NotNull VirtualFile file) {
+    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
+    return document != null ? document.getModificationStamp() : file.getModificationStamp();
+  }
+
+  /**
+   * The current define context, or null when the project has no v2 active build
+   * file (legacy detection applies then). Cached; recomputed when the build
+   * file, target selection or environment overrides change.
+   */
+  @Nullable
+  public Map<String, String> getActiveDefines() {
+    String path = effectiveActivePath();
+    if (StringUtil.isEmptyOrSpaces(path)) {
+      // record the null handout: files parsed now use the LEGACY define
+      // context, and activating a build file later must trigger a reparse
+      lastComputed = null;
+      return null;
+    }
+
+    FastState fast = fastState;
+    boolean fastHit = fast != null
+                      && fast.path().equals(path)
+                      && fast.file().isValid()
+                      && contentStamp(fast.file()) == fast.contentStamp();
+    if (fastHit) {
+      return fast.defines();
+    }
+
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    if (file == null || !file.isValid()) {
+      lastComputed = null;
+      return null;
+    }
+
+    Map<String, String> result = ReadAction.computeBlocking(() -> {
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+      if (type == null) return null;
+
+      String key = cacheKey(file, type);
+      Snapshot current = snapshot;
+      if (current != null && current.key().equals(key)) {
+        return current.defines();
+      }
+      Map<String, String> defines = compute(file, type);
+      snapshot = new Snapshot(key, defines);
+      return defines;
+    });
+    fastState = new FastState(path, file, contentStamp(file), result);
+    lastComputed = result;
+    return result;
+  }
+
+  /**
+   * Recomputes the context in the background and reparses all haxe files when it
+   * actually changed, so stubs and highlighting pick up the new conditionals.
+   * Cheap when nothing changed — safe to call from every tree refresh.
+   */
+  public void refreshAsync() {
+    AppExecutorUtil.getAppExecutorService().execute(() -> {
+      if (project.isDisposed()) return;
+      // compare against the defines last handed to consumers, NOT the snapshot
+      // cache: the invalidation topic clears the snapshot synchronously before
+      // this runs. The sentinel keeps project open cheap (nothing was handed
+      // out, nothing to reparse) while a recorded null handout still reparses
+      // on the null -> non-null transition (build file activated after files
+      // were parsed against the legacy context).
+      Map<String, String> before = lastComputed;
+      snapshot = null;
+      fastState = null;
+      Map<String, String> after = getActiveDefines();
+      lastComputed = after;
+      boolean changed = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
+      if (changed) {
+        // false = do not mark the LEGACY auto-import dirty; v2 has its own tracker
+        HaxeUtil.reparseProjectFiles(project, false);
+      }
+    });
+  }
+
+  /** Cheap identity of every input; a mismatch invalidates the cached context. */
+  @NotNull
+  private String cacheKey(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
+    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
+    long stamp = document != null ? document.getModificationStamp() : file.getModificationStamp();
+
+    String containerId = HaxeContainers.containerIdFor(project, file);
+    String targetId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file);
+    String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
+    String customTarget = HaxeEnvironmentStore.getInstance(project).getCustomTarget(containerId);
+    String compilerIdentity = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
+    List<EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
+
+    return file.getPath() + '|' + type + '|' + stamp + '|' + targetId + '|' + sdkName + '|' + customTarget + '|' + compilerIdentity + '|' + overrides;
+  }
+
+  @NotNull
+  private Map<String, String> compute(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
+    Map<String, String> defines = baseDefines(file, type);
+
+    String containerId = HaxeContainers.containerIdFor(project, file);
+    putCompilerIdentityDefines(defines, containerId);
+    putHashlinkVersionDefine(defines, containerId);
+    putCustomTargetDefines(defines, containerId);
+
+    for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
+      if (override.effect() == DefineEffect.REMOVE) {
+        defines.remove(override.name());
+      } else {
+        defines.put(override.name(), override.value().isEmpty() ? FLAG_DEFINE_VALUE : override.value());
+      }
+    }
+    return defines;
+  }
+
+  /** The build context's defines BEFORE the container's environment overrides apply. */
+  @NotNull
+  private Map<String, String> baseDefines(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
+    HaxeBuildFile buildFile = new HaxeBuildFile(file, type);
+    HaxeBuildFileInfo info = effectiveInfo(buildFile);
+
+    Map<String, String> defines = new LinkedHashMap<>();
+    for (HaxeBuildFileInfo.HaxeDefine define : info.defines()) {
+      defines.put(define.name(), define.value() != null ? define.value() : FLAG_DEFINE_VALUE);
+    }
+    // the compiler implicitly defines the target (hl, js, sys, ...) - the std
+    // library's per-target sources are gated on exactly these
+    if (info.target() != null) {
+      info.target().getDefinitions().forEach(definition -> defines.putIfAbsent(definition, FLAG_DEFINE_VALUE));
+    }
+    return defines;
+  }
+
+  /**
+   * The compiler's identity defines ({@code haxe_ver}, {@code haxe} and the
+   * major-version flags), mirrored so `#if (haxe_ver >= 4.1)` blocks activate
+   * correctly. Sourced from the language level or the container's compiler
+   * version per the compiler settings; wins over a build-tool-reported value
+   * (the point of choosing the level), while the container's explicit Define
+   * overrides still apply on top.
+   */
+  private void putCompilerIdentityDefines(@NotNull Map<String, String> defines, @NotNull String containerId) {
+    String version = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
+    defines.put("haxe_ver", version);
+    defines.put("haxe", version);
+    SemVer semVer = SemVer.parseFromText(version);
+    if (semVer != null) {
+      if (semVer.getMajor() >= 3) defines.put("haxe3", version);
+      if (semVer.getMajor() >= 4) defines.put("haxe4", version);
+      if (semVer.getMajor() >= 5) defines.put("haxe5", version);
+    }
+  }
+
+  /**
+   * The container's Custom target setting, mirrored as the defines
+   * {@code --custom-target} sets: {@code custom_target} and
+   * {@code target.name=<name>} (never the bare name — a custom target does
+   * NOT define itself the way stock targets do). Wins over an hxml-declared
+   * custom target, which arrives through the build file's defines; the
+   * container's explicit Define overrides still apply on top.
+   */
+  private void putCustomTargetDefines(@NotNull Map<String, String> defines, @NotNull String containerId) {
+    String customTarget = HaxeEnvironmentStore.getInstance(project).getCustomTarget(containerId);
+    if (customTarget == null) return;
+    defines.put(HaxeModuleVariants.CUSTOM_TARGET_DEFINE, FLAG_DEFINE_VALUE);
+    defines.put(HaxeModuleVariants.TARGET_NAME_DEFINE, customTarget);
+  }
+
+  /**
+   * The compiler defaults {@code hl_ver} by reading {@code std/hl/hl_version}
+   * from its standard library when the define is absent; mirror that so
+   * {@code #if (hl_ver >= version("1.12.0"))} blocks activate correctly out
+   * of the box. Synthesized for EVERY target - the value is a static property
+   * of the configured toolchain, target membership is what {@code #if hl}
+   * answers, and a target-dependent define would flicker with the selection.
+   * A build-file {@code -D hl-ver} keeps precedence (absence-guarded), and
+   * the container's environment overrides still apply on top.
+   */
+  private void putHashlinkVersionDefine(@NotNull Map<String, String> defines, @NotNull String containerId) {
+    if (defines.containsKey("hl_ver") || defines.containsKey("hl-ver")) return;
+    String version = readStdHlVersion(containerId);
+    if (version != null) {
+      defines.put("hl_ver", version);
+    }
+  }
+
+  @Nullable
+  private String readStdHlVersion(@NotNull String containerId) {
+    Sdk sdk = HaxeToolPathResolver.resolveSdk(project, containerId);
+    if (sdk == null) return null;
+    for (VirtualFile root : sdk.getRootProvider().getFiles(OrderRootType.SOURCES)) {
+      VirtualFile versionFile = root.findFileByRelativePath("hl/hl_version");
+      if (versionFile == null) continue;
+      try {
+        String version = VfsUtilCore.loadText(versionFile).trim();
+        return version.isEmpty() ? null : version;
+      }
+      catch (IOException e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Whether the ACTIVE build context defines the name before environment
+   * overrides apply — the define quickfix uses this to decide between merely
+   * dropping its own override and masking a build-file define with a REMOVE
+   * entry. False when no v2 active build file is configured.
+   */
+  public boolean isDefinedWithoutOverrides(@NotNull String name) {
+    String path = HaxeKnownBuildFiles.effectiveActivePath(project);
+    if (StringUtil.isEmptyOrSpaces(path)) return false;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    if (file == null || !file.isValid()) return false;
+    return Boolean.TRUE.equals(ReadAction.compute(() -> {
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+      if (type == null) return false;
+      return baseDefines(file, type).containsKey(name);
+    }));
+  }
+
+  /**
+   * The container owning the ACTIVE build file, or null without one — where
+   * define overrides belong, and the container library/SDK elements resolve
+   * their language level against. Cached (the language level lookup calls
+   * this per annotated element); callers hold the read lock.
+   */
+  @Nullable
+  public String activeContainerId() {
+    if (!activeContainerIdComputed) {
+      activeContainerId = computeActiveContainerId();
+      activeContainerIdComputed = true;
+    }
+    return activeContainerId;
+  }
+
+  @Nullable
+  private String computeActiveContainerId() {
+    String path = effectiveActivePath();
+    if (StringUtil.isEmptyOrSpaces(path)) return null;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    if (file == null || !file.isValid()) return null;
+    return HaxeContainers.containerIdFor(project, file);
+  }
+
+  /**
+   * The build file's parsed info; lime-family files use the selected target's
+   * `lime display` result when available (raw xml defines as the fallback until
+   * the background run lands, which then re-triggers a refresh).
+   */
+  @NotNull
+  private HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile) {
+    HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
+    HaxeBuildFileType type = buildFile.type();
+    if (!LimeProjects.isLimeFamily(type)) return raw;
+
+    String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
+    String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
+    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
+    HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
+      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, this::refreshAsync);
+    return display != null ? display : raw;
+  }
+
+  @Override
+  public void dispose() {
+  }
+}
