@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.model.evaluator;
 
 import com.intellij.openapi.util.LowMemoryWatcher;
+import com.intellij.openapi.util.RecursionGuard;
+import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.model.type.HaxeGenericResolver;
 import com.intellij.plugins.haxe.model.type.ResultHolder;
 import com.intellij.plugins.haxe.model.type.SpecificTypeReference;
@@ -10,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator._handle;
 
@@ -22,7 +25,9 @@ import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.
 public class HaxeExpressionEvaluatorCacheService  {
 
   private volatile  Map<EvaluationKey, ResultHolder> cacheMap = new ConcurrentHashMap<>();
+  private volatile Map<PsiElement, ResultHolder> methodReturnTypes = new ConcurrentHashMap<>();
   public static boolean skipCaching = false;// just convenience flag for debugging
+
 
 
   public HaxeExpressionEvaluatorCacheService() {
@@ -42,14 +47,39 @@ public class HaxeExpressionEvaluatorCacheService  {
     }
 
     EvaluationKey key = new EvaluationKey(element, resolver == null ? "NO_RESOLVER" : resolver.toCacheString());
-    if (cacheMap.containsKey(key)) {
-      return cacheMap.get(key);
+    ResultHolder cached = cacheMap.get(key);
+    if (cached != null) {
+      return cached;
     }
 
+    // The stamp distinguishes COMPLETE results from guard-truncated ones: any
+    // recursion guard firing beneath this point makes mayCacheNow() false, and
+    // such a result is only valid for this exact evaluation stack. The taint
+    // mark covers what the stamp cannot see: a guard-truncated CACHED call
+    // evaluation served from another stack's computation. A failure computed
+    // with both signals clean genuinely tried every path and is as
+    // authoritative as a success - caching it is what keeps broken references
+    // from re-running the whole evaluation on every visit.
+    RecursionGuard.StackStamp stamp = RecursionManager.markStack();
+    long taintMark = HaxeEvaluationTaint.mark();
     ResultHolder holder = _handle(element, context, resolver);
     if (holder == null) return SpecificTypeReference.getUnknown(element).createHolder();
-    if (holder.cacheable && !holder.isUnknown()) {
-      if (!holder.containsUnknownOrUnresolvedTypes()) {
+    boolean complete = stamp.mayCacheNow() && !HaxeEvaluationTaint.taintedSince(taintMark);
+    if (complete && holder.isCacheable()) {
+      boolean isUnknown = holder.isUnknown();
+      // success: fully resolved with all typeParameters
+      boolean cacheableSuccess = !isUnknown && !holder.containsUnknownOrUnresolvedTypes();
+      // A failure (Unknown) is only trustworthy when computed OUTSIDE any
+      // recursion guard. Inside a guarded computation, a nested step that
+      // needs an element already under evaluation backs out QUIETLY - no
+      // prevention fires, so the stamp and taint checks above both stay
+      // clean - and the result comes out Unknown even though the element
+      // has a real type (evaluating it fresh at top level finds it).
+      // Only at guard depth zero does Unknown reliably mean "genuinely has
+      // no type" rather than "could not look at itself mid-evaluation".
+      boolean cacheableFailure = isUnknown  && !HaxeEvaluationTaint.insideGuardedComputation();
+
+      if (cacheableSuccess || cacheableFailure) {
         cacheMap.put(key, holder);
       }
     }
@@ -58,8 +88,32 @@ public class HaxeExpressionEvaluatorCacheService  {
   }
 
 
+  /**
+   * Inferred method return types under the certainty rule: a result computed
+   * while truncation was observed (a probe gate refusal, a prevention) is
+   * served but NOT stored, so a later clean compute can land. A
+   * PsiDependentCache here froze the first tower-computed Unknown for the
+   * span between two code changes and starved every later consumer - the return-type inlay and
+   * any local initialized from the call.
+   */
+  public @NotNull ResultHolder methodReturnType(@NotNull PsiElement method, @NotNull Supplier<ResultHolder> compute) {
+    ResultHolder cached = methodReturnTypes.get(method);
+    if (cached != null) return cached;
+    long taintMark = HaxeEvaluationTaint.mark();
+    ResultHolder computed = compute.get();
+    boolean clean = !HaxeEvaluationTaint.taintedSince(taintMark);
+    // clean Unknown inside a guarded computation is still path-dependent
+    // (same rule as the expression cache's failure caching)
+    boolean unknownInsideGuards = computed.isUnknown() && HaxeEvaluationTaint.insideGuardedComputation();
+    if (clean && !unknownInsideGuards && computed.isCacheable()) {
+      methodReturnTypes.put(method, computed);
+    }
+    return computed;
+  }
+
   public void clearCaches() {
     synchronized(this) {
+      methodReturnTypes.clear();
       cacheMap.clear();
     }
   }

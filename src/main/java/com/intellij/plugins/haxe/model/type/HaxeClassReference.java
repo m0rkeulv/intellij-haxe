@@ -22,11 +22,12 @@ package com.intellij.plugins.haxe.model.type;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.lang.psi.*;
-import com.intellij.plugins.haxe.lang.psi.impl.AbstractHaxePsiClass;
-import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeClassStub;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileWithId;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.CachedValuesManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -39,9 +40,12 @@ public class HaxeClassReference {
   @NotNull
   public final PsiElement elementContext;
   public final HaxeClassModel classModel;
-  private final boolean isTypeParameter;
-
   public HaxeClass clazz;
+
+  private final boolean isTypeParameter;
+  private String cacheKey;
+
+
 
 
   public HaxeClassReference(@NotNull HaxeClassModel classModel, @NotNull PsiElement elementContext) {
@@ -139,6 +143,39 @@ public class HaxeClassReference {
   @Nullable
   public String getName() {
     return this.name;
+  }
+
+  // key used for GenericResolver cacheString (stored to avoid recompute)
+  public String getCacheKey() {
+    if (this.cacheKey == null) {
+      this.cacheKey = computeCacheKey();
+    }
+    return this.cacheKey;
+  }
+
+  private String computeCacheKey() {
+    if (classModel == null) return name;
+
+    HaxeClass haxeClass = classModel.haxeClass;
+    if (haxeClass instanceof HaxeAnonymousType) {
+      //  to keep things light we just use the file ID and offset for anonymous types
+      return "{}@" + anonymousTypeCacheKey(classModel.getBasePsi());
+    }
+
+    String qualifiedName = classModel.haxeClass.getQualifiedName();
+    return qualifiedName != null && !qualifiedName.isEmpty() ? qualifiedName : name;
+  }
+
+  private static String anonymousTypeCacheKey(PsiElement declaration) {
+    PsiFile file = declaration.getContainingFile();
+    VirtualFile virtualFile = file == null ? null : file.getVirtualFile();
+
+    if (virtualFile instanceof VirtualFileWithId withId) {
+      return withId.getId() + ":" + declaration.getTextOffset();
+    }
+
+    String fileName = file != null ? file.getName() : "<no-file>";
+    return fileName + "~" + System.identityHashCode(declaration.getNode()) + ":" + declaration.getTextOffset();
   }
 
   @Override

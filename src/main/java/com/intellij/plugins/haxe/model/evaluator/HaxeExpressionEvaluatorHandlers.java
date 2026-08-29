@@ -40,7 +40,7 @@ import java.util.stream.Stream;
 
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.ONLY_COMMENTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.KUNTYPED;
-import static com.intellij.plugins.haxe.lang.psi.HaxeResolver.buildExtractVarPath;
+import static com.intellij.plugins.haxe.lang.psi.HaxeResolveChecks.buildExtractVarPath;
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl.getLiteralClassName;
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceImpl.tryToFindTypeFromCallExpression;
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.isStaticExtension;
@@ -69,7 +69,7 @@ public class HaxeExpressionEvaluatorHandlers {
                                                HaxeGenericResolver resolver) {
 
     if (element == null ) return null;
-    return evaluatorHandlersRecursionGuard.doPreventingRecursion(element, false, () -> handle(element, context, resolver));
+    return HaxeEvaluationTaint.computeOrTaint(evaluatorHandlersRecursionGuard, element, false, () -> handle(element, context, resolver));
   }
 
 
@@ -723,7 +723,7 @@ public class HaxeExpressionEvaluatorHandlers {
           if (holder == null || holder.isOrContainsTypeParameters()) {
             HaxeComponentName name = parameter.getComponentName();
             final ResultHolder hint = holder;
-            ResultHolder searchResult =  evaluatorHandlersRecursionGuard.computePreventingRecursion(name, true, () -> {
+            ResultHolder searchResult =  HaxeEvaluationTaint.computeOrTaint(evaluatorHandlersRecursionGuard, name, true, () -> {
                 return searchReferencesForType(name, context, resolver, functionLiteral, hint);
             });
             if (searchResult!= null && !searchResult.isUnknown()) holder = searchResult;
@@ -737,9 +737,8 @@ public class HaxeExpressionEvaluatorHandlers {
           return createUnknown(parameter);
         }
       }else {
-        HaxeMethod method = PsiTreeUtil.getParentOfType(parameter, HaxeMethod.class);
-        ResultHolder holder = searchReferencesForType(parameter.getComponentName(), context, resolver, method.getBody());
-        if (holder!= null && !holder.isUnknown()) {
+        ResultHolder holder = HaxeUntypedParameterInference.inferMethodParameterType(parameter, context, resolver);
+        if (holder != null && !holder.isUnknown()) {
           return holder;
         }
       }
@@ -1013,7 +1012,7 @@ public class HaxeExpressionEvaluatorHandlers {
   }
   static ResultHolder createUnknown(PsiElement element, boolean cacheable) {
       ResultHolder holder = getUnknown(element).createHolder();
-      holder.cacheable = cacheable;
+      holder.setCacheable(cacheable);
       return holder;
   }
 
@@ -1880,20 +1879,20 @@ public class HaxeExpressionEvaluatorHandlers {
 
       if(returnType.getFunctionType() != null){
           ResultHolder holder = returnType.getFunctionType().createHolder();
-          holder.cacheable = allowCaching;
+          holder.setCacheable(allowCaching);
           return holder;
       }
 
       if(returnType.isClassType() || returnType.isEnumValueType()) {
           ResultHolder result = returnType.copy();
-          result.cacheable = allowCaching;
+          result.setCacheable(allowCaching);
           return result;
       }
     }
 
     if (functionType!= null && functionType.isDynamic()) {
         ResultHolder holder = functionType.withoutConstantValue().createHolder();
-        holder.cacheable = allowCaching;
+        holder.setCacheable(allowCaching);
         return holder;
     }
 
@@ -2054,8 +2053,11 @@ public class HaxeExpressionEvaluatorHandlers {
     if (isUnknownLiteralArray(result) && result.containsUnknownOrUnresolvedTypeParameters()) {
       result = searchReferencesForTypeParameters(name, context, resolver, result);
     }
+
     if (result != null && result.containsUnknownOrUnresolvedTypeParameters()) {
-      result = searchReferencesForTypeParameters(name, context, resolver, result);
+      if (!HaxeExpressionUsageUtil.containsOnlyEnclosingTypeParameters(result, varDeclaration)) {
+        result = searchReferencesForTypeParameters(name, context, resolver, result);
+      }
     }
 
     result = tryGetEnumValuesDeclaringClass(result);
