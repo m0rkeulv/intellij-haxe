@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.actions.HaxeTypeAddImportIntentionAction;
@@ -32,6 +32,7 @@ import com.intellij.plugins.haxe.lang.psi.stubs.index.HaxeClassNameStubIndex;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
+import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -44,14 +45,13 @@ import org.junit.jupiter.api.Test;
  * @author: Fedor.Korotkov
  */
 @DisplayName("Intention: type add import action")
-public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixtureTestCase {
+public class HaxeTypeAddImportIntentionActionTest extends HaxeLightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "/addImportIntention/";
   }
 
   protected CommonCodeStyleSettings myTestStyleSettings;
-
 
   public void doTest() {
     final PsiFile file = PsiDocumentManager.getInstance(myFixture.getProject()).getPsiFile(myFixture.getEditor().getDocument());
@@ -72,13 +72,12 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixture
     setTestStyleSettings();
   }
 
-
   @Override
   public void setTestStyleSettings() {
     Project project = getProject();
-    CodeStyleSettings currSettings = CodeStyleSettingsManager.getSettings(project);
+    CodeStyleSettings currSettings = CodeStyle.getSettings(project);
     assertNotNull(currSettings);
-    CodeStyleSettings tempSettings = currSettings.clone();
+    CodeStyleSettings tempSettings = CodeStyleSettingsManager.getInstance(project).cloneSettings(currSettings);
     CodeStyleSettings.IndentOptions indentOptions = tempSettings.getIndentOptions(HaxeFileType.INSTANCE);
     assertNotNull(indentOptions);
     defineStyleSettings(tempSettings);
@@ -93,10 +92,10 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeCodeInsightFixture
     myTestStyleSettings.ALIGN_MULTILINE_PARAMETERS = false;
     myTestStyleSettings.ALIGN_MULTILINE_PARAMETERS_IN_CALLS = false;
     myTestStyleSettings.KEEP_FIRST_COLUMN_COMMENT = false;
-    myTestStyleSettings.BLANK_LINES_AFTER_PACKAGE = 2;
-    myTestStyleSettings.BLANK_LINES_AFTER_IMPORTS = 2;
+    // one BLANK LINE each - the .txt fixtures encode exactly that
+    myTestStyleSettings.BLANK_LINES_AFTER_PACKAGE = 1;
+    myTestStyleSettings.BLANK_LINES_AFTER_IMPORTS = 1;
   }
-
 
   @Test
   @DisplayName("simple")
