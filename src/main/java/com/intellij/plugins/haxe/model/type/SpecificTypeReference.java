@@ -35,8 +35,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @CustomLog
 public abstract class SpecificTypeReference {
@@ -534,6 +537,24 @@ public abstract class SpecificTypeReference {
     return toPresentationString(false);
   }
   abstract public String toPresentationString(boolean showOnlyConstraintForTypeParam);
+
+  /**
+   * A value that is faster to generate than PresentationString, used for caching purposes.
+   */
+  final public String toCacheKey() {
+    StringBuilder out = new StringBuilder(64);
+    appendCacheKey(out, Collections.newSetFromMap(new IdentityHashMap<>()));
+    return out.toString();
+  }
+
+  /**
+   * Method that all sub classes must implement to provide a value to the cacheKey when its created.
+   */
+  abstract public void appendCacheKey(@NotNull StringBuilder out, @NotNull Set<SpecificTypeReference> walkPath);
+
+  /** Marks a type re-encountered on the current walk path; the walk cuts instead of recursing. */
+  protected static final String CACHE_KEY_CYCLE = "@cycle";
+
 
   abstract public String toString();
 
