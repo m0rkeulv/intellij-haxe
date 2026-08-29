@@ -55,7 +55,7 @@ public class HaxeFullyQualifiedModuleNameIndex extends HaxeComponentBaseIndex {
 
     @Override
     public @NotNull DataIndexer<String, HaxeComponentIndexData, FileContent> getIndexer() {
-        return new HaxeFullyQualifiedNameIndexer();
+        return new HaxeFullyQualifiedNameIndexer(HaxeFullyQualifiedNameIndexer.CollectType.MODULES);
     }
 
 
@@ -65,8 +65,7 @@ public class HaxeFullyQualifiedModuleNameIndex extends HaxeComponentBaseIndex {
 
         List<HaxeComponentIndexData> values = FileBasedIndex.getInstance().getValues(INDEX, name, scope);
         for (HaxeComponentIndexData value : values) {
-            FullyQualifiedInfo fqn = value.getFqn();
-            HaxeModuleModel moduleModel = resolveModule(INDEX, name, project, scope, fqn);
+            HaxeModuleModel moduleModel = resolveModule(INDEX, name, project, scope);
             if (moduleModel != null && moduleModel.getBasePsi() instanceof HaxeModule haxeModule) {
                 results.add(haxeModule);
             }
