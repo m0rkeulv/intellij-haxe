@@ -7,16 +7,11 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
-import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil;
-import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIndex;
-import com.intellij.plugins.haxe.model.FullyQualifiedInfo;
-import com.intellij.plugins.haxe.model.HaxeBaseMemberModel;
-import com.intellij.plugins.haxe.util.HaxeResolveUtil;
+import com.intellij.plugins.haxe.util.HaxeQnameResolveUtil;
 import com.intellij.pom.Navigatable;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.xdebugger.frame.XFullValueEvaluator;
 import com.intellij.xdebugger.frame.XValueNode;
@@ -24,7 +19,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import java.util.List;
 
 
 final class FqnNavigateLink {
@@ -35,11 +29,13 @@ final class FqnNavigateLink {
       new Task.Backgroundable(project, "Resolving",  true) {
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
-          FullyQualifiedInfo qualifiedInfo = new FullyQualifiedInfo(possibleQname);
           PsiElement element = resolve(project, possibleQname);
           if (element instanceof HaxeNamedComponent component) {
+            // getName() reads the stub tree - back under the read lock, the
+            // resolve() above releases it before returning
+            String componentName = ReadAction.compute(component::getName);
             String message = HaxeDebuggerBundle.message("dap.debugger.value.navigate.link");
-            String tooltip = HaxeDebuggerBundle.message("dap.debugger.value.navigate.tooltip", component.getName());
+            String tooltip = HaxeDebuggerBundle.message("dap.debugger.value.navigate.tooltip", componentName);
             node.setFullValueEvaluator(new NavigatableValue(message, tooltip, possibleQname, project).setShowValuePopup(false));
           }
         }
@@ -49,58 +45,13 @@ final class FqnNavigateLink {
 
   private static @Nullable PsiElement resolve(@NonNull Project project, @NonNull String value) {
     try {
-      return ReadAction.computeCancellable(() ->{
-        PsiElement element = HaxeResolveUtil.findClassOrMemberByQName(value, project);
-        if(element != null) return element;
-        return resolveRuntimeName(project, value);
-      });
+      return ReadAction.computeCancellable(() -> HaxeQnameResolveUtil.findClassOrMember(value, project));
     }catch (ProcessCanceledException e) {
       throw e;
     }catch (Exception e) {
       return null;
     }
   }
-
-  // modules are apparently a compile time concept, so FQN for classes will never contain the module name
-  private static @Nullable PsiElement resolveRuntimeName(@NonNull Project project, @NonNull String value) {
-    FullyQualifiedInfo info = getRuntimeQualifiedInfo(value);
-    if (info == null) return null;
-
-    GlobalSearchScope scope = GlobalSearchScope.allScope(project);
-    List<HaxeClass> haxeClasses = HaxeClassNameUnifiedIndex.getByNameFiltered(info.className, project, scope)
-      .stream()
-      .filter(aClass -> {
-        String qualifiedName = aClass.getFullyQualifiedName();
-        FullyQualifiedInfo withNoModuleName = new FullyQualifiedInfo(qualifiedName).withModuleName(null);
-        return withNoModuleName.equals(info.toClassQualifiedName());
-      }).toList();
-
-    if(!haxeClasses.isEmpty()) {
-      HaxeClass haxeClass = haxeClasses.getFirst();
-      if(!info.hasMemberName()) {
-        return haxeClass;
-      } else {
-        String name = info.getMemberName();
-        HaxeBaseMemberModel member = haxeClass.getModel().getMember(name, null);
-        if(member != null) {
-          return member.getBasePsi();
-        }
-      }
-    }
-
-    return null;
-  }
-
-  private static @Nullable FullyQualifiedInfo getRuntimeQualifiedInfo(@NonNull String value) {
-    // Runtime does not contain module info, so it is dropped and only the class is used
-    FullyQualifiedInfo info = new FullyQualifiedInfo(value);
-    if(!info.hasModuleName()) return null;
-    if(!info.hasClassName()) {
-      info = info.withModuleName(null).withClassName(info.moduleName);
-    }
-    return info;
-  }
-
 
   private static String stripFunctionPrefix(String componentName) {
     if (componentName == null) return "<unknown>";
