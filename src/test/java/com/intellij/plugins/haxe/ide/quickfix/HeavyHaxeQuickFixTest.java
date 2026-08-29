@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test;
 
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
-import com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolInspection;
+import com.intellij.plugins.haxe.HaxeToolkitLightFixtureTestCase;
+import com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolInspection;
 import com.intellij.util.ArrayUtil;
 
 import java.util.HashSet;
@@ -14,12 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 @DisplayName("Quick fix: heavy")
-public class HeavyHaxeQuickFixTest extends HaxeCodeInsightFixtureTestCase {
-    @Override
-    public void setUp() throws Exception {
-        useHaxeToolkit();
-        super.setUp();
-    }
+public class HeavyHaxeQuickFixTest extends HaxeToolkitLightFixtureTestCase {
 
     @Override
     protected String getBasePath() {
@@ -44,7 +39,6 @@ public class HeavyHaxeQuickFixTest extends HaxeCodeInsightFixtureTestCase {
         doTestQuickFix("Create method 'testMethodInDifferentClass'", "OtherClassForGeneration");
     }
 
-
     protected void doTestQuickFix(String actionToPerform) throws Exception {
         String testName = getTestName(false);
         doTestQuickFix(actionToPerform, testName, testName);
@@ -66,7 +60,6 @@ public class HeavyHaxeQuickFixTest extends HaxeCodeInsightFixtureTestCase {
         myFixture.configureByFiles(fileSet.toArray(String[]::new));
         myFixture.enableInspections(getAnnotatorBasedInspection());
 
-
         List<IntentionAction> allQuickFixes = myFixture.getAllQuickFixes(fileWithQuickFix);
         // Hackish way to filter out  "hidden" unresolved Symbol quickfixes (the same quickfix is used for both warning and info Problem descriptor)
         HashSet<IntentionAction> intentionActions = new HashSet<>(allQuickFixes);
@@ -85,6 +78,5 @@ public class HeavyHaxeQuickFixTest extends HaxeCodeInsightFixtureTestCase {
         FileDocumentManager.getInstance().saveAllDocuments();
         myFixture.checkResultByFile(resultName+".hx", resultName + "_expected.hx", true);
     }
-
 
 }

@@ -59,11 +59,22 @@ public class HaxeSyntaxHighlighterColors {
     createTextAttributesKey("HAXE_BLOCK_COMMENT", DefaultLanguageHighlighterColors.BLOCK_COMMENT);
   public static final TextAttributesKey DOC_COMMENT =
     createTextAttributesKey("HAXE_DOC_COMMENT", DefaultLanguageHighlighterColors.DOC_COMMENT);
+  public static final TextAttributesKey DOC_CODE =
+    createTextAttributesKey("HAXE_DOC_CODE", DefaultLanguageHighlighterColors.DOC_COMMENT_TAG_VALUE);
+  public static final TextAttributesKey DOC_TAG =
+    createTextAttributesKey("HAXE_DOC_TAG", DefaultLanguageHighlighterColors.DOC_COMMENT_TAG);
 
   public static final TextAttributesKey DEFINED_VAR = createTextAttributesKey("HAXE_DEFINED_VAR");
   public static final TextAttributesKey UNDEFINED_VAR = createTextAttributesKey("HAXE_UNDEFINED_VAR");
   public static final TextAttributesKey CONDITIONALLY_NOT_COMPILED = createTextAttributesKey("HAXE_CONDITIONALLY_NOT_COMPILED");
   public static final TextAttributesKey UNPARSEABLE_DATA = createTextAttributesKey(HAXE_UNPARSEABLE_DATA);
+
+  // string-literal navigation links (file paths / qualified names); both
+  // inherit the platform's Highlighted-reference styling until customized
+  public static final TextAttributesKey STRING_FILE_LINK =
+    createTextAttributesKey("HAXE_STRING_FILE_LINK", DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE);
+  public static final TextAttributesKey STRING_CODE_LINK =
+    createTextAttributesKey("HAXE_STRING_CODE_LINK", DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE);
 
   public static final TextAttributesKey METADATA =
     createTextAttributesKey("HAXE_METADATA", DefaultLanguageHighlighterColors.METADATA);
