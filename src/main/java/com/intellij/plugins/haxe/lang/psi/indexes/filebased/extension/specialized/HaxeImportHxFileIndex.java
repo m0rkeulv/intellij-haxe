@@ -106,7 +106,7 @@ public class HaxeImportHxFileIndex extends FileBasedIndexExtension<String, Void>
                         if (file instanceof HaxeFile haxeFile) {
                             haxeImportFiles.add(haxeFile);
                         }
-                        return false;
+                        return true; // keep iterating; false stops at the FIRST file and drops every other candidate
                     }
                 }, scope);
 

@@ -73,21 +73,12 @@ public class HaxeClassNameFileIndex extends HaxeComponentBaseIndex {
                             }
 
                         }
-                        return false;
+                        return true; // true = keep iterating
                     }
                 }, scope);
 
 
-//        List<HaxeClass> classes = new ArrayList<>();
-//        PsiManager instance = PsiManager.getInstance(project);
-//        List<HaxeComponentIndexData> values = FileBasedIndex.getInstance().getValues(INDEX, name, scope);
-//        for (HaxeComponentIndexData value : values) {
-//            String qualifiedName = value.getFqn().getQualifiedName(false);
-//            PsiElement classOrMemberByQName = HaxeResolveUtil.findClassOrMemberByQName(qualifiedName, instance, scope);
-//            if(classOrMemberByQName instanceof HaxeClass haxeClass) {
-//                classes.add(haxeClass);
-//            }
-//        }
+
 
         return classes;
     }
