@@ -28,15 +28,20 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
 /**
- * A v3 zone capture served FROM ITS FILE: opening indexes the zone chunks
+ * A zone capture served FROM ITS FILE: opening indexes the zone chunks
  * and reads the small records, but the zones themselves stay on disk —
  * {@link #scanZones} decodes only chunks whose time/duration bounds pass
  * the query, so a minutes-long capture never loads whole. Zones stream in
  * close order (per thread a post-order walk of the zone tree, depth
- * included) with times rebased to the session's zero; the small series in
- * {@link #session()} are already rebased on disk.
+ * included) with times rebased to the session's zero. Series records may
+ * repeat — a live writer streams increments — and append; v6 files carry
+ * their stamps RAW like the zones (rebased here), v5 wrote them
+ * pre-rebased.
  */
 public final class HxtZoneStore {
+
+  /** Files from this version on carry their series stamps RAW; older ones wrote them pre-rebased. */
+  private static final int RAW_SERIES_VERSION = 6;
 
   private final Path file;
   private final TracySession session;
@@ -96,27 +101,34 @@ public final class HxtZoneStore {
     Map<Integer, String> threadNames = new HashMap<>();
     Map<Integer, Long> threadZones = new HashMap<>();
 
+    boolean infoSeen = false;
+    long minChunkStartNs = Long.MAX_VALUE;
+    long maxChunkEndNs = Long.MIN_VALUE;
+    int version;
     try (InputStream raw = new BufferedInputStream(Files.newInputStream(file))) {
       CountingStream in = new CountingStream(raw);
       DataInputStream data = new DataInputStream(in);
-      HxtSessionTranslator.readZoneHeader(data);
+      version = HxtSessionTranslator.readZoneHeader(data);
       while (true) {
         int type;
+        int length;
         try {
           type = data.readUnsignedByte();
+          length = readI32(data);
         }
         catch (EOFException end) {
-          break;
+          break; // clean end, or a live writer caught mid-record-header
         }
-        int length = readI32(data);
         if (type == HxtZoneWriter.ZONES_RECORD) {
-          int count = readI32(data);
-          long minStart = readI64(data);
-          long maxEnd = readI64(data);
-          long maxDuration = readI64(data);
-          int compressedLength = length - (4 + 8 + 8 + 8);
-          ChunkRef chunk = new ChunkRef(in.position, compressedLength, count, minStart, maxEnd, maxDuration);
+          ChunkRef chunk;
+          int count;
           try {
+            count = readI32(data);
+            long minStart = readI64(data);
+            long maxEnd = readI64(data);
+            long maxDuration = readI64(data);
+            int compressedLength = length - (4 + 8 + 8 + 8);
+            chunk = new ChunkRef(in.position, compressedLength, count, minStart, maxEnd, maxDuration);
             data.skipNBytes(compressedLength);
           }
           catch (EOFException truncated) {
@@ -124,6 +136,8 @@ public final class HxtZoneStore {
           }
           chunks.add(chunk);
           zoneCount += count;
+          minChunkStartNs = Math.min(minChunkStartNs, chunk.minStartNs());
+          maxChunkEndNs = Math.max(maxChunkEndNs, chunk.maxEndNs());
           continue;
         }
         byte[] payloadBytes = data.readNBytes(length);
@@ -141,7 +155,9 @@ public final class HxtZoneStore {
             int count = readI32(payload);
             for (int i = 0; i < count; i++) frames.add(readI64(payload));
           }
-          case HxtZoneWriter.PLOT_RECORD -> plots.put(readString(payload), readPoints(payload));
+          // series records may arrive incrementally from a live writer - append
+          case HxtZoneWriter.PLOT_RECORD ->
+            plots.computeIfAbsent(readString(payload), key -> new ArrayList<>()).addAll(readPoints(payload));
           case HxtZoneWriter.CPU_RECORD -> cpu.addAll(readPoints(payload));
           case HxtZoneWriter.PROCESS_CPU_RECORD -> processCpu.addAll(readPoints(payload));
           case HxtZoneWriter.THREAD_RECORD -> {
@@ -149,7 +165,8 @@ public final class HxtZoneStore {
             threadNames.put(id, readString(payload));
             threadZones.put(id, readI64(payload));
           }
-          case HxtZoneWriter.MEMORY_RECORD -> memoryCurves.put(readString(payload), readPoints(payload));
+          case HxtZoneWriter.MEMORY_RECORD ->
+            memoryCurves.computeIfAbsent(readString(payload), key -> new ArrayList<>()).addAll(readPoints(payload));
           case HxtZoneWriter.GC_RECORD -> {
             int count = readI32(payload);
             for (int i = 0; i < count; i++) {
@@ -167,6 +184,7 @@ public final class HxtZoneStore {
             }
           }
           case HxtZoneWriter.INFO_RECORD -> {
+            infoSeen = true;
             programName = readString(payload);
             pid = readI64(payload);
             epoch = readI64(payload);
@@ -183,6 +201,30 @@ public final class HxtZoneStore {
       }
     }
 
+    boolean rawSeries = version >= RAW_SERIES_VERSION;
+    if (!infoSeen) {
+      // a LIVE read of a growing capture: INFO lands only at finish, so
+      // the raw bounds of the chunks - and, on raw-series files, of the
+      // series - stand in for the rebase base and duration
+      RawBounds series = rawSeries
+                         ? seriesBounds(frames, List.of(plots, memoryCurves), List.of(cpu, processCpu),
+                                        gcSweeps, events)
+                         : RawBounds.NONE;
+      long rawMin = Math.min(chunks.isEmpty() ? Long.MAX_VALUE : minChunkStartNs, series.minNs());
+      long rawMax = Math.max(chunks.isEmpty() ? Long.MIN_VALUE : maxChunkEndNs, series.maxNs());
+      if (rawMin != Long.MAX_VALUE) {
+        baseNs = rawMin;
+        durationNs = Math.max(rawMax - rawMin, 0);
+      }
+    }
+    long seriesShiftNs = rawSeries ? baseNs : 0;
+    plots.replaceAll((name, points) -> rebasedPoints(points, seriesShiftNs));
+    memoryCurves.replaceAll((name, points) -> rebasedPoints(points, seriesShiftNs));
+    frames = rebasedFrames(frames, seriesShiftNs);
+    cpu = rebasedPoints(cpu, seriesShiftNs);
+    processCpu = rebasedPoints(processCpu, seriesShiftNs);
+    gcSweeps = rebasedSweeps(gcSweeps, seriesShiftNs);
+    events = rebasedEvents(events, seriesShiftNs);
     TracyWelcome welcome = new TracyWelcome(1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
     TracySession session = new TracySession(welcome, List.of(), List.copyOf(frames), Map.copyOf(plots),
                                             Map.copyOf(memoryCurves), List.copyOf(gcSweeps), List.copyOf(events),
@@ -196,10 +238,72 @@ public final class HxtZoneStore {
                             threads, baseNs, zoneCount, compressionLevel);
   }
 
+  /** The raw stamp bounds across every small series; MAX/MIN sentinels when there are none. */
+  private record RawBounds(long minNs, long maxNs) {
+    static final RawBounds NONE = new RawBounds(Long.MAX_VALUE, Long.MIN_VALUE);
+
+    RawBounds fold(long ns) {
+      return new RawBounds(Math.min(minNs, ns), Math.max(maxNs, ns));
+    }
+  }
+
+  private static RawBounds seriesBounds(List<Long> frames,
+                                        List<Map<String, List<TracySession.PlotPoint>>> namedSeries,
+                                        List<List<TracySession.PlotPoint>> pointSeries,
+                                        List<TracySession.GcSweep> gcSweeps, List<TimelineEvent> events) {
+    RawBounds bounds = RawBounds.NONE;
+    for (long ns : frames) bounds = bounds.fold(ns);
+    List<List<TracySession.PlotPoint>> allPoints = new ArrayList<>(pointSeries);
+    namedSeries.forEach(series -> allPoints.addAll(series.values()));
+    for (List<TracySession.PlotPoint> points : allPoints) {
+      for (TracySession.PlotPoint point : points) bounds = bounds.fold(point.timeNs());
+    }
+    for (TracySession.GcSweep sweep : gcSweeps) {
+      bounds = bounds.fold(sweep.startNs()).fold(sweep.endNs());
+    }
+    for (TimelineEvent event : events) bounds = bounds.fold(event.timeNs());
+    return bounds;
+  }
+
+  /** Raw stamps to session time; the clamp covers a process-CPU bucket start preceding the base. */
+  private static List<TracySession.PlotPoint> rebasedPoints(List<TracySession.PlotPoint> points, long shiftNs) {
+    return points.stream()
+      .map(point -> new TracySession.PlotPoint(Math.max(point.timeNs() - shiftNs, 0), point.value()))
+      .sorted(Comparator.comparingLong(TracySession.PlotPoint::timeNs))
+      .toList();
+  }
+
+  private static List<Long> rebasedFrames(List<Long> frames, long shiftNs) {
+    return frames.stream().map(ns -> Math.max(ns - shiftNs, 0)).sorted().toList();
+  }
+
+  private static List<TracySession.GcSweep> rebasedSweeps(List<TracySession.GcSweep> sweeps, long shiftNs) {
+    return sweeps.stream()
+      .map(sweep -> new TracySession.GcSweep(Math.max(sweep.startNs() - shiftNs, 0),
+                                             Math.max(sweep.endNs() - shiftNs, 0),
+                                             sweep.freedBytes(), sweep.freedObjects()))
+      .sorted(Comparator.comparingLong(TracySession.GcSweep::startNs))
+      .toList();
+  }
+
+  private static List<TimelineEvent> rebasedEvents(List<TimelineEvent> events, long shiftNs) {
+    return events.stream()
+      .map(event -> new TimelineEvent(event.threadId(), Math.max(event.timeNs() - shiftNs, 0),
+                                      event.text(), event.color()))
+      .sorted(Comparator.comparingLong(TimelineEvent::timeNs))
+      .toList();
+  }
+
   /** The capture minus its zones (the zone list is always empty — zones come from {@link #scanZones}). */
   @NotNull
   public TracySession session() {
     return session;
+  }
+
+  /** The capture file this store serves from — a live view reopens it as it grows. */
+  @NotNull
+  public Path file() {
+    return file;
   }
 
   public long zoneCount() {
@@ -229,35 +333,65 @@ public final class HxtZoneStore {
     long rawFrom = fromNs == 0 ? Long.MIN_VALUE : baseNs + fromNs;
     long rawTo = toNs == Long.MAX_VALUE ? Long.MAX_VALUE : baseNs + toNs;
     try (RandomAccessFile access = new RandomAccessFile(file.toFile(), "r")) {
-      byte[] compressed = new byte[0];
-      byte[] raw = new byte[0];
+      ChunkBuffers buffers = new ChunkBuffers();
       for (ChunkRef chunk : chunks) {
         boolean overlaps = chunk.minStartNs() <= rawTo && chunk.maxEndNs() >= rawFrom;
         if (!overlaps || chunk.maxDurationNs() < minDurationNs) continue;
-        if (compressed.length < chunk.compressedLength()) compressed = new byte[chunk.compressedLength()];
-        access.seek(chunk.payloadOffset());
-        access.readFully(compressed, 0, chunk.compressedLength());
-        int byteLength = chunk.zoneCount() * HxtZoneWriter.ZONE_BYTES;
-        if (raw.length < byteLength) raw = new byte[byteLength];
-        decompressChunk(compressed, chunk.compressedLength(), raw, byteLength);
-        ByteBuffer zones = ByteBuffer.wrap(raw, 0, byteLength).order(ByteOrder.LITTLE_ENDIAN);
-        long previousStartNs = 0;
-        for (int i = 0; i < chunk.zoneCount(); i++) {
-          int thread = zones.getInt();
-          int depth = zones.getShort() & 0xFFFF;
-          long startNs = previousStartNs + zones.getLong();
-          long endNs = startNs + zones.getLong();
-          int location = zones.getInt();
-          previousStartNs = startNs;
-          if (threadId >= 0 && thread != threadId) continue;
-          if (endNs - startNs < minDurationNs) continue;
-          if (startNs > rawTo || endNs < rawFrom) continue;
-          if (location < 0 || location >= locations.size()) {
-            throw new ProfilerFormatException("zone references unknown source location " + location);
-          }
-          consumer.zone(thread, depth, startNs - baseNs, endNs - baseNs, locations.get(location));
-        }
+        scanChunk(access, chunk, buffers, threadId, rawFrom, rawTo, minDurationNs, consumer);
       }
+    }
+  }
+
+  /** How many zone chunks the file held when this store opened — a live reader's incremental cursor. */
+  public int chunkCount() {
+    return chunks.size();
+  }
+
+  /**
+   * Every zone of chunks {@code [fromChunk, chunkCount())}, rebased and
+   * unfiltered — the incremental feed a live view folds so a refresh only
+   * ever inflates the NEWLY appended chunks, not the whole file.
+   */
+  public void scanZonesFromChunk(int fromChunk, @NotNull ZoneConsumer consumer) throws IOException {
+    try (RandomAccessFile access = new RandomAccessFile(file.toFile(), "r")) {
+      ChunkBuffers buffers = new ChunkBuffers();
+      for (int i = Math.max(fromChunk, 0); i < chunks.size(); i++) {
+        scanChunk(access, chunks.get(i), buffers, -1, Long.MIN_VALUE, Long.MAX_VALUE, 0, consumer);
+      }
+    }
+  }
+
+  /** Reusable inflate targets across one scan's chunks. */
+  private static final class ChunkBuffers {
+    byte[] compressed = new byte[0];
+    byte[] raw = new byte[0];
+  }
+
+  private void scanChunk(RandomAccessFile access, ChunkRef chunk, ChunkBuffers buffers,
+                         int threadId, long rawFrom, long rawTo, long minDurationNs,
+                         ZoneConsumer consumer) throws IOException {
+    if (buffers.compressed.length < chunk.compressedLength()) buffers.compressed = new byte[chunk.compressedLength()];
+    access.seek(chunk.payloadOffset());
+    access.readFully(buffers.compressed, 0, chunk.compressedLength());
+    int byteLength = chunk.zoneCount() * HxtZoneWriter.ZONE_BYTES;
+    if (buffers.raw.length < byteLength) buffers.raw = new byte[byteLength];
+    decompressChunk(buffers.compressed, chunk.compressedLength(), buffers.raw, byteLength);
+    ByteBuffer zones = ByteBuffer.wrap(buffers.raw, 0, byteLength).order(ByteOrder.LITTLE_ENDIAN);
+    long previousStartNs = 0;
+    for (int i = 0; i < chunk.zoneCount(); i++) {
+      int thread = zones.getInt();
+      int depth = zones.getShort() & 0xFFFF;
+      long startNs = previousStartNs + zones.getLong();
+      long endNs = startNs + zones.getLong();
+      int location = zones.getInt();
+      previousStartNs = startNs;
+      if (threadId >= 0 && thread != threadId) continue;
+      if (endNs - startNs < minDurationNs) continue;
+      if (startNs > rawTo || endNs < rawFrom) continue;
+      if (location < 0 || location >= locations.size()) {
+        throw new ProfilerFormatException("zone references unknown source location " + location);
+      }
+      consumer.zone(thread, depth, startNs - baseNs, endNs - baseNs, locations.get(location));
     }
   }
 
@@ -285,7 +419,8 @@ public final class HxtZoneStore {
 
   private static String threadName(Map<Integer, String> names, int threadId) {
     String name = names.get(threadId);
-    return name != null ? name : "Thread " + Integer.toUnsignedString(threadId);
+    // a LIVE capture's incremental THREAD records carry no name yet
+    return name != null && !name.isEmpty() ? name : "Thread " + Integer.toUnsignedString(threadId);
   }
 
   private static List<TracySession.PlotPoint> readPoints(DataInputStream payload) throws IOException {

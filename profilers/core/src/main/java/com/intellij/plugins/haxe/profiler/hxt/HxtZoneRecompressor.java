@@ -73,7 +73,36 @@ public final class HxtZoneRecompressor {
       Files.deleteIfExists(temp);
       throw e;
     }
-    Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+    replaceRetrying(temp, file);
+  }
+
+  /**
+   * A live view's refresh tick may hold the original open for a moment,
+   * and a Windows reader blocks the replace with a sharing violation; a
+   * short bounded retry outlasts any single read. On give-up the temp is
+   * removed and the original — complete and valid at its live level —
+   * stays in place.
+   */
+  private static void replaceRetrying(Path temp, Path file) throws IOException {
+    IOException lastFailure = null;
+    for (int attempt = 0; attempt < 10; attempt++) {
+      try {
+        Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+        return;
+      }
+      catch (IOException locked) {
+        lastFailure = locked;
+        try {
+          Thread.sleep(200);
+        }
+        catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+    }
+    Files.deleteIfExists(temp);
+    throw lastFailure;
   }
 
   /**

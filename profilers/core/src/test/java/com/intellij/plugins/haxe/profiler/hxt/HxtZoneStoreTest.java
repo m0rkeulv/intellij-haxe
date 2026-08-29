@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.profiler.hxt;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
+import com.intellij.plugins.haxe.profiler.tracy.TracyEventReader;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import com.intellij.plugins.haxe.profiler.tracy.TracyWelcome;
@@ -152,6 +153,34 @@ public class HxtZoneStoreTest {
     assertTrue(Files.size(file) < rawZoneBytes, "delta + LZ4 must beat the raw zone encoding");
   }
 
+  /** A LIVE reader catches the file between chunk flushes: no finish(), no INFO — flushed chunks must still serve. */
+  @Test
+  @DisplayName("a growing capture without its finish records reads with fallbacks")
+  public void testAGrowingCaptureWithoutItsFinishRecordsReadsWithFallbacks() throws IOException {
+    Path file = directory.resolve("growing.hxtsession");
+    int total = 70_000; // one full chunk on disk, the partial second one lost
+    long baseOffsetNs = 5_000_000;
+    try (OutputStream out = Files.newOutputStream(file)) {
+      HxtZoneWriter writer = new HxtZoneWriter(out, 0, HxtZoneWriter.LIVE_LEVEL);
+      for (int i = 0; i < total; i++) {
+        writer.zone(1, 0, baseOffsetNs + i * 10L, baseOffsetNs + i * 10L + 5, BURN);
+      }
+      assertTrue(writer.flushedZones() > 0 && writer.flushedZones() < total,
+                 "the scenario needs a flushed chunk AND an unflushed tail");
+    }
+    HxtZoneStore store = HxtZoneStore.open(file);
+
+    assertEquals(1, store.threads().size(), "the incremental THREAD record lists the thread before finish()");
+    assertEquals("Thread 1", store.threads().get(0).name(), "nameless until finish() overrides");
+
+    long[] firstStartNs = {Long.MIN_VALUE};
+    store.scanZones(-1, 0, Long.MAX_VALUE, 0, (thread, depth, startNs, endNs, location) -> {
+      if (firstStartNs[0] == Long.MIN_VALUE) firstStartNs[0] = startNs;
+    });
+    assertEquals(0, firstStartNs[0], "without INFO the chunks' own minimum stands in as the rebase base");
+    assertTrue(store.session().durationNs() > 0, "the chunk bounds stand in for the duration");
+  }
+
   @Test
   @DisplayName("a live-level capture recompresses to the final level with identical content")
   public void testALiveLevelCaptureRecompressesToTheFinalLevelWithIdenticalContent() throws IOException {
@@ -207,6 +236,79 @@ public class HxtZoneStoreTest {
     HxtZoneStore store = assertInstanceOf(HxtCapture.Zones.class, HxtSessionTranslator.translateCapture(file)).store();
     assertEquals(HxtZoneWriter.FINAL_LEVEL, store.compressionLevel(), "the rewrite appends the level byte");
     assertEquals(1, store.zoneCount());
+  }
+
+  @Test
+  @DisplayName("live series batches append across records and rebase with the final base")
+  public void testLiveSeriesBatchesAppendAcrossRecordsAndRebaseWithTheFinalBase() throws IOException {
+    Path file = directory.resolve("batches.hxtsession");
+    // batch columns: frames, plots, cpu, processCpu, memory, gc, events, threadNames - raw times, base 1000
+    TracyEventReader.SeriesBatch first = new TracyEventReader.SeriesBatch(
+      List.of(17_000L),
+      Map.of("frame time", List.of(new TracySession.PlotPoint(1_100, 16.5))),
+      List.of(),
+      List.of(),
+      Map.of("Small Object Heap", List.of(new TracySession.PlotPoint(1_150, 4096.0))),
+      List.of(),
+      List.of(),
+      Map.of(1, "Early"));
+    TracyEventReader.SeriesBatch second = new TracyEventReader.SeriesBatch(
+      List.of(33_000L),
+      Map.of("frame time", List.of(new TracySession.PlotPoint(2_100, 17.5))),
+      List.of(new TracySession.PlotPoint(1_500, 12.5)),
+      List.of(),
+      Map.of("Small Object Heap", List.of(new TracySession.PlotPoint(2_150, 5120.0))),
+      List.of(new TracySession.GcSweep(1_250, 1_290, 2048, 17)),
+      List.of(new TimelineEvent(1, 1_320, "level loaded", 0xFF9900)),
+      Map.of());
+    try (OutputStream out = Files.newOutputStream(file)) {
+      HxtZoneWriter writer = new HxtZoneWriter(out, 0, HxtZoneWriter.LIVE_LEVEL);
+      writer.zone(1, 0, 1_000, 2_000, BURN);
+      writer.series(first);
+      writer.series(second);
+      writer.finished(1_000);
+      writer.finish(emptySmallSession());
+    }
+    HxtZoneStore store = HxtZoneStore.open(file);
+
+    TracySession reopened = store.session();
+    assertEquals(List.of(16_000L, 32_000L), reopened.frameMarksNs());
+    assertEquals(List.of(new TracySession.PlotPoint(100, 16.5), new TracySession.PlotPoint(1_100, 17.5)),
+                 reopened.plots().get("frame time"), "increments of one series merge in order");
+    assertEquals(List.of(new TracySession.PlotPoint(150, 4096.0), new TracySession.PlotPoint(1_150, 5120.0)),
+                 reopened.memoryCurves().get("Small Object Heap"));
+    assertEquals(List.of(new TracySession.PlotPoint(500, 12.5)), reopened.cpuUsage());
+    assertEquals(List.of(new TracySession.GcSweep(250, 290, 2048, 17)), reopened.gcSweeps());
+    assertEquals(List.of(new TimelineEvent(1, 320, "level loaded", 0xFF9900)), reopened.events());
+    assertEquals("Main", store.threads().get(0).name(), "finish()'s named THREAD record overrides the batch's");
+  }
+
+  /** A LIVE reader catches the file when only batches are down: series stamps stand in for the missing base. */
+  @Test
+  @DisplayName("streamed series serve before any chunk with their own fallback base")
+  public void testStreamedSeriesServeBeforeAnyChunkWithTheirOwnFallbackBase() throws IOException {
+    Path file = directory.resolve("seriesonly.hxtsession");
+    // batch columns: frames, plots, cpu, processCpu, memory, gc, events, threadNames - raw times
+    TracyEventReader.SeriesBatch streamed = new TracyEventReader.SeriesBatch(
+      List.of(5_000_000L, 5_016_000L),
+      Map.of(),
+      List.of(new TracySession.PlotPoint(5_001_000, 12.5)),
+      List.of(),
+      Map.of(),
+      List.of(),
+      List.of(),
+      Map.of());
+    try (OutputStream out = Files.newOutputStream(file)) {
+      HxtZoneWriter writer = new HxtZoneWriter(out, 0, HxtZoneWriter.LIVE_LEVEL);
+      writer.series(streamed);
+      // no finish - the reader caught the capture mid-stream
+    }
+    HxtZoneStore store = HxtZoneStore.open(file);
+
+    assertEquals(List.of(0L, 16_000L), store.session().frameMarksNs(),
+                 "the series' own minimum stands in as the rebase base");
+    assertEquals(List.of(new TracySession.PlotPoint(1_000, 12.5)), store.session().cpuUsage());
+    assertEquals(16_000, store.session().durationNs(), "the series bounds stand in for the duration");
   }
 
   @Test

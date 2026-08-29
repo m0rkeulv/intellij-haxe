@@ -14,11 +14,14 @@ import com.intellij.plugins.haxe.profiler.HaxeProfilerSnapshotOpener;
 import com.intellij.plugins.haxe.profiler.HaxeTracyCapture;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeCaptureFiles;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerProcessUi;
+import com.intellij.plugins.haxe.profiler.bridge.HaxeLiveCaptures;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerConfigurations;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneRecompressor;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneWriter;
+import com.intellij.plugins.haxe.profiler.tracy.TracyEventReader;
 import com.intellij.plugins.haxe.profiler.tracy.TracyLiveCapture;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
+import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -141,17 +144,24 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
       // idle again.
       int liveLevel = Math.min(HxtZoneWriter.LIVE_LEVEL, finalLevel);
       long zoneCount;
+      HaxeLiveCaptures.Entry liveEntry = null;
       try {
         Files.createDirectories(sessionFile.getParent());
+        if (session != null) {
+          liveEntry = HaxeLiveCaptures.register(sessionFile);
+        }
         try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(sessionFile))) {
           HxtZoneWriter writer = new HxtZoneWriter(out, 0, liveLevel);
-          TracySession session = capture.capture(writer);
+          TracySession session = capture.capture(liveOpening(writer));
           writer.finish(session);
           zoneCount = writer.zoneCount();
         }
       }
       catch (IOException | UncheckedIOException e) {
         LOG.warn("tracy capture failed", e);
+        if (liveEntry != null) {
+          liveEntry.finished();
+        }
         if (session != null) {
           session.failed(HaxeProfilerBundle.message("haxe.profiler.tracy.capture.failed", e.getMessage()));
         }
@@ -160,6 +170,13 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
         }
         return;
       }
+      // recompress BEFORE the completion rebuild: a store opened on the
+      // live-level file keeps its chunk OFFSETS, and the recompressed
+      // replacement lays chunks out differently - a rebuild racing the
+      // rewrite ends up scanning garbage at stale offsets (the call chart
+      // and frame breakdowns read the file lazily and came up empty). The
+      // live view keeps refreshing off the untouched original meanwhile,
+      // and its per-tick reopen picks up the swapped file cleanly.
       if (finalLevel > liveLevel) {
         try {
           HxtZoneRecompressor.recompress(sessionFile, finalLevel);
@@ -169,12 +186,48 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
           LOG.warn("could not recompress the tracy session", e);
         }
       }
+      if (liveEntry != null) {
+        liveEntry.finished();
+      }
       if (session != null) {
         session.dataReady();
       }
       else {
         notifyCaptured(zoneCount);
       }
+    }
+
+    /**
+     * Wraps the writer's sink to open the LIVE view once real chunks are
+     * on disk: the platform parses the partial file and shows the tabs
+     * NOW; the live registry entry keeps the chart refreshing.
+     */
+    private TracyEventReader.ZoneSink liveOpening(HxtZoneWriter writer) {
+      return new TracyEventReader.ZoneSink() {
+        private boolean opened;
+
+        @Override
+        public void zone(int threadId, int depth, long startNs, long endNs, @NotNull TracySourceLocation location) {
+          writer.zone(threadId, depth, startNs, endNs, location);
+          if (!opened && writer.flushedZones() > 0) {
+            opened = true;
+            HaxeProfilerProcessUi.Session ui = session;
+            if (ui != null) {
+              ui.dataReady();
+            }
+          }
+        }
+
+        @Override
+        public void series(TracyEventReader.@NotNull SeriesBatch batch) {
+          writer.series(batch);
+        }
+
+        @Override
+        public void finished(long base) {
+          writer.finished(base);
+        }
+      };
     }
 
     private void notifyCaptured(long zoneCount) {

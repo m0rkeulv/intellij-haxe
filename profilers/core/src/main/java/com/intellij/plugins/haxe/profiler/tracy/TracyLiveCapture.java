@@ -6,6 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
@@ -35,6 +36,8 @@ public final class TracyLiveCapture {
   private static final int QUERY_DISCONNECT = 9;
 
   private static final int CONNECT_RETRY_MS = 100;
+  /** How long a post-disconnect stream may stay silent before the capture ends with what arrived. */
+  private static final int DRAIN_QUIET_TIMEOUT_MS = 5_000;
 
   private final Socket socket;
   private final OutputStream queries;
@@ -130,6 +133,18 @@ public final class TracyLiveCapture {
   public void requestDisconnect() {
     if (!disconnectSent.compareAndSet(false, true)) return;
     query(QUERY_DISCONNECT, 0);
+    try {
+      // the client flushes and then WAITS for this side to close - but an
+      // exit-path shutdown (the app quit on its own; TRACY_NO_EXIT keeps
+      // the process alive for the drain) does not repeat its Terminate
+      // after the flush, so a quiet stream must end the capture instead
+      // of waiting for a marker that never comes. Closing our socket is
+      // also what finally lets that lingering process exit.
+      socket.setSoTimeout(DRAIN_QUIET_TIMEOUT_MS);
+    }
+    catch (SocketException gone) {
+      // a dead socket surfaces as the reader's stream end regardless
+    }
   }
 
   /** ServerQueryPacket: u8 type, u64 ptr, u32 extra — little-endian, 13 bytes. */

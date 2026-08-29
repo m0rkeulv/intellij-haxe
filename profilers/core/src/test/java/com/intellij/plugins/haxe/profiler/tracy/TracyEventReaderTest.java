@@ -10,9 +10,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -178,6 +180,49 @@ public class TracyEventReaderTest {
 
     assertEquals(List.of(new TimelineEvent(1, 200, "level loaded", 0xFF9900)), session.events());
     assertEquals(500, session.zones().getFirst().endNs(), "the zone delta stream ignores the message");
+  }
+
+  @Test
+  @DisplayName("a sink receives the small series as raw batches and the session stays lean")
+  public void testASinkReceivesTheSmallSeriesAsRawBatchesAndTheSessionStaysLean() throws IOException {
+    ItemBuilder items = new ItemBuilder();
+    items.threadContext(1);
+    items.sourceLocation("Main.main", "Main.hx", 1);
+    items.zoneBeginAlloc(1_000);
+    items.frameMark(1_200);
+    items.singleString("level loaded");
+    items.messageColor(1_300, 0xFF, 0x99, 0x00);
+    items.memName(0xBEEF);
+    items.memAlloc(100, 0x1000, 4096);
+    items.stringData(0xBEEF, "Small Object Heap");
+    items.plotDouble(0xCAFE, 50, 42.5); // its name never answers - the final batch labels it by pointer
+    items.zoneEnd(500);
+    List<TracyEventReader.SeriesBatch> batches = new ArrayList<>();
+    TracyEventReader.ZoneSink sink = new TracyEventReader.ZoneSink() {
+      @Override
+      public void zone(int threadId, int depth, long startNs, long endNs, TracySourceLocation location) {
+      }
+
+      @Override
+      public void series(TracyEventReader.SeriesBatch batch) {
+        batches.add(batch);
+      }
+    };
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS, NO_HOOKS, sink);
+
+    // too few items to trip the timed flush - everything arrives in the final tail batch
+    assertEquals(1, batches.size());
+    TracyEventReader.SeriesBatch tail = batches.get(0);
+    assertEquals(List.of(1_200L), tail.frameMarksNs(), "raw stamps, no rebase");
+    assertEquals(List.of(new TracySession.PlotPoint(100, 4096.0)), tail.memoryCurves().get("Small Object Heap"));
+    assertEquals(List.of(new TracySession.PlotPoint(1_050, 42.5)), tail.plots().get("plot@cafe"),
+                 "an unanswered name falls back to its pointer label");
+    assertEquals(List.of(new TimelineEvent(1, 1_300, "level loaded", 0xFF9900)), tail.events());
+
+    boolean seriesLeftInSession = !session.frameMarksNs().isEmpty() || !session.plots().isEmpty()
+                                  || !session.memoryCurves().isEmpty() || !session.events().isEmpty();
+    assertFalse(seriesLeftInSession, "the series went to the sink - the session mirrors the zones contract");
   }
 
   @Test

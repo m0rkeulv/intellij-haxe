@@ -63,8 +63,9 @@ public final class HxtSessionTranslator {
 
   /**
    * Reads any HXTS file: v1 headers dispatch to the sampled-capture path,
-   * v5 to the disk-served zone store ({@link HxtZoneStore} — zone captures
-   * are too big to load whole, so they need the file, not a stream).
+   * v5/v6 to the disk-served zone store ({@link HxtZoneStore} — zone
+   * captures are too big to load whole, so they need the file, not a
+   * stream; v5 differs only in carrying its small series pre-rebased).
    * v2-v4 headers are zone captures from older in-progress layouts;
    * recapture.
    */
@@ -82,7 +83,7 @@ public final class HxtSessionTranslator {
           yield new HxtCapture.Samples(translate(in));
         }
       }
-      case HxtZoneWriter.VERSION -> new HxtCapture.Zones(HxtZoneStore.open(file));
+      case 5, HxtZoneWriter.VERSION -> new HxtCapture.Zones(HxtZoneStore.open(file));
       case 2, 3, 4 -> throw new ProfilerFormatException("this zone capture uses an older in-progress layout - capture it again");
       default -> throw new ProfilerFormatException("unsupported HXTS version " + version);
     };
@@ -103,16 +104,17 @@ public final class HxtSessionTranslator {
     return readSampleRecords(data, tickHz, startStamp, target, version);
   }
 
-  /** Consumes a v3 header up to the records; the store's index pass starts here. */
-  static void readZoneHeader(@NotNull DataInputStream data) throws IOException {
+  /** Consumes a zone-capture header up to the records and returns its version; the store's index pass starts here. */
+  static int readZoneHeader(@NotNull DataInputStream data) throws IOException {
     readMagic(data);
     int version = readU16(data);
-    if (version != HxtZoneWriter.VERSION) {
+    if (version < 5 || version > HxtZoneWriter.VERSION) {
       throw new ProfilerFormatException("unsupported HXTS zone version " + version);
     }
     readInt(data); // tick rate
     readDouble(data); // epoch - INFO carries the authoritative copy
     readString(data, readU16(data)); // target
+    return version;
   }
 
   @NotNull

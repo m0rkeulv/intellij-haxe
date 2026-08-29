@@ -80,6 +80,23 @@ public final class TracyEventReader {
   private long minNs = Long.MAX_VALUE;
   private long maxNs = Long.MIN_VALUE;
 
+  /** How often the small series flush to an attached sink while the capture streams. */
+  private static final long SERIES_FLUSH_INTERVAL_NANOS = 500_000_000;
+  /** The flush timer is polled once per this many items — cheap enough for the hot read loop. */
+  private static final int SERIES_CHECK_ITEM_MASK = 0x3F;
+
+  private long lastSeriesFlushNanos = System.nanoTime();
+  private int itemsSinceSeriesCheck;
+  private int drainedFrameMarks;
+  private int drainedCpuUsage;
+  private int drainedGcSweeps;
+  private int drainedEvents;
+  /** Process-CPU buckets below this bound have been drained; no open interval can reach back into them. */
+  private long drainedCpuBucketBound;
+  private final Map<Long, Integer> drainedPlotPoints = new HashMap<>();
+  private final Map<Long, Integer> drainedMemPoints = new HashMap<>();
+  private final Set<Integer> drainedThreadNames = new HashSet<>();
+
   private record OpenZone(long startNs, TracySourceLocation location) {
   }
 
@@ -132,7 +149,40 @@ public final class TracyEventReader {
   public interface ZoneSink {
     void zone(int threadId, int depth, long startNs, long endNs, @NotNull TracySourceLocation location);
 
+    /**
+     * One increment of the small series, delivered while the capture
+     * streams and once more with the final tail. Times are RAW
+     * nanoseconds, like the zones. Only sent when a sink is attached;
+     * without one the series stay in the returned session.
+     */
+    default void series(@NotNull SeriesBatch batch) {
+    }
+
     default void finished(long baseNs) {
+    }
+  }
+
+  /**
+   * The small series' newly STABLE slice since the previous batch, raw
+   * nanoseconds. Plots and memory curves appear only once their names
+   * resolved over the query channel — the label must never change between
+   * batches — with the final batch falling back to pointer labels for
+   * names that never answered. A memory curve's most recent point is held
+   * back while its coalescing bucket can still move it; process-CPU
+   * buckets wait until no open on-core interval can reach back into them.
+   * Thread names list the newly resolved ones.
+   */
+  public record SeriesBatch(@NotNull List<Long> frameMarksNs,
+                            @NotNull Map<String, List<TracySession.PlotPoint>> plots,
+                            @NotNull List<TracySession.PlotPoint> cpuUsage,
+                            @NotNull List<TracySession.PlotPoint> processCpu,
+                            @NotNull Map<String, List<TracySession.PlotPoint>> memoryCurves,
+                            @NotNull List<TracySession.GcSweep> gcSweeps,
+                            @NotNull List<TimelineEvent> events,
+                            @NotNull Map<Integer, String> threadNames) {
+    public boolean isEmpty() {
+      return frameMarksNs.isEmpty() && plots.isEmpty() && cpuUsage.isEmpty() && processCpu.isEmpty()
+             && memoryCurves.isEmpty() && gcSweeps.isEmpty() && events.isEmpty() && threadNames.isEmpty();
     }
   }
 
@@ -155,8 +205,9 @@ public final class TracyEventReader {
 
   /**
    * The streaming form: zones go to {@code zoneSink} (raw times, close
-   * order) and the returned session's zone list stays empty; everything
-   * else (curves, sweeps, frames, names) is in the session as usual.
+   * order) and the small series follow as {@link SeriesBatch} increments;
+   * the returned session keeps only the thread names, duration and
+   * unmatched-end count.
    */
   @NotNull
   public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome,
@@ -284,7 +335,103 @@ public final class TracyEventReader {
         }
         default -> skipItem(type);
       }
+      if ((++itemsSinceSeriesCheck & SERIES_CHECK_ITEM_MASK) == 0) maybeFlushSeries();
     }
+  }
+
+  private void maybeFlushSeries() {
+    if (zoneSink == null) return;
+    long now = System.nanoTime();
+    if (now - lastSeriesFlushNanos < SERIES_FLUSH_INTERVAL_NANOS) return;
+    lastSeriesFlushNanos = now;
+    SeriesBatch batch = drainSeries(false);
+    if (!batch.isEmpty()) zoneSink.series(batch);
+  }
+
+  /**
+   * Collects everything that became stable since the previous drain;
+   * {@code end} lifts the stability holds (unresolved names fall back to
+   * pointer labels, held-back points and open buckets flush).
+   */
+  private SeriesBatch drainSeries(boolean end) {
+    List<Long> frames = List.copyOf(frameMarks.subList(drainedFrameMarks, frameMarks.size()));
+    drainedFrameMarks = frameMarks.size();
+    List<TracySession.PlotPoint> cpu = List.copyOf(cpuUsage.subList(drainedCpuUsage, cpuUsage.size()));
+    drainedCpuUsage = cpuUsage.size();
+    List<TracySession.GcSweep> sweeps = List.copyOf(gcSweeps.subList(drainedGcSweeps, gcSweeps.size()));
+    drainedGcSweeps = gcSweeps.size();
+    List<TimelineEvent> marks = List.copyOf(events.subList(drainedEvents, events.size()));
+    drainedEvents = events.size();
+
+    Map<String, List<TracySession.PlotPoint>> plotSlices = new HashMap<>();
+    plots.forEach((pointer, points) -> {
+      String name = plotName(pointer, end);
+      int from = drainedPlotPoints.getOrDefault(pointer, 0);
+      if (name == null || points.size() <= from) return;
+      plotSlices.put(name, List.copyOf(points.subList(from, points.size())));
+      drainedPlotPoints.put(pointer, points.size());
+    });
+
+    Map<String, List<TracySession.PlotPoint>> memorySlices = new HashMap<>();
+    memPools.forEach((pointer, pool) -> {
+      String name = poolName(pointer, end);
+      // the newest point may still move within its coalescing bucket
+      int upTo = end ? pool.points.size() : pool.points.size() - 1;
+      int from = drainedMemPoints.getOrDefault(pointer, 0);
+      if (name == null || upTo <= from) return;
+      memorySlices.put(name, List.copyOf(pool.points.subList(from, upTo)));
+      drainedMemPoints.put(pointer, upTo);
+    });
+
+    Map<Integer, String> names = new HashMap<>();
+    threadNames.forEach((id, name) -> {
+      if (drainedThreadNames.add(id)) names.put(id, name);
+    });
+
+    return new SeriesBatch(frames, plotSlices, cpu, drainProcessCpu(end), memorySlices, sweeps, marks, names);
+  }
+
+  /** The label a plot's points flush under; null while its name query is still unanswered. */
+  private @Nullable String plotName(long pointer, boolean end) {
+    String resolved = plotNames.get(pointer);
+    if (resolved != null) return resolved;
+    return end ? "plot@" + Long.toHexString(pointer) : null;
+  }
+
+  /** The label a pool's live-bytes points flush under; null while its name query is still unanswered. */
+  private @Nullable String poolName(long pointer, boolean end) {
+    if (pointer == 0) return "Memory";
+    String resolved = strings.get(pointer);
+    if (resolved != null) return resolved;
+    return end ? "pool@" + Long.toHexString(pointer) : null;
+  }
+
+  /**
+   * A bucket only flushes once nothing can still grow it: a close
+   * accumulates back to its interval's START, so every bucket at or past
+   * the earliest open own-thread interval stays; with none open, the ctx
+   * stream's current position bounds what a future interval can touch.
+   */
+  private List<TracySession.PlotPoint> drainProcessCpu(boolean end) {
+    long openBoundNs = toNs(refCtx);
+    for (int cpu = 0; cpu < coreTid.length; cpu++) {
+      if (coreInNs[cpu] >= 0 && ownTids.contains(coreTid[cpu])) {
+        openBoundNs = Math.min(openBoundNs, coreInNs[cpu]);
+      }
+    }
+    long bound = end ? Long.MAX_VALUE : openBoundNs / PROCESS_CPU_BUCKET_NS;
+    List<TracySession.PlotPoint> points = processBusyNsByBucket.entrySet().stream()
+      .filter(entry -> entry.getKey() >= drainedCpuBucketBound && entry.getKey() < bound)
+      .sorted(Map.Entry.comparingByKey())
+      .map(TracyEventReader::processCpuPoint)
+      .toList();
+    drainedCpuBucketBound = bound;
+    return points;
+  }
+
+  private static TracySession.PlotPoint processCpuPoint(Map.Entry<Long, Long> bucket) {
+    return new TracySession.PlotPoint(bucket.getKey() * PROCESS_CPU_BUCKET_NS,
+                                      bucket.getValue() * 100.0 / PROCESS_CPU_BUCKET_NS);
   }
 
   private enum PlotKind {
@@ -526,9 +673,17 @@ public final class TracyEventReader {
         emitZone(thread, stack.size(), open.startNs(), Math.max(maxNs, open.startNs()), open.location());
       }
     });
+    closeSweep(); // a capture cut mid-sweep still keeps the burst
     long base = minNs == Long.MAX_VALUE ? 0 : minNs;
+    long duration = maxNs == Long.MIN_VALUE ? 0 : maxNs - base;
     if (zoneSink != null) {
+      SeriesBatch tail = drainSeries(true);
+      if (!tail.isEmpty()) zoneSink.series(tail);
       zoneSink.finished(base);
+      // the series went to the sink raw, batch by batch - the session
+      // mirrors the zones contract and stays empty of them
+      return new TracySession(welcome, List.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(),
+                              List.of(), List.of(), Map.copyOf(threadNames), duration, unmatchedZoneEnds);
     }
 
     List<TracyZone> ordered = zones.stream()
@@ -546,7 +701,6 @@ public final class TracyEventReader {
       String name = pointer == 0 ? "Memory" : strings.getOrDefault(pointer, "pool@" + Long.toHexString(pointer));
       memoryCurves.put(name, rebase(pool.points, base));
     });
-    closeSweep(); // a capture cut mid-sweep still keeps the burst
     List<TracySession.GcSweep> sweeps = gcSweeps.stream()
       .map(sweep -> new TracySession.GcSweep(sweep.startNs() - base, sweep.endNs() - base,
                                              sweep.freedBytes(), sweep.freedObjects()))
@@ -555,7 +709,6 @@ public final class TracyEventReader {
       .map(event -> new TimelineEvent(event.threadId(), event.timeNs() - base, event.text(), event.color()))
       .sorted(Comparator.comparingLong(TimelineEvent::timeNs))
       .toList();
-    long duration = maxNs == Long.MIN_VALUE ? 0 : maxNs - base;
 
     return new TracySession(welcome, ordered, frames, Map.copyOf(rebasedPlots), Map.copyOf(memoryCurves),
                             sweeps, orderedEvents, rebase(cpuUsage, base), processCpuPoints(base),
