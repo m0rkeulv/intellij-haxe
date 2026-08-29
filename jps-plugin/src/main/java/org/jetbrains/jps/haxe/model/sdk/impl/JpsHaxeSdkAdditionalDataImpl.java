@@ -68,6 +68,36 @@ public class JpsHaxeSdkAdditionalDataImpl extends JpsElementBase<JpsHaxeSdkAddit
   }
 
   @Override
+  public String getNodeBinPath() {
+    return myAdditionalData.getNodeBinPath();
+  }
+
+  @Override
+  public void setNodeBinPath(String nodeBinPath) {
+    myAdditionalData.setNodeBinPath(nodeBinPath);
+  }
+
+  @Override
+  public String getFlashPlayerPath() {
+    return myAdditionalData.getFlashPlayerPath();
+  }
+
+  @Override
+  public void setFlashPlayerPath(String flashPlayerPath) {
+    myAdditionalData.setFlashPlayerPath(flashPlayerPath);
+  }
+
+  @Override
+  public String getFlexSdkName() {
+    return myAdditionalData.getFlexSdkName();
+  }
+
+  @Override
+  public void setFlexSdkName(String flexSdkName) {
+    myAdditionalData.setFlexSdkName(flexSdkName);
+  }
+
+  @Override
   public String getHaxelibPath() {
     return myAdditionalData.getHaxelibPath();
   }
@@ -75,16 +105,6 @@ public class JpsHaxeSdkAdditionalDataImpl extends JpsElementBase<JpsHaxeSdkAddit
   @Override
   public void setHaxelibPath(String haxelibPath) {
     myAdditionalData.setHaxelibPath(haxelibPath);
-  }
-
-  @Override
-  public boolean getUseCompilerCompletionFlag() {
-    return myAdditionalData.getUseCompilerCompletionFlag();
-  }
-
-  @Override
-  public void setUseCompilerCompletionFlag(boolean newState) {
-    myAdditionalData.setUseCompilerCompletionFlag(newState);
   }
 
   @Override
