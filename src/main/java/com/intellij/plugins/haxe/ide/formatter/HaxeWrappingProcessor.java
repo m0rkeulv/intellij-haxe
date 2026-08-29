@@ -24,6 +24,7 @@ import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.formatter.FormatterUtil;
 import com.intellij.psi.formatter.WrappingUtil;
 import com.intellij.psi.tree.IElementType;
+import org.jetbrains.annotations.Nullable;
 
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
@@ -35,16 +36,87 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 public class HaxeWrappingProcessor {
   private final ASTNode myNode;
   private final CommonCodeStyleSettings mySettings;
+  // chop-down wrapping only breaks EVERY element together when they share
+  // the wrap object; these groups are owned by the construct's own processor
+  // and reached from nested levels through the parent link
+  private Wrap sharedItemWrap;
+  private Wrap sharedChainWrap;
+  private HaxeWrappingProcessor parentProcessor;
 
   public HaxeWrappingProcessor(ASTNode node, CommonCodeStyleSettings settings) {
     myNode = node;
     mySettings = settings;
   }
 
+  void setParentProcessor(@Nullable HaxeWrappingProcessor parent) {
+    parentProcessor = parent;
+  }
+
   Wrap createChildWrap(ASTNode child, Wrap defaultWrap, Wrap childWrap) {
     final IElementType childType = child.getElementType();
     final IElementType elementType = myNode.getElementType();
     if (childType == OCOMMA || childType == OSEMI) return defaultWrap;
+
+    //
+    // Array/map/object literals: the items AND the closing bracket share ONE
+    // chop wrap (owned by the literal's processor), so a margin-busting
+    // literal breaks one item per line with the bracket on its own line.
+    // The item list itself stays unwrapped - breaks come from the items.
+    //
+    if (mySettings.ARRAY_INITIALIZER_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
+      final ASTNode listParent = myNode.getTreeParent();
+      final IElementType listParentType = listParent == null ? null : listParent.getElementType();
+      boolean literalItems = (elementType == EXPRESSION_LIST && listParentType == ARRAY_LITERAL)
+                             || elementType == MAP_INITIALIZER_EXPRESSION_LIST;
+      if (literalItems) {
+        HaxeWrappingProcessor literalProcessor = parentProcessor != null ? parentProcessor : this;
+        return literalProcessor.sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
+      }
+      if (elementType == OBJECT_LITERAL && childType == OBJECT_LITERAL_ELEMENT) {
+        return sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
+      }
+      boolean literalCloser = ((elementType == ARRAY_LITERAL || elementType == MAP_LITERAL) && childType == PRBRACK)
+                              || (elementType == OBJECT_LITERAL && childType == PRCURLY);
+      if (literalCloser) {
+        return sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
+      }
+      if ((elementType == ARRAY_LITERAL || elementType == MAP_LITERAL)
+          && (childType == EXPRESSION_LIST || childType == MAP_INITIALIZER_EXPRESSION_LIST)) {
+        return Wrap.createWrap(WrapType.NONE, true);
+      }
+    }
+
+    //
+    // Method chains: every link whose receiver is a CALL breaks before its
+    // dot, all links sharing the chain's ONE wrap group so chopping folds
+    // the whole chain. The first link's receiver is a plain reference, so it
+    // stays with the receiver (haxe-formatter's OnePerLineAfterFirst).
+    //
+    if (elementType == REFERENCE_EXPRESSION && childType == ODOT
+        && mySettings.METHOD_CALL_CHAIN_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
+        && myNode.getFirstChildNode() != null
+        && myNode.getFirstChildNode().getElementType() == CALL_EXPRESSION) {
+      return chainItemWrap(mySettings.METHOD_CALL_CHAIN_WRAP);
+    }
+
+    //
+    // extends/implements clauses share the list's ONE wrap group. Chop mode
+    // wraps the first element too (folds every clause); the fill modes must
+    // NOT (wrap-first-element pulls the break back to the first clause when
+    // a later one overflows).
+    //
+    if (elementType == INHERIT_LIST
+        && (childType == EXTENDS_DECLARATION || childType == IMPLEMENTS_DECLARATION)
+        && mySettings.EXTENDS_LIST_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
+        && child != myNode.getFirstChildNode()) {
+      // chop ("chop down if long" is stored as EVERY_ITEM|AS_NEEDED) and
+      // always must wrap the first participating clause too; only fill
+      // ("wrap if long") leaves it, so the break lands at the overflow
+      // instead of being pulled back to the first clause
+      boolean wrapFirst = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0
+                          || mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ALWAYS;
+      return sharedItemWrap(mySettings.EXTENDS_LIST_WRAP, wrapFirst);
+    }
 
     //
     // Function definition/call
@@ -119,23 +191,49 @@ public class HaxeWrappingProcessor {
     }
 
     //
-    // Ternary expressions
+    // Ternary expressions. The grammar wraps the signs into composite
+    // QUESTION_OPERATOR/COLON_OPERATOR elements - the bare tokens never
+    // appear as children here. Signs-on-next-line wraps the SIGNS (the
+    // branch then follows its sign on the same line); otherwise the
+    // BRANCHES wrap and the signs trail the previous line.
     //
     if (elementType == TERNARY_EXPRESSION) {
+      boolean sign = childType == QUESTION_OPERATOR || childType == COLON_OPERATOR;
       if (myNode.getFirstChildNode() != child) {
-        if (mySettings.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE) {
-          if (!FormatterUtil.isPrecededBy(child, OQUEST) &&
-              !FormatterUtil.isPrecededBy(child, OCOLON)) {
-            return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.TERNARY_OPERATION_WRAP), true);
-          }
-        }
-        else if (childType != OQUEST && childType != OCOLON) {
+        boolean wraps = mySettings.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE == sign;
+        if (wraps) {
           return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.TERNARY_OPERATION_WRAP), true);
         }
       }
       return Wrap.createWrap(WrapType.NONE, true);
     }
     return defaultWrap;
+  }
+
+  private Wrap sharedItemWrap(int wrapSetting) {
+    return sharedItemWrap(wrapSetting, true);
+  }
+
+  private Wrap sharedItemWrap(int wrapSetting, boolean wrapFirst) {
+    if (sharedItemWrap == null) {
+      sharedItemWrap = Wrap.createWrap(WrappingUtil.getWrapType(wrapSetting), wrapFirst);
+    }
+    return sharedItemWrap;
+  }
+
+  /** The chain's wrap group, owned by the OUTERMOST link: nested links delegate up while the parent is still chain. */
+  private Wrap chainItemWrap(int wrapSetting) {
+    final ASTNode parent = myNode.getTreeParent();
+    final IElementType parentType = parent == null ? null : parent.getElementType();
+    boolean parentIsChain = parentProcessor != null
+                            && (parentType == CALL_EXPRESSION || parentType == REFERENCE_EXPRESSION);
+    if (parentIsChain) {
+      return parentProcessor.chainItemWrap(wrapSetting);
+    }
+    if (sharedChainWrap == null) {
+      sharedChainWrap = Wrap.createWrap(WrappingUtil.getWrapType(wrapSetting), true);
+    }
+    return sharedChainWrap;
   }
 
   private boolean isRightOperand(ASTNode child) {

@@ -25,7 +25,9 @@ import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeTag;
+import com.intellij.plugins.haxe.metadata.lexer.HaxeMetadataTokenTypes;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
+import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -38,9 +40,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
-import static java.lang.Integer.max;
 
 /**
  * @author: Fedor.Korotkov
@@ -121,6 +123,13 @@ public class HaxeSpacingProcessor {
       return null;
     }
 
+    // inside a doc comment only line-leading indentation is managed: line breaks
+    // and blank lines are markdown content (paragraphs) and are all kept.
+    // The engine computes keepBlankLines + 1, so MAX_VALUE would overflow.
+    if (myNode.getElementType() == DOC_COMMENT) {
+      return Spacing.createSpacing(0, 9999, 0, true, 9999);
+    }
+
     final IElementType elementType = myNode.getElementType();
     final IElementType parentType = myNode.getTreeParent() == null ? null : myNode.getTreeParent().getElementType();
     final IElementType typeNext = getNextElementType();
@@ -152,15 +161,43 @@ public class HaxeSpacingProcessor {
     //  return addSingleSpaceIf(false, true);
     //}
 
-    if (type1.equals(PACKAGE_STATEMENT)) {
-      return Spacing.createSpacing(0, 0, mySettings.BLANK_LINES_AFTER_PACKAGE, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    // a block comment OPENING the file is a license header - it keeps a
+    // minimum gap to whatever follows (doc comments attach to their member
+    // and are not headers)
+    boolean fileHeaderComment = type1 == MML_COMMENT
+                                && node1.getTreePrev() == null
+                                && myNode.getTreeParent() == null;
+    if (fileHeaderComment && myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER > 0) {
+      int minimumFeeds = 1 + myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER;
+      return Spacing.createSpacing(0, 0, minimumFeeds, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
 
-    if (type1 == IMPORT_STATEMENT && type2 != IMPORT_STATEMENT ) {
-      return Spacing.createSpacing(0, 0, mySettings.BLANK_LINES_AFTER_IMPORTS, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    // BLANK_LINES_* count blank lines; Spacing counts LINE FEEDS (one more)
+    if (type1.equals(PACKAGE_STATEMENT)) {
+      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AFTER_PACKAGE, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
-    if (type1 == USING_STATEMENT && type2 != USING_STATEMENT ) {
-      return Spacing.createSpacing(0, 0, myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_USING, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+
+    // grouping on: imports from different package groups get an exact gap,
+    // same-group imports stay snug. Grouping off: the keep cap applies.
+    // Either way the section-end rules below own the blank after the section.
+    if (type1 == IMPORT_STATEMENT && type2 == IMPORT_STATEMENT
+        && myHaxeCodeStyleSettings.BLANK_LINES_BETWEEN_IMPORT_GROUPS > 0) {
+      boolean sameGroup = importGroupKey(node1).equals(importGroupKey(node2));
+      int blanks = sameGroup ? 0 : myHaxeCodeStyleSettings.BLANK_LINES_BETWEEN_IMPORT_GROUPS;
+      return Spacing.createSpacing(0, 0, 1 + blanks, false, blanks);
+    }
+    if ((type1 == IMPORT_STATEMENT && type2 == IMPORT_STATEMENT)
+        || (type1 == USING_STATEMENT && type2 == USING_STATEMENT)) {
+      return Spacing.createSpacing(0, 0, 1, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
+    }
+
+    // a comment inside the import section belongs to the import BELOW it -
+    // the section-end blank must not push it away from its import
+    if (type1 == IMPORT_STATEMENT && type2 != IMPORT_STATEMENT && !ONLY_COMMENTS.contains(type2)) {
+      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AFTER_IMPORTS, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
+    if (type1 == USING_STATEMENT && type2 != USING_STATEMENT && !ONLY_COMMENTS.contains(type2)) {
+      return Spacing.createSpacing(0, 0, 1 + myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_USING, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
 
     if (elementType.equals(IMPORT_WILDCARD)) {
@@ -169,6 +206,14 @@ public class HaxeSpacingProcessor {
 
     if (isClassDeclaration(elementType) && isClassBodyType(type2)) {
       return setBraceSpace(mySettings.SPACE_BEFORE_CLASS_LBRACE, mySettings.BRACE_STYLE, child1.getTextRange());
+    }
+
+    // adjacent ONE-LINE type declarations keep their own blank-line cap
+    // (0 = snug); a multi-line neighbour follows the around-class rules
+    boolean singleLineTypePair = isTypeDeclaration(type1) && isTypeDeclaration(type2)
+                                 && !node1.textContains('\n') && !node2.textContains('\n');
+    if (singleLineTypePair) {
+      return Spacing.createSpacing(0, 0, 1, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES);
     }
 
     if (isClassDeclaration(type1)) {
@@ -181,31 +226,61 @@ public class HaxeSpacingProcessor {
     // avoid  multi-line formatting types (anonymous structures have brackets)
     boolean isType = parentType == ANONYMOUS_TYPE || PsiTreeUtil.getParentOfType(myNode.getPsi(), HaxeTypeTag.class) != null;
 
-    if (type1 == PLCURLY && isClassBodyType(elementType) && isFirstChild(child1)) {
-      int settings = isFieldDeclaration(type2) ? mySettings.BLANK_LINES_AROUND_FIELD : mySettings.BLANK_LINES_AROUND_METHOD;
-      int lineFeeds = isType ? 0 : max(1, settings);
-      return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    // a structure extension hugs a one-line body ({ > Base, ... }) and takes
+    // its own line in a multi-line one; must precede the class-body { rule,
+    // whose isType arm keeps the pair as written (the OFF behavior)
+    if (myHaxeCodeStyleSettings.STRUCTURE_EXTENSION_ON_OWN_LINE
+        && elementType == ANONYMOUS_TYPE_BODY && type1 == PLCURLY && type2 == TYPE_EXTENDS_LIST) {
+      return Spacing.createDependentLFSpacing(1, 1, myNode.getTextRange(),
+                                              mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
 
-    if (type2 == PRCURLY && isClassBodyType(elementType) && isLastChild(child2)) {
-      int lineFeeds = isType ? 0 : max(1, mySettings.BLANK_LINES_BEFORE_CLASS_END);
-      return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    // type2 == PRCURLY is the EMPTY body - the before-} rule below keeps its
+    // (caret) line, which smart enter and live templates rely on
+    if (type1 == PLCURLY && type2 != PRCURLY && isClassBodyType(elementType) && isFirstChild(child1)) {
+      // the setting is exact here (kept blanks would defeat "0 after the header")
+      int lineFeeds = isType ? 0 : 1 + mySettings.BLANK_LINES_AFTER_CLASS_HEADER;
+      return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.BLANK_LINES_AFTER_CLASS_HEADER);
+    }
+
+    // type1 == PLCURLY is the EMPTY body - kept as written ({} stays inline,
+    // a caret line stays for smart enter)
+    if (type2 == PRCURLY && type1 != PLCURLY && isClassBodyType(elementType) && isLastChild(child2)) {
+      int lineFeeds = isType ? 0 : 1 + mySettings.BLANK_LINES_BEFORE_CLASS_END;
+      return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
+    }
+
+    // a blank line before a member belongs BEFORE its doc comment - resolve
+    // the pair as if the comment were the member's first line
+    boolean memberThenDoc = type2 == DOC_COMMENT
+                            && (isFieldDeclaration(type1) || isMethodDeclarationOrConstructorDeclaration(type1));
+    if (memberThenDoc) {
+      ASTNode documented = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(node2);
+      IElementType documentedType = documented == null ? null : documented.getElementType();
+      if (isMethodDeclarationOrConstructorDeclaration(documentedType)) {
+        return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
+      }
+      if (isFieldDeclaration(documentedType)) {
+        int blanks = Math.max(mySettings.BLANK_LINES_AROUND_FIELD,
+                              isMethodDeclarationOrConstructorDeclaration(type1) ? mySettings.BLANK_LINES_AROUND_METHOD : 0);
+        return Spacing.createSpacing(0, 0, 1 + blanks, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
+      }
     }
 
     if (isMethodDeclarationOrConstructorDeclaration(type1) && isMethodDeclarationOrConstructorDeclaration(type2)) {
-      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
+      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
     }
 
     if (isMethodDeclarationOrConstructorDeclaration(type1) && isFieldDeclaration(type2)) {
-      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
+      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
     }
 
     if (isFieldDeclaration(type1) && isFieldDeclaration(type2)) {
-      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_FIELD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
+      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_FIELD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
     }
 
     if (isFieldDeclaration(type1) && isMethodDeclarationOrConstructorDeclaration(type2)) {
-      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_CODE);
+      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
     }
 
     if (DOC_COMMENT == type1) {
@@ -214,6 +289,74 @@ public class HaxeSpacingProcessor {
 
     if (ONLY_COMMENTS.contains(type1) && (isMethodDeclarationOrConstructorDeclaration(type2) || isFieldDeclaration(type2))) { // prevent excess linefeed between doctype and function
       return Spacing.createSpacing(0, 0, 1, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
+
+    // an EMPTY body's braces collapse to {} when the matching keep-in-one-line
+    // option allows it (class bodies excluded - smart enter owns their caret line)
+    if (type1 == PLCURLY && type2 == PRCURLY && !isClassBodyType(elementType)
+        && collapseEmptyBody(elementType, parentType)) {
+      return Spacing.createSpacing(0, 0, 0, false, 0);
+    }
+
+    // "keep control statement in one line" OFF forces a NON-BLOCK body onto
+    // its own line (haxe-formatter's sameLine=Next); block bodies follow the
+    // brace rules instead. A for/while inside a literal is a COMPREHENSION,
+    // not a control statement - its body always stays on the line.
+    if (!mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE && !isComprehension(myNode)) {
+      boolean expressionIf = elementType == IF_STATEMENT && isExpressionPosition(myNode);
+      boolean expressionElse = elementType == ELSE_STATEMENT && isExpressionPosition(myNode.getTreeParent());
+      boolean expressionTry = elementType == TRY_STATEMENT && isExpressionPosition(myNode);
+      boolean expressionCatch = elementType == CATCH_STATEMENT && isExpressionPosition(myNode.getTreeParent());
+      boolean nonBlockBody =
+        (elementType == IF_STATEMENT && !expressionIf && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT)
+        || (elementType == ELSE_STATEMENT && !expressionElse && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT)
+        || (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT)
+        || (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT)
+        || (elementType == TRY_STATEMENT && !expressionTry && type1 == KTRY && type2 != BLOCK_STATEMENT && type2 != CATCH_STATEMENT)
+        || (elementType == CATCH_STATEMENT && !expressionCatch && type1 == PRPAREN && type2 != BLOCK_STATEMENT);
+      if (nonBlockBody) {
+        return Spacing.createSpacing(0, 0, 1, false, 0);
+      }
+    }
+
+    // a NAMED function's non-block body (function f() return x;) moves to
+    // its own line; anonymous/arrow function bodies always stay inline
+    boolean namedFunction = elementType == METHOD_DECLARATION || elementType == CONSTRUCTOR_DECLARATION
+                            || elementType == LOCAL_FUNCTION_DECLARATION || elementType == MODULE_METHOD_DECLARATION;
+    boolean headerEnd = FUNCTION_HEADER_END.contains(type1);
+    // the header's own trailing parts also follow a headerEnd - only what
+    // comes after the LAST of them is the body
+    boolean headerTrailer = FUNCTION_HEADER_END.contains(type2) || type2 == OSEMI || type2 == BLOCK_STATEMENT;
+    if (myHaxeCodeStyleSettings.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE
+        && namedFunction && headerEnd && !headerTrailer) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
+    }
+
+    // bracketConfig NoSpace: an access target keeps its '[' snug
+    if (elementType == ARRAY_ACCESS_EXPRESSION && type2 == PLBRACK) {
+      return addSingleSpaceIf(false);
+    }
+    boolean bracketInner = (elementType == ARRAY_ACCESS_EXPRESSION || elementType == ARRAY_LITERAL || elementType == MAP_LITERAL)
+                           && (type1 == PLBRACK || type2 == PRBRACK);
+    if (bracketInner) {
+      return addSingleSpaceIf(mySettings.SPACE_WITHIN_BRACKETS);
+    }
+
+    // inside a string's ${ } interpolation braces; the embedded expression
+    // itself formats under the normal rules
+    if (elementType == LONG_TEMPLATE_ENTRY
+        && (type1 == LONG_TEMPLATE_ENTRY_START || type2 == LONG_TEMPLATE_ENTRY_END)) {
+      return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_WITHIN_STRING_INTERPOLATION);
+    }
+
+    // type parameter/argument angle brackets: never a space between the name
+    // and its '<'; inside the brackets per the Haxe spacing option
+    if (type2 == TYPE_PARAM || type2 == GENERIC_PARAM) {
+      return addSingleSpaceIf(false);
+    }
+    boolean typeParams = elementType == TYPE_PARAM || elementType == GENERIC_PARAM;
+    if (typeParams && (type1 == OLESS || type2 == OGREATER)) {
+      return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_WITHIN_TYPE_PARAMETERS);
     }
 
     if (type2 == PLPAREN) {
@@ -328,6 +471,16 @@ public class HaxeSpacingProcessor {
       }
     }
 
+    // object literal field colon ({a: 1}) - hxformat's objectFieldColonPolicy
+    if (elementType == OBJECT_LITERAL_ELEMENT) {
+      if (type2 == OCOLON) {
+        return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_BEFORE_OBJECT_FIELD_COLON);
+      }
+      if (type1 == OCOLON) {
+        return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_AFTER_OBJECT_FIELD_COLON);
+      }
+    }
+
     if (elementType == TERNARY_EXPRESSION) {
       if (typeType2 == OQUEST) {
         return addSingleSpaceIf(mySettings.SPACE_BEFORE_QUEST);
@@ -409,21 +562,36 @@ public class HaxeSpacingProcessor {
     //
     // Spacing around  shift operators ( <<, >>, >>>, etc.)
     //
-    if (SHIFT_OPERATORS.contains(typeType1) || SHIFT_OPERATORS.contains(typeType2)) {
+    // >> and >>> arrive as composite operator elements over split '>' tokens
+    // (generics-friendly lexing), so the ELEMENT types match too, not only
+    // the wrapped token of a one-token operator
+    if (SHIFT_OPERATORS.contains(type1) || SHIFT_OPERATORS.contains(type2)
+        || SHIFT_OPERATORS.contains(typeType1) || SHIFT_OPERATORS.contains(typeType2)) {
       return addSingleSpaceIf(mySettings.SPACE_AROUND_SHIFT_OPERATORS);
+    }
+    // the split '>' tokens INSIDE such an operator must stay glued
+    if (SHIFT_OPERATORS.contains(elementType)) {
+      return Spacing.createSpacing(0, 0, 0, false, 0);
     }
 
     //
     //Spacing before keyword (else, catch, etc)
     //
+    // a value-position if/try keeps its keywords as written
+    // (expressionIf/expressionTry=Same)
+    if ((type2 == ELSE_STATEMENT || type2 == CATCH_STATEMENT) && isExpressionPosition(myNode)) {
+      boolean spaceBefore = type2 == ELSE_STATEMENT ? mySettings.SPACE_BEFORE_ELSE_KEYWORD
+                                                    : mySettings.SPACE_BEFORE_CATCH_KEYWORD;
+      return addSingleSpaceIf(spaceBefore);
+    }
     if (type2 == ELSE_STATEMENT) {
-      return addSingleSpaceIf(mySettings.SPACE_BEFORE_ELSE_KEYWORD, mySettings.ELSE_ON_NEW_LINE);
+      return keywordPlacement(mySettings.SPACE_BEFORE_ELSE_KEYWORD, mySettings.ELSE_ON_NEW_LINE, node1);
     }
     if (type2 == KWHILE) {
-      return addSingleSpaceIf(mySettings.SPACE_BEFORE_WHILE_KEYWORD, mySettings.WHILE_ON_NEW_LINE);
+      return keywordPlacement(mySettings.SPACE_BEFORE_WHILE_KEYWORD, mySettings.WHILE_ON_NEW_LINE, node1);
     }
     if (type2 == CATCH_STATEMENT) {
-      return addSingleSpaceIf(mySettings.SPACE_BEFORE_CATCH_KEYWORD, mySettings.CATCH_ON_NEW_LINE);
+      return keywordPlacement(mySettings.SPACE_BEFORE_CATCH_KEYWORD, mySettings.CATCH_ON_NEW_LINE, node1);
     }
 
     //
@@ -447,6 +615,37 @@ public class HaxeSpacingProcessor {
 
     if (type2 == OCOMMA) {
       return addSingleSpaceIf(mySettings.SPACE_BEFORE_COMMA);
+    }
+
+    // the (expr : Type) type-check colon, spaced UNLIKE type-hint colons
+    if (elementType == TYPE_CHECK_EXPR && (type1 == OCOLON || type2 == OCOLON)) {
+      return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_AROUND_TYPE_CHECK_COLON);
+    }
+
+    // metadata parens - metadata has its own token set, hence the qualified
+    // names. The @:name-to-( gap is always snug; inside per the option
+    boolean insideMeta = elementType == HaxeMetadataTokenTypes.COMPILE_TIME_META
+                         || elementType == HaxeMetadataTokenTypes.RUN_TIME_META;
+    if (insideMeta) {
+      if (type2 == HaxeMetadataTokenTypes.PLPAREN) {
+        return addSingleSpaceIf(false);
+      }
+      if (type1 == HaxeMetadataTokenTypes.PLPAREN || type2 == HaxeMetadataTokenTypes.PRPAREN) {
+        return addSingleSpaceIf(myHaxeCodeStyleSettings.SPACE_WITHIN_METADATA_PARENTHESES);
+      }
+    }
+
+    // plain grouping parens - the keyword/call paren kinds have their own
+    // rules above
+    if (elementType == PARENTHESIZED_EXPRESSION && (type1 == PLPAREN || type2 == PRPAREN)) {
+      return addSingleSpaceIf(mySettings.SPACE_WITHIN_PARENTHESES);
+    }
+
+    // a return's value joins the keyword's line; the value's own internals
+    // may still break
+    if (myHaxeCodeStyleSettings.RETURN_VALUE_ON_SAME_LINE
+        && elementType == RETURN_STATEMENT && type1 == KRETURN && type2 != OSEMI) {
+      return Spacing.createSpacing(1, 1, 0, false, 0);
     }
 
     if (type1 == OCOLON && elementType == TYPE_TAG) {
@@ -490,6 +689,75 @@ public class HaxeSpacingProcessor {
       return null;
   }
 
+  /**
+   * An if/try used as a VALUE ({@code var x = if (c) 1 else 2;}) rather than
+   * as a statement - haxe-formatter's expressionIf/expressionTry=Same keeps
+   * those on one line regardless of the statement-body policies.
+   */
+  private static boolean isExpressionPosition(ASTNode statement) {
+    ASTNode parent = statement.getTreeParent();
+    if (parent == null) return false;
+    IElementType parentType = parent.getElementType();
+    boolean statementPosition = parentType == BLOCK_STATEMENT
+                                || parentType == SWITCH_CASE_BLOCK
+                                || parentType == GUARDED_STATEMENT
+                                || parentType == ELSE_STATEMENT
+                                || parentType == DO_WHILE_BODY
+                                || parentType == FOR_STATEMENT
+                                || parentType == MODULE_METHOD_DECLARATION
+                                || FUNCTION_DEFINITION.contains(parentType);
+    return !statementPosition;
+  }
+
+  /** A for/while whose enclosing construct is an array/map literal: {@code [for (x in y) v]}. */
+  private static boolean isComprehension(ASTNode statement) {
+    ASTNode parent = statement.getTreeParent();
+    IElementType parentType = parent == null ? null : parent.getElementType();
+    if (parentType == EXPRESSION_LIST || parentType == MAP_LOOP_INITIALIZER_EXPRESSION) {
+      parent = parent.getTreeParent();
+      parentType = parent == null ? null : parent.getElementType();
+    }
+    return parentType == ARRAY_LITERAL || parentType == MAP_LITERAL;
+  }
+
+  /** Which keep-in-one-line option owns an empty {@code {}} body. */
+  private boolean collapseEmptyBody(IElementType elementType, IElementType parentType) {
+    // FUNCTION_LITERAL first: FUNCTION_DEFINITION contains it too
+    if (parentType == FUNCTION_LITERAL) return mySettings.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE;
+    if (FUNCTION_DEFINITION.contains(parentType)) return mySettings.KEEP_SIMPLE_METHODS_IN_ONE_LINE;
+    return mySettings.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE;
+  }
+
+  /**
+   * A placement option decides the keyword's line after a BLOCK, overriding
+   * kept line breaks: false must JOIN "} else", not merely allow it. After a
+   * non-block body ("trace(x); else") the written break stays — joining onto
+   * the statement reads wrong and haxe-formatter keeps it on its own line too
+   * (and keep-control-statement-in-one-line OFF forces that break).
+   */
+  private Spacing keywordPlacement(boolean spaceBefore, boolean onNewLine, ASTNode before) {
+    final int spaces = spaceBefore ? 1 : 0;
+    if (!endsWithRightCurly(before)) {
+      return addSingleSpaceIf(spaceBefore, onNewLine || !mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE);
+    }
+    return Spacing.createSpacing(spaces, spaces, onNewLine ? 1 : 0, false, 0);
+  }
+
+  private static boolean endsWithRightCurly(ASTNode node) {
+    ASTNode last = node;
+    while (last != null) {
+      ASTNode child = last.getLastChildNode();
+      if (child == null) break;
+      // trailing whitespace/comments hide the real last token
+      while (child != null && (WHITESPACES.contains(child.getElementType()) || ONLY_COMMENTS.contains(child.getElementType()))) {
+        child = child.getTreePrev();
+      }
+      if (child == null) break;
+      last = child;
+    }
+    return last != null && last.getElementType() == PRCURLY;
+  }
+
   private Spacing addSingleSpaceIf(boolean condition) {
     return addSingleSpaceIf(condition, false);
   }
@@ -525,6 +793,29 @@ public class HaxeSpacingProcessor {
 
   private boolean isClassDeclaration(IElementType type) {
     return CLASS_TYPES.contains(type);
+  }
+
+  /** Any top-level type declaration; CLASS_TYPES lacks the body-less typedef kind. */
+  private static boolean isTypeDeclaration(IElementType type) {
+    return CLASS_TYPES.contains(type) || type == TYPEDEF_DECLARATION;
+  }
+
+  /**
+   * The first IMPORT_GROUP_PACKAGE_DEPTH package segments of an import - the
+   * grouping key. A bare {@code import Std;} groups by its own name, like
+   * haxe-formatter's firstLevelPackage.
+   */
+  private String importGroupKey(ASTNode importStatement) {
+    // the qualified path between the "import" keyword and ';'/"as"/"in" -
+    // wildcard tails included ("a.b.*")
+    String text = importStatement.getText()
+      .replaceFirst("^import\\s+", "")
+      .replaceFirst("\\s.*$", "")
+      .replaceFirst(";$", "");
+    String[] segments = text.split("\\.");
+    int depth = Math.max(1, myHaxeCodeStyleSettings.IMPORT_GROUP_PACKAGE_DEPTH);
+    int keep = Math.min(depth, segments.length);
+    return String.join(".", Arrays.asList(segments).subList(0, keep));
   }
 
   private boolean blockBeginsWith(Block block, IElementType type) {
