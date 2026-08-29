@@ -40,7 +40,6 @@ import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
-import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
@@ -758,13 +757,12 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     executeProgramWith(programNode, executor);
   }
 
-  /** The Profile row: launches through the lane's IU profiler entry; without one the launch is refused with a notice. */
-  public void executeProgramWithProfiler(@NotNull ProgramNode programNode) {
-    executeProgramWith(programNode, null);
+  /** The Profile row: launches through the given lane profiler entry (the action resolved and, if needed, asked). */
+  public void executeProgramWithProfiler(@NotNull ProgramNode programNode, @NotNull Executor profilerExecutor) {
+    executeProgramWith(programNode, profilerExecutor);
   }
 
-  /** {@code executor} null = resolve the configuration's profiler executor after the settings exist. */
-  private void executeProgramWith(@NotNull ProgramNode programNode, @Nullable Executor executor) {
+  private void executeProgramWith(@NotNull ProgramNode programNode, @NotNull Executor executor) {
     VirtualFile file = programNode.buildFile().file();
     // the file index needs a read action - the EDT has no implicit read access
     Module module = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).getModuleForFile(file));
@@ -778,13 +776,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     if (settings == null) {
       notifyUser(HaxeBundle.message("haxe.toolwindow.program.unsupported", file.getName()));
       return;
-    }
-    if (executor == null) {
-      executor = HaxeProfilerExecutorSupport.profilerExecutor(settings.getConfiguration());
-      if (executor == null) {
-        notifyUser(HaxeBundle.message("haxe.toolwindow.program.profiler.unavailable", file.getName()));
-        return;
-      }
     }
     RunManager.getInstance(project).setSelectedConfiguration(settings);
     // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,

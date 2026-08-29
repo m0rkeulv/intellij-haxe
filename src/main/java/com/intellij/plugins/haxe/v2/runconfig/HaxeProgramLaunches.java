@@ -10,6 +10,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.runner.HaxeRunConfigurationType;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserConfigurationFactory;
@@ -85,14 +86,26 @@ public final class HaxeProgramLaunches {
   }
 
   /**
-   * True when the target's launch configuration can run under a Haxe
-   * profiler entry (see HaxeProfilableRunConfiguration). Flash profiles
-   * only as AIR: adl's debugger runtime has the sampler and its invoke
-   * arguments carry the port; the standalone player launch has neither.
+   * The profiler lane the target's launch configuration profiles under,
+   * null for targets without one. Flash profiles only as AIR: adl's
+   * debugger runtime carries the telemetry sampler; the standalone player
+   * launch does not.
    */
+  @Nullable
+  public static HaxeProfilableRunConfiguration.Lane profilingLaneFor(@NotNull HaxeTarget target,
+                                                                     @NotNull String targetOutput) {
+    return switch (target) {
+      case HL -> HaxeProfilableRunConfiguration.Lane.HASHLINK;
+      case CPP -> HaxeProfilableRunConfiguration.Lane.HXCPP;
+      case JAVA_SCRIPT -> HaxeProfilableRunConfiguration.Lane.JS;
+      case FLASH -> isAirOutput(targetOutput.toLowerCase(Locale.ROOT)) ? HaxeProfilableRunConfiguration.Lane.FLASH : null;
+      default -> null;
+    };
+  }
+
+  /** True when the target's launch configuration can run under a Haxe profiler entry. */
   public static boolean supportsProgramProfiling(@NotNull HaxeTarget target, @NotNull String targetOutput) {
-    if (target == HaxeTarget.FLASH) return isAirOutput(targetOutput.toLowerCase(Locale.ROOT));
-    return target == HaxeTarget.HL || target == HaxeTarget.CPP || target == HaxeTarget.JAVA_SCRIPT;
+    return profilingLaneFor(target, targetOutput) != null;
   }
 
   /** Display name of the configuration kind that launches this build ("HashLink Application", …), or null when unsupported. */

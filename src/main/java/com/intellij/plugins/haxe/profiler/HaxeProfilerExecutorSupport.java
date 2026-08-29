@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.profiler;
 
 import com.intellij.execution.Executor;
-import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.openapi.application.ApplicationManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -82,12 +81,17 @@ public interface HaxeProfilerExecutorSupport {
   Integer jsSamplingIntervalUsFor(@NotNull Executor executor);
 
   /**
-   * The profiler child executor that would launch this configuration (the
-   * lane's registered profiler entry), or null without one — what a
-   * tool-window "Profile" action executes with.
+   * Every profiler child executor that can launch the lane (its
+   * registered profiler entries, in the executor group's order) — what a
+   * tool-window "Profile" action offers and executes with. Empty when the
+   * lane has no entries.
    */
-  @Nullable
-  Executor profilerExecutorFor(@NotNull RunConfiguration configuration);
+  @NotNull
+  List<ProfilerEntry> profilerExecutorsFor(HaxeProfilableRunConfiguration.@NotNull Lane lane);
+
+  /** One registered profiler entry: its executor and the profile's user-visible name ("hxcpp Tracy"). */
+  record ProfilerEntry(@NotNull Executor executor, @NotNull String displayName) {
+  }
 
   /** Null-safe lookup: null unless the profiler module is present AND the executor is a HashLink profiler one. */
   @Nullable
@@ -137,10 +141,10 @@ public interface HaxeProfilerExecutorSupport {
     return support == null ? null : support.jsProfilingAdditionsFor(executor, limeFamily);
   }
 
-  /** Null-safe form of {@link #profilerExecutorFor}. */
-  @Nullable
-  static Executor profilerExecutor(@NotNull RunConfiguration configuration) {
+  /** Null-safe form of {@link #profilerExecutorsFor}: empty without the profiler module too. */
+  @NotNull
+  static List<ProfilerEntry> profilerExecutors(HaxeProfilableRunConfiguration.@NotNull Lane lane) {
     HaxeProfilerExecutorSupport support = getInstance();
-    return support == null ? null : support.profilerExecutorFor(configuration);
+    return support == null ? List.of() : support.profilerExecutorsFor(lane);
   }
 }

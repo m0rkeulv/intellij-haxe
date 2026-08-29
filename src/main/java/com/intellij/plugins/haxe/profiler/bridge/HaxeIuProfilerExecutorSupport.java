@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.profiler.bridge;
 
 import com.intellij.execution.Executor;
-import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.executors.RunExecutorSettings;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -143,20 +142,20 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
   }
 
   @Override
-  public @Nullable Executor profilerExecutorFor(@NotNull RunConfiguration configuration) {
-    if (!(configuration instanceof HaxeProfilableRunConfiguration profilable)) return null;
+  public @NotNull List<ProfilerEntry> profilerExecutorsFor(HaxeProfilableRunConfiguration.@NotNull Lane lane) {
     DefaultProfilerExecutorGroup group = DefaultProfilerExecutorGroup.Companion.getInstance();
-    if (group == null) return null;
-    Set<String> typeIds = HaxeProfilerConfigurations.typeIdsFor(profilable.profilingLane());
+    if (group == null) return List.of();
+    Set<String> typeIds = HaxeProfilerConfigurations.typeIdsFor(lane);
 
+    List<ProfilerEntry> entries = new ArrayList<>();
     for (Executor child : group.childExecutors()) {
       RunExecutorSettings settings = group.getRegisteredSettings(child.getId());
       if (settings instanceof DefaultProfilerExecutorGroup.ProfilerExecutorSettings profilerSettings
           && typeIds.contains(profilerSettings.getState().getConfigurationTypeId())) {
-        return child;
+        entries.add(new ProfilerEntry(child, profilerSettings.getState().getDisplayName()));
       }
     }
-    return null;
+    return entries;
   }
 
   /**

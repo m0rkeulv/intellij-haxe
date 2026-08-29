@@ -4,19 +4,29 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.ui.popup.JBPopupFactory;
+import com.intellij.openapi.ui.popup.PopupStep;
+import com.intellij.openapi.ui.popup.util.BaseListPopupStep;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
+import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport.ProfilerEntry;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ProgramNode;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import javax.swing.Icon;
+import java.util.List;
 
 /**
  * Profile on the "compile &amp; run" tree row: launches the build file's
  * program through its lane's IU profiler entry (compile attached as a
  * before-launch step, with the profiler's compile additions where the lane
- * needs them). Hidden on IDEs without the profiler module and on targets
- * without a profiler lane.
+ * needs them). One registered entry runs directly and names itself on the
+ * action; several open a chooser; none — the profiler module missing, the
+ * target without a lane, or every entry deleted in settings — disables it.
  */
 public final class HaxeProfileProgramAction extends DumbAwareAction {
 
@@ -29,17 +39,50 @@ public final class HaxeProfileProgramAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
-    if (panel.getSelectedUserObject() instanceof ProgramNode programNode) {
-      panel.executeProgramWithProfiler(programNode);
+    if (!(panel.getSelectedUserObject() instanceof ProgramNode programNode)) return;
+    List<ProfilerEntry> entries = profilerEntriesFor(programNode);
+    if (entries.isEmpty()) return; // raced a settings change - the action was disabled a moment ago
+    if (entries.size() == 1) {
+      panel.executeProgramWithProfiler(programNode, entries.get(0).executor());
+      return;
     }
+    BaseListPopupStep<ProfilerEntry> step =
+      new BaseListPopupStep<>(HaxeBundle.message("haxe.toolwindow.profile.action"), entries) {
+        @Override
+        public @NotNull String getTextFor(ProfilerEntry entry) {
+          return entry.displayName();
+        }
+
+        @Override
+        public Icon getIconFor(ProfilerEntry entry) {
+          return AllIcons.Actions.Profile;
+        }
+
+        @Override
+        public @Nullable PopupStep<?> onChosen(ProfilerEntry entry, boolean finalChoice) {
+          return doFinalStep(() -> panel.executeProgramWithProfiler(programNode, entry.executor()));
+        }
+      };
+    JBPopupFactory.getInstance()
+      .createListPopup(step)
+      .showInBestPositionFor(e.getDataContext());
   }
 
   @Override
   public void update(@NotNull AnActionEvent e) {
-    boolean applicable = panel.getSelectedUserObject() instanceof ProgramNode programNode
-                         && HaxeProfilerExecutorSupport.getInstance() != null
-                         && HaxeProgramLaunches.supportsProgramProfiling(programNode.target(), programNode.targetOutput());
-    e.getPresentation().setEnabledAndVisible(applicable);
+    List<ProfilerEntry> entries = panel.getSelectedUserObject() instanceof ProgramNode programNode
+                                  ? profilerEntriesFor(programNode)
+                                  : List.of();
+    e.getPresentation().setEnabledAndVisible(!entries.isEmpty());
+    e.getPresentation().setText(entries.size() == 1
+                                ? HaxeBundle.message("haxe.toolwindow.profile.action.with", entries.get(0).displayName())
+                                : HaxeBundle.message("haxe.toolwindow.profile.action"));
+  }
+
+  private static List<ProfilerEntry> profilerEntriesFor(ProgramNode programNode) {
+    HaxeProfilableRunConfiguration.Lane lane =
+      HaxeProgramLaunches.profilingLaneFor(programNode.target(), programNode.targetOutput());
+    return lane == null ? List.of() : HaxeProfilerExecutorSupport.profilerExecutors(lane);
   }
 
   @Override
