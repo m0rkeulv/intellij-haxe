@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intellij.plugins.haxe.ide.inspections;
+package com.intellij.plugins.haxe.ide.inspections.resolve;
 
 import com.intellij.codeInspection.*;
 import com.intellij.openapi.util.TextRange;
@@ -41,35 +41,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import static com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolQuickFixes.*;
-import static com.intellij.plugins.haxe.ide.inspections.HaxeUnresolvedSymbolQuickFixes.createMethodQuickfix;
+import static com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolQuickFixes.*;
 import static com.intellij.plugins.haxe.ide.inspections.intentions.HaxeUnresolvedSymbolIntentionBase.guessElementType;
 
 /**
  * Created by fedorkorotkov.
  */
 public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
-  @NotNull
-  public String getGroupDisplayName() {
-    return HaxeBundle.message("inspections.group.name");
-  }
 
+  /** Doubles as the problem message on the descriptors below. */
   @Nls
   @NotNull
   @Override
   public String getDisplayName() {
     return HaxeBundle.message("haxe.inspection.unresolved.symbol");
-  }
-
-  @Override
-  public boolean isEnabledByDefault() {
-    return true;
-  }
-
-  @NotNull
-  @Override
-  public String getShortName() {
-    return "HaxeUnresolvedSymbol";
   }
 
   @Nullable
@@ -98,7 +83,7 @@ public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
         result.add(manager.createProblemDescriptor(
                 reference,
                 reference.getRangeInElement(),
-                "Module must start by upper case",
+                HaxeBundle.message("haxe.semantic.module.must.start.upper.case"),
                 ProblemHighlightType.GENERIC_ERROR,
                 isOnTheFly
         ));
@@ -115,6 +100,7 @@ public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
             ProblemHighlightType.ERROR,
             isOnTheFly
           ));
+          return;
         }
 
         // ignore unnamed (avoid incorrect annotation for function bind etc.)

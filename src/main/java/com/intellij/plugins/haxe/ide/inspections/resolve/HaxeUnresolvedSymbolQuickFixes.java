@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.inspections;
+package com.intellij.plugins.haxe.ide.inspections.resolve;
 
 import com.intellij.codeInspection.LocalQuickFix;
 import com.intellij.plugins.haxe.ide.inspections.intentions.*;
