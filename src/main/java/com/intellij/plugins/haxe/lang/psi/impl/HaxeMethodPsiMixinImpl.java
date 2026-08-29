@@ -94,6 +94,11 @@ public abstract class HaxeMethodPsiMixinImpl extends HaxeStubBasedNamedComponent
     return (name != null) ? name : "<unnamed>";
   }
 
+  // implements HaxeMethod.isDeclaredPublic (declared on the interface the concrete impls carry, not the mixin's own supertypes)
+  public boolean isDeclaredPublic() {
+    return getModel().isDeclaredPublic();
+  }
+
   private HaxeMethodModel _model = null;
   public HaxeMethodModel getModel() {
     if (_model == null || !_model.isValid()) {
@@ -383,7 +388,8 @@ public abstract class HaxeMethodPsiMixinImpl extends HaxeStubBasedNamedComponent
       if (stub.isStatic()) {
         list.addModifier(HaxePsiModifier.STATIC);
       }
-      if (stub.isPublic()) {
+      //note: isPublic also checks the overridden method's visibility if necessary.
+      if (isPublic()) {
         list.addModifier(HaxePsiModifier.PUBLIC);
       } else {
         list.addModifier(HaxePsiModifier.PRIVATE);

@@ -28,7 +28,6 @@ import com.intellij.openapi.project.DumbService;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.hierarchy.HaxeHierarchyUtils;
-import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.plugins.haxe.lang.psi.stubs.*;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeModuleStub;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxePackageStub;
