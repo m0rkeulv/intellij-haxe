@@ -30,8 +30,12 @@ import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.Nullable;
 
+import static com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.DOC_COMMENT;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.FUNCTION_DEFINITION;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
@@ -60,9 +64,43 @@ public class HaxeIndentProcessor {
     if (parent == null || parent.getTreeParent() == null) {
       return Indent.getNoneIndent();
     }
+    // an inactive branch's block already sits at the right indent (it is a
+    // comment-shaped sibling); the chameleon wrapper layers are transparent,
+    // so the content aligns with the directives and inner elements use the
+    // normal rules relative to their own parents
+    if (parentType == PPBODY
+        || parentType == INACTIVE_MEMBER_LIST
+        || parentType == INACTIVE_STATEMENT_LIST
+        || parentType == INACTIVE_MODULE_LIST) {
+      return Indent.getNoneIndent();
+    }
+    if (parentType == DOC_COMMENT) {
+      if (elementType == DOC_LEADING_ASTERISK) {
+        // javadoc-style stars align under the /**'s first star
+        return Indent.getSpaceIndent(1);
+      }
+      if (elementType == DOC_END) {
+        // the starred style aligns its closer under the stars too; haxedoc
+        // puts **/ back at the comment's own indent
+        boolean starredStyle = parent.findChildByType(DOC_LEADING_ASTERISK) != null;
+        return starredStyle ? Indent.getSpaceIndent(1) : Indent.getNoneIndent();
+      }
+      if (elementType == DOC_START) {
+        return Indent.getNoneIndent();
+      }
+      // body lines sit one level inside the comment; author depth beyond the
+      // common prefix rides inside the token text (markdown) and stays untouched
+      return Indent.getNormalIndent();
+    }
     if (COMMENTS.contains(elementType)) {
-      if (settings.KEEP_FIRST_COLUMN_COMMENT && isAtFirstColumn(node)) {
+      // first-column preservation protects //-disabled code; a doc comment
+      // belongs to its member and always follows its scope (as javadoc does)
+      if (elementType != DOC_COMMENT && settings.KEEP_FIRST_COLUMN_COMMENT && isAtFirstColumn(node)) {
         return Indent.getAbsoluteNoneIndent();
+      }
+      // module-level comments sit at the file margin like their sibling declarations
+      if (parentType == MODULE) {
+        return Indent.getNoneIndent();
       }
       return Indent.getNormalIndent();
     }
@@ -97,7 +135,26 @@ public class HaxeIndentProcessor {
         return Indent.getNormalIndent();
       }
     }
+    // a named function's non-block body on its own line indents one step
+    // (FUNCTION_DEFINITION lacks the module-level kind); the header's own
+    // trailing parts also follow a header end and stay unindented
+    boolean functionParent = FUNCTION_DEFINITION.contains(parentType) || parentType == MODULE_METHOD_DECLARATION;
+    boolean afterHeaderEnd = FUNCTION_HEADER_END.contains(prevSiblingType);
+    boolean headerTrailer = FUNCTION_HEADER_END.contains(elementType)
+                            || elementType == BLOCK_STATEMENT
+                            || elementType == OSEMI;
+
+    if (functionParent && afterHeaderEnd && !headerTrailer) {
+      return Indent.getNormalIndent();
+    }
     if (parentType == FOR_STATEMENT && prevSiblingType == PRPAREN && elementType != BLOCK_STATEMENT) {
+      return Indent.getNormalIndent();
+    }
+    if (parentType == TRY_STATEMENT && prevSiblingType == KTRY
+        && elementType != BLOCK_STATEMENT && elementType != CATCH_STATEMENT) {
+      return Indent.getNormalIndent();
+    }
+    if (parentType == CATCH_STATEMENT && prevSiblingType == PRPAREN && elementType != BLOCK_STATEMENT) {
       return Indent.getNormalIndent();
     }
     if (parentType == WHILE_STATEMENT && prevSiblingType == PRPAREN
@@ -123,6 +180,23 @@ public class HaxeIndentProcessor {
     if (parentType == ANONYMOUS_TYPE_BODY) {
       return Indent.getNormalIndent();
     }
+    // a wrapped chain link (.map(...) on its own line) indents ONE step from
+    // the chain's base line - continuation indent would be a declaration-style
+    // double step
+    if (parentType == REFERENCE_EXPRESSION && elementType != CALL_EXPRESSION
+        && parent.getFirstChildNode() != null
+        && parent.getFirstChildNode().getElementType() == CALL_EXPRESSION) {
+      return Indent.getNormalIndent();
+    }
+    // a wrapped extends/implements clause continues the declaration header
+    if (parentType == INHERIT_LIST) {
+      return Indent.getContinuationIndent();
+    }
+    // wrapped ternary parts (branches, or the signs leading them) continue
+    // the condition's line
+    if (parentType == TERNARY_EXPRESSION && prevSibling != null) {
+      return Indent.getContinuationIndent();
+    }
     return Indent.getNoneIndent();
   }
 
@@ -134,10 +208,12 @@ public class HaxeIndentProcessor {
     result = result || type == CLASS_BODY;
     result = result || type == ABSTRACT_BODY;
     result = result || (type == ARRAY_LITERAL && elementType != PLBRACK && elementType != PRBRACK);
+    result = result || (type == MAP_LITERAL && elementType != PLBRACK && elementType != PRBRACK);
     result = result || type == OBJECT_LITERAL;
     result = result || type == XML_LITERAL_EXPRESSION;
     result = result || type == XML_MARKUP_ELEMENT;
-    result = result || type == MAP_INITIALIZER_EXPRESSION;
+    // NOT the map entry types: indenting an entry's children indents the
+    // entry's own first token again when the literal wraps one-per-line
     result = result || type == MAP_LOOP_INITIALIZER_EXPRESSION;
     result = result || type == EXTERN_CLASS_DECLARATION_BODY;
     result = result || type == ENUM_BODY;

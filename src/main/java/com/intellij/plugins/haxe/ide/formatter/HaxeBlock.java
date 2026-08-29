@@ -23,7 +23,9 @@ import com.intellij.formatting.templateLanguages.BlockWithParent;
 import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
+import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.formatter.FormatterUtil;
@@ -82,6 +84,12 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   @Override
   protected List<Block> buildChildren() {
     myChildrenBuilt = true;
+    if (getNode().getElementType() == HaxeTokenTypeSets.DOC_COMMENT) {
+      return buildDocCommentChildren();
+    }
+    if (getNode().getElementType() == HaxeTokenTypeSets.PPBODY) {
+      return buildInactiveBranchChildren();
+    }
     if (isLeaf()) {
       return EMPTY;
     }
@@ -90,9 +98,57 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
       if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
       final HaxeBlock childBlock = new HaxeBlock(childNode, createChildWrap(childNode), createChildAlignment(childNode), mySettings);
       childBlock.setParent(this);
+      // wrap groups can span levels (a literal's items chop with its closing
+      // bracket, a call chain's dots chop together) - the child's processor
+      // reaches the enclosing ones through this link
+      childBlock.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
       tlChildren.add(childBlock);
     }
     return tlChildren;
+  }
+
+  /**
+   * Line blocks over the lazily parsed doc sub-tree: only the managed
+   * line-leading whitespace between them is formatted (per the doc indent
+   * rules); wraps and alignments never apply inside a comment. The toggle
+   * keeps the comment one opaque block.
+   */
+  private List<Block> buildDocCommentChildren() {
+    if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_DOC_COMMENTS) {
+      return EMPTY;
+    }
+    final ArrayList<Block> children = new ArrayList<>();
+    for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
+      if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
+      HaxeBlock childBlock = new HaxeBlock(childNode, Wrap.createWrap(WrapType.NONE, false), null, mySettings);
+      childBlock.setParent(this);
+      children.add(childBlock);
+    }
+    return children;
+  }
+
+  /**
+   * Blocks over an inactive conditional branch's lazily parsed sub-tree: the
+   * children are ordinary Haxe PSI, so the normal indent and spacing rules
+   * apply inside. A branch that only graded to raw token soup stays one
+   * opaque block - preserved verbatim, like haxe-formatter's own fallback.
+   */
+  private List<Block> buildInactiveBranchChildren() {
+    if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES) {
+      return EMPTY;
+    }
+    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || !body.hasCleanParse()) {
+      return EMPTY;
+    }
+    final ArrayList<Block> children = new ArrayList<>();
+    for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
+      if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
+      HaxeBlock childBlock = new HaxeBlock(childNode, createChildWrap(childNode), null, mySettings);
+      childBlock.setParent(this);
+      childBlock.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
+      children.add(childBlock);
+    }
+    return children;
   }
 
   public Wrap createChildWrap(ASTNode child) {

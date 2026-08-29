@@ -20,6 +20,7 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.intellij.application.options.IndentOptionsEditor;
 import com.intellij.lang.Language;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.psi.codeStyle.*;
 import org.jetbrains.annotations.NotNull;
@@ -102,6 +103,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_AROUND_RELATIONAL_OPERATORS.name(),
                                    SPACE_AROUND_ADDITIVE_OPERATORS.name(),
                                    SPACE_AROUND_MULTIPLICATIVE_OPERATORS.name(),
+                                   SPACE_AROUND_BITWISE_OPERATORS.name(),
+                                   SPACE_AROUND_SHIFT_OPERATORS.name(),
                                    SPACE_BEFORE_METHOD_LBRACE.name(),
                                    SPACE_BEFORE_IF_LBRACE.name(),
                                    SPACE_BEFORE_ELSE_LBRACE.name(),
@@ -121,6 +124,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_WITHIN_FOR_PARENTHESES.name(),
                                    SPACE_WITHIN_CATCH_PARENTHESES.name(),
                                    SPACE_WITHIN_SWITCH_PARENTHESES.name(),
+                                   SPACE_WITHIN_PARENTHESES.name(),
                                    SPACE_BEFORE_QUEST.name(),
                                    SPACE_AFTER_QUEST.name(),
                                    SPACE_BEFORE_COLON.name(),
@@ -128,28 +132,65 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_AFTER_COMMA.name(),
                                    SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS.name(),
                                    SPACE_BEFORE_COMMA.name(),
-                                   SPACE_AROUND_UNARY_OPERATOR.name()
+                                   SPACE_AROUND_UNARY_OPERATOR.name(),
+                                   SPACE_WITHIN_BRACKETS.name()
       );
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", "Around ->",
+      // placements and names mirror Java/Kotlin/Groovy (see
+      // doc/haxe-formatter-settings-structure.md): arrow spacing sits with
+      // the operators, colon options use Kotlin's phrasing
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.arrow"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.type.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", "Space before type reference colon ':'",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.after.type.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", "Space after type reference colon ':'",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.type.parameters"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_STRING_INTERPOLATION", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.string.interpolation"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_TYPE_CHECK_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.type.check.colon"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_METADATA_PARENTHESES", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.metadata.parentheses"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.object.field.colon"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.after.object.field.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
       consumer.showStandardOptions(
         KEEP_BLANK_LINES_IN_CODE.name(),
+        KEEP_BLANK_LINES_IN_DECLARATIONS.name(),
+        KEEP_BLANK_LINES_BEFORE_RBRACE.name(),
         BLANK_LINES_AFTER_PACKAGE.name(),
-        BLANK_LINES_AFTER_IMPORTS.name()
+        BLANK_LINES_AFTER_IMPORTS.name(),
+        BLANK_LINES_AROUND_CLASS.name(),
+        BLANK_LINES_AFTER_CLASS_HEADER.name(),
+        BLANK_LINES_AROUND_FIELD.name(),
+        BLANK_LINES_AROUND_METHOD.name(),
+        BLANK_LINES_BEFORE_CLASS_END.name()
       );
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", "After using:",
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.using"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_FILE_HEADER", HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.file.header"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.between.single.line.types"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.WRAPPING_AND_BRACES_SETTINGS) {
       consumer.showStandardOptions(
-                      KEEP_LINE_BREAKS.name(),
+                      RIGHT_MARGIN.name(),
+                                   WRAP_ON_TYPING.name(),
+                                   KEEP_LINE_BREAKS.name(),
                                    KEEP_FIRST_COLUMN_COMMENT.name(),
+                                   KEEP_CONTROL_STATEMENT_IN_ONE_LINE.name(),
+                                   KEEP_SIMPLE_BLOCKS_IN_ONE_LINE.name(),
+                                   KEEP_SIMPLE_METHODS_IN_ONE_LINE.name(),
+                                   KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE.name(),
+                                   ARRAY_INITIALIZER_WRAP.name(),
+                                   METHOD_CALL_CHAIN_WRAP.name(),
+                                   EXTENDS_LIST_WRAP.name(),
                                    BRACE_STYLE.name(),
                                    METHOD_BRACE_STYLE.name(),
                                    CALL_PARAMETERS_WRAP.name(),
@@ -171,8 +212,26 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    PARENTHESES_EXPRESSION_LPAREN_WRAP.name(),
                                    PARENTHESES_EXPRESSION_RPAREN_WRAP.name(),
                                    ALIGN_MULTILINE_TERNARY_OPERATION.name(),
-                                   SPECIAL_ELSE_IF_TREATMENT.name()
+                                   SPECIAL_ELSE_IF_TREATMENT.name(),
+                                   ASSIGNMENT_WRAP.name(),
+                                   PLACE_ASSIGNMENT_SIGN_ON_NEXT_LINE.name()
       );
+      // the platform default label says "permits" - Java sealed-class syntax
+      // that does not exist in Haxe
+      consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.extends.list"));
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.expression.body.on.next.line"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.expression.body.group"));
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "STRUCTURE_EXTENSION_ON_OWN_LINE",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.structure.extension.own.line"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.structure.extension.group"));
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "RETURN_VALUE_ON_SAME_LINE",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.return.value.same.line"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.return.group"));
+      // inactive-branch treatment lives in the dedicated Conditional
+      // Compilation tab - its options span indentation, spacing and line
+      // breaks at once, not just wrapping
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "FORMAT_DOC_COMMENTS",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.format.doc.comments"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.comments.group"));
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "REINDENT_MULTILINE_COMMENTS",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.reindent.multiline.comments"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.comments.group"));
     }
   }
 
@@ -180,111 +239,137 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
   public IndentOptionsEditor getIndentOptionsEditor() {
     return new IndentOptionsEditor(this);
   }
-
+  @org.intellij.lang.annotations.Language("Haxe")
   public static final String SPACING_CODE_SAMPLE = """
-    package;
     @author("Penelope")
-    @:final
-    class Foo {
-         public var tmp:Array<Array<Int>>;
-        
-         public function foo(x:Int, z) {
-              new Foo(x, 2);
-              function absSum(a:Int, b:Int):Int {
-                   var value:Int = a + b;
-                   return value > 0 ? value : -value;
+    @:keep
+    class Foo<T> {
+         var items:Array<T>;
+         var lookup:Map<Int, String>;
+
+         function compute(a:Int, b:Int):Int {
+              var apply:Int -> Int = v -> v * 2;
+              var flag = !(a == b) && a <= b || a != 0;
+              var bits = (a & 3) ^ (b | 1) << 2 >> 1;
+              var sum = a + b * 2 - b % 3;
+              var pick = flag ? apply(sum) : -sum;
+              var name = 'value ${pick} of ${sum + 1}';
+              var head = items[0];
+              var asInt = (head : Int);
+              for (i in 0...3) {
+                   sum += i;
               }
-              var increment:Int -> Int = function(i:Int) {return ++i;}
-              var arr = ["zero", "one"];
-              var y = (x ^ 0x123) << 2;
-              for (i in 0...10) {
-                   y = (y ^ 0x123) << 2;
+              while (sum > 9) {
+                   sum -= 2;
               }
-              var k = x % 2 == 1 ? 0 : 1;
               do {
-                   try {
-                        if (0 < x&&x < 10) {
-                             while (x != y) {
-                                  x = absSum(x * 3, 5);
-                             }
-                             z += 2;
-                        } else if (x > 20) {
-                             z = x << 1;
-                        } else {
-                             z = x | 2;
-                        }
-                        switch (k) {
-                             case 0:
-                                  var s1 = 'zero';
-                             case 2:
-                                  var s1 = 'two';
-                             default:
-                                  var s1 = 'other';
-                        }
-                   } catch (e:String) {
-                        var message = arr[0];
-                   }
-              } while (x < 0);
+                   sum++;
+              } while (sum < 5);
+              try {
+                   check(sum, name);
+              } catch (e:String) {
+                   sum = 0;
+              }
+              switch (sum) {
+                   case 0:
+                        sum = 1;
+                   default:
+                        sum = 2;
+              }
+              if (sum > 1) {
+                   sum--;
+              } else {
+                   sum++;
+              }
+              return sum;
          }
-        
-         public function new(n:Int, m:Int) {
-              tmp = new Array<Array<Int>>();
-              for (i in 0...n * m) tmp.push(new Array<Int>());
-         }
+
+         function check(v:Int, label:String) {}
     }
     """;
-
+  @org.intellij.lang.annotations.Language("Haxe")
   public static final String WRAPPING_CODE_SAMPLE = """
-    @author("Penelope") @:final
-    class Foo {
-         // function fBar (x,y);
-         function fOne(argA, argB, argC, argD, argE, argF, argG, argH) {
-              var numbers:Array<String> = ['one', 'two', 'three', 'four', 'five', 'six'];
-              var x = ("" + argA) + argB + argC + argD + argE + argF + argG + argH;
-              try {
-                   this.fTwo(argA, argB, argC, this.fThree("", argE, argF, argG, argH));
-              } catch (ignored:String) {}
-              var z = argA == 'Some string' ? 'yes' : 'no';
-              var colors = ['red', 'green', 'blue', 'black', 'white', 'gray'];
-              for (colorIndex in 0...colors.length) {
-                   var colorString = numbers[colorIndex];
+    // a comment kept at the first column
+    class Foo extends BaseComponent implements Drawable implements Resizable implements Serializable implements Comparable implements Observable {
+         function fLong(argumentAlpha:Int, argumentBravo:Int, argumentCharlie:Int, argumentDelta:Int, argumentEcho:Int, argumentFoxtrot:Int):Int {
+              var planets = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'ceres', 'pluto', 'haumea', 'makemake'];
+              var shouted = planets.filter(word -> word.length > 4).map(word -> word.toUpperCase()).join(', ') + planets.join('; ') + 'end';
+              var total = argumentAlpha + argumentBravo + argumentCharlie + argumentDelta + argumentEcho + argumentFoxtrot + planets.length;
+              total = argumentAlpha * argumentBravo + argumentCharlie * argumentDelta + argumentEcho * argumentFoxtrot - shouted.length;
+              var label = total > 100 ? 'a rather large total for such a small example' : 'a rather small total for such a large example';
+              var grouped = (argumentAlpha + argumentBravo
+                             + argumentCharlie);
+              if (total > 6) total--;
+              var pick = if (total > 3) 'many' else 'few';
+              if (total == 0) {
+              }
+              var emptyCallback = function() {
+              };
+              var arrowCallback = () -> {
+              };
+              if (grouped > 1) {
+                   total += grouped;
+              } else if (label.length > 3) {
+                   total -= grouped;
+              } else {
+                   total = 0;
               }
               do {
-                   colors.pop();
-              } while (colors.length > 0);
+                   total--;
+              } while (total > 99);
+              try {
+                   fLong(total + 100, total + 200, total + 300, total + 400, total + 500, total + 600);
+              } catch (ignored:String) {}
+              #if debug
+              trace('debug build');
+              #else
+              trace('release build');
+              #end
+              return
+                   total;
          }
-        
-         function fTwo(strA, strB, strC, strD) {
-              if (true)
-                   return strC;
-              if (strA == 'one'||
-              strB == 'two') {
-                   return strA + strB;
-              } else if (true) return strD;
-              throw strD;
+
+         function fEmpty() {
          }
-        
-         function fThree(strA, strB, strC, strD, strE) {
-              return strA + strB + strC + strD + strE;
+
+         function fQuick() return 'fast';
+
+         function fMerge(base:{> Iterable<String>,
+              var label:String;
+         }) {
+              return base.label;
          }
-        
+
          public function new() {}
     }
     """;
-
+  @org.intellij.lang.annotations.Language("Haxe")
   public static final String BLANK_LINES_CODE_SAMPLE = """
+    /*
+     * File header comment.
+     */
     package foo.bar;
     import a.b.SomeClass;
-    import a.b.SomeOther as ClassAlias;
+    import a.b.SomeWidget;
     using someUtil;
+    interface Drawable {}
+
+    interface Resizable {}
     class Foo {
+
+
+         var counter:Int = 0;
+         var total:Int = 1;
          public function new() {
          }
-        
-        
          public static function main() {
+
               trace("Hello!");
+
+
          }
+
     }
+    class Bar {}
     """;
 }

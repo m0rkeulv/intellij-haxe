@@ -48,7 +48,8 @@ public class HaxeAlignmentProcessor {
     ASTNode parent = myNode.getTreeParent();
     IElementType parentType = parent == null ? null : parent.getElementType();
 
-    if (BINARY_EXPRESSIONS.contains(elementType) && mySettings.ALIGN_MULTILINE_BINARY_OPERATION) {
+    if (BINARY_EXPRESSIONS.contains(elementType) && mySettings.ALIGN_MULTILINE_BINARY_OPERATION
+        && !insideArgumentList(myNode)) {
       return myBaseAlignment;
     }
 
@@ -70,5 +71,24 @@ public class HaxeAlignmentProcessor {
     }
 
     return null;
+  }
+
+  /**
+   * A binary expression used as a call/constructor ARGUMENT starts mid-line,
+   * so aligning its operands anchors at that arbitrary column and each
+   * argument staircases deeper than the last - operand alignment only makes
+   * sense where the expression owns its line.
+   */
+  private static boolean insideArgumentList(ASTNode node) {
+    for (ASTNode parent = node.getTreeParent(); parent != null; parent = parent.getTreeParent()) {
+      IElementType type = parent.getElementType();
+      if (type == EXPRESSION_LIST || type == CALL_EXPRESSION_LIST || type == PARAMETER_LIST) {
+        return true;
+      }
+      if (type == BLOCK_STATEMENT || type == SWITCH_CASE_BLOCK || type == CLASS_BODY) {
+        return false;
+      }
+    }
+    return false;
   }
 }
