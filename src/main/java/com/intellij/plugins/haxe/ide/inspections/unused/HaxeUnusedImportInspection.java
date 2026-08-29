@@ -16,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intellij.plugins.haxe.ide.inspections;
+package com.intellij.plugins.haxe.ide.inspections.unused;
 
 import com.intellij.codeInspection.*;
 import com.intellij.lang.ImportOptimizer;
@@ -38,16 +38,14 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 
 /**
  * Created by fedorkorotkov.
  */
 public class HaxeUnusedImportInspection extends LocalInspectionTool {
-  @NotNull
-  public String getGroupDisplayName() {
-    return HaxeBundle.message("inspections.group.name");
-  }
 
+  /** Doubles as the problem message on the descriptors below. */
   @Nls
   @NotNull
   @Override
@@ -55,21 +53,13 @@ public class HaxeUnusedImportInspection extends LocalInspectionTool {
     return HaxeBundle.message("haxe.inspection.unused.import.name");
   }
 
-  @Override
-  public boolean isEnabledByDefault() {
-    return true;
-  }
-
-  @NotNull
-  @Override
-  public String getShortName() {
-    return "HaxeUnusedImport";
-  }
-
   @Nullable
   @Override
   public ProblemDescriptor[] checkFile(@NotNull PsiFile file, @NotNull InspectionManager manager, boolean isOnTheFly) {
     if (!(file instanceof HaxeFile)) return null;
+    HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(file.getProject());
+    // the compiler's unused-import annotator owns this while its toggle is on
+    if (settings.isCompilerDiagnosticsEnabled() && settings.isDiagnosticsUnusedImportsEnabled()) return null;
     // ignoring "import.hx" as it's a special file that is used as  imports for other files
     if (file.getVirtualFile().getName().equals("import.hx")) return null;
 

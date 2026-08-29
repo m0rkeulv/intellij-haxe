@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.inspections;
+package com.intellij.plugins.haxe.ide.inspections.unused;
 
 import com.intellij.codeInspection.*;
 import com.intellij.openapi.project.Project;
