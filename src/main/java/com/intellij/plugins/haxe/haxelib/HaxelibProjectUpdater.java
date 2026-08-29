@@ -55,6 +55,7 @@ import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.ide.projectStructure.autoimport.HaxelibAutoImport;
 import com.intellij.plugins.haxe.util.*;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.xml.XmlFile;
@@ -659,6 +660,11 @@ public class HaxelibProjectUpdater {
     else {
       // XXX: EMB - Not sure of the validity of using this path if xml lib isn't specified.
 
+      // display runs the openfl tool from the project's local .haxelib - project code
+      if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
+        timeLog.stamp("Skipped openfl display: project not trusted.");
+        return;
+      }
       String projectBasePath = project.getBasePath();
       if (null == projectBasePath) {
         projectBasePath = "";
