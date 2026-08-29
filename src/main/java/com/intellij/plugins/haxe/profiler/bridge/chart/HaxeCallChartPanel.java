@@ -32,6 +32,8 @@ import java.awt.Shape;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
@@ -121,6 +123,22 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   record RangeSelection(@Nullable CurveLane curveLane, @Nullable MarkerLane markerLane, long fromUs, long toUs) {
   }
 
+  /** One search hit in the session — enough to jump there and re-find its node once the window loads. */
+  record SearchMatch(long startUs, long endUs, int depth, @NotNull String symbol) {
+  }
+
+  /** The tab's in-view search bar, driven from the chart's keys (type-to-search, Ctrl+F, F3, Escape). */
+  interface SearchUi {
+    void open(@NotNull String seedText);
+
+    void nextMatch();
+
+    void previousMatch();
+
+    /** Closes the bar; false when it was not open (Escape then falls through to the range selection). */
+    boolean close();
+  }
+
   /** One instant mark on the events row — a user-emitted message with an optional color. */
   record TimeEvent(long timeUs, @NotNull String text, @Nullable Color color) {
   }
@@ -207,6 +225,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private static final Color SELECTION_INNER = new JBColor(0xFFFFFF, 0x1E1E1E);
   /** The dragged range's translucent fill over its lane body. */
   private static final Color RANGE_FILL = new JBColor(new Color(0x35, 0x74, 0xF0, 45), new Color(0x66, 0xA3, 0xE0, 55));
+  /** Boxes not matching the active search fade to this so the hits carry the color. */
+  private static final Color SEARCH_DIMMED_BOX = new JBColor(0xE8E8E8, 0x3C3E42);
   /** Fallback mark color for events that sent none. */
   private static final Color EVENT_MARK = new JBColor(0x3574F0, 0x66A3E0);
   private static final long[] STEP_FACTORS = {1, 2, 5};
@@ -274,6 +294,13 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   /** The last lane click (or completed drag's start) — a shift+click on the same lane ranges from here. */
   private @Nullable String anchorBandKey;
   private long anchorUs;
+  /** Lower-cased search text; while non-null, matching runs get accent borders and the rest dim. */
+  private @Nullable String searchQuery;
+  /** Per-symbol match verdicts for the current query — symbols repeat across thousands of boxes. */
+  private final Map<String, Boolean> searchVerdicts = new HashMap<>();
+  /** A jumped-to match not yet in the loaded tree; resolved to a node when a window load lands. */
+  private @Nullable SearchMatch pendingSearchTarget;
+  private @Nullable SearchUi searchUi;
   /** Key of the band (curve, events row or marker lane) being resized by a divider drag; null = none. */
   private @Nullable String resizingBandKey;
   private int resizeStartY;
@@ -309,6 +336,17 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     setOpaque(false);
     setFocusable(true); // arrow keys walk the selection (see installKeyboardNavigation)
     installKeyboardNavigation();
+    addKeyListener(new KeyAdapter() {
+      @Override
+      public void keyTyped(KeyEvent event) {
+        // type-to-search: a plain printable character opens the search bar seeded with it
+        char typed = event.getKeyChar();
+        int handledModifiers = KeyEvent.CTRL_DOWN_MASK | KeyEvent.ALT_DOWN_MASK | KeyEvent.META_DOWN_MASK;
+        if ((event.getModifiersEx() & handledModifiers) == 0 && !Character.isISOControl(typed)) {
+          openSearch(String.valueOf(typed));
+        }
+      }
+    });
     ToolTipManager.sharedInstance().registerComponent(this);
     addMouseListener(new MouseAdapter() {
       @Override
@@ -441,6 +479,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     clearCurveSelection();
     rangeBandKey = null;
     anchorBandKey = null;
+    pendingSearchTarget = null;
     selectedEvent = null;
     selectionListener.accept(List.of());
     syncScrollBar();
@@ -462,6 +501,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     if (previousSelection != null && selected == null) {
       selectionListener.accept(List.of());
     }
+    trySelectSearchTarget(); // a jumped-to match's window may have just loaded
     revalidate();
     repaint();
   }
@@ -650,6 +690,81 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     rangeSelectionListener = listener;
   }
 
+  /** Wires the tab's in-view search bar; the chart's keys drive it (type-to-search, Ctrl+F, F3, Escape). */
+  void setSearchUi(@NotNull SearchUi ui) {
+    searchUi = ui;
+  }
+
+  /** The active search text (null or blank = off): matching runs get accent borders, the rest dim. */
+  void setSearchQuery(@Nullable String query) {
+    searchQuery = query == null || query.isBlank() ? null : query.toLowerCase(Locale.ROOT);
+    searchVerdicts.clear();
+    if (searchQuery == null) {
+      pendingSearchTarget = null;
+    }
+    repaint();
+  }
+
+  /**
+   * Jumps to a match: scrolls it into view, or — when it would paint too
+   * narrow to read its name — zooms so it spans a quarter of the viewport,
+   * centered. The selection lands once the node is in the loaded tree (a
+   * windowed source loads it only after the jump).
+   */
+  void showSearchMatch(@NotNull SearchMatch match) {
+    long durationUs = Math.max(match.endUs() - match.startUs(), 1);
+    if (durationUs / scale() < JBUI.scale(120)) {
+      followLive = false;
+      int viewportWidth = Math.max(getWidth(), 1);
+      zoomTo(durationUs / (0.25 * viewportWidth), (match.startUs() + match.endUs()) / 2, viewportWidth / 2);
+    }
+    else {
+      revealTime(match.startUs(), match.endUs());
+    }
+    pendingSearchTarget = match;
+    trySelectSearchTarget();
+    repaint();
+  }
+
+  /** Resolves the pending match against the loaded tree; keeps waiting while the window has not caught up. */
+  private void trySelectSearchTarget() {
+    SearchMatch target = pendingSearchTarget;
+    if (target == null) return;
+    FlameNode node = findSearchNode(target);
+    if (node == null) return;
+    pendingSearchTarget = null;
+    selected = node;
+    clearSpanSelection();
+    clearCurveSelection();
+    selectedEvent = null;
+    selectionListener.accept(pathOfNode(node));
+  }
+
+  /** Containment descent to the match's depth; the symbol must agree (bounds may differ by rounding). */
+  private @Nullable FlameNode findSearchNode(SearchMatch match) {
+    long midUs = (match.startUs() + match.endUs()) / 2;
+    FlameNode node = root;
+    for (int depth = 0; depth <= match.depth(); depth++) {
+      FlameNode within = null;
+      for (FlameNode child : node.children()) {
+        if (child.startUs() <= midUs && midUs < Math.max(child.endUs(), child.startUs() + 1)) {
+          within = child;
+          break;
+        }
+      }
+      if (within == null) return null;
+      node = within;
+    }
+    boolean sameSymbol = node.frame() != null && node.frame().symbol().equals(match.symbol());
+    return sameSymbol && !node.idle() ? node : null;
+  }
+
+  private boolean matchesSearch(String symbol) {
+    String needle = searchQuery;
+    if (needle == null) return false;
+    return searchVerdicts.computeIfAbsent(symbol, key -> key.toLowerCase(Locale.ROOT).contains(needle));
+  }
+
   /** Shows or hides the calls lane (header included); hiding clears a selected run. */
   void setCallsVisible(boolean visible) {
     if (callsVisible == visible) return;
@@ -759,17 +874,23 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   private void paintBox(Graphics2D g, FlameNode node, int x, int y, int width) {
     int height = rowHeight() - 1;
-    g.setColor(colorOf(node));
+    String symbol = node.frame() == null ? "" : node.frame().symbol();
+    boolean searchHit = searchQuery != null && matchesSearch(symbol);
+    boolean dimmed = searchQuery != null && !searchHit;
+    g.setColor(dimmed ? SEARCH_DIMMED_BOX : colorOf(node));
     g.fillRect(x, y, width, height);
     if (width > 2) {
       g.setColor(BOX_BORDER);
       g.drawRect(x, y, width - 1, height - 1);
     }
+    if (searchHit) {
+      g.setColor(SELECTION);
+      g.drawRect(x, y, Math.max(width - 1, 1), height - 1);
+    }
     if (node == selected) {
       paintSelection(g, x, y, width, height);
     }
 
-    String symbol = node.frame() == null ? "" : node.frame().symbol();
     if (!symbol.isEmpty() && width > JBUI.scale(30)) {
       Shape outerClip = g.getClip();
       g.clipRect(x + 2, y, width - 4, height);
@@ -1290,7 +1411,29 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     bindKey("control ADD", this::zoomIn);
     bindKey("control MINUS", this::zoomOut);
     bindKey("control SUBTRACT", this::zoomOut);
-    bindKey("ESCAPE", this::clearRangeSelection);
+    bindKey("ESCAPE", this::escapePressed);
+    bindKey("control F", () -> openSearch(""));
+    bindKey("F3", () -> withSearchUi(SearchUi::nextMatch));
+    bindKey("shift F3", () -> withSearchUi(SearchUi::previousMatch));
+  }
+
+  /** Escape closes an open search bar first; without one it clears the range selection. */
+  private void escapePressed() {
+    if (searchUi == null || !searchUi.close()) {
+      clearRangeSelection();
+    }
+  }
+
+  private void openSearch(String seedText) {
+    if (searchUi != null) {
+      searchUi.open(seedText);
+    }
+  }
+
+  private void withSearchUi(Consumer<SearchUi> action) {
+    if (searchUi != null) {
+      action.accept(searchUi);
+    }
   }
 
   private void bindKey(String stroke, Runnable navigation) {

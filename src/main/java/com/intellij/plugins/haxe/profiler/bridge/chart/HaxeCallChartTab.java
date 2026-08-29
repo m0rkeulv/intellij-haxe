@@ -33,9 +33,12 @@ import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracyZone;
 import com.intellij.plugins.haxe.profiler.tracy.TracyZoneTrees;
+import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.InplaceButton;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.SearchTextField;
+import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.util.ui.JBUI;
@@ -66,10 +69,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComponent;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
 
 /**
  * The Call Chart tab: one thread's capture explorable over a time axis, the
@@ -159,6 +166,32 @@ public final class HaxeCallChartTab {
     /** What a run's count means in this capture: samples for sampled data, invocations for exact zones. */
     default String runCountText(int count) {
       return HaxeProfilerBundle.message("haxe.profiler.callchart.samples", count);
+    }
+
+    /**
+     * Runs whose symbol contains {@code query} (case-insensitive,
+     * anywhere in the qualified name — a bare method name and a package
+     * prefix both match), time-ordered, at most {@code limit}. May read
+     * the capture file; call off the EDT.
+     */
+    default List<HaxeCallChartPanel.SearchMatch> searchMatches(int threadId, String query, int limit) {
+      List<HaxeCallChartPanel.SearchMatch> matches = new ArrayList<>();
+      collectMatches(treeFor(threadId, 0, Long.MAX_VALUE, 0), 0, query.toLowerCase(Locale.ROOT), limit, matches);
+      matches.sort(Comparator.comparingLong(HaxeCallChartPanel.SearchMatch::startUs));
+      return matches;
+    }
+  }
+
+  /** Depth-first over an in-memory tree, non-idle runs only. */
+  private static void collectMatches(FlameNode node, int depth, String needle, int limit,
+                                     List<HaxeCallChartPanel.SearchMatch> matches) {
+    for (FlameNode child : node.children()) {
+      if (matches.size() >= limit) return;
+      StackFrame frame = child.frame();
+      if (!child.idle() && frame != null && frame.symbol().toLowerCase(Locale.ROOT).contains(needle)) {
+        matches.add(new HaxeCallChartPanel.SearchMatch(child.startUs(), child.endUs(), depth, frame.symbol()));
+      }
+      collectMatches(child, depth + 1, needle, limit, matches);
     }
   }
 
@@ -395,6 +428,11 @@ public final class HaxeCallChartTab {
     public String runCountText(int count) {
       return zones.runCountText(count);
     }
+
+    @Override
+    public List<HaxeCallChartPanel.SearchMatch> searchMatches(int threadId, String query, int limit) {
+      return zones.searchMatches(threadId, query, limit);
+    }
   }
 
   @NotNull
@@ -429,6 +467,9 @@ public final class HaxeCallChartTab {
 
     ComboBox<ProfilerThread> threadPicker = new ComboBox<>(initialData.threads().toArray(new ProfilerThread[0]));
     threadPicker.setRenderer(BuilderKt.textListCellRenderer("", ProfilerThread::name));
+    ChartSearch search = new ChartSearch(chart, () -> data[0],
+                                         () -> (ProfilerThread)threadPicker.getSelectedItem());
+    chart.setSearchUi(search);
     Runnable applyThread = () -> {
       ProfilerThread thread = (ProfilerThread)threadPicker.getSelectedItem();
       if (thread != null) {
@@ -440,6 +481,7 @@ public final class HaxeCallChartTab {
         applyLaneDefaults(lanes, viewSettings);
         applyLanes(chart, lanes);
         minimap.setContent(tree.durationUs(), lanes.frameSpans, data[0].coarseActivity(thread.id()));
+        search.refresh();
       }
     };
     ActionListener threadListener = event -> applyThread.run();
@@ -471,8 +513,11 @@ public final class HaxeCallChartTab {
     JBScrollPane scrollPane = new JBScrollPane(chart,
                                                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                                                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+    BorderLayoutPanel aboveChart = new BorderLayoutPanel();
+    aboveChart.addToTop(search.component());
+    aboveChart.addToCenter(minimap);
     BorderLayoutPanel chartArea = new BorderLayoutPanel();
-    chartArea.addToTop(minimap);
+    chartArea.addToTop(aboveChart);
     chartArea.addToCenter(scrollPane);
     chartArea.addToBottom(chart.createHorizontalScrollBar());
 
@@ -486,6 +531,135 @@ public final class HaxeCallChartTab {
     splitter.setFirstComponent(chartSide);
     new DetailsCollapse(splitter, details, viewSettings);
     return splitter;
+  }
+
+  /**
+   * The chart's in-view search bar, docked above the minimap and hidden
+   * until typing on the chart (or Ctrl+F) opens it. Highlighting follows
+   * every keystroke; the session-wide match list loads debounced on a
+   * pooled thread (a zone capture scans its whole file). Enter/F3 and
+   * Shift+Enter/Shift+F3 walk matches in time order; Escape returns the
+   * focus to the chart.
+   */
+  private static final class ChartSearch implements HaxeCallChartPanel.SearchUi {
+    private static final int MATCH_CAP = 10_000;
+    private static final int SEARCH_DEBOUNCE_MS = 250;
+
+    private final BorderLayoutPanel bar = new BorderLayoutPanel();
+    private final SearchTextField field = new SearchTextField(false);
+    private final JBLabel counter = new JBLabel();
+    private final HaxeCallChartPanel chart;
+    private final Supplier<ChartData> data;
+    private final Supplier<ProfilerThread> thread;
+    private final Timer debounce = new Timer(SEARCH_DEBOUNCE_MS, event -> startScan());
+    private final AtomicInteger generation = new AtomicInteger();
+    private List<HaxeCallChartPanel.SearchMatch> matches = List.of();
+    private int index = -1;
+
+    ChartSearch(HaxeCallChartPanel chart, Supplier<ChartData> data, Supplier<ProfilerThread> thread) {
+      this.chart = chart;
+      this.data = data;
+      this.thread = thread;
+      debounce.setRepeats(false);
+      counter.setBorder(JBUI.Borders.empty(0, 8));
+      bar.addToCenter(field);
+      bar.addToRight(counter);
+      bar.setVisible(false);
+      field.addDocumentListener(new DocumentAdapter() {
+        @Override
+        protected void textChanged(@NotNull DocumentEvent event) {
+          chart.setSearchQuery(field.getText());
+          counter.setText("");
+          debounce.restart();
+        }
+      });
+      JTextField editor = field.getTextEditor();
+      editor.registerKeyboardAction(event -> nextMatch(), KeyStroke.getKeyStroke("ENTER"), JComponent.WHEN_FOCUSED);
+      editor.registerKeyboardAction(event -> previousMatch(), KeyStroke.getKeyStroke("shift ENTER"), JComponent.WHEN_FOCUSED);
+      editor.registerKeyboardAction(event -> nextMatch(), KeyStroke.getKeyStroke("F3"), JComponent.WHEN_FOCUSED);
+      editor.registerKeyboardAction(event -> previousMatch(), KeyStroke.getKeyStroke("shift F3"), JComponent.WHEN_FOCUSED);
+      editor.registerKeyboardAction(event -> close(), KeyStroke.getKeyStroke("ESCAPE"), JComponent.WHEN_FOCUSED);
+    }
+
+    JComponent component() {
+      return bar;
+    }
+
+    @Override
+    public void open(@NotNull String seedText) {
+      bar.setVisible(true);
+      if (!seedText.isEmpty()) {
+        field.setText(seedText);
+      }
+      JTextField editor = field.getTextEditor();
+      editor.requestFocusInWindow();
+      editor.setCaretPosition(editor.getText().length());
+    }
+
+    @Override
+    public boolean close() {
+      if (!bar.isVisible()) return false;
+      bar.setVisible(false);
+      field.setText("");
+      chart.setSearchQuery(null);
+      matches = List.of();
+      index = -1;
+      counter.setText("");
+      chart.requestFocusInWindow();
+      return true;
+    }
+
+    @Override
+    public void nextMatch() {
+      step(1);
+    }
+
+    @Override
+    public void previousMatch() {
+      step(-1);
+    }
+
+    /** A thread switch (or a live completion rebuild) invalidated the match list; rescans while the bar shows. */
+    void refresh() {
+      if (bar.isVisible() && !field.getText().isBlank()) {
+        debounce.restart();
+      }
+    }
+
+    private void step(int direction) {
+      if (matches.isEmpty()) return;
+      index = Math.floorMod(index + direction, matches.size());
+      counter.setText((index + 1) + "/" + totalText());
+      chart.showSearchMatch(matches.get(index));
+    }
+
+    private String totalText() {
+      return matches.size() >= MATCH_CAP ? MATCH_CAP + "+" : String.valueOf(matches.size());
+    }
+
+    private void startScan() {
+      String query = field.getText();
+      if (query.isBlank()) {
+        matches = List.of();
+        index = -1;
+        counter.setText("");
+        return;
+      }
+      ProfilerThread selectedThread = thread.get();
+      if (selectedThread == null) return;
+      int expected = generation.incrementAndGet();
+      ChartData source = data.get();
+      int threadId = selectedThread.id();
+      ApplicationManager.getApplication().executeOnPooledThread(() -> {
+        List<HaxeCallChartPanel.SearchMatch> found = source.searchMatches(threadId, query, MATCH_CAP);
+        ApplicationManager.getApplication().invokeLater(() -> {
+          if (generation.get() != expected) return; // a newer query superseded this scan
+          matches = found;
+          index = -1;
+          counter.setText(totalText());
+        });
+      });
+    }
   }
 
   /** The lane state as one dialog snapshot. */
@@ -886,6 +1060,29 @@ public final class HaxeCallChartTab {
     public String runCountText(int count) {
       // zones are measured, not sampled - a run's count is its invocations
       return HaxeProfilerBundle.message("haxe.profiler.callchart.invocations", count);
+    }
+
+    /** The loaded tree is windowed AND duration-floored, so a session-wide search scans the store instead. */
+    @Override
+    public List<HaxeCallChartPanel.SearchMatch> searchMatches(int threadId, String query, int limit) {
+      String needle = query.toLowerCase(Locale.ROOT);
+      Map<String, Boolean> verdicts = new HashMap<>();
+      List<HaxeCallChartPanel.SearchMatch> matches = new ArrayList<>();
+      try {
+        store.scanZones(threadId, 0, Long.MAX_VALUE, 0, (thread, depth, startNs, endNs, location) -> {
+          if (matches.size() >= limit) return;
+          boolean hit = verdicts.computeIfAbsent(location.function(),
+                                                 function -> function.toLowerCase(Locale.ROOT).contains(needle));
+          if (hit) {
+            matches.add(new HaxeCallChartPanel.SearchMatch(startNs / 1000, endNs / 1000, depth, location.function()));
+          }
+        });
+      }
+      catch (IOException e) {
+        Logger.getInstance(HaxeCallChartTab.class).warn("could not read the zone capture", e);
+      }
+      matches.sort(Comparator.comparingLong(HaxeCallChartPanel.SearchMatch::startUs));
+      return matches;
     }
   }
 
