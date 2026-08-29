@@ -104,17 +104,31 @@ public final class HaxeCallStackElement extends BaseCallStackElement {
     if (atPosition != null) {
       return new NavigatablePsiElement[]{atPosition};
     }
+    NavigatablePsiElement declaration = declarationOf(project, symbol);
+    return declaration != null ? new NavigatablePsiElement[]{declaration}
+                               : NavigatablePsiElement.EMPTY_NAVIGATABLE_ELEMENT_ARRAY;
+  }
+
+  /**
+   * The declaration a bare qualified symbol names: the longest symbol
+   * prefix that names a class wins, then its member (or the class itself)
+   * — a closure symbol ({@code Main.update.2}) lands on its enclosing
+   * method. Hits the resolver and indexes; call under a read action.
+   */
+  @Nullable
+  public static NavigatablePsiElement declarationOf(@NotNull Project project, @NotNull String symbol) {
     PsiManager psiManager = PsiManager.getInstance(project);
     GlobalSearchScope scope = GlobalSearchScope.allScope(project);
+    // qualified-name segments: pack.Class.method, closures with trailing numeric segments
     String[] segments = symbol.split("\\.");
     for (int memberIndex = segments.length - 1; memberIndex >= 1; memberIndex--) {
       String className = String.join(".", List.of(segments).subList(0, memberIndex));
       HaxeClass haxeClass = HaxeResolveUtil.findClassByQName(className, psiManager, scope);
       if (haxeClass == null) continue;
       NavigatablePsiElement member = findMember(haxeClass, segments[memberIndex]);
-      return new NavigatablePsiElement[]{member != null ? member : haxeClass};
+      return member != null ? member : haxeClass;
     }
-    return NavigatablePsiElement.EMPTY_NAVIGATABLE_ELEMENT_ARRAY;
+    return null;
   }
 
   /** The named component enclosing the frame's line (or the file itself); null when the file cannot be found. */

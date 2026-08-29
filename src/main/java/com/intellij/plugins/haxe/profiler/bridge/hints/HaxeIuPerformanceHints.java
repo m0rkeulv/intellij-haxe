@@ -73,7 +73,7 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
   @Override
   public void onProfilerDumpOpen(@NotNull ProfilerData data, @NotNull Project project, @NotNull Object tab) {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      HaxeLineTimes lineTimes = lineTimesOf(data);
+      HaxeLineTimes lineTimes = lineTimesOf(data, project);
       if (lineTimes == null) return;
       ApplicationManager.getApplication().invokeLater(() -> {
         if (project.isDisposed()) return;
@@ -117,7 +117,7 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
 
   private void dataReplaced(Project project, ProfilerData replaced, ProfilerData replacement) {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      HaxeLineTimes lineTimes = lineTimesOf(replacement);
+      HaxeLineTimes lineTimes = lineTimesOf(replacement, project);
       if (lineTimes == null) return;
       ApplicationManager.getApplication().invokeLater(() -> {
         if (project.isDisposed()) return;
@@ -140,10 +140,16 @@ public class HaxeIuPerformanceHints implements PerformanceHintsManagerListener {
   }
 
   @Nullable
-  private static HaxeLineTimes lineTimesOf(ProfilerData data) {
+  private static HaxeLineTimes lineTimesOf(ProfilerData data, Project project) {
     try {
       if (data instanceof HaxeTracyProfilerData tracy) return HaxeLineTimes.fromStore(tracy.store());
-      if (data instanceof HaxeSamplingProfilerData sampled) return HaxeLineTimes.fromSnapshot(sampled.snapshot());
+      if (data instanceof HaxeSamplingProfilerData sampled) {
+        // flash frames carry no positions - their symbols resolve to
+        // project declarations instead (per-function chips, like tracy)
+        return HaxeLineTimes.carriesPositions(sampled.snapshot())
+               ? HaxeLineTimes.fromSnapshot(sampled.snapshot())
+               : HaxeLineTimes.fromDeclarations(project, sampled.snapshot());
+      }
     }
     catch (IOException e) {
       LOG.warn("could not aggregate line times for the gutter hints", e);

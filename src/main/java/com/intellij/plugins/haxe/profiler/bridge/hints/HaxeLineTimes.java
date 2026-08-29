@@ -1,16 +1,25 @@
 package com.intellij.plugins.haxe.profiler.bridge.hints;
 
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.profiler.bridge.data.HaxeCallStackElement;
 import com.intellij.plugins.haxe.profiler.bridge.data.HaxeSamplingProfilerData;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneStore;
 import com.intellij.plugins.haxe.profiler.model.ProfilerSnapshot;
 import com.intellij.plugins.haxe.profiler.model.StackFrame;
 import com.intellij.plugins.haxe.profiler.model.StackSample;
+import com.intellij.psi.NavigatablePsiElement;
+import com.intellij.psi.PsiDocumentManager;
+import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -23,10 +32,13 @@ import java.util.Set;
  * line is the CALL SITE inside its own method, so a line knows the method
  * enclosing it and that method's total. Tracy zones only carry the callee
  * function's declaration line (the caller's current line never reaches the
- * wire), so tracy hints are per function with no enclosing share. Lines
- * whose total rounds below a microsecond are dropped rather than shown as
- * zero. Files are keyed by their forward-slashed path as the capture
- * spelled it; editors match by path suffix.
+ * wire), so tracy hints are per function with no enclosing share. A sampled
+ * capture WITHOUT positions (flash — the Scout wire carries bare qualified
+ * names) resolves each symbol to its project declaration instead and
+ * attributes per function like tracy. Lines whose total rounds below a
+ * microsecond are dropped rather than shown as zero. Files are keyed by
+ * their forward-slashed path as the capture spelled it (declarations by
+ * their full path); editors match by path suffix.
  */
 final class HaxeLineTimes {
 
@@ -132,6 +144,83 @@ final class HaxeLineTimes {
       }
     }
     return new HaxeLineTimes(freeze(byFile, methodTotalsNs), sessionNs / 1000);
+  }
+
+  /** Whether any frame carries a source position — without one the declaration fallback is the only attribution. */
+  static boolean carriesPositions(@NotNull ProfilerSnapshot snapshot) {
+    for (StackSample sample : snapshot.samples()) {
+      for (StackFrame frame : sample.frames()) {
+        if (frame.file() != null && frame.line() > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Sampled captures whose frames carry NO positions: every distinct
+   * symbol resolves once to its project declaration (a smart-mode read
+   * action — the chips wait for indexing) and the sampled time lands per
+   * FUNCTION on the declaration line, like the tracy hints. Symbols the
+   * project cannot name (player builtins, "(unknown)") get no chip.
+   */
+  @NotNull
+  static HaxeLineTimes fromDeclarations(@NotNull Project project, @NotNull ProfilerSnapshot snapshot) {
+    long periodNs = HaxeSamplingProfilerData.samplePeriodUs(snapshot) * 1000;
+    Map<String, Accumulator> bySymbol = new HashMap<>();
+    long sessionNs = 0;
+    Set<String> charged = new HashSet<>();
+    for (StackSample sample : snapshot.samples()) {
+      long timeNs = sample.weight() * periodNs;
+      sessionNs += timeNs;
+      charged.clear();
+      List<StackFrame> frames = sample.frames();
+      for (int i = 0; i < frames.size(); i++) {
+        String symbol = frames.get(i).symbol();
+        Accumulator function = bySymbol.computeIfAbsent(symbol, key -> new Accumulator());
+        // recursion charges a function once per sample, not once per frame
+        if (charged.add(symbol)) {
+          function.totalNs += timeNs;
+        }
+        if (i == frames.size() - 1) function.selfNs += timeNs;
+      }
+    }
+
+    Map<String, Declaration> declarations =
+      ReadAction.nonBlocking(() -> resolveDeclarations(project, bySymbol.keySet()))
+        .inSmartMode(project)
+        .executeSynchronously();
+    Map<String, Map<Integer, Accumulator>> byFile = new HashMap<>();
+    bySymbol.forEach((symbol, function) -> {
+      Declaration declaration = declarations.get(symbol);
+      if (declaration == null) return;
+      // closures of one method share its declaration - their times merge
+      Accumulator line = byFile
+        .computeIfAbsent(declaration.path(), file -> new HashMap<>())
+        .computeIfAbsent(declaration.line(), key -> new Accumulator());
+      line.totalNs += function.totalNs;
+      line.selfNs += function.selfNs;
+    });
+    return new HaxeLineTimes(freeze(byFile, Map.of()), sessionNs / 1000);
+  }
+
+  /** A resolved symbol's declaring file (full path) and 1-based line. */
+  private record Declaration(String path, int line) {
+  }
+
+  /** Runs inside the read action: each symbol's declaration position, resolved via the project's classes. */
+  private static Map<String, Declaration> resolveDeclarations(Project project, Collection<String> symbols) {
+    Map<String, Declaration> resolved = new HashMap<>();
+    for (String symbol : symbols) {
+      NavigatablePsiElement declaration = HaxeCallStackElement.declarationOf(project, symbol);
+      if (declaration == null) continue;
+      PsiFile psiFile = declaration.getContainingFile();
+      VirtualFile virtualFile = psiFile == null ? null : psiFile.getVirtualFile();
+      Document document = psiFile == null ? null : PsiDocumentManager.getInstance(project).getDocument(psiFile);
+      if (virtualFile == null || document == null) continue;
+      int offset = Math.min(declaration.getTextOffset(), document.getTextLength());
+      resolved.put(symbol, new Declaration(virtualFile.getPath(), document.getLineNumber(offset) + 1));
+    }
+    return resolved;
   }
 
   /**
