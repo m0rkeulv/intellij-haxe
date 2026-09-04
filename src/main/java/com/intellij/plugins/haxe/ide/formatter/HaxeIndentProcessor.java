@@ -130,10 +130,36 @@ public class HaxeIndentProcessor {
       }
       return Indent.getNormalIndent();
     }
+    // a parameter/argument list carries no indent of its own: its ITEMS do
+    // (below), so a chopped-down list (the break right after the paren) and
+    // a mid-list wrap land at the same depth instead of stacking
     if (FUNCTION_DEFINITION.contains(parentType) || parentType == CALL_EXPRESSION) {
       if (elementType == PARAMETER_LIST || elementType == EXPRESSION_LIST || elementType == CALL_EXPRESSION_LIST) {
-        return Indent.getNormalIndent();
+        return Indent.getNoneIndent();
       }
+    }
+    // a wrapped list item continues in from the line that opened the list:
+    // call arguments and enum constructor parameters one step, a method
+    // signature's parameters two - the signature stands off from the body
+    // that follows at one
+    if (parentType == PARAMETER_LIST || parentType == EXPRESSION_LIST || parentType == CALL_EXPRESSION_LIST) {
+      ASTNode listOwner = parent.getTreeParent();
+      IElementType ownerType = listOwner == null ? null : listOwner.getElementType();
+      // an array literal's list is indented as a block of its own (needIndent);
+      // its items sit at the list's level
+      if (ownerType != ARRAY_LITERAL) {
+        if (elementType == PLPAREN || elementType == PRPAREN || elementType == OCOMMA) {
+          return Indent.getNoneIndent();
+        }
+        boolean signature = parentType == PARAMETER_LIST && FUNCTION_DEFINITION.contains(ownerType);
+        return signature ? Indent.getContinuationIndent() : Indent.getNormalIndent();
+      }
+    }
+    // `new T(a, b)` keeps its arguments as direct children (no list node);
+    // an argument follows the paren or a comma
+    if (parentType == NEW_EXPRESSION && (prevSiblingType == PLPAREN || prevSiblingType == OCOMMA)
+        && elementType != PRPAREN) {
+      return Indent.getNormalIndent();
     }
     // a named function's non-block body on its own line indents one step
     // (FUNCTION_DEFINITION lacks the module-level kind); the header's own

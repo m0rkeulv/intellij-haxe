@@ -135,6 +135,29 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("call args wrap")
+  public void testCallArgsWrap() throws Exception {
+    // a wrapped argument continues ONE step in from the statement's line,
+    // nested calls included; a wrapped chain link after it likewise
+    doParityTest("call-args-wrap");
+  }
+
+  @Test
+  @DisplayName("method signature wrap")
+  public void testMethodSignatureWrap() throws Exception {
+    // wrapped parameters continue TWO steps in from the declaration, so the
+    // signature stands off from the body that follows at one
+    doParityTest("method-signature-wrap");
+  }
+
+  @Test
+  @DisplayName("enum constructor wrap")
+  public void testEnumConstructorWrap() throws Exception {
+    // a constructor's wrapped arguments continue one step in, like call arguments
+    doParityTest("enum-constructor-wrap");
+  }
+
+  @Test
   @DisplayName("empty curly")
   public void testEmptyCurly() throws Exception {
     doParityTest("empty-curly");

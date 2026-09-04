@@ -132,6 +132,10 @@ public final class HxformatCodeStyle {
     common.METHOD_CALL_CHAIN_WRAP = UI_CHOP_DOWN;
     // wrapping.implementsExtends: FillLine - break only past maxLineLength
     common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
+    // haxe-formatter indents wrapped parameters and arguments (one step for
+    // arguments, two for a signature); it never aligns them under the first
+    common.ALIGN_MULTILINE_PARAMETERS = false;
+    common.ALIGN_MULTILINE_PARAMETERS_IN_CALLS = false;
 
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     // haxe-formatter always reindents plain /*..*/ comment interiors

@@ -22,7 +22,7 @@ public class HaxeWordSelectionTest extends HaxeLightFixtureTestCase {
     assertSelectsWord("""
       class Main {
         function f() {
-          // stay blank, t<caret>he bug is the first render
+          // keep the list, t<caret>he item is the first entry
         }
       }""", "the");
   }
@@ -33,7 +33,7 @@ public class HaxeWordSelectionTest extends HaxeLightFixtureTestCase {
     assertSelectsWord("""
       class Main {
         /**
-          Clears the graphics th<caret>at were drawn to this object.
+          Returns the items th<caret>at were added to this list.
         **/
         function f() {}
       }""", "that");
