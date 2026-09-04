@@ -343,9 +343,10 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       return false;
     }
 
+    /** Allow console input to reach the compiler's stdin, so prompt can be answered. */
     @Override
     public @Nullable OutputStream getProcessInput() {
-      return null;
+      return delegate.getProcessInput();
     }
   }
 
