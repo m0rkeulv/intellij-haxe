@@ -66,9 +66,8 @@ public abstract class HaxeBaseCopyPasteReferenceProcessor <TRef extends PsiEleme
         int refOffset = 0; // this is an offset delta for conversion from absolute offset to an offset inside clipboard contents
         for (int j = 0; j < startOffsets.length; j++) {
             refOffset += startOffsets[j];
-            for (PsiElement element : CollectHighlightsUtil.getElementsInRange(file, startOffsets[j], endOffsets[j])) {
-                addReferenceData(file, refOffset, element, array);
-            }
+            List<PsiElement> elements = CollectHighlightsUtil.getElementsInRange(file, startOffsets[j], endOffsets[j]);
+            addReferenceData(file, refOffset, elements, array);
             refOffset -= endOffsets[j] + 1; // 1 accounts for line break inserted between contents corresponding to different carets
         }
 
@@ -79,7 +78,9 @@ public abstract class HaxeBaseCopyPasteReferenceProcessor <TRef extends PsiEleme
         return Collections.singletonList(new HaxeReferenceTransferableData(array.toArray(new HaxeReferenceData[0])));
     }
 
-    protected abstract void addReferenceData(PsiFile file, int startOffset, PsiElement element, ArrayList<HaxeReferenceData> to);
+    /** Records the import-relevant references among one copied range's elements; called once per caret range. */
+    protected abstract void addReferenceData(PsiFile file, int startOffset, List<PsiElement> elements,
+                                             ArrayList<HaxeReferenceData> to);
 
     @Override
     public @NotNull List<HaxeReferenceTransferableData> extractTransferableData(@NotNull Transferable content) {

@@ -20,28 +20,53 @@ import java.util.*;
 
 public class HaxeCopyPasteReferenceProcessor extends HaxeBaseCopyPasteReferenceProcessor<HaxeReferenceExpression> {
 
-    protected void addReferenceData(PsiFile file, int startOffset, PsiElement element, ArrayList<HaxeReferenceData> to) {
-        if (element instanceof HaxeReferenceExpression referenceExpression) {
-            PsiElement resolve = referenceExpression.resolve();
-            if (resolve instanceof HaxeClass haxeClass) {
-                String qualifiedName = haxeClass.getQualifiedName();
-                if (qualifiedName != null) {
-                    addHaxeReferenceData(element, to, startOffset, qualifiedName, false, false);
-                }
-            } else if (resolve instanceof HaxeMethod method && method.isStatic()) {
-                FullyQualifiedInfo qualifiedInfo = method.getModel().getQualifiedInfo();
-
-                boolean isExtensionMethod = false;
-                if (element.getParent() instanceof HaxeCallExpression callExpression) {
-                    isExtensionMethod = callExpression.resolveIsStaticExtension();
-                }
-
-                if (qualifiedInfo != null) {
-                    String qualifiedName = qualifiedInfo.toString();
-                    addHaxeReferenceData(element, to, startOffset, qualifiedName, true, isExtensionMethod);
-                }
+    @Override
+    protected void addReferenceData(PsiFile file, int startOffset, List<PsiElement> elements,
+                                    ArrayList<HaxeReferenceData> to) {
+        HaxeImportCandidates candidates = HaxeImportCandidates.of((HaxeFile)file);
+        for (PsiElement element : elements) {
+            if (element instanceof HaxeReferenceExpression reference && candidates.mayNeedImport(reference)) {
+                addResolvedReference(startOffset, reference, to);
             }
         }
+    }
+
+    /** A class or static method the reference resolves to becomes a restorable import; anything else needs none. */
+    private void addResolvedReference(int startOffset, HaxeReferenceExpression reference,
+                                      ArrayList<HaxeReferenceData> to) {
+        PsiElement resolve = reference.resolve();
+        if (resolve instanceof HaxeClass haxeClass) {
+            String qualifiedName = haxeClass.getQualifiedName();
+            if (qualifiedName != null) {
+                addHaxeReferenceData(reference, to, startOffset, qualifiedName, false, false);
+            }
+        } else if (resolve instanceof HaxeMethod method && method.isStatic()) {
+            FullyQualifiedInfo qualifiedInfo = method.getModel().getQualifiedInfo();
+
+            boolean isExtensionMethod = false;
+            if (reference.getParent() instanceof HaxeCallExpression callExpression) {
+                isExtensionMethod = callExpression.resolveIsStaticExtension();
+            }
+
+            if (qualifiedInfo != null) {
+                addHaxeReferenceData(reference, to, startOffset, importPathOf(qualifiedInfo), true, isExtensionMethod);
+            }
+        }
+    }
+
+    /**
+     * The path an import names for a static member: package, module, the
+     * class only when it is not the module's main class, then the member.
+     * FullyQualifiedInfo.toString() prints module AND class even when they
+     * are the same name, which no import accepts.
+     */
+    private static String importPathOf(FullyQualifiedInfo info) {
+        List<String> parts = new ArrayList<>();
+        if (info.packageName != null && !info.packageName.isEmpty()) parts.add(info.packageName);
+        if (info.moduleName != null) parts.add(info.moduleName);
+        if (info.className != null && !info.className.equals(info.moduleName)) parts.add(info.className);
+        if (info.memberName != null) parts.add(info.memberName);
+        return String.join(".", parts);
     }
 
     private void addHaxeReferenceData(PsiElement element,
