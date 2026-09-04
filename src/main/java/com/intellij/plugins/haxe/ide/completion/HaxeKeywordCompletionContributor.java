@@ -77,12 +77,9 @@ public class HaxeKeywordCompletionContributor extends CompletionContributor {
 
     // foo.b<caret> - bad
     // i<caret> - good
-    // in comments - bad
     extend(CompletionType.BASIC,
            psiElement().inFile(StandardPatterns.instanceOf(HaxeFile.class))
-             .andNot(idInExpression.and(inComplexExpression))
-             .andNot(psiElement().withElementType(ONLY_COMMENTS))
-             .andNot(psiElement().inside(psiElement().withElementType(DOC_COMMENT))),
+             .andNot(idInExpression.and(inComplexExpression)),
            new CompletionProvider<>() {
              @Override
              protected void addCompletions(@NotNull CompletionParameters parameters,

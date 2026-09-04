@@ -332,6 +332,7 @@
          policy decides ordinary string literals -->
     <completion.confidence language="Haxe" id="haxeSetValueConfidence" implementationClass="com.intellij.plugins.haxe.runner.debugger.HaxeSetValueCompletionConfidence" order="first"/>
     <completion.confidence language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.references.HaxeStringLinkCompletionConfidence" order="after haxeSetValueConfidence"/>
+    <completion.confidence language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeCommentCompletionConfidence"/>
 
     <completion.contributor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.references.HaxeStringQnameCompletionContributor"/>
 
