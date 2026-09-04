@@ -77,11 +77,7 @@ public class HaxeKeywordCompletionContributor extends CompletionContributor {
 
     // foo.b<caret> - bad
     // i<caret> - good
-    // comment prose - nothing: a line/block comment IS the position element,
-    // a doc comment's text tokens sit inside one (the doc tag contributor
-    // owns those). Matched by element type, not PsiComment: an inactive
-    // conditional-compilation branch is comment-shaped for the platform
-    // yet its code still completes
+    // in comments - bad
     extend(CompletionType.BASIC,
            psiElement().inFile(StandardPatterns.instanceOf(HaxeFile.class))
              .andNot(idInExpression.and(inComplexExpression))
