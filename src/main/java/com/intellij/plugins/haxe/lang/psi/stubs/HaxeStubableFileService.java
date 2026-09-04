@@ -1,7 +1,9 @@
 package com.intellij.plugins.haxe.lang.psi.stubs;
 
 import com.intellij.openapi.util.Key;
-import com.intellij.openapi.vfs.*;
+import com.intellij.openapi.vfs.AsyncFileListener;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.plugins.haxe.HaxeFileType;
@@ -9,7 +11,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jspecify.annotations.NonNull;
 
 import java.io.IOException;
 import java.util.List;
@@ -17,74 +18,61 @@ import java.util.List;
 @CustomLog
 public class HaxeStubableFileService implements AsyncFileListener {
 
-    private static final Key<Boolean> CAN_CREATE_STUB_KEY =  Key.create("haxe.file.stub.create");
+  private static final Key<Boolean> CAN_CREATE_STUB_KEY = Key.create("haxe.file.stub.create");
+  private static final String CONDITIONAL_COMPILATION_MARKER = "#if";
 
-    public static boolean skipFilebasedIndex(HaxeFile haxeFile) {
-        return isStubable(haxeFile.getVirtualFile());
+  public static boolean skipFilebasedIndex(@NotNull HaxeFile haxeFile) {
+    return isStubable(haxeFile);
+  }
+
+  public static boolean isStubable(@Nullable VirtualFile file) {
+    if (file == null) return false;
+    Boolean cached = file.getUserData(CAN_CREATE_STUB_KEY);
+    return cached != null ? cached : evaluateStubable(file);
+  }
+
+  public static boolean isStubable(@NotNull HaxeFile haxeFile) {
+    VirtualFile file = haxeFile.getVirtualFile();
+    if (file == null) return false;
+    Boolean cached = file.getUserData(CAN_CREATE_STUB_KEY);
+    return cached != null ? cached : cache(file, isStubableText(haxeFile.getText()));
+  }
+
+  /** Idempotent, so concurrent evaluation of one file needs no lock. */
+  private static boolean evaluateStubable(@NotNull VirtualFile file) {
+    try {
+      return cache(file, isStubableText(VfsUtilCore.loadText(file)));
     }
+    catch (IOException e) {
+      log.warn("Unable to determine if file is stubable", e);
+      return false;
+    }
+  }
 
+  private static boolean isStubableText(@NotNull CharSequence text) {
+    return !text.toString().contains(CONDITIONAL_COMPILATION_MARKER);
+  }
 
-    public static void evaluateStubable(VirtualFile file) {
-        try {
-            String content = new String(file.contentsToByteArray(true));
-            if(content.contains("#if")){
-                file.putUserData(CAN_CREATE_STUB_KEY, Boolean.FALSE);
-            }else {
-                file.putUserData(CAN_CREATE_STUB_KEY, Boolean.TRUE);
-            }
-        } catch (IOException e) {
-            log.warn("Unable to determine if file is stubable", e);
+  private static boolean cache(@NotNull VirtualFile file, boolean stubable) {
+    file.putUserData(CAN_CREATE_STUB_KEY, stubable);
+    return stubable;
+  }
+
+  private static boolean isHaxeFile(@Nullable VirtualFile file) {
+    return file != null && file.getFileType() == HaxeFileType.INSTANCE;
+  }
+
+  @Override
+  public @Nullable ChangeApplier prepareChange(@NotNull List<? extends @NotNull VFileEvent> events) {
+    return new ChangeApplier() {
+      @Override
+      public void beforeVfsChange() {
+        for (VFileEvent event : events) {
+          if (event instanceof VFileContentChangeEvent && isHaxeFile(event.getFile())) {
+            event.getFile().putUserData(CAN_CREATE_STUB_KEY, null);
+          }
         }
-    }
-    public static boolean isStubable(VirtualFile file) {
-        if(file == null) return false;
-
-        Boolean isStubable = file.getUserData(CAN_CREATE_STUB_KEY);
-        if (isStubable == Boolean.TRUE) return true;
-        if (isStubable == Boolean.FALSE) return false;
-
-        synchronized (file) {
-            evaluateStubable(file);
-        }
-
-        isStubable = file.getUserData(CAN_CREATE_STUB_KEY);
-        // while it should not be Null after evaluation its better to be safe as there are many threads that
-        // may access this in parallel, if it turn out to be a problem we can just do a syncronize on file
-        // or something like that
-        if(isStubable == null) {
-            log.warn("Stubable result still null after evaluation");
-        }
-        return isStubable ==  Boolean.TRUE;
-    }
-
-    private void clearSubableFlag(VirtualFile file) {
-        if (isHaxeFile(file)) {
-            file.putUserData(CAN_CREATE_STUB_KEY, null);
-        }
-    }
-    private void updateStubable(@NotNull VirtualFile file) {
-        if (isHaxeFile(file)) {
-            evaluateStubable(file);
-        }
-    }
-
-    private static boolean isHaxeFile(@NonNull VirtualFile file) {
-        return file != null && file.getFileType() == HaxeFileType.INSTANCE;
-    }
-
-
-    @Override
-    public @Nullable ChangeApplier prepareChange(@NotNull List<? extends @NotNull VFileEvent> events) {
-
-        return new ChangeApplier(){
-            @Override
-            public void beforeVfsChange() {
-                for (VFileEvent event : events) {
-                    if(event instanceof VFileContentChangeEvent) {
-                        clearSubableFlag(event.getFile());
-                    }
-                }
-            }
-        };
-    }
+      }
+    };
+  }
 }

@@ -59,7 +59,7 @@ public class HaxeFile extends PsiFileBase
 
   public HaxeModule getModule() {
     boolean couldBeIndexing = DumbService.isDumb(this.getProject());
-    if(!couldBeIndexing && HaxeStubableFileService.isStubable(this.getVirtualFile())) {
+    if(!couldBeIndexing && HaxeStubableFileService.isStubable(this)) {
       return withGreenStubOrAst(this::moduleWithStub, this::moduleWithAst);
     }else {
       return moduleWithAst(null);

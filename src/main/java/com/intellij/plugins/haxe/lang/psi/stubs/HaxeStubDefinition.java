@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.lang.psi.stubs;
 
 import com.intellij.lang.ASTNode;
-import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeFileStub;
@@ -20,8 +19,6 @@ import static com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubFilterUtil.docsCo
 import static com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubFilterUtil.isElementTypeToSkip;
 
 public class HaxeStubDefinition  implements LanguageStubDefinition {
-
-    private static final Key<Boolean> CAN_CREATE_STUB_KEY =  Key.create("haxe.file.stub.create");
 
     @Override
     public boolean shouldBuildStubFor(@NonNull VirtualFile file) {

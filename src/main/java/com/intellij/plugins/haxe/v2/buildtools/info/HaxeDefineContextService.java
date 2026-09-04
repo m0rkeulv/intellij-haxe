@@ -19,7 +19,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
-import com.intellij.plugins.haxe.util.HaxeUtil;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
@@ -27,6 +27,7 @@ import com.intellij.util.text.SemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG_DEFINE_VALUE;
 
@@ -44,10 +46,11 @@ import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG
  * for xml projects — conditionals evaluated, toolchain defines included)
  * overlaid with the owning container's IDE Define overrides. Feeds
  * {@code HaxeDefineDetectionManager.getAllDefinitions()}, i.e. the parsing and
- * indexing of every haxe file — which is why a context change triggers a
- * project-wide reparse.
+ * indexing of every haxe file — which is why a context change re-indexes the
+ * files with conditional compilation ({@link HaxeDefineContextInvalidator}).
  */
 @Service(Service.Level.PROJECT)
+@CustomLog
 public final class HaxeDefineContextService implements Disposable, HaxeBuildSettingsListener {
 
   private record Snapshot(@NotNull String key, @NotNull Map<String, String> defines) {
@@ -68,7 +71,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   /**
    * Drops the derived context and recomputes in the background — a settings
-   * mutation must reach parsing (reparse) and highlighting WITHOUT relying on
+   * mutation must reach parsing (re-index) and highlighting WITHOUT relying on
    * the tool window being open to call {@link #refreshAsync()}.
    */
   @Override
@@ -105,6 +108,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   private volatile FastState fastState;
   /** The defines most recently handed to a consumer — what current PSI state was parsed against. */
   private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
+  private final AtomicBoolean refreshQueued = new AtomicBoolean();
+  private final Object refreshLock = new Object();
 
   // the implicit single-file fallback behind HaxeKnownBuildFiles sweeps every
   // module under the read lock - far too heavy for getActiveDefines, which
@@ -179,17 +184,24 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * Recomputes the context in the background and reparses all haxe files when it
-   * actually changed, so stubs and highlighting pick up the new conditionals.
-   * Cheap when nothing changed — safe to call from every tree refresh.
+   * Recomputes the context in the background and, when it actually changed,
+   * has {@link HaxeDefineContextInvalidator} re-index the conditional haxe
+   * files. Cheap when nothing changed — safe to call from every tree
+   * refresh; requests arriving while one is queued coalesce into it.
    */
   public void refreshAsync() {
-    AppExecutorUtil.getAppExecutorService().execute(() -> {
-      if (project.isDisposed()) return;
+    if (!refreshQueued.compareAndSet(false, true)) return;
+    AppExecutorUtil.getAppExecutorService().execute(this::refreshNow);
+  }
+
+  private void refreshNow() {
+    refreshQueued.set(false);
+    if (project.isDisposed()) return;
+    synchronized (refreshLock) {
       // compare against the defines last handed to consumers, NOT the snapshot
       // cache: the invalidation topic clears the snapshot synchronously before
       // this runs. The sentinel keeps project open cheap (nothing was handed
-      // out, nothing to reparse) while a recorded null handout still reparses
+      // out, nothing to re-index) while a recorded null handout still pushes
       // on the null -> non-null transition (build file activated after files
       // were parsed against the legacy context).
       Map<String, String> before = lastComputed;
@@ -198,11 +210,11 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       Map<String, String> after = getActiveDefines();
       lastComputed = after;
       boolean changed = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
+      log.info("define context refresh: changed=" + changed + ", defines=" + (after == null ? "legacy" : after.size()));
       if (changed) {
-        // false = do not mark the LEGACY auto-import dirty; v2 has its own tracker
-        HaxeUtil.reparseProjectFiles(project, false);
+        HaxeDefineContextInvalidator.invalidateConditionalFiles(project);
       }
-    });
+    }
   }
 
   /** Cheap identity of every input; a mismatch invalidates the cached context. */
@@ -340,11 +352,11 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     if (StringUtil.isEmptyOrSpaces(path)) return false;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null || !file.isValid()) return false;
-    return Boolean.TRUE.equals(ReadAction.compute(() -> {
+    return HaxeReadActions.compute(() -> {
       HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
       if (type == null) return false;
       return baseDefines(file, type).containsKey(name);
-    }));
+    });
   }
 
   /**

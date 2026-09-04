@@ -492,10 +492,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .createPopupChooserBuilder(choices)
       .setTitle(HaxeBundle.message("haxe.toolwindow.select.target.title"))
       .setRenderer(BuilderKt.textListCellRenderer("", HaxeTargetOptions.TargetChoice::displayName))
-      .setItemChosenCallback(choice -> {
-        HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(targetNode.buildFile().file(), choice.id());
-        refreshTree();
-      })
+      .setItemChosenCallback(choice -> HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(targetNode.buildFile().file(), choice.id()))
       .createPopup()
       .show(point);
   }
@@ -513,7 +510,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       .setItemChosenCallback(choice -> {
         String sectionId = sectionNode.ids().get(choice.index());
         HaxeSectionSelectionStore.getInstance(project).setSelectedSection(sectionNode.buildFile().file(), sectionId);
-        refreshTree();
       })
       .createPopup()
       .show(point);
