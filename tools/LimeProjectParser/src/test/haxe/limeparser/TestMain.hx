@@ -152,6 +152,10 @@ class TestMain {
 		assertTrue(hasLib(evaluator, "swf"), "haxelib.json transitive dep listed");
 		assertTrue(hasLib(evaluator, "lime"), "include.xml haxelib listed");
 		assertEquals("9.5.0", evaluator.defines.get("openfl"), "version define from resolution");
+		// the resolved version is NOT a pin: echoing it would later request that
+		// release over the repository's current (git/dev) selection
+		assertEquals("", libVersion(evaluator, "openfl"), "unpinned declaration stays unpinned");
+		assertEquals("", libVersion(evaluator, "swf"), "transitive libraries carry no pin");
 		assertTrue(evaluator.haxedefs.exists("openfl-shipped"), "include.xml haxedef merged");
 		assertTrue(evaluator.sources.contains("/lib/swf/3,4,0/src"), "transitive classpath collected");
 		var rebased = Lambda.exists(evaluator.sources, source -> StringTools.endsWith(source, "extra")
@@ -218,6 +222,11 @@ class TestMain {
 
 	static function hasLib(evaluator:ProjectXmlEvaluator, name:String):Bool {
 		return Lambda.exists(evaluator.haxelibs, lib -> lib.name == name);
+	}
+
+	static function libVersion(evaluator:ProjectXmlEvaluator, name:String):Null<String> {
+		var found = Lambda.find(evaluator.haxelibs, lib -> lib.name == name);
+		return found == null ? null : found.version;
 	}
 
 	static function assertTrue(condition:Bool, label:String):Void {

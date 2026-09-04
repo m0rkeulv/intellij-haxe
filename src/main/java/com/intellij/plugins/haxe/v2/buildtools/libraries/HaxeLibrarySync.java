@@ -250,6 +250,7 @@ public final class HaxeLibrarySync {
           if (section.classpaths().isEmpty()) continue;
           String version = sectionVersion(section, dependency);
           String entryName = version == null ? section.name() : section.name() + " " + version;
+          if (isScmCheckout(section)) entryName += " [git]";
           libraries.merge(managedLibraryName(entryName), section.classpaths(), HaxeLibrarySync::unionPreservingOrder);
         }
       }
@@ -263,6 +264,22 @@ public final class HaxeLibrarySync {
                                        HaxeBuildFileInfo.HaxeLibDependency dependency) {
     if (section.version() != null) return section.version();
     return section.name().equals(dependency.name()) ? dependency.version() : null;
+  }
+
+  /**
+   * A git/hg checkout serves from {@code <repo>/<lib>/git/...}; its
+   * {@code -D} marker still names the release in the checkout's
+   * haxelib.json, so the entry says which it really is.
+   */
+  private static boolean isScmCheckout(HaxelibPathParser.LibrarySection section) {
+    for (String classpath : section.classpaths()) {
+      String[] segments = classpath.replace('\\', '/').split("/");
+      for (int i = 1; i < segments.length; i++) {
+        boolean checkoutSegment = segments[i].equals("git") || segments[i].equals("hg");
+        if (checkoutSegment && segments[i - 1].equalsIgnoreCase(section.name())) return true;
+      }
+    }
+    return false;
   }
 
   @NotNull

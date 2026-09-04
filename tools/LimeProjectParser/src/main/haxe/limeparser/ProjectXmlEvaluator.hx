@@ -171,7 +171,7 @@ class ProjectXmlEvaluator {
 
 		var resolved = haxelibResolver(name, version);
 		if (resolved == null) {
-			registerHaxelib(name, version);
+			registerHaxelib(name, version, version);
 			return;
 		}
 		// the resolver returns the library plus its transitive dependency chain;
@@ -179,7 +179,12 @@ class ProjectXmlEvaluator {
 		// HXProject.fromHaxelib) - it can add more haxelibs, haxedefs and sources
 		for (library in resolved) {
 			if (Lambda.exists(haxelibs, lib -> lib.name == library.name)) continue;
-			registerHaxelib(library.name, library.version);
+			// only the project's own pin is a pin: the resolved version is what
+			// the checkout's haxelib.json says, and echoing it as a request
+			// would make a later `haxelib path name:version` pick that release
+			// over the repository's current (git/dev) selection
+			var declaredVersion = library.name == name ? version : "";
+			registerHaxelib(library.name, declaredVersion, library.version);
 			for (classpath in library.classpaths) {
 				if (!sources.contains(classpath)) {
 					sources.push(classpath);
@@ -198,12 +203,13 @@ class ProjectXmlEvaluator {
 		}
 	}
 
-	function registerHaxelib(name:String, version:String):Void {
-		haxelibs.push({name: name, version: version});
+	/** The listed version is the project's DECLARED pin (empty when none); the define carries the resolved one. **/
+	function registerHaxelib(name:String, declaredVersion:String, resolvedVersion:String):Void {
+		haxelibs.push({name: name, version: declaredVersion});
 		// lime defines each haxelib's name so later conditions can test for it
 		// (why if="openfl" works below a <haxelib name="openfl"/> line)
 		if (!defines.exists(name)) {
-			defines.set(name, version);
+			defines.set(name, resolvedVersion);
 		}
 	}
 
