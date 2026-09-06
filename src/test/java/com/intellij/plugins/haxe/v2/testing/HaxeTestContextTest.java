@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * invalidates the cache). The conventional-name path is covered by the
  * line-marker test.
  */
-@DisplayName("Test runner: gutter context")
-public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
+@DisplayName("Test runner: test context")
+public class HaxeTestContextTest extends HaxeCodeInsightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
@@ -33,7 +33,7 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "sub/src/TestMain.hx");
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
 
-    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(psiFile(source));
+    HaxeTestContext context = HaxeTestContext.forFile(psiFile(source));
     assertNotNull(context, "the marked build's classpaths contain the file");
     assertEquals("utest", context.framework().libraryName(), "no -lib in the build falls to the utest default");
     assertEquals(buildFile.getPath(), context.testsBuildPath());
@@ -46,7 +46,7 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile outside = myFixture.copyFileToProject("src/TestMain.hx", "elsewhere/TestMain.hx");
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
 
-    assertNull(HaxeTestGutterContext.contextFor(psiFile(outside)),
+    assertNull(HaxeTestContext.forFile(psiFile(outside)),
                "a file no marked tests build claims gets no markers");
   }
 
@@ -58,10 +58,10 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
     HaxeTestsBuildFileStore store = HaxeTestsBuildFileStore.getInstance(getProject());
 
     store.markTestsFile("container", buildFile.getPath());
-    assertNotNull(HaxeTestGutterContext.contextFor(psiFile(source)));
+    assertNotNull(HaxeTestContext.forFile(psiFile(source)));
 
     store.unmarkTestsFile("container", buildFile.getPath());
-    assertNull(HaxeTestGutterContext.contextFor(psiFile(source)),
+    assertNull(HaxeTestContext.forFile(psiFile(source)),
                "the store change must invalidate the cached context");
   }
 
@@ -72,7 +72,7 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "limeproj/src/TestMain.hx");
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
 
-    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(psiFile(source));
+    HaxeTestContext context = HaxeTestContext.forFile(psiFile(source));
     assertNotNull(context, "the lime build's declared sources contain the file");
     assertEquals("utest", context.framework().libraryName(), "the declared utest haxelib drives the framework");
     assertEquals(buildFile.getPath(), context.testsBuildPath());
@@ -84,7 +84,7 @@ public class HaxeTestGutterContextTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile buildFile = myFixture.copyFileToProject("targets/lime-project.xml", "limeproj/tests/project.xml");
     VirtualFile source = myFixture.copyFileToProject("src/TestMain.hx", "limeproj/tests/src/TestMain.hx");
 
-    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(psiFile(source));
+    HaxeTestContext context = HaxeTestContext.forFile(psiFile(source));
     assertNotNull(context, "a lime project under a tests directory is a conventional candidate");
     assertEquals(buildFile.getPath(), context.testsBuildPath());
   }

@@ -371,6 +371,7 @@
     <programRunner implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestDebugRunner"/>
     <runLineMarkerContributor language="Haxe"
                               implementationClass="com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunLineMarkerContributor"/>
+    <runConfigurationProducer implementation="com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurationProducer"/>
 
     <moduleService serviceImplementation="com.intellij.plugins.haxe.ide.module.HaxeModuleSettings"/>
 
@@ -945,6 +946,8 @@
               topic="com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener"/>
     <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
+    <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
+              topic="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener"/>
 <!--    <listener class="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"-->
 <!--              topic="com.intellij.openapi.vfs.VirtualFileListener"/>-->
 <!--    <listener class="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"-->

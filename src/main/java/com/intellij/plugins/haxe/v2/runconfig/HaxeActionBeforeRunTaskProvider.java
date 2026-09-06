@@ -211,12 +211,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
     HaxeUnsavedDocuments.saveAll();
     // test compiles derive their arguments at LAUNCH - the task's stored
-    // snapshot goes stale when the framework/reporter wiring evolves. A
-    // single-run (gutter) compile arrives fully formed: its generated main
-    // replaces the build's own, so the action-plus-file resolution and the
-    // section scoping below must not touch it.
+    // snapshot goes stale when the framework/reporter wiring evolves. An
+    // hxml single-run (gutter) compile arrives fully formed: its generated
+    // main replaces the build's own, so the action-plus-file resolution and
+    // the section scoping below must not touch it.
     boolean singleRun = configuration instanceof HaxeTestRunConfiguration testConfiguration
-                        && testConfiguration.hasSingleRun();
+                        && testConfiguration.compilesThroughTemplate();
     HaxeCompileCommands.Resolved resolved;
     if (singleRun) {
       resolved = ((HaxeTestRunConfiguration)configuration).resolveSingleRunCompile();

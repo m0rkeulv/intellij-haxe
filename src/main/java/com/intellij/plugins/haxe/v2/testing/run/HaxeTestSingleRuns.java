@@ -5,9 +5,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
-import com.intellij.util.execution.ParametersListUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -15,7 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -27,17 +25,27 @@ import org.jetbrains.annotations.Nullable;
  * target's output redirected into a per-run directory under a short temp
  * root (the real tests artifact must not be overwritten; see
  * {@link #generatedDirectory} for why short), and the generated
- * main's classpath appended. Templates live under
- * {@code resources/testFrameworks/<framework>/}; {@code ${TEST_CLASS}} /
- * {@code ${TEST_METHOD}} are substituted at generation time.
+ * main's classpath appended. A lime-family build instead compiles through
+ * its tool with the generated main overriding the app's (see
+ * {@code HaxeTestLaunchPlanner}); only {@link #generatedDirectory} serves
+ * it. Templates live under
+ * {@code resources/testFrameworks/<framework>/}; the suite list is
+ * substituted at generation time as {@code ${NEW_SUITES}} ({@code new A(),
+ * new B()}) or {@code ${ADD_SUITES}} ({@code add(A); add(B);}), a
+ * single-class template as {@code ${TEST_CLASS}} / {@code ${TEST_METHOD}}.
  */
 @CustomLog
 final class HaxeTestSingleRuns {
 
-  /** The gutter selection a run narrows to: a suite class, optionally one of its test methods. */
-  record SingleRun(@NotNull String testClass, @Nullable String testMethod) {
+  /** The selection a run narrows to: one or more suite classes, or one test method of a single suite. */
+  record SingleRun(@NotNull List<String> testClasses, @Nullable String testMethod) {
     boolean singleTest() {
       return testMethod != null;
+    }
+
+    @NotNull
+    String firstClass() {
+      return testClasses.get(0);
     }
   }
 
@@ -89,104 +97,6 @@ final class HaxeTestSingleRuns {
   }
 
   /**
-   * The lime-family flavor of {@link #resolveCompile}: a DIRECT haxe compile
-   * over the tool's effective display arguments — the tool itself cannot
-   * compile a substitute main. Entry point swapped and output redirected as
-   * in the hxml path. The display output ECHOES arguments injected into
-   * earlier builds (the tool persists CLI extras in its export state), so
-   * appended pairs already present verbatim are skipped — the reporter
-   * macro attached twice would stream every event twice. Call in a read
-   * action; the caller fetches the display arguments OUTSIDE it.
-   */
-  @Nullable
-  static HaxeCompileCommands.Resolved resolveLimeCompile(@NotNull Project project,
-                                                         @NotNull VirtualFile buildFile,
-                                                         @NotNull HaxeTestFramework framework,
-                                                         @NotNull String extraArguments,
-                                                         @NotNull SingleRun singleRun,
-                                                         @NotNull List<String> effectiveArguments) {
-    Path generated = generatedDirectory(buildFile.getPath(), framework, singleRun);
-    if (generated == null) return null;
-
-    String containerId = HaxeContainers.containerIdFor(project, buildFile);
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    List<String> command = new ArrayList<>();
-    command.add(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk));
-    command.addAll(swapEntryPoint(sanitizedDisplayArguments(effectiveArguments), generated));
-    appendSkippingDuplicates(command, ParametersListUtil.parse(extraArguments));
-    command.add("-cp");
-    command.add(generated.toString());
-    command.add("--main");
-    command.add(MAIN_CLASS);
-
-    String workDirectory = HaxeBuildWorkDirectories.workDirectory(project, buildFile);
-    // never server-connected: the run must own its artifact, and swf output through the server corrupts
-    return new HaxeCompileCommands.Resolved(containerId, command, workDirectory, String.join(" ", command), false);
-  }
-
-  // no-compilation: the display output describes a TYPING run - it suppresses
-  //   hxcpp's native step and pairs with --no-output (dropped below), which
-  //   suppresses generation entirely; both must go to produce an artifact.
-  // lime-cffi: lime ships a SHADOWING haxe/Timer.hx whose lime_cffi branch
-  //   swaps haxe.Timer for lime's event-loop timer - the frameworks use
-  //   Timer, so the define drags the whole lime runtime into the headless
-  //   single-run binary and its machinery keeps the process alive after the
-  //   tests (no exit on hl). Without it the std-like branch compiles and
-  //   lime/openfl classes fall to their stub backends.
-  private static final Set<String> DROPPED_DEFINES = Set.of("no-compilation", "lime-cffi");
-
-  /**
-   * Display output repurposed as a compilable argument list: drops
-   * {@code --no-output}, the {@link #DROPPED_DEFINES} and any echoed
-   * {@code --connect} pair (persisted from an earlier server build) — the
-   * single-run compile owns its artifact and never rides the compilation
-   * server.
-   */
-  @NotNull
-  private static List<String> sanitizedDisplayArguments(@NotNull List<String> arguments) {
-    List<String> sanitized = new ArrayList<>(arguments.size());
-    for (int i = 0; i < arguments.size(); i++) {
-      String argument = arguments.get(i);
-      boolean hasValue = i + 1 < arguments.size();
-      if (argument.equals("--no-output")) continue;
-      if (argument.equals("--connect") && hasValue) {
-        i++;
-        continue;
-      }
-      boolean droppedDefine = HxmlFileParser.DEFINE_FLAGS.contains(argument)
-                              && hasValue && DROPPED_DEFINES.contains(arguments.get(i + 1));
-      if (droppedDefine) {
-        i++;
-        continue;
-      }
-      sanitized.add(argument);
-    }
-    return sanitized;
-  }
-
-  /** Appends flag/value pairs, skipping pairs the command already carries verbatim (see {@link #resolveLimeCompile}). */
-  private static void appendSkippingDuplicates(@NotNull List<String> command, @NotNull List<String> pairs) {
-    for (int i = 0; i + 1 < pairs.size(); i += 2) {
-      String flag = pairs.get(i);
-      String value = pairs.get(i + 1);
-      boolean present = false;
-      for (int j = 0; j + 1 < command.size(); j++) {
-        if (command.get(j).equals(flag) && command.get(j + 1).equals(value)) {
-          present = true;
-          break;
-        }
-      }
-      if (!present) {
-        command.add(flag);
-        command.add(value);
-      }
-    }
-    if (pairs.size() % 2 == 1) {
-      command.add(pairs.get(pairs.size() - 1));
-    }
-  }
-
-  /**
    * The artifact the redirected target flag writes, resolved the same way
    * {@link #swapEntryPoint} redirects it; null for target-less/interp
    * sections (the compile IS the run) or when generation state is missing.
@@ -198,29 +108,6 @@ final class HaxeTestSingleRuns {
                        @NotNull HaxeTarget target) {
     Path generated = generatedDirectory(buildFile.getPath(), framework, singleRun);
     return generated == null ? null : outputFor(generated, target);
-  }
-
-  /**
-   * Writes the one-page host for a BROWSER-hosted single run beside the js
-   * artifact and returns its directory (the served web root); null when the
-   * write fails. Lime's whole-build html5 output ships its own index.html —
-   * only the direct-haxe single-run compile needs this harness.
-   */
-  @Nullable
-  static Path browserHarnessRoot(@NotNull Path jsArtifact) {
-    Path directory = jsArtifact.getParent();
-    if (directory == null) return null;
-    String page = """
-      <!DOCTYPE html><html><head><meta charset="utf-8"></head>\
-      <body><script src="%s"></script></body></html>""".formatted(jsArtifact.getFileName());
-    try {
-      Files.createDirectories(directory);
-      Files.writeString(directory.resolve("index.html"), page);
-      return directory;
-    } catch (IOException e) {
-      log.warn("cannot write the browser test harness: " + e.getMessage());
-      return null;
-    }
   }
 
   // Strips the section's entry point (--main/-x) and redirects its target
@@ -277,7 +164,7 @@ final class HaxeTestSingleRuns {
    * the template is missing or the write fails.
    */
   @Nullable
-  private static Path generatedDirectory(@NotNull String buildFilePath,
+  static Path generatedDirectory(@NotNull String buildFilePath,
                                          @NotNull HaxeTestFramework framework,
                                          @NotNull SingleRun singleRun) {
     String templateName = framework.singleRunTemplate(singleRun.singleTest());
@@ -317,7 +204,12 @@ final class HaxeTestSingleRuns {
         return null;
       }
       String template = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-      String substituted = template.replace("${TEST_CLASS}", singleRun.testClass());
+      String newSuites = singleRun.testClasses().stream().map(suite -> "new " + suite + "()").collect(Collectors.joining(", "));
+      String addSuites = singleRun.testClasses().stream().map(suite -> "add(" + suite + ");").collect(Collectors.joining("\n\t\t"));
+      String substituted = template
+        .replace("${NEW_SUITES}", newSuites)
+        .replace("${ADD_SUITES}", addSuites)
+        .replace("${TEST_CLASS}", singleRun.firstClass());
       if (singleRun.testMethod() != null) {
         substituted = substituted.replace("${TEST_METHOD}", singleRun.testMethod());
       }

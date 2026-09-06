@@ -34,8 +34,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.*;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.runner.debugger.browser.HaxeBrowserTestSupport;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFramework;
 import com.intellij.util.PathUtil;
@@ -64,7 +64,8 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   private static final String FILTER_PATTERN = "filterPattern";
   private static final String TEST_CLASS = "testClass";
   private static final String TEST_METHOD = "testMethod";
-  private static final int LIME_DISPLAY_TIMEOUT_MS = 60_000;
+  // a haxe qualified name never holds a comma
+  private static final String SUITE_SEPARATOR = ",";
 
   private String buildFilePath = "";
   private String filterPattern = "";
@@ -97,30 +98,57 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     testMethod = StringUtil.notNullize(testMethodName);
   }
 
+  /** Narrows the run to several suite classes (a file, directory or multi-selection run). */
+  public void setSingleRun(@NotNull List<String> testClassNames) {
+    setSingleRun(String.join(SUITE_SEPARATOR, testClassNames), null);
+  }
+
+  /** The suite classes, joined by {@link #SUITE_SEPARATOR} - one for a gutter run, several for a directory run. */
   public String getTestClass() {
     return testClass;
+  }
+
+  @NotNull
+  public List<String> getTestClasses() {
+    return testClass.isEmpty() ? List.of() : List.of(testClass.split(SUITE_SEPARATOR));
   }
 
   public String getTestMethod() {
     return testMethod;
   }
 
-  /** Whether this configuration runs a gutter-selected single suite/test instead of the whole tests build. */
+  /** Whether this configuration runs selected suites/tests instead of the whole tests build. */
   public boolean hasSingleRun() {
     return !testClass.isEmpty();
   }
 
-  /** The gutter selection, or null for a whole-build run. */
+  /**
+   * Whether the before-run compile is the template compile of
+   * {@link HaxeTestSingleRuns} (hxml single runs) rather than the build's
+   * own action: a lime-family single run compiles through the tool with the
+   * generated main overriding the app's, so it stays an action compile whose
+   * extra arguments carry the override.
+   */
+  public boolean compilesThroughTemplate() {
+    if (!hasSingleRun()) return false;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    if (file == null || !file.isValid()) return false;
+    HaxeBuildFileType type = HaxeReadActions.compute(() -> HaxeBuildFileScanner.detectType(getProject(), file));
+    return !LimeProjects.isLimeFamily(type);
+  }
+
+  /** The selection, or null for a whole-build run. */
   @Nullable
   HaxeTestSingleRuns.SingleRun singleRun() {
     if (testClass.isEmpty()) return null;
-    return new HaxeTestSingleRuns.SingleRun(testClass, StringUtil.nullize(testMethod));
+    return new HaxeTestSingleRuns.SingleRun(getTestClasses(), StringUtil.nullize(testMethod));
   }
 
   /**
-   * The single-run compile the before-run step performs — the whole command,
-   * not extra arguments: the template main replaces the build's own, so the
-   * normal action-plus-file resolution cannot be reused. Null when this is a
+   * The template compile the before-run step performs for an hxml single run
+   * (see {@link #compilesThroughTemplate}) — the whole command, not extra
+   * arguments: the template main replaces the build's own, so the normal
+   * action-plus-file resolution cannot be reused. Null when this is a
    * whole-build configuration or the compile cannot be resolved.
    */
   @Nullable
@@ -131,46 +159,8 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     if (file == null || !file.isValid()) return null;
     HaxeTestFramework framework = ReadAction.computeBlocking(
       () -> HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFilePath));
-    HaxeBuildFileType type = ReadAction.computeBlocking(
-      () -> HaxeBuildFileScanner.detectType(getProject(), file));
-    if (LimeProjects.isLimeFamily(type)) {
-      return resolveLimeSingleRunCompile(file, type, framework, run);
-    }
     return ReadAction.computeBlocking(
       () -> HaxeTestLaunchPlanner.singleRunCompile(getProject(), file, framework, run));
-  }
-
-  /** The inputs of a lime display invocation, captured under the read lock. */
-  private record LimeDisplayInputs(String haxelibExecutable, String tool, String directory,
-                                   String fileName, String targetFlag) {
-  }
-
-  /** The lime flavor: the tool's display mode SPAWNS a process, so it runs between the read actions, never inside one. */
-  @Nullable
-  private HaxeCompileCommands.Resolved resolveLimeSingleRunCompile(@NotNull VirtualFile file,
-                                                                   @NotNull HaxeBuildFileType type,
-                                                                   @NotNull HaxeTestFramework framework,
-                                                                   @NotNull HaxeTestSingleRuns.SingleRun run) {
-    LimeDisplayInputs inputs = ReadAction.computeBlocking(() -> limeDisplayInputs(file, type));
-    if (inputs == null) return null;
-    List<String> effectiveArguments = LimeProjects.displayArguments(
-      inputs.haxelibExecutable(), inputs.tool(), inputs.directory(),
-      inputs.fileName(), inputs.targetFlag(), LIME_DISPLAY_TIMEOUT_MS);
-    if (effectiveArguments == null) return null;
-    return ReadAction.computeBlocking(
-      () -> HaxeTestLaunchPlanner.singleRunLimeCompile(getProject(), file, framework, run, effectiveArguments));
-  }
-
-  /** Everything the display invocation needs, resolved under the caller's read action; null for a parentless file. */
-  @Nullable
-  private LimeDisplayInputs limeDisplayInputs(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
-    VirtualFile parent = file.getParent();
-    if (parent == null) return null;
-    String containerId = HaxeContainers.containerIdFor(getProject(), file);
-    String environmentSdk = HaxeEnvironmentStore.getInstance(getProject()).getSdkName(containerId);
-    String haxelibExecutable = HaxeToolPathResolver.resolveHaxelibExecutable(getProject(), environmentSdk);
-    String targetFlag = LimeProjects.selectedTargetFlag(getProject(), type, file);
-    return new LimeDisplayInputs(haxelibExecutable, LimeProjects.toolFor(type), parent.getPath(), file.getName(), targetFlag);
   }
 
   /**
@@ -202,7 +192,8 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   }
 
   /**
-   * The compile arguments for the CURRENT framework/reporter wiring. The
+   * The compile arguments for the CURRENT framework/reporter wiring and
+   * selection (a lime-family single run's main override included). The
    * before-run task recomputes these at launch — its stored snapshot goes
    * stale whenever the wiring evolves (a plugin update changing the injection
    * would otherwise keep compiling with the old arguments forever).
@@ -210,7 +201,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   @NotNull
   public String currentCompileArguments() {
     return ReadAction.computeBlocking(
-      () -> HaxeTestLaunchPlanner.compileArguments(getProject(), buildFilePath, filterPattern));
+      () -> HaxeTestLaunchPlanner.compileArguments(getProject(), buildFilePath, filterPattern, singleRun()));
   }
 
   @NotNull
@@ -238,6 +229,10 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   @Override
   public @Nullable String suggestedName() {
     if (StringUtil.isEmptyOrSpaces(buildFilePath)) return null;
+    List<String> suites = getTestClasses();
+    if (suites.size() > 1) {
+      return HaxeBundle.message("haxe.test.config.suggested.suites.name", suites.size(), PathUtil.getFileName(buildFilePath));
+    }
     if (hasSingleRun()) {
       String shortClass = StringUtil.getShortName(testClass);
       String test = testMethod.isEmpty() ? shortClass : shortClass + "." + testMethod;

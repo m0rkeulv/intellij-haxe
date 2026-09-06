@@ -6,12 +6,12 @@
 // dispatch calls haxe.Timer.delay there - a thread with no event loop on
 // HashLink, so setting a handler crashes the run's completion (verified
 // live). Without one the runner's thread handshake ends the process, and
-// verdicts ride the reported events. The ${TEST_CLASS} token is substituted
+// verdicts ride the reported events. The ${ADD_SUITES} token (one add() per selected class) is substituted
 // before the compile; this file is a template, never compiled as-is.
 class IjSingleSuite extends massive.munit.TestSuite {
 	public function new() {
 		super();
-		add(${TEST_CLASS});
+		${ADD_SUITES}
 	}
 }
 

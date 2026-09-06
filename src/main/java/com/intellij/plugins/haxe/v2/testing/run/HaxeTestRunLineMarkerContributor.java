@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
-import com.intellij.plugins.haxe.v2.testing.HaxeTestGutterContext;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestClasses;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestContext;
 import com.intellij.execution.lineMarker.RunLineMarkerContributor;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -13,9 +14,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeIdentifier;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import javax.swing.Icon;
 import org.jetbrains.annotations.NotNull;
@@ -24,7 +23,7 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Run/Debug gutter markers on test classes and methods. A marker appears only
  * when a marked-or-conventional tests build owns the file (see
- * {@link HaxeTestGutterContext})
+ * {@link HaxeTestContext})
  * and that build's framework recognizes the element - class markers run the
  * suite through the framework's single-suite template, method markers the one
  * test (frameworks without a method mechanism show class markers only).
@@ -51,46 +50,28 @@ public final class HaxeTestRunLineMarkerContributor extends RunLineMarkerContrib
 
   @Nullable
   private static Info classInfo(@NotNull PsiElement element, @NotNull HaxeClass haxeClass) {
-    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(element.getContainingFile());
+    HaxeTestContext context = HaxeTestContext.forFile(element.getContainingFile());
     if (context == null || !context.framework().isTestClass(haxeClass)) return null;
-    String reference = templateReference(haxeClass);
+    String reference = HaxeTestClasses.templateReference(haxeClass);
     if (reference == null) return null;
     return info(context, reference, null, haxeClass.getName(), AllIcons.RunConfigurations.TestState.Run_run);
   }
 
   @Nullable
   private static Info methodInfo(@NotNull PsiElement element, @NotNull HaxeMethod method) {
-    HaxeTestGutterContext.TestContext context = HaxeTestGutterContext.contextFor(element.getContainingFile());
+    HaxeTestContext context = HaxeTestContext.forFile(element.getContainingFile());
     if (context == null || context.framework().singleRunTemplate(true) == null) return null;
     HaxeClass enclosing = PsiTreeUtil.getParentOfType(method, HaxeClass.class);
     if (enclosing == null) return null;
     if (!context.framework().isTestClass(enclosing) || !context.framework().isTestMethod(method)) return null;
-    String reference = templateReference(enclosing);
+    String reference = HaxeTestClasses.templateReference(enclosing);
     if (reference == null) return null;
     String presentable = enclosing.getName() + "." + method.getName();
     return info(context, reference, method.getName(), presentable, AllIcons.RunConfigurations.TestState.Run);
   }
 
-  /**
-   * The spelling the generated template reaches the class by. A module's
-   * non-primary class is not reachable by its bare dotted name from other
-   * modules — it needs the module in the path ({@code pack.Module.Class}).
-   */
-  @Nullable
-  private static String templateReference(@NotNull HaxeClass haxeClass) {
-    String qualifiedName = haxeClass.getQualifiedName();
-    String className = haxeClass.getName();
-    if (qualifiedName == null || className == null) return null;
-    PsiFile file = haxeClass.getContainingFile();
-    VirtualFile virtualFile = file == null ? null : file.getVirtualFile();
-    String moduleName = virtualFile == null ? null : virtualFile.getNameWithoutExtension();
-    if (moduleName == null || moduleName.equals(className)) return qualifiedName;
-    int classStart = qualifiedName.length() - className.length();
-    return qualifiedName.substring(0, classStart) + moduleName + "." + className;
-  }
-
   @NotNull
-  private static Info info(@NotNull HaxeTestGutterContext.TestContext context,
+  private static Info info(@NotNull HaxeTestContext context,
                            @NotNull String testClass,
                            @Nullable String testMethod,
                            @Nullable String presentable,

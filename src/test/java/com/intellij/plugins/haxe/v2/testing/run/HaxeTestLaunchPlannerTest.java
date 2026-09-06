@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeSectionSelectionStor
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
+import com.intellij.util.execution.ParametersListUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -103,7 +104,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @DisplayName("single suite run swaps the entry point for the generated main")
   public void testSingleSuiteRunSwapsTheEntryPointForTheGeneratedMain() throws Exception {
     String path = fixturePath("test.hxml");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("cases.SampleTest", null);
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("cases.SampleTest"), null);
     Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
     List<String> command = plan.command();
 
@@ -125,7 +126,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @DisplayName("single test run adds the anchored utest pattern")
   public void testSingleTestRunAddsTheAnchoredUtestPattern() throws ExecutionException {
     String path = fixturePath("test.hxml");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("cases.SampleTest", "testPasses");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("cases.SampleTest"), "testPasses");
     Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
     assertTrue(plan.command().contains("UTEST_PATTERN=\\.testPasses$"),
                "anchored method pattern expected: " + plan.command());
@@ -135,7 +136,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @DisplayName("single run redirects the artifact away from the tests output")
   public void testSingleRunRedirectsTheArtifactAwayFromTheTestsOutput() throws ExecutionException {
     String path = fixturePath("targets/hl.hxml");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("cases.SampleTest", null);
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("cases.SampleTest"), null);
     Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
     assertFalse(plan.singleStage(), "artifact targets keep the compile in the before-run step");
     assertTrue(plan.command().get(1).endsWith("single.hl"),
@@ -148,7 +149,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @DisplayName("munit single method narrows through the macro define")
   public void testMunitSingleMethodNarrowsThroughTheMacroDefine() throws ExecutionException {
     String path = fixturePath("targets/munit-neko.hxml");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", "testAdd");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), "testAdd");
     HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
 
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
@@ -161,84 +162,49 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("lime single run launches the redirected artifact for the selected target")
-  public void testLimeSingleRunLaunchesTheRedirectedArtifactForTheSelectedTarget() throws ExecutionException {
+  @DisplayName("lime single run launches the packaged binary like the whole build")
+  public void testLimeSingleRunLaunchesThePackagedBinaryLikeTheWholeBuild() throws ExecutionException {
     String path = fixturePath("targets/lime-project.xml");
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
-    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
-    assertFalse(plan.singleStage(), "the compile stays in the before-run step");
-    assertEquals(HaxeTarget.NEKO, plan.target());
-    assertTrue(plan.command().get(1).endsWith("single.n"),
-               "the run must launch the redirected artifact: " + plan.command());
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), null);
+
+    Plan single = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
+    Plan whole = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
+    assertFalse(single.singleStage(), "the compile stays in the before-run step");
+    assertEquals(HaxeTarget.NEKO, single.target());
+    assertEquals(whole.command(), single.command(), "the single run launches the same packaged binary");
+    assertEquals(whole.workDirectory(), single.workDirectory());
   }
 
-  // what the tool's display mode prints: the build's entry point, its target
-  // output, an ECHO of a reporter macro and a --connect pair injected into
-  // earlier builds (the tool persists CLI extras in its export state), and
-  // the typing-run suppressors some targets carry (--no-output, hl)
-  private static final List<String> DISPLAY_MODE_ARGUMENTS = List.of(
-    "-main", "TestMain",
-    "-cp", "src",
-    "-D", "no-compilation",
-    "-D", "lime-cffi",
-    "-swf", "export/flash/bin/LimeTests.swf",
-    "--macro", "intellij_utest.Macro.init()",
-    "--connect", "51433",
-    "--no-output");
-
-  private record LimeSingleRun(HaxeCompileCommands.Resolved compile, VirtualFile buildFile) {}
-
-  /** The flash-lane lime single-run compile over {@link #DISPLAY_MODE_ARGUMENTS}. */
-  private LimeSingleRun limeSingleRunCompile() {
+  @Test
+  @DisplayName("lime single run compile arguments override the app main with the generated one")
+  public void testLimeSingleRunCompileArgumentsOverrideTheAppMainWithTheGeneratedOne() throws IOException {
     String path = fixturePath("targets/lime-project.xml");
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    assertNotNull(file);
-    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Flash");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
-    HaxeCompileCommands.Resolved compile = HaxeTestLaunchPlanner.singleRunLimeCompile(
-      getProject(), file, HaxeTestFrameworks.forBuildFile(getProject(), path), singleRun, DISPLAY_MODE_ARGUMENTS);
-    assertNotNull(compile, "the lime single-run compile must resolve");
-    return new LimeSingleRun(compile, file);
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), "testAdd");
+
+    List<String> arguments = ParametersListUtil.parse(HaxeTestLaunchPlanner.compileArguments(getProject(), path, null, singleRun));
+
+    assertTrue(arguments.contains("--app-main=" + HaxeTestSingleRuns.MAIN_CLASS),
+               "the generated main overrides the app's: " + arguments);
+    assertTrue(arguments.contains("-Dteamcity_suite_name=Target: Neko"), "the suite label names the target: " + arguments);
+    boolean narrowed = arguments.stream().anyMatch(argument -> argument.startsWith("-DUTEST_PATTERN=") && argument.contains("testAdd"));
+    assertTrue(narrowed, "a single test rides the framework's narrowing define: " + arguments);
+    Path generatedMain = generatedSourceRoot(arguments).resolve(HaxeTestSingleRuns.MAIN_CLASS + ".hx");
+    assertTrue(Files.isRegularFile(generatedMain), "the generated main is written: " + generatedMain);
+    assertTrue(Files.readString(generatedMain).contains("new CalculatorTest()"), "the template carries the selected suite");
   }
 
-  @Test
-  @DisplayName("lime single run compile swaps the entry point and redirects the output")
-  public void testLimeSingleRunCompileSwapsTheEntryPointAndRedirectsTheOutput() {
-    LimeSingleRun singleRun = limeSingleRunCompile();
-    List<String> command = singleRun.compile().command();
-
-    assertFalse(command.contains("TestMain"), "the build's own main is stripped: " + command);
-    int mainFlag = command.indexOf("--main");
-    assertEquals(HaxeTestSingleRuns.MAIN_CLASS, command.get(mainFlag + 1), "the generated main takes over");
-    assertTrue(command.get(command.indexOf("-swf") + 1).endsWith("single.swf"),
-               "the swf output is redirected away from the tests artifact: " + command);
-    assertEquals(singleRun.buildFile().getParent().getPath(), singleRun.compile().workDirectory());
-    assertFalse(singleRun.compile().connectEligible(), "swf output through the compilation server corrupts");
-  }
-
-  @Test
-  @DisplayName("lime single run compile forces the reporter macro once")
-  public void testLimeSingleRunCompileForcesTheReporterMacroOnce() {
-    List<String> command = limeSingleRunCompile().compile().command();
-
-    int reporterMacro = command.indexOf("intellij_utest.Macro.init()");
-    assertTrue(reporterMacro > 0, "the flash lane forces the live reporter macro: " + command);
-    assertEquals(reporterMacro, command.lastIndexOf("intellij_utest.Macro.init()"),
-                 "the echoed macro must not attach twice: " + command);
-  }
-
-  @Test
-  @DisplayName("lime single run compile scrubs the display arguments")
-  public void testLimeSingleRunCompileScrubsTheDisplayArguments() {
-    List<String> command = limeSingleRunCompile().compile().command();
-
-    assertFalse(command.contains("--no-output"), "the typing-run suppressor must go: " + command);
-    assertFalse(command.contains("no-compilation"), "hxcpp's skip define must go: " + command);
-    assertFalse(command.contains("lime-cffi"), "the lime runtime hook define must go: " + command);
-    assertFalse(command.contains("--connect"), "the echoed server pair must go: " + command);
-    assertFalse(command.contains("51433"), "the echoed server port goes with its flag: " + command);
+  /** The `--source=` entry holding the generated main (the reporter classpath is the other one). */
+  private static Path generatedSourceRoot(List<String> arguments) {
+    return arguments.stream()
+      .filter(argument -> argument.startsWith("--source="))
+      .map(argument -> Path.of(argument.substring("--source=".length())))
+      .filter(directory -> Files.exists(directory.resolve(HaxeTestSingleRuns.MAIN_CLASS + ".hx")))
+      .findFirst()
+      .orElseThrow(() -> new AssertionError("no --source= entry holds the generated main: " + arguments));
   }
 
   @Test
@@ -261,26 +227,24 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("html5 single run serves a generated harness beside the artifact")
-  public void testHtml5SingleRunServesAGeneratedHarnessBesideTheArtifact() throws Exception {
+  @DisplayName("html5 single run plans a browser hosted run over the packaged web root")
+  public void testHtml5SingleRunPlansABrowserHostedRunOverThePackagedWebRoot() throws Exception {
     String path = fixturePath("targets/lime-project.xml");
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "HTML5");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), null);
 
     Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false);
-    assertTrue(plan.browserHosted(), "the single-run js carries DOM-expecting lime code - browser-hosted");
-    Path harness = HaxeTestLaunchPlanner.browserWebRoot(plan).resolve("index.html");
-    assertTrue(Files.isRegularFile(harness), "generated harness expected: " + harness);
-    assertTrue(Files.readString(harness).contains("single.js"),
-               "the harness loads the redirected artifact");
+    assertTrue(plan.browserHosted(), "the packaged html5 output is served like the whole build");
+    assertTrue(plan.command().get(0).replace('\\', '/').endsWith("export/html5/bin"),
+               "the packaged web root is what gets served: " + plan.command());
   }
 
   @Test
   @DisplayName("single runs on nmml builds are refused")
   public void testSingleRunsOnNmmlBuildsAreRefused() {
     String path = fixturePath("targets/tests.nmml");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun("CalculatorTest", null);
+    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), null);
     assertThrows(ExecutionException.class,
                  () -> HaxeTestLaunchPlanner.planSingle(getProject(), path, singleRun, false));
   }

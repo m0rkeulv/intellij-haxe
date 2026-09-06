@@ -1,10 +1,10 @@
 // Entry point the IDE generates for a gutter-started run: one tink_unittest
 // suite class from the tests build, compiled with that build's classpaths,
-// defines and libraries. The ${TEST_CLASS} token is substituted before the
+// defines and libraries. The ${NEW_SUITES} token (one `new Suite()` per selected class) is substituted before the
 // compile; this file is a template, never compiled as-is.
 class IjSingleRun {
 	static function main() {
-		var batch = tink.unit.TestBatch.make([new ${TEST_CLASS}()]);
+		var batch = tink.unit.TestBatch.make([${NEW_SUITES}]);
 		tink.testrunner.Runner.run(batch).handle(exitHost);
 	}
 
