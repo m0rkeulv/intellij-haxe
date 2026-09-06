@@ -399,12 +399,14 @@ public final class HaxeProgramLaunches {
     return targetDir == null ? null : targetDir.resolve("bin");
   }
 
-  /// The `<app file>` name from the project xml; null for hxp (a script, not xml) or when undeclared.
+  /// The `<app file>` name the tool packages under: lime's default when a lime-family
+  /// xml declares none; null for hxp (a script, not xml) or an undeclared nmml one.
   @Nullable
   private static String appFileName(@NotNull HaxeBuildFile buildFile) {
     if (buildFile.type() == HaxeBuildFileType.HXP_PROJECT) return null;
     String content = ReadAction.computeBlocking(() -> HaxeBuildFileInspector.loadText(buildFile.file()));
-    return content == null ? null : ProjectXmlParser.parseAppFile(content);
+    if (content == null) return null;
+    return LimeProjects.isLimeFamily(buildFile.type()) ? LimeProjects.appFile(content) : ProjectXmlParser.parseAppFile(content);
   }
 
   /**

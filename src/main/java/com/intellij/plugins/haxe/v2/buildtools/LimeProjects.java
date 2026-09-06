@@ -51,7 +51,16 @@ public final class LimeProjects {
   /** The target flags whose packaged app runs in a BROWSER page, served and console-captured for test runs. */
   public static final Set<String> BROWSER_TARGETS = Set.of("html5");
 
+  /** The app file every lime platform falls back to when the project xml declares none. */
+  public static final String DEFAULT_APP_FILE = "MyApplication";
+
   private LimeProjects() {
+  }
+
+  /** The {@code <app file>} name the tool packages under: the declared one, else lime's default. */
+  @NotNull
+  public static String appFile(@NotNull String content) {
+    return StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppFile(content), DEFAULT_APP_FILE);
   }
 
   /** True for the types the lime tool can build; a plain hxp SCRIPT is not one of them. */
@@ -202,14 +211,12 @@ public final class LimeProjects {
     return exportBinDirectory(projectFile, content, targetFlag);
   }
 
-  /** The packaged swf a flash/air build exports ({@code <app path>/<target>/bin/<app file>.swf}), or null without an app file. */
+  /** The packaged swf a flash/air build exports ({@code <app path>/<target>/bin/<app file>.swf}), or null for another target. */
   @Nullable
   public static Path packagedSwf(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
     if (!FLASH_FAMILY_TARGETS.contains(targetFlag)) return null;
-    String appFile = ProjectXmlParser.parseAppFile(content);
-    if (appFile == null) return null;
     return exportBinDirectory(projectFile, content, targetFlag)
-      .resolve(appFile + ".swf")
+      .resolve(appFile(content) + ".swf")
       .normalize();
   }
 
@@ -235,15 +242,13 @@ public final class LimeProjects {
    * project file. Neko output is wrapped in a launcher executable and an HL
    * build ships a renamed copy of the hl runtime beside its hlboot.dat — for
    * all host targets the packaged binary itself is what runs. Null when the
-   * project xml declares no app file/path or the target is not host-launchable.
+   * target is not host-launchable.
    */
   @Nullable
   public static Path packagedBinary(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
     if (!HOST_LAUNCHABLE_TARGETS.contains(targetFlag)) return null;
-    String appFile = ProjectXmlParser.parseAppFile(content);
-    if (appFile == null) return null;
     return exportBinDirectory(projectFile, content, targetDirectory(targetFlag))
-      .resolve(HaxeSdkUtilBase.getExecutableName(appFile))
+      .resolve(HaxeSdkUtilBase.getExecutableName(appFile(content)))
       .normalize();
   }
 
@@ -280,18 +285,19 @@ public final class LimeProjects {
   /// lookups above answer the same layout as absolute paths at launch time.
   @Nullable
   public static String relativeTargetOutput(@NotNull String targetFlag, @NotNull String appPath, @NotNull String appFile) {
+    String name = StringUtil.defaultIfEmpty(appFile, DEFAULT_APP_FILE);
     return switch (targetFlag) {
       case "hl" -> appPath + "/hl/obj/ApplicationMain.hl";
-      case "html5" -> appPath + "/html5/bin/" + (appFile.isEmpty() ? "index" : appFile) + ".js";
-      case "flash" -> appPath + "/flash/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
+      case "html5" -> appPath + "/html5/bin/" + name + ".js";
+      case "flash" -> appPath + "/flash/bin/" + name + ".swf";
       // air: the descriptor (application.xml) sits at <app path>/air with the content swf in bin beside it
-      case "air" -> appPath + "/air/bin/" + (appFile.isEmpty() ? "Main" : appFile) + ".swf";
+      case "air" -> appPath + "/air/bin/" + name + ".swf";
       // desktop cpp: lime copies the built executable into bin, named after
       // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
-      case "windows" -> appFile.isEmpty() ? null : appPath + "/windows/bin/" + appFile + ".exe";
-      case "linux" -> appFile.isEmpty() ? null : appPath + "/linux/bin/" + appFile;
+      case "windows" -> appPath + "/windows/bin/" + name + ".exe";
+      case "linux" -> appPath + "/linux/bin/" + name;
       // neko is wrapped in a launcher executable named after the app, host-suffixed
-      case "neko" -> appFile.isEmpty() ? null : appPath + "/neko/bin/" + hostLauncherName(appFile);
+      case "neko" -> appPath + "/neko/bin/" + hostLauncherName(name);
       // TODO mac: the artifact is a .app bundle (Contents/MacOS/<app file>) - needs bundle-aware launch
       default -> null;
     };
