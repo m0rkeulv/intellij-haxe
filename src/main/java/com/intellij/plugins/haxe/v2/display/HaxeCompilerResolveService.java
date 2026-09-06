@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.DumbService;
@@ -458,6 +459,6 @@ public final class HaxeCompilerResolveService {
         PsiManager.getInstance(project).dropPsiCaches();
         DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler resolve results hydrated");
       }
-    });
+    }, ModalityState.nonModal());
   }
 }

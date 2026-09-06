@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
@@ -130,7 +131,7 @@ public class HaxeGeneratedPreviewGotoHandler implements GotoDeclarationHandler {
           // navigation is abandoned
           if (indicator.isCanceled()) return;
           ApplicationManager.getApplication().invokeLater(
-            () -> HaxeGeneratedCodePreview.openPrepared(project, prepared));
+            () -> HaxeGeneratedCodePreview.openPrepared(project, prepared), ModalityState.nonModal());
         }
       };
       dumpTask.queue();

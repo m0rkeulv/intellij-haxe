@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
@@ -117,6 +118,6 @@ public final class HaxeCompilerMetadataService {
       if (!project.isDisposed()) {
         DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler metadata updated");
       }
-    });
+    }, ModalityState.nonModal());
   }
 }

@@ -12,6 +12,7 @@ import com.intellij.execution.process.ProcessOutputType;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
@@ -340,13 +341,17 @@ public final class HaxeCompilationServerManager implements Disposable {
     }
   }
 
-  /** Publishes on the EDT, outside the manager's lock, so listeners can freely query state or refresh UI. */
+  /**
+   * Publishes on the EDT, outside the manager's lock, so listeners can freely query state or refresh UI.
+   * The explicit non-modal state matters: listeners drop PSI caches, and a runnable submitted from a
+   * pooled thread without one runs write-unsafe.
+   */
   private void fireStateChanged() {
     ApplicationManager.getApplication().invokeLater(() -> {
       if (!project.isDisposed()) {
         project.getMessageBus().syncPublisher(HaxeCompilationServerListener.TOPIC).serverStateChanged();
       }
-    });
+    }, ModalityState.nonModal());
   }
 
   private void notifyStartFailed(@NotNull String detail) {

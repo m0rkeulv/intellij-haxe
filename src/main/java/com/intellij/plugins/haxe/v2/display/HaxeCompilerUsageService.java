@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -172,6 +173,6 @@ public final class HaxeCompilerUsageService {
       if (!project.isDisposed()) {
         DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler usage data updated");
       }
-    });
+    }, ModalityState.nonModal());
   }
 }
