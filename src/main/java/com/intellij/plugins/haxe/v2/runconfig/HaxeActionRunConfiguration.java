@@ -21,6 +21,7 @@ import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolCommandLines;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.util.PathUtil;
@@ -116,14 +117,14 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
         }
         List<String> command = HaxeCompileCommands.connectIfEnabled(
           getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
-        GeneralCommandLine commandLine = new GeneralCommandLine(command)
-          .withWorkDirectory(resolved.workDirectory())
+        GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory())
           .withEnvironment(LimeProjects.commandEnvironment(command));
         KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine) {
-          // a run action wraps the app - long-running, sparse output; the default reader busy-polls it
+          // a run action wraps the app - long-running, sparse output; the default reader
+          // busy-polls it (a pty needs its own blocking reader)
           @Override
           protected @NotNull BaseOutputReader.Options readerOptions() {
-            return BaseOutputReader.Options.forMostlySilentProcess();
+            return hasPty() ? super.readerOptions() : BaseOutputReader.Options.forMostlySilentProcess();
           }
         };
         ProcessTerminatedListener.attach(processHandler);

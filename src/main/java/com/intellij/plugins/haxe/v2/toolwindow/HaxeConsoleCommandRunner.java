@@ -15,6 +15,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolCommandLines;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
@@ -42,8 +43,8 @@ public final class HaxeConsoleCommandRunner {
       return;
     }
     HaxeUnsavedDocuments.saveAll();
-    GeneralCommandLine commandLine = new GeneralCommandLine(command)
-      .withWorkDirectory(workDirectory != null ? workDirectory : project.getBasePath());
+    String effectiveWorkDirectory = workDirectory != null ? workDirectory : project.getBasePath();
+    GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, effectiveWorkDirectory);
     try {
       KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine);
       ProcessTerminatedListener.attach(processHandler);

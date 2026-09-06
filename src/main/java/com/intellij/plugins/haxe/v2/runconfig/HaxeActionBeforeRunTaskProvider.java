@@ -13,10 +13,10 @@ import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.executors.DefaultDebugExecutor;
-import com.intellij.execution.process.CapturingProcessHandler;
+import com.intellij.execution.process.KillableColoredProcessHandler;
+import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessListener;
-import com.intellij.execution.process.ProcessOutput;
 import com.intellij.execution.process.ProcessOutputType;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.notification.NotificationAction;
@@ -263,12 +263,11 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                                               task.getActionName(), PathUtil.getFileName(task.getBuildFilePath()));
     String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
 
-    CapturingProcessHandler handler;
+    KillableColoredProcessHandler handler;
     try {
-      GeneralCommandLine commandLine = new GeneralCommandLine(command)
-        .withWorkDirectory(resolved.workDirectory())
+      GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory())
         .withEnvironment(LimeProjects.commandEnvironment(command));
-      handler = new CapturingProcessHandler(commandLine);
+      handler = new KillableColoredProcessHandler(commandLine);
     }
     catch (ExecutionException e) {
       notifyFailure(project, StringUtil.notNullize(e.getMessage()));
@@ -296,10 +295,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                         outputType instanceof ProcessOutputType type ? type : ProcessOutputType.STDOUT);
       }
     });
-    ProcessOutput output = handler.runProcess();
-    if (output.getExitCode() != 0) {
+    handler.startNotify();
+    handler.waitFor();
+    Integer exitCode = handler.getExitCode();
+    if (exitCode == null || exitCode != 0) {
       progress.fail(System.currentTimeMillis(),
-                    HaxeDebuggerBundle.message("haxe.before.run.failed", String.valueOf(output.getExitCode())));
+                    HaxeDebuggerBundle.message("haxe.before.run.failed", String.valueOf(exitCode)));
       return false;
     }
     progress.finish();
@@ -308,10 +309,10 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
   /** Adapts the compiler process to the Build view: its Stop action destroys the underlying process. */
   private static final class CompileProcessHandler extends BuildProcessHandler {
-    private final CapturingProcessHandler delegate;
+    private final OSProcessHandler delegate;
     private final String executionName;
 
-    CompileProcessHandler(@NotNull CapturingProcessHandler delegate, @NotNull String executionName) {
+    CompileProcessHandler(@NotNull OSProcessHandler delegate, @NotNull String executionName) {
       this.delegate = delegate;
       this.executionName = executionName;
       delegate.addProcessListener(new ProcessListener() {
