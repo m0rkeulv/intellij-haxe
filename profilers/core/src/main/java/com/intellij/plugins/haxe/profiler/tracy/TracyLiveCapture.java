@@ -6,79 +6,102 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.SocketException;
 import java.net.Socket;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
 /**
  * One live tracy capture: connects OUT to the client (it listens on the
- * port the launcher assigned via TRACY_PORT), performs the handshake, asks
- * plot/thread names over the query channel as they first appear, and reads
- * until the client is drained. Shutdown is a two-step handshake and the
- * client NEVER closes the socket itself: it announces exit with a
- * Terminate item, and on receiving our Disconnect query it flushes what
- * remains, sends a FINAL Terminate and then waits for the server to close.
- * So: a Terminate with no disconnect requested yet triggers
- * {@link #requestDisconnect()}; one arriving after it means drained — the
- * read stops and closing our socket is what lets the client's process
- * exit. A capture can also end by the stream TEARING (the process killed,
- * or dead without the handshake): everything received before the tear is
- * kept. Queries are a handful of name lookups, far below the client's
- * query budget, so no flow-control bookkeeping is needed.
+ * port the launcher assigned via TRACY_PORT), settles the protocol version
+ * through the handshake - offering the strategy's candidates one connect
+ * at a time, since the client answers a wrong version with a refusal, closes
+ * and listens again - asks plot/thread names over the query channel as they
+ * first appear, and reads until the client is drained. Shutdown is a
+ * two-step handshake and the client NEVER closes the socket itself: it
+ * announces exit with a Terminate item, and on receiving our Disconnect
+ * query it flushes what remains, sends a FINAL Terminate and then waits for
+ * the server to close. So: a Terminate with no disconnect requested yet
+ * triggers {@link #requestDisconnect()}; one arriving after it means
+ * drained - the read stops and closing our socket is what lets the
+ * client's process exit. A capture can also end by the stream TEARING (the
+ * process killed, or dead without the handshake): everything received
+ * before the tear is kept. Queries are a handful of name lookups, far below
+ * the client's query budget, so no flow-control bookkeeping is needed.
  */
 public final class TracyLiveCapture {
 
-  // ServerQuery wire values (TracyProtocol.hpp, v74)
+  // ServerQuery wire values (TracyProtocol.hpp; unchanged v69..v82)
   private static final int QUERY_STRING = 1;
   private static final int QUERY_THREAD_STRING = 2;
   private static final int QUERY_PLOT_NAME = 4;
   private static final int QUERY_DISCONNECT = 9;
 
   private static final int CONNECT_RETRY_MS = 100;
+  /** A client that accepted the socket answers the handshake within its own 2 s read window; longer means it hung. */
+  private static final int HANDSHAKE_TIMEOUT_MS = 5_000;
   /** How long a post-disconnect stream may stay silent before the capture ends with what arrived. */
   private static final int DRAIN_QUIET_TIMEOUT_MS = 5_000;
 
   private final Socket socket;
   private final OutputStream queries;
+  private final TracyWelcome welcome;
   private final AtomicBoolean disconnectSent = new AtomicBoolean();
 
-  private TracyLiveCapture(Socket socket) throws IOException {
+  private TracyLiveCapture(Socket socket, TracyWelcome welcome) throws IOException {
     this.socket = socket;
     this.queries = socket.getOutputStream();
+    this.welcome = welcome;
   }
 
   /**
-   * Connects with retries while {@code keepTrying} allows — the client's
-   * listener comes up somewhere inside the process's startup. Null when the
-   * window closed without a connection (the process died first).
+   * Connects with retries while {@code keepTrying} allows - the client's
+   * listener comes up somewhere inside the process's startup - and completes
+   * the handshake with the first version the client accepts. Null when the
+   * window closed without a connection (the process died first); throws
+   * {@link TracyProtocolUnsupportedException} once the client refused every
+   * version the strategy had.
    */
-  public static TracyLiveCapture connect(int port, @NotNull BooleanSupplier keepTrying) throws IOException {
+  @Nullable
+  public static TracyLiveCapture connect(int port, @NotNull TracyVersionStrategy strategy,
+                                         @NotNull BooleanSupplier keepTrying) throws IOException {
+    List<TracyProtocolVersion> refused = new ArrayList<>();
     while (keepTrying.getAsBoolean()) {
-      Socket socket = new Socket();
-      try {
-        socket.connect(new InetSocketAddress("127.0.0.1", port), 500);
-        return new TracyLiveCapture(socket);
+      TracyProtocolVersion candidate = strategy.next(refused);
+      if (candidate == null) throw new TracyProtocolUnsupportedException(refused);
+      Socket socket = open(port);
+      if (socket == null) {
+        if (!pause()) return null;
+        continue;
       }
-      catch (IOException notListeningYet) {
-        try {
-          socket.close();
-        }
-        catch (IOException ignored) {
-        }
-        try {
-          Thread.sleep(CONNECT_RETRY_MS);
-        }
-        catch (InterruptedException interrupted) {
-          Thread.currentThread().interrupt();
-          return null;
-        }
+      try {
+        socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
+        TracyWelcome welcome = TracyHandshake.perform(socket.getInputStream(), socket.getOutputStream(), candidate);
+        socket.setSoTimeout(0);
+        return new TracyLiveCapture(socket, welcome);
+      }
+      catch (TracyProtocolMismatchException mismatch) {
+        refused.add(candidate);
+        closeQuietly(socket);
+      }
+      catch (IOException handshakeFailed) {
+        // "not available" (another server attached) or a dropped socket: the same offer is retried while the window is open
+        closeQuietly(socket);
+        if (!pause()) return null;
       }
     }
     return null;
   }
 
-  /** Handshakes and reads the whole session; returns when the client's stream ends. */
+  /** The client's welcome, protocol version included. */
+  @NotNull
+  public TracyWelcome welcome() {
+    return welcome;
+  }
+
+  /** Reads the whole session over the handshaken connection; returns when the client's stream ends. */
   @NotNull
   public TracySession capture() throws IOException {
     return capture(null);
@@ -92,7 +115,6 @@ public final class TracyLiveCapture {
   @NotNull
   public TracySession capture(TracyEventReader.@Nullable ZoneSink zoneSink) throws IOException {
     try (socket) {
-      TracyWelcome welcome = TracyHandshake.perform(socket.getInputStream(), queries);
       TracyEventReader.Hooks hooks = new TracyEventReader.Hooks() {
         @Override
         public void plotSeen(long namePointer) {
@@ -127,7 +149,7 @@ public final class TracyLiveCapture {
 
   /**
    * Acknowledges shutdown so the client flushes and closes; safe from any
-   * thread and called at most once — later calls and send failures are
+   * thread and called at most once - later calls and send failures are
    * no-ops (the stream end is what actually finishes the capture).
    */
   public void requestDisconnect() {
@@ -147,7 +169,7 @@ public final class TracyLiveCapture {
     }
   }
 
-  /** ServerQueryPacket: u8 type, u64 ptr, u32 extra — little-endian, 13 bytes. */
+  /** ServerQueryPacket: u8 type, u64 ptr, u32 extra - little-endian, 13 bytes. */
   private void query(int type, long pointer) {
     byte[] packet = new byte[13];
     packet[0] = (byte)type;
@@ -162,6 +184,40 @@ public final class TracyLiveCapture {
     }
     catch (IOException gone) {
       // a torn connection surfaces as the reader's stream end; queries are best-effort
+    }
+  }
+
+  /** A connected socket, or null while the client's listener is not up yet. */
+  @Nullable
+  private static Socket open(int port) {
+    Socket socket = new Socket();
+    try {
+      socket.connect(new InetSocketAddress("127.0.0.1", port), 500);
+      return socket;
+    }
+    catch (IOException notListeningYet) {
+      closeQuietly(socket);
+      return null;
+    }
+  }
+
+  /** One retry pause; false when interrupted (the capture is being abandoned). */
+  private static boolean pause() {
+    try {
+      Thread.sleep(CONNECT_RETRY_MS);
+      return true;
+    }
+    catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      return false;
+    }
+  }
+
+  private static void closeQuietly(@NotNull Socket socket) {
+    try {
+      socket.close();
+    }
+    catch (IOException ignored) {
     }
   }
 }

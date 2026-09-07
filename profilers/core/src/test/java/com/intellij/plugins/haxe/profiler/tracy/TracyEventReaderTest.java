@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("tracy receiver: event reader")
 public class TracyEventReaderTest {
 
-  private static final TracyWelcome TICKS_ARE_NS =
-    new TracyWelcome(1.0, 0, 0, 0, 0, 0, 0, 1, 0, false, "synthetic");
+  private static final TracyWelcome TICKS_ARE_NS = ticksAreNs(TracyProtocolVersion.V74);
+  private static final TracyWelcome TICKS_ARE_NS_V82 = ticksAreNs(TracyProtocolVersion.V82);
   private static final TracyEventReader.Hooks NO_HOOKS = new TracyEventReader.Hooks() {
   };
 
@@ -31,7 +31,7 @@ public class TracyEventReaderTest {
   public void testReplaysTheLiveCapturedSessionIntoNestedZones() throws IOException {
     TracyWelcome welcome;
     try (InputStream in = resource("/tracy/welcome-v74.bin")) {
-      welcome = TracyHandshake.parseWelcome(in.readAllBytes());
+      welcome = TracyHandshake.parseWelcome(in.readAllBytes(), TracyProtocolVersion.V74);
     }
     TracySession session;
     try (InputStream raw = resource("/tracy/session-v74.raw")) {
@@ -347,16 +347,178 @@ public class TracyEventReaderTest {
   }
 
   /** Writes decompressed tracy items the way the client's dequeue emits them. */
+  @Test
+  @DisplayName("replays the live captured v76 session from hxcpp master")
+  public void testReplaysTheLiveCapturedV76SessionFromHxcppMaster() throws IOException {
+    TracySession session = replayFixture(TracyProtocolVersion.V76);
+
+    assertEquals(TracyProtocolVersion.V76, session.welcome().protocolVersion());
+    assertEquals("Main.exe", session.welcome().programName());
+    // the sample nests frame -> branch -> 5 leaves: 300 frames of 7 zones, plus main and its startup
+    assertEquals(300 * 7 + 4, session.zones().size());
+    assertEquals(0, session.unmatchedZoneEnds());
+    assertEquals(300, session.frameMarksNs().size());
+    assertTrue(session.zones().stream().anyMatch(zone -> zone.location().function().equals("Main.leaf")),
+               "hxcpp's alloc-srcloc zones name the haxe function");
+    assertTrue(session.events().size() >= 3, "one message per hundred frames: " + session.events());
+  }
+
+  @Test
+  @DisplayName("replays the recorded v69 session of the 0.11 client")
+  public void testReplaysTheRecordedV69SessionOfThe011Client() throws IOException {
+    TracySession session = replayFixture(TracyProtocolVersion.V69);
+
+    assertEquals(TracyProtocolVersion.V69, session.welcome().protocolVersion());
+    // the fixture program nests frame -> branch -> 5 leaves, 300 frames of 7 zones
+    assertEquals(300 * 7, session.zones().size());
+    assertEquals(0, session.unmatchedZoneEnds());
+    assertEquals(300, session.frameMarksNs().size());
+    assertEquals(3, session.events().size(), "one message per hundred frames");
+    assertTrue(session.plots().containsKey("sink") || session.plots().keySet().stream().anyMatch(name -> name.startsWith("plot@")),
+               "the plot rides along: " + session.plots().keySet());
+    assertEquals(1, session.memoryCurves().size(), "the named pool's live-bytes curve");
+  }
+
+  @Test
+  @DisplayName("replays the recorded v82 session of the 0.14 client")
+  public void testReplaysTheRecordedV82SessionOfThe014Client() throws IOException {
+    TracySession session = replayFixture(TracyProtocolVersion.V82);
+
+    assertEquals(TracyProtocolVersion.V82, session.welcome().protocolVersion());
+    // the same fixture program as v69: 300 frames of 7 alloc-srcloc zones, the ends arriving packed
+    assertEquals(300 * 7, session.zones().size());
+    assertEquals(0, session.unmatchedZoneEnds());
+    assertTrue(session.zones().stream().allMatch(zone -> zone.endNs() >= zone.startNs()));
+    assertEquals(300, session.frameMarksNs().size());
+    // the client's own status message rides the same item with a non-program source and is dropped
+    assertEquals(3, session.events().size(), "the program's messages, with their metadata byte and 8-bit strings");
+    assertEquals("frame 0", session.events().get(0).text());
+    assertEquals(1, session.memoryCurves().size());
+  }
+
+  @Test
+  @DisplayName("v82 packs zone ends into 16 and 32 bit deltas with offsets")
+  public void testV82PacksZoneEndsInto16And32BitDeltasWithOffsets() throws IOException {
+    ItemBuilder items = new ItemBuilder(TracyProtocolVersion.V82);
+    items.threadContext(1);
+    items.sourceLocation("Main.a", "Main.hx", 1);
+    items.zoneBeginAlloc(100); // alloc-srcloc begins stay plain 64-bit deltas
+    items.zoneEnd16(50);
+    items.sourceLocation("Main.b", "Main.hx", 2);
+    items.zoneBeginAlloc(10);
+    items.zoneEnd32(70_000); // 32-bit item: stored minus 2^16
+    items.sourceLocation("Main.c", "Main.hx", 3);
+    items.zoneBeginAlloc(10);
+    items.zoneEnd64(5_000_000_000L); // 64-bit item: stored minus (2^16 + 2^32)
+    items.sourceLocation("Main.d", "Main.hx", 4);
+    items.zoneBeginAlloc(10);
+    items.zoneEnd64(-5); // a negative delta is sent as-is
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS_V82);
+
+    assertEquals(4, session.zones().size());
+    assertEquals(0, session.unmatchedZoneEnds());
+    assertEquals(50, session.zones().get(0).durationNs());
+    assertEquals(70_000, session.zones().get(1).durationNs());
+    assertEquals(5_000_000_000L, session.zones().get(2).durationNs());
+    assertEquals(-5, session.zones().get(3).durationNs());
+  }
+
+  @Test
+  @DisplayName("v82 static zone begins arrive packed too")
+  public void testV82StaticZoneBeginsArrivePackedToo() throws IOException {
+    ItemBuilder items = new ItemBuilder(TracyProtocolVersion.V82);
+    items.threadContext(1);
+    items.zoneBeginStatic16(100, 0xABC);
+    items.zoneEnd16(10);
+    items.zoneBeginStatic32(70_000, 0xABC);
+    items.zoneEnd16(10);
+    items.zoneBeginStatic64(5_000_000_000L, 0xABC);
+    items.zoneEnd16(10);
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS_V82);
+
+    // starts at 100, 70110 and 5000070120 ticks, rebased to the first
+    assertEquals(List.of(0L, 70_010L, 5_000_070_020L), session.zones().stream().map(TracyZone::startNs).toList());
+  }
+
+  @Test
+  @DisplayName("v82 messages carry a metadata byte and short strings an 8 bit length")
+  public void testV82MessagesCarryAMetadataByteAndShortStringsAn8BitLength() throws IOException {
+    ItemBuilder items = new ItemBuilder(TracyProtocolVersion.V82);
+    items.threadContext(1);
+    items.singleString8("hi");
+    items.messageColor82(1200, 0xFF, 0x99, 0x00);
+    items.singleString16Offset("x".repeat(300)); // u16 length stored minus 256
+    items.message82(1300);
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS_V82);
+
+    assertEquals(2, session.events().size());
+    assertEquals("hi", session.events().get(0).text());
+    assertEquals(0xFF9900, session.events().get(0).color());
+    assertEquals(300, session.events().get(1).text().length());
+    assertEquals(100, session.events().get(1).timeNs() - session.events().get(0).timeNs());
+  }
+
+  @Test
+  @DisplayName("v82 callstack samples put the thread first and pack their delta")
+  public void testV82CallstackSamplesPutTheThreadFirstAndPackTheirDelta() throws IOException {
+    ItemBuilder items = new ItemBuilder(TracyProtocolVersion.V82);
+    items.frameMark(0); // pins the session's zero
+    items.tidToPid(1, 1);
+    items.callstackSample16(1000, 1);
+    items.callstackSample32(70_000, 1);
+    items.contextSwitch(5, 0, 1, 0); // own thread 1 lands on core 0 at 1000 + 70000 + 5
+    items.contextSwitch(200_000_000, 1, 2, 0);
+
+    TracySession session = TracyEventReader.read(items.stream(), TICKS_ARE_NS_V82);
+
+    // the first 100 ms bucket is busy from 71005 on; had the samples not advanced the reference it would start at 5
+    double firstBucketPercent = session.processCpu().getFirst().value();
+    assertEquals((100_000_000 - 71_005) / 1_000_000.0, firstBucketPercent, 1e-6, "the packed sample deltas advanced the ctx reference");
+  }
+
+  private static TracySession replayFixture(TracyProtocolVersion version) throws IOException {
+    TracyWelcome welcome;
+    try (InputStream in = resource("/tracy/welcome-v" + version.wire() + ".bin")) {
+      welcome = TracyHandshake.parseWelcome(in.readAllBytes(), version);
+    }
+    try (InputStream raw = resource("/tracy/session-v" + version.wire() + ".raw")) {
+      return TracyEventReader.read(new TracyLz4Stream(raw), welcome);
+    }
+  }
+
+  private static TracyWelcome ticksAreNs(TracyProtocolVersion version) {
+    return new TracyWelcome(version, 1.0, 0, 0, 0, 0, 0, 0, 1, 0, false, "synthetic");
+  }
+
+  /** Writes items in one protocol version's numbering (v74 unless given). */
   private static final class ItemBuilder {
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+    private final TracyQueueTable table;
+
+    ItemBuilder() {
+      this(TracyProtocolVersion.V74);
+    }
+
+    ItemBuilder(TracyProtocolVersion version) {
+      this.table = version.table();
+    }
+
+    private void type(TracyQueueType type) {
+      int ordinal = table.ordinalOf(type);
+      if (ordinal < 0) throw new IllegalArgumentException(type + " is not in this protocol version");
+      out.write(ordinal);
+    }
 
     void threadContext(int thread) {
-      out.write(TracyQueueType.ThreadContext.ordinal());
+      type(TracyQueueType.ThreadContext);
       writeInt(thread);
     }
 
     void sourceLocation(String function, String file, int line) {
-      out.write(TracyQueueType.SourceLocationPayload.ordinal());
+      type(TracyQueueType.SourceLocationPayload);
       writeLong(0xDEAD); // the client-side pointer; unused by the reader
       byte[] functionUtf8 = function.getBytes(StandardCharsets.UTF_8);
       byte[] fileUtf8 = file.getBytes(StandardCharsets.UTF_8);
@@ -370,35 +532,35 @@ public class TracyEventReaderTest {
     }
 
     void zoneBeginAlloc(long deltaTicks) {
-      out.write(TracyQueueType.ZoneBeginAllocSrcLoc.ordinal());
+      type(TracyQueueType.ZoneBeginAllocSrcLoc);
       writeLong(deltaTicks);
     }
 
     void zoneEnd(long deltaTicks) {
-      out.write(TracyQueueType.ZoneEnd.ordinal());
+      type(TracyQueueType.ZoneEnd);
       writeLong(deltaTicks);
     }
 
     void frameMark(long absoluteTicks) {
-      out.write(TracyQueueType.FrameMarkMsg.ordinal());
+      type(TracyQueueType.FrameMarkMsg);
       writeLong(absoluteTicks);
       writeLong(0); // name pointer; 0 = the continuous frame set
     }
 
     void plotDouble(long namePointer, long deltaTicks, double value) {
-      out.write(TracyQueueType.PlotDataDouble.ordinal());
+      type(TracyQueueType.PlotDataDouble);
       writeLong(namePointer);
       writeLong(deltaTicks);
       writeLong(Double.doubleToLongBits(value));
     }
 
     void memName(long namePointer) {
-      out.write(TracyQueueType.MemNamePayload.ordinal());
+      type(TracyQueueType.MemNamePayload);
       writeLong(namePointer);
     }
 
     void memAlloc(long deltaTicks, long pointer, long size) {
-      out.write(TracyQueueType.MemAllocNamed.ordinal());
+      type(TracyQueueType.MemAllocNamed);
       writeLong(deltaTicks);
       writeInt(1); // owning thread
       writeLong(pointer);
@@ -406,35 +568,112 @@ public class TracyEventReaderTest {
     }
 
     void memFree(long deltaTicks, long pointer) {
-      out.write(TracyQueueType.MemFreeNamed.ordinal());
+      type(TracyQueueType.MemFreeNamed);
       writeLong(deltaTicks);
       writeInt(1); // owning thread
       writeLong(pointer);
     }
 
     void singleString(String text) {
-      out.write(TracyQueueType.SingleStringData.ordinal());
+      type(TracyQueueType.SingleStringData);
       byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
       writeU16(utf8.length);
       out.writeBytes(utf8);
     }
 
     void messageColor(long absoluteTicks, int r, int g, int b) {
-      out.write(TracyQueueType.MessageColor.ordinal());
+      type(TracyQueueType.MessageColor);
       writeLong(absoluteTicks);
       out.write(b);
       out.write(g);
       out.write(r);
     }
 
+    void zoneEnd16(int deltaTicks) {
+      type(TracyQueueType.ZoneEnd16);
+      writeU16(deltaTicks);
+    }
+
+    void zoneEnd32(long deltaTicks) {
+      type(TracyQueueType.ZoneEnd32);
+      writeInt((int)(deltaTicks - (1L << 16)));
+    }
+
+    /** v82's 64-bit end: a non-negative delta is stored minus (2^16 + 2^32). */
+    void zoneEnd64(long deltaTicks) {
+      type(TracyQueueType.ZoneEnd);
+      writeLong(deltaTicks >= 0 ? deltaTicks - ((1L << 16) + (1L << 32)) : deltaTicks);
+    }
+
+    void zoneBeginStatic16(int deltaTicks, long srcloc) {
+      type(TracyQueueType.ZoneBegin16);
+      writeU16(deltaTicks);
+      writeLong(srcloc);
+    }
+
+    void zoneBeginStatic32(long deltaTicks, long srcloc) {
+      type(TracyQueueType.ZoneBegin32);
+      writeInt((int)(deltaTicks - (1L << 16)));
+      writeLong(srcloc);
+    }
+
+    void zoneBeginStatic64(long deltaTicks, long srcloc) {
+      type(TracyQueueType.ZoneBegin);
+      writeLong(deltaTicks >= 0 ? deltaTicks - ((1L << 16) + (1L << 32)) : deltaTicks);
+      writeLong(srcloc);
+    }
+
+    void singleString8(String text) {
+      type(TracyQueueType.SingleStringData8);
+      byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
+      out.write(utf8.length);
+      out.writeBytes(utf8);
+    }
+
+    /** v82's u16 string transfer stores the length minus 256. */
+    void singleString16Offset(String text) {
+      type(TracyQueueType.SingleStringData);
+      byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
+      writeU16(utf8.length - 256);
+      out.writeBytes(utf8);
+    }
+
+    void message82(long absoluteTicks) {
+      type(TracyQueueType.Message);
+      writeLong(absoluteTicks);
+      out.write(0x10); // metadata: severity info, source user
+    }
+
+    void messageColor82(long absoluteTicks, int r, int g, int b) {
+      type(TracyQueueType.MessageColor);
+      writeLong(absoluteTicks);
+      out.write(b);
+      out.write(g);
+      out.write(r);
+      out.write(0x10);
+    }
+
+    /** v82 samples: thread first, then the packed delta. */
+    void callstackSample16(int deltaTicks, int thread) {
+      type(TracyQueueType.CallstackSample16);
+      writeInt(thread);
+      writeU16(deltaTicks);
+    }
+
+    void callstackSample32(long deltaTicks, int thread) {
+      type(TracyQueueType.CallstackSample32);
+      writeInt(thread);
+      writeInt((int)(deltaTicks - (1L << 16)));
+    }
+
     void tidToPid(long tid, long pid) {
-      out.write(TracyQueueType.TidToPid.ordinal());
+      type(TracyQueueType.TidToPid);
       writeLong(tid);
       writeLong(pid);
     }
 
     void contextSwitch(long deltaTicks, int oldThread, int newThread, int cpu) {
-      out.write(TracyQueueType.ContextSwitch.ordinal());
+      type(TracyQueueType.ContextSwitch);
       writeLong(deltaTicks);
       writeInt(oldThread);
       writeInt(newThread);
@@ -443,20 +682,20 @@ public class TracyEventReaderTest {
     }
 
     void threadWakeup(long deltaTicks, int thread) {
-      out.write(TracyQueueType.ThreadWakeup.ordinal());
+      type(TracyQueueType.ThreadWakeup);
       writeLong(deltaTicks);
       writeInt(thread);
       out.write(new byte[3], 0, 3); // cpu, adjust reason + increment
     }
 
     void callstackSample(long deltaTicks, int thread) {
-      out.write(TracyQueueType.CallstackSample.ordinal());
+      type(TracyQueueType.CallstackSample);
       writeLong(deltaTicks);
       writeInt(thread);
     }
 
     void stringData(long pointer, String text) {
-      out.write(TracyQueueType.StringData.ordinal());
+      type(TracyQueueType.StringData);
       writeLong(pointer);
       byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
       writeU16(utf8.length);

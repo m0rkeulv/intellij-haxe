@@ -11,55 +11,61 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * The server side of tracy's connection opening (protocol v74, the version
- * the hxcpp-bundled 0.12.0 client speaks): send the 8-byte shibboleth plus
- * our protocol version, read the client's one-byte verdict, then its packed
- * 1178-byte welcome message. A version mismatch fails loudly — tracy's
- * protocol is locked per version and limping on would misdecode everything.
+ * The server side of tracy's connection opening: send the 8-byte
+ * shibboleth plus the protocol version offered, read the client's one-byte
+ * verdict, then its packed welcome message in that version's layout. The
+ * client compares versions for equality only, so a refusal surfaces as
+ * {@link TracyProtocolMismatchException} for the caller to offer another.
  */
 public final class TracyHandshake {
 
-  public static final int PROTOCOL_VERSION = 74;
-
-  static final int WELCOME_SIZE = 8 * 9 + 1 + 1 + 12 + 4 + 64 + 1024;
   private static final byte[] SHIBBOLETH = "TracyPrf".getBytes(StandardCharsets.US_ASCII);
   // HandshakeStatus, by wire value
   private static final String[] STATUS_NAMES = {"pending", "welcome", "protocol mismatch", "not available", "dropped"};
   private static final int STATUS_WELCOME = 1;
+  private static final int STATUS_PROTOCOL_MISMATCH = 2;
   private static final int ON_DEMAND_FLAG = 1;
 
   private TracyHandshake() {
   }
 
   @NotNull
-  public static TracyWelcome perform(@NotNull InputStream in, @NotNull OutputStream out) throws IOException {
+  public static TracyWelcome perform(@NotNull InputStream in, @NotNull OutputStream out,
+                                     @NotNull TracyProtocolVersion version) throws IOException {
     out.write(SHIBBOLETH);
-    byte[] version = new byte[4];
-    ByteBuffer.wrap(version).order(ByteOrder.LITTLE_ENDIAN).putInt(PROTOCOL_VERSION);
-    out.write(version);
+    byte[] wireVersion = new byte[4];
+    ByteBuffer.wrap(wireVersion).order(ByteOrder.LITTLE_ENDIAN).putInt(version.wire());
+    out.write(wireVersion);
     out.flush();
 
     int status = in.read();
+    if (status == STATUS_PROTOCOL_MISMATCH) throw new TracyProtocolMismatchException(version);
     if (status != STATUS_WELCOME) {
       String name = status >= 0 && status < STATUS_NAMES.length ? STATUS_NAMES[status] : "unknown (" + status + ")";
       throw new ProfilerFormatException("tracy client refused the connection: " + name
-                                        + " (receiver speaks protocol " + PROTOCOL_VERSION + ")");
+                                        + " (receiver offered protocol " + version.wire() + ")");
     }
 
-    byte[] welcome = in.readNBytes(WELCOME_SIZE);
-    if (welcome.length < WELCOME_SIZE) {
+    byte[] welcome = in.readNBytes(version.welcomeSize());
+    if (welcome.length < version.welcomeSize()) {
       throw new ProfilerFormatException("truncated tracy welcome message");
     }
-    return parseWelcome(welcome);
+    return parseWelcome(welcome, version);
   }
 
+  /**
+   * The packed WelcomeMessage: timerMul f64, initBegin, initEnd, [delay -
+   * before v76], resolution, epoch, exectime, pid, samplingPeriod (i64/u64
+   * each), flags u8, cpuArch u8, cpuManufacturer[12], cpuId u32,
+   * programName[64], hostInfo[1024].
+   */
   @NotNull
-  static TracyWelcome parseWelcome(byte @NotNull [] welcome) {
+  static TracyWelcome parseWelcome(byte @NotNull [] welcome, @NotNull TracyProtocolVersion version) {
     ByteBuffer buffer = ByteBuffer.wrap(welcome).order(ByteOrder.LITTLE_ENDIAN);
     double timerMul = buffer.getDouble();
     long initBegin = buffer.getLong();
     long initEnd = buffer.getLong();
-    long delay = buffer.getLong();
+    long delay = version.welcomeHasDelay() ? buffer.getLong() : 0;
     long resolution = buffer.getLong();
     long epoch = buffer.getLong();
     long execTime = buffer.getLong();
@@ -75,7 +81,7 @@ public final class TracyHandshake {
     while (nameEnd < name.length && name[nameEnd] != 0) nameEnd++;
     String programName = new String(name, 0, nameEnd, StandardCharsets.UTF_8);
 
-    return new TracyWelcome(timerMul, initBegin, initEnd, delay, resolution, epoch, execTime, pid,
+    return new TracyWelcome(version, timerMul, initBegin, initEnd, delay, resolution, epoch, execTime, pid,
                             samplingPeriod, (flags & ON_DEMAND_FLAG) != 0, programName);
   }
 }

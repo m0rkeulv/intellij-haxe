@@ -18,10 +18,7 @@ import com.intellij.plugins.haxe.profiler.bridge.HaxeLiveCaptures;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerConfigurations;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneRecompressor;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneWriter;
-import com.intellij.plugins.haxe.profiler.tracy.TracyEventReader;
-import com.intellij.plugins.haxe.profiler.tracy.TracyLiveCapture;
-import com.intellij.plugins.haxe.profiler.tracy.TracySession;
-import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
+import com.intellij.plugins.haxe.profiler.tracy.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -32,15 +29,19 @@ import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  * The IU-side Tracy receiver: allocates the port the client will listen on
- * (handed to the process via TRACY_PORT), connects out with retries while
- * the process lives, captures the session and persists it as an HXTS v2
- * file. The exit notification offers to open it, or explains why nothing
- * was captured.
+ * (handed to the process via TRACY_PORT), listens for the client's
+ * broadcast to learn its protocol version, connects out with retries while
+ * the process lives (offering the pinned version, else the announced one
+ * and then the probe ladder), captures the session and persists it as an
+ * HXTS v2 file. The exit notification offers to open it, or explains why
+ * nothing was captured.
  */
 public class HaxeIuTracyCapture implements HaxeTracyCapture {
 
@@ -57,22 +58,24 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
       LOG.warn("could not allocate a tracy port", e);
       return null;
     }
-    return new Capture(project, displayName, sessionFile, port, compressionLevelFor(executor));
+    return new Capture(project, displayName, sessionFile, port, settingsFor(executor));
   }
 
   /**
-   * The final deflate level of the LAUNCHING profiler configuration (each
-   * named "hxcpp Tracy" entry is its own executor); the type's first
-   * configuration, then the default, for launches carrying none.
+   * The settings of the LAUNCHING profiler configuration (each named
+   * "hxcpp Tracy" entry is its own executor); the type's first
+   * configuration, then a template, for launches carrying none.
    */
-  private static int compressionLevelFor(@NotNull Executor executor) {
+  @NotNull
+  private static HaxeHxcppTracyProfilerConfigurationState settingsFor(@NotNull Executor executor) {
     if (HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHxcppTracyProfilerConfigurationState launched) {
-      return launched.getCompressionLevel();
+      return launched;
     }
-    return HaxeProfilerConfigurations.stateFor(HaxeHxcppTracyProfilerConfigurationType.ID)
-             instanceof HaxeHxcppTracyProfilerConfigurationState state
-           ? state.getCompressionLevel()
-           : HaxeHxcppTracyProfilerConfigurationState.DEFAULT_COMPRESSION_LEVEL;
+    if (HaxeProfilerConfigurations.stateFor(HaxeHxcppTracyProfilerConfigurationType.ID)
+          instanceof HaxeHxcppTracyProfilerConfigurationState first) {
+      return first;
+    }
+    return new HaxeHxcppTracyProfilerConfigurationType().getTemplateState();
   }
 
   private static final class Capture implements Handle {
@@ -81,16 +84,19 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
     private final Path sessionFile;
     private final int port;
     private final int finalLevel;
+    private final @Nullable TracyProtocolVersion pinnedProtocol;
     private final AtomicBoolean exited = new AtomicBoolean();
     private final AtomicReference<TracyLiveCapture> live = new AtomicReference<>();
     private volatile HaxeProfilerProcessUi.Session session;
 
-    Capture(Project project, String displayName, Path sessionFile, int port, int finalLevel) {
+    Capture(Project project, String displayName, Path sessionFile, int port,
+            HaxeHxcppTracyProfilerConfigurationState settings) {
       this.project = project;
       this.displayName = displayName;
       this.sessionFile = HaxeCaptureFiles.perCaptureSessionPath(sessionFile);
       this.port = port;
-      this.finalLevel = finalLevel;
+      this.finalLevel = settings.getCompressionLevel();
+      this.pinnedProtocol = settings.getPinnedProtocol();
       Thread receiver = new Thread(this::receive, "haxe-tracy-capture");
       receiver.setDaemon(true);
       // the profiled app runs concurrently - stay out of its scheduler slots
@@ -115,8 +121,15 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
 
     private void receive() {
       TracyLiveCapture capture;
-      try {
-        capture = TracyLiveCapture.connect(port, () -> !exited.get());
+      // the broadcast listener runs only for the connect window: a null
+      // listener (port not bindable) leaves the probe ladder to find the version
+      try (TracyBroadcastListener broadcast = pinnedProtocol == null ? TracyBroadcastListener.listen(port) : null) {
+        capture = TracyLiveCapture.connect(port, strategy(broadcast), () -> !exited.get());
+      }
+      catch (TracyProtocolUnsupportedException unsupported) {
+        LOG.warn("tracy client refused every protocol version: " + unsupported.refused());
+        notifyProtocolUnsupported(unsupported.refused());
+        return;
       }
       catch (IOException e) {
         LOG.warn("tracy connect failed", e);
@@ -127,6 +140,7 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
         notifyNothingCaptured();
         return;
       }
+      LOG.info("tracy capture on protocol " + capture.welcome().protocolVersion());
       live.set(capture);
       if (exited.get()) {
         capture.requestDisconnect(); // exit raced the connect
@@ -144,6 +158,7 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
       // idle again.
       int liveLevel = Math.min(HxtZoneWriter.LIVE_LEVEL, finalLevel);
       long zoneCount;
+      TracyProtocolVersion protocol;
       HaxeLiveCaptures.Entry liveEntry = null;
       try {
         Files.createDirectories(sessionFile.getParent());
@@ -155,6 +170,7 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
           TracySession session = capture.capture(liveOpening(writer));
           writer.finish(session);
           zoneCount = writer.zoneCount();
+          protocol = session.welcome().protocolVersion();
         }
       }
       catch (IOException | UncheckedIOException e) {
@@ -193,8 +209,14 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
         session.dataReady();
       }
       else {
-        notifyCaptured(zoneCount);
+        notifyCaptured(zoneCount, protocol);
       }
+    }
+
+    @NotNull
+    private TracyVersionStrategy strategy(@Nullable TracyBroadcastListener broadcast) {
+      if (pinnedProtocol != null) return TracyVersionStrategy.pinned(pinnedProtocol);
+      return TracyVersionStrategy.detect(broadcast == null ? () -> null : broadcast::heard);
     }
 
     /**
@@ -230,9 +252,9 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
       };
     }
 
-    private void notifyCaptured(long zoneCount) {
+    private void notifyCaptured(long zoneCount, TracyProtocolVersion protocol) {
       String content = HaxeProfilerBundle.message("haxe.profiler.tracy.captured",
-                                                  sessionFile.toString(), zoneCount);
+                                                  sessionFile.toString(), zoneCount, protocol.toString());
       Notification notification = group().createNotification(content, NotificationType.INFORMATION);
       HaxeProfilerSnapshotOpener opener = HaxeProfilerSnapshotOpener.getInstance();
       if (opener != null) {
@@ -245,6 +267,12 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
     private void notifyNothingCaptured() {
       String content = HaxeProfilerBundle.message("haxe.profiler.tracy.none");
       group().createNotification(content, NotificationType.WARNING).notify(project);
+    }
+
+    private void notifyProtocolUnsupported(List<TracyProtocolVersion> refused) {
+      String offered = refused.stream().map(version -> String.valueOf(version.wire())).collect(Collectors.joining(", "));
+      String content = HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.unsupported", offered);
+      group().createNotification(content, NotificationType.ERROR).notify(project);
     }
 
     private static NotificationGroup group() {

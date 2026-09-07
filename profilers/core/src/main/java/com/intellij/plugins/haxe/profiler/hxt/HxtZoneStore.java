@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.profiler.hxt;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
+import com.intellij.plugins.haxe.profiler.tracy.TracyProtocolVersion;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import com.intellij.plugins.haxe.profiler.tracy.TracyWelcome;
@@ -225,7 +226,8 @@ public final class HxtZoneStore {
     processCpu = rebasedPoints(processCpu, seriesShiftNs);
     gcSweeps = rebasedSweeps(gcSweeps, seriesShiftNs);
     events = rebasedEvents(events, seriesShiftNs);
-    TracyWelcome welcome = new TracyWelcome(1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
+    // the file records no protocol version; a stored session is never decoded through the wire reader again
+    TracyWelcome welcome = new TracyWelcome(TracyProtocolVersion.V74, 1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
     TracySession session = new TracySession(welcome, List.of(), List.copyOf(frames), Map.copyOf(plots),
                                             Map.copyOf(memoryCurves), List.copyOf(gcSweeps), List.copyOf(events),
                                             List.copyOf(cpu), List.copyOf(processCpu), Map.copyOf(threadNames),

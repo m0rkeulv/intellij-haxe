@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.profiler.hxt;
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
 import com.intellij.plugins.haxe.profiler.tracy.TracyEventReader;
+import com.intellij.plugins.haxe.profiler.tracy.TracyProtocolVersion;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import com.intellij.plugins.haxe.profiler.tracy.TracyWelcome;
@@ -37,7 +38,7 @@ public class HxtZoneStoreTest {
 
   /** The small series a capture accumulates beside the zones; times already rebased. */
   private static TracySession smallSession() {
-    TracyWelcome welcome = new TracyWelcome(0.25, 1, 2, 3, 4, 1_756_200_000L, 5, 4242, 0, false, "game.exe");
+    TracyWelcome welcome = new TracyWelcome(TracyProtocolVersion.V74, 0.25, 1, 2, 3, 4, 1_756_200_000L, 5, 4242, 0, false, "game.exe");
     return new TracySession(
       welcome,
       List.of(),
@@ -347,7 +348,7 @@ public class HxtZoneStoreTest {
   }
 
   private static TracySession emptySmallSession() {
-    TracyWelcome welcome = new TracyWelcome(1.0, 0, 0, 0, 0, 0, 0, 1, 0, false, "x");
+    TracyWelcome welcome = new TracyWelcome(TracyProtocolVersion.V74, 1.0, 0, 0, 0, 0, 0, 0, 1, 0, false, "x");
     return new TracySession(welcome, List.of(), List.of(), Map.of(), Map.of(),
                             List.of(), List.of(), List.of(), List.of(), Map.of(1, "Main"), 0, 0);
   }

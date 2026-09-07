@@ -3,6 +3,10 @@ package com.intellij.plugins.haxe.profiler.tracy;
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import java.util.List;
+import org.junit.jupiter.params.provider.FieldSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -13,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
 import java.util.Map;
 
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,30 +55,27 @@ public class TracyLz4StreamTest {
     assertTrue(failure.getMessage().contains("truncated"), failure.getMessage());
   }
 
-  @Test
-  @DisplayName("the embedded queue table matches the extracted compiler table")
-  public void testTheEmbeddedQueueTableMatchesTheExtractedCompilerTable() throws IOException {
-    String[] lines = fixture("/tracy/queue-data-sizes-v74.txt").split("\r?\n");
+  /** The protocol versions with a recorded session fixture. */
+  static final List<Arguments> RECORDED_SESSIONS = List.of(
+    arguments(TracyProtocolVersion.V69),
+    arguments(TracyProtocolVersion.V74),
+    arguments(TracyProtocolVersion.V76),
+    arguments(TracyProtocolVersion.V82));
 
-    assertEquals("NUM_TYPES=" + TracyQueueType.values().length, lines[0].trim());
-    for (TracyQueueType type : TracyQueueType.values()) {
-      String[] pair = lines[1 + type.ordinal()].trim().split(";");
-      assertEquals(type.ordinal(), Integer.parseInt(pair[0]));
-      assertEquals(Integer.parseInt(pair[1]), type.wireSize(), type + " wire size drifted");
-    }
-  }
-
-  @Test
-  @DisplayName("the live captured session decompresses and walks to exact item boundaries")
-  public void testTheLiveCapturedSessionDecompressesAndWalksToExactItemBoundaries() throws IOException {
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("RECORDED_SESSIONS")
+  public void testTheLiveCapturedSessionDecompressesAndWalksToExactItemBoundaries(TracyProtocolVersion version) throws IOException {
     Map<TracyQueueType, Integer> counts;
-    try (InputStream raw = TracyLz4StreamTest.class.getResourceAsStream("/tracy/session-v74.raw")) {
-      counts = walkItems(new TracyLz4Stream(raw));
+    try (InputStream raw = TracyLz4StreamTest.class.getResourceAsStream("/tracy/session-v" + version.wire() + ".raw")) {
+      counts = walkItems(new TracyLz4Stream(raw), version);
     }
 
     assertTrue(counts.getOrDefault(TracyQueueType.ZoneBeginAllocSrcLoc, 0) > 100,
                "the sample's instrumented functions must appear as zones: " + counts);
-    assertTrue(counts.getOrDefault(TracyQueueType.ZoneEnd, 0) > 100, "zones must close: " + counts);
+    int zoneEnds = counts.getOrDefault(TracyQueueType.ZoneEnd, 0)
+                   + counts.getOrDefault(TracyQueueType.ZoneEnd32, 0)
+                   + counts.getOrDefault(TracyQueueType.ZoneEnd16, 0);
+    assertTrue(zoneEnds > 100, "zones must close: " + counts);
     assertTrue(counts.getOrDefault(TracyQueueType.SourceLocationPayload, 0) > 0,
                "alloc'd source locations ship inline: " + counts);
     assertTrue(counts.getOrDefault(TracyQueueType.ThreadContext, 0) > 0, counts.toString());
@@ -85,19 +87,26 @@ public class TracyLz4StreamTest {
    * length is right, so reaching EOF at an item boundary validates the
    * framing, the LZ4 window carry and the table at once.
    */
-  private static Map<TracyQueueType, Integer> walkItems(InputStream stream) throws IOException {
+  private static Map<TracyQueueType, Integer> walkItems(InputStream stream, TracyProtocolVersion version) throws IOException {
+    TracyQueueTable table = version.table();
     Map<TracyQueueType, Integer> counts = new EnumMap<>(TracyQueueType.class);
     DataInputStream data = new DataInputStream(stream);
     int typeByte;
     while ((typeByte = data.read()) >= 0) {
-      TracyQueueType type = TracyQueueType.of(typeByte);
+      TracyQueueType type = table.of(typeByte);
       if (type == null) throw new IOException("unknown queue type " + typeByte + " after " + counts);
       counts.merge(type, 1, Integer::sum);
 
-      expectFully(data, type.wireSize() - 1, type);
+      expectFully(data, table.wireSize(type) - 1, type);
       int payloadLength = switch (type.payload()) {
         case NONE -> 0;
-        case U16 -> data.readUnsignedByte() | data.readUnsignedByte() << 8;
+        case U8 -> data.readUnsignedByte();
+        case U16 -> {
+          int length = data.readUnsignedByte() | data.readUnsignedByte() << 8;
+          boolean offset = version.stringLengthOffset()
+                           && (type == TracyQueueType.SingleStringData || type == TracyQueueType.SecondStringData);
+          yield offset ? length + 256 : length;
+        }
         case U32 -> {
           int value = 0;
           for (int i = 0; i < 4; i++) value |= data.readUnsignedByte() << (8 * i);

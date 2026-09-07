@@ -7,6 +7,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.options.UnnamedConfigurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
+import com.intellij.plugins.haxe.profiler.tracy.TracyProtocolVersion;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration.Lane;
 import com.intellij.profiler.api.AttachableTargetProcess;
@@ -36,6 +37,8 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
   private static final String COMPRESSION_ATTRIBUTE = "compressionLevel";
   private static final String CAPTURE_MEMORY_ATTRIBUTE = "captureMemory";
   private static final String COLLECT_PROCESS_CPU_ATTRIBUTE = "collectProcessCpu";
+  /** The pinned protocol's wire number; absent or unparsable = detect. */
+  private static final String PROTOCOL_ATTRIBUTE = "protocolVersion";
 
   @Override
   public @NotNull String getId() {
@@ -73,6 +76,7 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
     copy.setCompressionLevel(state.getCompressionLevel());
     copy.setCaptureMemory(state.isCaptureMemory());
     copy.setCollectProcessCpu(state.isCollectProcessCpu());
+    copy.setPinnedProtocol(state.getPinnedProtocol());
     return copy;
   }
 
@@ -89,6 +93,7 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
     }
     state.setCaptureMemory(!"false".equals(element.getAttributeValue(CAPTURE_MEMORY_ATTRIBUTE)));
     state.setCollectProcessCpu("true".equals(element.getAttributeValue(COLLECT_PROCESS_CPU_ATTRIBUTE)));
+    state.setPinnedProtocol(pinnedProtocol(element.getAttributeValue(PROTOCOL_ATTRIBUTE)));
     return state;
   }
 
@@ -99,7 +104,22 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
     element.setAttribute(COMPRESSION_ATTRIBUTE, String.valueOf(state.getCompressionLevel()));
     element.setAttribute(CAPTURE_MEMORY_ATTRIBUTE, String.valueOf(state.isCaptureMemory()));
     element.setAttribute(COLLECT_PROCESS_CPU_ATTRIBUTE, String.valueOf(state.isCollectProcessCpu()));
+    TracyProtocolVersion pinned = state.getPinnedProtocol();
+    if (pinned != null) {
+      element.setAttribute(PROTOCOL_ATTRIBUTE, String.valueOf(pinned.wire()));
+    }
     return element;
+  }
+
+  @Nullable
+  private static TracyProtocolVersion pinnedProtocol(@Nullable String attribute) {
+    if (attribute == null) return null;
+    try {
+      return TracyProtocolVersion.of(Integer.parseInt(attribute));
+    }
+    catch (NumberFormatException e) {
+      return null;
+    }
   }
 
   @Override

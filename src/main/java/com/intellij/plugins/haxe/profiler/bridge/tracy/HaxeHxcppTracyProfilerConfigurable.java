@@ -1,22 +1,38 @@
 package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.openapi.options.UnnamedConfigurable;
+import com.intellij.plugins.haxe.HaxeProfilerBundle;
+import com.intellij.plugins.haxe.profiler.tracy.TracyProtocolVersion;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import java.util.Objects;
 
-/** Settings form of one "hxcpp Tracy" configuration: compression level and the feature toggles. Layout in the bound .form. */
+/** Settings form of one "hxcpp Tracy" configuration: compression level, the feature toggles and the protocol choice. Layout in the bound .form. */
 final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
+
+  /** One protocol dropdown entry: a version, or null for detection. */
+  private record ProtocolChoice(@Nullable TracyProtocolVersion version) {
+    @NotNull
+    String label() {
+      if (version == null) return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.auto");
+      return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.version", version.wire(), version.tracyRelease());
+    }
+  }
 
   private final HaxeHxcppTracyProfilerConfigurationState state;
   private JPanel panel;
   private JBTextField levelField;
   private JBCheckBox captureMemoryCheckbox;
   private JBCheckBox collectProcessCpuCheckbox;
+  private JComboBox<ProtocolChoice> protocolCombo;
 
   HaxeHxcppTracyProfilerConfigurable(@NotNull HaxeHxcppTracyProfilerConfigurationState state) {
     this.state = state;
@@ -24,6 +40,13 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
 
   @Override
   public @Nullable JComponent createComponent() {
+    DefaultComboBoxModel<ProtocolChoice> choices = new DefaultComboBoxModel<>();
+    choices.addElement(new ProtocolChoice(null));
+    for (TracyProtocolVersion version : TracyProtocolVersion.values()) {
+      choices.addElement(new ProtocolChoice(version));
+    }
+    protocolCombo.setModel(choices);
+    protocolCombo.setRenderer(BuilderKt.textListCellRenderer("", ProtocolChoice::label));
     return panel;
   }
 
@@ -31,7 +54,8 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
   public boolean isModified() {
     return parsedLevel() != state.getCompressionLevel()
            || captureMemoryCheckbox.isSelected() != state.isCaptureMemory()
-           || collectProcessCpuCheckbox.isSelected() != state.isCollectProcessCpu();
+           || collectProcessCpuCheckbox.isSelected() != state.isCollectProcessCpu()
+           || !Objects.equals(selectedProtocol(), state.getPinnedProtocol());
   }
 
   @Override
@@ -39,6 +63,7 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
     state.setCompressionLevel(parsedLevel());
     state.setCaptureMemory(captureMemoryCheckbox.isSelected());
     state.setCollectProcessCpu(collectProcessCpuCheckbox.isSelected());
+    state.setPinnedProtocol(selectedProtocol());
   }
 
   @Override
@@ -46,6 +71,12 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
     levelField.setText(String.valueOf(state.getCompressionLevel()));
     captureMemoryCheckbox.setSelected(state.isCaptureMemory());
     collectProcessCpuCheckbox.setSelected(state.isCollectProcessCpu());
+    protocolCombo.setSelectedItem(new ProtocolChoice(state.getPinnedProtocol()));
+  }
+
+  @Nullable
+  private TracyProtocolVersion selectedProtocol() {
+    return protocolCombo.getSelectedItem() instanceof ProtocolChoice choice ? choice.version() : null;
   }
 
   /** A non-numeric entry falls back to the stored value rather than failing apply. */
