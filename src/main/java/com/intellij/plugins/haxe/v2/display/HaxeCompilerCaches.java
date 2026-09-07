@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiManager;
 import org.jetbrains.annotations.NonNls;
@@ -38,5 +40,18 @@ public final class HaxeCompilerCaches {
 
     PsiManager.getInstance(project).dropPsiCaches();
     DaemonCodeAnalyzer.getInstance(project).restart(reason);
+  }
+
+  /**
+   * Restarts highlighting from any thread: the restart is posted to the EDT
+   * with an explicit non-modal state (a pooled-thread post without one runs
+   * write-unsafe) and skipped once the project is disposed.
+   */
+  public static void restartHighlightingLater(@NotNull Project project, @NotNull @NonNls String reason) {
+    ApplicationManager.getApplication().invokeLater(() -> {
+      if (!project.isDisposed()) {
+        DaemonCodeAnalyzer.getInstance(project).restart(reason);
+      }
+    }, ModalityState.nonModal());
   }
 }

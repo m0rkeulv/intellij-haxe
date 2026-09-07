@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.execution.console;
 
 import com.intellij.execution.filters.Filter;
-import com.intellij.execution.filters.OpenFileHyperlinkInfo;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.util.HaxeFileUtil;
@@ -43,11 +42,8 @@ public final class HaxeCompilerMessageFilter implements Filter {
 
     VirtualFile file = HaxeFileUtil.locateFile(path, project.getBasePath());
     if (file == null) return null;
-    OpenFileHyperlinkInfo link = new OpenFileHyperlinkInfo(project, file, Integer.parseInt(line) - 1, column - 1);
-    // Result offsets are document-absolute; the line starts entireLength minus its own length back
-    int lineStart = entireLength - text.length();
-    int highlightStart = lineStart + text.indexOf(path);
-    int highlightEnd = highlightStart + path.length() + 1 + line.length(); // path ':' line
-    return new Result(highlightStart, highlightEnd, link);
+    int spanStart = text.indexOf(path);
+    int spanEnd = spanStart + path.length() + 1 + line.length(); // path ':' line
+    return HaxeConsoleLinks.link(project, file, Integer.parseInt(line) - 1, column - 1, text, entireLength, spanStart, spanEnd);
   }
 }

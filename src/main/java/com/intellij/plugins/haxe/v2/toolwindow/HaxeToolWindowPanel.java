@@ -487,12 +487,13 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Shows the target dropdown for a selectable target row, anchored at the given point. */
   public void showTargetPopup(@NotNull TargetNode targetNode, @NotNull RelativePoint point) {
+    VirtualFile buildFile = targetNode.buildFile().file();
     List<HaxeTargetOptions.TargetChoice> choices = HaxeTargetOptions.choicesFor(targetNode.buildFile().type());
     JBPopupFactory.getInstance()
       .createPopupChooserBuilder(choices)
       .setTitle(HaxeBundle.message("haxe.toolwindow.select.target.title"))
       .setRenderer(BuilderKt.textListCellRenderer("", HaxeTargetOptions.TargetChoice::displayName))
-      .setItemChosenCallback(choice -> HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(targetNode.buildFile().file(), choice.id()))
+      .setItemChosenCallback(choice -> HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(buildFile, choice.id()))
       .createPopup()
       .show(point);
   }

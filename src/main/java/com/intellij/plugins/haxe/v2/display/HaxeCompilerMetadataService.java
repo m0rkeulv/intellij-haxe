@@ -1,8 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
@@ -104,20 +102,12 @@ public final class HaxeCompilerMetadataService {
           .collect(Collectors.toUnmodifiableSet());
         registries.put(connected.port(), new Registry(entries, bareNames));
         log.info("haxe metadata registry loaded: " + entries.size() + " entries");
-        restartHighlighting();
+        HaxeCompilerCaches.restartHighlightingLater(project, "haxe: compiler metadata updated");
       } catch (DisplayRequestException e) {
         log.info("display/metadata failed: " + e.getMessage());
       } finally {
         hydrating.set(false);
       }
     });
-  }
-
-  private void restartHighlighting() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (!project.isDisposed()) {
-        DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler metadata updated");
-      }
-    }, ModalityState.nonModal());
   }
 }

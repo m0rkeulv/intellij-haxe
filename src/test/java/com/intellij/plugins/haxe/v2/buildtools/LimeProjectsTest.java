@@ -15,17 +15,24 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 @DisplayName("Build tools: lime projects")
 public class LimeProjectsTest {
 
+  private static final String NEKO_LAUNCHER_SUFFIX = SystemInfo.isWindows ? ".exe" : "";
+
   @Test
-  @DisplayName("app file defaults to lime's when the project xml declares none")
+  @DisplayName("app file is the declared one")
+  public void testAppFileIsTheDeclaredOne() {
+    assertEquals("Shapes", LimeProjects.appFile("<project><app main=\"Main\" file=\"Shapes\"/></project>"));
+  }
+
+  @Test
+  @DisplayName("app file defaults to limes when the project xml declares none")
   public void testAppFileDefaultsToLimesWhenTheProjectXmlDeclaresNone() {
     assertEquals("MyApplication", LimeProjects.appFile("<project><app main=\"Tests\"/></project>"));
-    assertEquals("Shapes", LimeProjects.appFile("<project><app main=\"Main\" file=\"Shapes\"/></project>"));
   }
 
   /** (target flag, app file as declared, expected output relative to the project file). */
   static final List<Arguments> OUTPUTS = List.of(
-    arguments("neko", "", "bin/neko/bin/MyApplication" + (SystemInfo.isWindows ? ".exe" : "")),
-    arguments("neko", "Shapes", "bin/neko/bin/Shapes" + (SystemInfo.isWindows ? ".exe" : "")),
+    arguments("neko", "", "bin/neko/bin/MyApplication" + NEKO_LAUNCHER_SUFFIX),
+    arguments("neko", "Shapes", "bin/neko/bin/Shapes" + NEKO_LAUNCHER_SUFFIX),
     arguments("windows", "", "bin/windows/bin/MyApplication.exe"),
     arguments("linux", "", "bin/linux/bin/MyApplication"),
     arguments("html5", "", "bin/html5/bin/MyApplication.js"),

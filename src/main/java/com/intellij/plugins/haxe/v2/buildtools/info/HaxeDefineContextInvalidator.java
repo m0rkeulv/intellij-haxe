@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
@@ -44,14 +45,15 @@ final class HaxeDefineContextInvalidator {
   static void invalidateConditionalFiles(@NotNull Project project) {
     List<VirtualFile> conditionalFiles = collectConditionalFiles(project);
     PushedFilePropertiesUpdater updater = PushedFilePropertiesUpdater.getInstance(project);
+    Disposable expiry = HaxeDefineContextService.getInstance(project);
     for (VirtualFile file : conditionalFiles) {
       ReadAction.nonBlocking(() -> invalidate(updater, file))
-        .expireWith(HaxeDefineContextService.getInstance(project))
+        .expireWith(expiry)
         .executeSynchronously();
     }
     Runnable reparseOpenEditors = () -> reparseOpenEditors(project, conditionalFiles);
     ApplicationManager.getApplication().invokeLater(reparseOpenEditors, ModalityState.nonModal(), project.getDisposed());
-    log.info("define context: " + conditionalFiles.size() + " conditional haxe files invalidated");
+    log.debug("define context: " + conditionalFiles.size() + " conditional haxe files invalidated");
   }
 
   /** Walks the indexable files without a lock — this is where an uncached stubable flag reads its file. */
@@ -66,6 +68,7 @@ final class HaxeDefineContextInvalidator {
   }
 
   /** Idempotent, so a cancelled and retried read action is safe. */
+  // returns Void so the lambda binds to nonBlocking(Callable); the Runnable overload is deprecated
   @Nullable
   private static Void invalidate(@NotNull PushedFilePropertiesUpdater updater, @NotNull VirtualFile file) {
     if (file.isValid()) {

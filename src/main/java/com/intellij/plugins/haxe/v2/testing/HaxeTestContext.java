@@ -50,22 +50,18 @@ public record HaxeTestContext(@NotNull HaxeTestFramework framework, @NotNull Str
   @Nullable
   public static HaxeTestContext forFile(@NotNull PsiFile file) {
     VirtualFile virtualFile = file.getVirtualFile();
-    return virtualFile == null ? null : forFile(file.getProject(), virtualFile);
+    return virtualFile == null ? null : owning(file.getProject(), virtualFile);
   }
 
+  /** The file's or directory's context: the build whose classpath contains it, or whose classpath root it is. */
   @Nullable
-  public static HaxeTestContext forFile(@NotNull Project project, @NotNull VirtualFile file) {
-    return forPath(project, file.getPath());
-  }
-
-  /** The directory's context: the build whose classpath contains it, or whose classpath root it is. */
-  @Nullable
-  public static HaxeTestContext forDirectory(@NotNull Project project, @NotNull VirtualFile directory) {
-    return forPath(project, directory.getPath());
+  public static HaxeTestContext owning(@NotNull Project project, @NotNull VirtualFile fileOrDirectory) {
+    return forPath(project, fileOrDirectory.getPath());
   }
 
   @Nullable
   private static HaxeTestContext forPath(@NotNull Project project, @NotNull String path) {
+    // TODO: a directory ABOVE a classpath root (the tests build's own directory) is claimed by nothing
     String pathAsPrefix = path + "/";
     for (Ownership ownership : ownerships(project)) {
       boolean owns = ownership.sourceDirectories().stream().anyMatch(directory -> pathAsPrefix.startsWith(directory + "/"));
@@ -97,7 +93,7 @@ public record HaxeTestContext(@NotNull HaxeTestFramework framework, @NotNull Str
       if (testsFile == null || !testsFile.isValid()) continue;
       // lime-family ownership/detection reads the project xml's DECLARED
       // sources and haxelibs (no tool run) - precise enough to claim a file
-      // TODO single runs for nmml tests builds: nme's display mode is unverified
+      // TODO single runs for nmml tests builds: nme's app-main override is unverified
       HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, testsFile);
       boolean supported = type == HaxeBuildFileType.HXML || LimeProjects.isLimeFamily(type);
       if (!supported) continue;

@@ -376,8 +376,8 @@ public final class HaxeProgramLaunches {
   /// lime places the desktop executable at `<export>/<target>/bin/<app file>[.exe]`;
   /// its display pipeline reports that path directly, but the legacy `lime display`
   /// fallback yields the C++ obj directory instead — derive bin from it the way
-  /// the HL flavor does. Unresolvable (hxp, no app file): the visible
-  /// configuration prompts for the executable.
+  /// the HL flavor does. Unresolvable (hxp, or an nmml without an app file):
+  /// the visible configuration prompts for the executable.
   private static void configureHxcppExecutable(@NotNull HxcppIntellijRunConfiguration configuration,
                                                @NotNull HaxeBuildFile buildFile,
                                                @NotNull Path output) {

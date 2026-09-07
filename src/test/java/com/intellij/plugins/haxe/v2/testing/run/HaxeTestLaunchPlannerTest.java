@@ -185,7 +185,8 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
     HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), "testAdd");
 
-    List<String> arguments = ParametersListUtil.parse(HaxeTestLaunchPlanner.compileArguments(getProject(), path, null, singleRun));
+    String joined = HaxeTestLaunchPlanner.compileArguments(getProject(), path, null, singleRun);
+    List<String> arguments = ParametersListUtil.parse(joined);
 
     assertTrue(arguments.contains("--app-main=" + HaxeTestSingleRuns.MAIN_CLASS),
                "the generated main overrides the app's: " + arguments);
@@ -195,16 +196,6 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     Path generatedMain = generatedSourceRoot(arguments).resolve(HaxeTestSingleRuns.MAIN_CLASS + ".hx");
     assertTrue(Files.isRegularFile(generatedMain), "the generated main is written: " + generatedMain);
     assertTrue(Files.readString(generatedMain).contains("new CalculatorTest()"), "the template carries the selected suite");
-  }
-
-  /** The `--source=` entry holding the generated main (the reporter classpath is the other one). */
-  private static Path generatedSourceRoot(List<String> arguments) {
-    return arguments.stream()
-      .filter(argument -> argument.startsWith("--source="))
-      .map(argument -> Path.of(argument.substring("--source=".length())))
-      .filter(directory -> Files.exists(directory.resolve(HaxeTestSingleRuns.MAIN_CLASS + ".hx")))
-      .findFirst()
-      .orElseThrow(() -> new AssertionError("no --source= entry holds the generated main: " + arguments));
   }
 
   @Test
@@ -621,5 +612,15 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     finally {
       settings.setLiveTestReporting(before);
     }
+  }
+
+  /** The `--source=` entry holding the generated main (the reporter classpath is the other one). */
+  private static Path generatedSourceRoot(List<String> arguments) {
+    return arguments.stream()
+      .filter(argument -> argument.startsWith("--source="))
+      .map(argument -> Path.of(argument.substring("--source=".length())))
+      .filter(directory -> Files.exists(directory.resolve(HaxeTestSingleRuns.MAIN_CLASS + ".hx")))
+      .findFirst()
+      .orElseThrow(() -> new AssertionError("no --source= entry holds the generated main: " + arguments));
   }
 }

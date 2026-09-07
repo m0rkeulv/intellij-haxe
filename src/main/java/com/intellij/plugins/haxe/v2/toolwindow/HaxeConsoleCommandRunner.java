@@ -56,7 +56,8 @@ public final class HaxeConsoleCommandRunner {
 
       console.attachToProcess(processHandler);
 
-      RunContentDescriptor descriptor = new RunContentDescriptor(console, processHandler, console.getComponent(), presentableName, HaxeIcons.HAXE_LOGO);
+      RunContentDescriptor descriptor =
+        new RunContentDescriptor(console, processHandler, console.getComponent(), presentableName, HaxeIcons.HAXE_LOGO);
       RunContentManager.getInstance(project).showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
 
       processHandler.startNotify();

@@ -47,9 +47,9 @@ import java.util.List;
 
 /**
  * Runs a container's tests build file as unit tests. Reference-style like
- * {@code HaxeActionRunConfiguration}: only the tests build file path and an
- * optional filter pattern are stored - the launch re-resolves everything at run
- * time, so target and SDK changes always apply. The SM test console attaches to
+ * {@code HaxeActionRunConfiguration}: only the tests build file path, an
+ * optional filter pattern and the selected suites/test are stored - the launch
+ * re-resolves everything at run time, so target and SDK changes always apply. The SM test console attaches to
  * the RUN process; for artifact targets the compile happens in the attached
  * before-run step (kept in sync by {@link #syncCompileStep()}), while interp
  * builds compile-and-run as the single test process.
@@ -92,7 +92,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     filterPattern = StringUtil.notNullize(pattern);
   }
 
-  /** Narrows the run to one suite class (gutter class marker) or one of its tests (method marker). */
+  /** Narrows the run to one suite class or one of its tests (a gutter marker or a context-menu run). */
   public void setSingleRun(@Nullable String testClassName, @Nullable String testMethodName) {
     testClass = StringUtil.notNullize(testClassName);
     testMethod = StringUtil.notNullize(testMethodName);
@@ -133,7 +133,9 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     if (!hasSingleRun()) return false;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null || !file.isValid()) return false;
-    HaxeBuildFileType type = HaxeReadActions.compute(() -> HaxeBuildFileScanner.detectType(getProject(), file));
+    // the before-run task calls this on a pooled thread
+    HaxeBuildFileType type = ReadAction.nonBlocking(() -> HaxeBuildFileScanner.detectType(getProject(), file))
+      .executeSynchronously();
     return !LimeProjects.isLimeFamily(type);
   }
 
@@ -157,10 +159,12 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     if (run == null) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     if (file == null || !file.isValid()) return null;
-    HaxeTestFramework framework = ReadAction.computeBlocking(
-      () -> HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFilePath));
-    return ReadAction.computeBlocking(
-      () -> HaxeTestLaunchPlanner.singleRunCompile(getProject(), file, framework, run));
+    // the before-run task calls this on a pooled thread
+    return ReadAction.nonBlocking(() -> {
+        HaxeTestFramework framework = HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFilePath);
+        return HaxeTestLaunchPlanner.singleRunCompile(getProject(), file, framework, run);
+      })
+      .executeSynchronously();
   }
 
   /**
@@ -176,14 +180,14 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   /** The before-run tasks {@link #syncCompileStep} would set, computed without mutating (parses build files). */
   @NotNull
   List<BeforeRunTask<?>> computedCompileStep() {
-    boolean singleStage = ReadAction.computeBlocking(
+    boolean singleStage = HaxeReadActions.compute(
       () -> HaxeTestLaunchPlanner.isSingleStage(getProject(), buildFilePath));
     if (singleStage) {
       return List.of();
     }
     HaxeActionBeforeRunTaskProvider.Task compileTask = new HaxeActionBeforeRunTaskProvider.Task();
     compileTask.setBuildFilePath(buildFilePath);
-    compileTask.setActionName(ReadAction.computeBlocking(this::buildActionName));
+    compileTask.setActionName(HaxeReadActions.compute(this::buildActionName));
     compileTask.setExtraArguments(currentCompileArguments());
     // a multi-section hxml compiles only its selected --next section, so the
     // reporting arguments reach that section instead of the chain's last one
@@ -200,7 +204,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
    */
   @NotNull
   public String currentCompileArguments() {
-    return ReadAction.computeBlocking(
+    return HaxeReadActions.compute(
       () -> HaxeTestLaunchPlanner.compileArguments(getProject(), buildFilePath, filterPattern, singleRun()));
   }
 

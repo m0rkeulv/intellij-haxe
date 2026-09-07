@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.ide.actions.editor.copypaste;
 import com.intellij.codeInsight.CodeInsightSettings;
 import com.intellij.openapi.actionSystem.IdeActions;
 import com.intellij.openapi.ide.CopyPasteManager;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
@@ -24,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Copy from one file, paste into another: the imports and usings the pasted code needs are restored. */
-@DisplayName("Editor: copy-paste reference restore")
+@DisplayName("Editor: copy-paste reference")
 public class HaxeCopyPasteReferenceTest extends HaxeLightFixtureTestCase {
 
   /** The extension receiver is a project class: the light project mounts no std, so a String receiver could not resolve. */
@@ -142,6 +143,7 @@ public class HaxeCopyPasteReferenceTest extends HaxeLightFixtureTestCase {
     HaxeImportCandidates candidates = HaxeImportCandidates.of((HaxeFile)myFixture.getFile());
 
     assertTrue(candidates.mayNeedImport(callee), "a using-exposed callee is an import candidate");
+
     PsiElement resolved = callee.resolve();
     boolean staticMethod = resolved instanceof HaxeMethod method && method.isStatic();
     assertTrue(staticMethod, "resolved to " + resolved);
@@ -160,7 +162,7 @@ public class HaxeCopyPasteReferenceTest extends HaxeLightFixtureTestCase {
       """);
 
     assertFalse(pasted.contains("import"), pasted);
-    assertEquals(1, countOccurrences(pasted, "holder.generated.deeper.field"), pasted);
+    assertEquals(1, StringUtil.getOccurrenceCount(pasted, "holder.generated.deeper.field"), pasted);
   }
 
   private String copyThenPaste(String source) {
@@ -183,13 +185,5 @@ public class HaxeCopyPasteReferenceTest extends HaxeLightFixtureTestCase {
     catch (UnsupportedFlavorException | IOException e) {
       throw new AssertionError(e);
     }
-  }
-
-  private static int countOccurrences(String text, String needle) {
-    int count = 0;
-    for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + needle.length())) {
-      count++;
-    }
-    return count;
   }
 }

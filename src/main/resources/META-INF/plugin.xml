@@ -948,10 +948,6 @@
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
     <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
               topic="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener"/>
-<!--    <listener class="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"-->
-<!--              topic="com.intellij.openapi.vfs.VirtualFileListener"/>-->
-<!--    <listener class="com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService"-->
-<!--              topic="com.intellij.psi.PsiTreeChangeListener"/>-->
 
   </projectListeners>
 

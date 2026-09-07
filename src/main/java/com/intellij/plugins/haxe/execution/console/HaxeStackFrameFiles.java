@@ -49,11 +49,15 @@ final class HaxeStackFrameFiles {
   private static int trailingSegmentsInCommon(@NotNull String filePath, @NotNull String tracePath) {
     String[] fileSegments = filePath.split("/");
     String[] traceSegments = tracePath.split("/");
+    int limit = Math.min(fileSegments.length, traceSegments.length);
     int common = 0;
-    while (common < fileSegments.length && common < traceSegments.length
-           && fileSegments[fileSegments.length - 1 - common].equals(traceSegments[traceSegments.length - 1 - common])) {
+    while (common < limit && sameSegmentFromEnd(fileSegments, traceSegments, common)) {
       common++;
     }
     return common;
+  }
+
+  private static boolean sameSegmentFromEnd(String[] fileSegments, String[] traceSegments, int fromEnd) {
+    return fileSegments[fileSegments.length - 1 - fromEnd].equals(traceSegments[traceSegments.length - 1 - fromEnd]);
   }
 }

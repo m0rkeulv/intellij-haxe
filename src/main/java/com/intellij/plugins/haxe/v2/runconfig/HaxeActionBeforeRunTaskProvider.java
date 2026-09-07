@@ -14,7 +14,6 @@ import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.process.KillableColoredProcessHandler;
-import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.process.ProcessOutputType;
@@ -42,6 +41,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfiguration;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.util.PathUtil;
 import icons.HaxeIcons;
 import org.jdom.Element;
@@ -55,6 +55,7 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Before-launch step that runs a Haxe action (a build file's compile/build command).
@@ -215,17 +216,18 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     // hxml single-run (gutter) compile arrives fully formed: its generated
     // main replaces the build's own, so the action-plus-file resolution and
     // the section scoping below must not touch it.
-    boolean singleRun = configuration instanceof HaxeTestRunConfiguration testConfiguration
+    boolean templateCompile = configuration instanceof HaxeTestRunConfiguration testConfiguration
                         && testConfiguration.compilesThroughTemplate();
     HaxeCompileCommands.Resolved resolved;
-    if (singleRun) {
+    if (templateCompile) {
       resolved = ((HaxeTestRunConfiguration)configuration).resolveSingleRunCompile();
     } else {
       String extraArguments = configuration instanceof HaxeTestRunConfiguration testConfiguration
                               ? testConfiguration.currentCompileArguments()
                               : task.getExtraArguments();
-      resolved = ReadAction.computeBlocking(
-        () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), extraArguments));
+      resolved = ReadAction.nonBlocking(
+          () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), extraArguments))
+        .executeSynchronously();
     }
     if (resolved == null) {
       notifyFailure(project, HaxeDebuggerBundle.message("haxe.before.run.unresolvable", task.getBuildFilePath()));
@@ -233,12 +235,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     }
     HaxeCompileCommands.Resolved resolvedCompile = resolved;
 
-    List<String> command = new ArrayList<>(baseCommand(project, task, singleRun, resolvedCompile));
+    List<String> command = new ArrayList<>(baseCommand(project, task, templateCompile, resolvedCompile));
     if (debug && task.isInjectDebugArguments()) {
       // a single-run compile is a DIRECT haxe compile whatever the build
       // system, so its additions use the haxe spelling - the tool spellings
       // (lime's --haxelib=) are unknown options to haxe itself
-      List<String> additions = singleRun
+      List<String> additions = templateCompile
                                ? singleRunDebugAdditions(project, task.getBuildFilePath())
                                : debugAdditions(project, task.getBuildFilePath());
       if (additions != null) {
@@ -248,7 +250,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
         command.addAll(additions);
       }
     }
-    if (!singleRun) {
+    if (!templateCompile) {
       List<String> profilingAdditions = profilingAdditions(project, configuration, environment.getExecutor(), task);
       if (profilingAdditions != null) {
         command.addAll(profilingAdditions);
@@ -265,8 +267,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
     KillableColoredProcessHandler handler;
     try {
-      GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory())
-        .withEnvironment(LimeProjects.commandEnvironment(command));
+      GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, workDirectory);
       handler = new KillableColoredProcessHandler(commandLine);
     }
     catch (ExecutionException e) {
@@ -282,7 +283,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     buildDescriptor.setActivateToolWindowWhenAdded(true);
     // surfacing the compile as the build's process handler enables the Build
     // view's Stop action - the escape hatch when a compile hangs (e.g. on a
-    // wedged compilation server connection)
+    // wedged compilation server connection), hence the hard kill below
     buildDescriptor.withProcessHandler(new CompileProcessHandler(handler, title), null);
     progress.start(descriptorFor(title, buildDescriptor));
 
@@ -296,9 +297,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       }
     });
     handler.startNotify();
-    handler.waitFor();
-    Integer exitCode = handler.getExitCode();
-    if (exitCode == null || exitCode != 0) {
+    // an interrupted wait (the launch cancelled) must not leave the compiler running
+    if (!handler.waitFor()) {
+      handler.destroyProcess();
+    }
+    int exitCode = Objects.requireNonNullElse(handler.getExitCode(), -1);
+    if (exitCode != 0) {
       progress.fail(System.currentTimeMillis(),
                     HaxeDebuggerBundle.message("haxe.before.run.failed", String.valueOf(exitCode)));
       return false;
@@ -307,12 +311,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     return true;
   }
 
-  /** Adapts the compiler process to the Build view: its Stop action destroys the underlying process. */
+  /** Adapts the compiler process to the Build view: its Stop action kills the underlying process outright. */
   private static final class CompileProcessHandler extends BuildProcessHandler {
-    private final OSProcessHandler delegate;
+    private final KillableColoredProcessHandler delegate;
     private final String executionName;
 
-    CompileProcessHandler(@NotNull OSProcessHandler delegate, @NotNull String executionName) {
+    CompileProcessHandler(@NotNull KillableColoredProcessHandler delegate, @NotNull String executionName) {
       this.delegate = delegate;
       this.executionName = executionName;
       delegate.addProcessListener(new ProcessListener() {
@@ -330,7 +334,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
     @Override
     protected void destroyProcessImpl() {
-      delegate.destroyProcess();
+      delegate.killProcess();
     }
 
     @Override
@@ -344,7 +348,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       return false;
     }
 
-    /** Allow console input to reach the compiler's stdin, so prompt can be answered. */
+    /** Console input reaches the compiler's stdin, so prompts can be answered. */
     @Override
     public @Nullable OutputStream getProcessInput() {
       return delegate.getProcessInput();
@@ -367,14 +371,15 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     };
   }
 
-  /** The compile command; a section-scoped suite run narrows it to the selected section, single runs keep it whole. */
+  /** The compile command; a section-scoped suite run narrows it to the selected section, template compiles keep it whole. */
   @NotNull
   private static List<String> baseCommand(@NotNull Project project,
                                           @NotNull Task task,
-                                          boolean singleRun,
+                                          boolean templateCompile,
                                           @NotNull HaxeCompileCommands.Resolved resolved) {
-    if (singleRun || !task.isSectionScoped()) return resolved.command();
-    return ReadAction.computeBlocking(() -> sectionScopedCommand(project, task.getBuildFilePath(), resolved.command()));
+    if (templateCompile || !task.isSectionScoped()) return resolved.command();
+    return ReadAction.nonBlocking(() -> sectionScopedCommand(project, task.getBuildFilePath(), resolved.command()))
+      .executeSynchronously();
   }
 
   /** The resolved command scoped to the hxml's selected {@code --next} section; unchanged for non-hxml files. */
@@ -401,7 +406,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       .findFirst()
       .orElse(null);
     if (buildFilePath == null) return List.of();
-    return ReadAction.computeBlocking(
+    return HaxeReadActions.compute(
       () -> HaxeBuildClasspaths.sourceDirectories(configuration.getProject(), buildFilePath));
   }
 
@@ -442,7 +447,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   static List<String> debugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
     HaxeBuildFile buildFile = resolveBuildFile(project, buildFilePath);
     if (buildFile == null) return null;
-    return ReadAction.computeBlocking(
+    return HaxeReadActions.compute(
       () -> HaxeBuildSystem.of(buildFile.type()).debugCompileAdditions(project, buildFile));
   }
 
@@ -451,10 +456,11 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   private static List<String> singleRunDebugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
     HaxeBuildFile buildFile = resolveBuildFile(project, buildFilePath);
     if (buildFile == null) return null;
-    return ReadAction.computeBlocking(() -> {
-      HaxeTarget target = HaxeBuildSystem.of(buildFile.type()).launchTarget(project, buildFile);
-      return target != null ? HaxeDebugAdditions.forTarget(target) : null;
-    });
+    return ReadAction.nonBlocking(() -> {
+        HaxeTarget target = HaxeBuildSystem.of(buildFile.type()).launchTarget(project, buildFile);
+        return target != null ? HaxeDebugAdditions.forTarget(target) : null;
+      })
+      .executeSynchronously();
   }
 
   /** The path's typed build-file handle, or null when it resolves to no known build file. */

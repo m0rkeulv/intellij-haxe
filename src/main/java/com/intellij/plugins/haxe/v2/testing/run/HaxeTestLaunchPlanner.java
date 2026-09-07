@@ -127,11 +127,17 @@ final class HaxeTestLaunchPlanner {
                                              @Nullable String filterPattern) {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
     List<String> plain = frameworkArguments(project, file.getPath(), limeSuiteContext(targetFlag), filterPattern);
+    return ParametersListUtil.join(limeSpelled(project, targetFlag, plain));
+  }
+
+  /** Plain hxml arguments in lime's forwarding spelling, plus the air swf-version flag where the target needs it. */
+  @NotNull
+  private static List<String> limeSpelled(@NotNull Project project, @NotNull String targetFlag, @NotNull List<String> plain) {
     List<String> spelled = new ArrayList<>(respell(plain, LIME_SPELLINGS));
     if ("air".equals(targetFlag)) {
       spelled.addAll(airSwfVersionFlag(project));
     }
-    return ParametersListUtil.join(spelled);
+    return spelled;
   }
 
   /** lime's app-field override form for the entry point ({@code --app-main=Class}, verified against lime 8.3.2). */
@@ -140,8 +146,8 @@ final class HaxeTestLaunchPlanner {
   /**
    * The lime-family single-run arguments: the reporting set (the method
    * narrowing for a single test) plus the generated main overriding the
-   * app's. Without a template (framework has no single-run form) only the
-   * reporting set remains - the plan refuses such a run before it compiles.
+   * app's. Without a generated main only the reporting set remains - the
+   * plan refuses such a run before it compiles (see {@link #checkLimeSingleRun}).
    */
   @NotNull
   private static String limeSingleRunCompileArguments(@NotNull Project project,
@@ -151,10 +157,7 @@ final class HaxeTestLaunchPlanner {
     HaxeTestFramework framework = frameworkFor(project, file.getPath());
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
     List<String> plain = singleRunArguments(project, framework, limeSuiteContext(targetFlag), singleRun);
-    List<String> spelled = new ArrayList<>(respell(plain, LIME_SPELLINGS));
-    if ("air".equals(targetFlag)) {
-      spelled.addAll(airSwfVersionFlag(project));
-    }
+    List<String> spelled = limeSpelled(project, targetFlag, plain);
     Path generated = HaxeTestSingleRuns.generatedDirectory(file.getPath(), framework, singleRun);
     if (generated != null) {
       spelled.add(LIME_SPELLINGS.classpathForm() + generated);
@@ -450,9 +453,9 @@ final class HaxeTestLaunchPlanner {
   }
 
   /**
-   * A gutter-started run: the template compile (see {@link HaxeTestSingleRuns})
-   * either IS the run (interp) or produces the redirected artifact the plan
-   * launches. Mirrors the whole-build shapes, with the generated main naming
+   * An hxml single run (gutter or context menu): the template compile (see
+   * {@link HaxeTestSingleRuns}) either IS the run (interp) or produces the
+   * redirected artifact the plan launches. Mirrors the whole-build shapes, with the generated main naming
    * the hxcpp binary.
    */
   @NotNull
@@ -490,10 +493,12 @@ final class HaxeTestLaunchPlanner {
   }
 
   /**
-   * Refuses a lime-family single run the framework cannot serve: no
-   * single-run template, or a flash-family target the framework does not
-   * support. A served run compiles and launches exactly like the whole build
-   * (see {@link #limePlan}), with the generated main overriding the app's.
+   * Refuses a lime-family single run that cannot be served: no single-run
+   * template, a flash-family target the framework does not support, or a
+   * generated main that could not be written (the compile would otherwise
+   * silently fall back to the whole app). A served run compiles and launches
+   * exactly like the whole build (see {@link #limePlan}), with the generated
+   * main overriding the app's.
    */
   private static void checkLimeSingleRun(@NotNull Project project,
                                          @NotNull VirtualFile file,
@@ -508,9 +513,12 @@ final class HaxeTestLaunchPlanner {
       throw new ExecutionException(
         HaxeBundle.message("haxe.test.config.framework.no.flash", framework.libraryName()));
     }
+    if (HaxeTestSingleRuns.generatedDirectory(file.getPath(), framework, singleRun) == null) {
+      throw new ExecutionException(HaxeBundle.message("haxe.test.single.unresolvable", file.getName()));
+    }
   }
 
-  /** The launch command over a single run's redirected artifact - shared by the hxml and lime shapes. */
+  /** The launch command over an hxml single run's redirected artifact (the whole-build shape lives in {@link #artifactPlan}). */
   @NotNull
   private static List<String> singleRunCommand(@NotNull Project project,
                                                @NotNull VirtualFile file,
@@ -592,7 +600,7 @@ final class HaxeTestLaunchPlanner {
     if (LimeProjects.FLASH_FAMILY_TARGETS.contains(targetFlag)) {
       Path swf = content == null ? null : LimeProjects.packagedSwf(file, content, targetFlag);
       if (swf == null) {
-        throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.app.file", file.getName()));
+        throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", file.getName()));
       }
       List<String> command = flashCommand(project, file, swf, debugLaunch);
       return new Plan(command, swf.getParent().toString(), false, HaxeTarget.FLASH, null);
@@ -614,7 +622,7 @@ final class HaxeTestLaunchPlanner {
       if (unrunnableTarget) {
         throw new ExecutionException(HaxeBundle.message("haxe.test.config.unrunnable.target", targetFlag));
       }
-      throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.app.file", file.getName()));
+      throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", file.getName()));
     }
     String workDirectory = binary.getParent().toString();
     return new Plan(List.of(binary.toString()), workDirectory, false, limeTarget(targetFlag), null);

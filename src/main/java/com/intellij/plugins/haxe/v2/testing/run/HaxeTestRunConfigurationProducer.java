@@ -35,11 +35,16 @@ import java.util.Set;
  */
 public final class HaxeTestRunConfigurationProducer extends LazyRunConfigurationProducer<HaxeTestRunConfiguration> {
 
-  /** What a context selects: the owning build, the suites, an optional single method, and the configuration's name. */
-  private record Selection(@NotNull HaxeTestContext context,
+  /**
+   * What a context selects: the owning build, the suites, an optional single
+   * method, and the configuration's name - null for the generated one (the
+   * configuration's own suggestedName), set where the location carries a
+   * name the stored state does not (a directory).
+   */
+  private record Selection(@NotNull HaxeTestContext testContext,
                            @NotNull List<String> testClasses,
                            @Nullable String testMethod,
-                           @NotNull String name) {
+                           @Nullable String name) {
   }
 
   @Override
@@ -53,14 +58,19 @@ public final class HaxeTestRunConfigurationProducer extends LazyRunConfiguration
                                                   @NotNull Ref<PsiElement> sourceElement) {
     Selection selection = select(context);
     if (selection == null) return false;
-    configuration.setBuildFilePath(selection.context().testsBuildPath());
+    configuration.setBuildFilePath(selection.testContext().testsBuildPath());
     if (selection.testMethod() != null) {
       configuration.setSingleRun(selection.testClasses().get(0), selection.testMethod());
     }
     else {
       configuration.setSingleRun(selection.testClasses());
     }
-    configuration.setName(selection.name());
+    if (selection.name() != null) {
+      configuration.setName(selection.name());
+    }
+    else {
+      configuration.setGeneratedName();
+    }
     configuration.syncCompileStep();
     sourceElement.set(context.getPsiLocation());
     return true;
@@ -70,7 +80,7 @@ public final class HaxeTestRunConfigurationProducer extends LazyRunConfiguration
   public boolean isConfigurationFromContext(@NotNull HaxeTestRunConfiguration configuration, @NotNull ConfigurationContext context) {
     Selection selection = select(context);
     return selection != null
-           && configuration.getBuildFilePath().equals(selection.context().testsBuildPath())
+           && configuration.getBuildFilePath().equals(selection.testContext().testsBuildPath())
            && configuration.getTestClasses().equals(selection.testClasses())
            && configuration.getTestMethod().equals(Objects.requireNonNullElse(selection.testMethod(), ""));
   }
@@ -103,23 +113,23 @@ public final class HaxeTestRunConfigurationProducer extends LazyRunConfiguration
                          && testContext.framework().isTestMethod(method)
                          && testContext.framework().singleRunTemplate(true) != null;
     if (singleTest) {
-      return new Selection(testContext, List.of(reference), method.getName(), haxeClass.getName() + "." + method.getName());
+      return new Selection(testContext, List.of(reference), method.getName(), null);
     }
-    return new Selection(testContext, List.of(reference), null, String.valueOf(haxeClass.getName()));
+    return new Selection(testContext, List.of(reference), null, null);
   }
 
   @Nullable
   private static Selection selectFile(@NotNull HaxeTestContext testContext, @NotNull PsiFile file) {
     List<String> suites = HaxeTestClasses.inFile(file, testContext.framework());
     if (suites.isEmpty()) return null;
-    String name = suites.size() == 1 ? shortName(suites.get(0)) : HaxeBundle.message("haxe.test.run.tests.in", file.getName());
+    String name = suites.size() == 1 ? null : HaxeBundle.message("haxe.test.run.tests.in", file.getName());
     return new Selection(testContext, suites, null, name);
   }
 
   @Nullable
   private static Selection selectDirectory(@NotNull Project project, @NotNull PsiDirectory directory) {
     VirtualFile virtualDirectory = directory.getVirtualFile();
-    HaxeTestContext testContext = HaxeTestContext.forDirectory(project, virtualDirectory);
+    HaxeTestContext testContext = HaxeTestContext.owning(project, virtualDirectory);
     if (testContext == null) return null;
     List<String> suites = HaxeTestClasses.underDirectory(project, virtualDirectory, testContext.framework());
     if (suites.isEmpty()) return null;
@@ -135,14 +145,14 @@ public final class HaxeTestRunConfigurationProducer extends LazyRunConfiguration
       Selection part = element instanceof PsiDirectory directory ? selectDirectory(project, directory)
                                                                   : selectFileElement(element);
       if (part == null) continue;
-      if (testContext == null) testContext = part.context();
-      if (!testContext.equals(part.context())) return null;
+      if (testContext == null) testContext = part.testContext();
+      if (!testContext.equals(part.testContext())) return null;
       suites.addAll(part.testClasses());
     }
     if (testContext == null) return null;
     List<String> sorted = new ArrayList<>(suites);
     sorted.sort(null);
-    return new Selection(testContext, sorted, null, HaxeBundle.message("haxe.test.run.selected.suites", sorted.size()));
+    return new Selection(testContext, sorted, null, null);
   }
 
   @Nullable
@@ -150,10 +160,5 @@ public final class HaxeTestRunConfigurationProducer extends LazyRunConfiguration
     if (!(element instanceof HaxeFile file)) return null;
     HaxeTestContext testContext = HaxeTestContext.forFile(file);
     return testContext == null ? null : selectFile(testContext, file);
-  }
-
-  @NotNull
-  private static String shortName(@NotNull String reference) {
-    return reference.substring(reference.lastIndexOf('.') + 1);
   }
 }

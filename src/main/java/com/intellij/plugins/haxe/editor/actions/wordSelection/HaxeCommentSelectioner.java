@@ -45,6 +45,7 @@ public class HaxeCommentSelectioner extends ExtendWordSelectionHandlerBase {
   private static final TokenSet DOC_TOKENS = TokenSet.create(
     HaxeDocTokenTypes.DOC_START, HaxeDocTokenTypes.DOC_LEADING_ASTERISK, HaxeDocTokenTypes.DOC_TAG_NAME,
     HaxeDocTokenTypes.DOC_DATA, HaxeDocTokenTypes.DOC_END);
+
   /** The doc tokens that are delimiters rather than text; selecting one takes the line, like a comment prefix. */
   private static final TokenSet DOC_DELIMITERS = TokenSet.create(
     HaxeDocTokenTypes.DOC_START, HaxeDocTokenTypes.DOC_LEADING_ASTERISK, HaxeDocTokenTypes.DOC_END);

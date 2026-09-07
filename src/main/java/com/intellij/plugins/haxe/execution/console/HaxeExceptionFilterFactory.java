@@ -20,7 +20,9 @@ public final class HaxeExceptionFilterFactory implements ExceptionFilterFactory 
 
   @Override
   public @NotNull Filter create(@NotNull Project project, @NotNull GlobalSearchScope searchScope) {
-    List<Filter> filters = List.of(new HaxeStackTraceFilter(project, searchScope), new HaxeUtestFailureFilter(project, searchScope));
+    List<Filter> filters = List.of(
+      new HaxeStackTraceFilter(project, searchScope),
+      new HaxeUtestFailureFilter(project, searchScope));
     return new CompositeFilter(project, filters);
   }
 }

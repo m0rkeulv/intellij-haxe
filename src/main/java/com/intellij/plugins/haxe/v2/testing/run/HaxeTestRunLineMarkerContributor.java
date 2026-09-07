@@ -1,7 +1,5 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
-import com.intellij.plugins.haxe.v2.testing.HaxeTestClasses;
-import com.intellij.plugins.haxe.v2.testing.HaxeTestContext;
 import com.intellij.execution.lineMarker.RunLineMarkerContributor;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -13,7 +11,8 @@ import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeIdentifier;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
-import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestClasses;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestContext;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import javax.swing.Icon;

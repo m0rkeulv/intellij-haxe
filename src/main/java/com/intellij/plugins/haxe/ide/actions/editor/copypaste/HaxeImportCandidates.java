@@ -44,17 +44,22 @@ final class HaxeImportCandidates {
     Set<String> usingMethods = new HashSet<>();
     for (HaxeImportableModel importable : file.getModel().getOrderedImportAndUsingModels()) {
       if (importable instanceof HaxeUsingModel using) {
-        for (HaxeClassModel classModel : using.getClassModels()) {
-          for (HaxeMethodModel method : classModel.getMethodsSelf(null)) {
-            if (method.isStatic()) usingMethods.add(method.getName());
-          }
-        }
+        addStaticMethodNames(using, usingMethods);
       }
       else if (importable instanceof HaxeImportModel importModel) {
         staticImports |= importsMembers(importModel);
       }
     }
     return new HaxeImportCandidates(staticImports, usingMethods);
+  }
+
+  /** The names a {@code using} exposes as extension methods: the static methods of the classes it names. */
+  private static void addStaticMethodNames(HaxeUsingModel using, Set<String> into) {
+    for (HaxeClassModel classModel : using.getClassModels()) {
+      for (HaxeMethodModel method : classModel.getMethodsSelf(null)) {
+        if (method.isStatic()) into.add(method.getName());
+      }
+    }
   }
 
   boolean mayNeedImport(@NotNull HaxeReferenceExpression reference) {

@@ -15,12 +15,21 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * Whether a haxe file can be stubbed: only a file without conditional
+ * compilation parses the same under every define set, so only it may feed
+ * the shared stub indexes. The verdict is cached on the virtual file until
+ * its content changes on disk; the PSI and the disk overloads answer from
+ * the text they have, so an unsaved editor may cache the disk verdict or
+ * the PSI one first - stubs are built on save, which clears the cache.
+ */
 @CustomLog
 public class HaxeStubableFileService implements AsyncFileListener {
 
   private static final Key<Boolean> CAN_CREATE_STUB_KEY = Key.create("haxe.file.stub.create");
   private static final String CONDITIONAL_COMPILATION_MARKER = "#if";
 
+  /** Stubbed files skip the file-based indexes: their stub indexes cover them. */
   public static boolean skipFilebasedIndex(@NotNull HaxeFile haxeFile) {
     return isStubable(haxeFile);
   }
@@ -49,8 +58,8 @@ public class HaxeStubableFileService implements AsyncFileListener {
     }
   }
 
-  private static boolean isStubableText(@NotNull CharSequence text) {
-    return !text.toString().contains(CONDITIONAL_COMPILATION_MARKER);
+  private static boolean isStubableText(@NotNull String text) {
+    return !text.contains(CONDITIONAL_COMPILATION_MARKER);
   }
 
   private static boolean cache(@NotNull VirtualFile file, boolean stubable) {
@@ -68,8 +77,9 @@ public class HaxeStubableFileService implements AsyncFileListener {
       @Override
       public void beforeVfsChange() {
         for (VFileEvent event : events) {
-          if (event instanceof VFileContentChangeEvent && isHaxeFile(event.getFile())) {
-            event.getFile().putUserData(CAN_CREATE_STUB_KEY, null);
+          VirtualFile file = event.getFile();
+          if (event instanceof VFileContentChangeEvent && isHaxeFile(file)) {
+            file.putUserData(CAN_CREATE_STUB_KEY, null);
           }
         }
       }

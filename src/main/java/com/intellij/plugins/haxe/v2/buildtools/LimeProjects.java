@@ -60,7 +60,13 @@ public final class LimeProjects {
   /** The {@code <app file>} name the tool packages under: the declared one, else lime's default. */
   @NotNull
   public static String appFile(@NotNull String content) {
-    return StringUtil.defaultIfEmpty(ProjectXmlParser.parseAppFile(content), DEFAULT_APP_FILE);
+    return appFileOrDefault(ProjectXmlParser.parseAppFile(content));
+  }
+
+  /** The declared {@code <app file>} name, or lime's default when the project xml declares none. */
+  @NotNull
+  public static String appFileOrDefault(@Nullable String declaredAppFile) {
+    return StringUtil.defaultIfEmpty(declaredAppFile, DEFAULT_APP_FILE);
   }
 
   /** True for the types the lime tool can build; a plain hxp SCRIPT is not one of them. */
@@ -252,10 +258,6 @@ public final class LimeProjects {
       .normalize();
   }
 
-  private static String hostLauncherName(String appFile) {
-    return SystemInfo.isWindows ? appFile + ".exe" : appFile;
-  }
-
   /**
    * Lime's export layout, shared by every packaged-artifact lookup:
    * {@code <app path>/<target dir>/bin} relative to the project file, the app
@@ -284,20 +286,20 @@ public final class LimeProjects {
   /// reports. Only the targets Build & run can launch need one; the packaged*
   /// lookups above answer the same layout as absolute paths at launch time.
   @Nullable
-  public static String relativeTargetOutput(@NotNull String targetFlag, @NotNull String appPath, @NotNull String appFile) {
-    String name = StringUtil.defaultIfEmpty(appFile, DEFAULT_APP_FILE);
+  public static String relativeTargetOutput(@NotNull String targetFlag, @NotNull String appPath, @NotNull String declaredAppFile) {
+    String appFile = appFileOrDefault(declaredAppFile);
     return switch (targetFlag) {
       case "hl" -> appPath + "/hl/obj/ApplicationMain.hl";
-      case "html5" -> appPath + "/html5/bin/" + name + ".js";
-      case "flash" -> appPath + "/flash/bin/" + name + ".swf";
+      case "html5" -> appPath + "/html5/bin/" + appFile + ".js";
+      case "flash" -> appPath + "/flash/bin/" + appFile + ".swf";
       // air: the descriptor (application.xml) sits at <app path>/air with the content swf in bin beside it
-      case "air" -> appPath + "/air/bin/" + name + ".swf";
+      case "air" -> appPath + "/air/bin/" + appFile + ".swf";
       // desktop cpp: lime copies the built executable into bin, named after
       // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
-      case "windows" -> appPath + "/windows/bin/" + name + ".exe";
-      case "linux" -> appPath + "/linux/bin/" + name;
+      case "windows" -> appPath + "/windows/bin/" + appFile + ".exe";
+      case "linux" -> appPath + "/linux/bin/" + appFile;
       // neko is wrapped in a launcher executable named after the app, host-suffixed
-      case "neko" -> appPath + "/neko/bin/" + hostLauncherName(name);
+      case "neko" -> appPath + "/neko/bin/" + HaxeSdkUtilBase.getExecutableName(appFile);
       // TODO mac: the artifact is a .app bundle (Contents/MacOS/<app file>) - needs bundle-aware launch
       default -> null;
     };

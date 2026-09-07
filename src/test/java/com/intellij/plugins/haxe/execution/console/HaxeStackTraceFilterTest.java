@@ -58,13 +58,23 @@ public class HaxeStackTraceFilterTest extends HaxeLightFixtureTestCase {
     OpenFileDescriptor target = ((OpenFileHyperlinkInfo)result.getFirstHyperlinkInfo()).getDescriptor();
     assertEquals(fileName, target.getFile().getName());
     assertEquals(zeroBasedLine, target.getLine());
-    assertEquals(highlighted, console.substring(result.getHighlightStartOffset(), result.getHighlightEndOffset()));
+    assertEquals(highlighted, highlightedSpan(console, result));
   }
 
   @Test
   @DisplayName("frames without a source file do not link")
   public void testFramesWithoutASourceFileDoNotLink() {
-    assertNull(filter.applyFilter("Called from a C function\n", 25));
-    assertNull(filter.applyFilter("Called from unknown/Missing.hx line 3\n", 38));
+    assertNull(applyToLine("Called from a C function"));
+    assertNull(applyToLine("Called from unknown/Missing.hx line 3"));
+  }
+
+  /** The filter over a console holding just this line (plus its newline). */
+  private Filter.Result applyToLine(String line) {
+    return filter.applyFilter(line + "\n", line.length() + 1);
+  }
+
+  private static String highlightedSpan(String console, Filter.Result result) {
+    Filter.ResultItem item = result.getResultItems().getFirst();
+    return console.substring(item.getHighlightStartOffset(), item.getHighlightEndOffset());
   }
 }

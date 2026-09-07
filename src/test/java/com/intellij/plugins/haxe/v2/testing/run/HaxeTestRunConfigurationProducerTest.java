@@ -82,7 +82,7 @@ public class HaxeTestRunConfigurationProducerTest extends HaxeCodeInsightFixture
 
     assertNotNull(configuration);
     assertEquals(List.of("cases.AlphaTest"), configuration.getTestClasses());
-    assertEquals("AlphaTest", configuration.getName());
+    assertEquals("AlphaTest (test.hxml)", configuration.getName(), "a single suite takes the generated name");
   }
 
   @Test

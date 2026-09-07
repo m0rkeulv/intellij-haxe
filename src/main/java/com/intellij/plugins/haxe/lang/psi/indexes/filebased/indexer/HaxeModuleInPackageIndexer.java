@@ -5,7 +5,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeModule;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.data.HaxeComponentIndexData;
 import com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexUtil;
-import com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeModuleModel;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;

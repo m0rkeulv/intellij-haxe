@@ -1,8 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -136,7 +134,7 @@ public final class HaxeCompilerUsageService {
         if (state != UsageState.UNKNOWN) {
           verdicts.put(request.key(), new Verdict(request.fileStamp(), state));
           failedAt.remove(request.key());
-          restartHighlighting();
+          HaxeCompilerCaches.restartHighlightingLater(project, "haxe: compiler usage data updated");
         } else {
           failedAt.put(request.key(), System.currentTimeMillis());
         }
@@ -166,13 +164,5 @@ public final class HaxeCompilerUsageService {
       log.info("display/references failed for " + request.key().memberName() + ": " + e.getMessage());
       return UsageState.UNKNOWN;
     }
-  }
-
-  private void restartHighlighting() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (!project.isDisposed()) {
-        DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler usage data updated");
-      }
-    }, ModalityState.nonModal());
   }
 }

@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.execution.console;
 
 import com.intellij.execution.filters.Filter;
-import com.intellij.execution.filters.OpenFileHyperlinkInfo;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -28,10 +27,7 @@ public final class HaxeStackTraceFilter implements Filter {
     if (frame == null) return null;
     VirtualFile file = HaxeStackFrameFiles.find(project, scope, frame.path());
     if (file == null) return null;
-
-    // Result offsets are document-absolute; the line starts entireLength minus its own length back
-    int lineStart = entireLength - text.length();
-    OpenFileHyperlinkInfo link = new OpenFileHyperlinkInfo(project, file, Math.max(0, frame.line() - 1));
-    return new Result(lineStart + frame.pathStart(), lineStart + frame.lineEnd(), link);
+    int documentLine = Math.max(0, frame.line() - 1);
+    return HaxeConsoleLinks.link(project, file, documentLine, 0, text, entireLength, frame.pathStart(), frame.lineEnd());
   }
 }

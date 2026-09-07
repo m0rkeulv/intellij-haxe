@@ -195,9 +195,10 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   private void refreshNow() {
-    refreshQueued.set(false);
     if (project.isDisposed()) return;
     synchronized (refreshLock) {
+      // cleared under the lock: requests arriving during this refresh fold into ONE follow-up
+      refreshQueued.set(false);
       // compare against the defines last handed to consumers, NOT the snapshot
       // cache: the invalidation topic clears the snapshot synchronously before
       // this runs. The sentinel keeps project open cheap (nothing was handed
@@ -207,10 +208,14 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       Map<String, String> before = lastComputed;
       snapshot = null;
       fastState = null;
-      Map<String, String> after = getActiveDefines();
+      // one non-blocking read action around the recompute: this is a pooled
+      // thread, and the inner blocking read forms then nest instead of freezing the UI
+      Map<String, String> after = ReadAction.nonBlocking(this::getActiveDefines)
+        .expireWith(this)
+        .executeSynchronously();
       lastComputed = after;
       boolean changed = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
-      log.info("define context refresh: changed=" + changed + ", defines=" + (after == null ? "legacy" : after.size()));
+      log.debug("define context refresh: changed=" + changed + ", defines=" + (after == null ? "legacy" : after.size()));
       if (changed) {
         HaxeDefineContextInvalidator.invalidateConditionalFiles(project);
       }

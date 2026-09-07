@@ -34,24 +34,28 @@ public class HaxeCopyPasteReferenceProcessor extends HaxeBaseCopyPasteReferenceP
     /** A class or static method the reference resolves to becomes a restorable import; anything else needs none. */
     private void addResolvedReference(int startOffset, HaxeReferenceExpression reference,
                                       ArrayList<HaxeReferenceData> to) {
-        PsiElement resolve = reference.resolve();
-        if (resolve instanceof HaxeClass haxeClass) {
-            String qualifiedName = haxeClass.getQualifiedName();
-            if (qualifiedName != null) {
-                addHaxeReferenceData(reference, to, startOffset, qualifiedName, false, false);
-            }
-        } else if (resolve instanceof HaxeMethod method && method.isStatic()) {
-            FullyQualifiedInfo qualifiedInfo = method.getModel().getQualifiedInfo();
-
-            boolean isExtensionMethod = false;
-            if (reference.getParent() instanceof HaxeCallExpression callExpression) {
-                isExtensionMethod = callExpression.resolveIsStaticExtension();
-            }
-
-            if (qualifiedInfo != null) {
-                addHaxeReferenceData(reference, to, startOffset, importPathOf(qualifiedInfo), true, isExtensionMethod);
+        switch (reference.resolve()) {
+            case HaxeClass haxeClass -> addClassReference(startOffset, reference, haxeClass, to);
+            case HaxeMethod method when method.isStatic() -> addStaticMethodReference(startOffset, reference, method, to);
+            case null, default -> {
             }
         }
+    }
+
+    private void addClassReference(int startOffset, HaxeReferenceExpression reference, HaxeClass haxeClass,
+                                   ArrayList<HaxeReferenceData> to) {
+        String qualifiedName = haxeClass.getQualifiedName();
+        if (qualifiedName == null) return;
+        addHaxeReferenceData(reference, to, startOffset, qualifiedName, false, false);
+    }
+
+    private void addStaticMethodReference(int startOffset, HaxeReferenceExpression reference, HaxeMethod method,
+                                          ArrayList<HaxeReferenceData> to) {
+        FullyQualifiedInfo qualifiedInfo = method.getModel().getQualifiedInfo();
+        if (qualifiedInfo == null) return;
+        boolean isExtensionMethod = reference.getParent() instanceof HaxeCallExpression callExpression
+                                    && callExpression.resolveIsStaticExtension();
+        addHaxeReferenceData(reference, to, startOffset, importPathOf(qualifiedInfo), true, isExtensionMethod);
     }
 
     /**
@@ -138,12 +142,13 @@ public class HaxeCopyPasteReferenceProcessor extends HaxeBaseCopyPasteReferenceP
         return referenceExpressions;
     }
 
-    // 2025.2 signature
-    protected void restoreReferences(HaxeReferenceData @NotNull [] referenceData, List<HaxeReferenceExpression> referenceExpressions, @NotNull Set<? super String> imported) {
+    @Override
+    protected void restoreReferences(HaxeReferenceData @NotNull [] referenceData,
+                                     HaxeReferenceExpression @NotNull [] referenceExpressions,
+                                     @NotNull Set<? super String> imported) {
         Set<QNameAndFile> importData = new HashSet<>();
-        for (int i = 0; i < referenceExpressions.size(); i++) {
-
-            HaxeReferenceExpression referenceExpression = referenceExpressions.get(i);
+        for (int i = 0; i < referenceExpressions.length; i++) {
+            HaxeReferenceExpression referenceExpression = referenceExpressions[i];
             ReferenceData referenceDatum = referenceData[i];
             if(referenceDatum instanceof  HaxeReferenceData haxeReferenceData) {
                 if (referenceExpression != null && referenceExpression.resolve() == null) {
@@ -175,13 +180,6 @@ public class HaxeCopyPasteReferenceProcessor extends HaxeBaseCopyPasteReferenceP
             }
         }
     }
-
-
-    // 2025.1 signature
-    protected void restoreReferences(HaxeReferenceData @NotNull [] referenceData, HaxeReferenceExpression @NotNull [] referenceExpressions, @NotNull Set<? super String> imported) {
-        restoreReferences(referenceData, Arrays.stream(referenceExpressions).toList(), imported);
-    }
-
 
     record QNameAndFile(String qname, PsiFile containingFile, boolean extensionMethod) {
     }

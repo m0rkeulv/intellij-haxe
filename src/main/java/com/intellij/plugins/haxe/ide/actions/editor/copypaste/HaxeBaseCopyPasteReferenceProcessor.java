@@ -1,14 +1,8 @@
 package com.intellij.plugins.haxe.ide.actions.editor.copypaste;
 
+import com.intellij.codeInsight.CodeInsightSettings;
 import com.intellij.codeInsight.editorActions.CopyPastePostProcessor;
 import com.intellij.codeInsight.editorActions.ReferenceCopyPasteProcessor;
-import com.intellij.plugins.haxe.editor.HaxeRestoreReferencesDialog;
-import com.intellij.plugins.haxe.lang.psi.HaxeFile;
-import com.intellij.psi.PsiElement;
-import lombok.CustomLog;
-import org.jetbrains.annotations.NotNull;
-
-import com.intellij.codeInsight.CodeInsightSettings;
 import com.intellij.codeInsight.daemon.impl.CollectHighlightsUtil;
 import com.intellij.codeInsight.hint.HintManager;
 import com.intellij.codeInsight.hint.HintManagerImpl;
@@ -28,10 +22,14 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.Ref;
+import com.intellij.plugins.haxe.editor.HaxeRestoreReferencesDialog;
+import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiUtilCore;
 import com.intellij.ui.LightweightHint;
 import com.intellij.util.ArrayUtil;
+import lombok.CustomLog;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.event.HyperlinkEvent;
@@ -42,7 +40,6 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /**
  *  Mostly a Copy of jetbrains com.intellij.codeInsight.editorActions.CopyPasteReferenceProcessor but with Haxe specific types
@@ -150,7 +147,6 @@ public abstract class HaxeBaseCopyPasteReferenceProcessor <TRef extends PsiEleme
     private void reviewImports(@NotNull Project project, @NotNull PsiFile file, @NotNull Set<String> importedClasses) {
         HaxeRestoreReferencesDialog dialog = new HaxeRestoreReferencesDialog(project, importedClasses.toArray(String[]::new));
         dialog.setTitle(JavaBundle.message("dialog.import.on.paste.title3"));
-//        dialog.setExplanation(JavaBundle.message("dialog.paste.on.import.text3"));
         if (dialog.showAndGet()) {
             List<String> selectedElements = dialog.getSelectedElements();
             if (!selectedElements.isEmpty()) {

@@ -42,9 +42,6 @@ import java.util.Collection;
  */
 @CustomLog
 public class HaxeUtil {
-  public static void reparseProjectFiles(@NotNull final Project project) {
-    reparseProjectFiles(project, true);
-  }
   public static void reparseProjectFiles(@NotNull final Project project, boolean invalidateBuildConfig) {
     if(project.isDisposed()) {
       log.warn("not going to reparse files - project Disposed");

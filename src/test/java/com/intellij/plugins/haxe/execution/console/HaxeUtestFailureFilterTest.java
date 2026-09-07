@@ -50,7 +50,7 @@ public class HaxeUtestFailureFilterTest extends HaxeLightFixtureTestCase {
     OpenFileDescriptor target = ((OpenFileHyperlinkInfo)result.getFirstHyperlinkInfo()).getDescriptor();
     assertEquals("ShapeTest.hx", target.getFile().getName());
     assertEquals(zeroBasedLine, target.getLine());
-    assertEquals(highlighted, console.substring(result.getHighlightStartOffset(), result.getHighlightEndOffset()));
+    assertEquals(highlighted, highlightedSpan(console, result));
   }
 
   /** Lines without a position, an unknown file, or a compiler message (the compiler filter's line) stay plain. */
@@ -62,14 +62,26 @@ public class HaxeUtestFailureFilterTest extends HaxeLightFixtureTestCase {
   @ParameterizedTest(name = "{0}")
   @FieldSource("PLAIN_LINES")
   public void testLeavesOtherLinesPlain(String line) {
-    assertNull(filter.applyFilter(line + "\n", line.length() + 1));
+    assertNull(applyToLine(line));
   }
 
   @Test
   @DisplayName("windows drive path")
   public void testWindowsDrivePath() {
-    String line = "C:/work/src/Other.hx:5: expected 1";
-    // an absolute path that does not exist here is not a link either
-    assertNull(filter.applyFilter(line + "\n", line.length() + 1));
+    HaxeUtestFailureLine failure = HaxeUtestFailureLine.parse("C:/work/src/Other.hx:5: expected 1");
+
+    assertNotNull(failure, "the drive letter is part of the path, not a separator");
+    assertEquals("C:/work/src/Other.hx", failure.path());
+    assertEquals(5, failure.line());
+  }
+
+  /** The filter over a console holding just this line (plus its newline). */
+  private Filter.Result applyToLine(String line) {
+    return filter.applyFilter(line + "\n", line.length() + 1);
+  }
+
+  private static String highlightedSpan(String console, Filter.Result result) {
+    Filter.ResultItem item = result.getResultItems().getFirst();
+    return console.substring(item.getHighlightStartOffset(), item.getHighlightEndOffset());
   }
 }

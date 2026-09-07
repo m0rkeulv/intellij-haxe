@@ -19,8 +19,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The compile behind a gutter-started single-suite/-test run: the tests
- * build's SELECTED section with its entry point swapped for a generated
+ * The compile behind a selection run (gutter marker or context menu: one or
+ * more suites, or one test) on an hxml tests build: the build's SELECTED section with its entry point swapped for a generated
  * template main — the original {@code --main}/{@code -x} stripped, the
  * target's output redirected into a per-run directory under a short temp
  * root (the real tests artifact must not be overwritten; see
@@ -204,8 +204,9 @@ final class HaxeTestSingleRuns {
         return null;
       }
       String template = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-      String newSuites = singleRun.testClasses().stream().map(suite -> "new " + suite + "()").collect(Collectors.joining(", "));
-      String addSuites = singleRun.testClasses().stream().map(suite -> "add(" + suite + ");").collect(Collectors.joining("\n\t\t"));
+      // the add(...) joiner mirrors the munit template's two-tab statement indent
+      String newSuites = joinSuites(singleRun, "new %s()", ", ");
+      String addSuites = joinSuites(singleRun, "add(%s);", "\n\t\t");
       String substituted = template
         .replace("${NEW_SUITES}", newSuites)
         .replace("${ADD_SUITES}", addSuites)
@@ -218,6 +219,14 @@ final class HaxeTestSingleRuns {
       log.warn("cannot read single-run template " + resource + ": " + e.getMessage());
       return null;
     }
+  }
+
+  /** Every selected suite spelled through {@code form} ({@code %s} = the class), joined by {@code separator}. */
+  @NotNull
+  private static String joinSuites(@NotNull SingleRun singleRun, @NotNull String form, @NotNull String separator) {
+    return singleRun.testClasses().stream()
+      .map(form::formatted)
+      .collect(Collectors.joining(separator));
   }
 
   @NotNull

@@ -33,7 +33,10 @@ import org.jetbrains.annotations.Nullable;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.DOC_COMMENT;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_LIKE_OWNERS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.LIST_PUNCTUATION;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.FUNCTION_DEFINITION;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
@@ -133,38 +136,35 @@ public class HaxeIndentProcessor {
     // a parameter/argument list carries no indent of its own: its ITEMS do
     // (below), so a chopped-down list (the break right after the paren) and
     // a mid-list wrap land at the same depth instead of stacking
-    if (FUNCTION_DEFINITION.contains(parentType) || parentType == CALL_EXPRESSION) {
-      if (elementType == PARAMETER_LIST || elementType == EXPRESSION_LIST || elementType == CALL_EXPRESSION_LIST) {
+    if (FUNCTION_LIKE_OWNERS.contains(parentType) || parentType == CALL_EXPRESSION) {
+      if (ARGUMENT_LISTS.contains(elementType)) {
         return Indent.getNoneIndent();
       }
     }
     // a wrapped list item continues in from the line that opened the list:
-    // call arguments and enum constructor parameters one step, a method
+    // call arguments and enum constructor parameters one step, a function
     // signature's parameters two - the signature stands off from the body
     // that follows at one
-    if (parentType == PARAMETER_LIST || parentType == EXPRESSION_LIST || parentType == CALL_EXPRESSION_LIST) {
-      ASTNode listOwner = parent.getTreeParent();
-      IElementType ownerType = listOwner == null ? null : listOwner.getElementType();
+    if (ARGUMENT_LISTS.contains(parentType)) {
       // an array literal's list is indented as a block of its own (needIndent);
       // its items sit at the list's level
-      if (ownerType != ARRAY_LITERAL) {
-        if (elementType == PLPAREN || elementType == PRPAREN || elementType == OCOMMA) {
+      if (superParentType != ARRAY_LITERAL) {
+        if (LIST_PUNCTUATION.contains(elementType)) {
           return Indent.getNoneIndent();
         }
-        boolean signature = parentType == PARAMETER_LIST && FUNCTION_DEFINITION.contains(ownerType);
+        boolean signature = parentType == PARAMETER_LIST && FUNCTION_LIKE_OWNERS.contains(superParentType);
         return signature ? Indent.getContinuationIndent() : Indent.getNormalIndent();
       }
     }
     // `new T(a, b)` keeps its arguments as direct children (no list node);
     // an argument follows the paren or a comma
-    if (parentType == NEW_EXPRESSION && (prevSiblingType == PLPAREN || prevSiblingType == OCOMMA)
-        && elementType != PRPAREN) {
+    boolean afterListOpener = prevSiblingType == PLPAREN || prevSiblingType == OCOMMA;
+    if (parentType == NEW_EXPRESSION && afterListOpener && elementType != PRPAREN) {
       return Indent.getNormalIndent();
     }
-    // a named function's non-block body on its own line indents one step
-    // (FUNCTION_DEFINITION lacks the module-level kind); the header's own
-    // trailing parts also follow a header end and stay unindented
-    boolean functionParent = FUNCTION_DEFINITION.contains(parentType) || parentType == MODULE_METHOD_DECLARATION;
+    // a named function's non-block body on its own line indents one step;
+    // the header's own trailing parts also follow a header end and stay unindented
+    boolean functionParent = FUNCTION_LIKE_OWNERS.contains(parentType);
     boolean afterHeaderEnd = FUNCTION_HEADER_END.contains(prevSiblingType);
     boolean headerTrailer = FUNCTION_HEADER_END.contains(elementType)
                             || elementType == BLOCK_STATEMENT

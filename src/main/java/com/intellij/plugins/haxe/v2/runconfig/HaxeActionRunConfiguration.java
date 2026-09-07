@@ -23,7 +23,6 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolCommandLines;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
-import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.util.PathUtil;
 import com.intellij.util.io.BaseOutputReader;
 import org.jdom.Element;
@@ -117,8 +116,7 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
         }
         List<String> command = HaxeCompileCommands.connectIfEnabled(
           getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
-        GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory())
-          .withEnvironment(LimeProjects.commandEnvironment(command));
+        GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory());
         KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine) {
           // a run action wraps the app - long-running, sparse output; the default reader
           // busy-polls it (a pty needs its own blocking reader)

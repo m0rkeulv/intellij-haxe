@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Ownership resolution behind the gutter markers, over an explicitly MARKED
+ * Ownership resolution behind the gutter markers and context-menu runs, over an explicitly MARKED
  * build with a deliberately NON-conventional name (checks.hxml) so the mark
  * itself is load-bearing: the context appears with the mark, follows the
  * classpaths, and drops on unmark (the store's modification tracker
@@ -47,7 +47,7 @@ public class HaxeTestContextTest extends HaxeCodeInsightFixtureTestCase {
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile("container", buildFile.getPath());
 
     assertNull(HaxeTestContext.forFile(psiFile(outside)),
-               "a file no marked tests build claims gets no markers");
+               "a file no marked tests build claims gets no runs");
   }
 
   @Test

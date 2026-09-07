@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.v2.testing;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
@@ -40,15 +40,22 @@ public final class HaxeTestClasses {
   public static List<String> underDirectory(@NotNull Project project, @NotNull VirtualFile directory, @NotNull HaxeTestFramework framework) {
     List<String> references = new ArrayList<>();
     PsiManager psiManager = PsiManager.getInstance(project);
-    VfsUtilCore.iterateChildrenRecursively(directory, null, file -> {
-      if (!file.isDirectory() && file.getFileType() == HaxeFileType.INSTANCE) {
-        PsiFile psiFile = psiManager.findFile(file);
-        if (psiFile != null) references.addAll(inFile(psiFile, framework));
-      }
-      return true;
-    });
+    // content iteration: excluded roots (export/bin output) under the directory are skipped
+    ProjectFileIndex.getInstance(project)
+      .iterateContentUnderDirectory(directory, file -> collectSuites(psiManager, file, framework, references));
     references.sort(null);
     return references;
+  }
+
+  /** Adds the suites of one Haxe file to {@code into}; always continues the iteration. */
+  private static boolean collectSuites(@NotNull PsiManager psiManager,
+                                       @NotNull VirtualFile file,
+                                       @NotNull HaxeTestFramework framework,
+                                       @NotNull List<String> into) {
+    if (file.isDirectory() || file.getFileType() != HaxeFileType.INSTANCE) return true;
+    PsiFile psiFile = psiManager.findFile(file);
+    if (psiFile != null) into.addAll(inFile(psiFile, framework));
+    return true;
   }
 
   /**
