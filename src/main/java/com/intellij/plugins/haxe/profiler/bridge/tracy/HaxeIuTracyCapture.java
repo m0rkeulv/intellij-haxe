@@ -164,8 +164,14 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
         notifyProtocolUnsupported(unsupported.refused());
         return null;
       }
-      catch (IOException | RuntimeException e) {
+      catch (IOException e) {
         LOG.warn("tracy connect failed", e);
+        notifyNothingCaptured();
+        return null;
+      }
+      catch (IllegalStateException | UncheckedIOException tableLoadFailed) {
+        // a version's item table failed to load - a packaging defect, reported rather than left on the thread
+        LOG.warn("tracy receiver broken", tableLoadFailed);
         notifyNothingCaptured();
         return null;
       }
@@ -279,7 +285,7 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
     }
 
     private void notifyCaptured(long zoneCount, TracyProtocolVersion protocol) {
-      String protocolLabel = HaxeHxcppTracyProfilerConfigurable.protocolLabel(protocol);
+      String protocolLabel = HaxeHxcppTracyProfilerConfigurationType.protocolLabel(protocol);
       String content = HaxeProfilerBundle.message("haxe.profiler.tracy.captured",
                                                   sessionFile.toString(), zoneCount, protocolLabel);
       Notification notification = group().createNotification(content, NotificationType.INFORMATION);

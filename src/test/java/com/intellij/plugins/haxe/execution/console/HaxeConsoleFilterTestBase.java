@@ -8,6 +8,7 @@ abstract class HaxeConsoleFilterTestBase extends HaxeLightFixtureTestCase {
 
   protected Filter filter;
 
+  /** Only names the fixture root the platform expects; these tests build their files in the project instead. */
   @Override
   protected String getBasePath() {
     return "/console/";

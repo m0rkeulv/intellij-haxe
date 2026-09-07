@@ -50,6 +50,12 @@ public class HaxeHxcppTracyProfilerConfigurationType implements ProfilerConfigur
     return HaxeProfilerBundle.message("haxe.profiler.hxcpp.tracy.configuration.name");
   }
 
+  /** The user-visible name of a protocol version ("76 (Tracy 0.13)"), for the settings dropdown and the capture notification. */
+  @NotNull
+  static String protocolLabel(@NotNull TracyProtocolVersion version) {
+    return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.version", version.wire(), version.tracyRelease());
+  }
+
   @Override
   public @NotNull Icon getIcon() {
     return AllIcons.Actions.Profile;

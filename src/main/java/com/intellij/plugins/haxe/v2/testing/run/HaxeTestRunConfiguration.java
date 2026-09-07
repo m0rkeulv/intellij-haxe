@@ -188,7 +188,8 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     HaxeActionBeforeRunTaskProvider.Task compileTask = new HaxeActionBeforeRunTaskProvider.Task();
     compileTask.setBuildFilePath(buildFilePath);
     compileTask.setActionName(HaxeReadActions.compute(this::buildActionName));
-    compileTask.setExtraArguments(currentCompileArguments());
+    // the stored arguments are a snapshot the launch recomputes; a run that cannot compute them fails at launch
+    compileTask.setExtraArguments(StringUtil.notNullize(currentCompileArguments()));
     // a multi-section hxml compiles only its selected --next section, so the
     // reporting arguments reach that section instead of the chain's last one
     compileTask.setSectionScoped(true);
@@ -200,9 +201,10 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
    * selection (a lime-family single run's main override included). The
    * before-run task recomputes these at launch — its stored snapshot goes
    * stale whenever the wiring evolves (a plugin update changing the injection
-   * would otherwise keep compiling with the old arguments forever).
+   * would otherwise keep compiling with the old arguments forever). Null
+   * when a lime single run's main could not be generated.
    */
-  @NotNull
+  @Nullable
   public String currentCompileArguments() {
     return HaxeReadActions.compute(
       () -> HaxeTestLaunchPlanner.compileArguments(getProject(), buildFilePath, filterPattern, singleRun()));

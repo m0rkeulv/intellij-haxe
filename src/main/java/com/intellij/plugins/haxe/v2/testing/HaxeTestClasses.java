@@ -2,8 +2,10 @@ package com.intellij.plugins.haxe.v2.testing;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileVisitor;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.psi.PsiFile;
@@ -51,11 +53,18 @@ public final class HaxeTestClasses {
       fileIndex.iterateContentUnderDirectory(directory, file -> collectSuites(psiManager, file, framework, references));
     }
     else {
-      VfsUtilCore.iterateChildrenRecursively(directory, child -> !fileIndex.isExcluded(child),
-                                             file -> collectSuites(psiManager, file, framework, references));
+      // TODO: bound this walk - a large shared classpath loads every file below it into the VFS
+      VfsUtilCore.iterateChildrenRecursively(directory, HaxeTestClasses::isVisited,
+                                             file -> collectSuites(psiManager, file, framework, references),
+                                             VirtualFileVisitor.NO_FOLLOW_SYMLINKS);
     }
     references.sort(null);
     return references;
+  }
+
+  /** Ignored names (.git, build output patterns) are skipped outside the content as the index skips them inside. */
+  private static boolean isVisited(@NotNull VirtualFile child) {
+    return !FileTypeRegistry.getInstance().isFileIgnored(child);
   }
 
   /** Adds the suites of one Haxe file to {@code into}; always continues the iteration. */

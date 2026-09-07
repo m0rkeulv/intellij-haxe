@@ -31,7 +31,7 @@ public class TracyLiveCaptureTest {
   @DisplayName("offers the ladder until the client accepts and keeps the settled version")
   public void testOffersTheLadderUntilTheClientAcceptsAndKeepsTheSettledVersion() throws Exception {
     try (FakeClient client = new FakeClient(TracyProtocolVersion.V82);
-         TracyLiveCapture capture = TracyLiveCapture.connect(client.port(), TracyVersionStrategy.detect(() -> null), () -> true)) {
+         TracyLiveCapture capture = TracyLiveCapture.connect(client.port(), probeLadder(), () -> true)) {
 
       assertNotNull(capture);
       assertEquals(TracyProtocolVersion.V82, capture.welcome().protocolVersion());
@@ -57,7 +57,7 @@ public class TracyLiveCaptureTest {
   public void testAClientRefusingEveryVersionFailsNamingWhatWasOffered() throws Exception {
     try (FakeClient client = new FakeClient(null)) {
       TracyProtocolUnsupportedException failure = assertThrows(TracyProtocolUnsupportedException.class,
-        () -> TracyLiveCapture.connect(client.port(), TracyVersionStrategy.detect(() -> null), () -> true));
+        () -> TracyLiveCapture.connect(client.port(), probeLadder(), () -> true));
 
       assertEquals(TracyProtocolVersion.PROBE_ORDER, failure.refused());
       assertEquals(List.of(76, 74, 82, 69), client.offered());
@@ -74,6 +74,11 @@ public class TracyLiveCaptureTest {
                    () -> TracyLiveCapture.connect(client.port(), strategy, () -> true));
       assertEquals(List.of(74), client.offered());
     }
+  }
+
+  /** Detection with nothing announced: the plain probe ladder. */
+  private static TracyVersionStrategy probeLadder() {
+    return TracyVersionStrategy.detect(() -> null);
   }
 
   private static final class FakeClient implements AutoCloseable {

@@ -22,14 +22,9 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
   private record ProtocolChoice(@Nullable TracyProtocolVersion version) {
     @NotNull
     String label() {
-      return version == null ? HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.auto") : protocolLabel(version);
+      if (version == null) return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.auto");
+      return HaxeHxcppTracyProfilerConfigurationType.protocolLabel(version);
     }
-  }
-
-  /** The user-visible name of a protocol version ("76 (Tracy 0.13)"), shared with the capture notification. */
-  @NotNull
-  static String protocolLabel(@NotNull TracyProtocolVersion version) {
-    return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.version", version.wire(), version.tracyRelease());
   }
 
   private final HaxeHxcppTracyProfilerConfigurationState state;

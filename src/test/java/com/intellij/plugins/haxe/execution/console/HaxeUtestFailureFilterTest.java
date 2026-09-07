@@ -44,11 +44,10 @@ public class HaxeUtestFailureFilterTest extends HaxeConsoleFilterTestBase {
     assertEquals(highlighted, highlightedSpan(console, result));
   }
 
-  /** Lines without a position, an unknown file, or a compiler message (the compiler filter's line) stay plain. */
+  /** Lines without a position or naming an unknown file stay plain (the parser's own rejections have their own test). */
   static final List<Arguments> PLAIN_LINES = List.of(
     arguments("expected 0 but it is \"bogus\""),
-    arguments("src/Missing.hx:3: expected 1"),
-    arguments("src/ShapeTest.hx:12: characters 4-9 : Unknown identifier"));
+    arguments("src/Missing.hx:3: expected 1"));
 
   @ParameterizedTest(name = "{0}")
   @FieldSource("PLAIN_LINES")

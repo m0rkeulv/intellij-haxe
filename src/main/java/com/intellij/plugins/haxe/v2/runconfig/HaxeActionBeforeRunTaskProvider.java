@@ -31,6 +31,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
@@ -225,6 +226,11 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       String extraArguments = configuration instanceof HaxeTestRunConfiguration testConfiguration
                               ? testConfiguration.currentCompileArguments()
                               : task.getExtraArguments();
+      if (extraArguments == null) {
+        String buildFileName = PathUtil.getFileName(task.getBuildFilePath());
+        notifyFailure(project, HaxeBundle.message("haxe.test.single.unresolvable", buildFileName));
+        return false;
+      }
       resolved = ReadAction.nonBlocking(
           () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), extraArguments))
         .executeSynchronously();
