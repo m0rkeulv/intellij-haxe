@@ -3,7 +3,6 @@ package com.intellij.plugins.haxe.profiler.tracy.connect;
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWelcome;
-import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireFormat;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -44,8 +43,9 @@ public final class TracyHandshake {
     if (status == STATUS_PROTOCOL_MISMATCH) throw new TracyProtocolMismatchException(version);
     if (status != STATUS_WELCOME) {
       String name = status >= 0 && status < STATUS_NAMES.length ? STATUS_NAMES[status] : "unknown (" + status + ")";
-      throw new ProfilerFormatException("tracy client refused the connection: " + name
-                                        + " (receiver offered protocol " + version.wire() + ")");
+      throw new ProfilerFormatException("""
+        tracy client refused the connection: %s (receiver offered protocol %d)\
+        """.formatted(name, version.wire()));
     }
 
     int welcomeSize = version.format().welcomeSize();
@@ -53,12 +53,6 @@ public final class TracyHandshake {
     if (welcome.length < welcomeSize) {
       throw new ProfilerFormatException("truncated tracy welcome message");
     }
-    return parseWelcome(welcome, version);
-  }
-
-  /** The welcome in the version's layout (see the version's {@link TracyWireFormat}). */
-  @NotNull
-  public static TracyWelcome parseWelcome(byte @NotNull [] welcome, @NotNull TracyProtocolVersion version) {
     return version.format().parseWelcome(welcome, version);
   }
 }

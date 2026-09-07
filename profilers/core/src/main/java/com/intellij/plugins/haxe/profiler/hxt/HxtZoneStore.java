@@ -43,6 +43,8 @@ public final class HxtZoneStore {
 
   /** Files from this version on carry their series stamps RAW; older ones wrote them pre-rebased. */
   private static final int RAW_SERIES_VERSION = 6;
+  // TODO: record the protocol version in the HXTS header; a stored session is never decoded through the wire reader again
+  private static final TracyProtocolVersion STORED_SESSION_PROTOCOL = TracyProtocolVersion.V74;
 
   private final Path file;
   private final TracySession session;
@@ -226,8 +228,7 @@ public final class HxtZoneStore {
     processCpu = rebasedPoints(processCpu, seriesShiftNs);
     gcSweeps = rebasedSweeps(gcSweeps, seriesShiftNs);
     events = rebasedEvents(events, seriesShiftNs);
-    // the file records no protocol version; a stored session is never decoded through the wire reader again
-    TracyWelcome welcome = new TracyWelcome(TracyProtocolVersion.V74, 1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
+    TracyWelcome welcome = new TracyWelcome(STORED_SESSION_PROTOCOL, 1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
     TracySession session = new TracySession(welcome, List.of(), List.copyOf(frames), Map.copyOf(plots),
                                             Map.copyOf(memoryCurves), List.copyOf(gcSweeps), List.copyOf(events),
                                             List.copyOf(cpu), List.copyOf(processCpu), Map.copyOf(threadNames),

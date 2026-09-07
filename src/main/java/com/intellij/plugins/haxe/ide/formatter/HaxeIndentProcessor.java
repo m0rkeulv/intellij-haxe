@@ -37,7 +37,6 @@ import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARG
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_LIKE_OWNERS;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.LIST_PUNCTUATION;
-import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.FUNCTION_DEFINITION;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.PPBODY;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
@@ -62,7 +61,7 @@ public class HaxeIndentProcessor {
     final ASTNode firstChild = node.getFirstChildNode();
     final IElementType firstChildType = firstChild == null ? null : firstChild.getElementType();
 
-    final int braceStyle = FUNCTION_DEFINITION.contains(superParentType) ? settings.METHOD_BRACE_STYLE : settings.BRACE_STYLE;
+    final int braceStyle = FUNCTION_LIKE_OWNERS.contains(superParentType) ? settings.METHOD_BRACE_STYLE : settings.BRACE_STYLE;
 
     if (parent == null || parent.getTreeParent() == null) {
       return Indent.getNoneIndent();

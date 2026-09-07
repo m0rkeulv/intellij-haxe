@@ -22,9 +22,14 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
   private record ProtocolChoice(@Nullable TracyProtocolVersion version) {
     @NotNull
     String label() {
-      if (version == null) return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.auto");
-      return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.version", version.wire(), version.tracyRelease());
+      return version == null ? HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.auto") : protocolLabel(version);
     }
+  }
+
+  /** The user-visible name of a protocol version ("76 (Tracy 0.13)"), shared with the capture notification. */
+  @NotNull
+  static String protocolLabel(@NotNull TracyProtocolVersion version) {
+    return HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.version", version.wire(), version.tracyRelease());
   }
 
   private final HaxeHxcppTracyProfilerConfigurationState state;
@@ -46,7 +51,7 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
       choices.addElement(new ProtocolChoice(version));
     }
     protocolCombo.setModel(choices);
-    protocolCombo.setRenderer(BuilderKt.textListCellRenderer("", ProtocolChoice::label));
+    protocolCombo.setRenderer(BuilderKt.textListCellRenderer(ProtocolChoice::label));
     return panel;
   }
 

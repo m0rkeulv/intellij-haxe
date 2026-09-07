@@ -23,14 +23,17 @@ public interface TracyWireFormat {
   /** The packed welcome message's size on the wire. */
   int welcomeSize();
 
-  /** The welcome message in this version's layout. */
+  /**
+   * The welcome message in this version's layout; {@code version} is
+   * recorded in the result because one format serves several versions.
+   */
   @NotNull
   TracyWelcome parseWelcome(byte @NotNull [] welcome, @NotNull TracyProtocolVersion version);
 
   /**
-   * The thread-stream delta of a static zone begin or a zone end item, in
-   * ticks: the item's 64-bit form or, where the format has them, its
-   * packed 32/16-bit forms.
+   * The thread-stream delta of a zone begin or zone end item, in ticks:
+   * the item's 64-bit form or, where the format has them, its packed
+   * 32/16-bit forms.
    */
   long zoneDelta(@NotNull TracyQueueType type, @NotNull DataInputStream in) throws IOException;
 

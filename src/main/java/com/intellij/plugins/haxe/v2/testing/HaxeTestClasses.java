@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.testing;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
@@ -35,14 +36,24 @@ public final class HaxeTestClasses {
     return references;
   }
 
-  /** Every haxe file below the directory, sorted by reference so the same selection always spells the same run. */
+  /**
+   * Every haxe file below the directory (excluded roots such as export
+   * output skipped), sorted by reference so the same selection always spells
+   * the same run. A classpath outside the project content - a shared
+   * {@code -cp ../lib}, a haxelib dev path - is walked as-is.
+   */
   @NotNull
   public static List<String> underDirectory(@NotNull Project project, @NotNull VirtualFile directory, @NotNull HaxeTestFramework framework) {
     List<String> references = new ArrayList<>();
     PsiManager psiManager = PsiManager.getInstance(project);
-    // content iteration: excluded roots (export/bin output) under the directory are skipped
-    ProjectFileIndex.getInstance(project)
-      .iterateContentUnderDirectory(directory, file -> collectSuites(psiManager, file, framework, references));
+    ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
+    if (fileIndex.isInContent(directory)) {
+      fileIndex.iterateContentUnderDirectory(directory, file -> collectSuites(psiManager, file, framework, references));
+    }
+    else {
+      VfsUtilCore.iterateChildrenRecursively(directory, child -> !fileIndex.isExcluded(child),
+                                             file -> collectSuites(psiManager, file, framework, references));
+    }
     references.sort(null);
     return references;
   }

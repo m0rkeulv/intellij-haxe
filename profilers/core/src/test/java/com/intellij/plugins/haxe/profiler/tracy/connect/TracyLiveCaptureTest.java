@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.profiler.tracy.connect;
 import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,14 +23,15 @@ import static org.junit.jupiter.api.Assertions.*;
  * shibboleth and version, refuses (status 2, close, listen again) until the
  * version it speaks is offered, then answers with the welcome fixture.
  */
-@DisplayName("tracy receiver: live capture (probe ladder)")
+@DisplayName("tracy receiver: live capture")
+@Timeout(20)
 public class TracyLiveCaptureTest {
 
   @Test
   @DisplayName("offers the ladder until the client accepts and keeps the settled version")
   public void testOffersTheLadderUntilTheClientAcceptsAndKeepsTheSettledVersion() throws Exception {
-    try (FakeClient client = new FakeClient(TracyProtocolVersion.V82)) {
-      TracyLiveCapture capture = TracyLiveCapture.connect(client.port(), TracyVersionStrategy.probe(), () -> true);
+    try (FakeClient client = new FakeClient(TracyProtocolVersion.V82);
+         TracyLiveCapture capture = TracyLiveCapture.connect(client.port(), TracyVersionStrategy.detect(() -> null), () -> true)) {
 
       assertNotNull(capture);
       assertEquals(TracyProtocolVersion.V82, capture.welcome().protocolVersion());
@@ -41,9 +43,9 @@ public class TracyLiveCaptureTest {
   @Test
   @DisplayName("an announced version is offered first")
   public void testAnAnnouncedVersionIsOfferedFirst() throws Exception {
-    try (FakeClient client = new FakeClient(TracyProtocolVersion.V69)) {
-      TracyVersionStrategy strategy = TracyVersionStrategy.detect(() -> TracyProtocolVersion.V69);
-      TracyLiveCapture capture = TracyLiveCapture.connect(client.port(), strategy, () -> true);
+    TracyVersionStrategy strategy = TracyVersionStrategy.detect(() -> TracyProtocolVersion.V69);
+    try (FakeClient client = new FakeClient(TracyProtocolVersion.V69);
+         TracyLiveCapture capture = TracyLiveCapture.connect(client.port(), strategy, () -> true)) {
 
       assertNotNull(capture);
       assertEquals(List.of(69), client.offered());
@@ -55,7 +57,7 @@ public class TracyLiveCaptureTest {
   public void testAClientRefusingEveryVersionFailsNamingWhatWasOffered() throws Exception {
     try (FakeClient client = new FakeClient(null)) {
       TracyProtocolUnsupportedException failure = assertThrows(TracyProtocolUnsupportedException.class,
-        () -> TracyLiveCapture.connect(client.port(), TracyVersionStrategy.probe(), () -> true));
+        () -> TracyLiveCapture.connect(client.port(), TracyVersionStrategy.detect(() -> null), () -> true));
 
       assertEquals(TracyProtocolVersion.PROBE_ORDER, failure.refused());
       assertEquals(List.of(76, 74, 82, 69), client.offered());

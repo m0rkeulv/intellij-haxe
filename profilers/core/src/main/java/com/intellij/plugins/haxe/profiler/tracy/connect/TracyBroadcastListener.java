@@ -45,7 +45,6 @@ public final class TracyBroadcastListener implements AutoCloseable {
     this.dataPort = dataPort;
     thread = new Thread(this::receive, "haxe-tracy-broadcast");
     thread.setDaemon(true);
-    thread.start();
   }
 
   /**
@@ -59,7 +58,9 @@ public final class TracyBroadcastListener implements AutoCloseable {
       DatagramSocket socket = new DatagramSocket(null);
       socket.setReuseAddress(true);
       socket.bind(new InetSocketAddress(BROADCAST_PORT));
-      return new TracyBroadcastListener(socket, dataPort);
+      TracyBroadcastListener listener = new TracyBroadcastListener(socket, dataPort);
+      listener.thread.start();
+      return listener;
     }
     catch (IOException cannotBind) {
       return null;

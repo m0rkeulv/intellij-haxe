@@ -197,7 +197,7 @@ final class HaxeTestSingleRuns {
   private static String substitutedTemplate(@NotNull HaxeTestFramework framework,
                                             @NotNull String templateName,
                                             @NotNull SingleRun singleRun) {
-    String resource = "/testFrameworks/" + framework.libraryName() + "/" + templateName;
+    String resource = templateResource(framework, templateName);
     try (InputStream stream = HaxeTestSingleRuns.class.getResourceAsStream(resource)) {
       if (stream == null) {
         log.warn("single-run template missing: " + resource);
@@ -227,6 +227,17 @@ final class HaxeTestSingleRuns {
     return singleRun.testClasses().stream()
       .map(form::formatted)
       .collect(Collectors.joining(separator));
+  }
+
+  /** Whether the framework ships a template for this selection shape (a single test needs its own). */
+  static boolean templateAvailable(@NotNull HaxeTestFramework framework, @NotNull SingleRun singleRun) {
+    String templateName = framework.singleRunTemplate(singleRun.singleTest());
+    return templateName != null && HaxeTestSingleRuns.class.getResource(templateResource(framework, templateName)) != null;
+  }
+
+  @NotNull
+  private static String templateResource(@NotNull HaxeTestFramework framework, @NotNull String templateName) {
+    return "/testFrameworks/" + framework.libraryName() + "/" + templateName;
   }
 
   @NotNull

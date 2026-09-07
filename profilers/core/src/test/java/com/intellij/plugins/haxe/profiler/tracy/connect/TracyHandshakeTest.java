@@ -23,7 +23,7 @@ public class TracyHandshakeTest {
   @Test
   @DisplayName("parses the live captured welcome message")
   public void testParsesTheLiveCapturedWelcomeMessage() throws IOException {
-    TracyWelcome welcome = TracyHandshake.parseWelcome(welcomeFixture(), TracyProtocolVersion.V74);
+    TracyWelcome welcome = TracyProtocolVersion.V74.format().parseWelcome(welcomeFixture(), TracyProtocolVersion.V74);
 
     assertEquals("ProfPump-debug.exe", welcome.programName());
     assertTrue(welcome.timerMul() > 0.01 && welcome.timerMul() < 100, "ticks-to-ns factor: " + welcome.timerMul());
@@ -59,10 +59,10 @@ public class TracyHandshakeTest {
     System.arraycopy(v74, 0, v76, 0, 24);
     System.arraycopy(v74, 32, v76, 24, v74.length - 32);
     assertEquals(TracyProtocolVersion.V76.format().welcomeSize(), v76.length);
+    TracyWelcome reference = TracyProtocolVersion.V74.format().parseWelcome(v74, TracyProtocolVersion.V74);
 
-    TracyWelcome welcome = TracyHandshake.parseWelcome(v76, TracyProtocolVersion.V76);
+    TracyWelcome welcome = TracyProtocolVersion.V76.format().parseWelcome(v76, TracyProtocolVersion.V76);
 
-    TracyWelcome reference = TracyHandshake.parseWelcome(v74, TracyProtocolVersion.V74);
     assertEquals("ProfPump-debug.exe", welcome.programName());
     assertEquals(reference.pid(), welcome.pid());
     assertEquals(reference.epoch(), welcome.epoch());

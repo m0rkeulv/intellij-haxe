@@ -3,7 +3,6 @@ package com.intellij.plugins.haxe.execution.console;
 import com.intellij.execution.filters.Filter;
 import com.intellij.execution.filters.OpenFileHyperlinkInfo;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
-import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,14 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @DisplayName("Console: stack trace filter")
-public class HaxeStackTraceFilterTest extends HaxeLightFixtureTestCase {
-
-  private Filter filter;
-
-  @Override
-  protected String getBasePath() {
-    return "/console/";
-  }
+public class HaxeStackTraceFilterTest extends HaxeConsoleFilterTestBase {
 
   @BeforeEach
   public void addTraceSources() {
@@ -66,15 +58,5 @@ public class HaxeStackTraceFilterTest extends HaxeLightFixtureTestCase {
   public void testFramesWithoutASourceFileDoNotLink() {
     assertNull(applyToLine("Called from a C function"));
     assertNull(applyToLine("Called from unknown/Missing.hx line 3"));
-  }
-
-  /** The filter over a console holding just this line (plus its newline). */
-  private Filter.Result applyToLine(String line) {
-    return filter.applyFilter(line + "\n", line.length() + 1);
-  }
-
-  private static String highlightedSpan(String console, Filter.Result result) {
-    Filter.ResultItem item = result.getResultItems().getFirst();
-    return console.substring(item.getHighlightStartOffset(), item.getHighlightEndOffset());
   }
 }

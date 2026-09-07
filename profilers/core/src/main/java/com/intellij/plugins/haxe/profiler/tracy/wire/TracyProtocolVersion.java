@@ -13,8 +13,7 @@ import java.util.List;
  * version before reading a byte. Each version selects the
  * {@link TracyWireFormat} that decodes its bytes; the version itself is
  * only the handshake number and the probe order. hxcpp bundles one client
- * per checkout - 0.11 (69) from October 2024, 0.12 (74) from June 2025,
- * 0.13 (76) from April 2026.
+ * per checkout: 0.11 speaks 69, 0.12 speaks 74, 0.13 speaks 76.
  */
 public enum TracyProtocolVersion {
   V69(69, "0.11"),

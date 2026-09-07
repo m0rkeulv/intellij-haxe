@@ -13,9 +13,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
- * The per-version tables are generated from the client headers; these
- * pins guard the facts the reader relies on (see the plan under
- * doc/planned for how each was derived).
+ * The per-version tables are generated from the client headers (see
+ * {@link TracyQueueTable}); these pins guard the facts the reader relies
+ * on, each traced to the header diff between the releases.
  */
 @DisplayName("tracy receiver: protocol versions")
 public class TracyProtocolVersionTest {
@@ -82,6 +82,11 @@ public class TracyProtocolVersionTest {
   public void testTheWireNumberResolvesToItsVersionAndUnknownNumbersToNothing() {
     assertSame(TracyProtocolVersion.V76, TracyProtocolVersion.of(76));
     assertNull(TracyProtocolVersion.of(75));
+  }
+
+  @Test
+  @DisplayName("the probe order tries current hxcpp first and the oldest client last")
+  public void testTheProbeOrderTriesCurrentHxcppFirstAndTheOldestClientLast() {
     assertEquals(List.of(TracyProtocolVersion.V76, TracyProtocolVersion.V74, TracyProtocolVersion.V82, TracyProtocolVersion.V69),
                  TracyProtocolVersion.PROBE_ORDER);
   }

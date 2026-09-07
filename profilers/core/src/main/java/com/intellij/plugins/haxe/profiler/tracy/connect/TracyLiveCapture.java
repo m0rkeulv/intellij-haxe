@@ -36,7 +36,7 @@ import java.util.function.BooleanSupplier;
  * before the tear is kept. Queries are a handful of name lookups, far below
  * the client's query budget, so no flow-control bookkeeping is needed.
  */
-public final class TracyLiveCapture {
+public final class TracyLiveCapture implements AutoCloseable {
 
   // ServerQuery wire values (TracyProtocol.hpp; unchanged v69..v82)
   private static final int QUERY_STRING = 1;
@@ -106,16 +106,11 @@ public final class TracyLiveCapture {
     return welcome;
   }
 
-  /** Reads the whole session over the handshaken connection; returns when the client's stream ends. */
-  @NotNull
-  public TracySession capture() throws IOException {
-    return capture(null);
-  }
-
   /**
-   * The streaming form: zones go to the sink as they close and stay out of
-   * the returned session, so a minutes-long capture spools to disk instead
-   * of filling the heap.
+   * Reads the whole session over the handshaken connection; returns when
+   * the client's stream ends. Zones go to the sink as they close and stay
+   * out of the returned session, so a minutes-long capture spools to disk
+   * instead of filling the heap.
    */
   @NotNull
   public TracySession capture(TracyEventReader.@Nullable ZoneSink zoneSink) throws IOException {
@@ -172,6 +167,17 @@ public final class TracyLiveCapture {
     catch (SocketException gone) {
       // a dead socket surfaces as the reader's stream end regardless
     }
+  }
+
+  /**
+   * Abandons a handshaken connection the caller could not start reading
+   * (the session file failed to open): the client streams into a closed
+   * socket and moves on, instead of waiting forever for a server that never
+   * drains it. {@link #capture} closes the socket itself.
+   */
+  @Override
+  public void close() {
+    closeQuietly(socket);
   }
 
   /** ServerQueryPacket: u8 type, u64 ptr, u32 extra - little-endian, 13 bytes. */

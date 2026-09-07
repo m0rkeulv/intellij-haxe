@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.profiler.tracy;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
-import com.intellij.plugins.haxe.profiler.tracy.connect.TracyHandshake;
 import com.intellij.plugins.haxe.profiler.tracy.wire.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,7 +33,7 @@ public class TracyEventReaderTest {
   public void testReplaysTheLiveCapturedSessionIntoNestedZones() throws IOException {
     TracyWelcome welcome;
     try (InputStream in = resource("/tracy/welcome-v74.bin")) {
-      welcome = TracyHandshake.parseWelcome(in.readAllBytes(), TracyProtocolVersion.V74);
+      welcome = TracyProtocolVersion.V74.format().parseWelcome(in.readAllBytes(), TracyProtocolVersion.V74);
     }
     TracySession session;
     try (InputStream raw = resource("/tracy/session-v74.raw")) {
@@ -53,7 +53,7 @@ public class TracyEventReaderTest {
     assertEquals(1, session.cpuUsage().size(), "the one SysTimeReport in the capture");
 
     TracyZone outer = session.zones().stream()
-      .max(java.util.Comparator.comparingLong(TracyZone::durationNs))
+      .max(Comparator.comparingLong(TracyZone::durationNs))
       .orElseThrow();
     boolean nests = session.zones().stream()
       .anyMatch(zone -> zone != outer && zone.startNs() >= outer.startNs() && zone.endNs() <= outer.endNs());
@@ -348,7 +348,6 @@ public class TracyEventReaderTest {
     assertEquals(List.of(new TracySession.PlotPoint(10, 150.0)), curve);
   }
 
-  /** Writes decompressed tracy items the way the client's dequeue emits them. */
   @Test
   @DisplayName("replays the live captured v76 session from hxcpp master")
   public void testReplaysTheLiveCapturedV76SessionFromHxcppMaster() throws IOException {
@@ -376,8 +375,9 @@ public class TracyEventReaderTest {
     assertEquals(0, session.unmatchedZoneEnds());
     assertEquals(300, session.frameMarksNs().size());
     assertEquals(3, session.events().size(), "one message per hundred frames");
-    assertTrue(session.plots().containsKey("sink") || session.plots().keySet().stream().anyMatch(name -> name.startsWith("plot@")),
-               "the plot rides along: " + session.plots().keySet());
+    boolean plotPresent = session.plots().containsKey("sink")
+                          || session.plots().keySet().stream().anyMatch(name -> name.startsWith("plot@"));
+    assertTrue(plotPresent, "the plot rides along: " + session.plots().keySet());
     assertEquals(1, session.memoryCurves().size(), "the named pool's live-bytes curve");
   }
 
@@ -484,7 +484,7 @@ public class TracyEventReaderTest {
   private static TracySession replayFixture(TracyProtocolVersion version) throws IOException {
     TracyWelcome welcome;
     try (InputStream in = resource("/tracy/welcome-v" + version.wire() + ".bin")) {
-      welcome = TracyHandshake.parseWelcome(in.readAllBytes(), version);
+      welcome = version.format().parseWelcome(in.readAllBytes(), version);
     }
     try (InputStream raw = resource("/tracy/session-v" + version.wire() + ".raw")) {
       return TracyEventReader.read(new TracyLz4Stream(raw), welcome);
@@ -495,8 +495,16 @@ public class TracyEventReaderTest {
     return new TracyWelcome(version, 1.0, 0, 0, 0, 0, 0, 0, 1, 0, false, "synthetic");
   }
 
+  private static InputStream resource(String name) {
+    return TracyEventReaderTest.class.getResourceAsStream(name);
+  }
+
   /** Writes items in one protocol version's numbering (v74 unless given). */
   private static final class ItemBuilder {
+    /** v82's packed-delta offsets: what the 32 and 64-bit items store their delta minus. */
+    private static final long OFFSET_16BIT = 1L << 16;
+    private static final long OFFSET_32BIT = (1L << 16) + (1L << 32);
+
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
     private final TracyQueueTable table;
 
@@ -598,13 +606,13 @@ public class TracyEventReaderTest {
 
     void zoneEnd32(long deltaTicks) {
       type(TracyQueueType.ZoneEnd32);
-      writeInt((int)(deltaTicks - (1L << 16)));
+      writeInt((int)(deltaTicks - OFFSET_16BIT));
     }
 
     /** v82's 64-bit end: a non-negative delta is stored minus (2^16 + 2^32). */
     void zoneEnd64(long deltaTicks) {
       type(TracyQueueType.ZoneEnd);
-      writeLong(deltaTicks >= 0 ? deltaTicks - ((1L << 16) + (1L << 32)) : deltaTicks);
+      writeLong(deltaTicks >= 0 ? deltaTicks - OFFSET_32BIT : deltaTicks);
     }
 
     void zoneBeginStatic16(int deltaTicks, long srcloc) {
@@ -615,13 +623,13 @@ public class TracyEventReaderTest {
 
     void zoneBeginStatic32(long deltaTicks, long srcloc) {
       type(TracyQueueType.ZoneBegin32);
-      writeInt((int)(deltaTicks - (1L << 16)));
+      writeInt((int)(deltaTicks - OFFSET_16BIT));
       writeLong(srcloc);
     }
 
     void zoneBeginStatic64(long deltaTicks, long srcloc) {
       type(TracyQueueType.ZoneBegin);
-      writeLong(deltaTicks >= 0 ? deltaTicks - ((1L << 16) + (1L << 32)) : deltaTicks);
+      writeLong(deltaTicks >= 0 ? deltaTicks - OFFSET_32BIT : deltaTicks);
       writeLong(srcloc);
     }
 
@@ -665,7 +673,7 @@ public class TracyEventReaderTest {
     void callstackSample32(long deltaTicks, int thread) {
       type(TracyQueueType.CallstackSample32);
       writeInt(thread);
-      writeInt((int)(deltaTicks - (1L << 16)));
+      writeInt((int)(deltaTicks - OFFSET_16BIT));
     }
 
     void tidToPid(long tid, long pid) {
@@ -724,9 +732,5 @@ public class TracyEventReaderTest {
     private void writeLong(long value) {
       for (int i = 0; i < 8; i++) out.write((int)(value >> (8 * i) & 0xFF));
     }
-  }
-
-  private static InputStream resource(String name) {
-    return TracyEventReaderTest.class.getResourceAsStream(name);
   }
 }

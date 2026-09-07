@@ -3,10 +3,9 @@ package com.intellij.plugins.haxe.profiler.tracy.wire;
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import java.util.List;
-import org.junit.jupiter.params.provider.FieldSource;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -15,6 +14,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -118,11 +118,5 @@ public class TracyLz4StreamTest {
       out.writeBytes(block);
     }
     return out.toByteArray();
-  }
-
-  private static String fixture(String name) throws IOException {
-    try (InputStream in = TracyLz4StreamTest.class.getResourceAsStream(name)) {
-      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-    }
   }
 }

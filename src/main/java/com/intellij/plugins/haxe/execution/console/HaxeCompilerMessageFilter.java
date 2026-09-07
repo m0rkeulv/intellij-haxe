@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.execution.console;
 
 import com.intellij.execution.filters.Filter;
+import com.intellij.execution.filters.HyperlinkInfo;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.util.HaxeFileUtil;
@@ -44,6 +45,7 @@ public final class HaxeCompilerMessageFilter implements Filter {
     if (file == null) return null;
     int spanStart = text.indexOf(path);
     int spanEnd = spanStart + path.length() + 1 + line.length(); // path ':' line
-    return HaxeConsoleLinks.link(project, file, Integer.parseInt(line) - 1, column - 1, text, entireLength, spanStart, spanEnd);
+    HyperlinkInfo target = HaxeConsoleLinks.target(project, file, Integer.parseInt(line) - 1, column - 1);
+    return HaxeConsoleLinks.lineSpan(text, entireLength, spanStart, spanEnd, target);
   }
 }

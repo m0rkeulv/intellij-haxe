@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.runconfig;
 
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.project.Project;
@@ -91,10 +90,10 @@ final class HaxeActionBeforeRunDialog extends DialogWrapper {
     super.doOKAction();
   }
 
-  /// Additions derive from the file type and selected target - content sniffing needs a read action.
+  /// Additions derive from the file type and selected target.
   private List<String> debugAdditionsFor(String path) {
     if (path.isEmpty()) return null;
-    return ReadAction.computeBlocking(() -> HaxeActionBeforeRunTaskProvider.debugAdditions(project, path));
+    return HaxeActionBeforeRunTaskProvider.debugAdditions(project, path);
   }
 
   /** Shows the exact arguments a Debug launch would append for the chosen file's target. */

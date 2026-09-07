@@ -67,8 +67,11 @@ final class HaxeDefineContextInvalidator {
     return conditionalFiles;
   }
 
-  /** Idempotent, so a cancelled and retried read action is safe. */
-  // returns Void so the lambda binds to nonBlocking(Callable); the Runnable overload is deprecated
+  /**
+   * Idempotent, so a cancelled and retried read action is safe. Returns
+   * Void so the lambda binds the Callable overload of nonBlocking (the
+   * Runnable one is deprecated).
+   */
   @Nullable
   private static Void invalidate(@NotNull PushedFilePropertiesUpdater updater, @NotNull VirtualFile file) {
     if (file.isValid()) {

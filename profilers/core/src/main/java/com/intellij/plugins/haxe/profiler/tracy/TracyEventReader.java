@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireBytes.*;
+
 /**
  * Decodes tracy's DECOMPRESSED item stream (compose with
  * {@link TracyLz4Stream}) into a {@link TracySession}, scoped to what the
@@ -266,7 +268,7 @@ public final class TracyEventReader {
       if (type == null) throw new ProfilerFormatException("unknown tracy queue type " + typeByte);
       switch (type) {
         case ThreadContext -> {
-          int thread = TracyWireBytes.readIntLe(data);
+          int thread = readIntLe(data);
           if (seenThreads.add(thread)) hooks.threadSeen(thread);
           currentThread = thread;
           refThread = 0;
@@ -275,14 +277,14 @@ public final class TracyEventReader {
           skip(8); // the client-side pointer identifying the blob - the blob itself follows
           pendingSourceLocation = TracySourceLocation.parse(readPayload(payloadLength(type)));
         }
-        // the alloc-srcloc begin keeps a plain 64-bit delta in every version
-        case ZoneBeginAllocSrcLoc, ZoneBeginAllocSrcLocCallstack -> beginZone(consumePendingSourceLocation(), TracyWireBytes.readLongLe(data));
+        case ZoneBeginAllocSrcLoc, ZoneBeginAllocSrcLocCallstack ->
+          beginZone(consumePendingSourceLocation(), format.zoneDelta(type, data));
         case ZoneBegin, ZoneBeginCallstack, ZoneBegin32, ZoneBeginCallstack32, ZoneBegin16, ZoneBeginCallstack16 ->
           beginStaticZone(format.zoneDelta(type, data));
         case ZoneEnd, ZoneEnd32, ZoneEnd16 -> endZone(format.zoneDelta(type, data));
         case ZoneValidation -> skip(4);
         case FrameMarkMsg, FrameMarkMsgStart, FrameMarkMsgEnd -> {
-          long timeNs = toNs(TracyWireBytes.readLongLe(data));
+          long timeNs = toNs(readLongLe(data));
           skip(8); // name pointer; the continuous frame set sends 0
           frameMarks.add(timeNs);
           track(timeNs);
@@ -291,8 +293,8 @@ public final class TracyEventReader {
         case PlotDataFloat -> readPlot(PlotKind.F32);
         case PlotDataDouble -> readPlot(PlotKind.F64);
         case SysTimeReport -> {
-          long timeNs = toNs(TracyWireBytes.readLongLe(data));
-          cpuUsage.add(new TracySession.PlotPoint(timeNs, Float.intBitsToFloat(TracyWireBytes.readIntLe(data))));
+          long timeNs = toNs(readLongLe(data));
+          cpuUsage.add(new TracySession.PlotPoint(timeNs, Float.intBitsToFloat(readIntLe(data))));
           track(timeNs);
         }
         // system-tracing traffic, present only when the process ran with
@@ -302,15 +304,15 @@ public final class TracyEventReader {
         // discarded, or every later ctx time is wrong.
         case ContextSwitch -> readContextSwitch();
         case ThreadWakeup -> {
-          advanceCtxTime(TracyWireBytes.readLongLe(data));
+          advanceCtxTime(readLongLe(data));
           skip(table.wireSize(type) - 1 - 8); // thread, plus the cpu/adjust fields v74 added
         }
         // the sampled native stacks are not charted; only the ctx reference advances
         case CallstackSample, CallstackSampleContextSwitch, CallstackSample32, CallstackSampleContextSwitch32,
              CallstackSample16, CallstackSampleContextSwitch16 -> advanceCtxTime(format.callstackSampleDelta(type, data));
         case TidToPid -> {
-          long tid = TracyWireBytes.readLongLe(data);
-          if (TracyWireBytes.readLongLe(data) == ownPid) ownTids.add(tid);
+          long tid = readLongLe(data);
+          if (readLongLe(data) == ownPid) ownTids.add(tid);
         }
         // precedes the fat item owning it (a message's text)
         case SingleStringData, SingleStringData8 -> pendingSingleString = readUtf8Payload(type);
@@ -318,18 +320,18 @@ public final class TracyEventReader {
         case Message, MessageCallstack -> readMessage(false);
         case MessageColor, MessageColorCallstack -> readMessage(true);
         // sent under the serial lock directly before the mem event it names
-        case MemNamePayload -> pendingMemName = TracyWireBytes.readLongLe(data);
+        case MemNamePayload -> pendingMemName = readLongLe(data);
         case MemAlloc, MemAllocNamed, MemAllocCallstack, MemAllocCallstackNamed -> readMemAlloc();
         case MemFree, MemFreeNamed, MemFreeCallstack, MemFreeCallstackNamed -> readMemFree();
         case MemDiscard, MemDiscardCallstack -> {
           // hxcpp never discards a pool, but the delta keeps the serial reference honest
-          advanceSerialTime(TracyWireBytes.readLongLe(data));
+          advanceSerialTime(readLongLe(data));
           skip(12);
         }
         // answers to the live query channel; absent in plain replays
-        case PlotName -> plotNames.put(TracyWireBytes.readLongLe(data), readUtf8Payload(type));
-        case ThreadName -> threadNames.put((int)TracyWireBytes.readLongLe(data), readUtf8Payload(type));
-        case StringData -> strings.put(TracyWireBytes.readLongLe(data), readUtf8Payload(type));
+        case PlotName -> plotNames.put(readLongLe(data), readUtf8Payload(type));
+        case ThreadName -> threadNames.put((int)readLongLe(data), readUtf8Payload(type));
+        case StringData -> strings.put(readLongLe(data), readUtf8Payload(type));
         // announces shutdown; buffered items may still follow, so only the
         // hook (owning the disconnect handshake) may declare the stream done
         case Terminate -> {
@@ -446,12 +448,12 @@ public final class TracyEventReader {
 
   /** Wire order: name pointer, thread-delta time, then the kind's value. */
   private void readPlot(PlotKind kind) throws IOException {
-    long name = TracyWireBytes.readLongLe(data);
-    long timeNs = advanceThreadTime(TracyWireBytes.readLongLe(data));
+    long name = readLongLe(data);
+    long timeNs = advanceThreadTime(readLongLe(data));
     double value = switch (kind) {
-      case I64 -> (double)TracyWireBytes.readLongLe(data);
-      case F32 -> Float.intBitsToFloat(TracyWireBytes.readIntLe(data));
-      case F64 -> Double.longBitsToDouble(TracyWireBytes.readLongLe(data));
+      case I64 -> (double)readLongLe(data);
+      case F32 -> Float.intBitsToFloat(readIntLe(data));
+      case F64 -> Double.longBitsToDouble(readLongLe(data));
     };
     List<TracySession.PlotPoint> series = plots.get(name);
     if (series == null) {
@@ -471,10 +473,10 @@ public final class TracyEventReader {
 
   /** Wire order: serial-delta time, owning thread u32, pointer u64, 48-bit size. */
   private void readMemAlloc() throws IOException {
-    long timeNs = advanceSerialTime(TracyWireBytes.readLongLe(data));
+    long timeNs = advanceSerialTime(readLongLe(data));
     skip(4); // owning thread - the heap curves are process-wide
-    long pointer = TracyWireBytes.readLongLe(data);
-    long size = TracyWireBytes.readU48Le(data);
+    long pointer = readLongLe(data);
+    long size = readU48Le(data);
     closeSweep(); // an alloc means the mutator runs again - any free burst ended
     MemPool pool = memPool();
     pool.liveBytes += size;
@@ -485,9 +487,9 @@ public final class TracyEventReader {
 
   /** Wire order: serial-delta time, owning thread u32, pointer u64. */
   private void readMemFree() throws IOException {
-    long timeNs = advanceSerialTime(TracyWireBytes.readLongLe(data));
+    long timeNs = advanceSerialTime(readLongLe(data));
     skip(4);
-    long pointer = TracyWireBytes.readLongLe(data);
+    long pointer = readLongLe(data);
     MemPool pool = memPool();
     Long size = pool.liveSizes.remove(pointer);
     // an unknown pointer was allocated before the capture attached
@@ -506,7 +508,7 @@ public final class TracyEventReader {
    * the program's timeline and are dropped.
    */
   private void readMessage(boolean colored) throws IOException {
-    long timeNs = toNs(TracyWireBytes.readLongLe(data));
+    long timeNs = toNs(readLongLe(data));
     int color = 0;
     if (colored) {
       int b = data.readUnsignedByte();
@@ -532,9 +534,9 @@ public final class TracyEventReader {
    * threads accumulate, so nothing about other processes is ever kept.
    */
   private void readContextSwitch() throws IOException {
-    long timeNs = advanceCtxTime(TracyWireBytes.readLongLe(data));
+    long timeNs = advanceCtxTime(readLongLe(data));
     skip(4); // old thread - the tracked core state already knows it
-    long newThread = Integer.toUnsignedLong(TracyWireBytes.readIntLe(data));
+    long newThread = Integer.toUnsignedLong(readIntLe(data));
     int cpu = data.readUnsignedByte();
     skip(5);
     if (coreInNs[cpu] >= 0 && ownTids.contains(coreTid[cpu])) {
@@ -613,7 +615,7 @@ public final class TracyEventReader {
   /** A static-srcloc begin: the location is an unresolvable client pointer offline; hxcpp never sends these. */
   private void beginStaticZone(long deltaTicks) throws IOException {
     long begin = advanceThreadTime(deltaTicks);
-    long pointer = TracyWireBytes.readLongLe(data);
+    long pointer = readLongLe(data);
     openStack().push(new OpenZone(begin, staticLocation(pointer)));
     track(begin);
   }

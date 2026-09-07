@@ -217,7 +217,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     // main replaces the build's own, so the action-plus-file resolution and
     // the section scoping below must not touch it.
     boolean templateCompile = configuration instanceof HaxeTestRunConfiguration testConfiguration
-                        && testConfiguration.compilesThroughTemplate();
+                              && testConfiguration.compilesThroughTemplate();
     HaxeCompileCommands.Resolved resolved;
     if (templateCompile) {
       resolved = ((HaxeTestRunConfiguration)configuration).resolveSingleRunCompile();
@@ -297,9 +297,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       }
     });
     handler.startNotify();
-    // an interrupted wait (the launch cancelled) must not leave the compiler running
+    // a cancelled wait (the launch's progress cancelled) must not leave the compiler running
     if (!handler.waitFor()) {
-      handler.destroyProcess();
+      handler.killProcess();
     }
     int exitCode = Objects.requireNonNullElse(handler.getExitCode(), -1);
     if (exitCode != 0) {

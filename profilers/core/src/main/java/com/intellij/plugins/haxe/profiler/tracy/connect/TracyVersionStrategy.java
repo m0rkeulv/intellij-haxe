@@ -39,12 +39,6 @@ public final class TracyVersionStrategy {
     return new TracyVersionStrategy(null, announced);
   }
 
-  /** The probe ladder alone. */
-  @NotNull
-  public static TracyVersionStrategy probe() {
-    return detect(() -> null);
-  }
-
   /** The next version to offer given the ones already refused; null once every candidate was tried. */
   @Nullable
   public TracyProtocolVersion next(@NotNull List<TracyProtocolVersion> refused) {

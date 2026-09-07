@@ -39,7 +39,7 @@ public final class HaxeTestRunConfigurationProducer extends LazyRunConfiguration
    * What a context selects: the owning build, the suites, an optional single
    * method, and the configuration's name - null for the generated one (the
    * configuration's own suggestedName), set where the location carries a
-   * name the stored state does not (a directory).
+   * name the stored state does not (a directory, a multi-suite file).
    */
   private record Selection(@NotNull HaxeTestContext testContext,
                            @NotNull List<String> testClasses,

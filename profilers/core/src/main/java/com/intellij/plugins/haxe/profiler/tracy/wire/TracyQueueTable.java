@@ -15,9 +15,10 @@ import java.util.Map;
  * {@link TracyQueueType}, and each item's fixed size on the wire INCLUDING
  * the ordinal byte. Loaded from {@code tracy/queue-v<N>.txt}, one
  * {@code Name;size} line per ordinal, generated mechanically from that
- * version's {@code TracyQueue.hpp} (the enum order plus the compiler's own
- * {@code QueueDataSize[]}) - never typed by hand: a single misnumbered item
- * silently misparses everything after it.
+ * version's {@code TracyQueue.hpp} with the probe under
+ * {@code profilers/core/tools/tracy-queue-table} (the enum order plus the
+ * compiler's own {@code QueueDataSize[]}) - never typed by hand: a single
+ * misnumbered item silently misparses everything after it.
  */
 public final class TracyQueueTable {
 
@@ -47,6 +48,7 @@ public final class TracyQueueTable {
 
   @NotNull
   static TracyQueueTable parse(@NotNull String text) {
+    // one item per line; the resource is written with LF endings
     String[] lines = text.strip().split("\n");
     TracyQueueType[] types = new TracyQueueType[lines.length];
     int[] sizes = new int[lines.length];
@@ -70,6 +72,7 @@ public final class TracyQueueTable {
     return ordinalByType.getOrDefault(type, -1);
   }
 
+  /** Whether this version has the item at all (older versions lack the ones added later). */
   public boolean defines(@NotNull TracyQueueType type) {
     return ordinalByType.containsKey(type);
   }
@@ -81,6 +84,7 @@ public final class TracyQueueTable {
     return sizeByOrdinal[ordinal];
   }
 
+  /** The number of items this version defines: its enum's entry count. */
   public int size() {
     return byOrdinal.length;
   }

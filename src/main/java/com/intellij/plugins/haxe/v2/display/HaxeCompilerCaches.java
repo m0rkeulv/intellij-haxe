@@ -10,8 +10,9 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * The one entry point for dropping everything derived from the compilation
- * server. Callers never clear individual services: a partial clear leaves
- * PSI-level results derived from the skipped caches alive.
+ * server, and the daemon restart the services post after hydrating.
+ * Callers never clear individual services: a partial clear leaves PSI-level
+ * results derived from the skipped caches alive.
  */
 public final class HaxeCompilerCaches {
 
@@ -48,10 +49,7 @@ public final class HaxeCompilerCaches {
    * write-unsafe) and skipped once the project is disposed.
    */
   public static void restartHighlightingLater(@NotNull Project project, @NotNull @NonNls String reason) {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (!project.isDisposed()) {
-        DaemonCodeAnalyzer.getInstance(project).restart(reason);
-      }
-    }, ModalityState.nonModal());
+    Runnable restart = () -> DaemonCodeAnalyzer.getInstance(project).restart(reason);
+    ApplicationManager.getApplication().invokeLater(restart, ModalityState.nonModal(), project.getDisposed());
   }
 }

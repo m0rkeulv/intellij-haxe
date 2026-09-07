@@ -25,7 +25,7 @@ public class TracyVersionStrategyTest {
   @Test
   @DisplayName("the probe ladder walks the order until every version was refused")
   public void testTheProbeLadderWalksTheOrderUntilEveryVersionWasRefused() {
-    TracyVersionStrategy strategy = TracyVersionStrategy.probe();
+    TracyVersionStrategy strategy = TracyVersionStrategy.detect(() -> null);
 
     assertEquals(TracyProtocolVersion.V76, strategy.next(List.of()));
     assertEquals(TracyProtocolVersion.V74, strategy.next(List.of(TracyProtocolVersion.V76)));

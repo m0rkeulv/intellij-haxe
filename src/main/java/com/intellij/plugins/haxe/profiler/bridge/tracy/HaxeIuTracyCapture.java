@@ -124,36 +124,60 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
     }
 
     private void receive() {
-      TracyLiveCapture capture;
+      TracyLiveCapture capture = connectToClient();
+      if (capture == null) return;
+      // the connection closes with the capture: a session file that fails
+      // to open must not leave the client streaming into a socket nobody reads
+      try (capture) {
+        live.set(capture);
+        if (exited.get()) {
+          capture.requestDisconnect(); // exit raced the connect
+        }
+        else {
+          session = HaxeIuProfilerProcessUi.open(project, displayName, sessionFile,
+                                                 HaxeHxcppTracyProfilerConfigurationType.ID);
+        }
+        captureSession(capture);
+      }
+    }
+
+    /**
+     * The handshaken connection, or null after the failure was reported: the
+     * process died before the client listened, the client refused every
+     * protocol version, or the receiver itself broke (a missing item table).
+     */
+    @Nullable
+    private TracyLiveCapture connectToClient() {
       // the broadcast listener runs only for the connect window: a null
       // listener (port not bindable) leaves the probe ladder to find the version
-      try (TracyBroadcastListener broadcast = pinnedProtocol == null ? TracyBroadcastListener.listen(port) : null) {
-        capture = TracyLiveCapture.connect(port, strategy(broadcast), () -> !exited.get());
+      try (TracyBroadcastListener broadcast = broadcastListener()) {
+        TracyLiveCapture capture = TracyLiveCapture.connect(port, strategy(broadcast), () -> !exited.get());
+        if (capture == null) {
+          notifyNothingCaptured();
+          return null;
+        }
+        LOG.info("tracy capture on protocol " + capture.welcome().protocolVersion());
+        return capture;
       }
       catch (TracyProtocolUnsupportedException unsupported) {
         LOG.warn("tracy client refused every protocol version: " + unsupported.refused());
         notifyProtocolUnsupported(unsupported.refused());
-        return;
+        return null;
       }
-      catch (IOException e) {
+      catch (IOException | RuntimeException e) {
         LOG.warn("tracy connect failed", e);
         notifyNothingCaptured();
-        return;
+        return null;
       }
-      if (capture == null) {
-        notifyNothingCaptured();
-        return;
-      }
-      LOG.info("tracy capture on protocol " + capture.welcome().protocolVersion());
-      live.set(capture);
-      if (exited.get()) {
-        capture.requestDisconnect(); // exit raced the connect
-      }
-      else {
-        session = HaxeIuProfilerProcessUi.open(project, displayName, sessionFile,
-                                               HaxeHxcppTracyProfilerConfigurationType.ID);
-      }
+    }
 
+    /** No listener when a version is pinned: nothing to detect. */
+    @Nullable
+    private TracyBroadcastListener broadcastListener() {
+      return pinnedProtocol == null ? TracyBroadcastListener.listen(port) : null;
+    }
+
+    private void captureSession(TracyLiveCapture capture) {
       // zones spool to the session file AS THEY ARRIVE - a minutes-long
       // capture must never accumulate them on the heap. The live level
       // keeps the receiver's CPU out of the profiled app's way (a
@@ -162,7 +186,6 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
       // idle again.
       int liveLevel = Math.min(HxtZoneWriter.LIVE_LEVEL, finalLevel);
       long zoneCount;
-      TracyProtocolVersion protocol;
       HaxeLiveCaptures.Entry liveEntry = null;
       try {
         Files.createDirectories(sessionFile.getParent());
@@ -174,7 +197,6 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
           TracySession session = capture.capture(liveOpening(writer));
           writer.finish(session);
           zoneCount = writer.zoneCount();
-          protocol = session.welcome().protocolVersion();
         }
       }
       catch (IOException | UncheckedIOException e) {
@@ -213,7 +235,7 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
         session.dataReady();
       }
       else {
-        notifyCaptured(zoneCount, protocol);
+        notifyCaptured(zoneCount, capture.welcome().protocolVersion());
       }
     }
 
@@ -257,8 +279,9 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
     }
 
     private void notifyCaptured(long zoneCount, TracyProtocolVersion protocol) {
+      String protocolLabel = HaxeHxcppTracyProfilerConfigurable.protocolLabel(protocol);
       String content = HaxeProfilerBundle.message("haxe.profiler.tracy.captured",
-                                                  sessionFile.toString(), zoneCount, protocol.toString());
+                                                  sessionFile.toString(), zoneCount, protocolLabel);
       Notification notification = group().createNotification(content, NotificationType.INFORMATION);
       HaxeProfilerSnapshotOpener opener = HaxeProfilerSnapshotOpener.getInstance();
       if (opener != null) {

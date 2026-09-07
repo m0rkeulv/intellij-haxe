@@ -21,30 +21,31 @@ import static com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireBytes.*;
  */
 final class TracyPackedWireFormat implements TracyWireFormat {
 
-  static final long TIME_OFFSET_16BIT = 1L << 16;
-  static final long TIME_OFFSET_32BIT = (1L << 16) + (1L << 32);
-  static final int STRING_LENGTH_OFFSET_8BIT = 1 << 8;
+  private static final long TIME_OFFSET_16BIT = 1L << 16;
+  private static final long TIME_OFFSET_32BIT = (1L << 16) + (1L << 32);
+  private static final int STRING_LENGTH_OFFSET_8BIT = 1 << 8;
   private static final int MESSAGE_SOURCE_MASK = 0x0F;
 
-  private final TracyClassicWireFormat layout;
+  /** The table, welcome layout and plain reads are the classic format's. */
+  private final TracyClassicWireFormat classic;
 
   TracyPackedWireFormat(@NotNull TracyQueueTable table) {
-    layout = new TracyClassicWireFormat(table, false);
+    classic = new TracyClassicWireFormat(table, false);
   }
 
   @Override
   public @NotNull TracyQueueTable table() {
-    return layout.table();
+    return classic.table();
   }
 
   @Override
   public int welcomeSize() {
-    return layout.welcomeSize();
+    return classic.welcomeSize();
   }
 
   @Override
   public @NotNull TracyWelcome parseWelcome(byte @NotNull [] welcome, @NotNull TracyProtocolVersion version) {
-    return layout.parseWelcome(welcome, version);
+    return classic.parseWelcome(welcome, version);
   }
 
   @Override
@@ -52,6 +53,8 @@ final class TracyPackedWireFormat implements TracyWireFormat {
     return switch (type) {
       case ZoneBegin16, ZoneBeginCallstack16, ZoneEnd16 -> readU16Le(in);
       case ZoneBegin32, ZoneBeginCallstack32, ZoneEnd32 -> readDelta32(in);
+      // the alloc-srcloc begins are the one zone item the client never packs
+      case ZoneBeginAllocSrcLoc, ZoneBeginAllocSrcLocCallstack -> readLongLe(in);
       default -> readDelta64(in);
     };
   }
@@ -69,7 +72,7 @@ final class TracyPackedWireFormat implements TracyWireFormat {
 
   @Override
   public int payloadLength(@NotNull TracyQueueType type, @NotNull DataInputStream in) throws IOException {
-    int length = layout.payloadLength(type, in);
+    int length = classic.payloadLength(type, in);
     boolean offset = type == TracyQueueType.SingleStringData || type == TracyQueueType.SecondStringData;
     return offset ? length + STRING_LENGTH_OFFSET_8BIT : length;
   }
