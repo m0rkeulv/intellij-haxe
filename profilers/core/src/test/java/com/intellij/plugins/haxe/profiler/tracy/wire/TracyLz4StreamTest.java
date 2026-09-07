@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.wire;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import org.junit.jupiter.api.DisplayName;
@@ -98,21 +98,7 @@ public class TracyLz4StreamTest {
       counts.merge(type, 1, Integer::sum);
 
       expectFully(data, table.wireSize(type) - 1, type);
-      int payloadLength = switch (type.payload()) {
-        case NONE -> 0;
-        case U8 -> data.readUnsignedByte();
-        case U16 -> {
-          int length = data.readUnsignedByte() | data.readUnsignedByte() << 8;
-          boolean offset = version.stringLengthOffset()
-                           && (type == TracyQueueType.SingleStringData || type == TracyQueueType.SecondStringData);
-          yield offset ? length + 256 : length;
-        }
-        case U32 -> {
-          int value = 0;
-          for (int i = 0; i < 4; i++) value |= data.readUnsignedByte() << (8 * i);
-          yield value;
-        }
-      };
+      int payloadLength = version.format().payloadLength(type, data);
       expectFully(data, payloadLength, type);
     }
     return counts;

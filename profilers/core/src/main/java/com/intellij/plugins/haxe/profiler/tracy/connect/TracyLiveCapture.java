@@ -1,5 +1,10 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.connect;
 
+import com.intellij.plugins.haxe.profiler.tracy.TracyEventReader;
+import com.intellij.plugins.haxe.profiler.tracy.TracySession;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyLz4Stream;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWelcome;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

@@ -1,6 +1,8 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.connect;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWelcome;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +58,7 @@ public class TracyHandshakeTest {
     byte[] v76 = new byte[v74.length - 8];
     System.arraycopy(v74, 0, v76, 0, 24);
     System.arraycopy(v74, 32, v76, 24, v74.length - 32);
-    assertEquals(TracyProtocolVersion.V76.welcomeSize(), v76.length);
+    assertEquals(TracyProtocolVersion.V76.format().welcomeSize(), v76.length);
 
     TracyWelcome welcome = TracyHandshake.parseWelcome(v76, TracyProtocolVersion.V76);
 

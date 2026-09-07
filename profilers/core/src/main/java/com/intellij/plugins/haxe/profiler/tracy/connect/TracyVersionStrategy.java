@@ -1,5 +1,6 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.connect;
 
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

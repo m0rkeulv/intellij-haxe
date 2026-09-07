@@ -1,6 +1,7 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.connect;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import org.jetbrains.annotations.NotNull;
 
 /**

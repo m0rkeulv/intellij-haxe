@@ -2,6 +2,8 @@ package com.intellij.plugins.haxe.profiler.tracy;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
+import com.intellij.plugins.haxe.profiler.tracy.connect.TracyHandshake;
+import com.intellij.plugins.haxe.profiler.tracy.wire.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

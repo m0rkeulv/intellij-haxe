@@ -1,5 +1,6 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.connect;
 
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

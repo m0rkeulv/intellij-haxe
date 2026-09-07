@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.openapi.options.UnnamedConfigurable;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
-import com.intellij.plugins.haxe.profiler.tracy.TracyProtocolVersion;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;

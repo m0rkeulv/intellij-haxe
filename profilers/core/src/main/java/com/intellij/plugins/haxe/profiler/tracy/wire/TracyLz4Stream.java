@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.wire;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import org.apache.commons.compress.compressors.lz4.BlockLZ4CompressorInputStream;

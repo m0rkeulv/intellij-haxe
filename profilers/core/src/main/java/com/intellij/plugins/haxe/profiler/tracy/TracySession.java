@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.tracy;
 
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWelcome;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;

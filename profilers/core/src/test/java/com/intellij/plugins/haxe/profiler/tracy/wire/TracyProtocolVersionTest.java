@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.wire;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +31,7 @@ public class TracyProtocolVersionTest {
   @FieldSource("LAYOUTS")
   public void testTablesAndWelcomeMatchTheClientHeaders(TracyProtocolVersion version, int itemCount, int welcomeSize) {
     assertEquals(itemCount, version.table().size());
-    assertEquals(welcomeSize, version.welcomeSize());
+    assertEquals(welcomeSize, version.format().welcomeSize());
   }
 
   /** (version, item, wire ordinal, wire size incl. the type byte). */
@@ -73,7 +73,7 @@ public class TracyProtocolVersionTest {
   public void testOlderVersionsLackTheItemsAddedLater(TracyProtocolVersion version) {
     boolean packed = version == TracyProtocolVersion.V82;
     assertEquals(packed, version.table().defines(TracyQueueType.ZoneEnd16));
-    assertEquals(packed, version.compactTimes());
+    assertEquals(packed, version.format() instanceof TracyPackedWireFormat);
     assertEquals(version != TracyProtocolVersion.V69, version.table().defines(TracyQueueType.MemDiscard));
   }
 

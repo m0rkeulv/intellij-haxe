@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.profiler.tracy;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
+import com.intellij.plugins.haxe.profiler.tracy.wire.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,19 +32,17 @@ import java.util.Set;
  * switches, thread wakeups and sampled callstacks against a THIRD one
  * (never reset); frame marks and system-load reports carry ABSOLUTE times
  * (the client's dequeue has no case for them). Every ZoneBeginAllocSrcLoc
- * is immediately preceded by its SourceLocationPayload. Protocol v82 packs
- * static zone begins, zone ends and sampled callstacks into 16/32-bit
- * delta items with offset-encoded 64-bit fallbacks (alloc-srcloc begins and
- * every other delta stay plain), adds a metadata byte to message items, puts
- * the thread before the time in callstack samples and offsets the u16
- * string lengths. Unknown item types are consumed by the size table so
- * future traffic degrades to being ignored, never misparsed.
+ * is immediately preceded by its SourceLocationPayload. The reads whose
+ * encoding changed between versions (zone and callstack-sample deltas,
+ * payload lengths, the message header) go through the version's
+ * {@link TracyWireFormat}. Unknown item types are consumed by the size
+ * table so future traffic degrades to being ignored, never misparsed.
  */
 public final class TracyEventReader {
 
   private final DataInputStream data;
   private final double timerMul;
-  private final TracyProtocolVersion version;
+  private final TracyWireFormat format;
   private final TracyQueueTable table;
 
   private Hooks hooks = NO_HOOKS;
@@ -119,8 +118,8 @@ public final class TracyEventReader {
   private TracyEventReader(InputStream decompressed, TracyWelcome welcome) {
     this.data = new DataInputStream(decompressed);
     this.timerMul = welcome.timerMul();
-    this.version = welcome.protocolVersion();
-    this.table = version.table();
+    this.format = welcome.protocolVersion().format();
+    this.table = format.table();
     this.ownPid = welcome.pid();
     Arrays.fill(coreTid, -1);
     Arrays.fill(coreInNs, -1);
@@ -267,7 +266,7 @@ public final class TracyEventReader {
       if (type == null) throw new ProfilerFormatException("unknown tracy queue type " + typeByte);
       switch (type) {
         case ThreadContext -> {
-          int thread = readIntLe();
+          int thread = TracyWireBytes.readIntLe(data);
           if (seenThreads.add(thread)) hooks.threadSeen(thread);
           currentThread = thread;
           refThread = 0;
@@ -277,16 +276,13 @@ public final class TracyEventReader {
           pendingSourceLocation = TracySourceLocation.parse(readPayload(payloadLength(type)));
         }
         // the alloc-srcloc begin keeps a plain 64-bit delta in every version
-        case ZoneBeginAllocSrcLoc, ZoneBeginAllocSrcLocCallstack -> beginZone(consumePendingSourceLocation(), readLongLe());
-        case ZoneBegin, ZoneBeginCallstack -> beginStaticZone(readCompactableDelta64());
-        case ZoneBegin32, ZoneBeginCallstack32 -> beginStaticZone(readDelta32());
-        case ZoneBegin16, ZoneBeginCallstack16 -> beginStaticZone(readU16Le());
-        case ZoneEnd -> endZone(readCompactableDelta64());
-        case ZoneEnd32 -> endZone(readDelta32());
-        case ZoneEnd16 -> endZone(readU16Le());
+        case ZoneBeginAllocSrcLoc, ZoneBeginAllocSrcLocCallstack -> beginZone(consumePendingSourceLocation(), TracyWireBytes.readLongLe(data));
+        case ZoneBegin, ZoneBeginCallstack, ZoneBegin32, ZoneBeginCallstack32, ZoneBegin16, ZoneBeginCallstack16 ->
+          beginStaticZone(format.zoneDelta(type, data));
+        case ZoneEnd, ZoneEnd32, ZoneEnd16 -> endZone(format.zoneDelta(type, data));
         case ZoneValidation -> skip(4);
         case FrameMarkMsg, FrameMarkMsgStart, FrameMarkMsgEnd -> {
-          long timeNs = toNs(readLongLe());
+          long timeNs = toNs(TracyWireBytes.readLongLe(data));
           skip(8); // name pointer; the continuous frame set sends 0
           frameMarks.add(timeNs);
           track(timeNs);
@@ -295,8 +291,8 @@ public final class TracyEventReader {
         case PlotDataFloat -> readPlot(PlotKind.F32);
         case PlotDataDouble -> readPlot(PlotKind.F64);
         case SysTimeReport -> {
-          long timeNs = toNs(readLongLe());
-          cpuUsage.add(new TracySession.PlotPoint(timeNs, Float.intBitsToFloat(readIntLe())));
+          long timeNs = toNs(TracyWireBytes.readLongLe(data));
+          cpuUsage.add(new TracySession.PlotPoint(timeNs, Float.intBitsToFloat(TracyWireBytes.readIntLe(data))));
           track(timeNs);
         }
         // system-tracing traffic, present only when the process ran with
@@ -306,16 +302,15 @@ public final class TracyEventReader {
         // discarded, or every later ctx time is wrong.
         case ContextSwitch -> readContextSwitch();
         case ThreadWakeup -> {
-          advanceCtxTime(readLongLe());
+          advanceCtxTime(TracyWireBytes.readLongLe(data));
           skip(table.wireSize(type) - 1 - 8); // thread, plus the cpu/adjust fields v74 added
         }
         // the sampled native stacks are not charted; only the ctx reference advances
-        case CallstackSample, CallstackSampleContextSwitch -> readCallstackSample(type);
-        case CallstackSample32, CallstackSampleContextSwitch32 -> readCallstackSample(type);
-        case CallstackSample16, CallstackSampleContextSwitch16 -> readCallstackSample(type);
+        case CallstackSample, CallstackSampleContextSwitch, CallstackSample32, CallstackSampleContextSwitch32,
+             CallstackSample16, CallstackSampleContextSwitch16 -> advanceCtxTime(format.callstackSampleDelta(type, data));
         case TidToPid -> {
-          long tid = readLongLe();
-          if (readLongLe() == ownPid) ownTids.add(tid);
+          long tid = TracyWireBytes.readLongLe(data);
+          if (TracyWireBytes.readLongLe(data) == ownPid) ownTids.add(tid);
         }
         // precedes the fat item owning it (a message's text)
         case SingleStringData, SingleStringData8 -> pendingSingleString = readUtf8Payload(type);
@@ -323,18 +318,18 @@ public final class TracyEventReader {
         case Message, MessageCallstack -> readMessage(false);
         case MessageColor, MessageColorCallstack -> readMessage(true);
         // sent under the serial lock directly before the mem event it names
-        case MemNamePayload -> pendingMemName = readLongLe();
+        case MemNamePayload -> pendingMemName = TracyWireBytes.readLongLe(data);
         case MemAlloc, MemAllocNamed, MemAllocCallstack, MemAllocCallstackNamed -> readMemAlloc();
         case MemFree, MemFreeNamed, MemFreeCallstack, MemFreeCallstackNamed -> readMemFree();
         case MemDiscard, MemDiscardCallstack -> {
           // hxcpp never discards a pool, but the delta keeps the serial reference honest
-          advanceSerialTime(readLongLe());
+          advanceSerialTime(TracyWireBytes.readLongLe(data));
           skip(12);
         }
         // answers to the live query channel; absent in plain replays
-        case PlotName -> plotNames.put(readLongLe(), readUtf8Payload(type));
-        case ThreadName -> threadNames.put((int)readLongLe(), readUtf8Payload(type));
-        case StringData -> strings.put(readLongLe(), readUtf8Payload(type));
+        case PlotName -> plotNames.put(TracyWireBytes.readLongLe(data), readUtf8Payload(type));
+        case ThreadName -> threadNames.put((int)TracyWireBytes.readLongLe(data), readUtf8Payload(type));
+        case StringData -> strings.put(TracyWireBytes.readLongLe(data), readUtf8Payload(type));
         // announces shutdown; buffered items may still follow, so only the
         // hook (owning the disconnect handshake) may declare the stream done
         case Terminate -> {
@@ -451,12 +446,12 @@ public final class TracyEventReader {
 
   /** Wire order: name pointer, thread-delta time, then the kind's value. */
   private void readPlot(PlotKind kind) throws IOException {
-    long name = readLongLe();
-    long timeNs = advanceThreadTime(readLongLe());
+    long name = TracyWireBytes.readLongLe(data);
+    long timeNs = advanceThreadTime(TracyWireBytes.readLongLe(data));
     double value = switch (kind) {
-      case I64 -> (double)readLongLe();
-      case F32 -> Float.intBitsToFloat(readIntLe());
-      case F64 -> Double.longBitsToDouble(readLongLe());
+      case I64 -> (double)TracyWireBytes.readLongLe(data);
+      case F32 -> Float.intBitsToFloat(TracyWireBytes.readIntLe(data));
+      case F64 -> Double.longBitsToDouble(TracyWireBytes.readLongLe(data));
     };
     List<TracySession.PlotPoint> series = plots.get(name);
     if (series == null) {
@@ -476,10 +471,10 @@ public final class TracyEventReader {
 
   /** Wire order: serial-delta time, owning thread u32, pointer u64, 48-bit size. */
   private void readMemAlloc() throws IOException {
-    long timeNs = advanceSerialTime(readLongLe());
+    long timeNs = advanceSerialTime(TracyWireBytes.readLongLe(data));
     skip(4); // owning thread - the heap curves are process-wide
-    long pointer = readLongLe();
-    long size = readU48Le();
+    long pointer = TracyWireBytes.readLongLe(data);
+    long size = TracyWireBytes.readU48Le(data);
     closeSweep(); // an alloc means the mutator runs again - any free burst ended
     MemPool pool = memPool();
     pool.liveBytes += size;
@@ -490,9 +485,9 @@ public final class TracyEventReader {
 
   /** Wire order: serial-delta time, owning thread u32, pointer u64. */
   private void readMemFree() throws IOException {
-    long timeNs = advanceSerialTime(readLongLe());
+    long timeNs = advanceSerialTime(TracyWireBytes.readLongLe(data));
     skip(4);
-    long pointer = readLongLe();
+    long pointer = TracyWireBytes.readLongLe(data);
     MemPool pool = memPool();
     Long size = pool.liveSizes.remove(pointer);
     // an unknown pointer was allocated before the capture attached
@@ -504,17 +499,14 @@ public final class TracyEventReader {
     track(timeNs);
   }
 
-  /** v82 message metadata: the low nibble is the source (0 = the program, 1 = the tracy client's own status lines). */
-  private static final int MESSAGE_SOURCE_MASK = 0x0F;
-
   /**
-   * Wire order: absolute time, then b/g/r for the colored kinds, then (v82)
-   * the source/severity metadata byte; the text arrived as the preceding
-   * SingleStringData. The client's own status messages (source != program)
-   * are not the program's timeline and are dropped.
+   * Wire order: absolute time, then b/g/r for the colored kinds, then what
+   * the format adds (v82's source/severity byte); the text arrived as the
+   * preceding SingleStringData. The client's own status messages are not
+   * the program's timeline and are dropped.
    */
   private void readMessage(boolean colored) throws IOException {
-    long timeNs = toNs(readLongLe());
+    long timeNs = toNs(TracyWireBytes.readLongLe(data));
     int color = 0;
     if (colored) {
       int b = data.readUnsignedByte();
@@ -522,7 +514,7 @@ public final class TracyEventReader {
       int r = data.readUnsignedByte();
       color = r << 16 | g << 8 | b;
     }
-    boolean fromProgram = !version.messageMetadataByte() || (data.readUnsignedByte() & MESSAGE_SOURCE_MASK) == 0;
+    boolean fromProgram = format.messageFromProgram(data);
     String text = pendingSingleString == null ? "" : pendingSingleString;
     pendingSingleString = null;
     if (!fromProgram) return;
@@ -540,9 +532,9 @@ public final class TracyEventReader {
    * threads accumulate, so nothing about other processes is ever kept.
    */
   private void readContextSwitch() throws IOException {
-    long timeNs = advanceCtxTime(readLongLe());
+    long timeNs = advanceCtxTime(TracyWireBytes.readLongLe(data));
     skip(4); // old thread - the tracked core state already knows it
-    long newThread = Integer.toUnsignedLong(readIntLe());
+    long newThread = Integer.toUnsignedLong(TracyWireBytes.readIntLe(data));
     int cpu = data.readUnsignedByte();
     skip(5);
     if (coreInNs[cpu] >= 0 && ownTids.contains(coreTid[cpu])) {
@@ -621,7 +613,7 @@ public final class TracyEventReader {
   /** A static-srcloc begin: the location is an unresolvable client pointer offline; hxcpp never sends these. */
   private void beginStaticZone(long deltaTicks) throws IOException {
     long begin = advanceThreadTime(deltaTicks);
-    long pointer = readLongLe();
+    long pointer = TracyWireBytes.readLongLe(data);
     openStack().push(new OpenZone(begin, staticLocation(pointer)));
     track(begin);
   }
@@ -658,41 +650,6 @@ public final class TracyEventReader {
 
   private static TracySourceLocation staticLocation(long pointer) {
     return new TracySourceLocation("zone@" + Long.toHexString(pointer), "", 0, 0);
-  }
-
-  /**
-   * v82 puts the thread BEFORE the (16/32/64-bit, offset-encoded) time;
-   * earlier versions send the 64-bit time first. Either way only the ctx
-   * reference advances.
-   */
-  private void readCallstackSample(TracyQueueType type) throws IOException {
-    if (version.callstackSampleThreadFirst()) {
-      skip(4);
-      advanceCtxTime(callstackSampleDelta(type));
-    }
-    else {
-      advanceCtxTime(readLongLe());
-      skip(4);
-    }
-  }
-
-  private long callstackSampleDelta(TracyQueueType type) throws IOException {
-    return switch (type) {
-      case CallstackSample16, CallstackSampleContextSwitch16 -> readU16Le();
-      case CallstackSample32, CallstackSampleContextSwitch32 -> readDelta32();
-      default -> readCompactableDelta64();
-    };
-  }
-
-  /** A v82 32-bit delta item stores {@code delta - 2^16}. */
-  private long readDelta32() throws IOException {
-    return Integer.toUnsignedLong(readIntLe()) + TracyProtocolVersion.TIME_OFFSET_16BIT;
-  }
-
-  /** The 64-bit form of a delta v82 also sends compactly: a non-negative value stores {@code delta - (2^16 + 2^32)}. */
-  private long readCompactableDelta64() throws IOException {
-    long delta = readLongLe();
-    return version.compactTimes() && delta >= 0 ? delta + TracyProtocolVersion.TIME_OFFSET_32BIT : delta;
   }
 
   private Deque<OpenZone> openStack() {
@@ -796,23 +753,9 @@ public final class TracyEventReader {
     skip(payloadLength(type));
   }
 
-  /**
-   * The length prefix of the item's inline payload (0 for none). v82's u16
-   * single/second string transfers store {@code length - 256}: the 8-bit
-   * items carry the shorter strings.
-   */
+  /** The length prefix of the item's inline payload (0 for none), in the version's encoding. */
   private int payloadLength(TracyQueueType type) throws IOException {
-    return switch (type.payload()) {
-      case NONE -> 0;
-      case U8 -> data.readUnsignedByte();
-      case U16 -> {
-        int length = readU16Le();
-        boolean offset = version.stringLengthOffset()
-                         && (type == TracyQueueType.SingleStringData || type == TracyQueueType.SecondStringData);
-        yield offset ? length + TracyProtocolVersion.STRING_LENGTH_OFFSET_8BIT : length;
-      }
-      case U32 -> readIntLe();
-    };
+    return format.payloadLength(type, data);
   }
 
   private String readUtf8Payload(TracyQueueType type) throws IOException {
@@ -820,42 +763,12 @@ public final class TracyEventReader {
   }
 
   private void skip(int count) throws IOException {
-    if (data.readNBytes(count).length < count) {
-      throw new ProfilerFormatException("tracy stream ended inside an item");
-    }
+    TracyWireBytes.skip(data, count);
   }
 
   private byte[] readPayload(int length) throws IOException {
     byte[] payload = data.readNBytes(length);
     if (payload.length < length) throw new ProfilerFormatException("tracy stream ended inside a payload");
     return payload;
-  }
-
-  private int readU16Le() throws IOException {
-    return data.readUnsignedByte() | data.readUnsignedByte() << 8;
-  }
-
-  private int readIntLe() throws IOException {
-    int value = 0;
-    for (int i = 0; i < 4; i++) {
-      value |= data.readUnsignedByte() << (8 * i);
-    }
-    return value;
-  }
-
-  private long readLongLe() throws IOException {
-    long value = 0;
-    for (int i = 0; i < 8; i++) {
-      value |= (long)data.readUnsignedByte() << (8 * i);
-    }
-    return value;
-  }
-
-  private long readU48Le() throws IOException {
-    long value = 0;
-    for (int i = 0; i < 6; i++) {
-      value |= (long)data.readUnsignedByte() << (8 * i);
-    }
-    return value;
   }
 }

@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.wire;
 
 /**
  * Tracy's queue-item vocabulary across the supported protocol versions,
@@ -8,9 +8,8 @@ package com.intellij.plugins.haxe.profiler.tracy;
  * maps that version's wire ordinals (and item sizes) onto these constants;
  * an older version simply never emits the constants added after it.
  * Payload types carry extra inline data right after the fixed item: a u8,
- * u16 or u32 length plus that many bytes (protocol v82 encodes the u16
- * length of {@code SingleStringData} / {@code SecondStringData} minus 256,
- * see {@link TracyProtocolVersion#stringLengthOffset()}).
+ * u16 or u32 length plus that many bytes, decoded by the version's
+ * {@link TracyWireFormat} (v82 stores some u16 lengths with an offset).
  */
 public enum TracyQueueType {
   ZoneText,

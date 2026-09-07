@@ -1,5 +1,6 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.connect;
 
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -136,7 +137,7 @@ public class TracyLiveCaptureTest {
       try (InputStream in = TracyLiveCaptureTest.class.getResourceAsStream("/tracy/welcome-v74.bin")) {
         v74 = in.readAllBytes();
       }
-      if (version.welcomeHasDelay()) return v74;
+      if (version.format().welcomeSize() == v74.length) return v74;
       byte[] shorter = new byte[v74.length - 8];
       System.arraycopy(v74, 0, shorter, 0, 24);
       System.arraycopy(v74, 32, shorter, 24, v74.length - 32);

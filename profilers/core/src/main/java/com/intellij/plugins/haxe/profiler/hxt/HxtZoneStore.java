@@ -2,10 +2,10 @@ package com.intellij.plugins.haxe.profiler.hxt;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
-import com.intellij.plugins.haxe.profiler.tracy.TracyProtocolVersion;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
-import com.intellij.plugins.haxe.profiler.tracy.TracyWelcome;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWelcome;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.BufferedInputStream;

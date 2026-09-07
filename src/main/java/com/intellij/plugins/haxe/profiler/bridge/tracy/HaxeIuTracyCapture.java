@@ -18,7 +18,11 @@ import com.intellij.plugins.haxe.profiler.bridge.HaxeLiveCaptures;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerConfigurations;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneRecompressor;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneWriter;
-import com.intellij.plugins.haxe.profiler.tracy.*;
+import com.intellij.plugins.haxe.profiler.tracy.TracyEventReader;
+import com.intellij.plugins.haxe.profiler.tracy.TracySession;
+import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
+import com.intellij.plugins.haxe.profiler.tracy.connect.*;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

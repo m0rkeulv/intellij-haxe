@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.wire;
 
 import org.jetbrains.annotations.NotNull;
 

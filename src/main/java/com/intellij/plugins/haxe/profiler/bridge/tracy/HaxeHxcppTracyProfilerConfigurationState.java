@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneWriter;
-import com.intellij.plugins.haxe.profiler.tracy.TracyProtocolVersion;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import com.intellij.profiler.api.configurations.ProfilerConfigurationState;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

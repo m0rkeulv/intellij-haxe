@@ -1,6 +1,9 @@
-package com.intellij.plugins.haxe.profiler.tracy;
+package com.intellij.plugins.haxe.profiler.tracy.connect;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWelcome;
+import com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireFormat;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -24,7 +27,6 @@ public final class TracyHandshake {
   private static final String[] STATUS_NAMES = {"pending", "welcome", "protocol mismatch", "not available", "dropped"};
   private static final int STATUS_WELCOME = 1;
   private static final int STATUS_PROTOCOL_MISMATCH = 2;
-  private static final int ON_DEMAND_FLAG = 1;
 
   private TracyHandshake() {
   }
@@ -46,42 +48,17 @@ public final class TracyHandshake {
                                         + " (receiver offered protocol " + version.wire() + ")");
     }
 
-    byte[] welcome = in.readNBytes(version.welcomeSize());
-    if (welcome.length < version.welcomeSize()) {
+    int welcomeSize = version.format().welcomeSize();
+    byte[] welcome = in.readNBytes(welcomeSize);
+    if (welcome.length < welcomeSize) {
       throw new ProfilerFormatException("truncated tracy welcome message");
     }
     return parseWelcome(welcome, version);
   }
 
-  /**
-   * The packed WelcomeMessage: timerMul f64, initBegin, initEnd, [delay -
-   * before v76], resolution, epoch, exectime, pid, samplingPeriod (i64/u64
-   * each), flags u8, cpuArch u8, cpuManufacturer[12], cpuId u32,
-   * programName[64], hostInfo[1024].
-   */
+  /** The welcome in the version's layout (see the version's {@link TracyWireFormat}). */
   @NotNull
-  static TracyWelcome parseWelcome(byte @NotNull [] welcome, @NotNull TracyProtocolVersion version) {
-    ByteBuffer buffer = ByteBuffer.wrap(welcome).order(ByteOrder.LITTLE_ENDIAN);
-    double timerMul = buffer.getDouble();
-    long initBegin = buffer.getLong();
-    long initEnd = buffer.getLong();
-    long delay = version.welcomeHasDelay() ? buffer.getLong() : 0;
-    long resolution = buffer.getLong();
-    long epoch = buffer.getLong();
-    long execTime = buffer.getLong();
-    long pid = buffer.getLong();
-    long samplingPeriod = buffer.getLong();
-    int flags = buffer.get() & 0xFF;
-    buffer.get();       // cpuArch
-    buffer.position(buffer.position() + 12 + 4); // cpuManufacturer, cpuId
-
-    byte[] name = new byte[64];
-    buffer.get(name);
-    int nameEnd = 0;
-    while (nameEnd < name.length && name[nameEnd] != 0) nameEnd++;
-    String programName = new String(name, 0, nameEnd, StandardCharsets.UTF_8);
-
-    return new TracyWelcome(version, timerMul, initBegin, initEnd, delay, resolution, epoch, execTime, pid,
-                            samplingPeriod, (flags & ON_DEMAND_FLAG) != 0, programName);
+  public static TracyWelcome parseWelcome(byte @NotNull [] welcome, @NotNull TracyProtocolVersion version) {
+    return version.format().parseWelcome(welcome, version);
   }
 }
