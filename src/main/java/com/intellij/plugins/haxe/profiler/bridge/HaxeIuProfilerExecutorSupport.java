@@ -102,6 +102,16 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
   }
 
   @Override
+  public @Nullable List<String> hlProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily) {
+    if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHlProfilerConfigurationState)) return null;
+    // hl_profile is the compile-side profiling switch by convention: heaps'
+    // main loop emits an end-of-frame marker and pauses sampling across
+    // present() under it, so frames align and vsync wait stays out of the
+    // samples. Code without the guard is unaffected - an unknown define is inert.
+    return limeFamily ? List.of("-Dhl_profile") : List.of("-D", "hl_profile");
+  }
+
+  @Override
   public @Nullable List<String> flashProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily) {
     if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeFlashProfilerConfigurationState)) return null;
     // advanced-telemetry embeds the EnableTelemetry swf tag (swf-version 17+):

@@ -37,6 +37,7 @@ import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.flash.AirRunConfiguration;
+import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
@@ -438,6 +439,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       List<String> telemetry = HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, limeFamily, dumpPath);
       if (telemetry != null) return telemetry;
       return HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, limeFamily);
+    }
+    if (configuration instanceof HashLinkRunConfiguration) {
+      return HaxeProfilerExecutorSupport.hlProfilingAdditions(executor, limeFamily);
     }
     if (configuration instanceof AirRunConfiguration) {
       return HaxeProfilerExecutorSupport.flashProfilingAdditions(executor, limeFamily);

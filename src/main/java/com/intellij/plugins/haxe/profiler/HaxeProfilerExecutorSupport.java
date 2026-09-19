@@ -65,6 +65,14 @@ public interface HaxeProfilerExecutorSupport {
   List<String> flashProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily);
 
   /**
+   * Compile additions for a HashLink-profiling launch (the {@code hl_profile}
+   * define frameworks key their profiler instrumentation on); null when the
+   * launch is not a HashLink-profiling one.
+   */
+  @Nullable
+  List<String> hlProfilingAdditionsFor(@NotNull Executor executor, boolean limeFamily);
+
+  /**
    * Compile additions for a JS-profiling launch (source-map emission, so
    * sampled positions map back to the .hx sources); null when the launch
    * is not a JS-profiling one.
@@ -125,6 +133,13 @@ public interface HaxeProfilerExecutorSupport {
   static List<String> flashProfilingAdditions(@NotNull Executor executor, boolean limeFamily) {
     HaxeProfilerExecutorSupport support = getInstance();
     return support == null ? null : support.flashProfilingAdditionsFor(executor, limeFamily);
+  }
+
+  /** Null-safe form of {@link #hlProfilingAdditionsFor}. */
+  @Nullable
+  static List<String> hlProfilingAdditions(@NotNull Executor executor, boolean limeFamily) {
+    HaxeProfilerExecutorSupport support = getInstance();
+    return support == null ? null : support.hlProfilingAdditionsFor(executor, limeFamily);
   }
 
   /** Null-safe form of {@link #jsSamplingIntervalUsFor}. */
