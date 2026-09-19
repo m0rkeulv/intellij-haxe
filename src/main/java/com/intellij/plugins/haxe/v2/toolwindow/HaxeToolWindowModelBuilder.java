@@ -194,8 +194,10 @@ final class HaxeToolWindowModelBuilder {
       rawContainers.add(new RawContainer(rootContainerId, project.getName(), true, rootFiles));
     }
 
-    Module[] modules = ModuleManager.getInstance(project).getModules();
-    Arrays.sort(modules, Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
+    // getModules() hands out the manager's cached array: sorting it in place mutates
+    // platform state, and two concurrent rebuilds sorting the same array break TimSort
+    List<Module> modules = new ArrayList<>(Arrays.asList(ModuleManager.getInstance(project).getModules()));
+    modules.sort(Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
     for (Module module : modules) {
       if (module.equals(rootModule)) continue;
       List<FileEntry> files = mergeAndInspect(module.getName(), HaxeBuildFileScanner.scan(module));
