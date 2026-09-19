@@ -132,8 +132,10 @@ public final class HaxelibLocalDocs {
       return new GitCheckout(null, head, remoteUrl);
     }
     String ref = head.substring("ref: ".length()).trim();
-    // the branch is the ref's last segment (refs/heads/main -> main)
-    String branch = ref.substring(ref.lastIndexOf('/') + 1);
+    // strip only the ref namespace - branch names themselves may contain
+    // slashes (refs/heads/castlewars/prod -> castlewars/prod)
+    String headsPrefix = "refs/heads/";
+    String branch = ref.startsWith(headsPrefix) ? ref.substring(headsPrefix.length()) : ref;
     String commit = readTrimmed(gitDir.resolve(ref));
     if (commit == null) {
       commit = packedRefCommit(gitDir, ref);

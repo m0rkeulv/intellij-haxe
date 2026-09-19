@@ -73,6 +73,21 @@ public class HaxelibLocalDocsTest {
   }
 
   @Test
+  @DisplayName("git checkout keeps slashes in the branch name")
+  public void testGitCheckoutKeepsSlashesInTheBranchName() throws Exception {
+    Path repo = repo();
+    Path gitDir = Files.createDirectories(repo.resolve("slashlib/git/.git"));
+    Files.writeString(gitDir.resolve("HEAD"), "ref: refs/heads/castlewars/prod\n");
+    Files.createDirectories(gitDir.resolve("refs/heads/castlewars"));
+    Files.writeString(gitDir.resolve("refs/heads/castlewars/prod"), "0123456789abcdef0123456789abcdef01234567\n");
+
+    HaxelibLocalDocs.GitCheckout checkout = HaxelibLocalDocs.gitCheckout(repo, "slashlib");
+    assertNotNull(checkout);
+    assertEquals("castlewars/prod", checkout.branch());
+    assertEquals("0123456789abcdef0123456789abcdef01234567", checkout.commit());
+  }
+
+  @Test
   @DisplayName("detached head yields a commit without a branch")
   public void testDetachedHeadYieldsACommitWithoutABranch() throws Exception {
     Path repo = repo();
