@@ -450,6 +450,7 @@
     <gotoSymbolContributor implementation="com.intellij.plugins.haxe.ide.symbols.HaxeGotoMethodSymbolContributor"/>
 
     <definitionsScopedSearch implementation="com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeInheritanceDefinitionsSearcher"/>
+    <definitionsScopedSearch implementation="com.intellij.plugins.haxe.ide.HaxeExternImplementationSearcher"/>
 
     <projectService serviceImplementation="com.intellij.plugins.haxe.haxelib.definitions.HaxeDefineDetectionManager"/>
     <projectService serviceImplementation="com.intellij.plugins.haxe.config.HaxeProjectSettings"/>
