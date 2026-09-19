@@ -45,9 +45,11 @@ public class HaxeElementGenerator {
 
   public static PsiElement createExpressionFromText(Project myProject, String text) {
     PsiElement fromText = createStatementFromText(myProject, "var test = " + text + ";");
-    if (fromText instanceof HaxeFieldDeclaration) {
-      HaxeFieldDeclaration declarationPart = ((HaxeFieldDeclaration)fromText);
-      HaxeVarInit varInit = declarationPart.getVarInit();
+    if (fromText instanceof HaxeLocalVarDeclarationList declarationList) {
+      fromText = declarationList.getLocalVarDeclarationList().getFirst();
+    }
+    if (fromText instanceof HaxePsiField field) {
+      HaxeVarInit varInit = field.getVarInit();
       return varInit != null ? varInit.getExpression() : null;
     }
     return null;
