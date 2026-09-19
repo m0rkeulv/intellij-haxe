@@ -748,7 +748,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
   }
 
   @Nullable
-  private Path repositoryRoot() {
+  Path repositoryRoot() {
     // SDK and VFS resolution read the project model; reached from pooled
     // detail loads and from EDT context-menu actions (dev directory chooser)
     return HaxeReadActions.compute(() -> {

@@ -1,11 +1,18 @@
 package com.intellij.plugins.haxe.ide.toolWindow.haxelib;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.actions.RevealFileAction;
 import com.intellij.notification.NotificationType;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionUiKind;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.actionSystem.ex.ActionUtil;
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
@@ -26,7 +33,10 @@ import com.intellij.plugins.haxe.ide.toolWindow.haxelib.HaxelibExplorerPanel.Ver
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
+import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
 import java.util.function.Supplier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -58,6 +68,9 @@ final class HaxelibExplorerActions {
     group.add(new SetDevDirectory(panel));
     group.add(new RemoveDevDirectory(panel));
     group.add(new InstallFromGitRepository(panel));
+    group.addSeparator();
+    group.add(new ShowVersionInFileManager(panel));
+    group.add(new OpenVersionInTerminal(panel));
     return group;
   }
 
@@ -97,6 +110,18 @@ final class HaxelibExplorerActions {
                                       HaxeBundle.message("haxelib.explorer.action.remove.confirm", target),
                                       HaxeBundle.message("haxelib.explorer.action.remove.title"),
                                       Messages.getWarningIcon()) == Messages.YES;
+    }
+
+    /** The selected version's install directory, or null when it is not on disk (a stale dev pointer, say). */
+    @Nullable
+    Path versionDirectory(@NotNull VersionEntry entry) {
+      Path repoRoot = panel.repositoryRoot();
+      return repoRoot == null ? null : HaxelibLocalDocs.versionDirectory(repoRoot, entry.library(), entry.version());
+    }
+
+    void notifyMissingDirectory(@NotNull String title, @NotNull VersionEntry entry) {
+      String message = HaxeBundle.message("haxelib.explorer.action.show.in.files.missing", entry.library(), entry.version());
+      HaxeCommandNotifications.notify(panel.getProject(), title, message, NotificationType.WARNING);
     }
 
     /** Runs the mutation in the background; on success refreshes the explorer (dropping the library's stale info) and the v2 library sync. */
@@ -418,6 +443,99 @@ final class HaxelibExplorerActions {
       mutate(HaxeBundle.message("haxelib.explorer.action.remove.progress", row.name()),
              row.name(),
              () -> HaxelibInstaller.remove(panel.getProject(), row.name(), null));
+    }
+  }
+
+  /** Reveals the selected version's install directory in the system file manager, named for that manager. */
+  private static final class ShowVersionInFileManager extends ExplorerAction {
+    private ShowVersionInFileManager(@NotNull HaxelibExplorerPanel panel) {
+      super(panel, RevealFileAction::getActionName);
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      VersionEntry entry = selectedVersion();
+      // directory resolution reads the disk - the perform side handles a missing one
+      boolean applicable = entry != null && entry.installed() && RevealFileAction.isDirectoryOpenSupported();
+      e.getPresentation().setEnabledAndVisible(applicable);
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      VersionEntry entry = selectedVersion();
+      if (entry == null) return;
+      Path directory = versionDirectory(entry);
+      if (directory == null) {
+        notifyMissingDirectory(RevealFileAction.getActionName(), entry);
+        return;
+      }
+      RevealFileAction.openDirectory(directory);
+    }
+  }
+
+  /** Opens a terminal tab in the selected version's install directory, through the terminal plugin's own action. */
+  private static final class OpenVersionInTerminal extends ExplorerAction {
+    // one action per terminal engine; each disables itself for the other engine,
+    // so the delegate is whichever reports enabled for the directory
+    private static final List<String> TERMINAL_ACTION_IDS =
+      List.of("Terminal.OpenInTerminal", "Terminal.OpenInReworkedTerminal");
+
+    private OpenVersionInTerminal(@NotNull HaxelibExplorerPanel panel) {
+      super(panel, OpenVersionInTerminal::terminalActionText);
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      VersionEntry entry = selectedVersion();
+      // directory resolution reads the disk - the perform side handles a missing one
+      boolean applicable = entry != null && entry.installed() && registeredTerminalAction() != null;
+      e.getPresentation().setEnabledAndVisible(applicable);
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      VersionEntry entry = selectedVersion();
+      if (entry == null) return;
+      Path directory = versionDirectory(entry);
+      VirtualFile directoryFile = directory == null ? null
+                                                    : LocalFileSystem.getInstance().refreshAndFindFileByNioFile(directory);
+      if (directoryFile == null) {
+        notifyMissingDirectory(terminalActionText(), entry);
+        return;
+      }
+
+      DataContext context = SimpleDataContext.builder()
+        .add(CommonDataKeys.PROJECT, panel.getProject())
+        .add(CommonDataKeys.VIRTUAL_FILE, directoryFile)
+        .build();
+      for (String actionId : TERMINAL_ACTION_IDS) {
+        AnAction delegate = ActionManager.getInstance().getAction(actionId);
+        if (delegate == null) continue;
+        AnActionEvent delegateEvent = AnActionEvent.createEvent(delegate, context, null, e.getPlace(), ActionUiKind.NONE, null);
+        ActionUtil.updateAction(delegate, delegateEvent);
+        if (delegateEvent.getPresentation().isEnabledAndVisible()) {
+          ActionUtil.performAction(delegate, delegateEvent);
+          return;
+        }
+      }
+    }
+
+    /** The terminal plugin's own menu text, so this entry matches the platform's Open In menu. */
+    @NotNull
+    private static String terminalActionText() {
+      AnAction action = registeredTerminalAction();
+      String text = action != null ? action.getTemplatePresentation().getText() : null;
+      return text != null ? text : "";
+    }
+
+    @Nullable
+    private static AnAction registeredTerminalAction() {
+      ActionManager manager = ActionManager.getInstance();
+      return TERMINAL_ACTION_IDS.stream()
+        .map(manager::getAction)
+        .filter(Objects::nonNull)
+        .findFirst()
+        .orElse(null);
     }
   }
 }
