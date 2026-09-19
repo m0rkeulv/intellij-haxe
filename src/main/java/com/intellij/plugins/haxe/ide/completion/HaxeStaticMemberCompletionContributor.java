@@ -23,6 +23,7 @@ import com.intellij.psi.stubs.StubIndex;
 import com.intellij.util.ProcessingContext;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.List;
@@ -55,15 +56,24 @@ public class HaxeStaticMemberCompletionContributor extends CompletionContributor
                boolean inChain = isInReferenceChain(parameters.getPosition());
                if(!newExpression && !inChain) {
                  position = position != null ? position : parameters.getPosition();
-                 addVariantsFromIndex(result, file, position.getText());
+                 FullyQualifiedInfo expectedEnum = expectedEnumInfo(parameters);
+                 addVariantsFromIndex(result, file, position.getText(), expectedEnum);
                }
              }
            });
   }
 
+  /** The expected enum's class info, whose values HaxeExpectedEnumValueCompletionContributor already offers prioritized. */
+  @Nullable
+  private static FullyQualifiedInfo expectedEnumInfo(CompletionParameters parameters) {
+    HaxeClass expectedEnum = HaxeExpectedEnumValueCompletionContributor.expectedEnumClass(parameters);
+    return expectedEnum == null ? null : expectedEnum.getModel().getQualifiedInfo();
+  }
+
   private static void addVariantsFromIndex(final CompletionResultSet resultSet,
                                             final PsiFile targetFile,
-                                            @NlsSafe String filterText) {
+                                            @NlsSafe String filterText,
+                                            @Nullable FullyQualifiedInfo suppressedClass) {
     final Project project = targetFile.getProject();
     final GlobalSearchScope scope = HaxeResolveUtil.getScopeForElement(targetFile);
     final PrefixMatcher matcher = resultSet.getPrefixMatcher();
@@ -77,7 +87,7 @@ public class HaxeStaticMemberCompletionContributor extends CompletionContributor
         ProgressIndicatorProvider.checkCanceled();
         List<HaxeMemberLookupData> lookupData = HaxeStaticMethodNameUnifiedIndex.getCompletionData(name, project, scope);
         for (HaxeMemberLookupData lookupDatum : lookupData) {
-            addMemberElement(resultSet, lookupDatum, filterText);
+            addMemberElement(resultSet, lookupDatum, filterText, suppressedClass);
         }
     });
 
@@ -90,14 +100,19 @@ public class HaxeStaticMemberCompletionContributor extends CompletionContributor
                   ProgressIndicatorProvider.checkCanceled();
                   List<HaxeMemberLookupData> lookupData = HaxeStaticFieldNameUnifiedIndex.getCompletionData(name, project, scope);
                   for (HaxeMemberLookupData lookupDatum : lookupData) {
-                      addMemberElement(resultSet, lookupDatum, filterText);
+                      addMemberElement(resultSet, lookupDatum, filterText, suppressedClass);
                   }
               }
       );
   }
 
-    private static void addMemberElement(CompletionResultSet resultSet, HaxeMemberLookupData lookupData, @NlsSafe String filterText) {
+    private static void addMemberElement(CompletionResultSet resultSet,
+                                         HaxeMemberLookupData lookupData,
+                                         @NlsSafe String filterText,
+                                         @Nullable FullyQualifiedInfo suppressedClass) {
         FullyQualifiedInfo qualifiedInfo = lookupData.qualifiedInfo;
+        // the expected-enum contributor already offers this class's values at the top; a second copy would scatter below
+        if (suppressedClass != null && qualifiedInfo.withMemberName(null).equals(suppressedClass)) return;
 
         String possibleClass = qualifiedInfo.getClassName();
         String className = possibleClass != null ? possibleClass : "";
