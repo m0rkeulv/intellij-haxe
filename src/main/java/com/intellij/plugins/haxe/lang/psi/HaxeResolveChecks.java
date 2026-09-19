@@ -494,6 +494,20 @@ public class HaxeResolveChecks {
       return null;
     }
 
+    if (parent instanceof HaxeMapInitializerExpression mapEntry) {
+      HaxeMapLiteral mapLiteral = PsiTreeUtil.getParentOfType(mapEntry, HaxeMapLiteral.class);
+      if (mapLiteral != null) {
+        ResultHolder type = findParentAssignType(mapLiteral, isValueExpression);
+        if (type != null && !type.isUnknown() && type.getClassType() != null) {
+          HaxeTypeUtils.MapKeyValueTypes entryTypes = HaxeTypeUtils.tryFindMapKeyValueTypes(type.getClassType());
+          if (entryTypes != null) {
+            return mapEntry.getLeftHand() == reference ? entryTypes.key() : entryTypes.value();
+          }
+        }
+      }
+      return null;
+    }
+
     if (reference instanceof HaxeEnumValueReference) {
       if (parent instanceof HaxeEnumArgumentExtractor extractor) {
         // same kind of relation between the reference expression to a method and a callExpression
@@ -890,13 +904,22 @@ public class HaxeResolveChecks {
   }
 
   private static List<HaxeComponentName> findEnumFromAssignType(HaxeReference reference, SpecificTypeReference typeReference) {
-    if (enumUsageisInArrayLiteral(reference.getParent())) {
+    PsiElement referenceParent = reference.getParent();
+    if (enumUsageisInArrayLiteral(referenceParent)) {
       if (typeReference instanceof SpecificHaxeClassReference classReference) {
         if (classReference.isArray()) {
           @NotNull ResultHolder[] specifics = classReference.getGenericResolver().getSpecifics();
           if (specifics.length == 1) {
             return findEnumMember(reference, specifics[0].getType());
           }
+        }
+      }
+    } else if (referenceParent instanceof HaxeMapInitializerExpression mapEntry) {
+      if (typeReference instanceof SpecificHaxeClassReference classReference) {
+        HaxeTypeUtils.MapKeyValueTypes entryTypes = HaxeTypeUtils.tryFindMapKeyValueTypes(classReference);
+        if (entryTypes != null) {
+          ResultHolder sideType = mapEntry.getLeftHand() == reference ? entryTypes.key() : entryTypes.value();
+          return findEnumMember(reference, sideType.getType());
         }
       }
     } else {
