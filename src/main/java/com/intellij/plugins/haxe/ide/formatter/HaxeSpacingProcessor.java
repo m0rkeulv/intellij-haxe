@@ -265,16 +265,16 @@ public class HaxeSpacingProcessor {
     // (emptyLines.afterLeftCurly/beforeRightCurly; class bodies above use
     // exact counts); the pair otherwise behaves like the fallback rule
     if (type1 == PLCURLY && type2 != PRCURLY && !isClassBodyType(elementType) && isFirstChild(child1)) {
-      return Spacing.createSpacing(0, 1, 0, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_LBRACE);
+      return keepCappedBlanks(myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_LBRACE);
     }
     if (type2 == PRCURLY && type1 != PLCURLY && !isClassBodyType(elementType) && isLastChild(child2)) {
-      return Spacing.createSpacing(0, 1, 0, true, mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
+      return keepCappedBlanks(mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
     }
 
     // a blank between a case's ':' and its body has its own keep cap
     // (emptyLines.beforeBlocks); blanks BETWEEN cases keep the in-code cap
     if ((elementType == SWITCH_CASE || elementType == DEFAULT_CASE) && type2 == SWITCH_CASE_BLOCK) {
-      return Spacing.createSpacing(0, 1, 0, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_CASE_COLON);
+      return keepCappedBlanks(myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_CASE_COLON);
     }
 
     // a blank line before a member belongs BEFORE its doc comment - resolve
@@ -789,10 +789,11 @@ public class HaxeSpacingProcessor {
                           || isImportOrUsing(realNeighborType(node2, true));
       return inSection ? importSectionKeepSpacing() : null;
     }
-    boolean sectionEnd = type1 == PPEND && !ONLY_COMMENTS.contains(type2)
-                         && isImportOrUsing(realNeighborType(node1, false));
-    if (sectionEnd) {
-      int blanks = realNeighborType(node1, false) == USING_STATEMENT
+    IElementType lastSectionStatement = type1 == PPEND && !ONLY_COMMENTS.contains(type2)
+                                        ? realNeighborType(node1, false)
+                                        : null;
+    if (isImportOrUsing(lastSectionStatement)) {
+      int blanks = lastSectionStatement == USING_STATEMENT
                    ? myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_USING
                    : mySettings.BLANK_LINES_AFTER_IMPORTS;
       return Spacing.createSpacing(0, 0, 1 + blanks, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
@@ -801,7 +802,12 @@ public class HaxeSpacingProcessor {
   }
 
   private Spacing importSectionKeepSpacing() {
-    return Spacing.createSpacing(0, 1, 0, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
+    return keepCappedBlanks(myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
+  }
+
+  /** The fallback pair shape with a tighter blank-line cap: single space at most, written breaks kept. */
+  private static Spacing keepCappedBlanks(int keepBlankLines) {
+    return Spacing.createSpacing(0, 1, 0, true, keepBlankLines);
   }
 
   /** Whether the whole multi-var statement, joined onto its current line, would pass the configured split width. */
