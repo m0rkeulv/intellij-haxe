@@ -971,6 +971,18 @@
             text="Add as Haxe Build File" description="Register this file as a Haxe build file of a module">
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </action>
+    <group id="Haxe.ToolsEditorPopup" class="com.intellij.plugins.haxe.v2.tools.HaxeToolsEditorGroup"
+           text="Haxe Tools" popup="true">
+      <action id="Haxe.Tools.FormatFile" class="com.intellij.plugins.haxe.v2.tools.HaxeFormatFileAction"
+              text="Format File" description="Format this file with the formatter haxelib"/>
+      <action id="Haxe.Tools.CheckFileFormatting" class="com.intellij.plugins.haxe.v2.tools.HaxeCheckFileFormattingAction"
+              text="Check Formatting" description="Check this file's formatting without changing it"/>
+      <action id="Haxe.Tools.ShowFormattingDiff" class="com.intellij.plugins.haxe.v2.tools.HaxeShowFormattingDiffAction"
+              text="Show Formatting Diff" description="Diff this file against the formatter's output without changing it"/>
+      <action id="Haxe.Tools.RunCheckstyleFile" class="com.intellij.plugins.haxe.v2.tools.HaxeRunCheckstyleFileAction"
+              text="Run Checkstyle" description="Lint this file with the checkstyle haxelib"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </group>
     <action id="Generate.Constructor.Haxe" class="com.intellij.plugins.haxe.ide.generation.HaxeGenerateConstructorAction"
             text="Constructor">
       <add-to-group anchor="first" group-id="GenerateGroup"/>
