@@ -28,6 +28,7 @@ public final class HaxeToolWindowUiState implements PersistentStateComponent<Hax
 
   public static final class State {
     public List<String> expandedKeys = new ArrayList<>();
+    public boolean hideEmptyModules;
   }
 
   private State state = new State();
@@ -48,6 +49,14 @@ public final class HaxeToolWindowUiState implements PersistentStateComponent<Hax
       state.expandedKeys = new ArrayList<>();
     }
     this.state = state;
+  }
+
+  public boolean isHideEmptyModules() {
+    return state.hideEmptyModules;
+  }
+
+  public void setHideEmptyModules(boolean hide) {
+    state.hideEmptyModules = hide;
   }
 
   /** Empty when nothing was saved yet — the panel then applies its default expansion. */

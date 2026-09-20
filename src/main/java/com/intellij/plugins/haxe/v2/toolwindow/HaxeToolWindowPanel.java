@@ -187,6 +187,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeSettingsActionGroup());
 
     group.addSeparator();
+    group.add(new HaxeHideEmptyModulesAction(this::refreshTree));
     CommonActionsManager commonActions = CommonActionsManager.getInstance();
     DefaultTreeExpander treeExpander = new DefaultTreeExpander(tree);
     group.add(commonActions.createExpandAllAction(treeExpander, tree));
@@ -210,6 +211,10 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeAddCustomActionAction(this));
     group.add(new HaxeEditCustomActionAction(this));
     group.add(new HaxeRemoveCustomActionAction(this));
+    group.addSeparator();
+    group.add(new HaxeAddToolAction(this));
+    group.add(new HaxeEditToolAction(this));
+    group.add(new HaxeRemoveToolAction(this));
     group.add(new HaxeSetActiveBuildFileAction(this));
     group.add(new HaxeMarkTestsBuildFileAction(this));
     group.add(new HaxeSetWorkDirectoryAction(this));
@@ -259,12 +264,21 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     catch (Exception e) {
       log.warn("haxelib lookup failed; library install state unknown", e);
     }
-    DefaultMutableTreeNode root = buildTreeRoot(scan, installed);
+    DefaultMutableTreeNode root = buildTreeRoot(visibleContainers(scan), installed);
     ApplicationManager.getApplication().invokeLater(() -> {
       if (project.isDisposed()) return;
       rememberTestsPaths(scan);
       applyTreeUpdate(root);
     });
+  }
+
+  /** The hide-empty toggle removes module rows with no build files and no user configuration. */
+  @NotNull
+  private List<ContainerEntry> visibleContainers(@NotNull List<ContainerEntry> scan) {
+    if (!HaxeToolWindowUiState.getInstance(project).isHideEmptyModules()) return scan;
+    return scan.stream()
+      .filter(container -> !container.emptyModule())
+      .toList();
   }
 
   /** Keeps the scan's per-container tests build files, so container-row actions resolve them without re-scanning. */
@@ -323,16 +337,32 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
         projectNode.add(buildCompilationGroupNode(container));
         projectNode.add(buildEnvironmentNode(container));
         projectNode.add(buildBuildGroupNode(container, installedLibraries));
+        if (!container.tools().isEmpty()) {
+          projectNode.add(buildToolsGroupNode(container));
+        }
       }
       else {
         DefaultMutableTreeNode moduleNode = new DefaultMutableTreeNode(new ModuleNode(container.displayName()));
         moduleNode.add(buildCompilationGroupNode(container));
         moduleNode.add(buildEnvironmentNode(container));
         moduleNode.add(buildBuildGroupNode(container, installedLibraries));
+        if (!container.tools().isEmpty()) {
+          moduleNode.add(buildToolsGroupNode(container));
+        }
         projectNode.add(moduleNode);
       }
     }
     return root;
+  }
+
+  @NotNull
+  private static DefaultMutableTreeNode buildToolsGroupNode(@NotNull ContainerEntry container) {
+    DefaultMutableTreeNode toolsNode =
+      new DefaultMutableTreeNode(new ToolsGroupNode(container.id(), container.tools().size()));
+    for (ToolNode tool : container.tools()) {
+      toolsNode.add(new DefaultMutableTreeNode(tool));
+    }
+    return toolsNode;
   }
 
   @NotNull
@@ -712,6 +742,18 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     executeAction(actionNode, DefaultRunExecutor.getRunExecutorInstance());
   }
 
+  // TODO: run tools through a run configuration like action rows, so they land in the run dropdown
+  public void runTool(@NotNull ToolNode toolNode) {
+    if (toolNode.command().isEmpty()) return;
+    // a raw tree double-click dispatches on the EDT without the write-intent
+    // lock the runner's save-all needs; invokeLater re-enters with it
+    ApplicationManager.getApplication().invokeLater(() -> {
+      if (!project.isDisposed()) {
+        HaxeConsoleCommandRunner.run(project, toolNode.name(), toolNode.command(), toolNode.workDirectory());
+      }
+    });
+  }
+
   /**
    * Executes an action row through a run configuration (created on first use,
    * reused after), so it lands in the run configuration dropdown and can be rerun
@@ -991,6 +1033,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       case BuildFileRow row when row.buildFile().file().isValid() ->
         new OpenFileDescriptor(project, row.buildFile().file()).navigate(true);
       case ActionNode actionNode -> runAction(actionNode);
+      case ToolNode toolNode -> runTool(toolNode);
       case ProgramNode programNode -> executeProgram(programNode, false);
       case TestRunNode testRunNode -> runUnitTests(testRunNode.buildFilePath());
       case null, default -> {

@@ -26,16 +26,44 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   private JBTextField commandField;
   private JTextPane hintArea;
 
-  public HaxeCustomActionDialog(@NotNull Project project, @Nullable CustomAction initial) {
+  /** The name/command pair being edited; action rows and tool rows share the dialog. */
+  public record NameAndCommand(@NotNull String name, @NotNull String command) {
+  }
+
+  private final String nameRequiredKey;
+
+  private HaxeCustomActionDialog(@NotNull Project project, @Nullable NameAndCommand initial,
+                                 @NotNull String addTitleKey, @NotNull String editTitleKey,
+                                 @Nullable String hintKey, @NotNull String nameRequiredKey) {
     super(project);
-    setTitle(HaxeBundle.message(initial == null ? "haxe.custom.action.dialog.add.title"
-                                                : "haxe.custom.action.dialog.edit.title"));
+    this.nameRequiredKey = nameRequiredKey;
+    setTitle(HaxeBundle.message(initial == null ? addTitleKey : editTitleKey));
     HaxeDialogHints.style(hintArea);
+    if (hintKey != null) {
+      hintArea.setText(HaxeBundle.message(hintKey));
+    }
     if (initial != null) {
       nameField.setText(initial.name());
       commandField.setText(initial.command());
     }
     init();
+  }
+
+  /** A build file's custom action: the hint documents work directory and placeholder expansion. */
+  @NotNull
+  public static HaxeCustomActionDialog forAction(@NotNull Project project, @Nullable CustomAction initial) {
+    NameAndCommand nameAndCommand = initial == null ? null : new NameAndCommand(initial.name(), initial.command());
+    return new HaxeCustomActionDialog(project, nameAndCommand,
+                                      "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",
+                                      null, "haxe.custom.action.dialog.name.required");
+  }
+
+  /** A container's custom tool: no target placeholders, runs in the container root. */
+  @NotNull
+  public static HaxeCustomActionDialog forTool(@NotNull Project project, @Nullable NameAndCommand initial) {
+    return new HaxeCustomActionDialog(project, initial,
+                                      "haxe.custom.tool.dialog.add.title", "haxe.custom.tool.dialog.edit.title",
+                                      "haxe.custom.tool.dialog.hint", "haxe.custom.tool.dialog.name.required");
   }
 
   @Override
@@ -52,7 +80,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   @Override
   protected @Nullable ValidationInfo doValidate() {
     if (StringUtil.isEmptyOrSpaces(nameField.getText())) {
-      return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.name.required"), nameField);
+      return new ValidationInfo(HaxeBundle.message(nameRequiredKey), nameField);
     }
     if (StringUtil.isEmptyOrSpaces(commandField.getText())) {
       return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.command.required"), commandField);
@@ -63,5 +91,12 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   @NotNull
   public CustomAction getAction() {
     return new CustomAction(nameField.getText().trim(), commandField.getText().trim());
+  }
+
+  /** The edited values, independent of which store they land in. */
+  @NotNull
+  public NameAndCommand getNameAndCommand() {
+    CustomAction action = getAction();
+    return new NameAndCommand(action.name(), action.command());
   }
 }

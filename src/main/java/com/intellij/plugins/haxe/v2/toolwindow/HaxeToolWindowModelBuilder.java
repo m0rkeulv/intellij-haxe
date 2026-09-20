@@ -11,6 +11,8 @@ import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -69,7 +71,14 @@ final class HaxeToolWindowModelBuilder {
                         List<String> testsPaths,
                         EnvironmentData environment,
                         EnvCompileCommandNode compileCommand,
-                        CompilationServerNode server) {
+                        CompilationServerNode server,
+                        List<ToolNode> tools,
+                        boolean userConfigured) {
+
+    /** A module row the hide-empty toggle removes: no build files, no tools and nothing user-configured. */
+    boolean emptyModule() {
+      return !projectRoot && files.isEmpty() && tools.isEmpty() && !userConfigured;
+    }
   }
 
   /** The container's environment as shown in the tree, resolved during the scan read action. */
@@ -135,11 +144,95 @@ final class HaxeToolWindowModelBuilder {
       EnvironmentData environment = buildEnvironmentData(raw.id(), activeDefines);
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
       List<String> testsPaths = resolveTestsPaths(raw);
+      List<ToolNode> tools = containerTools(raw);
+      boolean userConfigured = hasUserConfiguration(raw.id());
       ContainerEntry container = new ContainerEntry(raw.id(), raw.displayName(), raw.projectRoot(), raw.files(),
-                                                    activePath, testsPaths, environment, compileCommand, server);
+                                                    activePath, testsPaths, environment, compileCommand, server,
+                                                    tools, userConfigured);
       containers.add(container);
     }
     return containers;
+  }
+
+  /** Whether the user attached anything to the container: environment overrides, custom actions or custom tools. */
+  private boolean hasUserConfiguration(@NotNull String containerId) {
+    return HaxeEnvironmentStore.getInstance(project).hasUserOverrides(containerId)
+           || !HaxeCustomActionsStore.getInstance(project).getActions(containerId).isEmpty()
+           || !HaxeCustomToolsStore.getInstance(project).getTools(containerId).isEmpty();
+  }
+
+  /**
+   * The container's tool rows: commands for tool configs detected at the container
+   * root, then the user's custom tools. Everything runs in the container root so
+   * the tools' own config discovery and relative excludes resolve as if run there;
+   * haxelib forwards that directory to the tool (the HAXELIB_RUN cwd convention).
+   */
+  @NotNull
+  private List<ToolNode> containerTools(@NotNull RawContainer raw) {
+    VirtualFile rootDir = containerRootDir(raw);
+    if (rootDir == null) return List.of();
+
+    List<ToolNode> tools = new ArrayList<>();
+    String workDirectory = rootDir.getPath();
+    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(raw.id());
+    String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
+    List<String> sources = sourceArguments(raw, rootDir);
+
+    if (rootDir.findChild(HaxeToolConfigs.CHECKSTYLE_CONFIG_NAME) != null) {
+      String name = HaxeBundle.message("haxe.toolwindow.tool.checkstyle");
+      tools.add(detectedTool(raw.id(), name, haxelib, "checkstyle", HaxeToolConfigs.CHECKSTYLE_CONFIG_NAME, sources, List.of(), workDirectory));
+    }
+    if (rootDir.findChild(HaxeToolConfigs.FORMATTER_CONFIG_NAME) != null) {
+      String formatName = HaxeBundle.message("haxe.toolwindow.tool.format");
+      String checkName = HaxeBundle.message("haxe.toolwindow.tool.format.check");
+      tools.add(detectedTool(raw.id(), formatName, haxelib, "formatter", HaxeToolConfigs.FORMATTER_CONFIG_NAME, sources, List.of(), workDirectory));
+      tools.add(detectedTool(raw.id(), checkName, haxelib, "formatter", HaxeToolConfigs.FORMATTER_CONFIG_NAME, sources, List.of("--check"), workDirectory));
+    }
+    for (HaxeCustomToolsStore.CustomTool custom : HaxeCustomToolsStore.getInstance(project).getTools(raw.id())) {
+      List<String> command = HaxeCustomCommands.parse(custom.command());
+      tools.add(new ToolNode(raw.id(), custom.name(), command, workDirectory, custom.command(), true));
+    }
+    return tools;
+  }
+
+  /** The row's gray tail names the config file the tool was detected from, not the full command. */
+  @NotNull
+  private static ToolNode detectedTool(@NotNull String containerId, @NotNull String name, @NotNull String haxelib,
+                                       @NotNull String tool, @NotNull String configName,
+                                       @NotNull List<String> sources, @NotNull List<String> extra,
+                                       @NotNull String workDirectory) {
+    List<String> command = new ArrayList<>(List.of(haxelib, "run", tool));
+    // mode flags (--check) go before the source list
+    command.addAll(extra);
+    for (String source : sources) {
+      command.addAll(List.of("-s", source));
+    }
+    return new ToolNode(containerId, name, command, workDirectory, configName, false);
+  }
+
+  @Nullable
+  private VirtualFile containerRootDir(@NotNull RawContainer raw) {
+    if (raw.projectRoot()) {
+      return ProjectUtil.guessProjectDir(project);
+    }
+    Module module = ModuleManager.getInstance(project).findModuleByName(raw.id());
+    if (module == null) return null;
+    VirtualFile[] contentRoots = ModuleRootManager.getInstance(module).getContentRoots();
+    return contentRoots.length == 0 ? null : contentRoots[0];
+  }
+
+  /** Source roots relative to the container root; without any, the whole container directory. */
+  @NotNull
+  private List<String> sourceArguments(@NotNull RawContainer raw, @NotNull VirtualFile rootDir) {
+    Module module = raw.projectRoot() ? findProjectRootModule()
+                                      : ModuleManager.getInstance(project).findModuleByName(raw.id());
+    if (module == null) return List.of(".");
+    List<String> sources = new ArrayList<>();
+    for (VirtualFile sourceRoot : ModuleRootManager.getInstance(module).getSourceRoots()) {
+      String relative = VfsUtilCore.getRelativePath(sourceRoot, rootDir);
+      sources.add(relative != null ? relative : sourceRoot.getPath());
+    }
+    return sources.isEmpty() ? List.of(".") : sources;
   }
 
   /** The container's tests build files - the framework gating and store resolution live in {@link HaxeTestFrameworks#testsBuildPaths}. */

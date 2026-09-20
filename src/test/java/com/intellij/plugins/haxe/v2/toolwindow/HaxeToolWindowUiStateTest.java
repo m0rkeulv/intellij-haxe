@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Tool window: ui state")
@@ -19,6 +20,21 @@ public class HaxeToolWindowUiStateTest {
   public void defaultsAreEmpty() {
     HaxeToolWindowUiState uiState = new HaxeToolWindowUiState();
     assertTrue(uiState.getExpandedKeys().isEmpty());
+  }
+
+  @Test
+  @DisplayName("hide empty modules flag survives xml serialization round trip")
+  public void hideEmptyModulesFlagSurvivesXmlSerializationRoundTrip() {
+    HaxeToolWindowUiState uiState = new HaxeToolWindowUiState();
+    assertFalse(uiState.isHideEmptyModules());
+    uiState.setHideEmptyModules(true);
+
+    Element serialized = XmlSerializer.serialize(uiState.getState());
+    HaxeToolWindowUiState.State deserialized = XmlSerializer.deserialize(serialized, HaxeToolWindowUiState.State.class);
+
+    HaxeToolWindowUiState reloaded = new HaxeToolWindowUiState();
+    reloaded.loadState(deserialized);
+    assertTrue(reloaded.isHideEmptyModules());
   }
 
   @Test

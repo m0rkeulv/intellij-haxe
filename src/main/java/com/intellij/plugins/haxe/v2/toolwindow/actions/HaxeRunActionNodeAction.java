@@ -7,6 +7,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ToolNode;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -23,6 +24,10 @@ public final class HaxeRunActionNodeAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    if (panel.getSelectedUserObject() instanceof ToolNode toolNode) {
+      panel.runTool(toolNode);
+      return;
+    }
     if (panel.getSelectedUserObject() instanceof ActionNode actionNode) {
       panel.runAction(actionNode);
     }
@@ -30,7 +35,8 @@ public final class HaxeRunActionNodeAction extends DumbAwareAction {
 
   @Override
   public void update(@NotNull AnActionEvent e) {
-    e.getPresentation().setEnabledAndVisible(panel.getSelectedUserObject() instanceof ActionNode);
+    Object selected = panel.getSelectedUserObject();
+    e.getPresentation().setEnabledAndVisible(selected instanceof ActionNode || selected instanceof ToolNode);
   }
 
   @Override

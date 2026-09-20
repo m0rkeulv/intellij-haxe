@@ -143,6 +143,43 @@ public final class HaxeToolWindowNodes {
     }
   }
 
+  /** Group of runnable developer tools under a container: detected tool configs plus user-added tools. */
+  public record ToolsGroupNode(@NotNull String containerId, int count) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "tools";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.tools");
+    }
+  }
+
+  /**
+   * A runnable tool row under a container: detected from a tool's config file
+   * (checkstyle.json, hxformat.json) or added by the user. Unlike {@link ActionNode}
+   * a tool never participates in compile-command selection. {@code detail} is the
+   * gray tail text: the config file name for detected tools, the editable command
+   * for custom ones.
+   */
+  public record ToolNode(@NotNull String containerId,
+                         @NotNull String name,
+                         @NotNull List<String> command,
+                         @Nullable String workDirectory,
+                         @NotNull String detail,
+                         boolean custom) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "tool:" + name;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
+    }
+  }
+
   /**
    * "Build &amp; run" row under a build file's Actions: launches the target's
    * output through its run configuration (the build attached as a before-launch

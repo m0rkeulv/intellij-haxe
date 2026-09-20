@@ -5,6 +5,8 @@ import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.process.KillableColoredProcessHandler;
+import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.process.ProcessTerminatedListener;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.RunContentDescriptor;
@@ -38,6 +40,15 @@ public final class HaxeConsoleCommandRunner {
                          @NotNull String presentableName,
                          @NotNull List<String> command,
                          @Nullable String workDirectory) {
+    run(project, presentableName, command, workDirectory, null);
+  }
+
+  /** Like {@link #run(Project, String, List, String)}; {@code onTerminated} runs after process exit (any thread). */
+  public static void run(@NotNull Project project,
+                         @NotNull String presentableName,
+                         @NotNull List<String> command,
+                         @Nullable String workDirectory,
+                         @Nullable Runnable onTerminated) {
     // the command comes from the project's build configuration - project code
     if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.execute.command"))) {
       return;
@@ -48,6 +59,14 @@ public final class HaxeConsoleCommandRunner {
     try {
       KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine);
       ProcessTerminatedListener.attach(processHandler);
+      if (onTerminated != null) {
+        processHandler.addProcessListener(new ProcessListener() {
+          @Override
+          public void processTerminated(@NotNull ProcessEvent event) {
+            onTerminated.run();
+          }
+        });
+      }
 
       // the process handler itself prints the command line on startNotify
       ConsoleView console = TextConsoleBuilderFactory.getInstance()

@@ -112,6 +112,17 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     environment.defines = cleaned;
   }
 
+  /** Whether the user overrode anything for the container: SDK, defines, target, compile command or server opt-out. */
+  public boolean hasUserOverrides(@NotNull String containerId) {
+    ContainerEnvironment environment = find(containerId);
+    if (environment == null) return false;
+    return StringUtil.isNotEmpty(environment.sdkName)
+           || StringUtil.isNotEmpty(environment.customTarget)
+           || StringUtil.isNotEmpty(environment.compileFilePath)
+           || !environment.defines.isEmpty()
+           || !environment.useCompilationServer;
+  }
+
   /** Drops every stored setting of the container (a removed module leaves no stale state behind). */
   public void clearContainer(@NotNull String containerId) {
     state.environments.removeIf(environment -> containerId.equals(environment.containerId));

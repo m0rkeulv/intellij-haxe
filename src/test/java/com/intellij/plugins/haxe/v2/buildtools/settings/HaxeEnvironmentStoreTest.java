@@ -23,6 +23,38 @@ public class HaxeEnvironmentStoreTest {
   }
 
   @Test
+  @DisplayName("has user overrides reflects every stored override kind")
+  public void testHasUserOverridesReflectsEveryStoredOverrideKind() {
+    HaxeEnvironmentStore store = new HaxeEnvironmentStore();
+    assertFalse(store.hasUserOverrides("mod"));
+
+    store.setSdkName("mod", "haxe 4.3.7");
+    assertTrue(store.hasUserOverrides("mod"));
+    store.setSdkName("mod", null);
+    assertFalse(store.hasUserOverrides("mod"));
+
+    store.putDefine("mod", "debug", "");
+    assertTrue(store.hasUserOverrides("mod"));
+    store.removeDefine("mod", "debug");
+    assertFalse(store.hasUserOverrides("mod"));
+
+    store.setCustomTarget("mod", "hl");
+    assertTrue(store.hasUserOverrides("mod"));
+    store.setCustomTarget("mod", null);
+    assertFalse(store.hasUserOverrides("mod"));
+
+    store.setCompileCommand("mod", new HaxeEnvironmentStore.CompileCommand("build.hxml", null, ""));
+    assertTrue(store.hasUserOverrides("mod"));
+    store.setCompileCommand("mod", null);
+    assertFalse(store.hasUserOverrides("mod"));
+
+    store.setUsingCompilationServer("mod", false);
+    assertTrue(store.hasUserOverrides("mod"));
+    store.setUsingCompilationServer("mod", true);
+    assertFalse(store.hasUserOverrides("mod"));
+  }
+
+  @Test
   @DisplayName("sdk can be set and cleared")
   public void sdkCanBeSetAndCleared() {
     HaxeEnvironmentStore store = new HaxeEnvironmentStore();

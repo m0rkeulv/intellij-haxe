@@ -31,7 +31,7 @@ public final class HaxeAddCustomActionAction extends DumbAwareAction {
     String ownerId = selectedOwnerId();
     if (project == null || ownerId == null) return;
 
-    HaxeCustomActionDialog dialog = new HaxeCustomActionDialog(project, null);
+    HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forAction(project, null);
     if (dialog.showAndGet()) {
       HaxeCustomActionsStore.getInstance(project).addAction(ownerId, dialog.getAction());
       panel.refreshTree();
