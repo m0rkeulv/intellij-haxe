@@ -21,6 +21,7 @@ package com.intellij.plugins.haxe.ide.formatter;
 import com.intellij.formatting.*;
 import com.intellij.formatting.templateLanguages.BlockWithParent;
 import com.intellij.lang.ASTNode;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
@@ -69,6 +70,26 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   // @Override // - Doesn't override until 2018.3.
   public String getDebugName() {
     return getClass().getSimpleName() + "(" + myNode.getElementType() + ")";
+  }
+
+  /**
+   * A PPBODY chameleon spans the WHOLE region between directives - the lexer
+   * remaps every token there, edge whitespace included. Reported as-is that
+   * whitespace would sit inside the block, out of the engine's reach, and
+   * blank lines around an inactive branch would survive every spacing rule -
+   * so the range is trimmed to the branch's real content.
+   */
+  @Override
+  public @NotNull TextRange getTextRange() {
+    if (myNode.getElementType() != HaxeTokenTypeSets.PPBODY) return super.getTextRange();
+    // trim by the same child-node walk that builds the sub-blocks, so every
+    // child block stays inside the reported range
+    ASTNode first = myNode.getFirstChildNode();
+    while (first != null && FormatterUtil.containsWhiteSpacesOnly(first)) first = first.getTreeNext();
+    ASTNode last = myNode.getLastChildNode();
+    while (last != null && FormatterUtil.containsWhiteSpacesOnly(last)) last = last.getTreePrev();
+    if (first == null || last == null) return super.getTextRange();  // a whitespace-only branch stays as written
+    return new TextRange(first.getStartOffset(), last.getTextRange().getEndOffset());
   }
 
   @Override

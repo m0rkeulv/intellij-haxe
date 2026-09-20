@@ -20,4 +20,13 @@ final class HaxeIndentText {
     while (end < line.length() && (line.charAt(end) == ' ' || line.charAt(end) == '\t')) end++;
     return line.substring(0, end);
   }
+
+  /** The column the whitespace reaches, tabs advancing to the next tab stop. */
+  static int indentWidth(String whitespace, int tabSize) {
+    int columns = 0;
+    for (int i = 0; i < whitespace.length(); i++) {
+      columns = whitespace.charAt(i) == '\t' ? (columns / tabSize + 1) * tabSize : columns + 1;
+    }
+    return columns;
+  }
 }

@@ -65,6 +65,27 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // a hand-broken "return\n value;" is re-joined; off keeps the break
     public boolean RETURN_VALUE_ON_SAME_LINE = false;
 
+    // "//text" normalizes to "// text" on reformat (hxformat's
+    // whitespace.addLineCommentSpace); divider art and "///" keep their shape
+    public boolean ADD_LINE_COMMENT_SPACE = false;
+
+    // where a control statement's NON-BLOCK body goes, per construct
+    // (hxformat's sameLine.*Body): NEXT_LINE breaks it onto its own line,
+    // SAME_LINE joins it onto the header's line, KEEP leaves it as written.
+    // DEFAULT defers to the common "keep control statement in one line"
+    // checkbox (checked = KEEP, unchecked = NEXT_LINE)
+    public static final int BODY_PLACEMENT_DEFAULT = 0;
+    public static final int BODY_PLACEMENT_NEXT_LINE = 1;
+    public static final int BODY_PLACEMENT_SAME_LINE = 2;
+    public static final int BODY_PLACEMENT_KEEP = 3;
+    public int IF_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+    public int ELSE_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+    public int FOR_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+    public int WHILE_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+    public int DO_WHILE_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+    public int TRY_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+    public int CATCH_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+
     // counts BLANK LINES (like the platform's BLANK_LINES_* options)
     public int MINIMUM_BLANK_LINES_AFTER_USING = 1;
     // gap after a block comment that OPENS the file (a license header);
@@ -75,6 +96,17 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public int KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 2;
     // keep cap WITHIN the import/using section; 0 makes it one solid block
     public int KEEP_BLANK_LINES_BETWEEN_IMPORTS = 2;
+    // keep cap for a blank line directly after a block's '{' (class bodies
+    // use the exact BLANK_LINES_AFTER_CLASS_HEADER count instead); 0 pulls
+    // the first statement against the brace, hxformat-style
+    public int KEEP_BLANK_LINES_AFTER_LBRACE = 2;
+    // keep cap between a case's ':' and its first statement (hxformat's
+    // emptyLines.beforeBlocks); blanks BETWEEN cases follow the in-code cap
+    public int KEEP_BLANK_LINES_AFTER_CASE_COLON = 2;
+    // a multi-var declaration whose JOINED line would pass this many columns
+    // splits one declarator per line (hxformat's wrapping.multiVar
+    // lineLengthLargerThan rule); 0 keeps the written shape
+    public int MULTI_VAR_SPLIT_WIDTH = 0;
     // 0 = no grouping (the keep cap above applies); above 0, imports whose
     // first IMPORT_GROUP_PACKAGE_DEPTH package segments differ get exactly
     // this many blank lines between them and same-group imports stay snug

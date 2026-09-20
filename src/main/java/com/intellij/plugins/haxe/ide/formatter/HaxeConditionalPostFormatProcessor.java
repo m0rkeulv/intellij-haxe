@@ -32,6 +32,13 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * branch's own relative nesting preserved - to the region's nearest
  * preceding directive. Single-line (inline expression) regions are
  * untouched.
+ *
+ * TODO: a #if NESTED inside an inactive branch splits the branch into
+ *       fragments that cannot parse alone (a '{' in one, its '}' in
+ *       another); the fragments go verbatim while the inner directives
+ *       indent at their PSI level (the class body), and the following
+ *       fragments then align to that wrong depth. Needs region-level
+ *       grouping from the inactive-CC redesign to keep the written depth.
  */
 public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
 
@@ -111,11 +118,11 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
     if (blob.indexOf('\n') < 0) return blob;
     String[] lines = blob.split("\n", -1);
 
-    int targetColumns = indentWidth(target, indent.TAB_SIZE);
+    int targetColumns = HaxeIndentText.indentWidth(target, indent.TAB_SIZE);
     int referenceColumns = -1;
     for (int i = 1; i < lines.length; i++) {
       if (!lines[i].isBlank()) {
-        referenceColumns = indentWidth(HaxeIndentText.leadingWhitespace(lines[i]), indent.TAB_SIZE);
+        referenceColumns = HaxeIndentText.indentWidth(HaxeIndentText.leadingWhitespace(lines[i]), indent.TAB_SIZE);
         break;
       }
     }
@@ -133,20 +140,12 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
       }
       else if (!line.isBlank()) {
         String lead = HaxeIndentText.leadingWhitespace(line);
-        int columns = Math.max(0, indentWidth(lead, indent.TAB_SIZE) + delta);
+        int columns = Math.max(0, HaxeIndentText.indentWidth(lead, indent.TAB_SIZE) + delta);
         result.append(renderIndent(columns, indent));
         result.append(line, lead.length(), line.length());
       }
     }
     return result.toString();
-  }
-
-  private static int indentWidth(String whitespace, int tabSize) {
-    int columns = 0;
-    for (int i = 0; i < whitespace.length(); i++) {
-      columns = whitespace.charAt(i) == '\t' ? (columns / tabSize + 1) * tabSize : columns + 1;
-    }
-    return columns;
   }
 
   private static String renderIndent(int columns, CommonCodeStyleSettings.IndentOptions indent) {

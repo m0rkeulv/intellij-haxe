@@ -30,6 +30,7 @@ import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.formatter.common.AbstractBlock;
 import com.intellij.psi.tree.IElementType;
@@ -191,6 +192,16 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, 1, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
     }
 
+    // conditional-compilation directives wrapping imports belong to the
+    // import section: the betweenImports cap spans them, and the section-end
+    // gap moves behind the closing #end (haxe-formatter's markImports)
+    boolean cc1 = CONDITIONALLY_NOT_COMPILED.contains(type1);
+    boolean cc2 = CONDITIONALLY_NOT_COMPILED.contains(type2);
+    if (cc1 || cc2) {
+      Spacing importSection = importSectionDirectiveSpacing(node1, node2, type1, type2, cc1, cc2);
+      if (importSection != null) return importSection;
+    }
+
     // a comment inside the import section belongs to the import BELOW it -
     // the section-end blank must not push it away from its import
     if (type1 == IMPORT_STATEMENT && type2 != IMPORT_STATEMENT && !ONLY_COMMENTS.contains(type2)) {
@@ -250,6 +261,22 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, lineFeeds, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
     }
 
+    // a blank line hugging a plain block's brace has its own keep cap
+    // (emptyLines.afterLeftCurly/beforeRightCurly; class bodies above use
+    // exact counts); the pair otherwise behaves like the fallback rule
+    if (type1 == PLCURLY && type2 != PRCURLY && !isClassBodyType(elementType) && isFirstChild(child1)) {
+      return Spacing.createSpacing(0, 1, 0, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_LBRACE);
+    }
+    if (type2 == PRCURLY && type1 != PLCURLY && !isClassBodyType(elementType) && isLastChild(child2)) {
+      return Spacing.createSpacing(0, 1, 0, true, mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
+    }
+
+    // a blank between a case's ':' and its body has its own keep cap
+    // (emptyLines.beforeBlocks); blanks BETWEEN cases keep the in-code cap
+    if ((elementType == SWITCH_CASE || elementType == DEFAULT_CASE) && type2 == SWITCH_CASE_BLOCK) {
+      return Spacing.createSpacing(0, 1, 0, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_CASE_COLON);
+    }
+
     // a blank line before a member belongs BEFORE its doc comment - resolve
     // the pair as if the comment were the member's first line
     boolean memberThenDoc = type2 == DOC_COMMENT
@@ -298,24 +325,18 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, 0, false, 0);
     }
 
-    // "keep control statement in one line" OFF forces a NON-BLOCK body onto
-    // its own line (haxe-formatter's sameLine=Next); block bodies follow the
-    // brace rules instead. A for/while inside a literal is a COMPREHENSION,
-    // not a control statement - its body always stays on the line.
-    if (!mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE && !isComprehension(myNode)) {
-      boolean expressionIf = elementType == IF_STATEMENT && isExpressionPosition(myNode);
-      boolean expressionElse = elementType == ELSE_STATEMENT && isExpressionPosition(myNode.getTreeParent());
-      boolean expressionTry = elementType == TRY_STATEMENT && isExpressionPosition(myNode);
-      boolean expressionCatch = elementType == CATCH_STATEMENT && isExpressionPosition(myNode.getTreeParent());
-      boolean nonBlockBody =
-        (elementType == IF_STATEMENT && !expressionIf && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT)
-        || (elementType == ELSE_STATEMENT && !expressionElse && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT)
-        || (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT)
-        || (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT)
-        || (elementType == TRY_STATEMENT && !expressionTry && type1 == KTRY && type2 != BLOCK_STATEMENT && type2 != CATCH_STATEMENT)
-        || (elementType == CATCH_STATEMENT && !expressionCatch && type1 == PRPAREN && type2 != BLOCK_STATEMENT);
-      if (nonBlockBody) {
+    // haxe-formatter's sameLine.*Body policies for a NON-BLOCK body:
+    // Next forces it onto its own line, Same joins it onto the header's
+    // line, Keep leaves it as written; block bodies follow the brace rules
+    // instead. A for/while inside a literal is a COMPREHENSION, not a
+    // control statement - its body always stays on the line.
+    if (!isComprehension(myNode)) {
+      int placement = nonBlockBodyPlacement(elementType, type1, type2, typeType2);
+      if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE) {
         return Spacing.createSpacing(0, 0, 1, false, 0);
+      }
+      if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE) {
+        return Spacing.createSpacing(1, 1, 0, false, 0);
       }
     }
 
@@ -585,13 +606,18 @@ public class HaxeSpacingProcessor {
       return addSingleSpaceIf(spaceBefore);
     }
     if (type2 == ELSE_STATEMENT) {
-      return keywordPlacement(mySettings.SPACE_BEFORE_ELSE_KEYWORD, mySettings.ELSE_ON_NEW_LINE, node1);
+      return keywordPlacement(mySettings.SPACE_BEFORE_ELSE_KEYWORD, mySettings.ELSE_ON_NEW_LINE, node1,
+                              resolvedBodyPlacement(myHaxeCodeStyleSettings.IF_BODY_PLACEMENT));
     }
     if (type2 == KWHILE) {
-      return keywordPlacement(mySettings.SPACE_BEFORE_WHILE_KEYWORD, mySettings.WHILE_ON_NEW_LINE, node1);
+      return keywordPlacement(mySettings.SPACE_BEFORE_WHILE_KEYWORD, mySettings.WHILE_ON_NEW_LINE, node1,
+                              resolvedBodyPlacement(myHaxeCodeStyleSettings.DO_WHILE_BODY_PLACEMENT));
     }
     if (type2 == CATCH_STATEMENT) {
-      return keywordPlacement(mySettings.SPACE_BEFORE_CATCH_KEYWORD, mySettings.CATCH_ON_NEW_LINE, node1);
+      int precedingBody = resolvedBodyPlacement(type1 == CATCH_STATEMENT
+                                                ? myHaxeCodeStyleSettings.CATCH_BODY_PLACEMENT
+                                                : myHaxeCodeStyleSettings.TRY_BODY_PLACEMENT);
+      return keywordPlacement(mySettings.SPACE_BEFORE_CATCH_KEYWORD, mySettings.CATCH_ON_NEW_LINE, node1, precedingBody);
     }
 
     //
@@ -600,6 +626,14 @@ public class HaxeSpacingProcessor {
 
     if (type1 == KELSE && type2 == IF_STATEMENT) {  // Inside of ELSE_STATEMENT
       return Spacing.createSpacing(1, 1, mySettings.SPECIAL_ELSE_IF_TREATMENT ? 0 : 1, false, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
+
+    // wrapping.multiVar: a multi-var whose JOINED line would pass the split
+    // width breaks after every comma; under the width the written shape is
+    // kept (the tool's length-based joins are not reproduced)
+    if (elementType == LOCAL_VAR_DECLARATION_LIST && type1 == OCOMMA && type2 == LOCAL_VAR_DECLARATION
+        && multiVarLineExceedsSplitWidth()) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
     }
 
     if (type1 == OCOMMA && (elementType == PARAMETER_LIST || elementType == EXPRESSION_LIST || elementType == CALL_EXPRESSION_LIST) &&
@@ -690,6 +724,148 @@ public class HaxeSpacingProcessor {
   }
 
   /**
+   * The configured placement for a (header, non-block body) pair — or KEEP
+   * when the pair is no such thing. Value-position ifs/tries are exempt
+   * (expressionIf/expressionTry=Same keeps them as written).
+   */
+  private int nonBlockBodyPlacement(IElementType elementType, IElementType type1, IElementType type2, IElementType typeType2) {
+    HaxeCodeStyleSettings haxe = myHaxeCodeStyleSettings;
+    if (elementType == IF_STATEMENT && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT
+        && !isExpressionPosition(myNode)) {
+      return resolvedBodyPlacement(haxe.IF_BODY_PLACEMENT);
+    }
+    if (elementType == ELSE_STATEMENT && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT
+        && !isExpressionPosition(myNode.getTreeParent())) {
+      return resolvedBodyPlacement(haxe.ELSE_BODY_PLACEMENT);
+    }
+    if (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT) {
+      return resolvedBodyPlacement(elementType == DO_WHILE_STATEMENT ? haxe.DO_WHILE_BODY_PLACEMENT : haxe.WHILE_BODY_PLACEMENT);
+    }
+    if (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT) {
+      return resolvedBodyPlacement(haxe.FOR_BODY_PLACEMENT);
+    }
+    if (elementType == TRY_STATEMENT && type1 == KTRY && type2 != BLOCK_STATEMENT && type2 != CATCH_STATEMENT
+        && !isExpressionPosition(myNode)) {
+      return resolvedBodyPlacement(haxe.TRY_BODY_PLACEMENT);
+    }
+    if (elementType == CATCH_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT
+        && !isExpressionPosition(myNode.getTreeParent())) {
+      return resolvedBodyPlacement(haxe.CATCH_BODY_PLACEMENT);
+    }
+    return HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP;
+  }
+
+  /** DEFAULT defers to the IDE's own "keep control statement in one line" checkbox. */
+  private int resolvedBodyPlacement(int placement) {
+    if (placement != HaxeCodeStyleSettings.BODY_PLACEMENT_DEFAULT) return placement;
+    return mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE
+           ? HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP
+           : HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+  }
+
+  /**
+   * Blank-line handling for pairs touching a conditional-compilation token
+   * near the import section: a directive whose conditional wraps imports is
+   * covered by the section's keep cap, and the closing #end of such a
+   * conditional takes over the section-end gap. Returns null when the pair
+   * is not part of an import section (an inline #if in an expression, a
+   * conditional around a type declaration).
+   */
+  @Nullable
+  private Spacing importSectionDirectiveSpacing(ASTNode node1, ASTNode node2,
+                                                IElementType type1, IElementType type2,
+                                                boolean cc1, boolean cc2) {
+    if (isImportOrUsing(type1) && cc2) {
+      // an OPENING directive joins the section only when its conditional
+      // holds imports; #else/#elseif/#end already belong to the section
+      boolean opensImports = type2 != PPIF || conditionalWrapsImports(node2);
+      return opensImports ? importSectionKeepSpacing() : null;
+    }
+    if (cc1 && isImportOrUsing(type2)) {
+      return importSectionKeepSpacing();
+    }
+    if (cc1 && cc2) {
+      boolean inSection = isImportSectionEdge(realNeighborType(node1, false))
+                          || isImportOrUsing(realNeighborType(node2, true));
+      return inSection ? importSectionKeepSpacing() : null;
+    }
+    boolean sectionEnd = type1 == PPEND && !ONLY_COMMENTS.contains(type2)
+                         && isImportOrUsing(realNeighborType(node1, false));
+    if (sectionEnd) {
+      int blanks = realNeighborType(node1, false) == USING_STATEMENT
+                   ? myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_USING
+                   : mySettings.BLANK_LINES_AFTER_IMPORTS;
+      return Spacing.createSpacing(0, 0, 1 + blanks, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
+    return null;
+  }
+
+  private Spacing importSectionKeepSpacing() {
+    return Spacing.createSpacing(0, 1, 0, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
+  }
+
+  /** Whether the whole multi-var statement, joined onto its current line, would pass the configured split width. */
+  private boolean multiVarLineExceedsSplitWidth() {
+    int splitWidth = myHaxeCodeStyleSettings.MULTI_VAR_SPLIT_WIDTH;
+    if (splitWidth <= 0) return false;
+    PsiFile file = myNode.getPsi().getContainingFile();
+    if (file == null) return false;
+    // the statement's post-format line indent matches its current one in all
+    // but pathological inputs - good enough for a width heuristic
+    CharSequence text = file.getViewProvider().getContents();
+    String lineIndent = HaxeIndentText.lineIndentAt(text, myNode.getStartOffset());
+    int indentColumns = HaxeIndentText.indentWidth(lineIndent, tabSize());
+    // every whitespace run (line breaks included) becomes the single space it joins into
+    String joined = myNode.getText().replaceAll("\\s+", " ");
+    return indentColumns + joined.length() > splitWidth;
+  }
+
+  private int tabSize() {
+    CommonCodeStyleSettings.IndentOptions options = mySettings.getIndentOptions();
+    return options == null ? 4 : options.TAB_SIZE;
+  }
+
+  private static boolean isImportOrUsing(@Nullable IElementType type) {
+    return type == IMPORT_STATEMENT || type == USING_STATEMENT;
+  }
+
+  private static boolean isImportSectionEdge(@Nullable IElementType type) {
+    return isImportOrUsing(type) || type == PACKAGE_STATEMENT;
+  }
+
+  /**
+   * The first real content after an opening directive is an import/using -
+   * parsed (active branch), or as an INACTIVE branch's text, which the
+   * neighbor scan cannot see into.
+   */
+  private static boolean conditionalWrapsImports(ASTNode directive) {
+    for (ASTNode n = directive.getTreeNext(); n != null; n = n.getTreeNext()) {
+      IElementType type = n.getElementType();
+      if (WHITESPACES.contains(type) || ONLY_COMMENTS.contains(type)) continue;
+      if (type == PPBODY) {
+        String content = n.getText().strip();
+        return content.startsWith("import ") || content.startsWith("using ");
+      }
+      if (CONDITIONALLY_NOT_COMPILED.contains(type)) continue;
+      return isImportOrUsing(type);
+    }
+    return false;
+  }
+
+  /** The element type of the nearest sibling that is real code — not whitespace, comment or conditional-compilation token. */
+  @Nullable
+  private static IElementType realNeighborType(ASTNode node, boolean forward) {
+    ASTNode neighbor = forward ? node.getTreeNext() : node.getTreePrev();
+    while (neighbor != null) {
+      IElementType type = neighbor.getElementType();
+      var skipped = WHITESPACES.contains(type) || ONLY_COMMENTS.contains(type) || CONDITIONALLY_NOT_COMPILED.contains(type);
+      if (!skipped) return type;
+      neighbor = forward ? neighbor.getTreeNext() : neighbor.getTreePrev();
+    }
+    return null;
+  }
+
+  /**
    * An if/try used as a VALUE ({@code var x = if (c) 1 else 2;}) rather than
    * as a statement - haxe-formatter's expressionIf/expressionTry=Same keeps
    * those on one line regardless of the statement-body policies.
@@ -705,6 +881,10 @@ public class HaxeSpacingProcessor {
                                 || parentType == DO_WHILE_BODY
                                 || parentType == FOR_STATEMENT
                                 || parentType == MODULE_METHOD_DECLARATION
+                                // an inactive branch's statements sit under the chameleon's
+                                // list wrappers and format like active statements
+                                || parentType == PPBODY
+                                || parentType == INACTIVE_STATEMENT_LIST
                                 || FUNCTION_DEFINITION.contains(parentType);
     return !statementPosition;
   }
@@ -733,12 +913,13 @@ public class HaxeSpacingProcessor {
    * kept line breaks: false must JOIN "} else", not merely allow it. After a
    * non-block body ("trace(x); else") the written break stays — joining onto
    * the statement reads wrong and haxe-formatter keeps it on its own line too
-   * (and keep-control-statement-in-one-line OFF forces that break).
+   * (any body placement other than KEEP forces that break).
    */
-  private Spacing keywordPlacement(boolean spaceBefore, boolean onNewLine, ASTNode before) {
+  private Spacing keywordPlacement(boolean spaceBefore, boolean onNewLine, ASTNode before, int precedingBodyPlacement) {
     final int spaces = spaceBefore ? 1 : 0;
     if (!endsWithRightCurly(before)) {
-      return addSingleSpaceIf(spaceBefore, onNewLine || !mySettings.KEEP_CONTROL_STATEMENT_IN_ONE_LINE);
+      boolean breakBefore = onNewLine || precedingBodyPlacement != HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP;
+      return addSingleSpaceIf(spaceBefore, breakBefore);
     }
     return Spacing.createSpacing(spaces, spaces, onNewLine ? 1 : 0, false, 0);
   }

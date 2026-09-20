@@ -118,7 +118,9 @@ public final class HxformatCodeStyle {
     common.BLANK_LINES_AROUND_METHOD = 1;
     common.BLANK_LINES_BEFORE_CLASS_END = 0;
 
-    // sameLine.ifBody/elseBody/forBody/whileBody=Next (non-block bodies break)
+    // sameLine.ifBody/elseBody/forBody/whileBody/doWhileBody/tryBody/
+    // catchBody=Next (the per-construct placements below carry the policy;
+    // the common flag stays in sync for the settings UI)
     common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE = false;
     // lineEnds.emptyCurly=NoBreak ({} collapses)
     common.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE = true;
@@ -132,6 +134,13 @@ public final class HxformatCodeStyle {
     common.METHOD_CALL_CHAIN_WRAP = UI_CHOP_DOWN;
     // wrapping.implementsExtends: FillLine - break only past maxLineLength
     common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
+    // wrapping.functionSignature: FillLine - a line past the margin breaks;
+    // written breaks are kept.
+    // TODO: fillLine also RE-PACKS hand-broken parameters up to the margin;
+    //       reproducing that needs the tool's exact line-length accounting
+    //       (ours packs one item more at the boundary), so written break
+    //       points are preserved instead.
+    common.METHOD_PARAMETERS_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
     // haxe-formatter indents wrapped parameters and arguments (one step for
     // arguments, two for a signature); it never aligns them under the first
     common.ALIGN_MULTILINE_PARAMETERS = false;
@@ -161,6 +170,24 @@ public final class HxformatCodeStyle {
     haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
     // sameLine.returnBodySingleLine - a broken return re-joins its value
     haxe.RETURN_VALUE_ON_SAME_LINE = true;
+    // whitespace.addLineCommentSpace=true - "//text" becomes "// text"
+    haxe.ADD_LINE_COMMENT_SPACE = true;
+    // sameLine.*Body=Next - every non-block statement body breaks onto its
+    // own line
+    haxe.IF_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    haxe.ELSE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    haxe.FOR_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    haxe.WHILE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    haxe.DO_WHILE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    haxe.TRY_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    haxe.CATCH_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    // emptyLines.afterLeftCurly=Remove
+    haxe.KEEP_BLANK_LINES_AFTER_LBRACE = 0;
+    // emptyLines.beforeBlocks=Remove (the case-body edge)
+    haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = 0;
+    // wrapping.multiVar: lineLengthLargerThan=80 -> onePerLineAfterFirst
+    // (the length-based JOIN of short multi-vars is not reproduced)
+    haxe.MULTI_VAR_SPLIT_WIDTH = 80;
     // emptyLines.importAndUsing.beforeType=1
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
     // emptyLines.betweenSingleLineTypes=0
@@ -291,12 +318,16 @@ public final class HxformatCodeStyle {
       wrapConstruct("wrapping.callParameter", value -> common.CALL_PARAMETERS_WRAP = value);
       wrapConstruct("wrapping.opBoolChain", value -> common.BINARY_OPERATION_WRAP = value);
       wrapConstruct("wrapping.opAddSubChain", value -> common.BINARY_OPERATION_WRAP = value);
-      for (String construct : List.of("typeParameter", "metadataCallParameter", "multiVar", "casePattern", "anonType")) {
+      for (String construct : List.of("typeParameter", "metadataCallParameter", "casePattern", "anonType")) {
         String path = "wrapping." + construct;
         if (node(path) != null) {
           markConsumedSubtree(path);
           unsupported.add(path + " (no wrap target on our side)");
         }
+      }
+      if (node("wrapping.multiVar") != null) {
+        markConsumedSubtree("wrapping.multiVar");
+        unsupported.add("wrapping.multiVar (only the default 80-column split is reproduced)");
       }
     }
 
@@ -401,22 +432,21 @@ public final class HxformatCodeStyle {
       if (elseIf != null) {
         common.SPECIAL_ELSE_IF_TREATMENT = "same".equals(elseIf);
       }
-      // one flag covers every statement body; Next on any of them breaks all
-      boolean anyBodyNext = false;
-      boolean anyBodyKeep = false;
-      for (String key : List.of("sameLine.ifBody", "sameLine.elseBody", "sameLine.forBody",
-                                "sameLine.whileBody", "sameLine.doWhileBody",
-                                "sameLine.tryBody", "sameLine.catchBody")) {
-        String value = str(key);
-        if ("next".equals(value)) anyBodyNext = true;
-        if ("keep".equals(value) || "same".equals(value)) anyBodyKeep = true;
-      }
-      if (anyBodyNext && anyBodyKeep) {
-        unsupported.add("sameLine.*Body (mixed values; using one policy for all bodies)");
-      }
-      if (anyBodyNext || anyBodyKeep) {
-        common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE = !anyBodyNext;
-      }
+      bodyPlacement("sameLine.ifBody", value -> haxe.IF_BODY_PLACEMENT = value);
+      bodyPlacement("sameLine.elseBody", value -> haxe.ELSE_BODY_PLACEMENT = value);
+      bodyPlacement("sameLine.forBody", value -> haxe.FOR_BODY_PLACEMENT = value);
+      bodyPlacement("sameLine.whileBody", value -> haxe.WHILE_BODY_PLACEMENT = value);
+      bodyPlacement("sameLine.doWhileBody", value -> haxe.DO_WHILE_BODY_PLACEMENT = value);
+      bodyPlacement("sameLine.tryBody", value -> haxe.TRY_BODY_PLACEMENT = value);
+      bodyPlacement("sameLine.catchBody", value -> haxe.CATCH_BODY_PLACEMENT = value);
+      // the engine reads the per-construct placements; the common checkbox
+      // only mirrors them for the settings UI
+      List<Integer> bodyPlacements = List.of(haxe.IF_BODY_PLACEMENT, haxe.ELSE_BODY_PLACEMENT,
+                                             haxe.FOR_BODY_PLACEMENT, haxe.WHILE_BODY_PLACEMENT,
+                                             haxe.DO_WHILE_BODY_PLACEMENT, haxe.TRY_BODY_PLACEMENT,
+                                             haxe.CATCH_BODY_PLACEMENT);
+      common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE =
+        !bodyPlacements.contains(HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE);
       String functionBody = str("sameLine.functionBody");
       if (functionBody != null) {
         haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = "next".equals(functionBody);
@@ -489,6 +519,10 @@ public final class HxformatCodeStyle {
       String extension = str("whitespace.typeExtensionPolicy");
       if (extension != null) {
         haxe.STRUCTURE_EXTENSION_ON_OWN_LINE = "after".equals(extension);
+      }
+      String addCommentSpace = str("whitespace.addLineCommentSpace");
+      if (addCommentSpace != null) {
+        haxe.ADD_LINE_COMMENT_SPACE = "true".equals(addCommentSpace);
       }
       String interpolation = str("whitespace.formatStringInterpolation");
       if (interpolation != null && !"true".equals(interpolation)) {
@@ -616,6 +650,16 @@ public final class HxformatCodeStyle {
       if (beforeRCurly != null) {
         common.KEEP_BLANK_LINES_BEFORE_RBRACE = "remove".equals(beforeRCurly) ? 0 : common.KEEP_BLANK_LINES_IN_DECLARATIONS;
       }
+      String afterLCurly = str("emptyLines.afterLeftCurly");
+      if (afterLCurly != null) {
+        haxe.KEEP_BLANK_LINES_AFTER_LBRACE = "remove".equals(afterLCurly) ? 0 : common.KEEP_BLANK_LINES_IN_CODE;
+      }
+      // beforeBlocks' visible effect beyond the brace rules is the blank
+      // between a case's ':' and its body
+      String beforeBlocks = str("emptyLines.beforeBlocks");
+      if (beforeBlocks != null) {
+        haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = "remove".equals(beforeBlocks) ? 0 : common.KEEP_BLANK_LINES_IN_CODE;
+      }
       applyInt("emptyLines.importAndUsing.beforeType", value -> {
         common.BLANK_LINES_AFTER_IMPORTS = value;
         haxe.MINIMUM_BLANK_LINES_AFTER_USING = value;
@@ -648,13 +692,12 @@ public final class HxformatCodeStyle {
       for (String key : List.of("afterIf", "beforeElse", "afterElse", "beforeEnd", "beforeError", "afterError")) {
         acceptOnly("emptyLines.conditionalsEmptyLines." + key, "0");
       }
-      // we KEEP blanks in code bodies; their default actively removes these
-      acceptOnly("emptyLines.afterReturn", "keep");
-      acceptOnly("emptyLines.beforeBlocks", "keep");
-      acceptOnly("emptyLines.afterBlocks", "keep");
+      // afterReturn/afterBlocks at their Remove default are covered by the
+      // beforeRightCurly cap and the keyword-joining rules
+      acceptOnly("emptyLines.afterReturn", "remove");
+      acceptOnly("emptyLines.afterBlocks", "remove");
       acceptOnly("emptyLines.finalNewline", "true");
       acceptOnly("emptyLines.beforePackage", "0");
-      acceptOnly("emptyLines.afterLeftCurly", "remove");
       acceptOnly("emptyLines.beforeDocCommentEmptyLines", "one");
       acceptOnly("emptyLines.afterFieldsWithDocComments", "one");
       acceptOnly("emptyLines.betweenMultilineComments", "0");
@@ -716,6 +759,18 @@ public final class HxformatCodeStyle {
     }
 
     /** Ints in the emptyLines section obey the maxAnywhereInFile clamp. */
+    /** A sameLine.*Body policy (next / same / keep) into a per-construct body placement. */
+    private void bodyPlacement(String path, IntConsumer setter) {
+      String value = str(path);
+      if (value == null) return;
+      switch (value) {
+        case "next" -> setter.accept(HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE);
+        case "same" -> setter.accept(HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE);
+        case "keep" -> setter.accept(HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP);
+        default -> unsupported.add(path + "=" + value);
+      }
+    }
+
     private void applyInt(String path, IntConsumer setter) {
       Integer value = intVal(path);
       if (value != null) {

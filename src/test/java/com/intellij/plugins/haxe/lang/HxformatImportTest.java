@@ -37,10 +37,10 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
         "indentation": { "character": "  ", "tabWidth": 2 },
         "wrapping": { "maxLineLength": 100 },
         "lineEnds": { "leftCurly": "before", "emptyCurly": "break" },
-        "sameLine": { "ifElse": "next", "ifBody": "keep", "elseBody": "keep",
-                      "forBody": "keep", "whileBody": "keep", "doWhileBody": "keep" },
+        "sameLine": { "ifElse": "next", "ifBody": "keep", "elseBody": "keep", "forBody": "keep",
+                      "whileBody": "keep", "doWhileBody": "keep", "tryBody": "keep", "catchBody": "keep" },
         "whitespace": { "typeHintColonPolicy": "after", "typeCheckColonPolicy": "none", "unknownKey": true },
-        "emptyLines": { "betweenSingleLineTypes": 2,
+        "emptyLines": { "betweenSingleLineTypes": 2, "afterLeftCurly": "keep", "beforeBlocks": "keep",
                         "importAndUsing": { "betweenImports": 1, "betweenImportsLevel": "secondLevelPackage" } }
       }""");
 
@@ -54,7 +54,11 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(CommonCodeStyleSettings.NEXT_LINE, common.BRACE_STYLE);
     assertFalse(common.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE);
     assertTrue(common.ELSE_ON_NEW_LINE);
-    assertTrue(common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE);
+    assertEquals(HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP, haxe.IF_BODY_PLACEMENT);
+    assertEquals(HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP, haxe.DO_WHILE_BODY_PLACEMENT);
+    assertTrue(common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE, "no body breaks, so the mirroring checkbox flips back on");
+    assertEquals(common.KEEP_BLANK_LINES_IN_CODE, haxe.KEEP_BLANK_LINES_AFTER_LBRACE);
+    assertEquals(common.KEEP_BLANK_LINES_IN_CODE, haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON);
     assertTrue(haxe.SPACE_AFTER_TYPE_REFERENCE_COLON);
     assertFalse(haxe.SPACE_BEFORE_TYPE_REFERENCE_COLON);
     assertFalse(haxe.SPACE_AROUND_TYPE_CHECK_COLON);
@@ -127,13 +131,17 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertTrue(common.ELSE_ON_NEW_LINE);
     assertTrue(common.WHILE_ON_NEW_LINE);
     assertTrue(common.CATCH_ON_NEW_LINE);
-    // ifBody=same but tryBody=next - our single body flag cannot split, so
-    // breaking wins and the mix is reported
+    // ifBody=same joins if-bodies while tryBody=next keeps breaking; the
+    // unset bodies stay at the Next default
+    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    assertEquals(HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE, haxe.IF_BODY_PLACEMENT);
+    assertEquals(HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE, haxe.TRY_BODY_PLACEMENT);
+    assertEquals(HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE, haxe.ELSE_BODY_PLACEMENT);
     assertFalse(common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE);
     int uiChop = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM | CommonCodeStyleSettings.WRAP_AS_NEEDED;
     assertEquals(uiChop, common.ARRAY_INITIALIZER_WRAP);
     assertEquals(uiChop, common.METHOD_CALL_CHAIN_WRAP);
-    assertEquals(List.of("sameLine.*Body (mixed values; using one policy for all bodies)"), unsupported);
+    assertTrue(unsupported.isEmpty(), "the openfl config maps completely, got: " + unsupported);
   }
 
   /** The sections added by the full-spec audit: wrapping rules, parens, brackets, clamp, line ends. */
@@ -178,7 +186,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(uiChop, common.METHOD_CALL_CHAIN_WRAP, "the exceedsMaxLineLength rule decides");
     List<String> sortedUnsupported = unsupported.stream().sorted().toList();
     assertEquals(List.of("wrapping.methodChain.rules (rule engine approximated by one policy)",
-                         "wrapping.multiVar (no wrap target on our side)"),
+                         "wrapping.multiVar (only the default 80-column split is reproduced)"),
                  sortedUnsupported);
   }
 

@@ -26,6 +26,7 @@ import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.Nullable;
@@ -33,6 +34,7 @@ import org.jetbrains.annotations.Nullable;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.DOC_COMMENT;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.WHITESPACES;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_LIKE_OWNERS;
@@ -104,6 +106,16 @@ public class HaxeIndentProcessor {
       if (parentType == MODULE) {
         return Indent.getNoneIndent();
       }
+      // a comment hanging directly off the switch block: after a case WITHOUT
+      // statements it reads as that case's BODY (a lone "// TODO" body, two
+      // steps in - continuation depth matches at the standard 2x ratio);
+      // after a case with a body, or at the block's start, it reads as a
+      // heading for the NEXT case and sits at case level
+      if (parentType == SWITCH_BLOCK) {
+        boolean emptyCaseBody = (prevSiblingType == SWITCH_CASE || prevSiblingType == DEFAULT_CASE)
+                                && caseBodyIsEmpty(prevSibling);
+        return emptyCaseBody ? Indent.getContinuationIndent() : Indent.getNormalIndent();
+      }
       return Indent.getNormalIndent();
     }
     if (elementType == PLCURLY || elementType == PRCURLY) {
@@ -152,8 +164,27 @@ public class HaxeIndentProcessor {
           return Indent.getNoneIndent();
         }
         boolean signature = parentType == PARAMETER_LIST && FUNCTION_LIKE_OWNERS.contains(superParentType);
-        return signature ? Indent.getContinuationIndent() : Indent.getNormalIndent();
+        if (signature) {
+          // same-line metadata robs the declaration of its line start; with
+          // the class body's '{' on its OWN line the engine then anchors a
+          // wrapped parameter at that brace's column and the member step is
+          // lost - spelled back in explicitly. With end-of-line braces the
+          // anchor stays on the metadata's line and needs nothing.
+          boolean ownLineClassBrace = settings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE
+                                      || settings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE_SHIFTED
+                                      || settings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE_SHIFTED2;
+          if (ownLineClassBrace && startsWithSameLineMetadata(superParent)) {
+            return memberStepPlusContinuation();
+          }
+          return Indent.getContinuationIndent();
+        }
+        return Indent.getNormalIndent();
       }
+    }
+    // a multi-var declarator wrapped onto its own line continues one step in
+    // from the "var" line (the first declarator shares that line)
+    if (elementType == LOCAL_VAR_DECLARATION && parentType == LOCAL_VAR_DECLARATION_LIST) {
+      return Indent.getNormalIndent();
     }
     // `new T(a, b)` keeps its arguments as direct children (no list node);
     // an argument follows the paren or a comma
@@ -205,6 +236,14 @@ public class HaxeIndentProcessor {
     if (parentType == ANONYMOUS_TYPE_BODY) {
       return Indent.getNormalIndent();
     }
+    // metadata sits BESIDE its declaration in the PSI, so a declaration
+    // opened by same-line metadata never starts its own line - the engine
+    // then anchors the body's next-line '{' past the declaration's indent,
+    // at the class body's column. One explicit step restores the level.
+    if (elementType == BLOCK_STATEMENT && FUNCTION_LIKE_OWNERS.contains(parentType)
+        && startsWithSameLineMetadata(parent)) {
+      return Indent.getNormalIndent();
+    }
     // a wrapped chain link (.map(...) on its own line) indents ONE step from
     // the chain's base line - continuation indent would be a declaration-style
     // double step
@@ -223,6 +262,44 @@ public class HaxeIndentProcessor {
       return Indent.getContinuationIndent();
     }
     return Indent.getNoneIndent();
+  }
+
+  /** The case carries no body statements - a comment following it then reads as its body. */
+  private static boolean caseBodyIsEmpty(ASTNode switchCase) {
+    ASTNode block = switchCase.findChildByType(SWITCH_CASE_BLOCK);
+    if (block == null) return true;
+    for (ASTNode child = block.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      IElementType type = child.getElementType();
+      if (!WHITESPACES.contains(type) && !COMMENTS.contains(type)) return false;
+    }
+    return true;
+  }
+
+  /** One member step plus the continuation, in columns - for anchors that lost the member step to same-line metadata. */
+  private Indent memberStepPlusContinuation() {
+    CommonCodeStyleSettings.IndentOptions options = settings.getIndentOptions();
+    int indentSize = options == null ? 4 : options.INDENT_SIZE;
+    int continuationSize = options == null ? 8 : options.CONTINUATION_INDENT_SIZE;
+    return Indent.getSpaceIndent(indentSize + continuationSize);
+  }
+
+  /**
+   * The declaration's line is opened by an EMBEDDED_META sibling - no line
+   * break between the meta and the declaration.
+   * TODO: metadata living BESIDE its declaration breaks the engine's indent
+   *       anchor for every continuation under it; the body block and the
+   *       signature parameters are compensated here, other wrapped parts
+   *       (an extends list, a wrapped return type) still anchor short.
+   *       Absorbing metadata into the declaration's block would fix all.
+   */
+  private static boolean startsWithSameLineMetadata(ASTNode declaration) {
+    ASTNode sibling = declaration.getTreePrev();
+    while (sibling != null && sibling.getElementType() != EMBEDDED_META) {
+      boolean whitespace = sibling.getPsi() instanceof PsiWhiteSpace;
+      if (!whitespace || sibling.textContains('\n')) return false;
+      sibling = sibling.getTreePrev();
+    }
+    return sibling != null;
   }
 
   private static boolean needIndent(@Nullable IElementType type, IElementType elementType) {

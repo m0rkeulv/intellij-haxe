@@ -320,6 +320,80 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     doParityTest("conditional-inactive");
   }
 
+  @Test
+  @DisplayName("block edge blanks")
+  public void testBlockEdgeBlanks() throws Exception {
+    // emptyLines.afterLeftCurly/beforeRightCurly/beforeBlocks=Remove: blanks
+    // hugging block braces and case colons go, statement blanks keep max 1
+    doParityTest("block-edge-blanks");
+  }
+
+  @Test
+  @DisplayName("import conditional blanks")
+  public void testImportConditionalBlanks() throws Exception {
+    // conditional-compilation directives wrapping imports format as part of
+    // the import section: betweenImports=0 spans them, the before-type gap
+    // follows the closing #end
+    doParityTest("import-conditional-blanks");
+  }
+
+  @Test
+  @DisplayName("if body same line")
+  public void testIfBodySameLine() throws Exception {
+    // sameLine.ifBody=same (fixture hxformat.json): a non-block if-body
+    // JOINS the guard's line; else/while bodies keep the Next default
+    doParityTest("if-body-same-line", settings -> {
+      HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+      haxe.IF_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE;
+    });
+  }
+
+  @Test
+  @DisplayName("metadata with next line braces")
+  public void testMetadataWithNextLineBraces() throws Exception {
+    // lineEnds.leftCurly/rightCurly=both (fixture hxformat.json): metadata
+    // opening a declaration's line must not cost the next-line '{' its
+    // member indent
+    doParityTest("metadata-braces", settings -> {
+      CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+      common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+      common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+    });
+  }
+
+  @Test
+  @DisplayName("inactive branch bodies")
+  public void testInactiveBranchBodies() throws Exception {
+    // an inactive #if region around whole members formats like active code:
+    // non-block else/for bodies still break, and a conditional holding only
+    // an INACTIVE import stays snug in the import section
+    doParityTest("inactive-branch-bodies");
+  }
+
+  @Test
+  @DisplayName("multi var wrap indent")
+  public void testMultiVarWrapIndent() throws Exception {
+    // a declarator wrapped onto its own line continues one step in from the
+    // var line; the written break is kept either way (the tool's length-based
+    // join/split of multi-vars stays unsupported)
+    doParityTest("multi-var-wrap-indent");
+  }
+
+  @Test
+  @DisplayName("switch case comment")
+  public void testSwitchCaseComment() throws Exception {
+    // a comment standing alone between cases indents as case-BODY content
+    doParityTest("switch-case-comment");
+  }
+
+  @Test
+  @DisplayName("line comment space")
+  public void testLineCommentSpace() throws Exception {
+    // whitespace.addLineCommentSpace: "//text" becomes "// text"; divider
+    // art, extra slashes and already-spaced content keep their shape
+    doParityTest("line-comment-space");
+  }
+
   /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
   private void doParityTest(String rule) throws Exception {
     String actual = formatInput(rule);
