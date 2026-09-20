@@ -46,6 +46,36 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("override config applies when the upward search finds nothing")
+  public void testOverrideConfigAppliesWhenTheUpwardSearchFindsNothing() {
+    PsiFile override = myFixture.addFileToProject("configs/hxformat.json", """
+      { "wrapping": { "maxLineLength": 91 } }""");
+    PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
+    com.intellij.plugins.haxe.ide.formatter.settings.HaxeHxformatConfigCache.getInstance(getProject())
+      .setOverrideConfigUrl(override.getVirtualFile().getUrl());
+
+    TransientCodeStyleSettings settings = transientFor(file);
+    assertTrue(new HaxeHxformatSettingsModifier().modifySettings(settings, file), "the override must apply");
+    assertEquals(91, settings.getRightMargin(HaxeLanguage.INSTANCE));
+  }
+
+  @Test
+  @DisplayName("config found by the upward search beats the override")
+  public void testConfigFoundByTheUpwardSearchBeatsTheOverride() {
+    PsiFile override = myFixture.addFileToProject("configs/hxformat.json", """
+      { "wrapping": { "maxLineLength": 91 } }""");
+    myFixture.addFileToProject("hxformat.json", """
+      { "wrapping": { "maxLineLength": 101 } }""");
+    PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
+    com.intellij.plugins.haxe.ide.formatter.settings.HaxeHxformatConfigCache.getInstance(getProject())
+      .setOverrideConfigUrl(override.getVirtualFile().getUrl());
+
+    TransientCodeStyleSettings settings = transientFor(file);
+    assertTrue(new HaxeHxformatSettingsModifier().modifySettings(settings, file), "the config must apply");
+    assertEquals(101, settings.getRightMargin(HaxeLanguage.INSTANCE));
+  }
+
+  @Test
   @DisplayName("toggle off keeps the scheme settings")
   public void testToggleOffKeepsTheSchemeSettings() {
     CodeStyleSettings projectSettings = CodeStyleSettingsManager.getSettings(getProject()).clone();

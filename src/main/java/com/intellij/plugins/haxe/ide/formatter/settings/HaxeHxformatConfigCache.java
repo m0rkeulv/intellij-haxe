@@ -2,10 +2,14 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.components.State;
+import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.util.ModificationTracker;
 import com.intellij.openapi.util.SimpleModificationTracker;
 import com.intellij.openapi.vfs.VfsUtilCore;
@@ -24,13 +28,20 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Parsed hxformat.json configs for {@link HaxeHxformatSettingsModifier}. Any
- * VFS change to a file named hxformat.json bumps the tracker (invalidating
+ * Parsed hxformat.json configs for {@link HaxeHxformatSettingsModifier}, plus
+ * the user's explicitly chosen fallback config ("Use as Haxe Formatting
+ * Rules"), persisted per project. Any VFS change to a file named
+ * hxformat.json - and any override change - bumps the tracker (invalidating
  * the per-file transient settings that depend on it), clears the parse cache
  * and re-triggers code style recalculation.
  */
 @Service(Service.Level.PROJECT)
-public final class HaxeHxformatConfigCache {
+@State(name = "HaxeHxformatConfig", storages = @Storage("haxeFormatter.xml"))
+public final class HaxeHxformatConfigCache implements PersistentStateComponent<HaxeHxformatConfigCache.State> {
+
+  public static final class State {
+    public String overrideConfigUrl;
+  }
 
   public static final String HXFORMAT_FILE_NAME = "hxformat.json";
   private static final Logger LOG = Logger.getInstance(HaxeHxformatConfigCache.class);
@@ -39,12 +50,25 @@ public final class HaxeHxformatConfigCache {
 
   private final Map<String, CachedConfig> parsedByPath = new ConcurrentHashMap<>();
   private final SimpleModificationTracker tracker = new SimpleModificationTracker();
+  private final Project project;
+  private State state = new State();
 
   public static HaxeHxformatConfigCache getInstance(@NotNull Project project) {
     return project.getService(HaxeHxformatConfigCache.class);
   }
 
+  @Override
+  public @NotNull State getState() {
+    return state;
+  }
+
+  @Override
+  public void loadState(@NotNull State state) {
+    this.state = state;
+  }
+
   public HaxeHxformatConfigCache(@NotNull Project project) {
+    this.project = project;
     project.getMessageBus().connect().subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
       @Override
       public void after(@NotNull List<? extends @NotNull VFileEvent> events) {
@@ -60,20 +84,48 @@ public final class HaxeHxformatConfigCache {
     });
   }
 
-  /** The nearest hxformat.json from the file's directory up to the content root. */
+  /**
+   * The nearest hxformat.json from the file's directory up to the project base
+   * directory (the CLI's upward search, bounded to the project - a content
+   * root is no boundary, so a root-level config reaches nested modules), else
+   * the explicitly chosen fallback config, else null.
+   */
   @Nullable
   public static VirtualFile findConfig(@NotNull Project project, @NotNull VirtualFile file) {
-    VirtualFile contentRoot = ProjectFileIndex.getInstance(project).getContentRootForFile(file);
+    VirtualFile projectDir = ProjectUtil.guessProjectDir(project);
     for (VirtualFile dir = file.getParent(); dir != null; dir = dir.getParent()) {
       VirtualFile config = dir.findChild(HXFORMAT_FILE_NAME);
       if (config != null && !config.isDirectory()) {
         return config;
       }
-      if (dir.equals(contentRoot)) {
-        return null;
+      if (dir.equals(projectDir)) {
+        break;
       }
     }
-    return null;
+    return getInstance(project).overrideConfig();
+  }
+
+  /** The explicitly chosen fallback config, or null when unset or gone from disk. */
+  @Nullable
+  public VirtualFile overrideConfig() {
+    String url = state.overrideConfigUrl;
+    if (StringUtil.isEmpty(url)) return null;
+    // a VFS URL, so the config resolves in whatever filesystem holds it
+    VirtualFile file = VirtualFileManager.getInstance().findFileByUrl(url);
+    return file != null && file.isValid() && !file.isDirectory() ? file : null;
+  }
+
+  @Nullable
+  public String overrideConfigUrl() {
+    return state.overrideConfigUrl;
+  }
+
+  /** Sets (or clears, with null) the fallback config and re-triggers code style recalculation. */
+  public void setOverrideConfigUrl(@Nullable String url) {
+    state.overrideConfigUrl = url;
+    parsedByPath.clear();
+    tracker.incModificationCount();
+    CodeStyleSettingsManager.getInstance(project).notifyCodeStyleSettingsChanged();
   }
 
   /** Bumped whenever any hxformat.json changes - the transient settings' dependency. */

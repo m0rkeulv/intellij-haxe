@@ -971,6 +971,12 @@
             text="Add as Haxe Build File" description="Register this file as a Haxe build file of a module">
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </action>
+    <action id="Haxe.UseFormattingRules" class="com.intellij.plugins.haxe.ide.formatter.settings.HaxeUseFormattingRulesAction"
+            text="Use as Haxe Formatting Rules"
+            description="Use this hxformat.json for files that have no config of their own above them">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </action>
     <group id="Haxe.ToolsEditorPopup" class="com.intellij.plugins.haxe.v2.tools.HaxeToolsEditorGroup"
            text="Haxe Tools" popup="true">
       <action id="Haxe.Tools.FormatFile" class="com.intellij.plugins.haxe.v2.tools.HaxeFormatFileAction"
