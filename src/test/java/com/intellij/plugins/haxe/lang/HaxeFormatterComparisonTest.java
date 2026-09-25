@@ -394,6 +394,60 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     doParityTest("line-comment-space");
   }
 
+  @Test
+  @DisplayName("field group blanks")
+  public void testFieldGroupBlanks() throws Exception {
+    // classEmptyLines.afterStaticVars/afterPrivateVars: a staticness or
+    // visibility change splits the var block with one blank, landing BEFORE
+    // a field's leading comment; same-group vars stay snug
+    doParityTest("field-group-blanks");
+  }
+
+  @Test
+  @DisplayName("documented field blanks")
+  public void testDocumentedFieldBlanks() throws Exception {
+    // beforeDocCommentEmptyLines/afterFieldsWithDocComments: a field's doc
+    // comment stands one blank off from BOTH neighbors; plain line and
+    // block comments between same-group fields stay snug
+    doParityTest("documented-field-blanks");
+  }
+
+  @Test
+  @DisplayName("case body next line")
+  public void testCaseBodyNextLine() throws Exception {
+    // sameLine.caseBody=next: an inline case body breaks onto its own line
+    // in a STATEMENT switch; an expression switch keeps inline bodies
+    // (expressionCase=keep)
+    doParityTest("case-body-next-line");
+  }
+
+  @Test
+  @DisplayName("bool chain wrap")
+  public void testBoolChainWrap() throws Exception {
+    // wrapping.opBoolChain: a chain of more than four operands whose items
+    // total 120 columns splits one operand per line, operators leading;
+    // each chain level continues ONE step in from the line it starts on;
+    // shorter chains keep their written shape
+    doParityTest("bool-chain-wrap");
+  }
+
+  @Test
+  @DisplayName("import end meta conditional")
+  public void testImportEndMetaConditional() throws Exception {
+    // the section-end gap follows the import conditional's closing #end even
+    // when ANOTHER conditional (wrapping class metadata, not imports) comes
+    // next; that conditional then stays snug with its class
+    doParityTest("import-end-meta-conditional");
+  }
+
+  @Test
+  @DisplayName("additive arg wrap")
+  public void testAdditiveArgWrap() throws Exception {
+    // a call argument's wrapped arithmetic continuation stays ONE step past
+    // the call's line, and the written break points are kept
+    doParityTest("additive-arg-wrap");
+  }
+
   /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
   private void doParityTest(String rule) throws Exception {
     String actual = formatInput(rule);

@@ -85,6 +85,9 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public int DO_WHILE_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
     public int TRY_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
     public int CATCH_BODY_PLACEMENT = BODY_PLACEMENT_DEFAULT;
+    // a case's body (hxformat's sameLine.caseBody) has no common-checkbox
+    // equivalent: the plain default keeps the written shape
+    public int CASE_BODY_PLACEMENT = BODY_PLACEMENT_KEEP;
 
     // counts BLANK LINES (like the platform's BLANK_LINES_* options)
     public int MINIMUM_BLANK_LINES_AFTER_USING = 1;
@@ -103,10 +106,35 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // keep cap between a case's ':' and its first statement (hxformat's
     // emptyLines.beforeBlocks); blanks BETWEEN cases follow the in-code cap
     public int KEEP_BLANK_LINES_AFTER_CASE_COLON = 2;
+    // blank lines where a var block's group changes - staticness or
+    // visibility (hxformat's classEmptyLines.afterStaticVars and
+    // afterPrivateVars); 0 keeps the plain BLANK_LINES_AROUND_FIELD gap
+    public int BLANK_LINES_BETWEEN_FIELD_GROUPS = 0;
+    // minimum blank lines before a FIELD's doc comment (hxformat's
+    // beforeDocCommentEmptyLines) and after a documented field
+    // (afterFieldsWithDocComments); 0 keeps the written shape
+    public int BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = 0;
+    public int BLANK_LINES_AFTER_DOCUMENTED_FIELD = 0;
+    // wrapped operator chains (&&/||, +/-) continue ONE step from the line
+    // the chain starts on, the way haxe-formatter indents its wraps; off
+    // keeps the classic alignment-driven continuation behavior
+    public boolean INDENT_WRAPPED_OPERATOR_CHAINS = false;
+    // and/or chains split one operand per line, operators leading, when
+    // the joined line reaches SPLIT_LINE_LENGTH holding an operand of
+    // SPLIT_ITEM_LENGTH, or when SPLIT_ITEM_COUNT operands total more than
+    // SPLIT_TOTAL_LENGTH (hxformat's wrapping.opBoolChain conditions,
+    // inclusive like the tool's); 0 disables a trigger
+    public int BOOL_CHAIN_SPLIT_LINE_LENGTH = 0;
+    public int BOOL_CHAIN_SPLIT_ITEM_LENGTH = 0;
+    public int BOOL_CHAIN_SPLIT_ITEM_COUNT = 0;
+    public int BOOL_CHAIN_SPLIT_TOTAL_LENGTH = 0;
     // a multi-var declaration whose JOINED line would pass this many columns
     // splits one declarator per line (hxformat's wrapping.multiVar
-    // lineLengthLargerThan rule); 0 keeps the written shape
+    // lineLengthLargerThan rule); 0 keeps the written shape. A declarator at
+    // or under FILL_ITEM_LENGTH keeps the list filling instead (the tool's
+    // preceding anyItemLength rule)
     public int MULTI_VAR_SPLIT_WIDTH = 0;
+    public int MULTI_VAR_FILL_ITEM_LENGTH = 0;
     // 0 = no grouping (the keep cap above applies); above 0, imports whose
     // first IMPORT_GROUP_PACKAGE_DEPTH package segments differ get exactly
     // this many blank lines between them and same-group imports stay snug

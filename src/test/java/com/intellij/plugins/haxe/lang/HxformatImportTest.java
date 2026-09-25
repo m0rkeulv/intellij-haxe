@@ -165,7 +165,9 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
             { "conditions": [ { "cond": "itemCount >= n", "value": 7 } ], "type": "fillLine" },
             { "conditions": [ { "cond": "exceedsMaxLineLength" } ], "type": "onePerLineAfterFirst" }
           ] },
-          "multiVar": { "defaultWrap": "fillLine" }
+          "multiVar": { "rules": [
+            { "conditions": [ { "cond": "lineLength >= n", "value": 100 } ], "type": "onePerLineAfterFirst" }
+          ] }
         }
       }""");
 
@@ -184,10 +186,35 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(CommonCodeStyleSettings.WRAP_AS_NEEDED, common.METHOD_PARAMETERS_WRAP);
     int uiChop = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM | CommonCodeStyleSettings.WRAP_AS_NEEDED;
     assertEquals(uiChop, common.METHOD_CALL_CHAIN_WRAP, "the exceedsMaxLineLength rule decides");
+    assertEquals(100, haxe.MULTI_VAR_SPLIT_WIDTH, "the multiVar split width lifts from the config rule");
     List<String> sortedUnsupported = unsupported.stream().sorted().toList();
     assertEquals(List.of("wrapping.methodChain.rules (rule engine approximated by one policy)",
-                         "wrapping.multiVar (only the default 80-column split is reproduced)"),
+                         "wrapping.multiVar (only the line-length split is reproduced)"),
                  sortedUnsupported);
+  }
+
+  @Test
+  @DisplayName("custom bool chain rules set the split thresholds")
+  public void testCustomBoolChainRulesSetTheSplitThresholds() throws Exception {
+    CodeStyleSettings settings = freshDefaults();
+    var root = new ObjectMapper().readTree("""
+      {
+        "wrapping": { "opBoolChain": { "rules": [
+          { "conditions": [ { "cond": "totalItemLength <= n", "value": 90 } ], "type": "noWrap" },
+          { "conditions": [ { "cond": "lineLength >= n", "value": 100 },
+                            { "cond": "anyItemLength >= n", "value": 30 } ],
+            "type": "onePerLineAfterFirst" },
+          { "conditions": [ { "cond": "itemCount >= n", "value": 6 } ], "type": "onePerLineAfterFirst" }
+        ] } }
+      }""");
+
+    HxformatCodeStyle.applyJson(settings, root);
+
+    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    assertEquals(100, haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH);
+    assertEquals(30, haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH);
+    assertEquals(6, haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT);
+    assertEquals(90, haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH);
   }
 
   @Test

@@ -28,4 +28,6 @@ class Main
 	{
 		__matrix = null;
 	}
+
+	public function noop() {}
 }

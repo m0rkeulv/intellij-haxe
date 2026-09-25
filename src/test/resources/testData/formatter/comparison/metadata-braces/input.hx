@@ -22,4 +22,7 @@ class Main {
 	private function reset():Void {
 		__matrix = null;
 	}
+
+	public function noop()
+	{}
 }

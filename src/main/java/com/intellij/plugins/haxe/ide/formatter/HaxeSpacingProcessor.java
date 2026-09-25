@@ -24,6 +24,7 @@ import com.intellij.formatting.Spacing;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeTag;
 import com.intellij.plugins.haxe.metadata.lexer.HaxeMetadataTokenTypes;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
@@ -36,6 +37,7 @@ import com.intellij.psi.formatter.common.AbstractBlock;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
 import lombok.CustomLog;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
@@ -148,10 +150,14 @@ public class HaxeSpacingProcessor {
 
     // TODO: Do this for comments, too??
     // If type2 is metadata, then camouflage it as the type that follows it.
+    // memberNode2 carries the REAL member behind the camouflage for rules
+    // that inspect the declaration (field grouping).
+    ASTNode memberNode2 = node2;
     if(type2 == EMBEDDED_META) {
       PsiElement element = HaxeMetadataUtils.getAssociatedElement(node2.getPsi());
       if (null != element) {
-        type2 = element.getNode().getElementType();
+        memberNode2 = element.getNode();
+        type2 = memberNode2.getElementType();
       }
     }
 
@@ -271,9 +277,18 @@ public class HaxeSpacingProcessor {
       return keepCappedBlanks(mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
     }
 
-    // a blank between a case's ':' and its body has its own keep cap
-    // (emptyLines.beforeBlocks); blanks BETWEEN cases keep the in-code cap
+    // a case's body: sameLine.caseBody=Next breaks an inline body onto its
+    // own line - except in an EXPRESSION switch (expressionCase=keep). The
+    // written shape otherwise keeps the case-colon blank cap
+    // (emptyLines.beforeBlocks); blanks BETWEEN cases keep the in-code cap.
     if ((elementType == SWITCH_CASE || elementType == DEFAULT_CASE) && type2 == SWITCH_CASE_BLOCK) {
+      int placement = myHaxeCodeStyleSettings.CASE_BODY_PLACEMENT;
+      if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE && !isExpressionSwitchCase(myNode)) {
+        return Spacing.createSpacing(0, 0, 1, false, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_CASE_COLON);
+      }
+      if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE && !isExpressionSwitchCase(myNode)) {
+        return Spacing.createSpacing(1, 1, 0, false, 0);
+      }
       return keepCappedBlanks(myHaxeCodeStyleSettings.KEEP_BLANK_LINES_AFTER_CASE_COLON);
     }
 
@@ -282,14 +297,31 @@ public class HaxeSpacingProcessor {
     boolean memberThenDoc = type2 == DOC_COMMENT
                             && (isFieldDeclaration(type1) || isMethodDeclarationOrConstructorDeclaration(type1));
     if (memberThenDoc) {
-      ASTNode documented = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(node2);
+      ASTNode documented = followingMember(node2);
       IElementType documentedType = documented == null ? null : documented.getElementType();
       if (isMethodDeclarationOrConstructorDeclaration(documentedType)) {
         return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_METHOD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
       }
       if (isFieldDeclaration(documentedType)) {
-        int blanks = Math.max(mySettings.BLANK_LINES_AROUND_FIELD,
-                              isMethodDeclarationOrConstructorDeclaration(type1) ? mySettings.BLANK_LINES_AROUND_METHOD : 0);
+        // a FIELD's doc comment also stands off from the previous field
+        // (beforeDocCommentEmptyLines)
+        int neighborGap = isMethodDeclarationOrConstructorDeclaration(type1)
+                          ? mySettings.BLANK_LINES_AROUND_METHOD
+                          : Math.max(fieldExtraGap(node1, documented), myHaxeCodeStyleSettings.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT);
+        int blanks = Math.max(mySettings.BLANK_LINES_AROUND_FIELD, neighborGap);
+        return Spacing.createSpacing(0, 0, 1 + blanks, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
+      }
+    }
+
+    // a plain comment travels with the field BELOW it too - a field-group
+    // or documented-field blank must land before the comment, not between
+    // comment and field. Without one the pair keeps its written shape.
+    if (ONLY_COMMENTS.contains(type2) && isFieldDeclaration(type1)) {
+      ASTNode commented = followingMember(node2);
+      int blanks = commented != null && isFieldDeclaration(commented.getElementType())
+                   ? fieldExtraGap(node1, commented)
+                   : 0;
+      if (blanks > 0) {
         return Spacing.createSpacing(0, 0, 1 + blanks, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
       }
     }
@@ -303,7 +335,8 @@ public class HaxeSpacingProcessor {
     }
 
     if (isFieldDeclaration(type1) && isFieldDeclaration(type2)) {
-      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_FIELD, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
+      int blanks = Math.max(mySettings.BLANK_LINES_AROUND_FIELD, fieldExtraGap(node1, memberNode2));
+      return Spacing.createSpacing(0, 0, 1 + blanks, mySettings.KEEP_LINE_BREAKS, mySettings.KEEP_BLANK_LINES_IN_DECLARATIONS);
     }
 
     if (isFieldDeclaration(type1) && isMethodDeclarationOrConstructorDeclaration(type2)) {
@@ -321,7 +354,7 @@ public class HaxeSpacingProcessor {
     // an EMPTY body's braces collapse to {} when the matching keep-in-one-line
     // option allows it (class bodies excluded - smart enter owns their caret line)
     if (type1 == PLCURLY && type2 == PRCURLY && !isClassBodyType(elementType)
-        && collapseEmptyBody(elementType, parentType)) {
+        && emptyBodyStaysInline(parentType)) {
       return Spacing.createSpacing(0, 0, 0, false, 0);
     }
 
@@ -413,6 +446,16 @@ public class HaxeSpacingProcessor {
     }
     if (type1 == OGREATER && type2 == OASSIGN) {
       return addSingleSpaceIf(false);
+    }
+
+    // lineEnds.emptyCurly=NoBreak: an EMPTY body's {} stays on the header's
+    // line even under next-line brace styles - the collapse rule above folds
+    // the braces themselves, this pair keeps them from moving down
+    ASTNode emptyBodyCandidate = type2 == BLOCK_STATEMENT ? node2
+      : (type2 == GUARDED_STATEMENT || type2 == DO_WHILE_BODY) && typeType2 == BLOCK_STATEMENT ? nodeNode2
+      : null;
+    if (isEmptyBlock(emptyBodyCandidate) && emptyBodyStaysInline(elementType)) {
+      return Spacing.createSpacing(1, 1, 0, false, 0);
     }
 
     //
@@ -536,6 +579,15 @@ public class HaxeSpacingProcessor {
     //
     // Spacing around  logical operators (&&, OR, etc.)
     //
+    // wrapping.opBoolChain: a qualifying chain goes one operand per line
+    // with LEADING operators; other chains keep their written shape
+    boolean logicChain = elementType == LOGIC_AND_EXPRESSION || elementType == LOGIC_OR_EXPRESSION;
+    if (logicChain && LOGIC_OPERATORS.contains(typeType2) && boolChainSplitsOnePerLine(myNode)) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
+    }
+    if (logicChain && LOGIC_OPERATORS.contains(typeType1) && boolChainSplitsOnePerLine(myNode)) {
+      return Spacing.createSpacing(1, 1, 0, false, 0);
+    }
     if (LOGIC_OPERATORS.contains(typeType1) || LOGIC_OPERATORS.contains(typeType2)) {
       return addSingleSpaceIf(mySettings.SPACE_AROUND_LOGICAL_OPERATORS);
     }
@@ -775,6 +827,20 @@ public class HaxeSpacingProcessor {
   private Spacing importSectionDirectiveSpacing(ASTNode node1, ASTNode node2,
                                                 IElementType type1, IElementType type2,
                                                 boolean cc1, boolean cc2) {
+    // the closing #end of the LAST import conditional carries the
+    // section-end gap - unless more section content follows it
+    IElementType lastSectionStatement = type1 == PPEND && !ONLY_COMMENTS.contains(type2)
+                                        ? realNeighborType(node1, false)
+                                        : null;
+    boolean sectionCloses = isImportOrUsing(lastSectionStatement)
+                            && !isImportOrUsing(type2)
+                            && !(cc2 && continuesImportSection(node2, type2));
+    if (sectionCloses) {
+      int blanks = lastSectionStatement == USING_STATEMENT
+                   ? myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_USING
+                   : mySettings.BLANK_LINES_AFTER_IMPORTS;
+      return Spacing.createSpacing(0, 0, 1 + blanks, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
     if (isImportOrUsing(type1) && cc2) {
       // an OPENING directive joins the section only when its conditional
       // holds imports; #else/#elseif/#end already belong to the section
@@ -789,16 +855,13 @@ public class HaxeSpacingProcessor {
                           || isImportOrUsing(realNeighborType(node2, true));
       return inSection ? importSectionKeepSpacing() : null;
     }
-    IElementType lastSectionStatement = type1 == PPEND && !ONLY_COMMENTS.contains(type2)
-                                        ? realNeighborType(node1, false)
-                                        : null;
-    if (isImportOrUsing(lastSectionStatement)) {
-      int blanks = lastSectionStatement == USING_STATEMENT
-                   ? myHaxeCodeStyleSettings.MINIMUM_BLANK_LINES_AFTER_USING
-                   : mySettings.BLANK_LINES_AFTER_IMPORTS;
-      return Spacing.createSpacing(0, 0, 1 + blanks, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
-    }
     return null;
+  }
+
+  /** More import-section content behind the directive: an import conditional opening, or a continuation of one. */
+  private static boolean continuesImportSection(@NotNull ASTNode node, @NotNull IElementType type) {
+    // #else/#elseif/#end belong to the enclosing conditional either way
+    return type != PPIF || conditionalWrapsImports(node);
   }
 
   private Spacing importSectionKeepSpacing() {
@@ -814,6 +877,10 @@ public class HaxeSpacingProcessor {
   private boolean multiVarLineExceedsSplitWidth() {
     int splitWidth = myHaxeCodeStyleSettings.MULTI_VAR_SPLIT_WIDTH;
     if (splitWidth <= 0) return false;
+    // a declarator at or under the fill threshold keeps the list filling
+    // (the tool's anyItemLength rule precedes its split rule)
+    int fillItemLength = myHaxeCodeStyleSettings.MULTI_VAR_FILL_ITEM_LENGTH;
+    if (fillItemLength > 0 && shortestDeclaratorLength(myNode) <= fillItemLength) return false;
     PsiFile file = myNode.getPsi().getContainingFile();
     if (file == null) return false;
     // the statement's post-format line indent matches its current one in all
@@ -821,14 +888,28 @@ public class HaxeSpacingProcessor {
     CharSequence text = file.getViewProvider().getContents();
     String lineIndent = HaxeIndentText.lineIndentAt(text, myNode.getStartOffset());
     int indentColumns = HaxeIndentText.indentWidth(lineIndent, tabSize());
-    // every whitespace run (line breaks included) becomes the single space it joins into
-    String joined = myNode.getText().replaceAll("\\s+", " ");
-    return indentColumns + joined.length() > splitWidth;
+    return indentColumns + oneLineWidth(myNode) >= splitWidth;
+  }
+
+  /** The node's width as it would print on one line: every whitespace run (line breaks included) one space. */
+  private static int oneLineWidth(@NotNull ASTNode node) {
+    // any whitespace run, joined into the single space it prints as
+    return node.getText().replaceAll("\\s+", " ").length();
   }
 
   private int tabSize() {
     CommonCodeStyleSettings.IndentOptions options = mySettings.getIndentOptions();
     return options == null ? 4 : options.TAB_SIZE;
+  }
+
+  /** The shortest declarator's one-line width in the multi-var list. */
+  private static int shortestDeclaratorLength(@NotNull ASTNode declarationList) {
+    int shortest = Integer.MAX_VALUE;
+    for (ASTNode child = declarationList.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      if (child.getElementType() != LOCAL_VAR_DECLARATION) continue;
+      shortest = Math.min(shortest, oneLineWidth(child));
+    }
+    return shortest == Integer.MAX_VALUE ? 0 : shortest;
   }
 
   private static boolean isImportOrUsing(@Nullable IElementType type) {
@@ -854,6 +935,129 @@ public class HaxeSpacingProcessor {
       }
       if (CONDITIONALLY_NOT_COMPILED.contains(type)) continue;
       return isImportOrUsing(type);
+    }
+    return false;
+  }
+
+  /**
+   * Whether the whole and/or chain around this expression goes one operand
+   * per line, per the configured opBoolChain thresholds (inclusive, like
+   * the tool's conditions): a joined line reaching the line threshold while
+   * holding an operand at the item threshold, or the operand count reached
+   * with items totaling more than the total guard. The chain spans every
+   * same-chain nesting level (mixed && and || included, matching the tool);
+   * a parenthesized group counts as ONE operand and starts a chain of its
+   * own. Line length is measured as the chain JOINED onto its current line
+   * (the trailing close-parens are not counted - a few columns of slack no
+   * threshold sits on).
+   */
+  private boolean boolChainSplitsOnePerLine(@NotNull ASTNode chainMember) {
+    HaxeCodeStyleSettings haxe = myHaxeCodeStyleSettings;
+    ASTNode root = chainMember;
+    while (root.getTreeParent() != null && isLogicExpression(root.getTreeParent().getElementType())) {
+      root = root.getTreeParent();
+    }
+    int[] metrics = new int[3];
+    collectBoolChainItems(root, metrics);
+    boolean countTrigger = haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT > 0
+                           && metrics[0] >= haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT
+                           && metrics[1] > haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH;
+    if (countTrigger) return true;
+    if (haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH <= 0 || haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH <= 0) return false;
+    if (metrics[2] < haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH) return false;
+    PsiFile file = root.getPsi().getContainingFile();
+    if (file == null) return false;
+    CharSequence text = file.getViewProvider().getContents();
+    int startColumn = HaxeIndentText.columnAt(text, root.getStartOffset(), tabSize());
+    return startColumn + oneLineWidth(root) >= haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH;
+  }
+
+  /** Fills {count, total item length, longest item length}. */
+  private static void collectBoolChainItems(@NotNull ASTNode chain, int[] metrics) {
+    for (ASTNode child = chain.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      IElementType type = child.getElementType();
+      if (WHITESPACES.contains(type) || COMMENTS.contains(type) || LOGIC_OPERATORS.contains(childTokenType(child))) {
+        continue;
+      }
+      if (isLogicExpression(type)) {
+        collectBoolChainItems(child, metrics);
+        continue;
+      }
+      metrics[0]++;
+      int length = oneLineWidth(child);
+      metrics[1] += length;
+      metrics[2] = Math.max(metrics[2], length);
+    }
+  }
+
+  private static boolean isLogicExpression(@Nullable IElementType type) {
+    return type == LOGIC_AND_EXPRESSION || type == LOGIC_OR_EXPRESSION;
+  }
+
+  /** The wrapped operator element's own token, for set membership tests. */
+  @Nullable
+  private static IElementType childTokenType(@NotNull ASTNode node) {
+    ASTNode first = node.getFirstChildNode();
+    return first == null ? node.getElementType() : first.getElementType();
+  }
+
+  /** The case belongs to a switch used as a VALUE - its bodies keep their written line per expressionCase=keep. */
+  private static boolean isExpressionSwitchCase(ASTNode switchCase) {
+    ASTNode switchBlock = switchCase.getTreeParent();
+    ASTNode switchStatement = switchBlock == null ? null : switchBlock.getTreeParent();
+    return switchStatement != null
+           && switchStatement.getElementType() == SWITCH_STATEMENT
+           && isExpressionPosition(switchStatement);
+  }
+
+  /** The member a comment introduces: the next real sibling, metadata resolved to the declaration it decorates. */
+  @Nullable
+  private static ASTNode followingMember(ASTNode node) {
+    ASTNode next = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(node);
+    if (next != null && next.getElementType() == EMBEDDED_META) {
+      PsiElement element = HaxeMetadataUtils.getAssociatedElement(next.getPsi());
+      return element == null ? null : element.getNode();
+    }
+    return next;
+  }
+
+  /**
+   * The blank lines a field-group boundary demands between two field
+   * declarations (haxe-formatter's classEmptyLines.afterStaticVars and
+   * afterPrivateVars): a change of staticness or visibility splits the var
+   * block. Zero within a group, for non-field nodes, and while the setting
+   * is off.
+   */
+  private int fieldGroupGap(@NotNull ASTNode first, @NotNull ASTNode second) {
+    int gap = myHaxeCodeStyleSettings.BLANK_LINES_BETWEEN_FIELD_GROUPS;
+    if (gap <= 0) return 0;
+    if (!(first.getPsi() instanceof HaxeNamedComponent left)
+        || !(second.getPsi() instanceof HaxeNamedComponent right)) {
+      return 0;
+    }
+    boolean sameGroup = left.isStatic() == right.isStatic() && left.isPublic() == right.isPublic();
+    return sameGroup ? 0 : gap;
+  }
+
+  /**
+   * The blanks a field pair demands beyond the plain around-field count: a
+   * group boundary, and the stand-off after a DOCUMENTED field
+   * (afterFieldsWithDocComments).
+   */
+  private int fieldExtraGap(@NotNull ASTNode first, @NotNull ASTNode second) {
+    int gap = fieldGroupGap(first, second);
+    if (hasDocComment(first)) {
+      gap = Math.max(gap, myHaxeCodeStyleSettings.BLANK_LINES_AFTER_DOCUMENTED_FIELD);
+    }
+    return gap;
+  }
+
+  /** The declaration's own doc comment: the previous real sibling, metadata skipped (doc sits above the meta). */
+  private static boolean hasDocComment(@NotNull ASTNode declaration) {
+    for (ASTNode prev = declaration.getTreePrev(); prev != null; prev = prev.getTreePrev()) {
+      IElementType type = prev.getElementType();
+      if (WHITESPACES.contains(type) || type == EMBEDDED_META) continue;
+      return type == DOC_COMMENT;
     }
     return false;
   }
@@ -906,11 +1110,22 @@ public class HaxeSpacingProcessor {
     return parentType == ARRAY_LITERAL || parentType == MAP_LITERAL;
   }
 
-  /** Which keep-in-one-line option owns an empty {@code {}} body. */
-  private boolean collapseEmptyBody(IElementType elementType, IElementType parentType) {
+  /** Only braces and whitespace inside - the {}-collapse owns its interior. */
+  private static boolean isEmptyBlock(@Nullable ASTNode block) {
+    if (block == null || block.getElementType() != BLOCK_STATEMENT) return false;
+    for (ASTNode child = block.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      IElementType type = child.getElementType();
+      if (type == PLCURLY || type == PRCURLY || WHITESPACES.contains(type)) continue;
+      return false;
+    }
+    return true;
+  }
+
+  /** Which keep-in-one-line option keeps an empty body's {} on the header's line. */
+  private boolean emptyBodyStaysInline(IElementType headerType) {
     // FUNCTION_LITERAL first: FUNCTION_DEFINITION contains it too
-    if (parentType == FUNCTION_LITERAL) return mySettings.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE;
-    if (FUNCTION_DEFINITION.contains(parentType)) return mySettings.KEEP_SIMPLE_METHODS_IN_ONE_LINE;
+    if (headerType == FUNCTION_LITERAL) return mySettings.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE;
+    if (FUNCTION_DEFINITION.contains(headerType)) return mySettings.KEEP_SIMPLE_METHODS_IN_ONE_LINE;
     return mySettings.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE;
   }
 

@@ -181,13 +181,34 @@ public final class HxformatCodeStyle {
     haxe.DO_WHILE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
     haxe.TRY_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
     haxe.CATCH_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    // sameLine.caseBody=Next (expression switches keep, per expressionCase)
+    haxe.CASE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    // classEmptyLines.afterStaticVars/afterPrivateVars=1 - a staticness or
+    // visibility change splits the var block
+    haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = 1;
+    // beforeDocCommentEmptyLines/afterFieldsWithDocComments=One - a
+    // documented field stands off from both neighbors
+    haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = 1;
+    haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = 1;
     // emptyLines.afterLeftCurly=Remove
     haxe.KEEP_BLANK_LINES_AFTER_LBRACE = 0;
     // emptyLines.beforeBlocks=Remove (the case-body edge)
     haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = 0;
-    // wrapping.multiVar: lineLengthLargerThan=80 -> onePerLineAfterFirst
-    // (the length-based JOIN of short multi-vars is not reproduced)
+    // haxe-formatter indents every wrapped operator chain one step from
+    // the chain's line (no operand alignment)
+    haxe.INDENT_WRAPPED_OPERATOR_CHAINS = true;
+    // wrapping.opBoolChain defaults: one operand per line past these
+    // (inclusive) thresholds - line 140 with an item of 40, or 4 operands
+    // totaling more than 120
+    haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = 140;
+    haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = 40;
+    haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = 4;
+    haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = 120;
+    // wrapping.multiVar: lineLengthLargerThan=80 -> onePerLineAfterFirst,
+    // preceded by anyItemLengthLessThan=15 -> fillLine (the length-based
+    // JOIN of short multi-vars is not reproduced)
     haxe.MULTI_VAR_SPLIT_WIDTH = 80;
+    haxe.MULTI_VAR_FILL_ITEM_LENGTH = 15;
     // emptyLines.importAndUsing.beforeType=1
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
     // emptyLines.betweenSingleLineTypes=0
@@ -317,6 +338,7 @@ public final class HxformatCodeStyle {
       wrapConstruct("wrapping.anonFunctionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
       wrapConstruct("wrapping.callParameter", value -> common.CALL_PARAMETERS_WRAP = value);
       wrapConstruct("wrapping.opBoolChain", value -> common.BINARY_OPERATION_WRAP = value);
+      applyBoolChainRules();
       wrapConstruct("wrapping.opAddSubChain", value -> common.BINARY_OPERATION_WRAP = value);
       for (String construct : List.of("typeParameter", "metadataCallParameter", "casePattern", "anonType")) {
         String path = "wrapping." + construct;
@@ -327,7 +349,23 @@ public final class HxformatCodeStyle {
       }
       if (node("wrapping.multiVar") != null) {
         markConsumedSubtree("wrapping.multiVar");
-        unsupported.add("wrapping.multiVar (only the default 80-column split is reproduced)");
+        // the split width lifts from a matching rule; the length-based JOIN
+        // of short multi-vars stays unreproduced
+        JsonNode multiVarRules = node("wrapping.multiVar.rules");
+        if (multiVarRules != null && multiVarRules.isArray()) {
+          for (JsonNode rule : multiVarRules) {
+            String type = rule.path("type").asText("");
+            Integer line = conditionValue(rule, "lineLength >= n");
+            if ("onePerLineAfterFirst".equals(type) && line != null) {
+              haxe.MULTI_VAR_SPLIT_WIDTH = line;
+            }
+            Integer shortItem = conditionValue(rule, "anyItemLength <= n");
+            if ("fillLine".equals(type) && shortItem != null) {
+              haxe.MULTI_VAR_FILL_ITEM_LENGTH = shortItem;
+            }
+          }
+        }
+        unsupported.add("wrapping.multiVar (only the line-length split is reproduced)");
       }
     }
 
@@ -462,7 +500,7 @@ public final class HxformatCodeStyle {
       acceptOnly("sameLine.comprehensionFor", "same");
       acceptOnly("sameLine.untypedBody", "same");
       acceptOnly("sameLine.returnBody", "same");
-      acceptOnly("sameLine.caseBody", "next");
+      bodyPlacement("sameLine.caseBody", value -> haxe.CASE_BODY_PLACEMENT = value);
       acceptOnly("sameLine.ifElseSemicolonNextLine", "true");
       acceptOnly("sameLine.expressionIfWithBlocks", "false");
     }
@@ -673,8 +711,8 @@ public final class HxformatCodeStyle {
       // the remaining flat-set boundaries our single member-blank model covers
       // at THEIR defaults only
       acceptOnly("emptyLines.classEmptyLines.betweenStaticVars", "0");
-      acceptOnly("emptyLines.classEmptyLines.afterStaticVars", "1");
-      acceptOnly("emptyLines.classEmptyLines.afterPrivateVars", "1");
+      applyInt("emptyLines.classEmptyLines.afterStaticVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
+      applyInt("emptyLines.classEmptyLines.afterPrivateVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
       acceptOnly("emptyLines.classEmptyLines.afterVars", "1");
       acceptOnly("emptyLines.classEmptyLines.afterStaticFunctions", "1");
       acceptOnly("emptyLines.classEmptyLines.betweenStaticFunctions", "1");
@@ -698,8 +736,9 @@ public final class HxformatCodeStyle {
       acceptOnly("emptyLines.afterBlocks", "remove");
       acceptOnly("emptyLines.finalNewline", "true");
       acceptOnly("emptyLines.beforePackage", "0");
-      acceptOnly("emptyLines.beforeDocCommentEmptyLines", "one");
-      acceptOnly("emptyLines.afterFieldsWithDocComments", "one");
+      // "ignore" keeps the written shape, which 0 also does on our side
+      applyCommentPolicy("emptyLines.beforeDocCommentEmptyLines", value -> haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = value);
+      applyCommentPolicy("emptyLines.afterFieldsWithDocComments", value -> haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = value);
       acceptOnly("emptyLines.betweenMultilineComments", "0");
       acceptOnly("emptyLines.lineCommentsBetweenTypes", "keep");
       acceptOnly("emptyLines.lineCommentsBetweenFunctions", "keep");
@@ -758,7 +797,59 @@ public final class HxformatCodeStyle {
       setter.accept(SPACE_AFTER_POLICIES.contains(value));
     }
 
-    /** Ints in the emptyLines section obey the maxAnywhereInFile clamp. */
+    /** A doc-comment blank policy (one / none / ignore) into a minimum blank-line count. */
+    private void applyCommentPolicy(String path, IntConsumer setter) {
+      String value = str(path);
+      if (value == null) return;
+      setter.accept("one".equals(value) ? 1 : 0);
+    }
+
+    /**
+     * Custom opBoolChain rules: the one-per-line thresholds our splitter
+     * reproduces are lifted from matching rule shapes (an onePerLineAfterFirst
+     * rule's itemCount / lineLength+anyItemLength conditions, a noWrap rule's
+     * totalItemLength guard); everything else stays with wrapConstruct's
+     * one-policy approximation.
+     */
+    private void applyBoolChainRules() {
+      JsonNode rules = node("wrapping.opBoolChain.rules");
+      if (rules == null || !rules.isArray()) return;
+      for (JsonNode rule : rules) {
+        String type = rule.path("type").asText("");
+        if ("onePerLineAfterFirst".equals(type)) {
+          Integer count = conditionValue(rule, "itemCount >= n");
+          if (count != null) {
+            haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = count;
+          }
+          Integer line = conditionValue(rule, "lineLength >= n");
+          Integer item = conditionValue(rule, "anyItemLength >= n");
+          if (line != null && item != null) {
+            haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = line;
+            haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = item;
+          }
+        }
+        if ("noWrap".equals(type)) {
+          Integer total = conditionValue(rule, "totalItemLength <= n");
+          if (total != null) {
+            haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = total;
+          }
+        }
+      }
+    }
+
+    @Nullable
+    private static Integer conditionValue(@NotNull JsonNode rule, @NotNull String cond) {
+      JsonNode conditions = rule.get("conditions");
+      if (conditions == null || !conditions.isArray()) return null;
+      for (JsonNode condition : conditions) {
+        if (cond.equals(condition.path("cond").asText(""))) {
+          JsonNode value = condition.get("value");
+          return value == null || !value.canConvertToInt() ? null : value.intValue();
+        }
+      }
+      return null;
+    }
+
     /** A sameLine.*Body policy (next / same / keep) into a per-construct body placement. */
     private void bodyPlacement(String path, IntConsumer setter) {
       String value = str(path);
@@ -771,6 +862,7 @@ public final class HxformatCodeStyle {
       }
     }
 
+    /** Ints in the emptyLines section obey the maxAnywhereInFile clamp. */
     private void applyInt(String path, IntConsumer setter) {
       Integer value = intVal(path);
       if (value != null) {

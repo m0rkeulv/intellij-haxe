@@ -22,6 +22,7 @@ import com.intellij.formatting.Indent;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
@@ -47,9 +48,11 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  */
 public class HaxeIndentProcessor {
   private final CommonCodeStyleSettings settings;
+  private final HaxeCodeStyleSettings haxeSettings;
 
-  public HaxeIndentProcessor(CommonCodeStyleSettings settings) {
+  public HaxeIndentProcessor(CommonCodeStyleSettings settings, HaxeCodeStyleSettings haxeSettings) {
     this.settings = settings;
+    this.haxeSettings = haxeSettings;
   }
 
   public Indent getChildIndent(ASTNode node) {
@@ -136,6 +139,26 @@ public class HaxeIndentProcessor {
         return Indent.getNoneIndent();
       }
       return Indent.getNormalIndent();
+    }
+    // a bool chain's wrapped lines continue ONE step from the line the
+    // chain starts on. One step per level cannot stack: left-nested levels
+    // of one chain all START on the chain's first line, so every operator
+    // line lands exactly one step in; a parenthesized inner chain starts on
+    // its opener's (wrapped) line and steps once from there
+    if ((parentType == LOGIC_AND_EXPRESSION || parentType == LOGIC_OR_EXPRESSION)
+        && haxeSettings.INDENT_WRAPPED_OPERATOR_CHAINS) {
+      return Indent.getNormalIndent();
+    }
+    // an additive chain's wrapped lines stay at the surrounding wrap step
+    // (haxe-formatter never stacks them): a chain STARTING a line anchors
+    // there and takes no step; a mid-line chain's continuation anchors past
+    // it (the call or statement line) and needs the one step back
+    if (parentType == ADDITIVE_EXPRESSION && haxeSettings.INDENT_WRAPPED_OPERATOR_CHAINS) {
+      // a mid-line chain that is a list's LAST item already rides the item
+      // step (the engine carries it into the closing line), so only there
+      // the extra step must not be added again
+      boolean levelAlready = additiveChainBeginsItsLine(parent) || additiveChainClosesItsList(parent);
+      return levelAlready ? Indent.getNoneIndent() : Indent.getNormalIndent();
     }
     if (needIndent(parentType, elementType)) {
       final PsiElement psi = node.getPsi();
@@ -262,6 +285,40 @@ public class HaxeIndentProcessor {
       return Indent.getContinuationIndent();
     }
     return Indent.getNoneIndent();
+  }
+
+  /** The outermost additive level of the chain around {@code additive}. */
+  private static ASTNode additiveChainRoot(ASTNode additive) {
+    ASTNode root = additive;
+    while (root.getTreeParent() != null && root.getTreeParent().getElementType() == ADDITIVE_EXPRESSION) {
+      root = root.getTreeParent();
+    }
+    return root;
+  }
+
+  /** The CHAIN ROOT is the last item of its expression list - nothing but the closing paren follows. */
+  private static boolean additiveChainClosesItsList(ASTNode additive) {
+    ASTNode root = additiveChainRoot(additive);
+    ASTNode parent = root.getTreeParent();
+    if (parent == null || !ARGUMENT_LISTS.contains(parent.getElementType())) return false;
+    for (ASTNode next = root.getTreeNext(); next != null; next = next.getTreeNext()) {
+      if (!WHITESPACES.contains(next.getElementType())) return false;
+    }
+    return true;
+  }
+
+  /** The CHAIN ROOT (outermost additive level) sits at its line's start - only whitespace before it. */
+  private static boolean additiveChainBeginsItsLine(ASTNode additive) {
+    ASTNode root = additiveChainRoot(additive);
+    PsiFile file = root.getPsi().getContainingFile();
+    if (file == null) return false;
+    CharSequence text = file.getViewProvider().getContents();
+    int lineStart = HaxeIndentText.lineStartOffset(text, root.getStartOffset());
+    for (int i = lineStart; i < root.getStartOffset(); i++) {
+      char c = text.charAt(i);
+      if (c != ' ' && c != '\t') return false;
+    }
+    return true;
   }
 
   /** The case carries no body statements - a comment following it then reads as its body. */
