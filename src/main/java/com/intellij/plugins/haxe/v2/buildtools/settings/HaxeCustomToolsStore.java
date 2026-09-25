@@ -23,7 +23,8 @@ import java.util.List;
 @State(name = "HaxeCustomTools", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeCustomToolsStore implements PersistentStateComponent<HaxeCustomToolsStore.State> {
 
-  public record CustomTool(@NotNull String name, @NotNull String command) {
+  /** {@code workDirectory} may carry root variables; blank means the container root. */
+  public record CustomTool(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
   }
 
   public static final class State {
@@ -38,6 +39,7 @@ public final class HaxeCustomToolsStore implements PersistentStateComponent<Haxe
   public static final class ToolState {
     public String name;
     public String command = "";
+    public String workDirectory = "";
   }
 
   private State state = new State();
@@ -83,7 +85,7 @@ public final class HaxeCustomToolsStore implements PersistentStateComponent<Haxe
     if (container == null) return List.of();
     return container.tools.stream()
       .filter(tool -> !StringUtil.isEmptyOrSpaces(tool.name))
-      .map(tool -> new CustomTool(tool.name, StringUtil.notNullize(tool.command)))
+      .map(tool -> new CustomTool(tool.name, StringUtil.notNullize(tool.command), StringUtil.notNullize(tool.workDirectory)))
       .toList();
   }
 
@@ -117,6 +119,7 @@ public final class HaxeCustomToolsStore implements PersistentStateComponent<Haxe
     ToolState toolState = new ToolState();
     toolState.name = tool.name();
     toolState.command = tool.command();
+    toolState.workDirectory = tool.workDirectory();
     return toolState;
   }
 

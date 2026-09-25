@@ -26,12 +26,12 @@ public class HaxeCustomActionsStoreTest {
   @DisplayName("actions keep creation order and same name replaces")
   public void actionsKeepCreationOrderAndSameNameReplaces() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("docs", "haxe doc.hxml"));
-    store.addAction(FILE, new CustomAction("serve", "nekotools server"));
-    store.addAction(FILE, new CustomAction("docs", "haxe docs2.hxml"));
+    store.addAction(FILE, new CustomAction("docs", "haxe doc.hxml", ""));
+    store.addAction(FILE, new CustomAction("serve", "nekotools server", ""));
+    store.addAction(FILE, new CustomAction("docs", "haxe docs2.hxml", ""));
 
-    assertEquals(List.of(new CustomAction("serve", "nekotools server"),
-                         new CustomAction("docs", "haxe docs2.hxml")),
+    assertEquals(List.of(new CustomAction("serve", "nekotools server", ""),
+                         new CustomAction("docs", "haxe docs2.hxml", "")),
                  store.getActions(FILE));
   }
 
@@ -39,12 +39,12 @@ public class HaxeCustomActionsStoreTest {
   @DisplayName("update keeps position and rename works")
   public void updateKeepsPositionAndRenameWorks() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("a", "cmd-a"));
-    store.addAction(FILE, new CustomAction("b", "cmd-b"));
+    store.addAction(FILE, new CustomAction("a", "cmd-a", ""));
+    store.addAction(FILE, new CustomAction("b", "cmd-b", ""));
 
-    store.updateAction(FILE, "a", new CustomAction("a2", "cmd-a2"));
+    store.updateAction(FILE, "a", new CustomAction("a2", "cmd-a2", ""));
 
-    assertEquals(List.of(new CustomAction("a2", "cmd-a2"), new CustomAction("b", "cmd-b")),
+    assertEquals(List.of(new CustomAction("a2", "cmd-a2", ""), new CustomAction("b", "cmd-b", "")),
                  store.getActions(FILE));
   }
 
@@ -52,7 +52,7 @@ public class HaxeCustomActionsStoreTest {
   @DisplayName("remove deletes by name")
   public void removeDeletesByName() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("a", "cmd-a"));
+    store.addAction(FILE, new CustomAction("a", "cmd-a", ""));
     store.removeAction(FILE, "a");
     assertTrue(store.getActions(FILE).isEmpty());
   }
@@ -61,14 +61,14 @@ public class HaxeCustomActionsStoreTest {
   @DisplayName("state survives xml serialization round trip")
   public void stateSurvivesXmlSerializationRoundTrip() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("docs", "haxe doc.hxml"));
+    store.addAction(FILE, new CustomAction("docs", "haxe doc.hxml", "${moduleRoot}/docs"));
 
     Element serialized = XmlSerializer.serialize(store.getState());
     HaxeCustomActionsStore.State deserialized = XmlSerializer.deserialize(serialized, HaxeCustomActionsStore.State.class);
 
     HaxeCustomActionsStore reloaded = new HaxeCustomActionsStore();
     reloaded.loadState(deserialized);
-    assertEquals(List.of(new CustomAction("docs", "haxe doc.hxml")), reloaded.getActions(FILE));
+    assertEquals(List.of(new CustomAction("docs", "haxe doc.hxml", "${moduleRoot}/docs")), reloaded.getActions(FILE));
   }
 
   @Test

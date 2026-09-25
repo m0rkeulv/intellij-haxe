@@ -28,11 +28,16 @@ public final class HaxeEditToolAction extends DumbAwareAction {
     Project project = e.getProject();
     if (project == null || !(panel.getSelectedUserObject() instanceof ToolNode toolNode) || !toolNode.custom()) return;
 
-    var initial = new HaxeCustomActionDialog.NameAndCommand(toolNode.name(), toolNode.detail());
+    // edit the STORED values - the node's are the resolved display forms
+    var stored = HaxeCustomToolsStore.getInstance(project).getTools(toolNode.containerId()).stream()
+      .filter(tool -> tool.name().equals(toolNode.name()))
+      .findFirst()
+      .orElse(new HaxeCustomToolsStore.CustomTool(toolNode.name(), toolNode.detail(), ""));
+    var initial = new HaxeCustomActionDialog.EditedCommand(stored.name(), stored.command(), stored.workDirectory());
     HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forTool(project, initial);
     if (dialog.showAndGet()) {
-      var edited = dialog.getNameAndCommand();
-      var tool = new HaxeCustomToolsStore.CustomTool(edited.name(), edited.command());
+      var edited = dialog.getEditedCommand();
+      var tool = new HaxeCustomToolsStore.CustomTool(edited.name(), edited.command(), edited.workDirectory());
       HaxeCustomToolsStore.getInstance(project).updateTool(toolNode.containerId(), toolNode.name(), tool);
       panel.refreshTree();
     }

@@ -22,7 +22,8 @@ import java.util.List;
 @State(name = "HaxeCustomActions", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeCustomActionsStore implements PersistentStateComponent<HaxeCustomActionsStore.State> {
 
-  public record CustomAction(@NotNull String name, @NotNull String command) {
+  /** {@code workDirectory} may carry root variables; blank means the build file's directory. */
+  public record CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
   }
 
   public static final class State {
@@ -37,6 +38,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
   public static final class ActionState {
     public String name;
     public String command = "";
+    public String workDirectory = "";
   }
 
   private State state = new State();
@@ -82,7 +84,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     if (container == null) return List.of();
     return container.actions.stream()
       .filter(action -> !StringUtil.isEmptyOrSpaces(action.name))
-      .map(action -> new CustomAction(action.name, StringUtil.notNullize(action.command)))
+      .map(action -> new CustomAction(action.name, StringUtil.notNullize(action.command), StringUtil.notNullize(action.workDirectory)))
       .toList();
   }
 
@@ -116,6 +118,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     ActionState actionState = new ActionState();
     actionState.name = action.name();
     actionState.command = action.command();
+    actionState.workDirectory = action.workDirectory();
     return actionState;
   }
 

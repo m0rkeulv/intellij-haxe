@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
@@ -9,6 +10,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +25,10 @@ public final class HaxeCustomCommands {
   public static final String TARGET_VARIABLE = "${target}";
   /** The execution-time variable {@link #expandServerPort} resolves; resolve and display keep it literal. */
   public static final String SERVER_PORT_VARIABLE = "${serverPort}";
+  /** The variable {@link #expandRoots} resolves to the container's root directory. */
+  public static final String MODULE_ROOT_VARIABLE = "${moduleRoot}";
+  /** The variable {@link #expandRoots} resolves to the project's base directory. */
+  public static final String PROJECT_ROOT_VARIABLE = "${projectRoot}";
 
   private HaxeCustomCommands() {
   }
@@ -66,6 +72,36 @@ public final class HaxeCustomCommands {
     return command.stream()
       .map(argument -> argument.replace(SERVER_PORT_VARIABLE, String.valueOf(port)))
       .toList();
+  }
+
+  /**
+   * Expands {@code ${moduleRoot}} and {@code ${projectRoot}} to the
+   * container's root and the project's base directory (the same directory
+   * for the project-level container). A root that cannot be resolved keeps
+   * the literal, making the unapplied variable visible instead of silently
+   * vanishing.
+   */
+  @NotNull
+  public static String expandRoots(@NotNull String text, @Nullable String moduleRoot, @Nullable String projectRoot) {
+    String expanded = text;
+    if (moduleRoot != null) {
+      expanded = expanded.replace(MODULE_ROOT_VARIABLE, moduleRoot);
+    }
+    if (projectRoot != null) {
+      expanded = expanded.replace(PROJECT_ROOT_VARIABLE, projectRoot);
+    }
+    return expanded;
+  }
+
+  /**
+   * A custom row's working directory: blank falls back to the row kind's
+   * default, anything else expands the root variables.
+   */
+  @Nullable
+  public static String resolveWorkDirectory(@NotNull String workDirectory, @Nullable String fallback,
+                                            @Nullable String moduleRoot, @Nullable String projectRoot) {
+    if (StringUtil.isEmptyOrSpaces(workDirectory)) return fallback;
+    return expandRoots(workDirectory, moduleRoot, projectRoot);
   }
 
   /**

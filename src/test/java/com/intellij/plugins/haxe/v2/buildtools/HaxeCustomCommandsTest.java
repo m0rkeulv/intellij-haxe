@@ -34,4 +34,32 @@ public class HaxeCustomCommandsTest extends HaxeCodeInsightFixtureTestCase {
     List<String> command = List.of("mytool", "--connect", "${serverPort}");
     assertEquals(command, HaxeCustomCommands.expandServerPort(getProject(), "module", command));
   }
+
+  @Test
+  @DisplayName("root variables expand to the given directories")
+  public void testRootVariablesExpandToTheGivenDirectories() {
+    String expanded = HaxeCustomCommands.expandRoots("${moduleRoot}/bin and ${projectRoot}/out", "/work/mod", "/work");
+
+    assertEquals("/work/mod/bin and /work/out", expanded);
+  }
+
+  @Test
+  @DisplayName("unresolvable roots keep the literal visible")
+  public void testUnresolvableRootsKeepTheLiteralVisible() {
+    String expanded = HaxeCustomCommands.expandRoots("${moduleRoot} ${projectRoot}", null, "/work");
+
+    assertEquals("${moduleRoot} /work", expanded);
+  }
+
+  @Test
+  @DisplayName("blank work directory falls back to the row kind's default")
+  public void testBlankWorkDirectoryFallsBackToTheRowKindsDefault() {
+    assertEquals("/fallback", HaxeCustomCommands.resolveWorkDirectory("  ", "/fallback", "/work/mod", "/work"));
+  }
+
+  @Test
+  @DisplayName("work directory expands root variables")
+  public void testWorkDirectoryExpandsRootVariables() {
+    assertEquals("/work/sub", HaxeCustomCommands.resolveWorkDirectory("${projectRoot}/sub", "/fallback", "/work/mod", "/work"));
+  }
 }
