@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.buildtools.server;
 
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
@@ -48,8 +47,7 @@ public final class HaxeContextFailures {
   /** Drops the failures of every container the given server serves — a stopped server's failures describe a dead process. */
   public void clearForServer(@NotNull String serverId) {
     for (String containerId : List.copyOf(failures.keySet())) {
-      String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
-      if (serverId.equals(HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName))) {
+      if (serverId.equals(HaxeCompilationServerManager.serverIdFor(project, containerId))) {
         record(containerId, null);
       }
     }

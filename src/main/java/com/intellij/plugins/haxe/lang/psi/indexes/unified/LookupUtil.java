@@ -15,9 +15,9 @@ import java.util.Set;
 public class LookupUtil {
 
     /**
-     * Root packages that mirror compiler targets: the std library's target externs
-     * (std/flash → package flash) and libraries shipping per-target externs (e.g.
-     * openfl's flash compatibility package) use exactly these names.
+     * Root packages that mirror compiler targets: the std library's target
+     * externs (std/flash is package flash) and libraries shipping per-target
+     * externs use exactly these names.
      */
     private static final Set<String> TARGET_ROOT_PACKAGES =
       Set.of("cpp", "cs", "flash", "hl", "java", "js", "jvm", "lua", "php", "python", "neko");

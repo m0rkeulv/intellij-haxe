@@ -5,6 +5,7 @@ import com.intellij.plugins.haxe.profiler.hxt.HxtSessionWriter.WeightedStack;
 import com.intellij.plugins.haxe.profiler.js.CpuProfileTranslator.NodeTree;
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.StackFrame;
+import com.intellij.plugins.haxe.profiler.model.PseudoFrames;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import tools.jackson.core.JacksonException;
@@ -28,7 +29,7 @@ import java.util.List;
  * profile) — those records chart as real frames, and each carries the
  * segment's heap reading when one was polled. The tail up to the flush
  * boundary is marked a collection window: not a frame. Without observed
- * frames a segment stays one such window, exactly as before.
+ * frames a segment is one such window.
  *
  * Segments share the target's microsecond clock ({@code startTime}/
  * {@code endTime}); the first segment's start rebases the session to zero.
@@ -36,8 +37,8 @@ import java.util.List;
  * and {@code (program)} become [idle], {@code (garbage collector)} becomes
  * [gc] and counts into its window's GC time. Positions map back to the
  * .hx sources through {@link JsSourceMap} when the caller supplies maps;
- * unmapped frames keep the generated file's own position through the v1
- * name convention {@code symbol(file:line)} either way.
+ * unmapped frames keep the generated file's own position. Either way the
+ * position travels in the v1 name convention {@code symbol(file:line)}.
  */
 public final class CpuProfileSessionBuilder {
 
@@ -103,7 +104,7 @@ public final class CpuProfileSessionBuilder {
     // next segment's first sample cannot inherit it (delta IS weight)
     long gapUs = startUs - baseUs - lastStampUs;
     if (gapUs > 0) {
-      weighted.add(new WeightedStack(List.of("[idle]"), gapUs));
+      weighted.add(new WeightedStack(List.of(PseudoFrames.IDLE), gapUs));
     }
 
     long elapsedUs = 0;
@@ -112,24 +113,24 @@ public final class CpuProfileSessionBuilder {
       elapsedUs += weight;
       int nodeId = samples.path(i).asInt(-1);
       String function = tree.functionOf(nodeId);
-      if ("(idle)".equals(function) || "(program)".equals(function)) {
-        weighted.add(new WeightedStack(List.of("[idle]"), weight));
+      if (CpuProfileTranslator.isIdleNode(function)) {
+        weighted.add(new WeightedStack(List.of(PseudoFrames.IDLE), weight));
         continue;
       }
-      if ("(garbage collector)".equals(function)) {
-        weighted.add(new WeightedStack(List.of("[gc]"), weight));
+      if (CpuProfileTranslator.GC_NODE.equals(function)) {
+        weighted.add(new WeightedStack(List.of(PseudoFrames.GC), weight));
         continue;
       }
       List<StackFrame> stack = tree.stackOf(nodeId);
       if (stack.isEmpty()) {
-        weighted.add(new WeightedStack(List.of("[idle]"), weight));
+        weighted.add(new WeightedStack(List.of(PseudoFrames.IDLE), weight));
         continue;
       }
       weighted.add(new WeightedStack(names(stack), weight));
     }
 
-    // endTime when present, else the samples' extent; never backward - the
-    // v1 window chain needs monotonic stamps
+    // endTime when present, else the samples' extent; never backward, since
+    // the v1 window chain needs monotonic stamps
     long stampUs = Math.max(profile.path("endTime").asLong(0) - baseUs, startUs - baseUs + elapsedUs);
     stampUs = Math.max(stampUs, lastStampUs);
 
@@ -198,7 +199,7 @@ public final class CpuProfileSessionBuilder {
   }
 
   private static boolean isGcStack(WeightedStack sample) {
-    return sample.rootFirstStack().size() == 1 && "[gc]".equals(sample.rootFirstStack().get(0));
+    return sample.rootFirstStack().size() == 1 && PseudoFrames.GC.equals(sample.rootFirstStack().get(0));
   }
 
   /** The plain frame, or the source-mapped one when a map covers the sampled position. */
@@ -236,15 +237,16 @@ public final class CpuProfileSessionBuilder {
 
   /**
    * Haxe's js generator writes a type's dotted path with {@code _} as the
-   * separator and marks a segment's own leading underscore with a
-   * following {@code $} ({@code openfl_display__$internal_Context3DShape}
-   * is {@code openfl.display._internal.Context3DShape}). Only pieces that
-   * start lowercase (a package root) and carry an underscore are touched,
-   * so plain method names like {@code __updateGL} pass through.
+   * separator and marks a segment's own leading underscore with a following
+   * {@code $} ({@code pack_sub__$internal_Shape} is
+   * {@code pack.sub._internal.Shape}). Only pieces that start lowercase (a
+   * package root) and carry an underscore are touched, so plain method names
+   * like {@code __update} pass through.
    */
   static String demangle(String name) {
     StringBuilder result = new StringBuilder(name.length());
-    for (String piece : name.split("\\.", -1)) { // dots split V8's "Type.method" inferred names
+    // the pieces of V8's dotted "Type.method" inferred names
+    for (String piece : name.split("\\.", -1)) {
       if (result.length() > 0) result.append('.');
       // a mangled type path: lowercase start, at least one underscore
       if (piece.matches("[a-z][a-zA-Z0-9$]*_[a-zA-Z0-9_$]*")) {

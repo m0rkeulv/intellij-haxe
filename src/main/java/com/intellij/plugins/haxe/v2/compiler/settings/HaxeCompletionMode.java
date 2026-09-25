@@ -10,9 +10,8 @@ import org.jetbrains.annotations.Nullable;
  * members the source never declares). Gates the compiler-backed resolve and
  * completion paths; diagnostics highlighting has its own toggle.
  */
-// TODO: a COMPILER_ONLY mode (every completion answered by the compilation
-//  server) needs per-request display/completion wiring with unsaved-buffer
-//  sync and is out of scope for now.
+// TODO: a COMPILER_ONLY mode (every completion answered by the compilation server),
+//  which needs per-request display wiring with unsaved-buffer sync
 public enum HaxeCompletionMode {
   IDE_ONLY("ide", "haxe.compiler.completion.mode.ide"),
   IDE_AND_COMPILER("ide+compiler", "haxe.compiler.completion.mode.ide.and.compiler");

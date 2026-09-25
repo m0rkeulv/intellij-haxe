@@ -116,6 +116,7 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
    */
   private static String reindentBlob(String blob, String target, CommonCodeStyleSettings.IndentOptions indent) {
     if (blob.indexOf('\n') < 0) return blob;
+    // every line, trailing empty ones kept
     String[] lines = blob.split("\n", -1);
 
     int targetColumns = HaxeIndentText.indentWidth(target, indent.TAB_SIZE);

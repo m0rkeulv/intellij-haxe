@@ -5,7 +5,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataType;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.SearchScope;
 import com.intellij.psi.search.searches.ReferencesSearch;
@@ -17,14 +16,14 @@ import org.jetbrains.annotations.NotNull;
 /**
  * Unified "is this declaration used?" over static reference search and the
  * compiler's post-macro knowledge. Static search runs first and stops at the
- * FIRST hit; only a statically-unreferenced member falls through to the
+ * FIRST hit; only a statically unreferenced member falls through to the
  * compiler side ({@link HaxeCompilerUsageService}), which sees usages that
  * exist only in generated code.
  *
- * The answer is deliberately tri-state: the compiler half is cache-only under
- * the read lock, so "no reference found" splits into UNUSED (compiler
- * confirmed) and UNKNOWN (verdict still being fetched — the caller's static
- * conclusion stands for this pass and self-corrects on the next).
+ * The answer is tri-state because the compiler half is cache-only under the
+ * read lock: "no reference found" splits into UNUSED (the compiler confirmed
+ * it) and UNKNOWN (its verdict is still being fetched; the caller's static
+ * conclusion stands for this pass and is corrected on the next).
  */
 public final class HaxeUsageSearch {
 
@@ -77,11 +76,11 @@ public final class HaxeUsageSearch {
   /**
    * Whether the declaration's metadata should exempt it from "unused"
    * warnings. Registry-known metadata (except {@code @:deprecated}) may be
-   * consumed invisibly — even the compiler's reference search reports zero
-   * usages for haxeui's {@code @:bind} handlers, yet they run. Metadata the
-   * registry does NOT know is likely a typo and keeps no one alive; a user
-   * whose custom meta is misjudged adds {@code @:keep}. While the registry
-   * has not loaded, any metadata counts (conservative).
+   * consumed invisibly: a macro can wire up a handler through its metadata,
+   * and even the compiler's reference search then reports zero usages. Metadata
+   * the registry does NOT know is likely a typo and keeps nothing alive; a
+   * user whose custom metadata is misjudged adds {@code @:keep}. While the
+   * registry has not loaded, any metadata counts.
    */
   public static boolean metadataKeepsAlive(@NotNull HaxeNamedComponent declaration) {
     List<String> names = new ArrayList<>();
@@ -95,8 +94,7 @@ public final class HaxeUsageSearch {
     names.remove("deprecated");
     if (names.isEmpty()) return false;
 
-    PsiFile file = declaration.getContainingFile();
-    VirtualFile virtualFile = file != null ? file.getOriginalFile().getVirtualFile() : null;
+    VirtualFile virtualFile = HaxeCompilerDisplayService.physicalFileOf(declaration);
     if (virtualFile == null) return true;
     Set<String> known = HaxeCompilerMetadataService.getInstance(declaration.getProject()).knownBareNames(virtualFile);
     if (known == null) return true;

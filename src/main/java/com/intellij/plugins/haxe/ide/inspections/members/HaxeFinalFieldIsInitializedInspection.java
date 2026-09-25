@@ -97,7 +97,7 @@ public class HaxeFinalFieldIsInitializedInspection extends HaxeInspection {
 
     @Override
     public void visitAssignExpression(@NotNull HaxeAssignExpression o) {
-      HaxeExpression expression = (o.getExpressionList()).get(0);
+      HaxeExpression expression = o.getExpressionList().getFirst();
       if (expression instanceof HaxeReferenceExpression reference) {
         final HaxeIdentifier identifier = reference.getIdentifier();
 

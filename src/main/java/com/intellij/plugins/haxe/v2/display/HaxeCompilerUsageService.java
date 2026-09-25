@@ -16,7 +16,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch.UsageState;
-import com.intellij.psi.PsiFile;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,16 +26,17 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The compiler's answer to "is this member referenced anywhere?" via
- * {@code display/references} — it sees the post-macro program, so usages that
- * exist only in generated code (a {@code @:bind}-wired handler) count.
+ * {@code display/references}. The compiler sees the post-macro program, so
+ * usages that exist only in generated code (a handler a macro wires up)
+ * count.
  *
- * Inspections run under the read lock, so queries are strictly cache-only:
- * a miss schedules background hydration and answers UNKNOWN this once; the
- * daemon restart after the verdict lands re-runs the inspection against the
- * cache. Verdicts are per file revision — an edit anywhere in the file drops
- * them (offsets move); usages appearing in OTHER files leave a stale verdict
- * until then, which the asymmetric consumers tolerate (a stale USED merely
- * keeps suppressing a hint).
+ * Inspections run under the read lock, so queries are strictly cache-only: a
+ * miss schedules background hydration and answers UNKNOWN this once, and the
+ * daemon restart after the verdict lands runs the inspection again against
+ * the cache. Verdicts belong to one file revision: any edit in the file drops
+ * them, since offsets move. Usages appearing in OTHER files leave a stale
+ * verdict until then, which the consumers tolerate because a stale USED only
+ * keeps suppressing a hint.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -82,9 +82,7 @@ public final class HaxeCompilerUsageService {
     if (DumbService.isDumb(project)) return UsageState.UNKNOWN;
     HaxeComponentName componentName = declaration.getComponentName();
     if (componentName == null) return UsageState.UNKNOWN;
-    PsiFile file = declaration.getContainingFile();
-    if (file == null) return UsageState.UNKNOWN;
-    VirtualFile virtualFile = file.getOriginalFile().getVirtualFile();
+    VirtualFile virtualFile = HaxeCompilerDisplayService.physicalFileOf(declaration);
     if (virtualFile == null) return UsageState.UNKNOWN;
     HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(virtualFile);
     if (context == null) return UsageState.UNKNOWN;
@@ -99,7 +97,7 @@ public final class HaxeCompilerUsageService {
       return verdict.state();
     }
 
-    // no request while the text does not parse - cached verdicts above are
+    // no request while the text does not parse; cached verdicts above are
     // still served, only new server work waits for valid syntax
     if (!HaxeCompilerDisplayService.isSyntaxClean(project, virtualFile)) return UsageState.UNKNOWN;
 

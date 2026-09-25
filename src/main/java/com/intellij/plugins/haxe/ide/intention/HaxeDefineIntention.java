@@ -78,7 +78,7 @@ public class HaxeDefineIntention implements IntentionAction {
     List<EnvironmentDefine> defines = new ArrayList<>(store.getDefines(containerId));
     defines.removeIf(define -> define.name().equals(myWord));
     // an override entry is only needed when the build context disagrees with
-    // the wanted state; otherwise dropping our previous override suffices
+    // the wanted state; otherwise dropping the previous override suffices
     boolean definedByBuildContext = contextService.isDefinedWithoutOverrides(myWord);
     if (isDefined && definedByBuildContext) {
       defines.add(new EnvironmentDefine(myWord, "", DefineEffect.REMOVE));

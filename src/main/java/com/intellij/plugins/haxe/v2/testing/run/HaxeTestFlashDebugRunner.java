@@ -14,6 +14,7 @@ import com.intellij.execution.testframework.sm.runner.SMTRunnerConsoleProperties
 import com.intellij.execution.testframework.ui.BaseTestsOutputConsoleView;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -58,8 +59,9 @@ public class HaxeTestFlashDebugRunner extends GenericProgramRunner<RunnerSetting
   private static boolean launchesFlash(@NotNull HaxeTestRunConfiguration configuration) {
     String buildFilePath = configuration.getBuildFilePath();
     if (StringUtil.isEmptyOrSpaces(buildFilePath)) return false;
-    return ReadAction.compute(
-      () -> HaxeTestLaunchPlanner.launchTarget(configuration.getProject(), buildFilePath) == HaxeTarget.FLASH);
+    // runner selection happens on the EDT and on background threads alike
+    HaxeTarget target = HaxeReadActions.compute(() -> HaxeTestLaunchPlanner.launchTarget(configuration.getProject(), buildFilePath));
+    return target == HaxeTarget.FLASH;
   }
 
   @Override

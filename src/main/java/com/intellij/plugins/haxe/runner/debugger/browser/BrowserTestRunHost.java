@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.runner.debugger.browser;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.openapi.util.Key;
+import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.HostedTestRunSentinel;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
@@ -67,10 +68,10 @@ public final class BrowserTestRunHost extends ProcessHandler {
       endpoint.sendRequestNoWait(backend.launchRequest());
       pumpEvents(endpoint);
     } catch (IOException e) {
-      failRun("The browser test run could not start: " + e.getMessage() + "\n");
+      failRun(HaxeDebuggerBundle.message("browser.test.run.start.failed", e.getMessage()));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      failRun("The browser test run was interrupted.\n");
+      failRun(HaxeDebuggerBundle.message("browser.test.run.interrupted"));
     }
   }
 
@@ -78,8 +79,7 @@ public final class BrowserTestRunHost extends ProcessHandler {
     long deadline = System.currentTimeMillis() + OUTPUT_STALL_MILLIS;
     while (!finished) {
       if (System.currentTimeMillis() > deadline) {
-        failRun("The browser test run produced no output for " + OUTPUT_STALL_MILLIS / 1000
-                + " seconds and never reported completion; the page likely failed to load the tests.\n");
+        failRun(HaxeDebuggerBundle.message("browser.test.run.stalled", String.valueOf(OUTPUT_STALL_MILLIS / 1000)));
         return;
       }
       Event event = endpoint.pollEvent(EVENT_POLL_MILLIS);
@@ -123,7 +123,7 @@ public final class BrowserTestRunHost extends ProcessHandler {
     if (finished) {
       return;
     }
-    notifyTextAvailable(message, ProcessOutputTypes.STDERR);
+    notifyTextAvailable(message + "\n", ProcessOutputTypes.STDERR);
     finish(null);
   }
 

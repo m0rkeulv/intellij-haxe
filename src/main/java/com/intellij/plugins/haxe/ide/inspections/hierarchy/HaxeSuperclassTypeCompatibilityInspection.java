@@ -12,7 +12,6 @@ import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.fixer.HaxeFixer;
 import com.intellij.psi.PsiElement;
 import java.util.*;
-import static java.util.function.Predicate.not;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** The extends clause names something that cannot be extended here. */

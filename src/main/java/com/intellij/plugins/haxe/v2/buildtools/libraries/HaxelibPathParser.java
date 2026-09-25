@@ -13,6 +13,8 @@ import java.util.List;
  */
 public final class HaxelibPathParser {
 
+  private static final String DEFINE_PREFIX = "-D ";
+
   private HaxelibPathParser() {
   }
 
@@ -35,10 +37,10 @@ public final class HaxelibPathParser {
     for (String line : outputLines) {
       String trimmed = line.trim();
       if (trimmed.isEmpty()) continue;
-      if (trimmed.startsWith("-D ")) {
+      if (trimmed.startsWith(DEFINE_PREFIX)) {
         int equals = trimmed.indexOf('=');
-        if (equals > 3) {
-          String name = trimmed.substring(3, equals).trim();
+        if (equals > DEFINE_PREFIX.length()) {
+          String name = trimmed.substring(DEFINE_PREFIX.length(), equals).trim();
           String version = trimmed.substring(equals + 1).trim();
           sections.add(new LibrarySection(name, version, List.copyOf(pending)));
           pending.clear();
@@ -54,5 +56,4 @@ public final class HaxelibPathParser {
     }
     return sections;
   }
-
 }

@@ -107,8 +107,8 @@ public final class HaxeModuleVariants {
       Set<String> active = new HashSet<>();
 
       for (String platform : STOCK_PLATFORM_NAMES) {
-        // NOTE: we do not show all defines in the haxe tool window, but we do add target (amongst others like compiler version etc)
-        // see HaxeDefineContextService.baseDefines for details
+        // the tool window lists only the declared defines; the context adds the target's own
+        // (and the compiler version's) - see HaxeDefineContextService.baseDefines
         if (defines.containsKey(platform)) active.add(platform);
       }
 

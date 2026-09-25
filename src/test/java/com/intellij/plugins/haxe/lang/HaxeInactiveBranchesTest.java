@@ -157,8 +157,8 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   @DisplayName("broken statement keeps the rest of the branch navigable")
   public void testBrokenStatementKeepsTheRestOfTheBranchNavigable() {
     // a missing semicolon must stay a LOCAL error: the sibling method keeps
-    // real PSI and its references keep resolving (previously the whole
-    // branch degraded to token soup and every reference died)
+    // real PSI and its references keep resolving instead of the whole branch
+    // falling back to flat tokens
     PsiFile file = myFixture.configureByText("Foo.hx", """
       class Helper {}
       class Foo {
@@ -692,7 +692,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   @DisplayName("dead branch completion offers rich member elements")
   public void testDeadBranchCompletionOffersRichMemberElements() {
     // completion runs on a COPY with a dummy identifier at the caret, which
-    // breaks the strict parse grading - the copy must take the best grade
+    // breaks the clean parse - the copy must keep the recovered parse
     // errors-and-all or the rich reference pipeline finds no reference and
     // only the flat word-completion fallback fills the popup
     myFixture.configureByText("Foo.hx", """

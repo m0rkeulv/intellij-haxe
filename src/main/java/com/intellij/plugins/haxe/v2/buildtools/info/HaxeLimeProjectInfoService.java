@@ -44,10 +44,10 @@ import static com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.
  * whose hxml output flattens haxelibs into classpaths.
  *
  * Results are cached per (file, target, toolchain) and refreshed in the
- * background - callers get the cached value (possibly stale, possibly null on
- * first ask) immediately and a callback once a refresh lands. A failed run is
- * cached as null until the file changes, so a broken toolchain never causes
- * refresh loops.
+ * background via {@link HaxeProjectInfoCache} - callers get the cached value
+ * (possibly stale, possibly null on first ask) immediately and a callback once
+ * a refresh lands. A failed parser-tool run retries a bounded number of times
+ * per file revision, so a broken toolchain never causes refresh loops.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -93,7 +93,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     Key key = new Key(buildFile.file().getPath(), targetFlag, haxelibPath);
     long stamp = buildFile.file().getModificationStamp();
 
-    //NOTE: ran here as the executor thread must not touch the VirtualFile
+    // read here: the executor thread must not touch the VirtualFile
     String tool = LimeProjects.toolFor(buildFile.type());
     VirtualFile parent = buildFile.file().getParent();
 
@@ -166,8 +166,8 @@ public final class HaxeLimeProjectInfoService implements Disposable {
       }
 
       return parseToolOutput(output.getStdout(), key.targetFlag());
-
-    } catch (ExecutionException e) {
+    }
+    catch (ExecutionException e) {
       log.warn("LimeProjectParser could not run for " + key.filePath() + ": " + e.getMessage());
       return null;
     }
@@ -196,13 +196,10 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     }
   }
 
-  /**
-   * Approximates the condition defines lime seeds before parsing (target id plus
-   * its platform family). The planned matrix comparison lane tightens this list
-   * against real `lime display` output.
-   */
+  /** Approximates the condition defines lime seeds before parsing: the target id plus its platform family. */
   @NotNull
   private static List<String> seedDefines(@NotNull String targetFlag) {
+    // TODO: verify the seeds against real `lime display` output per target
     List<String> seeds = new ArrayList<>();
     seeds.add(targetFlag);
     switch (targetFlag) {
@@ -218,7 +215,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
       case "hl", "neko", "java", "cs" -> {
         seeds.add("desktop");
         // pseudo-targets run on the host platform, which lime also defines
-        seeds.add(SystemInfo.isWindows ? "windows" : SystemInfo.isMac ? "mac" : "linux");
+        seeds.add(LimeProjects.hostPlatformTarget());
       }
       default -> { }
     }

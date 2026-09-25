@@ -5,7 +5,6 @@ import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.HaxeComponentType;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeStubBasedNamedComponent;
-import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeComponentNameStub;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeEmptyContainerStub;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeModuleStub;
 import com.intellij.plugins.haxe.model.HaxeAbstractClassModel;

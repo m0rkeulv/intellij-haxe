@@ -22,7 +22,6 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.*;
 import static com.intellij.plugins.haxe.ide.annotator.semantics.AnnotatorUtil.hasMacroForCodeGeneration;
 import static com.intellij.plugins.haxe.model.evaluator.assign.HaxeTypeCompatible.canAssignToFromReference;
-import static java.util.function.Predicate.not;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** Implemented interface members whose signature or type does not conform. */
@@ -101,7 +100,7 @@ public class HaxeInterfaceMethodSignatureInspection extends HaxeInspection {
                 annotateDifferentAccess(intReference, reporter, fieldDeclaration, fieldDeclaration);
               }
               else {
-                HaxePropertyAccessor getter = propertyDeclaration.getPropertyAccessorList().get(0);
+                HaxePropertyAccessor getter = propertyDeclaration.getPropertyAccessorList().getFirst();
                 HaxePropertyAccessor setter = propertyDeclaration.getPropertyAccessorList().get(1);
 
                 if (intGetterText != null && getter != null) {

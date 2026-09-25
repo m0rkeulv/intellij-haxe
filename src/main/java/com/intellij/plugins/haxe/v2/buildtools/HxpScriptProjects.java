@@ -23,8 +23,6 @@ public final class HxpScriptProjects {
   public static List<String> buildCommand(@NotNull Project project,
                                           @Nullable String environmentSdk,
                                           @NotNull VirtualFile file) {
-
     return List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk), "run", "hxp", file.getName());
-
   }
 }

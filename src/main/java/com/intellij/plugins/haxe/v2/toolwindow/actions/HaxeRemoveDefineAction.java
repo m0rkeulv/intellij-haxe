@@ -27,7 +27,6 @@ public final class HaxeRemoveDefineAction extends DumbAwareAction {
     Project project = e.getProject();
     if (project != null && panel.getSelectedUserObject() instanceof EnvDefineNode define) {
       HaxeEnvironmentStore.getInstance(project).removeDefine(define.containerId(), define.name());
-      panel.refreshTree();
     }
   }
 

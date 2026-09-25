@@ -107,14 +107,18 @@ final class HaxeLineChipGutter {
     ComponentListener relayout = new ComponentAdapter() {
       @Override
       public void componentResized(ComponentEvent event) {
-        overlay.setBounds(gutter.getAnnotationsAreaOffset(), 0, gutter.getAnnotationsAreaWidth(), gutter.getHeight());
+        fitToAnnotationsArea(overlay, gutter);
       }
     };
     gutter.add(overlay);
     gutter.addComponentListener(relayout);
-    overlay.setBounds(gutter.getAnnotationsAreaOffset(), 0, gutter.getAnnotationsAreaWidth(), gutter.getHeight());
+    fitToAnnotationsArea(overlay, gutter);
     gutter.repaint();
     return new Installed(widthHolder, overlay, gutter, relayout);
+  }
+
+  private static void fitToAnnotationsArea(JComponent overlay, EditorGutterComponentEx gutter) {
+    overlay.setBounds(gutter.getAnnotationsAreaOffset(), 0, gutter.getAnnotationsAreaWidth(), gutter.getHeight());
   }
 
   /**
@@ -365,12 +369,16 @@ final class HaxeLineChipGutter {
       int height = editor.getLineHeight() - JBUI.scale(2);
       int width = metrics.stringWidth(text) + 2 * textPadding();
       int arc = JBUI.scale(6);
-      g.setColor(hot ? (hovered ? HOT_HOVER_BACKGROUND : HOT_BACKGROUND)
-                     : (hovered ? LINE_HOVER_BACKGROUND : LINE_BACKGROUND));
+      g.setColor(chipBackground(hot, hovered));
       g.fillRoundRect(0, y + JBUI.scale(1), width, height, arc, arc);
       g.setColor(hot ? HOT_FOREGROUND : LINE_FOREGROUND);
       int baseline = y + JBUI.scale(1) + (height + metrics.getAscent() - metrics.getDescent()) / 2;
       g.drawString(text, textPadding(), baseline);
+    }
+
+    private static Color chipBackground(boolean hot, boolean hovered) {
+      if (hot) return hovered ? HOT_HOVER_BACKGROUND : HOT_BACKGROUND;
+      return hovered ? LINE_HOVER_BACKGROUND : LINE_BACKGROUND;
     }
 
     /**
@@ -406,5 +414,4 @@ final class HaxeLineChipGutter {
       return percent == 0 && partUs > 0 ? "<1" : String.valueOf(percent);
     }
   }
-
 }

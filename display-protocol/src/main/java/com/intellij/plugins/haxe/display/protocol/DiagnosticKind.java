@@ -3,9 +3,10 @@ package com.intellij.plugins.haxe.display.protocol;
 /**
  * Wire codes of std {@code haxe.display.DiagnosticKind}. The {@code args}
  * payload differs per kind (see the std typedef): UNRESOLVED_IDENTIFIER
- * carries import/typo suggestions, COMPILER_ERROR/PARSER_ERROR a message
- * string, REMOVABLE_CODE a description+range, MISSING_FIELDS the structured
- * implement-members data.
+ * carries import and typo suggestions, COMPILER_ERROR and PARSER_ERROR a
+ * message string, REMOVABLE_CODE a description and range, MISSING_FIELDS the
+ * structured implement-members data. Haxe 5 renames REMOVABLE_CODE to
+ * ReplaceableCode under the same code.
  */
 public enum DiagnosticKind {
   UNUSED_IMPORT(0),
@@ -22,10 +23,6 @@ public enum DiagnosticKind {
 
   DiagnosticKind(int code) {
     this.code = code;
-  }
-
-  public int code() {
-    return code;
   }
 
   public static DiagnosticKind fromCode(int code) {

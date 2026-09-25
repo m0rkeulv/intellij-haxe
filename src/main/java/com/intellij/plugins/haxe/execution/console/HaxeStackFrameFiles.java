@@ -18,8 +18,8 @@ import java.util.Comparator;
  * Finds the source file a stack frame names. A path that exists as written,
  * or under the project root, wins; otherwise the indexed file sharing the
  * longest trailing path with it — a trace pasted from another machine names
- * {@code /opt/.../std/neko/_std/Array.hx}, which is this SDK's
- * {@code std/neko/_std/Array.hx}. Project content beats libraries on a tie.
+ * {@code /home/username/work/app/src/shapes/Circle.hx}, which is this
+ * project's {@code src/shapes/Circle.hx}. Project content beats libraries on a tie.
  */
 final class HaxeStackFrameFiles {
 

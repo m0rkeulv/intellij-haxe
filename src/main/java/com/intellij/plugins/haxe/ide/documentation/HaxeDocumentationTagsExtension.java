@@ -11,7 +11,6 @@ import org.commonmark.parser.Parser;
 import org.commonmark.parser.PostProcessor;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

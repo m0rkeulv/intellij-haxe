@@ -43,7 +43,6 @@ public final class HaxeSetWorkDirectoryAction extends DumbAwareAction {
     HaxeWorkDirectoryDialog dialog = new HaxeWorkDirectoryDialog(project, currentOverride, defaultDirectory);
     if (dialog.showAndGet()) {
       store.setWorkDirectory(file.getPath(), dialog.getWorkDirectory());
-      panel.refreshTree();
     }
   }
 

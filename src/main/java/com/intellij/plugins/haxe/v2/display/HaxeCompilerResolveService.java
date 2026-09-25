@@ -3,11 +3,11 @@ package com.intellij.plugins.haxe.v2.display;
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
@@ -26,7 +26,6 @@ import com.intellij.plugins.haxe.model.HaxeModuleModel;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.util.PsiTreeUtil;
 import java.util.ArrayList;
@@ -35,7 +34,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -43,20 +41,21 @@ import org.jetbrains.annotations.TestOnly;
 
 /**
  * The compiler-backed last resort of {@code HaxeResolver}: when static
- * resolution fails, an UNQUALIFIED reference is looked up in the enclosing
- * class's post-macro blueprint ({@code server/type}), where macro-generated
- * members exist with their real types.
+ * resolution fails, the member is looked up in the post-macro blueprint
+ * ({@code server/type}) of its class, where macro-generated members exist
+ * with their real types. The class is the enclosing one for an unqualified
+ * reference and the receiver's for a qualified one.
  *
  * Resolve runs under the read lock, so this path is strictly cache-only: a
- * miss schedules background hydration and fails this once; the daemon restart
- * after hydration re-resolves from the cache. Resolved members materialize as
- * a synthetic field declaration carrying the blueprint type — real PSI, so
- * type inference, completion and chained member access downstream all work
- * off it (a generated {@code button1:haxe.ui.components.Button} makes
- * {@code button1.text} resolve statically against the real Button class).
+ * miss schedules background hydration and fails this once, and the daemon
+ * restart after hydration resolves again from the cache. A resolved member
+ * is a declaration in a synthetic extern class rendered from the blueprint.
+ * That is real PSI, so type inference, completion and chained member access
+ * all work off it: a generated {@code panel:ui.Panel} field makes
+ * {@code panel.title} resolve statically against the real {@code Panel}.
  *
  * Gated on the completion mode (Settings | Compiler | Haxe Compiler): in
- * "IDE only" this service answers nothing; the compiler-diagnostics toggle
+ * "IDE only" this service answers nothing. The compiler-diagnostics toggle
  * only governs problem highlighting.
  */
 @Service(Service.Level.PROJECT)
@@ -67,22 +66,21 @@ public final class HaxeCompilerResolveService {
   }
 
   /**
-   * Marks blueprint-rendered files with their type's dot path — the
-   * generated-code preview's goto handler recognizes blueprint-resolved
-   * members by this key on the resolve target's containing file.
+   * Marks blueprint-rendered files with their type's dot path. The
+   * generated-code preview's goto handler recognizes a blueprint-resolved
+   * member by this key on the member's containing file.
    */
   public static final Key<String> BLUEPRINT_DOT_PATH = Key.create("haxe.blueprint.dotpath");
 
   private static final long FAILURE_COOLDOWN_MS = 30_000;
   /**
-   * Depth-one bound: resolving the RECEIVER inside the fallback re-runs the
-   * resolver, whose own failures re-enter this fallback. The resolver cannot
-   * negatively cache failures (a wrong path's cached failure would mask a
-   * success reachable through another path), so failed sub-chains recompute
-   * on every visit - nested fallbacks multiply that cost without bound and
-   * once froze a full resolve pass. Each reference gets the fallback when it
-   * is the SUBJECT of resolution, never transitively inside another
-   * reference's fallback.
+   * Keeps the fallback one level deep. Resolving the RECEIVER inside the
+   * fallback runs the resolver again, and its failures would enter this
+   * fallback again. The resolver cannot cache failures (a failure cached on
+   * one path would mask a success reachable through another), so failed
+   * sub-chains are recomputed on every visit, and nested fallbacks multiply
+   * that cost without bound. A reference therefore gets the fallback only as
+   * the subject of resolution, never inside another reference's fallback.
    */
   private static final ThreadLocal<Boolean> inFallback = ThreadLocal.withInitial(() -> false);
 
@@ -122,7 +120,7 @@ public final class HaxeCompilerResolveService {
     // context check BEFORE resolving the receiver: targetClassOf recurses into
     // resolve, and without a build context (fixture tests, non-v2 projects)
     // this path can never answer - the recursion would be pure overhead
-    VirtualFile contextFile = fileOf(expression);
+    VirtualFile contextFile = HaxeCompilerDisplayService.physicalFileOf(expression);
     if (contextFile == null) return null;
     if (HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile) == null) return null;
 
@@ -132,7 +130,7 @@ public final class HaxeCompilerResolveService {
       HaxeClass targetClass = targetClassOf(expression);
       if (targetClass == null) return null;
 
-      // check if we got a real PSI element before we use compiler blueprint
+      // a member with a source declaration needs no blueprint
       HaxeClassModel targetModel = targetClass.getModel();
       HaxeBaseMemberModel memberModel = targetModel.getMember(name, null);
       if (memberModel != null) return null;
@@ -209,16 +207,9 @@ public final class HaxeCompilerResolveService {
     return new BlueprintLookup(key, blueprint);
   }
 
-  /** The physical file of an element; completion copies map back to the file on disk. */
-  @Nullable
-  private static VirtualFile fileOf(@NotNull PsiElement element) {
-    PsiFile file = element.getContainingFile();
-    return file != null ? file.getOriginalFile().getVirtualFile() : null;
-  }
-
-  // TODO: no automatic blueprint invalidation - an edited macro input (the
-  //  haxeui XML, a lib's include.xml) only takes effect after Purge Caches
-  //  or a restart.
+  // TODO: no automatic blueprint invalidation - an edited macro input (a
+  //  layout file a macro reads, a lib's include.xml) only takes effect after
+  //  Purge Caches or a restart.
   public void clearCaches() {
     blueprints.clear();
     blueprintFiles.clear();
@@ -228,11 +219,10 @@ public final class HaxeCompilerResolveService {
   // --- synthetic PSI ---
 
   /**
-   * Members materialize from a virtual extern class rendered out of the
-   * blueprint — real (non-physical) PSI with real type tags, the same
-   * mechanism {@code HaxeSyntheticDeclarations} uses for {@code trace}: type
-   * inference, completion and chained access all work off it, and navigation
-   * lands on a readable declaration.
+   * The member's declaration in the extern class rendered from the
+   * blueprint: non-physical PSI with real type tags, the same mechanism
+   * {@code HaxeSyntheticDeclarations} uses for {@code trace}. Navigation lands
+   * on a readable declaration.
    */
   @Nullable
   private PsiElement blueprintMember(@NotNull BlueprintKey key, @NotNull TypeBlueprint blueprint, @NotNull String name) {
@@ -248,19 +238,21 @@ public final class HaxeCompilerResolveService {
     HaxeModule module = file.getModule();
     if (module == null) return null;
     HaxeModuleModel model = (HaxeModuleModel)module.getModel();
-    return model.getClass(typeNameOf(key.dotPath()));
+    return model.getClass(StringUtil.getShortName(key.dotPath()));
   }
 
   @NotNull
   private HaxeFile buildBlueprintFile(@NotNull BlueprintKey key, @NotNull TypeBlueprint blueprint) {
-    String typeName = typeNameOf(key.dotPath());
-    StringBuilder text = new StringBuilder();
-    text.append("/**\n")
-      .append("   This class does not exist as source. It is the compiler's\n")
-      .append("   post-macro blueprint of `").append(key.dotPath()).append("` -\n")
-      .append("   members generated by macros resolve here.\n")
-      .append("**/\n")
-      .append("extern class ").append(typeName).append(" {\n");
+    String typeName = StringUtil.getShortName(key.dotPath());
+    String header = """
+      /**
+         This class does not exist as source. It is the compiler's
+         post-macro blueprint of `%s` -
+         members generated by macros resolve here.
+      **/
+      extern class %s {
+      """.formatted(key.dotPath(), typeName);
+    StringBuilder text = new StringBuilder(header);
     for (TypeBlueprint.Member member : blueprint.fields()) {
       appendMember(text, member, false);
     }
@@ -304,11 +296,6 @@ public final class HaxeCompilerResolveService {
     return String.join(", ", parameters);
   }
 
-  @NotNull
-  private static String typeNameOf(@NotNull String dotPath) {
-    return dotPath.substring(dotPath.lastIndexOf('.') + 1);
-  }
-
   /**
    * Renders a blueprint type as haxe type syntax the parser accepts; anything
    * not safely expressible degrades to Dynamic rather than producing a
@@ -338,8 +325,7 @@ public final class HaxeCompilerResolveService {
 
   @NotNull
   private static String functionTypeText(@NotNull JsonTypeRef type) {
-    String arguments = StreamSupport
-      .stream(type.args().path("args").spliterator(), false)
+    String arguments = type.args().path("args").valueStream()
       .map(argument -> safeTypeText(JsonTypeRef.of(argument.path("t"))))
       .collect(Collectors.joining(", "));
     String returnType = safeTypeText(JsonTypeRef.of(type.args().path("ret")));
@@ -398,10 +384,8 @@ public final class HaxeCompilerResolveService {
     displayService.ensureContextCompiled(connected, key.contextKey());
 
     try {
-      // the type's module path: for Module.SubType the module is the prefix
-      String modulePath = key.dotPath();
-      String typeName = modulePath.substring(modulePath.lastIndexOf('.') + 1);
-      return blueprintFromAnyContext(connected, modulePath, typeName);
+      String dotPath = key.dotPath();
+      return blueprintFromAnyContext(connected, modulePathOf(dotPath), StringUtil.getShortName(dotPath));
     } catch (DisplayRequestException e) {
       log.info("server/type failed for " + key.dotPath() + ": " + e.getMessage());
       return null;
@@ -409,11 +393,25 @@ public final class HaxeCompilerResolveService {
   }
 
   /**
+   * The module declaring a type. A main type's dot path is its module path;
+   * a sub-type's ({@code pack.Module.SubType}) has the module as its prefix.
+   * Haxe requires package names to start lowercase and module names
+   * uppercase, so an uppercase second-to-last segment names the module.
+   */
+  @NotNull
+  static String modulePathOf(@NotNull String dotPath) {
+    String owner = StringUtil.getPackageName(dotPath);
+    if (owner.isEmpty()) return dotPath;
+    String ownerName = StringUtil.getShortName(owner);
+    return Character.isUpperCase(ownerName.charAt(0)) ? owner : dotPath;
+  }
+
+  /**
    * server/type against the context holding the module. A source module's
-   * context is found through the module listing; a Context.defineType module
-   * is LISTED nowhere (see the display-protocol README), so the typed
-   * ({@code after_init_macros}) contexts are tried blind — server/type itself
-   * is the test of whether the type lives there.
+   * context is found through the module listing. A module created by
+   * {@code Context.defineType} is listed nowhere (see the display-protocol
+   * README), so every typed context is tried blind: server/type itself tells
+   * whether the type lives there.
    */
   @Nullable
   private TypeBlueprint blueprintFromAnyContext(@NotNull HaxeCompilerDisplayService.Connected connected,
@@ -430,7 +428,7 @@ public final class HaxeCompilerResolveService {
       } catch (DisplayRequestException ignored) {
         // some contexts reject module listing - try the next
       }
-      if ("after_init_macros".equals(context.desc())) {
+      if (context.holdsTypedModules()) {
         candidates.add(context.signature());
       }
     }
@@ -446,12 +444,13 @@ public final class HaxeCompilerResolveService {
 
   /**
    * A landed blueprint changes what DEPENDENT references resolve to:
-   * {@code button1.text} was computed (and cached empty) while {@code button1}
-   * was still unknown. The fallback only covers the root reference, so the
-   * chain's stale results must go before the re-highlight — and not just the
-   * resolve caches: type-evaluation CachedValues key on the PSI modification
-   * count and survive dropResolveCaches, so the full dropPsiCaches it is
-   * (rare enough here: once per hydrated class per session).
+   * {@code panel.title} was computed, and cached as unresolved, while
+   * {@code panel} was still unknown. The fallback only covers the root
+   * reference, so the chain's stale results must go before highlighting
+   * restarts. Dropping the resolve caches is not enough, because
+   * type-evaluation CachedValues key on the PSI modification count and
+   * survive it; hence the full PSI cache drop, which happens about once per
+   * hydrated class per session.
    */
   private void restartHighlighting() {
     ApplicationManager.getApplication().invokeLater(() -> {

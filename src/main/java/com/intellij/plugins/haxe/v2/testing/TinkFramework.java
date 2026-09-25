@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.testing;
 
+import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
@@ -49,8 +50,8 @@ public final class TinkFramework implements HaxeTestFramework {
   public boolean isTestMethod(@NotNull HaxeMethod method) {
     HaxeMethodModel model = method.getModel();
     if (model.isConstructor() || model.isStatic() || !model.isPublic()) return false;
-    HaxeClass declaringClass = model.getDeclaringClass() != null ? model.getDeclaringClass().haxeClass : null;
-    return declaringClass != null && isTestClass(declaringClass);
+    HaxeClassModel declaringClass = model.getDeclaringClass();
+    return declaringClass != null && isTestClass(declaringClass.haxeClass);
   }
 
   /** Or null when extraction fails - the run then reports to the console only. */

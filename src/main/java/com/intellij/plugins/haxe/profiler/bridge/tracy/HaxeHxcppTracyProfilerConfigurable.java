@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.openapi.options.UnnamedConfigurable;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
 import com.intellij.ui.components.JBCheckBox;
@@ -81,11 +82,6 @@ final class HaxeHxcppTracyProfilerConfigurable implements UnnamedConfigurable {
 
   /** A non-numeric entry falls back to the stored value rather than failing apply. */
   private int parsedLevel() {
-    try {
-      return Integer.parseInt(levelField.getText().trim());
-    }
-    catch (NumberFormatException e) {
-      return state.getCompressionLevel();
-    }
+    return StringUtil.parseInt(levelField.getText().trim(), state.getCompressionLevel());
   }
 }

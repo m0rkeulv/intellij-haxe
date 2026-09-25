@@ -78,7 +78,7 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("toggle off keeps the scheme settings")
   public void testToggleOffKeepsTheSchemeSettings() {
-    CodeStyleSettings projectSettings = CodeStyleSettingsManager.getSettings(getProject()).clone();
+    CodeStyleSettings projectSettings = projectSettingsCopy();
     projectSettings.getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT = false;
     CodeStyleSettingsManager.getInstance(getProject()).setTemporarySettings(projectSettings);
     myFixture.addFileToProject("hxformat.json", """

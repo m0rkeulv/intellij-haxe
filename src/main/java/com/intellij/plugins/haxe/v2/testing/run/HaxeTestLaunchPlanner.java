@@ -14,16 +14,12 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.buildtools.*;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.testing.*;
-import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Locale;
 
 /// Turns a tests build file into the process a unit-test run spawns. Two shapes:
@@ -31,19 +27,15 @@ import java.util.Locale;
 /// - **interp** (or no target): the compile IS the run - one `haxe` process with
 ///   the framework's reporting defines appended; its stdout carries the TeamCity
 ///   service messages.
-/// - **artifact targets** (HL, Neko, JVM jar, desktop C++, JS under node): the
-///   before-run compile step has already produced the artifact; the plan is the
-///   host command launching it.
+/// - **artifact targets** (HL, Neko, JVM jar, desktop C++, JS under node, flash
+///   under adl, lime/nme packages, browser-hosted html5): the before-run compile
+///   step has already produced the artifact; the plan is the host command
+///   launching it (or, browser-hosted, the directory served to the page).
 ///
-/// Phase 1 gate: hxml tests files and host-executable targets only - everything
-/// else raises a bundle-keyed [ExecutionException]. Call inside a read action.
+/// The compile arguments behind both shapes come from [HaxeTestCompileArguments].
+/// A build or target no shape serves raises a bundle-keyed [ExecutionException].
+/// Call inside a read action.
 final class HaxeTestLaunchPlanner {
-
-  /** The tests build's framework, from the SELECTED section's -lib declarations. Call inside a read action. */
-  @NotNull
-  static HaxeTestFramework frameworkFor(@NotNull Project project, @NotNull String buildFilePath) {
-    return HaxeTestFrameworks.forBuildFile(project, buildFilePath);
-  }
 
   /** The command to spawn, where to spawn it, the build's target, and an optional advisory shown to the user. */
   record Plan(@NotNull List<String> command,
@@ -65,250 +57,10 @@ final class HaxeTestLaunchPlanner {
   /** A browser-hosted plan's served directory (its command's only element; index.html inside is the page). */
   @NotNull
   static Path browserWebRoot(@NotNull Plan plan) {
-    return Path.of(plan.command().get(0));
+    return Path.of(plan.command().getFirst());
   }
 
   private HaxeTestLaunchPlanner() {
-  }
-
-  /**
-   * The framework's compile arguments (reporting + optional filter) as an
-   * extra-arguments string, in the spelling the build tool takes: plain haxe
-   * flags for hxml builds; for lime-family builds the tool's forwarding forms —
-   * ATTACHED defines ({@code -Dname=value}: the two-word spelling trips a lime
-   * bug duplicating the value), {@code --source=} for the classpath and
-   * {@code --haxeflag=} for the macro (all verified against lime 8.3.2).
-   */
-  @NotNull
-  static String compileArguments(@NotNull Project project,
-                                 @NotNull String buildFilePath,
-                                 @Nullable String filterPattern) {
-    // only a lime single run can fail to produce arguments, and this form asks for none
-    return Objects.requireNonNull(compileArguments(project, buildFilePath, filterPattern, null));
-  }
-
-  /**
-   * As {@link #compileArguments(Project, String, String)}; a lime-family
-   * single run additionally overrides the app's main with the generated
-   * template main ({@code --app-main=} plus its {@code --source=}), so the
-   * tool packages the selection exactly like the whole build - the runtime
-   * (native library, assets, application bootstrap) is what the tests expect.
-   * Null only for such a run whose main could not be generated: the
-   * arguments without it would build and run the WHOLE app under the
-   * selection's name, so the launch must fail instead.
-   */
-  @Nullable
-  static String compileArguments(@NotNull Project project,
-                                 @NotNull String buildFilePath,
-                                 @Nullable String filterPattern,
-                                 @Nullable HaxeTestSingleRuns.SingleRun singleRun) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
-    if (LimeProjects.isLimeFamily(type)) {
-      return singleRun != null
-             ? limeSingleRunCompileArguments(project, file, type, singleRun)
-             : limeCompileArguments(project, file, type, filterPattern);
-    }
-    if (type == HaxeBuildFileType.NMML) {
-      return nmeCompileArguments(project, file, filterPattern);
-    }
-
-    return ParametersListUtil.join(
-      frameworkArguments(project, buildFilePath, hxmlSuiteContext(project, buildFilePath), filterPattern));
-  }
-
-  /** Whether the hxml tests build compiles for flash - the adl-hosted lane needs the injected reporter (exit + stdout). */
-  private static boolean isFlashHxml(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null || !file.isValid()) return false;
-    HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
-    return info.target() == HaxeTarget.FLASH;
-  }
-
-  @NotNull
-  private static String limeCompileArguments(@NotNull Project project,
-                                             @NotNull VirtualFile file,
-                                             @NotNull HaxeBuildFileType type,
-                                             @Nullable String filterPattern) {
-    String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
-    List<String> plain = frameworkArguments(project, file.getPath(), limeSuiteContext(targetFlag), filterPattern);
-    return ParametersListUtil.join(limeSpelled(project, targetFlag, plain));
-  }
-
-  /** Plain hxml arguments in lime's forwarding spelling, plus the air swf-version flag where the target needs it. */
-  @NotNull
-  private static List<String> limeSpelled(@NotNull Project project, @NotNull String targetFlag, @NotNull List<String> plain) {
-    List<String> spelled = new ArrayList<>(respell(plain, LIME_SPELLINGS));
-    if ("air".equals(targetFlag)) {
-      spelled.addAll(airSwfVersionFlag(project));
-    }
-    return spelled;
-  }
-
-  /** lime's app-field override form for the entry point ({@code --app-main=Class}, verified against lime 8.3.2). */
-  private static final String LIME_APP_MAIN_FORM = "--app-main=";
-
-  /**
-   * The lime-family single-run arguments: the reporting set (the method
-   * narrowing for a single test) plus the generated main overriding the
-   * app's; null when the main could not be written (see
-   * {@link #compileArguments(Project, String, String, HaxeTestSingleRuns.SingleRun)}).
-   */
-  @Nullable
-  private static String limeSingleRunCompileArguments(@NotNull Project project,
-                                                      @NotNull VirtualFile file,
-                                                      @NotNull HaxeBuildFileType type,
-                                                      @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
-    HaxeTestFramework framework = frameworkFor(project, file.getPath());
-    String targetFlag = LimeProjects.selectedTargetFlag(project, type, file);
-    List<String> plain = singleRunArguments(project, framework, limeSuiteContext(targetFlag), singleRun);
-    List<String> spelled = limeSpelled(project, targetFlag, plain);
-    Path generated = HaxeTestSingleRuns.generatedDirectory(file.getPath(), framework, singleRun);
-    if (generated == null) return null;
-    spelled.add(LIME_SPELLINGS.classpathForm() + generated);
-    spelled.add(LIME_APP_MAIN_FORM + HaxeTestSingleRuns.MAIN_CLASS);
-    return ParametersListUtil.join(spelled);
-  }
-
-  /**
-   * lime's air builds default to {@code -swf-version 17}, whose openfl AIR
-   * extern overrides trip VerifyError #1053 under a modern AIR runtime. The
-   * tests swf targets the hosting SDK's own version instead (a trailing CLI
-   * flag overrides the default). No flag when no AIR SDK resolves - the run
-   * would already stop at the missing adl.
-   */
-  @NotNull
-  private static List<String> airSwfVersionFlag(@NotNull Project project) {
-    String adl = HaxeToolPathResolver.resolveAdlExecutable(project);
-    if (adl == null) return List.of();
-    // namespaceVersion is "major.minor" (e.g. 31.0); -swf-version takes the major
-    String major = AirTestHost.namespaceVersion(Path.of(adl)).split("\\.")[0];
-    return List.of("--haxeflag=-swf-version " + major);
-  }
-
-  /** The run's root-suite label plus whether an IDE-provided host (adl, a served browser page) runs the tests. */
-  private record SuiteContext(@Nullable String suiteName, boolean hostedTests) {
-  }
-
-  @NotNull
-  private static SuiteContext limeSuiteContext(@NotNull String targetFlag) {
-    return new SuiteContext(suiteLabel(limeTarget(targetFlag)), LimeProjects.isHostedTarget(targetFlag));
-  }
-
-  @NotNull
-  private static SuiteContext hxmlSuiteContext(@NotNull Project project, @NotNull String buildFilePath) {
-    return new SuiteContext(rootSuiteName(project, buildFilePath), isFlashHxml(project, buildFilePath));
-  }
-
-  /**
-   * The tests build's framework arguments in plain hxml spelling — the
-   * reporting set plus the filter. The tool-specific paths respell them (see
-   * {@link #respell}).
-   *
-   * buddy's packaged (lime/nme) tests only report when the app's OWN main
-   * honors the injected {@code -D reporter} define — a lime/nme main is the
-   * Sprite, not buddy's generated main, so buddy's built-in handling of that
-   * define never runs. The conditional to copy into such a TestMain lives in
-   * the testProjects buddy samples; without it the run stays console-only.
-   */
-  @NotNull
-  private static List<String> frameworkArguments(@NotNull Project project,
-                                                 @NotNull String buildFilePath,
-                                                 @NotNull SuiteContext suite,
-                                                 @Nullable String filterPattern) {
-    HaxeTestFramework framework = frameworkFor(project, buildFilePath);
-    List<String> arguments = reportingArguments(project, framework, suite);
-    arguments.addAll(framework.filterArgs(StringUtil.nullize(filterPattern, true)));
-    return arguments;
-  }
-
-  /**
-   * The framework's reporting arguments over its extracted shipped reporter.
-   * The hosted lanes depend on the injected reporter: adl-hosted flash for its
-   * stdout output AND the exit call, browser-hosted html5 for the console
-   * transport and the completion sentinel - the live-reporting toggle cannot
-   * opt a hosted build out of it.
-   */
-  @NotNull
-  private static List<String> reportingArguments(@NotNull Project project,
-                                                 @NotNull HaxeTestFramework framework,
-                                                 @NotNull SuiteContext suite) {
-    boolean liveReporting = suite.hostedTests() || HaxeBuildToolSettings.getInstance(project).isLiveTestReporting();
-    return new ArrayList<>(framework.reportingArgs(suite.suiteName(), framework.reporterClasspath(), liveReporting));
-  }
-
-  /** A build tool's forwarding forms for the three plain-hxml flags; each flag's VALUE is appended to its form. */
-  private record FlagSpellings(@NotNull String defineForm, @NotNull String classpathForm, @NotNull String macroForm) {
-  }
-
-  /**
-   * lime's forwarding forms: ATTACHED defines ({@code -Dname=value}: the
-   * two-word spelling trips a lime bug duplicating the value),
-   * {@code --source=} for classpaths and {@code --haxeflag=} for macros (all
-   * verified against lime 8.3.2).
-   */
-  private static final FlagSpellings LIME_SPELLINGS = new FlagSpellings("-D", "--source=", "--haxeflag=--macro ");
-
-  /**
-   * nme's forwarding forms: the tool forwards ATTACHED defines and any
-   * double-dash token verbatim into its generated build.hxml (single-dash
-   * haxe flags like {@code -cp} are swallowed - the classpath rides the
-   * {@code --class-path} spelling; all verified against nme 7.0.64).
-   */
-  private static final FlagSpellings NME_SPELLINGS = new FlagSpellings("-D", "--class-path ", "--macro ");
-
-  /** Respells plain hxml arguments into a build tool's forwarding forms. */
-  @NotNull
-  private static List<String> respell(@NotNull List<String> plainArguments, @NotNull FlagSpellings forms) {
-    List<String> spelled = new ArrayList<>();
-    for (int i = 0; i < plainArguments.size(); i++) {
-      String argument = plainArguments.get(i);
-      switch (argument) {
-        case "-D" -> spelled.add(forms.defineForm() + plainArguments.get(++i));
-        case "-cp" -> spelled.add(forms.classpathForm() + plainArguments.get(++i));
-        case "--macro" -> spelled.add(forms.macroForm() + plainArguments.get(++i));
-        default -> spelled.add(argument);
-      }
-    }
-    return spelled;
-  }
-
-  /** The plan-level target a lime target flag compiles through; unknown ids fall to hxcpp, the desktop default. */
-  @NotNull
-  private static HaxeTarget limeTarget(@NotNull String targetFlag) {
-    HaxeTarget target = LimeProjects.targetFor(targetFlag);
-    return target != null ? target : HaxeTarget.CPP;
-  }
-
-  @NotNull
-  private static String nmeCompileArguments(@NotNull Project project,
-                                            @NotNull VirtualFile file,
-                                            @Nullable String filterPattern) {
-    String targetFlag = NmeProjects.selectedTargetFlag(project, file);
-    // unknown target ids fall to hxcpp, nme's host-desktop default
-    HaxeTarget mapped = NmeProjects.targetFor(targetFlag);
-    HaxeTarget target = mapped != null ? mapped : HaxeTarget.CPP;
-    SuiteContext suite = new SuiteContext(suiteLabel(target), target == HaxeTarget.FLASH);
-    List<String> plain = frameworkArguments(project, file.getPath(), suite, filterPattern);
-    return ParametersListUtil.join(respell(plain, NME_SPELLINGS));
-  }
-
-  /** The tree's root-suite label for a target ({@code Target: Neko}). */
-  @NotNull
-  private static String suiteLabel(@NotNull HaxeTarget target) {
-    return "Target: " + target;
-  }
-
-  /** The tree's root suite label, from the tests build's target. Null when the file cannot be inspected. */
-  @Nullable
-  private static String rootSuiteName(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type != HaxeBuildFileType.HXML) return null;
-    HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, type));
-    HaxeTarget target = info.target() != null ? info.target() : HaxeTarget.INTERP;
-    return suiteLabel(target);
   }
 
   /**
@@ -317,13 +69,13 @@ final class HaxeTestLaunchPlanner {
    * attached - checkConfiguration reports the real problem.
    */
   static boolean isSingleStage(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null || !file.isValid()) return true;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
+    if (buildFile == null) return true;
+    HaxeBuildFileType type = buildFile.type();
     if (LimeProjects.isLimeFamily(type) || type == HaxeBuildFileType.NMML) return false;
     if (type != HaxeBuildFileType.HXML) return true;
-    HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
-    return info.target() == null || info.target() == HaxeTarget.INTERP;
+    HaxeTarget target = HaxeBuildSections.inspectSelected(project, buildFile).target();
+    return target == null || target == HaxeTarget.INTERP;
   }
 
   /** Whether the tests build's target can be debugged. Call inside a read action. */
@@ -334,13 +86,11 @@ final class HaxeTestLaunchPlanner {
   /** The haxe target the tests build's current selection launches, or null when unresolvable. Call inside a read action. */
   @Nullable
   static HaxeTarget launchTarget(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return null;
-    HaxeTarget target = HaxeBuildSystem.of(type).launchTarget(project, new HaxeBuildFile(file, type));
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
+    if (buildFile == null) return null;
+    HaxeTarget target = HaxeBuildSystem.of(buildFile.type()).launchTarget(project, buildFile);
     // an hxml without a target flag compiles-and-runs on the interpreter
-    if (target == null && type == HaxeBuildFileType.HXML) return HaxeTarget.INTERP;
+    if (target == null && buildFile.type() == HaxeBuildFileType.HXML) return HaxeTarget.INTERP;
     return target;
   }
 
@@ -349,7 +99,7 @@ final class HaxeTestLaunchPlanner {
   static Path packagedHlBoot(@NotNull Plan plan) {
     boolean packagedHl = plan.target() == HaxeTarget.HL && !plan.singleStage() && plan.command().size() == 1;
     if (!packagedHl) return null;
-    Path runtime = Path.of(plan.command().get(0));
+    Path runtime = Path.of(plan.command().getFirst());
     Path binDirectory = runtime.getParent();
     return binDirectory == null ? null : binDirectory.resolve("hlboot.dat");
   }
@@ -446,7 +196,7 @@ final class HaxeTestLaunchPlanner {
       return singleRunPlan(project, file, info, singleRun, nodeExecutable, debugLaunch);
     }
     if (info.target() == null || info.target() == HaxeTarget.INTERP) {
-      HaxeTestFramework framework = frameworkFor(project, file.getPath());
+      HaxeTestFramework framework = HaxeTestFrameworks.forBuildFile(project, file.getPath());
       if (!framework.supportsInterp()) {
         throw new ExecutionException(
           HaxeBundle.message("haxe.test.config.framework.no.interp", framework.libraryName()));
@@ -469,7 +219,7 @@ final class HaxeTestLaunchPlanner {
                                     @NotNull HaxeTestSingleRuns.SingleRun singleRun,
                                     @Nullable String nodeExecutable,
                                     boolean debugLaunch) throws ExecutionException {
-    HaxeTestFramework framework = frameworkFor(project, file.getPath());
+    HaxeTestFramework framework = HaxeTestFrameworks.forBuildFile(project, file.getPath());
     if (framework.singleRunTemplate(singleRun.singleTest()) == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported", framework.libraryName()));
     }
@@ -508,7 +258,7 @@ final class HaxeTestLaunchPlanner {
                                          @NotNull VirtualFile file,
                                          @NotNull HaxeBuildFileType type,
                                          @NotNull HaxeTestSingleRuns.SingleRun singleRun) throws ExecutionException {
-    HaxeTestFramework framework = frameworkFor(project, file.getPath());
+    HaxeTestFramework framework = HaxeTestFrameworks.forBuildFile(project, file.getPath());
     if (!HaxeTestSingleRuns.templateAvailable(framework, singleRun)) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported", framework.libraryName()));
     }
@@ -544,31 +294,8 @@ final class HaxeTestLaunchPlanner {
                                                        @NotNull VirtualFile file,
                                                        @NotNull HaxeTestFramework framework,
                                                        @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
-    return HaxeTestSingleRuns.resolveCompile(
-      project, file, framework, singleRunCompileArguments(project, file.getPath(), framework, singleRun), singleRun);
-  }
-
-  /** The hxml single-run compile arguments: the reporting set plus the method narrowing. */
-  @NotNull
-  private static String singleRunCompileArguments(@NotNull Project project,
-                                                  @NotNull String buildFilePath,
-                                                  @NotNull HaxeTestFramework framework,
-                                                  @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
-    SuiteContext suite = hxmlSuiteContext(project, buildFilePath);
-    return ParametersListUtil.join(singleRunArguments(project, framework, suite, singleRun));
-  }
-
-  /** The reporting set, narrowed to the one method for a single-test run, in plain hxml spelling. */
-  @NotNull
-  private static List<String> singleRunArguments(@NotNull Project project,
-                                                 @NotNull HaxeTestFramework framework,
-                                                 @NotNull SuiteContext suite,
-                                                 @NotNull HaxeTestSingleRuns.SingleRun singleRun) {
-    List<String> arguments = reportingArguments(project, framework, suite);
-    if (singleRun.singleTest()) {
-      arguments.addAll(framework.singleRunFilterArgs(singleRun.testMethod()));
-    }
-    return arguments;
+    String arguments = HaxeTestCompileArguments.singleRunCompileArguments(project, file.getPath(), framework, singleRun);
+    return HaxeTestSingleRuns.resolveCompile(project, file, framework, arguments, singleRun);
   }
 
   /** The generated main's hxcpp binary inside the redirected output directory. */
@@ -584,9 +311,8 @@ final class HaxeTestLaunchPlanner {
 
   /**
    * A lime-family tests build, whole or single run: the before-run step
-   * compiles through the lime tool (the injection rides
-   * {@link #limeCompileArguments}, a single run's main override
-   * {@link #limeSingleRunCompileArguments}); the plan launches the packaged
+   * compiles through the lime tool (the injection and a single run's main
+   * override ride {@link HaxeTestCompileArguments}); the plan launches the packaged
    * host binary. The lime HL package bundles its own runtime, so
    * even the HL app launches directly - but for the same reason it is not the
    * bare {@code [hl, artifact]} shape the HL debug lane attaches to.
@@ -626,7 +352,7 @@ final class HaxeTestLaunchPlanner {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", file.getName()));
     }
     String workDirectory = binary.getParent().toString();
-    return new Plan(List.of(binary.toString()), workDirectory, false, limeTarget(targetFlag), null);
+    return new Plan(List.of(binary.toString()), workDirectory, false, HaxeTestCompileArguments.limeTarget(targetFlag), null);
   }
 
   /** An nmml tests build: compile through the nme tool, launch the packaged desktop/neko artifact. */
@@ -667,9 +393,9 @@ final class HaxeTestLaunchPlanner {
   private static Plan singleStagePlan(@NotNull Project project,
                                       @NotNull VirtualFile file,
                                       @Nullable String filterPattern) throws ExecutionException {
-    HaxeCompileCommands.Resolved resolved = HaxeCompileCommands.resolveAction(
-      project, file.getPath(), HaxeBuildFileActions.defaultBuildActionName(HaxeBuildFileType.HXML),
-      compileArguments(project, file.getPath(), filterPattern));
+    String buildAction = HaxeBuildSystem.of(HaxeBuildFileType.HXML).defaultBuildActionName();
+    String arguments = HaxeTestCompileArguments.compileArguments(project, file.getPath(), filterPattern);
+    HaxeCompileCommands.Resolved resolved = HaxeCompileCommands.resolveAction(project, file.getPath(), buildAction, arguments);
     if (resolved == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.unresolvable", file.getName()));
     }
@@ -803,7 +529,7 @@ final class HaxeTestLaunchPlanner {
                                            @NotNull VirtualFile file,
                                            @NotNull Path artifact,
                                            boolean debugLaunch) throws ExecutionException {
-    HaxeTestFramework framework = frameworkFor(project, file.getPath());
+    HaxeTestFramework framework = HaxeTestFrameworks.forBuildFile(project, file.getPath());
     if (!framework.supportsFlash()) {
       throw new ExecutionException(
         HaxeBundle.message("haxe.test.config.framework.no.flash", framework.libraryName()));

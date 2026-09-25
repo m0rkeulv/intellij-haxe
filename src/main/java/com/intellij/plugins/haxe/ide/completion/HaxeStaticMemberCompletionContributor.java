@@ -1,17 +1,13 @@
 package com.intellij.plugins.haxe.ide.completion;
 
 import com.intellij.codeInsight.completion.*;
-import com.intellij.codeInsight.lookup.LookupElement;
-import com.intellij.codeInsight.lookup.LookupElementBuilder;
 import com.intellij.openapi.progress.ProgressIndicatorProvider;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.NlsSafe;
 import com.intellij.patterns.PsiElementPattern;
-import com.intellij.plugins.haxe.ide.lookup.indexed.data.HaxeClassLookupData;
 import com.intellij.plugins.haxe.ide.lookup.indexed.data.HaxeMemberLookupData;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.ide.lookup.indexed.HaxeIndexedStaticMemberLookupElement;
-import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIndex;
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeStaticFieldNameUnifiedIndex;
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeStaticMethodNameUnifiedIndex;
 import com.intellij.plugins.haxe.model.*;
@@ -21,7 +17,6 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.stubs.StubIndex;
 import com.intellij.util.ProcessingContext;
-import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,7 +26,6 @@ import java.util.List;
 import static com.intellij.patterns.PlatformPatterns.psiElement;
 import static com.intellij.plugins.haxe.ide.completion.HaxeCommonCompletionPattern.identifierInNewExpression;
 import static com.intellij.plugins.haxe.ide.completion.HaxeCompletionUtil.isInReferenceChain;
-import static com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexUtil.belongToPlatformNotTargeted;
 
 public class HaxeStaticMemberCompletionContributor extends CompletionContributor {
 

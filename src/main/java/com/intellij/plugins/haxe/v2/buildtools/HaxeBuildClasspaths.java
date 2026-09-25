@@ -12,7 +12,6 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import java.util.ArrayList;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
@@ -55,13 +54,10 @@ public final class HaxeBuildClasspaths {
   /** Absolute directory paths (VFS separators), or empty when the build file cannot be inspected. Call in a read action. */
   @NotNull
   public static List<String> sourceDirectories(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile buildFile = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (buildFile == null || !buildFile.isValid()) return List.of();
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, buildFile);
-    if (type == null) return List.of();
-    List<String> classpaths =
-      HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(buildFile, type)).classpaths();
-    return sourceDirectories(project, buildFile, classpaths);
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
+    if (buildFile == null) return List.of();
+    List<String> classpaths = HaxeBuildSections.inspectSelected(project, buildFile).classpaths();
+    return sourceDirectories(project, buildFile.file(), classpaths);
   }
 
   /** Same, for a caller that already inspected the build file (no second parse of its selected section). Call in a read action. */

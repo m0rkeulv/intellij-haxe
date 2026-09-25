@@ -1,24 +1,16 @@
 package com.intellij.plugins.haxe.profiler.bridge.data;
 
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeLiveCaptures;
-import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerTabContent;
 import com.intellij.plugins.haxe.profiler.bridge.chart.HaxeCallChartTab;
-import com.intellij.plugins.haxe.profiler.bridge.hints.HaxeIuPerformanceHints;
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneStore;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import com.intellij.profiler.DummyCallTreeBuilder;
 import com.intellij.profiler.api.BaseCallStackElement;
 import com.intellij.profiler.api.CallTreeBuildingData;
 import com.intellij.profiler.api.MultipleCallTreesProfilerData;
-import com.intellij.profiler.api.ProfilerData;
 import com.intellij.profiler.model.ThreadInfo;
-import com.intellij.profiler.ui.MainCallTreeDataComponent;
-import com.intellij.ui.tabs.TabInfo;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,28 +23,25 @@ import java.util.Map;
 import javax.swing.JComponent;
 
 /**
- * A tracy zone capture for the IU profiler views: the standard tabs with
- * two states — EXACT self times (a zone's duration minus its direct
- * children — measured, not sampled; kept in microseconds) and invocation
- * counts — plus the Call Chart over the same zones. Wraps a
- * {@link MultipleCallTreesProfilerData} rather than subclassing (the
- * sampling hierarchy is sealed). The capture streams FROM ITS FILE — the
- * store's close-ordered scan (per thread a post-order walk) folds
- * bottom-up into a path trie, and the platform builders get one addStack
- * per DISTINCT path (lossless: their nodes carry only an accumulated
- * value, no counts).
+ * A tracy zone capture for the IU profiler views: the standard tabs with two
+ * states, EXACT self times (a zone's duration minus its direct children:
+ * measured, not sampled; kept in microseconds) and invocation counts, plus
+ * the Call Chart over the same zones. The capture streams FROM ITS FILE:
+ * the store's close-ordered scan (per thread a post-order walk) folds
+ * bottom-up into a path trie, and the platform builders get one addStack per
+ * DISTINCT path, which loses nothing because their nodes carry only an
+ * accumulated value, no counts.
  */
-public final class HaxeTracyProfilerData implements ProfilerData {
+public final class HaxeTracyProfilerData extends HaxeChartedProfilerData {
 
   private final HxtZoneStore store;
-  private final MultipleCallTreesProfilerData trees;
 
   private HaxeTracyProfilerData(MultipleCallTreesProfilerData trees, HxtZoneStore store) {
-    this.trees = trees;
+    super(trees);
     this.store = store;
   }
 
-  /** The capture's disk store — the gutter hints aggregate their line times from it. */
+  /** The capture's disk store; the gutter hints aggregate their line times from it. */
   @NotNull
   public HxtZoneStore store() {
     return store;
@@ -75,20 +64,14 @@ public final class HaxeTracyProfilerData implements ProfilerData {
     for (HxtZoneStore.ThreadEntry entry : store.threads()) {
       ThreadAggregation aggregation = byThread.get(entry.id());
       if (aggregation == null) continue;
-      ThreadInfo thread = new HaxeSamplingProfilerData.HaxeProfilerThreadInfo(entry.name(),
-                                                                              Integer.toUnsignedString(entry.id()));
+      ThreadInfo thread = new HaxeProfilerThreadInfo(entry.name(), Integer.toUnsignedString(entry.id()));
       emit(timeBuilder, callsBuilder, thread, aggregation.roots(), new ArrayList<>());
     }
 
-    CallTreeBuildingData timeTree = new CallTreeBuildingData(HaxeProfilerBundle.message("haxe.profiler.tree.name"),
-                                                            new HaxeCallStackElementRenderer(),
-                                                            timeBuilder,
-                                                            "haxe.tracy.cpu");
-    CallTreeBuildingData callsTree = new CallTreeBuildingData(HaxeProfilerBundle.message("haxe.profiler.tree.invocations"),
-                                                             new HaxeCallStackElementRenderer(),
-                                                             callsBuilder,
-                                                             "haxe.tracy.invocations");
-    return new HaxeTracyProfilerData(new MultipleCallTreesProfilerData(List.of(timeTree, callsTree)), store);
+    CallTreeBuildingData timeTree = callTree("haxe.profiler.tree.name", timeBuilder, "haxe.tracy.cpu");
+    CallTreeBuildingData callsTree = callTree("haxe.profiler.tree.invocations", callsBuilder, "haxe.tracy.invocations");
+    MultipleCallTreesProfilerData trees = new MultipleCallTreesProfilerData(List.of(timeTree, callsTree));
+    return new HaxeTracyProfilerData(trees, store);
   }
 
   /** Depth-first over the trie: one addStack per path and builder; a 300 ns path still visible as 1 µs. */
@@ -117,68 +100,28 @@ public final class HaxeTracyProfilerData implements ProfilerData {
     return store.zoneCount() == 0;
   }
 
-  /** The standard tabs plus our Call Chart (non-closable, not auto-selected, no event-state controller). */
   @Override
-  public @NotNull JComponent doCreateTopLevelComponent(@NotNull Project project, @NotNull Disposable parent) {
-    HaxeLiveCaptures.Entry live = HaxeLiveCaptures.find(store.file());
-    if (live != null && live.isLive()) {
-      return liveComponent(project, parent, live);
-    }
-    return buildComponent(project, parent, null, false, null);
+  protected @NotNull Path sessionFile() {
+    return store.file();
   }
 
-  /**
-   * The live phase: tree tabs from the partial scan, the Call Chart
-   * self-refreshing off the growing store; when the capture completes the
-   * WHOLE component rebuilds once from the final file (after its
-   * recompression), so the tree tabs stop being an early partial
-   * snapshot. The component goes to the platform UNWRAPPED and the
-   * completion swap happens in place ({@link HaxeProfilerTabContent}) —
-   * the process panel's tab lookup casts its content to
-   * MainCallTreeDataComponent and a wrapper makes every tab action throw.
-   */
-  private JComponent liveComponent(Project project, Disposable parent, HaxeLiveCaptures.Entry live) {
-    JComponent[] liveChart = new JComponent[1];
-    JComponent liveMain = buildComponent(project, parent, live, false, liveChart);
-    Path file = store.file();
-    live.onCompletion(() -> ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      HaxeTracyProfilerData finalData;
-      try {
-        finalData = from(HxtZoneStore.open(file));
-      }
-      catch (IOException | RuntimeException e) {
-        // the live chart keeps showing the last good refresh - but a
-        // rebuild that silently dies leaves the STALE live component up,
-        // so say why in the log
-        Logger.getInstance(HaxeTracyProfilerData.class).warn("tracy completion rebuild failed", e);
-        return;
-      }
-      ApplicationManager.getApplication().invokeLater(() -> {
-        // the rebuild must not steal the user's place: a chart being
-        // watched stays the selected tab afterwards
-        boolean chartShowing = liveChart[0] != null && liveChart[0].isShowing();
-        JComponent finalMain = finalData.buildComponent(project, parent, null, chartShowing, null);
-        HaxeProfilerTabContent.swap(liveMain, finalMain);
-        HaxeIuPerformanceHints.captureDataReplaced(project, this, finalData);
-      });
-    }));
-    return liveMain;
+  @Override
+  protected boolean hasChartData() {
+    return store.zoneCount() > 0;
   }
 
-  private JComponent buildComponent(Project project, Disposable parent, HaxeLiveCaptures.@Nullable Entry live,
-                                    boolean selectChart, JComponent @Nullable [] chartOut) {
-    MainCallTreeDataComponent main = new MainCallTreeDataComponent(project, trees, parent, null, false);
-    // a live tab renders even before the first chunk lands - it fills itself
-    if (live != null || store.zoneCount() > 0) {
-      JComponent chart = live != null
-                         ? HaxeCallChartTab.createLiveZones(project, store, live, parent)
-                         : HaxeCallChartTab.create(project, store);
-      if (chartOut != null) chartOut[0] = chart;
-      TabInfo callChartTab = new TabInfo(chart);
-      callChartTab.setText(HaxeProfilerBundle.message("haxe.profiler.callchart.tab"));
-      main.addTab(callChartTab, false, selectChart, false);
-    }
-    return main;
+  @Override
+  protected @NotNull JComponent createCallChart(@NotNull Project project, HaxeLiveCaptures.@Nullable Entry live,
+                                                @NotNull Disposable parent) {
+    return live != null
+           ? HaxeCallChartTab.createLiveZones(project, store, live, parent)
+           : HaxeCallChartTab.create(project, store);
+  }
+
+  /** The store opened again on the completed (recompressed) file. */
+  @Override
+  protected @NotNull HaxeChartedProfilerData reparse(@NotNull Path completedFile) throws IOException {
+    return from(HxtZoneStore.open(completedFile));
   }
 
   /**

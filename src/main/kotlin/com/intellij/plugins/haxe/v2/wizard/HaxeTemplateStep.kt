@@ -90,10 +90,10 @@ private class HxmlTemplateStep(parent: NewProjectWizardStep) : AbstractNewProjec
   private val dceProperty: GraphProperty<String> = propertyGraph.property("std")
   private val jsSourceMapProperty: GraphProperty<Boolean> = propertyGraph.property(false)
   private val swfVersionProperty: GraphProperty<String> = propertyGraph.property("")
-  private val swfWidthProperty: GraphProperty<String> = propertyGraph.property("960")
-  private val swfHeightProperty: GraphProperty<String> = propertyGraph.property("640")
-  private val swfFpsProperty: GraphProperty<String> = propertyGraph.property("60")
-  private val swfColorProperty: GraphProperty<String> = propertyGraph.property("ffffff")
+  private val swfWidthProperty: GraphProperty<String> = propertyGraph.property(DEFAULT_SWF_WIDTH.toString())
+  private val swfHeightProperty: GraphProperty<String> = propertyGraph.property(DEFAULT_SWF_HEIGHT.toString())
+  private val swfFpsProperty: GraphProperty<String> = propertyGraph.property(DEFAULT_SWF_FPS.toString())
+  private val swfColorProperty: GraphProperty<String> = propertyGraph.property(DEFAULT_SWF_COLOR)
 
   init {
     // the output default follows the selected target until edited manually
@@ -133,34 +133,48 @@ private class HxmlTemplateStep(parent: NewProjectWizardStep) : AbstractNewProjec
     val contentRoot = HaxeTemplateScaffold.createModule(project, this) ?: return
     val target = targetProperty.get()
     val mainClass = mainClassProperty.get().ifBlank { "Main" }
-    // free-text stage fields: non-numeric input would render an hxml the
-    // compiler rejects, so fall back to the field defaults (LimeFamilyTemplateStep guards the same way)
-    val swfHeader = if (target == HaxeTemplateFiles.HxmlTargetOption.FLASH) {
-      val width = swfWidthProperty.get().toIntOrNull() ?: 960
-      val height = swfHeightProperty.get().toIntOrNull() ?: 640
-      val fps = swfFpsProperty.get().toIntOrNull() ?: 60
-      val colorText = swfColorProperty.get().trim()
-
-      // the stage color is an RGB hex sextet (ffffff); anything else gets the default
-      val color = if (colorText.matches(Regex("[0-9a-fA-F]{6}"))) colorText else "ffffff"
-      "$width:$height:$fps:$color"
-    } else ""
-    // --swf-version takes a plain number (14 or 11.2); anything else drops the line
-    val swfVersion = swfVersionProperty.get().trim()
-      .takeIf { it.matches(Regex("\\d+(\\.\\d+)?")) } ?: ""
+    val isFlash = target == HaxeTemplateFiles.HxmlTargetOption.FLASH
     val spec = HaxeTemplateFiles.HxmlSpec(
       target = target,
       mainClass = mainClass,
       output = outputProperty.get().ifBlank { target.defaultOutput },
       dce = dceProperty.get(),
       jsSourceMap = jsSourceMapProperty.get(),
-      swfVersion = swfVersion,
-      swfHeader = swfHeader)
+      swfVersion = swfVersion(),
+      swfHeader = if (isFlash) swfHeader() else "")
 
     val files = mapOf(
       "${HaxeTemplateFiles.SOURCE_DIR}/$mainClass.hx" to HaxeTemplateFiles.starterMainHx(project, mainClass),
       "build.hxml" to HaxeTemplateFiles.hxml(project, spec))
     HaxeTemplateScaffold.writeAndRegister(project, contentRoot, files, buildFileName = "build.hxml")
+  }
+
+  /**
+   * The {@code width:height:fps:color} stage header from the free-text fields;
+   * non-numeric input would render an hxml the compiler rejects, so each
+   * field falls back to its default.
+   */
+  private fun swfHeader(): String {
+    val width = swfWidthProperty.get().toIntOrNull() ?: DEFAULT_SWF_WIDTH
+    val height = swfHeightProperty.get().toIntOrNull() ?: DEFAULT_SWF_HEIGHT
+    val fps = swfFpsProperty.get().toIntOrNull() ?: DEFAULT_SWF_FPS
+    val colorText = swfColorProperty.get().trim()
+    // the stage color is an RGB hex sextet (ffffff)
+    val color = if (colorText.matches(Regex("[0-9a-fA-F]{6}"))) colorText else DEFAULT_SWF_COLOR
+    return "$width:$height:$fps:$color"
+  }
+
+  /** --swf-version takes a plain number (14 or 11.2); anything else drops the line. */
+  private fun swfVersion(): String {
+    // one or two dot-separated numbers
+    return swfVersionProperty.get().trim().takeIf { it.matches(Regex("\\d+(\\.\\d+)?")) } ?: ""
+  }
+
+  private companion object {
+    const val DEFAULT_SWF_WIDTH = 960
+    const val DEFAULT_SWF_HEIGHT = 640
+    const val DEFAULT_SWF_FPS = 60
+    const val DEFAULT_SWF_COLOR = "ffffff"
   }
 }
 
@@ -178,7 +192,7 @@ private enum class LimeFlavor(val haxelib: String, val buildFileName: String) {
 private class LimeFamilyTemplateStep(parent: NewProjectWizardStep, private val flavor: LimeFlavor)
   : AbstractNewProjectWizardStep(parent) {
 
-  /** id = the name the target-selection store expects; label = the presentable name (identical today). */
+  /** id = the name the target-selection store expects; label = the presentable name. */
   private data class TargetChoice(val id: String, val label: String) {
     override fun toString(): String = label
   }
@@ -197,10 +211,9 @@ private class LimeFamilyTemplateStep(parent: NewProjectWizardStep, private val f
   private val targetProperty: GraphProperty<TargetChoice> = propertyGraph.property(defaultTarget())
   private val titleProperty: GraphProperty<String> = propertyGraph.lazyProperty { baseData?.name ?: "App" }
   private val packageProperty: GraphProperty<String> = propertyGraph.lazyProperty { defaultPackage() }
-  private val widthProperty: GraphProperty<String> = propertyGraph.property("1280")
-  private val heightProperty: GraphProperty<String> = propertyGraph.property("720")
-  private val fpsProperty: GraphProperty<String> = propertyGraph.property("60")
-
+  private val widthProperty: GraphProperty<String> = propertyGraph.property(DEFAULT_WIDTH.toString())
+  private val heightProperty: GraphProperty<String> = propertyGraph.property(DEFAULT_HEIGHT.toString())
+  private val fpsProperty: GraphProperty<String> = propertyGraph.property(DEFAULT_FPS.toString())
 
   /** The framework's declared default target — reordering the configured list must not change it. */
   private fun defaultTarget(): TargetChoice {
@@ -242,9 +255,9 @@ private class LimeFamilyTemplateStep(parent: NewProjectWizardStep, private val f
 
   override fun setupProject(project: Project) {
     val contentRoot = HaxeTemplateScaffold.createModule(project, this) ?: return
-    val width = widthProperty.get().toIntOrNull() ?: 1280
-    val height = heightProperty.get().toIntOrNull() ?: 720
-    val fps = fpsProperty.get().toIntOrNull() ?: 60
+    val width = widthProperty.get().toIntOrNull() ?: DEFAULT_WIDTH
+    val height = heightProperty.get().toIntOrNull() ?: DEFAULT_HEIGHT
+    val fps = fpsProperty.get().toIntOrNull() ?: DEFAULT_FPS
     val title = titleProperty.get()
     val pkg = packageProperty.get()
 
@@ -263,5 +276,11 @@ private class LimeFamilyTemplateStep(parent: NewProjectWizardStep, private val f
     HaxeTemplateScaffold.writeAndRegister(project, contentRoot, files,
                                           buildFileName = flavor.buildFileName,
                                           targetId = targetProperty.get().id)
+  }
+
+  private companion object {
+    const val DEFAULT_WIDTH = 1280
+    const val DEFAULT_HEIGHT = 720
+    const val DEFAULT_FPS = 60
   }
 }

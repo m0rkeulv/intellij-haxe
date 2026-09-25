@@ -15,7 +15,6 @@
  */
 package com.intellij.plugins.haxe.haxelib;
 
-import com.intellij.plugins.haxe.util.HaxeStringUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -91,8 +90,6 @@ public class HaxelibSemVer implements Comparable<HaxelibSemVer> {
   public static boolean isReleaseVersion(@Nullable String version) {
     return version != null && SEMVER_PATTERN.matcher(version).matches();
   }
-
-
 
   private int major;
   private int minor;

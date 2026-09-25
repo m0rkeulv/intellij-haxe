@@ -103,8 +103,9 @@ final class HaxeIuProfilerProcess extends FileBasedProfilerProcess<HaxeIuProfile
       return new ProfilerError(HaxeProfilerBundle.message("haxe.profiler.parse.failed", dump.getName()));
     }
     ProfilerDumpFileParsingResult result = provider.createParser(getProject()).parse(dump, indicator);
-    ProfilerDumpWriter writer = new CopyFileDumpWriter(dump, getTargetProcess().getFullName(),
-                                                       attachedTimestamp, provider.getRequiredFileExtension());
+    String targetName = getTargetProcess().getFullName();
+    String extension = provider.getRequiredFileExtension();
+    ProfilerDumpWriter writer = new CopyFileDumpWriter(dump, targetName, attachedTimestamp, extension);
     return asProfilerState(result, writer);
   }
 

@@ -18,6 +18,7 @@ public enum HaxeLanguageLevel {
   HAXE_4_3(4, 3),
   HAXE_5_0(5, 0);
 
+  // the leading major.minor of a version (4.3.7, 5.0.0-rc.1): groups major, minor
   private static final Pattern VERSION_PATTERN = Pattern.compile("^\\s*(\\d+)\\.(\\d+)");
 
   private final int major;

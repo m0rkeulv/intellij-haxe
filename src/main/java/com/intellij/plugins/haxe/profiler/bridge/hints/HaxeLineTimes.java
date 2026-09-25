@@ -33,7 +33,7 @@ import java.util.Set;
  * enclosing it and that method's total. Tracy zones only carry the callee
  * function's declaration line (the caller's current line never reaches the
  * wire), so tracy hints are per function with no enclosing share. A sampled
- * capture WITHOUT positions (flash — the Scout wire carries bare qualified
+ * capture WITHOUT positions (flash: its telemetry carries bare qualified
  * names) resolves each symbol to its project declaration instead and
  * attributes per function like tracy. Lines whose total rounds below a
  * microsecond are dropped rather than shown as zero. Files are keyed by
@@ -106,8 +106,8 @@ final class HaxeLineTimes {
    * a call site inside that frame's own method, the leaf line gets the self
    * time, and each line remembers its method and the method's total. The
    * hints are SOURCE-level while HL compiles a generic into one function
-   * per type argument (`ObjectPool_geom_Point.get`), so methods are keyed
-   * by file + displayed name — a line's "% of method" denominator covers
+   * per type argument ({@code Pool_pack_Item.get}), so methods are keyed by
+   * file and displayed name: a line's "% of method" denominator covers
    * every specialization of the source method, never just its own.
    */
   @NotNull
@@ -129,10 +129,11 @@ final class HaxeLineTimes {
         if (frame.file() == null || frame.line() <= 0) continue;
         String file = frame.file().replace('\\', '/');
         String methodName = displayMethodName(frame.symbol());
+        String methodKey = methodKey(file, methodName);
         // recursion (and same-line siblings across specializations) charge
         // a method once per sample, not once per frame
-        if (chargedMethods.add(file + "#" + methodName)) {
-          methodTotalsNs.merge(file + "#" + methodName, timeNs, Long::sum);
+        if (chargedMethods.add(methodKey)) {
+          methodTotalsNs.merge(methodKey, timeNs, Long::sum);
         }
         if (!chargedLines.add(file + ":" + frame.line())) continue;
         Accumulator line = byFile
@@ -250,13 +251,18 @@ final class HaxeLineTimes {
         if (totalUs <= 0) return;
         long enclosingTotalUs = accumulator.enclosing == null
                                 ? 0
-                                : methodTotalsNs.getOrDefault(file + "#" + accumulator.enclosing, 0L) / 1000;
-        frozenLines.put(line, new LineTime(totalUs, accumulator.selfNs / 1000,
-                                           accumulator.enclosing, enclosingTotalUs));
+                                : methodTotalsNs.getOrDefault(methodKey(file, accumulator.enclosing), 0L) / 1000;
+        long selfUs = accumulator.selfNs / 1000;
+        frozenLines.put(line, new LineTime(totalUs, selfUs, accumulator.enclosing, enclosingTotalUs));
       });
       if (!frozenLines.isEmpty()) frozen.put(file, Map.copyOf(frozenLines));
     });
     return Map.copyOf(frozen);
+  }
+
+  /** A source method's identity across its compiled specializations: file plus displayed name. */
+  private static String methodKey(String file, String methodName) {
+    return file + "#" + methodName;
   }
 
   private static final class Accumulator {

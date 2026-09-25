@@ -5,6 +5,7 @@ import com.intellij.execution.testframework.TestConsoleProperties;
 import com.intellij.execution.testframework.sm.runner.OutputToGeneralTestEventsConverter;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestNameLocation;
 import com.intellij.util.PathUtil;
 import jetbrains.buildServer.messages.serviceMessages.ServiceMessageVisitor;
 import org.jetbrains.annotations.NotNull;
@@ -210,10 +211,9 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
   private void flushPendingOutput(@NotNull String testName,
                                   @NotNull Key<?> outputType,
                                   @NotNull ServiceMessageVisitor visitor) throws ParseException {
-    // utest spells default-package tests with a leading dot (`.MyTest.testX`);
-    // the attributor's names never carry one - normalize the lookup only, the
-    // emitted event must repeat the reporter's exact name
-    StringBuilder buffered = pendingOutput.remove(StringUtil.trimLeading(testName, '.'));
+    // the attributor's names never carry the leading dot - normalize the
+    // lookup only, the emitted event must repeat the reporter's exact name
+    StringBuilder buffered = pendingOutput.remove(normalize(testName));
     if (buffered == null) return;
     String event = "##teamcity[testStdOut name='" + testName + "' out='" + escapeValue(buffered.toString()) + "']";
     super.processServiceMessages(event, outputType, visitor);
@@ -274,8 +274,8 @@ public class HaxeTestEventsConverter extends OutputToGeneralTestEventsConverter 
     if (!started || event.name() == null || event.attributes().containsKey("locationHint")) {
       return text;
     }
-    String buildSuffix = buildFilePath == null ? "" : "?build=" + escapeValue(buildFilePath);
+    String buildSuffix = buildFilePath == null ? "" : HaxeTestNameLocation.BUILD_HINT + escapeValue(buildFilePath);
     String beforeClosingBracket = trimmed.substring(0, trimmed.length() - 1);
-    return beforeClosingBracket + " locationHint='" + HaxeTestLocator.PROTOCOL + "://" + event.name() + buildSuffix + "']";
+    return beforeClosingBracket + " locationHint='" + HaxeTestNameLocation.PROTOCOL + "://" + event.name() + buildSuffix + "']";
   }
 }

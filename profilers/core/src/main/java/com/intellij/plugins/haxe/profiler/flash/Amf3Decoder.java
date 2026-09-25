@@ -4,6 +4,7 @@ import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,7 +30,7 @@ public final class Amf3Decoder {
   /** AMF3 {@code undefined}, kept distinct from {@code null}. */
   public static final Object UNDEFINED = new Object();
 
-  private final InputStream in;
+  private final DataInputStream in;
   private final List<String> strings = new ArrayList<>();
   private final List<Object> objects = new ArrayList<>();
   private final List<Traits> traits = new ArrayList<>();
@@ -44,7 +45,7 @@ public final class Amf3Decoder {
   private record Traits(String className, List<String> members, boolean dynamic) {}
 
   public Amf3Decoder(@NotNull InputStream in) {
-    this.in = in;
+    this.in = new DataInputStream(in);
   }
 
   /** Reads one complete value; {@link EOFException} on a stream that ends at or inside it. */
@@ -56,16 +57,16 @@ public final class Amf3Decoder {
       case 0x02 -> Boolean.FALSE;
       case 0x03 -> Boolean.TRUE;
       case 0x04 -> readSignedU29();
-      case 0x05 -> readDouble();
+      case 0x05 -> in.readDouble();
       case 0x06 -> readString();
       case 0x07, 0x0b -> readXml();
       case 0x08 -> readDate();
       case 0x09 -> readArray();
       case 0x0a -> readObject();
       case 0x0c -> readByteArray();
-      case 0x0d, 0x0e -> readIntVector();
-      case 0x0f -> readDoubleVector();
-      case 0x10 -> readObjectVector();
+      case 0x0d, 0x0e -> readVector(false, () -> (long)in.readInt());
+      case 0x0f -> readVector(false, in::readDouble);
+      case 0x10 -> readVector(true, this::readValue);
       case 0x11 -> readDictionary();
       default -> throw new ProfilerFormatException("unhandled AMF3 marker 0x" + Integer.toHexString(marker));
     };
@@ -134,42 +135,22 @@ public final class Amf3Decoder {
     return bytes;
   }
 
-  private Object readIntVector() throws IOException {
-    int flags = readU29();
-    if ((flags & 1) == 0) return objects.get(flags >> 1);
-    int count = flags >> 1;
-    readByte(); // fixed-length flag
-    List<Object> vector = new ArrayList<>(count);
-    objects.add(vector);
-    for (int i = 0; i < count; i++) {
-      vector.add((long)readInt32());
-    }
-    return vector;
+  /** One vector element, read in the vector's element encoding. */
+  private interface ElementReader {
+    Object read() throws IOException;
   }
 
-  private Object readDoubleVector() throws IOException {
+  /** A Vector.&lt;int|uint|Number|Object&gt;; an object vector also names its element type, which is skipped. */
+  private Object readVector(boolean namesElementType, ElementReader element) throws IOException {
     int flags = readU29();
     if ((flags & 1) == 0) return objects.get(flags >> 1);
     int count = flags >> 1;
     readByte(); // fixed-length flag
+    if (namesElementType) readString();
     List<Object> vector = new ArrayList<>(count);
     objects.add(vector);
     for (int i = 0; i < count; i++) {
-      vector.add(readDouble());
-    }
-    return vector;
-  }
-
-  private Object readObjectVector() throws IOException {
-    int flags = readU29();
-    if ((flags & 1) == 0) return objects.get(flags >> 1);
-    int count = flags >> 1;
-    readByte(); // fixed-length flag
-    readString(); // element type name
-    List<Object> vector = new ArrayList<>(count);
-    objects.add(vector);
-    for (int i = 0; i < count; i++) {
-      vector.add(readValue());
+      vector.add(element.read());
     }
     return vector;
   }
@@ -190,7 +171,7 @@ public final class Amf3Decoder {
   private Object readDate() throws IOException {
     int flags = readU29();
     if ((flags & 1) == 0) return objects.get(flags >> 1);
-    Double epochMillis = readDouble();
+    Double epochMillis = in.readDouble();
     objects.add(epochMillis);
     return epochMillis;
   }
@@ -226,30 +207,14 @@ public final class Amf3Decoder {
     return value << 8 | readByte();
   }
 
-  private int readInt32() throws IOException {
-    byte[] four = readFully(4);
-    return (four[0] & 0xFF) << 24 | (four[1] & 0xFF) << 16 | (four[2] & 0xFF) << 8 | four[3] & 0xFF;
-  }
-
-  private double readDouble() throws IOException {
-    byte[] eight = readFully(8);
-    long bits = 0;
-    for (byte b : eight) {
-      bits = bits << 8 | b & 0xFF;
-    }
-    return Double.longBitsToDouble(bits);
-  }
-
   private byte[] readFully(int length) throws IOException {
     if (length < 0) throw new ProfilerFormatException("negative AMF3 length " + length);
-    byte[] bytes = in.readNBytes(length);
-    if (bytes.length < length) throw new EOFException();
+    byte[] bytes = new byte[length];
+    in.readFully(bytes);
     return bytes;
   }
 
   private int readByte() throws IOException {
-    int b = in.read();
-    if (b < 0) throw new EOFException();
-    return b;
+    return in.readUnsignedByte();
   }
 }

@@ -1,14 +1,8 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
-import com.intellij.execution.Executor;
-import com.intellij.execution.runners.ExecutionUtil;
-import com.intellij.execution.RunManager;
-import com.intellij.execution.RunnerAndConfigurationSettings;
-import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.ide.CommonActionsManager;
 import com.intellij.ide.DefaultTreeExpander;
-import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
@@ -16,7 +10,6 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.CommonShortcuts;
-import com.intellij.openapi.actionSystem.CustomShortcutSet;
 import com.intellij.openapi.actionSystem.DataSink;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
@@ -27,63 +20,26 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.projectRoots.ProjectJdkTable;
-import com.intellij.openapi.projectRoots.Sdk;
-import com.intellij.openapi.roots.ProjectFileIndex;
-import com.intellij.openapi.ui.InputValidator;
-import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
-import com.intellij.openapi.ui.popup.JBPopupFactory;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.config.HaxeTarget;
-import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
-import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
-import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
-import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
-import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
-import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleWorkspace;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
-import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
-import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
-import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
-import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
-import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.toolwindow.actions.*;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.ContainerEntry;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.EnvironmentData;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.FileEntry;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.*;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
-import com.intellij.plugins.haxe.runner.HaxeRunConfigurationType;
-import com.intellij.plugins.haxe.v2.runconfig.HaxeActionConfigurationFactory;
-import com.intellij.plugins.haxe.v2.runconfig.HaxeActionRunConfiguration;
-import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
-import com.intellij.plugins.haxe.v2.toolwindow.ui.HaxeCompileCommandDialog;
 import com.intellij.pom.Navigatable;
-import com.intellij.util.PathUtil;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleColoredComponent;
-import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.awt.RelativePoint;
-import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.tree.TreeUtil;
-import kotlin.Unit;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -104,7 +60,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -120,11 +75,11 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   public static final String TOOLBAR_PLACE = "HaxeToolWindowToolbar";
   public static final String TREE_POPUP_PLACE = "HaxeToolWindowTreePopup";
 
-
   private final Project project;
   private final DefaultTreeModel treeModel = new DefaultTreeModel(new DefaultMutableTreeNode());
   private final Tree tree = new Tree(treeModel);
   private final HaxeToolWindowModelBuilder modelBuilder;
+  private final HaxeToolWindowTreeBuilder treeBuilder;
   private boolean initialExpansionDone;
   // last scan's tests build files per container (EDT only), for the container-row unit-test action
   private final Map<String, List<String>> testsPathsByContainer = new HashMap<>();
@@ -134,6 +89,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     super(true, true);
     this.project = project;
     this.modelBuilder = new HaxeToolWindowModelBuilder(project, this::refreshTree);
+    this.treeBuilder = new HaxeToolWindowTreeBuilder(project);
 
     tree.setRootVisible(false);
     tree.setShowsRootHandles(true);
@@ -264,7 +220,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     catch (Exception e) {
       log.warn("haxelib lookup failed; library install state unknown", e);
     }
-    DefaultMutableTreeNode root = buildTreeRoot(visibleContainers(scan), installed);
+    DefaultMutableTreeNode root = treeBuilder.buildRoot(visibleContainers(scan), installed);
     ApplicationManager.getApplication().invokeLater(() -> {
       if (project.isDisposed()) return;
       rememberTestsPaths(scan);
@@ -314,332 +270,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       case null, default -> null;
     };
   }
-
-  /** Runs the build file as unit tests through the test run configuration (SM console). */
-  public void runUnitTests(@NotNull String buildFilePath) {
-    HaxeTestRunConfigurations.run(project, buildFilePath);
-  }
-
-  public void debugUnitTests(@NotNull String buildFilePath) {
-    HaxeTestRunConfigurations.debug(project, buildFilePath);
-  }
-
-  /** Gradle-style structure: one project root node containing root-level build files and the modules. */
-  @NotNull
-  private DefaultMutableTreeNode buildTreeRoot(@NotNull List<ContainerEntry> scan,
-                                               @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
-    DefaultMutableTreeNode root = new DefaultMutableTreeNode();
-    DefaultMutableTreeNode projectNode = new DefaultMutableTreeNode(new ProjectNode(project.getName()));
-    root.add(projectNode);
-
-    for (ContainerEntry container : scan) {
-      if (container.projectRoot()) {
-        projectNode.add(buildCompilationGroupNode(container));
-        projectNode.add(buildEnvironmentNode(container));
-        projectNode.add(buildBuildGroupNode(container, installedLibraries));
-        if (!container.tools().isEmpty()) {
-          projectNode.add(buildToolsGroupNode(container));
-        }
-      }
-      else {
-        DefaultMutableTreeNode moduleNode = new DefaultMutableTreeNode(new ModuleNode(container.displayName()));
-        moduleNode.add(buildCompilationGroupNode(container));
-        moduleNode.add(buildEnvironmentNode(container));
-        moduleNode.add(buildBuildGroupNode(container, installedLibraries));
-        if (!container.tools().isEmpty()) {
-          moduleNode.add(buildToolsGroupNode(container));
-        }
-        projectNode.add(moduleNode);
-      }
-    }
-    return root;
-  }
-
-  @NotNull
-  private static DefaultMutableTreeNode buildToolsGroupNode(@NotNull ContainerEntry container) {
-    DefaultMutableTreeNode toolsNode =
-      new DefaultMutableTreeNode(new ToolsGroupNode(container.id(), container.tools().size()));
-    for (ToolNode tool : container.tools()) {
-      toolsNode.add(new DefaultMutableTreeNode(tool));
-    }
-    return toolsNode;
-  }
-
-  @NotNull
-  private static DefaultMutableTreeNode buildActionsGroupNode(@NotNull FileEntry entry) {
-    String launchKind = HaxeProgramLaunches.launchKind(entry.info(), entry.buildFile().type());
-    int count = entry.actions().size() + (launchKind != null ? 1 : 0);
-    DefaultMutableTreeNode actionsNode = new DefaultMutableTreeNode(
-      new ActionsGroupNode(entry.buildFile().file().getPath(), count));
-    for (ActionNode action : entry.actions()) {
-      actionsNode.add(new DefaultMutableTreeNode(action));
-    }
-    if (launchKind != null) {
-      ProgramNode program =
-        new ProgramNode(entry.buildFile(), launchKind, entry.info().target(), entry.info().targetOutput());
-      actionsNode.add(new DefaultMutableTreeNode(program));
-    }
-    return actionsNode;
-  }
-
-  /** The tests build file's own category, keeping test runs out of the crowded Actions group. */
-  @NotNull
-  private static DefaultMutableTreeNode buildTestsGroupNode(@NotNull FileEntry entry) {
-    String path = entry.buildFile().file().getPath();
-    DefaultMutableTreeNode testsNode = new DefaultMutableTreeNode(new TestsGroupNode());
-    testsNode.add(new DefaultMutableTreeNode(new TestRunNode(path)));
-    return testsNode;
-  }
-
-  @NotNull
-  private static DefaultMutableTreeNode buildCompilationGroupNode(@NotNull ContainerEntry container) {
-    DefaultMutableTreeNode compilationNode = new DefaultMutableTreeNode(new CompilationGroupNode(container.id()));
-    compilationNode.add(new DefaultMutableTreeNode(container.compileCommand()));
-    compilationNode.add(new DefaultMutableTreeNode(container.server()));
-    return compilationNode;
-  }
-
-  @NotNull
-  private DefaultMutableTreeNode buildBuildGroupNode(@NotNull ContainerEntry container,
-                                                     @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
-    DefaultMutableTreeNode buildNode =
-      new DefaultMutableTreeNode(new BuildGroupNode(container.id(), container.files().size()));
-    addContainerFiles(buildNode, container, installedLibraries);
-    return buildNode;
-  }
-
-  @NotNull
-  private static DefaultMutableTreeNode buildEnvironmentNode(@NotNull ContainerEntry container) {
-    EnvironmentData environment = container.environment();
-    EnvironmentNode environmentRow =
-      new EnvironmentNode(container.id(), container.displayName(), environment.activeBuildFileDefines());
-    DefaultMutableTreeNode environmentNode = new DefaultMutableTreeNode(environmentRow);
-
-    EnvSdkNode sdkRow = new EnvSdkNode(container.id(), environment.sdkDisplay(), environment.sdkMissing());
-    environmentNode.add(new DefaultMutableTreeNode(sdkRow));
-
-    EnvLanguageLevelNode levelRow = new EnvLanguageLevelNode(container.id(), environment.languageLevelDisplay());
-    environmentNode.add(new DefaultMutableTreeNode(levelRow));
-
-    EnvDefinesNode definesRow = new EnvDefinesNode(container.id(), environment.defines().size());
-    DefaultMutableTreeNode definesNode = new DefaultMutableTreeNode(definesRow);
-
-    for (EnvDefineNode define : environment.defines()) {
-      definesNode.add(new DefaultMutableTreeNode(define));
-    }
-    environmentNode.add(definesNode);
-
-    EnvCustomTargetNode customTargetRow = new EnvCustomTargetNode(container.id(), environment.customTarget());
-    environmentNode.add(new DefaultMutableTreeNode(customTargetRow));
-    return environmentNode;
-  }
-
-  private void addContainerFiles(@NotNull DefaultMutableTreeNode parentNode,
-                                 @NotNull ContainerEntry container,
-                                 @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
-    for (FileEntry fileEntry : container.files()) {
-      String path = fileEntry.buildFile().file().getPath();
-      boolean active = path.equals(container.activePath());
-      boolean tests = container.testsPaths().contains(path);
-      // pure list scan over the prepared model - safe on the EDT
-      boolean frameworkDetected = HaxeTestFrameworks.detectedFramework(fileEntry.info().libraries()) != null;
-      BuildFileRow row =
-        new BuildFileRow(fileEntry.buildFile(), container.id(), active, fileEntry.manual(), tests, frameworkDetected);
-      parentNode.add(buildFileNode(fileEntry, row, installedLibraries));
-    }
-  }
-
-  @NotNull
-  private DefaultMutableTreeNode buildFileNode(@NotNull FileEntry entry,
-                                               @NotNull BuildFileRow row,
-                                               @Nullable Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installedLibraries) {
-    HaxeBuildFile buildFile = entry.buildFile();
-    DefaultMutableTreeNode fileNode = new DefaultMutableTreeNode(row);
-    // a plain hxp script decides its own targets in code - no target row
-    if (buildFile.type() != HaxeBuildFileType.HXP_SCRIPT) {
-      fileNode.add(new DefaultMutableTreeNode(buildTargetNode(entry)));
-    }
-    // multi-section hxml (--next chain): the row picking which compilation the tree follows
-    if (!entry.sectionLabels().isEmpty()) {
-      SectionNode sectionNode = new SectionNode(buildFile, entry.sectionIds(), entry.sectionLabels(),
-                                                entry.sectionDescriptors(), entry.selectedSection());
-      fileNode.add(new DefaultMutableTreeNode(sectionNode));
-    }
-
-
-    HaxeBuildFileInfo info = entry.info();
-    DefaultMutableTreeNode definesNode =
-      new DefaultMutableTreeNode(new GroupNode(GroupKind.DEFINES, info.defines().size()));
-    for (HaxeBuildFileInfo.HaxeDefine define : info.defines()) {
-      definesNode.add(new DefaultMutableTreeNode(new DefineNode(buildFile, define.name(), define.value())));
-    }
-    fileNode.add(definesNode);
-
-    DefaultMutableTreeNode librariesNode =
-      new DefaultMutableTreeNode(new GroupNode(GroupKind.LIBRARIES, info.libraries().size()));
-    for (HaxeBuildFileInfo.HaxeLibDependency library : info.libraries()) {
-      String key = library.name().toLowerCase(Locale.ROOT);
-      var installedLibrary = installedLibraries != null ? installedLibraries.get(key) : null;
-      // a pinned version must itself be installed - the name alone is not
-      // enough. A git checkout is listed as version "git", never as its
-      // url#ref spec.
-      // TODO: compare a git pin's #ref against the installed checkout
-      //       (HaxelibLocalDocs.gitCheckout) and flag mismatches
-      String requiredVersion = HaxelibGitSpec.parse(library.version()) != null ? HaxelibSemVer.GIT_SCM
-                                                                               : library.version();
-      boolean pinSatisfied = requiredVersion == null
-                             || (installedLibrary != null && installedLibrary.versions().contains(requiredVersion));
-      boolean installed = installedLibraries == null || (installedLibrary != null && pinSatisfied);
-      String resolvedVersion = installedLibrary != null ? installedLibrary.selectedVersion() : null;
-      LibraryNode libraryRow = new LibraryNode(buildFile, library.name(), library.version(), resolvedVersion, installed);
-      librariesNode.add(new DefaultMutableTreeNode(libraryRow));
-    }
-    fileNode.add(librariesNode);
-    fileNode.add(buildActionsGroupNode(entry));
-    if (row.testsFile()) {
-      fileNode.add(buildTestsGroupNode(entry));
-    }
-    return fileNode;
-  }
-
-  @NotNull
-  private TargetNode buildTargetNode(@NotNull FileEntry entry) {
-    HaxeBuildFile buildFile = entry.buildFile();
-    if (!HaxeTargetOptions.isTargetSelectable(buildFile.type())) {
-      HaxeTarget target = entry.info().target();
-      String display = target != null ? target.toString()
-                                      : HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
-      return new TargetNode(buildFile, display, false);
-    }
-    String selectedId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(buildFile.file());
-    return new TargetNode(buildFile, HaxeTargetOptions.displayNameFor(buildFile.type(), selectedId), true);
-  }
-
-  /** Shows the target dropdown for a selectable target row, anchored at the given point. */
-  public void showTargetPopup(@NotNull TargetNode targetNode, @NotNull RelativePoint point) {
-    VirtualFile buildFile = targetNode.buildFile().file();
-    List<HaxeTargetOptions.TargetChoice> choices = HaxeTargetOptions.choicesFor(targetNode.buildFile().type());
-    JBPopupFactory.getInstance()
-      .createPopupChooserBuilder(choices)
-      .setTitle(HaxeBundle.message("haxe.toolwindow.select.target.title"))
-      .setRenderer(BuilderKt.textListCellRenderer("", HaxeTargetOptions.TargetChoice::displayName))
-      .setItemChosenCallback(choice -> HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(buildFile, choice.id()))
-      .createPopup()
-      .show(point);
-  }
-
-  /** Shows the {@code --next} section dropdown for a multi-section hxml, anchored at the given point. */
-  public void showSectionPopup(@NotNull SectionNode sectionNode, @NotNull RelativePoint point) {
-    List<SectionChoice> choices = new ArrayList<>();
-    for (int i = 0; i < sectionNode.labels().size(); i++) {
-      choices.add(new SectionChoice(i, sectionNode.labels().get(i), sectionNode.displayDescriptor(i)));
-    }
-    JBPopupFactory.getInstance()
-      .createPopupChooserBuilder(choices)
-      .setTitle(HaxeBundle.message("haxe.toolwindow.select.section.title"))
-      .setRenderer(sectionChoiceRenderer())
-      .setItemChosenCallback(choice -> {
-        String sectionId = sectionNode.ids().get(choice.index());
-        HaxeSectionSelectionStore.getInstance(project).setSelectedSection(sectionNode.buildFile().file(), sectionId);
-      })
-      .createPopup()
-      .show(point);
-  }
-
-  private record SectionChoice(int index, @NotNull String label, @NotNull String descriptor) {
-  }
-
-  /** Section label first, its target/output descriptor grayed - one glance tells the sections apart. */
-  @NotNull
-  private static ListCellRenderer<SectionChoice> sectionChoiceRenderer() {
-    return BuilderKt.listCellRenderer(row -> {
-      SectionChoice choice = row.getValue();
-      row.text(choice.label(), null);
-      if (!choice.descriptor().isEmpty()) {
-        row.text(choice.descriptor(), params -> {
-          params.setAttributes(SimpleTextAttributes.GRAYED_ATTRIBUTES);
-          return Unit.INSTANCE;
-        });
-      }
-      return Unit.INSTANCE;
-    });
-  }
-
-  /** Shows the environment SDK dropdown, anchored at the given point. */
-  public void showEnvironmentSdkPopup(@NotNull EnvSdkNode sdkNode, @NotNull RelativePoint point) {
-    List<SdkChoice> choices = new ArrayList<>();
-    choices.add(new SdkChoice(null, HaxeBundle.message("haxe.toolwindow.environment.sdk.default.choice")));
-    for (Sdk sdk : ProjectJdkTable.getInstance().getSdksOfType(HaxeSdkType.getInstance())) {
-      choices.add(new SdkChoice(sdk.getName(), sdk.getName()));
-    }
-    JBPopupFactory.getInstance()
-      .createPopupChooserBuilder(choices)
-      .setTitle(HaxeBundle.message("haxe.toolwindow.select.sdk.title"))
-      .setRenderer(BuilderKt.textListCellRenderer("", SdkChoice::display))
-      .setItemChosenCallback(choice -> {
-        HaxeEnvironmentStore.getInstance(project).setSdkName(sdkNode.containerId(), choice.name());
-        HaxeModuleSdkApplier.getInstance(project).applyAsync(sdkNode.containerId(), choice.name());
-        refreshTree();
-      })
-      .createPopup()
-      .show(point);
-  }
-
-  private record SdkChoice(@Nullable String name, @NotNull String display) {
-  }
-
-  /** Level choices mirror the Haxe Compiler settings page: an explicit level, or null = project default. */
-  public void showLanguageLevelPopup(@NotNull EnvLanguageLevelNode levelNode, @NotNull RelativePoint point) {
-    HaxeCompilerSettings compilerSettings = HaxeCompilerSettings.getInstance(project);
-    List<LevelChoice> choices = new ArrayList<>();
-    String defaultDisplay = HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default",
-                                               compilerSettings.getDefaultLanguageLevel(levelNode.containerId()).getPresentableText());
-    choices.add(new LevelChoice(null, defaultDisplay));
-    for (HaxeLanguageLevel level : HaxeLanguageLevel.values()) {
-      choices.add(new LevelChoice(level, level.getPresentableText()));
-    }
-    JBPopupFactory.getInstance()
-      .createPopupChooserBuilder(choices)
-      .setTitle(HaxeBundle.message("haxe.toolwindow.select.language.level.title"))
-      .setRenderer(BuilderKt.textListCellRenderer("", LevelChoice::display))
-      .setItemChosenCallback(choice -> {
-        compilerSettings.setModuleLanguageLevelOverride(levelNode.containerId(), choice.level());
-        HaxeLanguageLevelUtil.notifyLanguageLevelChanged(project);
-        refreshTree();
-      })
-      .createPopup()
-      .show(point);
-  }
-
-  private record LevelChoice(@Nullable HaxeLanguageLevel level, @NotNull String display) {
-  }
-
-  /** Edits the container's {@code --custom-target} name; an empty entry clears it. */
-  private void editCustomTarget(@NotNull EnvCustomTargetNode customTargetNode) {
-    String entered = Messages.showInputDialog(project,
-                                              HaxeBundle.message("haxe.toolwindow.custom.target.prompt"),
-                                              HaxeBundle.message("haxe.toolwindow.custom.target.title"),
-                                              null,
-                                              customTargetNode.customTarget(),
-                                              CUSTOM_TARGET_VALIDATOR);
-    if (entered == null) return;
-    HaxeEnvironmentStore.getInstance(project).setCustomTarget(customTargetNode.containerId(), entered);
-    refreshTree();
-  }
-
-  private static final InputValidator CUSTOM_TARGET_VALIDATOR = new InputValidator() {
-    @Override
-    public boolean checkInput(String input) {
-      // a lowercase-start identifier - the only shape variant activation
-      // matches in file names (see HaxeModuleVariants) - or empty to clear
-      return input.isBlank() || input.trim().matches("[a-z_][a-zA-Z0-9_]*");
-    }
-
-    @Override
-    public boolean canClose(String input) {
-      return checkInput(input);
-    }
-  };
 
   /** User object of the tree's selected node, or null. */
   @Nullable
@@ -696,16 +326,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     }
   }
 
-  /** Opens the compile command configuration dialog and refreshes on OK. */
-  public void configureCompileCommand(@NotNull EnvCompileCommandNode compileCommand) {
-    HaxeCompileCommandDialog dialog = new HaxeCompileCommandDialog(project, compileCommand.containerId(),
-                                                                   compileCommand.candidateFilePaths(),
-                                                                   compileCommand.actionNamesByFile());
-    if (dialog.showAndGet()) {
-      refreshTree();
-    }
-  }
-
   /** The build file row enclosing the selection (an action or child row), or null. */
   @Nullable
   public BuildFileRow getSelectedBuildFileRowAncestor() {
@@ -718,128 +338,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       path = path.getParentPath();
     }
     return null;
-  }
-
-  /**
-   * Runs the container's configured compile command (no-op while unconfigured),
-   * routed through the compilation server when enabled and applicable.
-   */
-  public void runCompileCommand(@NotNull EnvCompileCommandNode compileCommand) {
-    if (compileCommand.command() == null) return;
-    // connect injection may spawn the compilation server - keep process creation off the EDT
-    AppExecutorUtil.getAppExecutorService().execute(() -> {
-      List<String> command = HaxeCompileCommands.connectIfEnabled(
-        project, compileCommand.containerId(), compileCommand.connectEligible(), compileCommand.command());
-      ApplicationManager.getApplication().invokeLater(() -> {
-        if (!project.isDisposed()) {
-          HaxeConsoleCommandRunner.run(project, compileCommand.display(), command, compileCommand.workDirectory());
-        }
-      });
-    });
-  }
-
-  public void runAction(@NotNull ActionNode actionNode) {
-    executeAction(actionNode, DefaultRunExecutor.getRunExecutorInstance());
-  }
-
-  // TODO: run tools through a run configuration like action rows, so they land in the run dropdown
-  public void runTool(@NotNull ToolNode toolNode) {
-    if (toolNode.command().isEmpty()) return;
-    // a raw tree double-click dispatches on the EDT without the write-intent
-    // lock the runner's save-all needs; invokeLater re-enters with it
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (!project.isDisposed()) {
-        HaxeConsoleCommandRunner.run(project, toolNode.name(), toolNode.command(), toolNode.workDirectory());
-      }
-    });
-  }
-
-  /**
-   * Executes an action row through a run configuration (created on first use,
-   * reused after), so it lands in the run configuration dropdown and can be rerun
-   * or debugged from the main UI - the Gradle tool window pattern.
-   */
-  private void executeAction(@NotNull ActionNode actionNode, @NotNull Executor executor) {
-    if (actionNode.command().isEmpty()) return;
-
-    RunManager runManager = RunManager.getInstance(project);
-    RunnerAndConfigurationSettings settings = runManager.getAllSettings().stream()
-      .filter(candidate -> candidate.getConfiguration() instanceof HaxeActionRunConfiguration configuration
-                           && configuration.getBuildFilePath().equals(actionNode.ownerId())
-                           && configuration.getActionName().equals(actionNode.name()))
-      .findFirst()
-      .orElse(null);
-
-    if (settings == null) {
-      String name = PathUtil.getFileName(actionNode.ownerId()) + " " + actionNode.name();
-      settings = runManager.createConfiguration(name, HaxeRunConfigurationType.getInstance().getFactory(HaxeActionConfigurationFactory.class));
-      HaxeActionRunConfiguration configuration = (HaxeActionRunConfiguration)settings.getConfiguration();
-      configuration.setBuildFilePath(actionNode.ownerId());
-      configuration.setActionName(actionNode.name());
-      runManager.addConfiguration(settings);
-    }
-    runManager.setSelectedConfiguration(settings);
-    // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,
-    // which enforces single-instance configurations with the stop-and-rerun dialog
-    ExecutionUtil.runConfiguration(settings, executor);
-  }
-
-  /**
-   * The "compile &amp; run" row: launches the program a build file produces,
-   * through the target's visible run configuration (HashLink, Browser, …) whose
-   * before-launch step compiles the file (with the target's debug additions
-   * under the Debug executor).
-   */
-  public void executeProgram(@NotNull ProgramNode programNode, boolean debug) {
-    Executor executor = debug ? DefaultDebugExecutor.getDebugExecutorInstance()
-                              : DefaultRunExecutor.getRunExecutorInstance();
-    executeProgramWith(programNode, executor);
-  }
-
-  /** The Profile row: launches through the given lane profiler entry (the action resolved and, if needed, asked). */
-  public void executeProgramWithProfiler(@NotNull ProgramNode programNode, @NotNull Executor profilerExecutor) {
-    executeProgramWith(programNode, profilerExecutor);
-  }
-
-  private void executeProgramWith(@NotNull ProgramNode programNode, @NotNull Executor executor) {
-    VirtualFile file = programNode.buildFile().file();
-    // the file index needs a read action - the EDT has no implicit read access
-    Module module = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).getModuleForFile(file));
-    if (module == null) {
-      notifyUser(HaxeBundle.message("haxe.toolwindow.program.no.module", file.getName()));
-      return;
-    }
-
-    RunnerAndConfigurationSettings settings = HaxeProgramLaunches.findOrCreate(
-      project, module, programNode.buildFile(), programNode.target(), programNode.targetOutput());
-    if (settings == null) {
-      notifyUser(HaxeBundle.message("haxe.toolwindow.program.unsupported", file.getName()));
-      return;
-    }
-    RunManager.getInstance(project).setSelectedConfiguration(settings);
-    // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,
-    // which enforces single-instance configurations with the stop-and-rerun dialog
-    ExecutionUtil.runConfiguration(settings, executor);
-  }
-
-  private void notifyUser(@NotNull String message) {
-    HaxeCommandNotifications.notify(project, message, NotificationType.WARNING);
-  }
-
-  /** Toggles the container's server participation; while disabled project-wide, opens the settings page instead. */
-  public void toggleCompilationServer(@NotNull CompilationServerNode serverNode) {
-    if (!serverNode.projectEnabled()) {
-      ShowSettingsUtil.getInstance().showSettingsDialog(project, HaxeBuildToolsConfigurable.class);
-    }
-    else {
-      boolean enable = !serverNode.moduleUses();
-      HaxeEnvironmentStore.getInstance(project).setUsingCompilationServer(serverNode.containerId(), enable);
-      if (!enable) {
-        // an opted-out container sends no more requests - a lingering failure could never clear itself
-        HaxeContextFailures.getInstance(project).record(serverNode.containerId(), null);
-      }
-    }
-    refreshTree();
   }
 
   /** The Environment row of the selection, walking up from any of its child rows. */
@@ -1017,14 +515,11 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       renderer.setSize(bounds.width, bounds.height);
       return colored.getFragmentTagAt(e.getX() - bounds.x);
     }
-
   }
 
   /** Opens the server console at the tab serving this container's SDK — the status view holds the failure detail. */
   private void openServerConsole(@NotNull String containerId) {
-    String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
-    String serverId = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
-    HaxeServerConsoleWindowFactory.open(project, serverId);
+    HaxeServerConsoleWindowFactory.open(project, HaxeCompilationServerManager.serverIdFor(project, containerId));
   }
 
   /** The row's ACTIVATION — double-click and Enter share it. False when the row has none. */
@@ -1032,10 +527,10 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     switch (userObject) {
       case BuildFileRow row when row.buildFile().file().isValid() ->
         new OpenFileDescriptor(project, row.buildFile().file()).navigate(true);
-      case ActionNode actionNode -> runAction(actionNode);
-      case ToolNode toolNode -> runTool(toolNode);
-      case ProgramNode programNode -> executeProgram(programNode, false);
-      case TestRunNode testRunNode -> runUnitTests(testRunNode.buildFilePath());
+      case ActionNode actionNode -> HaxeToolWindowLaunches.runAction(project, actionNode);
+      case ToolNode toolNode -> HaxeToolWindowLaunches.runTool(project, toolNode);
+      case ProgramNode programNode -> HaxeToolWindowLaunches.runProgram(project, programNode, DefaultRunExecutor.getRunExecutorInstance());
+      case TestRunNode testRunNode -> HaxeTestRunConfigurations.run(project, testRunNode.buildFilePath());
       case null, default -> {
         return false;
       }
@@ -1046,12 +541,12 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   /** The row's chooser/toggle INTERACTION — single-click and Enter share it. False when the row has none. */
   private boolean interactWithNode(@Nullable Object userObject, @NotNull RelativePoint point, @Nullable Object fragmentTag) {
     switch (userObject) {
-      case TargetNode targetNode when targetNode.selectable() -> showTargetPopup(targetNode, point);
-      case SectionNode sectionNode -> showSectionPopup(sectionNode, point);
-      case EnvSdkNode sdkNode -> showEnvironmentSdkPopup(sdkNode, point);
-      case EnvLanguageLevelNode levelNode -> showLanguageLevelPopup(levelNode, point);
-      case EnvCustomTargetNode customTargetNode -> editCustomTarget(customTargetNode);
-      case EnvCompileCommandNode buildCommand -> configureCompileCommand(buildCommand);
+      case TargetNode targetNode when targetNode.selectable() -> HaxeToolWindowEditors.showTargetPopup(project, targetNode, point);
+      case SectionNode sectionNode -> HaxeToolWindowEditors.showSectionPopup(project, sectionNode, point);
+      case EnvSdkNode sdkNode -> HaxeToolWindowEditors.showEnvironmentSdkPopup(project, sdkNode, point);
+      case EnvLanguageLevelNode levelNode -> HaxeToolWindowEditors.showLanguageLevelPopup(project, levelNode, point);
+      case EnvCustomTargetNode customTargetNode -> HaxeToolWindowEditors.editCustomTarget(project, customTargetNode);
+      case EnvCompileCommandNode compileCommand -> HaxeToolWindowEditors.configureCompileCommand(project, compileCommand);
       case CompilationServerNode serverNode -> {
         // the red failure text links to the server console's status view;
         // the rest of the row keeps the participation toggle
@@ -1059,7 +554,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
           openServerConsole(link.containerId());
         }
         else {
-          toggleCompilationServer(serverNode);
+          HaxeToolWindowEditors.toggleCompilationServer(project, serverNode);
         }
       }
       case null, default -> {
@@ -1098,9 +593,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
       switch (getSelectedUserObject()) {
-        case BuildFileRow row -> confirmAndRemoveBuildFile(row);
-        case EnvDefineNode define -> confirmAndRemoveDefine(define);
-        case ModuleNode module -> confirmAndRemoveModule(module);
+        case BuildFileRow row -> HaxeToolWindowEditors.confirmAndRemoveBuildFile(project, row);
+        case EnvDefineNode define -> HaxeToolWindowEditors.confirmAndRemoveDefine(project, define);
+        case ModuleNode module -> HaxeToolWindowEditors.confirmAndRemoveModule(project, module);
         case null, default -> { }
       }
     }
@@ -1118,40 +613,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     public @NotNull ActionUpdateThread getActionUpdateThread() {
       return ActionUpdateThread.EDT;
     }
-  }
-
-  public void confirmAndRemoveBuildFile(@NotNull BuildFileRow row) {
-    String confirmKey = row.manual() ? "haxe.toolwindow.remove.build.file.confirm"
-                                     : "haxe.toolwindow.hide.build.file.confirm";
-    String titleKey = row.manual() ? "haxe.toolwindow.remove.build.file" : "haxe.toolwindow.hide.build.file";
-    int answer = Messages.showYesNoDialog(project,
-                                          HaxeBundle.message(confirmKey, row.buildFile().file().getName()),
-                                          HaxeBundle.message(titleKey),
-                                          Messages.getQuestionIcon());
-    if (answer != Messages.YES) return;
-    HaxeBuildFilesStore.getInstance(project).removeFile(row.containerId(), row.buildFile().file().getPath());
-    refreshTree();
-  }
-
-  private void confirmAndRemoveDefine(@NotNull EnvDefineNode define) {
-    int answer = Messages.showYesNoDialog(project,
-                                          HaxeBundle.message("haxe.toolwindow.remove.define.confirm", define.name()),
-                                          HaxeBundle.message("haxe.toolwindow.remove.define"),
-                                          Messages.getQuestionIcon());
-    if (answer != Messages.YES) return;
-    HaxeEnvironmentStore.getInstance(project).removeDefine(define.containerId(), define.name());
-    refreshTree();
-  }
-
-  /** Module removal after confirmation. Files on disk are untouched - the folder folds back into the surrounding module. */
-  public void confirmAndRemoveModule(@NotNull ModuleNode module) {
-    int answer = Messages.showYesNoDialog(
-      project,
-      HaxeBundle.message("haxe.toolwindow.remove.module.confirm", module.name()),
-      HaxeBundle.message("haxe.toolwindow.remove.module"),
-      Messages.getWarningIcon());
-    if (answer != Messages.YES) return;
-    HaxeModuleWorkspace.getInstance(project).removeModuleAsync(module.name());
   }
 
   private void toggleSelectedExpansion() {

@@ -29,7 +29,8 @@ import java.util.List;
  * Runs a tool command with its output attached to a console in the Run tool window,
  * so compile errors and long-running processes are fully visible (the console picks
  * up the plugin's error filters, giving clickable file:line links). Must be called
- * on the EDT. Used by the tool window's execute button and the build file action rows.
+ * on the EDT. Used by the tool window's execute button, compile command and tool
+ * rows, and the file tool actions.
  */
 public final class HaxeConsoleCommandRunner {
 

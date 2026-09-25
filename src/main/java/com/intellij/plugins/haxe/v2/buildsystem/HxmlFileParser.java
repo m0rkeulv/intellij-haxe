@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
@@ -47,6 +48,22 @@ public final class HxmlFileParser {
   private static final String EACH_SEPARATOR = "--each";
   private static final Set<String> SECTION_FLAGS = Set.of(NEXT_SEPARATOR, EACH_SEPARATOR);
 
+  private static final Map<String, HaxeTarget> TARGET_FLAGS = buildTargetFlagMap();
+
+  /** The define flag's two spellings; the flag's value is {@code name} or {@code name=value}. */
+  public static final Set<String> DEFINE_FLAGS = Set.of("-D", "--define");
+
+  /** Haxe 5's {@code --custom-target name[=path]}: the name becomes the platform name. */
+  private static final String CUSTOM_TARGET_FLAG = "--custom-target";
+
+  private static final Set<String> LIBRARY_FLAGS = Set.of("-lib", "--library", "-L");
+  private static final Set<String> CLASSPATH_FLAGS = Set.of("-cp", "-p", "--class-path");
+  private static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
+  private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
+
+  private HxmlFileParser() {
+  }
+
   /** Whether the flag token starts a new {@code --next} compilation section. */
   public static boolean isNextSeparator(@NotNull String token) {
     return token.equals(NEXT_SEPARATOR);
@@ -61,8 +78,8 @@ public final class HxmlFileParser {
    * The build's EFFECTIVE hxml: every referenced-hxml line replaced by that
    * file's content, recursively. haxe resolves a reference against the
    * invocation's working directory, NOT the file that declares it (a nested
-   * include in a subfolder still reads next to the root — verified against a
-   * live compile), so one reader rooted at the build file's directory serves
+   * include in a subfolder still reads next to the root), so one reader
+   * rooted at the build file's directory serves
    * every nesting level. A revisited reference is dropped: haxe would loop on
    * such input. Unreadable references stay as lines; {@link #parse} skips them.
    * Each expansion is preceded by a comment naming the included file (see
@@ -131,22 +148,6 @@ public final class HxmlFileParser {
     return null;
   }
 
-  private static final Map<String, HaxeTarget> TARGET_FLAGS = buildTargetFlagMap();
-
-  /** The define flag's two spellings; the flag's value is {@code name} or {@code name=value}. */
-  public static final Set<String> DEFINE_FLAGS = Set.of("-D", "--define");
-
-  /** Haxe 5's {@code --custom-target name[=path]}: the name becomes the platform name. */
-  private static final String CUSTOM_TARGET_FLAG = "--custom-target";
-
-  private static final Set<String> LIBRARY_FLAGS = Set.of("-lib", "--library", "-L");
-  private static final Set<String> CLASSPATH_FLAGS = Set.of("-cp", "-p", "--class-path");
-  private static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
-  private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
-
-  private HxmlFileParser() {
-  }
-
   /** A line the compiler acts on - not blank, not a comment (which covers the {@code # include} markers). */
   private static boolean isSignificantLine(@NotNull String rawLine) {
     String line = rawLine.trim();
@@ -193,7 +194,7 @@ public final class HxmlFileParser {
       descriptors.add(baseDescriptor(infos.get(i).target(), mains.get(i)));
     }
     extendCollidingDescriptors(descriptors, i -> infos.get(i).targetOutput());
-    extendCollidingDescriptors(descriptors, i -> mains.get(i) == null ? null : simpleClassName(mains.get(i)));
+    extendCollidingDescriptors(descriptors, i -> mains.get(i) == null ? null : StringUtil.getShortName(mains.get(i)));
     return descriptors;
   }
 
@@ -201,7 +202,7 @@ public final class HxmlFileParser {
   @NotNull
   private static String baseDescriptor(@Nullable HaxeTarget target, @Nullable String main) {
     if (target != null) return target.toString();
-    if (main != null) return simpleClassName(main);
+    if (main != null) return StringUtil.getShortName(main);
     return "";
   }
 
@@ -231,13 +232,6 @@ public final class HxmlFileParser {
         descriptors.set(i, descriptors.get(i) + " · " + extra);
       }
     }
-  }
-
-  // "com.example.Main" -> "Main"
-  @NotNull
-  private static String simpleClassName(@NotNull String dottedName) {
-    int lastDot = dottedName.lastIndexOf('.');
-    return lastDot < 0 ? dottedName : dottedName.substring(lastDot + 1);
   }
 
   /** Parses effective (include-merged) hxml content — see {@link #flatten}. */

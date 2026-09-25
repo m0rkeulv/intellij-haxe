@@ -18,7 +18,6 @@
 package org.jetbrains.jps.haxe.model.sdk.impl;
 
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkAdditionalDataBase;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jps.haxe.model.sdk.JpsHaxeSdkAdditionalData;
 import org.jetbrains.jps.model.ex.JpsElementBase;
 

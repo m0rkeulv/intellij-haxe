@@ -16,7 +16,13 @@ public final class HaxeRunCheckstyleFileAction extends HaxeFileToolAction {
   }
 
   @Override
+  @NotNull
+  String toolHaxelib() {
+    return HaxeToolConfigs.CHECKSTYLE_HAXELIB;
+  }
+
+  @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
-    runFileTool(e, "checkstyle", List.of(), null);
+    runFileTool(e, List.of(), null);
   }
 }

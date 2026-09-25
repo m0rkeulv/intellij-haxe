@@ -1,17 +1,13 @@
 package com.intellij.plugins.haxe.ide;
 
-import com.intellij.codeInspection.LocalInspectionTool;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedFieldInspection;
 import com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedFunctionInspection;
 import com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedLocalVarInspection;
 import com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedMethodInspection;
-import com.intellij.util.ArrayUtil;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Set;
 
 
 @DisplayName("Annotation: unused annotator")

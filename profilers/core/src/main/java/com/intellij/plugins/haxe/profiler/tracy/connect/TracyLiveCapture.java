@@ -11,6 +11,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.net.Socket;
 import java.net.SocketException;
 import java.util.ArrayList;
@@ -26,19 +28,19 @@ import java.util.function.BooleanSupplier;
  * and listens again - asks plot/thread names over the query channel as they
  * first appear, and reads until the client is drained. Shutdown is a
  * two-step handshake and the client NEVER closes the socket itself: it
- * announces exit with a Terminate item, and on receiving our Disconnect
- * query it flushes what remains, sends a FINAL Terminate and then waits for
- * the server to close. So: a Terminate with no disconnect requested yet
- * triggers {@link #requestDisconnect()}; one arriving after it means
- * drained - the read stops and closing our socket is what lets the
- * client's process exit. A capture can also end by the stream TEARING (the
+ * announces exit with a Terminate item, and on receiving the receiver's
+ * Disconnect query it flushes what remains, sends a FINAL Terminate and then
+ * waits for the server to close. So a Terminate with no disconnect requested
+ * yet triggers {@link #requestDisconnect()}, and one arriving after it means
+ * drained: the read stops, and closing the receiver's socket is what lets
+ * the client's process exit. A capture can also end by the stream TEARING (the
  * process killed, or dead without the handshake): everything received
  * before the tear is kept. Queries are a handful of name lookups, far below
  * the client's query budget, so no flow-control bookkeeping is needed.
  */
 public final class TracyLiveCapture implements AutoCloseable {
 
-  // ServerQuery wire values (TracyProtocol.hpp; unchanged v69..v82)
+  // ServerQuery wire values, the same in every supported protocol version
   private static final int QUERY_STRING = 1;
   private static final int QUERY_THREAD_STRING = 2;
   private static final int QUERY_PLOT_NAME = 4;
@@ -156,12 +158,12 @@ public final class TracyLiveCapture implements AutoCloseable {
     if (!disconnectSent.compareAndSet(false, true)) return;
     query(QUERY_DISCONNECT, 0);
     try {
-      // the client flushes and then WAITS for this side to close - but an
-      // exit-path shutdown (the app quit on its own; TRACY_NO_EXIT keeps
-      // the process alive for the drain) does not repeat its Terminate
-      // after the flush, so a quiet stream must end the capture instead
-      // of waiting for a marker that never comes. Closing our socket is
-      // also what finally lets that lingering process exit.
+      // the client flushes and then WAITS for this side to close. An
+      // exit-path shutdown (the app quit on its own; TRACY_NO_EXIT keeps the
+      // process alive for the drain) does not repeat its Terminate after the
+      // flush, so a quiet stream must end the capture instead of waiting for
+      // a marker that never comes. Closing the socket is also what finally
+      // lets that lingering process exit.
       socket.setSoTimeout(DRAIN_QUIET_TIMEOUT_MS);
     }
     catch (SocketException gone) {
@@ -180,16 +182,15 @@ public final class TracyLiveCapture implements AutoCloseable {
     closeQuietly(socket);
   }
 
-  /** ServerQueryPacket: u8 type, u64 ptr, u32 extra - little-endian, 13 bytes. */
+  /** ServerQueryPacket: u8 type, u64 ptr, u32 extra (always 0 here), little-endian. */
   private void query(int type, long pointer) {
-    byte[] packet = new byte[13];
-    packet[0] = (byte)type;
-    for (int i = 0; i < 8; i++) {
-      packet[1 + i] = (byte)(pointer >> (8 * i) & 0xFF);
-    }
+    ByteBuffer packet = ByteBuffer.allocate(1 + 8 + 4)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .put((byte)type)
+      .putLong(pointer);
     try {
       synchronized (queries) {
-        queries.write(packet);
+        queries.write(packet.array());
         queries.flush();
       }
     }

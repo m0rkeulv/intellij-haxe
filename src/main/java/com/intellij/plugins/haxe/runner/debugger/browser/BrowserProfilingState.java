@@ -67,31 +67,10 @@ public class BrowserProfilingState implements RunProfileState {
 
       int debugPort = freePort();
       GeneralCommandLine commandLine = chromiumCommandLine(url, debugPort);
-      Path sessionBase = contentRoot != null
-                         ? contentRoot.resolve(PROFILE_FILE_NAME)
-                         : Path.of(configuration.getProject().getBasePath(), PROFILE_FILE_NAME);
       HaxeJsProfilerCapture.Handle capture =
-        HaxeJsProfilerCapture.startCapture(configuration.getProject(), configuration.getName(), sessionBase,
+        HaxeJsProfilerCapture.startCapture(configuration.getProject(), configuration.getName(), sessionPath(contentRoot),
                                            debugPort, samplingIntervalUs, contentRoot, url);
-
-      ProcessHandler handler = new MostlySilentColoredProcessHandler(commandLine) {
-        @Override
-        protected void destroyProcessImpl() {
-          // Stop = end of the capture: collect while the browser still lives
-          if (capture != null) capture.finishCapture();
-          super.destroyProcessImpl();
-        }
-      };
-      ContentHttpServer startedServer = server;
-      handler.addProcessListener(new ProcessListener() {
-        @Override
-        public void processTerminated(@NotNull ProcessEvent event) {
-          // no-op after a Stop's collection; a browser closed by hand
-          // finalizes the session with the segments already streamed
-          if (capture != null) capture.connectionLost();
-          if (startedServer != null) startedServer.close();
-        }
-      });
+      ProcessHandler handler = profiledBrowserHandler(commandLine, capture, server);
 
       ConsoleView console = TextConsoleBuilderFactory.getInstance()
         .createBuilder(configuration.getProject())
@@ -105,6 +84,39 @@ public class BrowserProfilingState implements RunProfileState {
         server.close();
       }
     }
+  }
+
+  /** The streamed session file: beside the served content, else in the project directory. */
+  @NotNull
+  private Path sessionPath(@Nullable Path contentRoot) {
+    return contentRoot != null
+           ? contentRoot.resolve(PROFILE_FILE_NAME)
+           : Path.of(configuration.getProject().getBasePath(), PROFILE_FILE_NAME);
+  }
+
+  /** The browser process, ending the capture on Stop and releasing the content server when the browser exits. */
+  @NotNull
+  private static ProcessHandler profiledBrowserHandler(@NotNull GeneralCommandLine commandLine,
+                                                       @Nullable HaxeJsProfilerCapture.Handle capture,
+                                                       @Nullable ContentHttpServer server) throws ExecutionException {
+    ProcessHandler handler = new MostlySilentColoredProcessHandler(commandLine) {
+      @Override
+      protected void destroyProcessImpl() {
+        // Stop = end of the capture: collect while the browser still lives
+        if (capture != null) capture.finishCapture();
+        super.destroyProcessImpl();
+      }
+    };
+    handler.addProcessListener(new ProcessListener() {
+      @Override
+      public void processTerminated(@NotNull ProcessEvent event) {
+        // no-op after a Stop's collection; a browser closed by hand
+        // finalizes the session with the segments already streamed
+        if (capture != null) capture.connectionLost();
+        if (server != null) server.close();
+      }
+    });
+    return handler;
   }
 
   /**

@@ -497,6 +497,8 @@ public abstract class SpecificTypeReference {
     return null;
   }
 
+  /** Null for a function type without a declaration to resolve to. */
+  @Nullable
   abstract public HaxeResolveResult asResolveResult();
   abstract public SpecificTypeReference withConstantValue(Object constantValue);
 
@@ -538,9 +540,7 @@ public abstract class SpecificTypeReference {
   }
   abstract public String toPresentationString(boolean showOnlyConstraintForTypeParam);
 
-  /**
-   * A value that is faster to generate than PresentationString, used for caching purposes.
-   */
+  /** A cache-key form of this type, cheaper to build than the presentation string. */
   final public String toCacheKey() {
     StringBuilder out = new StringBuilder(64);
     appendCacheKey(out, Collections.newSetFromMap(new IdentityHashMap<>()));
@@ -548,13 +548,14 @@ public abstract class SpecificTypeReference {
   }
 
   /**
-   * Method that all sub classes must implement to provide a value to the cacheKey when its created.
+   * Appends this type's cache key. {@code walkPath} holds the types being
+   * expanded (by identity), so a recursive type appends {@link #CACHE_KEY_CYCLE}
+   * instead of expanding forever.
    */
   abstract public void appendCacheKey(@NotNull StringBuilder out, @NotNull Set<SpecificTypeReference> walkPath);
 
   /** Marks a type re-encountered on the current walk path; the walk cuts instead of recursing. */
   protected static final String CACHE_KEY_CYCLE = "@cycle";
-
 
   abstract public String toString();
 

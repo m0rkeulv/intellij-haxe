@@ -29,9 +29,11 @@ public final class HaxeDebugUnitTestsAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    if (project == null) return;
     String buildFilePath = panel.resolveTestsPath(panel.getSelectedUserObject());
     if (buildFilePath != null) {
-      panel.debugUnitTests(buildFilePath);
+      HaxeTestRunConfigurations.debug(project, buildFilePath);
     }
   }
 

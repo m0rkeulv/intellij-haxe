@@ -18,7 +18,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("hxcpp telemetry: session translator")
 public class HxtSessionTranslatorTest {
@@ -188,7 +187,7 @@ public class HxtSessionTranslatorTest {
     private ByteArrayOutputStream frame;
 
     SessionBuilder(int tickHz, double startStamp) {
-      out.writeBytes(HxtSessionTranslator.MAGIC);
+      out.writeBytes(HxtFormat.MAGIC);
       writeU16(out, 1);
       writeInt(out, tickHz);
       writeDouble(out, startStamp);

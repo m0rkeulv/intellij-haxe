@@ -47,7 +47,7 @@ import static com.intellij.plugins.haxe.model.HaxeStdTypesFileModel.STD_TYPES_HX
  * and its own dependency roots, so modules on different haxe versions never
  * see each other's standard library. Elements outside any module (opened
  * library files, scratches) and {@link #fromProject} callers get the
- * project-wide union as before.
+ * project-wide union.
  */
 public class HaxeProjectModel {
   private static final Key<HaxeProjectModel> HAXE_PROJECT_MODEL_KEY = new Key<>("HAXE_PROJECT_MODEL");

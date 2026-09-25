@@ -14,7 +14,7 @@ import sys.thread.Thread;
 	<Name>.hx (class name = capitalized file name), its @:compiler( lines
 	become extra compiler args, and the user's haxe executes it with
 	-lib lime -lib hxp. The shipped HxpRunner (extracted beside the script)
-	replaces lime's serialize/unserialize round trip by printing our JSON
+	replaces lime's serialize/unserialize round trip by printing the JSON
 	directly from inside that context.
 
 	Requires haxe plus the lime and hxp haxelibs; returns null (with a message
@@ -38,13 +38,8 @@ class HxpEvaluator {
 		return result;
 	}
 
-	static function evaluateIn(tempDirectory:String,
-							   hxpPath:String,
-							   target:String,
-							   defines:Map<String, String>,
-							   haxeExecutable:String):Null<String>
-	{
-
+	static function evaluateIn(tempDirectory:String, hxpPath:String, target:String, defines:Map<String, String>,
+			haxeExecutable:String):Null<String> {
 		var absolute = FileSystem.absolutePath(hxpPath);
 		var name = className(hxpPath);
 

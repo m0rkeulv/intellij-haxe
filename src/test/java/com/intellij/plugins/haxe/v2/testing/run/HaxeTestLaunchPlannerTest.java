@@ -185,7 +185,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
     HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), "testAdd");
 
-    String joined = HaxeTestLaunchPlanner.compileArguments(getProject(), path, null, singleRun);
+    String joined = HaxeTestCompileArguments.compileArguments(getProject(), path, null, singleRun);
     List<String> arguments = ParametersListUtil.parse(joined);
 
     assertTrue(arguments.contains("--app-main=" + HaxeTestSingleRuns.MAIN_CLASS),
@@ -348,7 +348,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   public void testFlashBuildForcesTheLiveReporterIntoTheCompile() {
     withLiveReportingDisabled(() -> {
       // the adl-hosted lane needs the injected reporter for stdout output and the exit call
-      String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("targets/swf.hxml"), null);
+      String arguments = HaxeTestCompileArguments.compileArguments(getProject(), fixturePath("targets/swf.hxml"), null);
       assertTrue(arguments.contains("intellij_utest.Macro.init()"), "reporter injection missing: " + arguments);
     });
   }
@@ -389,9 +389,9 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @DisplayName("munit build is detected from its lib and compiles with the injected client")
   public void testMunitBuildIsDetectedFromItsLibAndCompilesWithTheInjectedClient() throws ExecutionException {
     String path = fixturePath("targets/munit-neko.hxml");
-    assertEquals("munit", HaxeTestLaunchPlanner.frameworkFor(getProject(), path).libraryName());
+    assertEquals("munit", HaxeTestFrameworks.forBuildFile(getProject(), path).libraryName());
 
-    String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), path, null);
+    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, null);
     assertTrue(arguments.contains("--macro intellij_munit.Macro.init()"),
                "the injected client is munit's result channel: " + arguments);
     assertFalse(arguments.contains("-D teamcity "), "utest's batch define has no meaning for munit: " + arguments);
@@ -404,9 +404,9 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @DisplayName("buddy build is detected from its lib and compiles with the reporter define")
   public void testBuddyBuildIsDetectedFromItsLibAndCompilesWithTheReporterDefine() throws ExecutionException {
     String path = fixturePath("targets/buddy-interp.hxml");
-    assertEquals("buddy", HaxeTestLaunchPlanner.frameworkFor(getProject(), path).libraryName());
+    assertEquals("buddy", HaxeTestFrameworks.forBuildFile(getProject(), path).libraryName());
 
-    String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), path, null);
+    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, null);
     assertTrue(arguments.contains("-D reporter=intellij_buddy.TcReporter"),
                "buddy's reporter override selects the shipped reporter: " + arguments);
 
@@ -418,9 +418,9 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @DisplayName("tink build is detected from its lib and compiles with the injected reporter")
   public void testTinkBuildIsDetectedFromItsLibAndCompilesWithTheInjectedReporter() throws ExecutionException {
     String path = fixturePath("targets/tink-interp.hxml");
-    assertEquals("tink_unittest", HaxeTestLaunchPlanner.frameworkFor(getProject(), path).libraryName());
+    assertEquals("tink_unittest", HaxeTestFrameworks.forBuildFile(getProject(), path).libraryName());
 
-    String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), path, null);
+    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, null);
     assertTrue(arguments.contains("--macro intellij_tink.Macro.init()"),
                "the injected reporter is tink's result channel: " + arguments);
     assertFalse(arguments.contains("-D teamcity "), "utest's batch define has no meaning for tink: " + arguments);
@@ -472,13 +472,13 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     // the suite-name define overrides utest's target #if chain, which lacks
     // several targets (HL runs would read "Target: Undefined")
     String interp = fixturePath("test.hxml");
-    String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), interp, null);
+    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), interp, null);
     assertTrue(arguments.startsWith("-D teamcity -D \"teamcity_suite_name=Target: Interpretation\""),
                "activation and suite-name defines expected: " + arguments);
     assertTrue(arguments.contains("--macro intellij_utest.Macro.init()"),
                "the live reporter injection is on by default: " + arguments);
 
-    String filtered = HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("targets/hl.hxml"), "A.testX");
+    String filtered = HaxeTestCompileArguments.compileArguments(getProject(), fixturePath("targets/hl.hxml"), "A.testX");
     assertTrue(filtered.startsWith("-D teamcity -D \"teamcity_suite_name=Target: HashLink\""),
                "activation and suite name lead: " + filtered);
     assertTrue(filtered.endsWith("-D UTEST_PATTERN=A.testX"),
@@ -507,7 +507,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
 
-    String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), path, "A.testX");
+    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, "A.testX");
     // ATTACHED defines: the two-word -D spelling trips a lime bug duplicating the value
     assertTrue(arguments.startsWith("-Dteamcity \"-Dteamcity_suite_name=Target: Neko\""),
                "lime spelling expected: " + arguments);
@@ -567,7 +567,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
 
-    String arguments = HaxeTestLaunchPlanner.compileArguments(getProject(), path, null);
+    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, null);
     assertTrue(arguments.startsWith("-Dteamcity \"-Dteamcity_suite_name=Target: Neko\""),
                "attached defines expected: " + arguments);
     // nme swallows single-dash haxe flags; the classpath must ride --class-path
@@ -581,14 +581,14 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   public void testMunitPackagedBuildsInjectTheMunitClientInTheToolSpelling() {
     VirtualFile limeFile = LocalFileSystem.getInstance().findFileByPath(fixturePath("targets/munit-lime-project.xml"));
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(limeFile, "Neko");
-    String lime = HaxeTestLaunchPlanner.compileArguments(getProject(), limeFile.getPath(), null);
+    String lime = HaxeTestCompileArguments.compileArguments(getProject(), limeFile.getPath(), null);
     assertTrue(lime.contains("\"--haxeflag=--macro intellij_munit.Macro.init()\""),
                "munit's client rides lime's --haxeflag: " + lime);
     assertFalse(lime.contains("-Dteamcity "), "utest's batch define has no meaning for munit: " + lime);
 
     VirtualFile nmeFile = LocalFileSystem.getInstance().findFileByPath(fixturePath("targets/munit-tests.nmml"));
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(nmeFile, "Neko");
-    String nme = HaxeTestLaunchPlanner.compileArguments(getProject(), nmeFile.getPath(), null);
+    String nme = HaxeTestCompileArguments.compileArguments(getProject(), nmeFile.getPath(), null);
     assertTrue(nme.contains("\"--macro intellij_munit.Macro.init()\""),
                "munit's client rides an nme double-dash token: " + nme);
   }
@@ -598,7 +598,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   public void testDisablingLiveTestReportingDropsTheInjection() {
     withLiveReportingDisabled(() ->
       assertEquals("-D teamcity -D \"teamcity_suite_name=Target: Interpretation\"",
-                   HaxeTestLaunchPlanner.compileArguments(getProject(), fixturePath("test.hxml"), null)));
+                   HaxeTestCompileArguments.compileArguments(getProject(), fixturePath("test.hxml"), null)));
   }
 
   /** Runs the body with live test reporting OFF, restoring the setting after. */

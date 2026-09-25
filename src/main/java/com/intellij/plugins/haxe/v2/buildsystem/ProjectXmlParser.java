@@ -14,12 +14,13 @@ import javax.xml.stream.XMLStreamReader;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * StAX parser for XML-based Haxe project files (Lime/OpenFL project.xml, NMML),
  * collecting haxelib dependencies and defines. Conditional attributes
- * (if / unless) are not evaluated — every entry in the file is listed;
- * target-accurate define sets come later via `lime display`.
+ * (if / unless) are not evaluated, so every entry in the file is listed;
+ * {@code HaxeLimeProjectInfoService} provides the target-accurate evaluation.
  */
 @CustomLog
 public final class ProjectXmlParser {
@@ -70,7 +71,7 @@ public final class ProjectXmlParser {
       XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
       while (reader.hasNext()) {
         if (reader.next() != XMLStreamConstants.START_ELEMENT) continue;
-        if (!"app".equals(reader.getLocalName().toLowerCase())) continue;
+        if (!"app".equals(reader.getLocalName().toLowerCase(Locale.ROOT))) continue;
         String value = StringUtil.nullize(attribute(reader, attributeName), true);
         if (value != null) {
           return value.trim();
@@ -87,7 +88,7 @@ public final class ProjectXmlParser {
                                     @NotNull List<HaxeDefine> defines,
                                     @NotNull List<HaxeLibDependency> libraries,
                                     @NotNull List<String> classpaths) {
-    String tag = reader.getLocalName().toLowerCase();
+    String tag = reader.getLocalName().toLowerCase(Locale.ROOT);
     switch (tag) {
       case "haxelib" -> {
         String name = attribute(reader, "name");

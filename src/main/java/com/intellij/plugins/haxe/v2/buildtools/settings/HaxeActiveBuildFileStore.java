@@ -8,9 +8,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.List;
-import org.jetbrains.annotations.TestOnly;
 
 /**
  * The project's single active build file. There is exactly one because the IDE has
@@ -21,7 +21,13 @@ import org.jetbrains.annotations.TestOnly;
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeActiveBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeActiveBuildFileStore implements PersistentStateComponent<HaxeActiveBuildFileStore.State> {
+
+  public static final class State {
+    public String activeFile;
+  }
+
   private final @Nullable Project project;
+  private State state = new State();
 
   public HaxeActiveBuildFileStore(@NotNull Project project) {
     this.project = project;
@@ -32,19 +38,6 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
   public HaxeActiveBuildFileStore() {
     this.project = null;
   }
-
-  private void notifyChanged() {
-    if (project != null) {
-      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
-    }
-  }
-
-
-  public static final class State {
-    public String activeFile;
-  }
-
-  private State state = new State();
 
   @NotNull
   public static HaxeActiveBuildFileStore getInstance(@NotNull Project project) {
@@ -59,7 +52,7 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
   @Override
   public void loadState(@NotNull State state) {
     this.state = state;
-    notifyChanged();
+    HaxeBuildSettingsListener.publish(project);
   }
 
   @Nullable
@@ -69,7 +62,7 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
 
   public void setActiveFile(@NotNull String filePath) {
     state.activeFile = filePath;
-    notifyChanged();
+    HaxeBuildSettingsListener.publish(project);
   }
 
   /**
@@ -83,6 +76,6 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
     if (stored != null && candidatePaths.contains(stored)) {
       return stored;
     }
-    return candidatePaths.size() == 1 ? candidatePaths.get(0) : null;
+    return candidatePaths.size() == 1 ? candidatePaths.getFirst() : null;
   }
 }

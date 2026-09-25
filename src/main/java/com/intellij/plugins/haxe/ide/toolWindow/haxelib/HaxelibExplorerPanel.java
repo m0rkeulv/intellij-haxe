@@ -71,9 +71,6 @@ import org.jetbrains.annotations.Nullable;
  * Refresh is the explicit force-update. All haxelib calls run on pooled
  * threads; a library's version children materialize on first expand.
  */
-// TODO multi-module projects: the explorer follows the FIRST module with a
-//  valid Haxe SDK; a module chooser belongs in the toolbar once a real
-//  project needs per-module repositories.
 public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Disposable {
 
   /** One library with its LOCAL state (empty versions = not installed). */
@@ -802,6 +799,7 @@ public final class HaxelibExplorerPanel extends BorderLayoutPanel implements Dis
     return module == null ? null : HaxelibCacheManager.getInstance(module);
   }
 
+  // TODO: a module chooser in the toolbar - the explorer follows the FIRST module with a valid Haxe SDK
   @Nullable
   private Module haxeModule() {
     // pure model reads under the lock; lookupSdk's default-SDK fallback

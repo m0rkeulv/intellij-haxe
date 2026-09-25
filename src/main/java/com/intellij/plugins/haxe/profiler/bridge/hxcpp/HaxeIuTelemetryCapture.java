@@ -1,16 +1,11 @@
 package com.intellij.plugins.haxe.profiler.bridge.hxcpp;
 
-import com.intellij.notification.Notification;
-import com.intellij.notification.NotificationAction;
-import com.intellij.notification.NotificationGroup;
-import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationType;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
-import com.intellij.plugins.haxe.profiler.HaxeProfilerSnapshotOpener;
+import com.intellij.plugins.haxe.profiler.HaxeProfilingNotifier;
 import com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture;
 import com.intellij.plugins.haxe.profiler.bridge.flash.FlashTelemetryConfig;
 import com.intellij.plugins.haxe.profiler.bridge.flash.HaxeFlashProfilerConfigurationType;
@@ -219,32 +214,16 @@ public class HaxeIuTelemetryCapture implements HaxeTelemetryCapture {
         live.finished();
       }
       if (receivedBytes < MINIMUM_SESSION_BYTES) {
-        String content = noneMessageFor(lane);
-        if (session != null) {
-          session.failed(content);
-        }
-        else {
-          group().createNotification(content, NotificationType.WARNING).notify(project);
-        }
+        HaxeProfilingNotifier.reportNothingCaptured(project, session, noneMessageFor(lane));
         return;
       }
       if (session != null) {
         session.dataReady();
         return;
       }
-      String content = HaxeProfilerBundle.message("haxe.profiler.telemetry.captured",
-                                                  sessionFile.toString(), receivedBytes / 1024);
-      Notification notification = group().createNotification(content, NotificationType.INFORMATION);
-      HaxeProfilerSnapshotOpener opener = HaxeProfilerSnapshotOpener.getInstance();
-      if (opener != null) {
-        String openText = HaxeProfilerBundle.message("haxe.profiler.dump.open");
-        notification.addAction(NotificationAction.createSimpleExpiring(openText, () -> opener.open(project, sessionFile)));
-      }
-      notification.notify(project);
-    }
-
-    private static NotificationGroup group() {
-      return NotificationGroupManager.getInstance().getNotificationGroup("haxe.profiler");
+      long receivedKb = receivedBytes / 1024;
+      String content = HaxeProfilerBundle.message("haxe.profiler.telemetry.captured", sessionFile.toString(), receivedKb);
+      HaxeProfilingNotifier.notifySnapshotReady(project, content, sessionFile);
     }
   }
 }

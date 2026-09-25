@@ -40,7 +40,6 @@ import com.intellij.psi.impl.PsiSuperMethodImplUtil;
 import com.intellij.psi.javadoc.PsiDocComment;
 import com.intellij.psi.search.LocalSearchScope;
 import com.intellij.psi.search.SearchScope;
-import com.intellij.psi.stubs.IStubElementType;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.MethodSignature;
 import com.intellij.psi.util.MethodSignatureBackedByPsiMethod;
@@ -388,7 +387,7 @@ public abstract class HaxeMethodPsiMixinImpl extends HaxeStubBasedNamedComponent
       if (stub.isStatic()) {
         list.addModifier(HaxePsiModifier.STATIC);
       }
-      //note: isPublic also checks the overridden method's visibility if necessary.
+      // isPublic also resolves an inherited-visibility override's parent
       if (isPublic()) {
         list.addModifier(HaxePsiModifier.PUBLIC);
       } else {

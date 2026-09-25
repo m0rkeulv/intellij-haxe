@@ -73,9 +73,8 @@ public class HaxeBinaryOperatorApplicabilityInspection extends HaxeInspection {
 
       if (result.isUnknown()) {
 
-        // ignoring macro values as we dont always know the type
+        // an unknown operand cannot be judged - macro values included, their types are not always known
         boolean containsMacroExpression = HaxeMacroUtil.isMacroType(lhsType) | HaxeMacroUtil.isMacroType(rhsType);
-        // ignore  unknown and dynamic for now
         if (lhsType.isUnknown() || rhsType.isUnknown() || containsMacroExpression) {
           return;
         }

@@ -60,7 +60,7 @@ public final class HaxeTestRunConfigurationProducer extends LazyRunConfiguration
     if (selection == null) return false;
     configuration.setBuildFilePath(selection.testContext().testsBuildPath());
     if (selection.testMethod() != null) {
-      configuration.setSingleRun(selection.testClasses().get(0), selection.testMethod());
+      configuration.setSingleRun(selection.testClasses().getFirst(), selection.testMethod());
     }
     else {
       configuration.setSingleRun(selection.testClasses());

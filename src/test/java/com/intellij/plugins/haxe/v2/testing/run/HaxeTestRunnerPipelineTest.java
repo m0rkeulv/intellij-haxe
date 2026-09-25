@@ -14,9 +14,10 @@ import com.intellij.execution.testframework.sm.runner.events.*;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileActions;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import org.jetbrains.annotations.NotNull;
@@ -162,7 +163,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile buildFile = myFixture.findFileInTempDir("munit/test.hxml");
     assertNotNull(buildFile, "the munit fixture must be copied");
 
-    assertEquals("munit", HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFile.getPath()).libraryName());
+    assertEquals("munit", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
     compileTestsBuild(buildFile);
 
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
@@ -201,7 +202,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile buildFile = myFixture.findFileInTempDir("buddy/test.hxml");
     assertNotNull(buildFile, "the buddy fixture must be copied");
 
-    assertEquals("buddy", HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFile.getPath()).libraryName());
+    assertEquals("buddy", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
     // buddy's generated main exits 1 on a failing spec - verified live
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
@@ -240,7 +241,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile buildFile = myFixture.findFileInTempDir("tink/test.hxml");
     assertNotNull(buildFile, "the tink fixture must be copied");
 
-    assertEquals("tink_unittest", HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFile.getPath()).libraryName());
+    assertEquals("tink_unittest", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
     // Runner.exit reports the failure count as the exit code - verified live
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
@@ -337,9 +338,9 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
   /** The artifact compile the before-run step would perform: the tests build with the framework's reporting args. */
   private void compileTestsBuild(@NotNull VirtualFile buildFile) throws ExecutionException {
     String reportingArguments =
-      HaxeTestLaunchPlanner.compileArguments(getProject(), buildFile.getPath(), null);
+      HaxeTestCompileArguments.compileArguments(getProject(), buildFile.getPath(), null);
     HaxeCompileCommands.Resolved resolved = HaxeCompileCommands.resolveAction(
-      getProject(), buildFile.getPath(), HaxeBuildFileActions.defaultBuildActionName(HaxeBuildFileType.HXML),
+      getProject(), buildFile.getPath(), HaxeBuildSystem.of(HaxeBuildFileType.HXML).defaultBuildActionName(),
       reportingArguments);
     assertNotNull(resolved, "the tests build must resolve to a compile command");
     runCompile(resolved, "tests compile");

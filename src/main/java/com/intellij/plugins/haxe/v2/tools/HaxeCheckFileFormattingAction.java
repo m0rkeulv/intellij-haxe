@@ -16,7 +16,13 @@ public final class HaxeCheckFileFormattingAction extends HaxeFileToolAction {
   }
 
   @Override
+  @NotNull
+  String toolHaxelib() {
+    return HaxeToolConfigs.FORMATTER_HAXELIB;
+  }
+
+  @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
-    runFileTool(e, "formatter", List.of("--check"), null);
+    runFileTool(e, List.of("--check"), null);
   }
 }

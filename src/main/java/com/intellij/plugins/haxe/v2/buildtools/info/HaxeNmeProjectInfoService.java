@@ -186,9 +186,7 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     String content = Files.readString(hxml);
     HaxeBuildFileInfo parsed = HxmlFileParser.parse(content);
     List<HaxeLibDependency> libraries = withDerivedLibraries(parsed.libraries(), parsed.classpaths());
-    HaxeBuildFileInfo info = new HaxeBuildFileInfo(parsed.target(), parsed.targetOutput(), parsed.defines(), libraries,
-                                                   parsed.classpaths());
-    return new Evaluation(info, content);
+    return new Evaluation(parsed.withLibraries(libraries), content);
   }
 
   private static void deletePreparedDir(@NotNull PreparedRun run) {
@@ -214,6 +212,7 @@ public final class HaxeNmeProjectInfoService implements Disposable {
 
   @Nullable
   private static HaxeLibDependency libraryOfRepoClasspath(@NotNull String classpath) {
+    // either path separator
     String[] segments = classpath.split("[/\\\\]");
     for (int i = 1; i < segments.length; i++) {
       if (HAXELIB_VERSION_SEGMENT.matcher(segments[i]).matches()) {

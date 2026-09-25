@@ -16,6 +16,9 @@ public final class HaxeToolConfigs {
 
   public static final String CHECKSTYLE_CONFIG_NAME = "checkstyle.json";
   public static final String FORMATTER_CONFIG_NAME = "hxformat.json";
+  /** The haxelibs {@code haxelib run} starts for these configs. */
+  public static final String CHECKSTYLE_HAXELIB = "checkstyle";
+  public static final String FORMATTER_HAXELIB = "formatter";
 
   private HaxeToolConfigs() {
   }

@@ -1,26 +1,31 @@
 package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
-import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.icons.AllIcons;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 
 /**
- * Renders the Haxe tool window tree: modules, build files, target, define and
- * library rows. Missing libraries are shown in error color.
+ * Renders the Haxe tool window tree. Most rows take one of three shapes - a
+ * label, a label with its grayed value (plus a ▾ marker where clicking opens a
+ * chooser), or a group label with its child count; rows with more to say
+ * (build files, the server, the SDK, defines, libraries) render themselves.
+ * Missing libraries and SDKs are shown in error color.
  */
 public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
 
   private static final SimpleTextAttributes STRIKEOUT_ATTRIBUTES =
     new SimpleTextAttributes(SimpleTextAttributes.STYLE_STRIKEOUT, null);
+  private static final String CHOOSER_MARKER = " ▾";
 
   @Override
   public void customizeCellRenderer(@NotNull JTree tree,
@@ -32,230 +37,205 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
                                     boolean hasFocus) {
     if (!(value instanceof DefaultMutableTreeNode node)) return;
 
+    Object userObject = node.getUserObject();
     // the renderer instance is shared across rows - a stale tooltip must not leak
-    setToolTipText(tooltipFor(node.getUserObject()));
-    switch (node.getUserObject()) {
-      case ModuleNode moduleNode -> {
-        setIcon(AllIcons.Nodes.Module);
-        append(moduleNode.name());
-      }
-      case ProjectNode projectNode -> {
-        setIcon(AllIcons.Nodes.Project);
-        append(projectNode.name());
-      }
-      case BuildFileRow fileRow -> {
-        setIcon(fileRow.buildFile().type().getIcon());
-        if (fileRow.active()) {
-          append(fileRow.buildFile().file().getName(), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-          append("  " + HaxeBundle.message("haxe.toolwindow.node.build.file.active"),
-                 SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        }
-        else {
-          append(fileRow.buildFile().file().getName());
-        }
-        if (fileRow.testsFile()) {
-          append("  " + HaxeBundle.message("haxe.toolwindow.node.build.file.tests"),
-                 SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        }
-      }
-      case TargetNode targetNode -> {
-        setIcon(AllIcons.RunConfigurations.Application);
-        append(HaxeBundle.message("haxe.toolwindow.node.target"));
-        append("  " + targetNode.displayName(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        if (targetNode.selectable()) {
-          append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        }
-      }
-      case SectionNode sectionNode -> {
-        setIcon(AllIcons.RunConfigurations.Compound);
-        append(HaxeBundle.message("haxe.toolwindow.node.section"));
-        append("  " + sectionNode.displayName(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case GroupNode groupNode -> {
-        setIcon(groupNode.kind() == GroupKind.LIBRARIES ? AllIcons.Nodes.PpLibFolder : AllIcons.Nodes.Folder);
-        append(groupLabel(groupNode.kind()));
-        append(" (" + groupNode.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case DefineNode defineNode -> {
-        setIcon(AllIcons.Nodes.Property);
-        append(defineNode.name());
-        if (defineNode.value() != null) {
-          append(" = " + defineNode.value(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        }
-      }
-      case EnvironmentNode ignored -> {
-        setIcon(AllIcons.General.Settings);
-        append(HaxeBundle.message("haxe.toolwindow.node.environment"));
-      }
-      case BuildGroupNode buildGroup -> {
-        setIcon(AllIcons.Nodes.Folder);
-        append(HaxeBundle.message("haxe.toolwindow.node.build"));
-        append(" (" + buildGroup.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case CompilationGroupNode ignored -> {
-        setIcon(AllIcons.General.Settings);
-        append(HaxeBundle.message("haxe.toolwindow.node.compilation"));
-      }
-      case CompilationServerNode serverNode -> {
-        setIcon(serverNode.running() ? ExecutionUtil.getLiveIndicator(AllIcons.Webreferences.Server)
-                                     : AllIcons.Webreferences.Server);
-        append(HaxeBundle.message("haxe.toolwindow.node.server"));
-        append("  " + serverNode.display(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        if (serverNode.contextFailure() != null) {
-          append("  " + HaxeBundle.message("haxe.toolwindow.server.context.failing"), SimpleTextAttributes.ERROR_ATTRIBUTES,
-                 new HaxeToolWindowNodes.ServerFailureLink(serverNode.containerId()));
-        }
-      }
-      case ActionsGroupNode actionsGroup -> {
-        setIcon(AllIcons.Nodes.ConfigFolder);
-        append(HaxeBundle.message("haxe.toolwindow.node.actions"));
-        append(" (" + actionsGroup.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case TestsGroupNode ignored -> {
-        setIcon(AllIcons.Nodes.TestSourceFolder);
-        append(HaxeBundle.message("haxe.toolwindow.node.tests.group"));
-      }
-      case ActionNode actionNode -> {
-        setIcon(isBuildAction(actionNode.name()) ? AllIcons.Actions.Compile : AllIcons.Actions.Execute);
-        append(actionNode.name());
-        append("  " + actionNode.presentableCommand(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case ToolsGroupNode toolsGroup -> {
-        setIcon(AllIcons.General.ExternalTools);
-        append(HaxeBundle.message("haxe.toolwindow.node.tools"));
-        append(" (" + toolsGroup.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case ToolNode toolNode -> {
-        setIcon(AllIcons.General.ExternalTools);
-        append(toolNode.name());
-        append("  " + toolNode.detail(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case ProgramNode programNode -> {
-        setIcon(AllIcons.Actions.Execute);
-        append(HaxeBundle.message("haxe.toolwindow.node.program"));
-        append("  " + programNode.kind(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case TestRunNode ignored -> {
-        setIcon(AllIcons.RunConfigurations.TestState.Run);
-        append(HaxeBundle.message("haxe.toolwindow.node.run.unit.tests"));
-      }
-      case EnvSdkNode sdkNode -> {
-        setIcon(AllIcons.Nodes.PpJdk);
-        append(HaxeBundle.message("haxe.toolwindow.node.environment.sdk"));
-        append("  " + sdkNode.displayName(),
-               sdkNode.missing() ? SimpleTextAttributes.ERROR_ATTRIBUTES : SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case EnvCompileCommandNode buildCommand -> {
-        setIcon(AllIcons.Actions.Compile);
-        append(HaxeBundle.message("haxe.toolwindow.node.compile.command"));
-        append("  " + buildCommand.display(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case EnvLanguageLevelNode levelNode -> {
-        setIcon(AllIcons.Nodes.Property);
-        append(HaxeBundle.message("haxe.toolwindow.node.environment.language.level"));
-        append("  " + levelNode.displayName(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case EnvDefinesNode definesNode -> {
-        setIcon(AllIcons.Nodes.Folder);
-        append(HaxeBundle.message("haxe.toolwindow.node.environment.defines"));
-        append(" (" + definesNode.count() + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case EnvCustomTargetNode customTargetNode -> {
-        setIcon(AllIcons.Nodes.Property);
-        append(HaxeBundle.message("haxe.toolwindow.node.environment.custom.target"));
-        String display = customTargetNode.customTarget() != null
-                         ? customTargetNode.customTarget()
-                         : HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
-        append("  " + display, SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        append(" ▾", SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      }
-      case EnvDefineNode defineNode -> {
-        setIcon(AllIcons.Nodes.Property);
-        if (defineNode.effect() == DefineEffect.REMOVE) {
-          append(defineNode.name(), STRIKEOUT_ATTRIBUTES);
-          append("  " + HaxeBundle.message("haxe.environment.effect.remove"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        }
-        else {
-          append(defineNode.name());
-          if (!defineNode.value().isEmpty()) {
-            append(" = " + defineNode.value(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-          }
-          if (defineNode.inBuildFile()) {
-            append("  " + HaxeBundle.message("haxe.toolwindow.node.define.overriding"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-          }
-        }
-      }
-      case LibraryNode libraryNode -> {
-        setIcon(AllIcons.Nodes.PpLib);
-        var attributes = libraryNode.installed() ? SimpleTextAttributes.REGULAR_ATTRIBUTES
-                                                 : SimpleTextAttributes.ERROR_ATTRIBUTES;
-        append(libraryNode.name(), attributes);
-        if (libraryNode.displayVersion() != null) {
-          append(" : " + libraryNode.displayVersion(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        }
-        if (!libraryNode.installed()) {
-          // a resolved version means the library name IS installed - only the pinned version is absent
-          String message = libraryNode.resolvedVersion() != null
-                           ? HaxeBundle.message("haxe.toolwindow.node.library.version.missing")
-                           : HaxeBundle.message("haxe.toolwindow.node.library.missing");
-          append("  " + message, SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        }
-      }
-      case null, default -> {
-        Object userObject = node.getUserObject();
-        if (userObject != null) append(String.valueOf(userObject));
-      }
+    setToolTipText(tooltipFor(userObject));
+    switch (userObject) {
+      case ModuleNode module -> labelRow(AllIcons.Nodes.Module, module.name());
+      case ProjectNode project -> labelRow(AllIcons.Nodes.Project, project.name());
+      case BuildFileRow fileRow -> renderBuildFile(fileRow);
+      case TargetNode target ->
+        valueRow(AllIcons.RunConfigurations.Application, HaxeBundle.message("haxe.toolwindow.node.target"),
+                 target.displayName(), target.selectable());
+      case SectionNode section ->
+        valueRow(AllIcons.RunConfigurations.Compound, HaxeBundle.message("haxe.toolwindow.node.section"), section.displayName(), true);
+      case GroupNode group -> countRow(groupIcon(group.kind()), groupLabel(group.kind()), group.count());
+      case DefineNode define -> renderDefine(define.name(), define.value());
+      case EnvironmentNode ignored -> labelRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.environment"));
+      case BuildGroupNode buildGroup ->
+        countRow(AllIcons.Nodes.Folder, HaxeBundle.message("haxe.toolwindow.node.build"), buildGroup.count());
+      case CompilationGroupNode ignored -> labelRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.compilation"));
+      case CompilationServerNode server -> renderServer(server);
+      case ActionsGroupNode actionsGroup ->
+        countRow(AllIcons.Nodes.ConfigFolder, HaxeBundle.message("haxe.toolwindow.node.actions"), actionsGroup.count());
+      case TestsGroupNode ignored -> labelRow(AllIcons.Nodes.TestSourceFolder, HaxeBundle.message("haxe.toolwindow.node.tests.group"));
+      case ActionNode action -> valueRow(actionIcon(action.name()), action.name(), action.presentableCommand(), false);
+      case ToolsGroupNode toolsGroup ->
+        countRow(AllIcons.General.ExternalTools, HaxeBundle.message("haxe.toolwindow.node.tools"), toolsGroup.count());
+      case ToolNode tool -> valueRow(AllIcons.General.ExternalTools, tool.name(), tool.detail(), false);
+      case ProgramNode program ->
+        valueRow(AllIcons.Actions.Execute, HaxeBundle.message("haxe.toolwindow.node.program"), program.kind(), false);
+      case TestRunNode ignored ->
+        labelRow(AllIcons.RunConfigurations.TestState.Run, HaxeBundle.message("haxe.toolwindow.node.run.unit.tests"));
+      case EnvSdkNode sdk -> renderSdk(sdk);
+      case EnvCompileCommandNode compileCommand ->
+        valueRow(AllIcons.Actions.Compile, HaxeBundle.message("haxe.toolwindow.node.compile.command"), compileCommand.display(), true);
+      case EnvLanguageLevelNode level ->
+        valueRow(AllIcons.Nodes.Property, HaxeBundle.message("haxe.toolwindow.node.environment.language.level"), level.displayName(), true);
+      case EnvDefinesNode defines ->
+        countRow(AllIcons.Nodes.Folder, HaxeBundle.message("haxe.toolwindow.node.environment.defines"), defines.count());
+      case EnvCustomTargetNode customTarget ->
+        valueRow(AllIcons.Nodes.Property, HaxeBundle.message("haxe.toolwindow.node.environment.custom.target"),
+                 customTargetDisplay(customTarget), true);
+      case EnvDefineNode define -> renderEnvironmentDefine(define);
+      case LibraryNode library -> renderLibrary(library);
+      case null -> { }
+      default -> append(String.valueOf(userObject));
+    }
+  }
+
+  private void labelRow(@NotNull Icon icon, @NotNull String label) {
+    setIcon(icon);
+    append(label);
+  }
+
+  /** The label, then its current value grayed; a {@code chooser} row adds the dropdown marker. */
+  private void valueRow(@NotNull Icon icon, @NotNull String label, @NotNull String value, boolean chooser) {
+    setIcon(icon);
+    append(label);
+    append("  " + value, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    if (chooser) {
+      append(CHOOSER_MARKER, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+  }
+
+  private void countRow(@NotNull Icon icon, @NotNull String label, int count) {
+    setIcon(icon);
+    append(label);
+    append(" (" + count + ")", SimpleTextAttributes.GRAYED_ATTRIBUTES);
+  }
+
+  private void renderBuildFile(@NotNull BuildFileRow fileRow) {
+    setIcon(fileRow.buildFile().type().getIcon());
+    String name = fileRow.buildFile().file().getName();
+    if (fileRow.active()) {
+      append(name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+      append("  " + HaxeBundle.message("haxe.toolwindow.node.build.file.active"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+    else {
+      append(name);
+    }
+    if (fileRow.testsFile()) {
+      append("  " + HaxeBundle.message("haxe.toolwindow.node.build.file.tests"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+  }
+
+  private void renderServer(@NotNull CompilationServerNode server) {
+    Icon icon = server.running() ? ExecutionUtil.getLiveIndicator(AllIcons.Webreferences.Server) : AllIcons.Webreferences.Server;
+    valueRow(icon, HaxeBundle.message("haxe.toolwindow.node.server"), server.display(), true);
+    if (server.contextFailure() != null) {
+      String failing = "  " + HaxeBundle.message("haxe.toolwindow.server.context.failing");
+      append(failing, SimpleTextAttributes.ERROR_ATTRIBUTES, new ServerFailureLink(server.containerId()));
+    }
+  }
+
+  private void renderSdk(@NotNull EnvSdkNode sdk) {
+    setIcon(AllIcons.Nodes.PpJdk);
+    append(HaxeBundle.message("haxe.toolwindow.node.environment.sdk"));
+    var attributes = sdk.missing() ? SimpleTextAttributes.ERROR_ATTRIBUTES : SimpleTextAttributes.GRAYED_ATTRIBUTES;
+    append("  " + sdk.displayName(), attributes);
+    append(CHOOSER_MARKER, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+  }
+
+  private void renderDefine(@NotNull String name, @Nullable String value) {
+    setIcon(AllIcons.Nodes.Property);
+    append(name);
+    if (value != null && !value.isEmpty()) {
+      append(" = " + value, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+  }
+
+  private void renderEnvironmentDefine(@NotNull EnvDefineNode define) {
+    if (define.effect() == DefineEffect.REMOVE) {
+      setIcon(AllIcons.Nodes.Property);
+      append(define.name(), STRIKEOUT_ATTRIBUTES);
+      append("  " + HaxeBundle.message("haxe.environment.effect.remove"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      return;
+    }
+    renderDefine(define.name(), define.value());
+    if (define.inBuildFile()) {
+      append("  " + HaxeBundle.message("haxe.toolwindow.node.define.overriding"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+  }
+
+  private void renderLibrary(@NotNull LibraryNode library) {
+    setIcon(AllIcons.Nodes.PpLib);
+    var attributes = library.installed() ? SimpleTextAttributes.REGULAR_ATTRIBUTES : SimpleTextAttributes.ERROR_ATTRIBUTES;
+    append(library.name(), attributes);
+    if (library.displayVersion() != null) {
+      append(" : " + library.displayVersion(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+    if (!library.installed()) {
+      // a resolved version means the library name IS installed - only the pinned version is absent
+      String missing = library.resolvedVersion() != null
+                       ? HaxeBundle.message("haxe.toolwindow.node.library.version.missing")
+                       : HaxeBundle.message("haxe.toolwindow.node.library.missing");
+      append("  " + missing, SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
   }
 
   /** What a row means, shown as its tooltip; null for self-explanatory rows. */
-  private static String tooltipFor(Object userObject) {
+  @Nullable
+  private static String tooltipFor(@Nullable Object userObject) {
     return switch (userObject) {
       case CompilationGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.compilation");
       case EnvCompileCommandNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.compile.command");
-      case CompilationServerNode serverNode -> {
-        if (serverNode.contextFailure() != null) {
-          yield HaxeBundle.message("haxe.toolwindow.tooltip.server.context.failing", serverNode.contextFailure());
-        }
-        yield serverNode.connectEligible() ? HaxeBundle.message("haxe.toolwindow.tooltip.server")
-                                           : HaxeBundle.message("haxe.toolwindow.tooltip.server.not.connectable");
-      }
+      case CompilationServerNode server -> serverTooltip(server);
       case EnvironmentNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment");
       case EnvSdkNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.sdk");
       case EnvLanguageLevelNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.language.level");
       case EnvDefinesNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.defines");
       case EnvCustomTargetNode ignored -> HaxeBundle.message("haxe.environment.dialog.custom.target.tooltip");
       case BuildGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.build.files");
-      case TargetNode targetNode ->
-        HaxeBundle.message(targetNode.selectable() ? "haxe.toolwindow.tooltip.target.selectable"
-                                                   : "haxe.toolwindow.tooltip.target");
-      case GroupNode groupNode ->
-        HaxeBundle.message(groupNode.kind() == GroupKind.LIBRARIES ? "haxe.toolwindow.tooltip.libraries"
-                                                                   : "haxe.toolwindow.tooltip.defines");
+      case TargetNode target ->
+        HaxeBundle.message(target.selectable() ? "haxe.toolwindow.tooltip.target.selectable" : "haxe.toolwindow.tooltip.target");
+      case GroupNode group ->
+        HaxeBundle.message(group.kind() == GroupKind.LIBRARIES ? "haxe.toolwindow.tooltip.libraries" : "haxe.toolwindow.tooltip.defines");
       case ActionsGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.actions");
       case TestsGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.tests.group");
-      case LibraryNode libraryNode -> libraryTooltip(libraryNode);
+      case LibraryNode library -> libraryTooltip(library);
       case SectionNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.section");
-      case ProgramNode programNode -> HaxeBundle.message("haxe.toolwindow.tooltip.program", programNode.kind());
+      case ProgramNode program -> HaxeBundle.message("haxe.toolwindow.tooltip.program", program.kind());
       case TestRunNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.run.unit.tests");
       case null, default -> null;
     };
   }
 
+  @NotNull
+  private static String serverTooltip(@NotNull CompilationServerNode server) {
+    if (server.contextFailure() != null) {
+      return HaxeBundle.message("haxe.toolwindow.tooltip.server.context.failing", server.contextFailure());
+    }
+    return server.connectEligible() ? HaxeBundle.message("haxe.toolwindow.tooltip.server")
+                                    : HaxeBundle.message("haxe.toolwindow.tooltip.server.not.connectable");
+  }
+
   /** A git-pinned library shows only {@code git#ref} in the row; the tooltip carries the repository url. */
-  private static String libraryTooltip(@NotNull LibraryNode libraryNode) {
-    HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(libraryNode.version());
+  @Nullable
+  private static String libraryTooltip(@NotNull LibraryNode library) {
+    HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(library.version());
     return gitSpec == null ? null : HaxeBundle.message("haxe.toolwindow.tooltip.library.git", gitSpec.url());
   }
 
+  @NotNull
+  private static String customTargetDisplay(@NotNull EnvCustomTargetNode customTarget) {
+    return customTarget.customTarget() != null
+           ? customTarget.customTarget()
+           : HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
+  }
+
   /** Actions that only produce output get the build hammer; ones that run something keep the play icon. */
-  private static boolean isBuildAction(@NotNull String name) {
-    return name.equalsIgnoreCase("build") || name.equalsIgnoreCase("compile") || name.equalsIgnoreCase("clean");
+  @NotNull
+  private static Icon actionIcon(@NotNull String actionName) {
+    boolean buildAction = actionName.equalsIgnoreCase("build")
+                          || actionName.equalsIgnoreCase("compile")
+                          || actionName.equalsIgnoreCase("clean");
+    return buildAction ? AllIcons.Actions.Compile : AllIcons.Actions.Execute;
+  }
+
+  @NotNull
+  private static Icon groupIcon(@NotNull GroupKind kind) {
+    return kind == GroupKind.LIBRARIES ? AllIcons.Nodes.PpLibFolder : AllIcons.Nodes.Folder;
   }
 
   @NotNull

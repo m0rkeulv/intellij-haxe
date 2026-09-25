@@ -12,6 +12,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -20,9 +22,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Reads a HashLink {@code hlprofile.dump} (the VM sampling profiler's
- * {@code PROF} binary, written by hashlink's {@code src/profile.c}) into the
- * neutral snapshot model. Little-endian throughout.
+ * Reads a HashLink {@code hlprofile.dump} (the {@code PROF} binary the VM's
+ * sampling profiler writes) into the neutral snapshot model. Little-endian
+ * throughout.
  * <p>
  * Layout: {@code "PROF"} magic, int32 runtime version, int32 samples/sec,
  * then records of (double time, int32 threadId, int32 msgId) until a
@@ -48,8 +50,6 @@ public final class HlProfDumpTranslator {
   private static final int SAMPLE_FRAME_COUNT_MASK = 0x3FFFFFFF;
   private static final int SAMPLE_IN_GC_MAJOR = 0x40000000;
   private static final int BACK_REFERENCE_FLAG = 0x80000000;
-
-  private static final String MAIN_THREAD_NAME = "Main";
 
   private HlProfDumpTranslator() {
   }
@@ -239,7 +239,7 @@ public final class HlProfDumpTranslator {
     List<ProfilerThread> threads = new ArrayList<>();
     boolean first = true;
     for (Map.Entry<Integer, String> entry : parse.threadNames.entrySet()) {
-      String defaultName = first ? MAIN_THREAD_NAME : "Thread " + entry.getKey();
+      String defaultName = first ? ProfilerThread.MAIN_NAME : ProfilerThread.unnamed(entry.getKey());
       threads.add(new ProfilerThread(entry.getKey(), entry.getValue() != null ? entry.getValue() : defaultName));
       first = false;
     }
@@ -250,8 +250,8 @@ public final class HlProfDumpTranslator {
       samples.add(freeze(raw, frozen));
     }
     // the PROF dump carries no heap readings
-    return new ProfilerSnapshot(TARGET, version, samplesPerSecond,
-                                List.copyOf(threads), List.copyOf(samples), List.copyOf(parse.events), List.of());
+    List<ProfilerEvent> events = List.copyOf(parse.events);
+    return new ProfilerSnapshot(TARGET, version, samplesPerSecond, List.copyOf(threads), List.copyOf(samples), events, List.of());
   }
 
   /** Reverses the dump's leaf-first order into the model's root-first one. */
@@ -269,7 +269,7 @@ public final class HlProfDumpTranslator {
   /** Little-endian primitive reads; end-of-input is only legal at a record boundary. */
   private static final class Reader {
     private final InputStream in;
-    private final byte[] scratch = new byte[8];
+    private final ByteBuffer scratch = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
 
     Reader(InputStream in) {
       this.in = in;
@@ -289,25 +289,25 @@ public final class HlProfDumpTranslator {
 
     int readInt() throws IOException {
       fill(4);
-      return intAt(0);
+      return scratch.getInt(0);
     }
 
     /** Null at clean end of input; a PARTIAL int is truncation and throws. */
     @Nullable
     Integer readIntOrEndOfInput() throws IOException {
-      int read = in.readNBytes(scratch, 0, 4);
+      int read = in.readNBytes(scratch.array(), 0, 4);
       if (read == 0) return null;
       if (read != 4) throw new EOFException("Truncated dump: partial trailer");
-      return intAt(0);
+      return scratch.getInt(0);
     }
 
     /** Null at clean end of input; a PARTIAL double is truncation and throws. */
     @Nullable
     Double readDoubleOrEndOfInput() throws IOException {
-      int read = in.readNBytes(scratch, 0, 8);
+      int read = in.readNBytes(scratch.array(), 0, 8);
       if (read == 0) return null;
       if (read != 8) throw new EOFException("Truncated dump: partial record");
-      return Double.longBitsToDouble(longAt());
+      return scratch.getDouble(0);
     }
 
     @NotNull
@@ -316,21 +316,10 @@ public final class HlProfDumpTranslator {
     }
 
     private void fill(int count) throws IOException {
-      int read = in.readNBytes(scratch, 0, count);
+      int read = in.readNBytes(scratch.array(), 0, count);
       if (read != count) {
         throw new EOFException("Truncated dump: expected " + count + " bytes, got " + read);
       }
-    }
-
-    private int intAt(int offset) {
-      return (scratch[offset] & 0xFF)
-             | (scratch[offset + 1] & 0xFF) << 8
-             | (scratch[offset + 2] & 0xFF) << 16
-             | (scratch[offset + 3] & 0xFF) << 24;
-    }
-
-    private long longAt() {
-      return (intAt(0) & 0xFFFFFFFFL) | (long)intAt(4) << 32;
     }
   }
 }

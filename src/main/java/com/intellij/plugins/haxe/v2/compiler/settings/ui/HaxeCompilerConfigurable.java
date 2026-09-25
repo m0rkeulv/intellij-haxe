@@ -70,7 +70,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     if (panel == null) return;
     HaxeCompilerSettings settings = getSettings();
     settings.setDefaultLanguageLevel(panel.getSelectedDefaultLevel());
-    settings.setModuleLanguageLevelOverrides(withUnlistedOverrides(settings, panel.getModuleOverrides()));
+    settings.setContainerLanguageLevelOverrides(withUnlistedOverrides(settings, panel.getModuleOverrides()));
     settings.setUseLanguageLevelForConditionals(panel.isUseLanguageLevelForConditionals());
     settings.setCompilerDiagnosticsEnabled(panel.isCompilerDiagnosticsEnabled());
     settings.setDiagnosticsErrorsEnabled(panel.isDiagnosticsErrorsEnabled());
@@ -86,7 +86,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     HaxeCompilerSettings settings = getSettings();
     panel.reset(settings.getExplicitDefaultLanguageLevel(),
                 HaxeLanguageLevelUtil.fromCompiler(project, null),
-                settings.getModuleLanguageLevelOverrides(),
+                settings.getContainerLanguageLevelOverrides(),
                 getModuleNames());
     panel.setUseLanguageLevelForConditionals(settings.isUseLanguageLevelForConditionals());
     panel.setCompilerDiagnosticsEnabled(settings.isCompilerDiagnosticsEnabled());
@@ -122,7 +122,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
 
   @NotNull
   private Map<String, HaxeLanguageLevel> shownOverrides(@NotNull HaxeCompilerSettings settings) {
-    Map<String, HaxeLanguageLevel> shown = new HashMap<>(settings.getModuleLanguageLevelOverrides());
+    Map<String, HaxeLanguageLevel> shown = new HashMap<>(settings.getContainerLanguageLevelOverrides());
     shown.keySet().retainAll(getModuleNames());
     return shown;
   }
@@ -130,7 +130,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
   @NotNull
   private Map<String, HaxeLanguageLevel> withUnlistedOverrides(@NotNull HaxeCompilerSettings settings,
                                                                @NotNull Map<String, HaxeLanguageLevel> tableOverrides) {
-    Map<String, HaxeLanguageLevel> merged = new HashMap<>(settings.getModuleLanguageLevelOverrides());
+    Map<String, HaxeLanguageLevel> merged = new HashMap<>(settings.getContainerLanguageLevelOverrides());
     merged.keySet().removeAll(getModuleNames());
     merged.putAll(tableOverrides);
     return merged;

@@ -30,7 +30,7 @@ class HaxeV1MigrationStartup : ProjectActivity {
     if (legacyModules.isEmpty()) return
 
     NotificationGroupManager.getInstance()
-      .getNotificationGroup("haxe.v1.migration")
+      .getNotificationGroup(HaxeV1Migrator.NOTIFICATION_GROUP_ID)
       .createNotification(
         HaxeProjectBundle.message("haxe.v1.migration.title"),
         HaxeProjectBundle.message("haxe.v1.migration.content", legacyModules.joinToString(", ")),

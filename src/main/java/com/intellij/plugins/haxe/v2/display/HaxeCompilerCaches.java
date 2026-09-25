@@ -20,12 +20,12 @@ public final class HaxeCompilerCaches {
   }
 
   /**
-   * Clears every compiler-derived cache, then recomputes: warm-up
-   * bookkeeping, blueprints, the type catalog, usage verdicts and the
-   * metadata registry, followed by a PSI-cache drop and a daemon restart.
-   * The group order is load-bearing — services empty first, the PSI drop
-   * kills results derived from them, and the restart recomputes from
-   * nothing. Call on the EDT.
+   * Clears every compiler-derived cache (warm-up bookkeeping, type catalog,
+   * metadata registry, blueprints, usage verdicts, dumps, preview files and
+   * diagnostics), then drops the PSI caches and restarts the daemon. The
+   * order matters: the services empty first, the PSI drop removes results
+   * derived from them, and the restart recomputes from scratch. Call on the
+   * EDT.
    */
   public static void clearAndRehighlight(@NotNull Project project, @NotNull @NonNls String reason) {
     HaxeCompilerDisplayService.getInstance(project).resetCompiledContexts();
@@ -44,9 +44,9 @@ public final class HaxeCompilerCaches {
   }
 
   /**
-   * Restarts highlighting from any thread: the restart is posted to the EDT
-   * with an explicit non-modal state (a pooled-thread post without one runs
-   * write-unsafe) and skipped once the project is disposed.
+   * Restarts highlighting from any thread. The restart is posted to the EDT
+   * with an explicit non-modal state (a post from a pooled thread without one
+   * runs write-unsafe) and skipped once the project is disposed.
    */
   public static void restartHighlightingLater(@NotNull Project project, @NotNull @NonNls String reason) {
     Runnable restart = () -> DaemonCodeAnalyzer.getInstance(project).restart(reason);

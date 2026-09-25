@@ -4,6 +4,8 @@ import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -20,8 +22,9 @@ public record TracySourceLocation(@NotNull String function, @NotNull String file
   @NotNull
   static TracySourceLocation parse(byte @NotNull [] blob) throws IOException {
     if (blob.length < 8) throw new ProfilerFormatException("source location payload too short: " + blob.length);
-    int color = readInt(blob, 0);
-    int line = readInt(blob, 4);
+    ByteBuffer header = ByteBuffer.wrap(blob).order(ByteOrder.LITTLE_ENDIAN);
+    int color = header.getInt(0);
+    int line = header.getInt(4);
 
     int functionEnd = 8;
     while (functionEnd < blob.length && blob[functionEnd] != 0) functionEnd++;
@@ -36,11 +39,4 @@ public record TracySourceLocation(@NotNull String function, @NotNull String file
     return new TracySourceLocation(function, file, line, color);
   }
 
-  private static int readInt(byte[] blob, int offset) {
-    int value = 0;
-    for (int i = 0; i < 4; i++) {
-      value |= (blob[offset + i] & 0xFF) << (8 * i);
-    }
-    return value;
-  }
 }

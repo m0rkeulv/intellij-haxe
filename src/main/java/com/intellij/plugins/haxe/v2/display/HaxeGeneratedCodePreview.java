@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
@@ -28,8 +29,8 @@ import java.util.regex.Pattern;
 
 /// Renders a `-D dump=pretty` module dump as a read-only Haxe preview:
 /// the post-macro typed AST is close enough to Haxe that the normal parser,
-/// highlighting and folding apply once the declaration headers are sanitized
-/// (see doc/generated-code-preview.md). Preview files are marked with
+/// highlighting and folding apply once the declaration headers are sanitized.
+/// Preview files are marked with
 /// [#PREVIEW_KEY] — the semantic annotators and the per-file
 /// highlighting level keep error analysis off them while the color
 /// annotators still paint.
@@ -80,8 +81,8 @@ public final class HaxeGeneratedCodePreview {
                                         @Nullable String memberName) {
     LightVirtualFile file = previewFile(dumpFile, typeDotPath);
     if (file == null) return null;
-    String typeName = typeDotPath.substring(typeDotPath.lastIndexOf('.') + 1);
-    int offset = ReadAction.compute(() -> memberOffset(project, file, typeName, memberName));
+    String typeName = StringUtil.getShortName(typeDotPath);
+    int offset = ReadAction.nonBlocking(() -> memberOffset(project, file, typeName, memberName)).executeSynchronously();
     return new PreparedPreview(file, Math.max(offset, 0));
   }
 
@@ -113,9 +114,10 @@ public final class HaxeGeneratedCodePreview {
   }
 
   /**
-   * Un-dots declaration headers into a package statement + simple names, and
-   * prepends a banner naming what the reader is looking at. Backtick-marked
-   * unbound identifiers need no rewriting — the grammar parses them.
+   * Rewrites qualified declaration headers into a package statement plus
+   * simple names, and prepends a banner saying what the reader is looking at.
+   * Backtick-marked unbound identifiers need no rewriting: the grammar parses
+   * them.
    */
   @NotNull
   static String sanitize(@NotNull String dumpText) {
@@ -128,20 +130,18 @@ public final class HaxeGeneratedCodePreview {
     }
     matcher.appendTail(rewritten);
 
-    StringBuilder result = new StringBuilder(rewritten.length() + 200);
-    result.append("// Compiler-generated preview (post-macro typed AST, -D dump=pretty).\n")
-      .append("// Read-only; regenerated on the next code change.\n");
-    if (packageName != null) {
-      result.append("package ").append(packageName).append(";\n");
-    }
-    result.append('\n').append(rewritten);
-    return result.toString();
+    String banner = """
+      // Compiler-generated preview (post-macro typed AST, -D dump=pretty).
+      // Read-only; regenerated on the next code change.
+      """;
+    String packageStatement = packageName != null ? "package " + packageName + ";\n" : "";
+    return banner + packageStatement + "\n" + rewritten;
   }
 
   /**
-   * Caret placement wants the member's NAME, not its type: the lookup walks
-   * plain PSI on purpose — the model's member lookup pulls type resolution
-   * over the whole (library-sized) dump.
+   * The offset of the member's NAME, else of the type, else 0. Walks plain
+   * PSI on purpose: the model's member lookup would pull type resolution over
+   * the whole dump, which can be library-sized.
    */
   private static int memberOffset(@NotNull Project project,
                                   @NotNull LightVirtualFile file,

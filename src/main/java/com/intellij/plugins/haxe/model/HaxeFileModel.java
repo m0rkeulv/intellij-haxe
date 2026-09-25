@@ -157,7 +157,7 @@ public class HaxeFileModel implements HaxeExposableModel {
     return file;
   }
 
-  //The module name (no target or extension)
+  /** The module name: the file name without target variant or extension. */
   @NotNull
   public String getName() {
     return HaxeModuleVariants.moduleNameOf(file);

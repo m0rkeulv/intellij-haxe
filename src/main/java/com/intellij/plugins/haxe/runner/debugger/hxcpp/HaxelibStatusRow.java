@@ -41,9 +41,9 @@ public final class HaxelibStatusRow {
     installLink.setVisible(false);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       boolean installed = HaxelibInstaller.isInstalled(project, libName);
+      String statusKey = installed ? "hxcpp.runner.editor.server.lib.installed" : "hxcpp.runner.editor.server.lib.missing";
       onEditorModality(() -> {
-        statusLabel.setText(HaxeDebuggerBundle.message(installed ? "hxcpp.runner.editor.server.lib.installed"
-                                                                 : "hxcpp.runner.editor.server.lib.missing", libName));
+        statusLabel.setText(HaxeDebuggerBundle.message(statusKey, libName));
         installLink.setVisible(!installed);
       });
     });

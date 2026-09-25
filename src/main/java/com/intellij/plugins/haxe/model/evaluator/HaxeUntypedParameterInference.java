@@ -37,14 +37,13 @@ public final class HaxeUntypedParameterInference {
   private static final int MAX_PROBED_CALL_SITES = 8;
 
   // A probed argument can itself be an untyped parameter, whose own probe
-  // continues the chain until some call site finally passes a concrete
-  // value. The budget bounds the TOTAL argument evaluations one top-level
-  // query spends across that whole chain: a linear chain (one call site per
-  // hop) descends up to 64 hops, while a branching call graph is cut at the
-  // former worst case of 8 sites over 8 levels. A depth cap here instead
-  // clipped exactly the productive case - a deep linear chain whose only
-  // informative site sits at the far end. Cycles never reach the budget:
-  // callSiteProbeGuard cuts a re-entered parameter.
+  // continues the chain until some call site passes a concrete value. The
+  // budget bounds the TOTAL argument evaluations one top-level query spends
+  // across the whole chain rather than its depth: a linear chain (one call
+  // site per hop) still reaches an informative site 64 hops away, while a
+  // branching call graph stops after as much work as 8 sites on 8 levels.
+  // Cycles never reach the budget: callSiteProbeGuard cuts a re-entered
+  // parameter.
   private static final int MAX_PROBE_WORK = 64;
 
   private static final ThreadLocal<MutableInt> probeChainDepth = ThreadLocal.withInitial(MutableInt::new);
@@ -56,12 +55,13 @@ public final class HaxeUntypedParameterInference {
   private HaxeUntypedParameterInference() {
   }
 
-  // Memo of probe outcomes, valid until the next code change, including clean misses: probing chains
-  // into argument evaluations that can cycle across methods, and without the
-  // memo every query re-runs the whole probe. Only UNTAINTED outcomes are
-  // stored (certainty rule) - a result shaped by a cut or prevention must
-  // recompute until a clean one lands. Project-scoped and cleared with the
-  // evaluator caches (HaxeUntypedParameterBindingCache).
+  /**
+   * Probe outcomes, clean misses included, valid until the next code change:
+   * probing chains into argument evaluations that can cycle across methods,
+   * and without the memo every query re-runs the whole probe. Only UNTAINTED
+   * outcomes are stored; a result shaped by a cut or prevention recomputes
+   * until a clean one lands.
+   */
   private static Map<HaxeParameter, Optional<ResultHolder>> bindingCache(HaxeParameter parameter) {
     return HaxeUntypedParameterBindingCache.getInstance(parameter.getProject()).bindings();
   }
@@ -140,8 +140,7 @@ public final class HaxeUntypedParameterInference {
     HaxeMethod method = PsiTreeUtil.getParentOfType(parameter, HaxeMethod.class);
     if (method == null) return null;
     // overload selection owns argument typing for overloaded methods
-    HaxeMethodModel model = method.getModel();
-    if (model != null && (model.hasModifier(HaxePsiModifier.OVERLOAD) || !model.getOverloadsFromMeta().isEmpty())) return null;
+    if (isOverloaded(method.getModel())) return null;
     HaxeComponentName methodName = method.getComponentName();
     if (methodName == null) return null;
     int parameterIndex = parameterIndex(parameter);
@@ -161,8 +160,9 @@ public final class HaxeUntypedParameterInference {
     // toward a concrete call site, bounded by the probe work budget.
     int chainDepth = probeChainDepth.get().intValue();
     boolean insideProbeChain = chainDepth > 0;
-    if ((HaxeCallExpressionEvaluatorCacheService.anyComputeInFlight() && !insideProbeChain)
-        || probeWorkSpent.get().intValue() >= MAX_PROBE_WORK) {
+    boolean insideCallCompute = HaxeCallExpressionEvaluatorCacheService.anyComputeInFlight() && !insideProbeChain;
+    boolean budgetSpent = probeWorkSpent.get().intValue() >= MAX_PROBE_WORK;
+    if (insideCallCompute || budgetSpent) {
       HaxeEvaluationTaint.taint();
       return null;
     }
@@ -403,6 +403,11 @@ public final class HaxeUntypedParameterInference {
            && !type.isUnknown()
            && !type.isOrContainsTypeParameters()
            && type.isCacheable();
+  }
+
+  private static boolean isOverloaded(@Nullable HaxeMethodModel model) {
+    if (model == null) return false;
+    return model.hasModifier(HaxePsiModifier.OVERLOAD) || !model.getOverloadsFromMeta().isEmpty();
   }
 
   private static int parameterIndex(HaxeParameter parameter) {

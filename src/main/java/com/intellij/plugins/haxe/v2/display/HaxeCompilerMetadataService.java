@@ -80,7 +80,7 @@ public final class HaxeCompilerMetadataService {
     if (context == null) return null;
     // the registry is a property of the compiler binary, so it lives and dies
     // with that SDK's server instance; another SDK's registry is never served
-    int currentPort = HaxeCompilationServerManager.getInstance(project).getRunningPort(context.sdkName());
+    int currentPort = HaxeCompilationServerManager.getInstance(project).runningPortForSdk(context.sdkName());
     Registry known = currentPort > 0 ? registries.get(currentPort) : null;
     if (known != null) {
       return known;

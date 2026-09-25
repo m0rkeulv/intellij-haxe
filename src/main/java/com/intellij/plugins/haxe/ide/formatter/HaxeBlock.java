@@ -151,8 +151,8 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   /**
    * Blocks over an inactive conditional branch's lazily parsed sub-tree: the
    * children are ordinary Haxe PSI, so the normal indent and spacing rules
-   * apply inside. A branch that only graded to raw token soup stays one
-   * opaque block - preserved verbatim, like haxe-formatter's own fallback.
+   * apply inside. A branch without a clean parse stays one opaque block,
+   * preserved verbatim like the reference formatter's own fallback.
    */
   private List<Block> buildInactiveBranchChildren() {
     if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES) {

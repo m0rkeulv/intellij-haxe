@@ -7,7 +7,6 @@ import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.ide.formatter.settings.HxformatCodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -250,7 +249,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
   }
 
   private CodeStyleSettings freshDefaults() {
-    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(getProject()).clone();
+    CodeStyleSettings settings = projectSettingsCopy();
     HxformatCodeStyle.applyDefaults(settings);
     return settings;
   }

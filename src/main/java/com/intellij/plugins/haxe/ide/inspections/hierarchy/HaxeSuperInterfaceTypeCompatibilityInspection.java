@@ -12,7 +12,6 @@ import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.fixer.HaxeFixer;
 import com.intellij.plugins.haxe.model.type.SpecificHaxeClassReference;
 import java.util.*;
-import static java.util.function.Predicate.not;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 
 /** The implements clause names something that is not an interface. */

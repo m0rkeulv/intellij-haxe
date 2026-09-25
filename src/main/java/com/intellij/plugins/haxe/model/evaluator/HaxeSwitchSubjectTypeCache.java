@@ -14,18 +14,16 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The evaluated type of a switch statement's SUBJECT expression, computed
- * once per psi generation and shared by everything that needs it while
+ * once per PSI modification and shared by everything that needs it while
  * resolving the switch's case patterns: enum member hints, extractor enum
- * resolution, extracted-value typing. Each pattern reference used to
- * re-evaluate the subject on its own - a generic subject makes that a full
- * constructor/type-parameter inference, and its evaluation taints, so the
- * general caches never absorbed the repetition (per reference, per
- * highlighting visitor).
- *
+ * resolution, extracted-value typing. Without it every pattern reference
+ * re-evaluates the subject; for a generic subject that is a full
+ * constructor/type-parameter inference whose evaluation taints, so the
+ * general caches cannot absorb the repetition.
+ * <p>
  * Only SUCCESSFUL evaluations are shared: an unknown (or partially
- * unresolved) result can be the product of a truncated evaluation window
- * and may heal on recomputation, so failures fall through to a fresh
- * evaluation on every ask, exactly as before.
+ * unresolved) result can come from a truncated evaluation and may heal on
+ * recomputation, so a failure is evaluated afresh on every ask.
  */
 public final class HaxeSwitchSubjectTypeCache {
 

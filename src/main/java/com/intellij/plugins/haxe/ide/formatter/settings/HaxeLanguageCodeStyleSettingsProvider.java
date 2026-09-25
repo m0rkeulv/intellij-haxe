@@ -71,7 +71,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
 
       @Override
       public boolean isLeadingAsteriskEnabled() {
-        return false; // haxe docs are markdown and we do not want it prefixed with Asterisk
+        return false; // haxe docs are markdown - no leading asterisks
       }
 
       @Override
@@ -135,9 +135,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                    SPACE_AROUND_UNARY_OPERATOR.name(),
                                    SPACE_WITHIN_BRACKETS.name()
       );
-      // placements and names mirror Java/Kotlin/Groovy (see
-      // doc/haxe-formatter-settings-structure.md): arrow spacing sits with
-      // the operators, colon options use Kotlin's phrasing
+      // placements and names mirror Java/Kotlin/Groovy: arrow spacing sits
+      // with the operators, colon options use Kotlin's phrasing
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.arrow"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.type.colon"),

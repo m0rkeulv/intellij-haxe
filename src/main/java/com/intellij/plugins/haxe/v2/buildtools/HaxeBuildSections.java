@@ -45,7 +45,7 @@ public final class HaxeBuildSections {
     }
     List<String> sections = HaxeBuildFileInspector.sectionContents(project, buildFile.file());
     if (sections.isEmpty()) return null;
-    if (sections.size() == 1) return sections.get(0);
+    if (sections.size() == 1) return sections.getFirst();
     return sections.get(selectedIndex(project, buildFile.file(), sections));
   }
 

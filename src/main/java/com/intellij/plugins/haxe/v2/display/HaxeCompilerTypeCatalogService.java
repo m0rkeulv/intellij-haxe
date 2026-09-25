@@ -7,6 +7,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.indexing.FileBasedIndex;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -33,25 +35,25 @@ import org.jetbrains.annotations.TestOnly;
 
 /**
  * The compiler's post-macro type catalog: every type the compilation server
- * knows that exists in NO source file the IDE indexes — types created by
- * macros ({@code Context.defineType}/{@code defineModule}). The unified index
- * facades consult it as a third leg beside the stub and file-based indexes,
- * which gives completion, resolve and import candidates for generated types
- * without touching IntelliJ's index lifecycle: filling and invalidation are
- * driven by the server ({@code ModuleInfo.sign} diffs), never by the VFS.
+ * knows that exists in NO source file the IDE indexes, i.e. types created by
+ * macros ({@code Context.defineType}, {@code defineModule}). The unified index
+ * facades consult it as a third leg beside the stub and file-based indexes.
+ * That gives completion, resolve and import candidates for generated types
+ * without touching IntelliJ's index lifecycle: the server drives filling and
+ * refresh ({@code ModuleInfo.sign} changes), never the VFS.
  *
  * Queries are strictly cache-only (safe under the read lock); an empty
- * catalog schedules a background fill. The fill enumerates
- * {@code server/contexts} → {@code server/modules} → {@code server/module}
- * and keeps only types the FQN source indexes cannot find. The server's
- * module cache is empty until a real compile, so the fill warms each context
- * with one {@code --no-output} compile first.
+ * catalog schedules a background fill. The fill walks
+ * {@code server/contexts}, {@code server/modules} and {@code server/module},
+ * and keeps only the types the source FQN indexes cannot find. The server's
+ * module cache stays empty until a real compile, so the fill compiles each
+ * context once first ({@code --no-output}).
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeCompilerTypeCatalogService {
 
-  /** One compiler-known type with no source: its dot path doubles as the FQN. */
+  /** One compiler-known type with no source; {@code fqn} is its qualified name in the class-name index form. */
   public record GeneratedType(@NotNull String contextKey, @NotNull String fqn, @NotNull String name) {
   }
 
@@ -65,7 +67,7 @@ public final class HaxeCompilerTypeCatalogService {
 
   private final Project project;
   private final Map<String, ContextCatalog> catalogs = new ConcurrentHashMap<>();
-  private final Set<String> filling = ConcurrentHashMap.newKeySet();
+  private final AtomicBoolean filling = new AtomicBoolean();
   private final Map<String, Long> failedAt = new ConcurrentHashMap<>();
   /** Guards against a fill storm while the catalog legitimately stays empty (no contexts, server off). */
   private volatile long lastFillScheduledAt;
@@ -156,9 +158,7 @@ public final class HaxeCompilerTypeCatalogService {
   @TestOnly
   public void fillNowForTests() {
     clearCaches();
-    for (Map.Entry<String, HaxeCompilerDisplayService.DisplayContext> entry : moduleContexts().entrySet()) {
-      fillContext(entry.getKey(), entry.getValue());
-    }
+    fillAllContexts();
   }
 
   /** Synchronous materialization for the gated live-integration tests: hydrates the blueprint, then renders. */
@@ -178,24 +178,28 @@ public final class HaxeCompilerTypeCatalogService {
     // background index queries only add storage contention to the test run
     if (ApplicationManager.getApplication().isUnitTestMode()) return;
     // resolve running INSIDE an indexer reaches this service through the
-    // unified index; scheduling a fill from there feeds a churn loop (the
-    // fill's stub queries force more indexing, whose resolve pokes this
-    // again). The next non-indexing caller schedules instead.
+    // unified index. A fill scheduled from there feeds a churn loop: the
+    // fill's stub queries force more indexing, whose resolve calls this
+    // again. The next caller outside indexing schedules instead.
     if (FileBasedIndex.getInstance().getFileBeingCurrentlyIndexed() != null) return;
     if (System.currentTimeMillis() - lastFillScheduledAt < FAILURE_COOLDOWN_MS) return;
-    if (!filling.add("*")) return;
+    if (!filling.compareAndSet(false, true)) return;
     lastFillScheduledAt = System.currentTimeMillis();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        for (Map.Entry<String, HaxeCompilerDisplayService.DisplayContext> entry : moduleContexts().entrySet()) {
-          fillContext(entry.getKey(), entry.getValue());
-        }
+        fillAllContexts();
       } catch (Throwable t) {
         log.warn("type catalog fill failed: " + t.getMessage());
       } finally {
-        filling.remove("*");
+        filling.set(false);
       }
     });
+  }
+
+  private void fillAllContexts() {
+    for (Map.Entry<String, HaxeCompilerDisplayService.DisplayContext> entry : moduleContexts().entrySet()) {
+      fillContext(entry.getKey(), entry.getValue());
+    }
   }
 
   /** Every module's display context, one per context key. */
@@ -224,9 +228,9 @@ public final class HaxeCompilerTypeCatalogService {
       failedAt.put(contextKey, System.currentTimeMillis());
       return;
     }
-    // best effort: a failed warm-up must not abort the fill - the module
-    // cache may already be warm from an earlier compile (and a re-run of
-    // init macros can even fail on redefinitions while the cache is fine)
+    // best effort: a failed warm-up must not abort the fill. The module
+    // cache may already be warm from an earlier compile, and re-running init
+    // macros can fail on redefinitions while the cache is fine.
     displayService.ensureContextCompiled(connected, contextKey);
 
     try {
@@ -242,7 +246,7 @@ public final class HaxeCompilerTypeCatalogService {
     }
   }
 
-  /** Null when indexing is in progress — a dumb-mode diff would misread source types as generated. */
+  /** Null when indexing is in progress: a dumb-mode diff would misread source types as generated. */
   @Nullable
   private ContextCatalog collectCatalog(@NotNull String contextKey,
                                         @NotNull HaxeCompilerDisplayService.DisplayContext context,
@@ -261,10 +265,9 @@ public final class HaxeCompilerTypeCatalogService {
         if (info == null) continue;
         moduleSigns.put(modulePath, info.sign());
 
-        // Context.defineType modules never appear in the listing (and
+        // Context.defineType modules never appear in the listing (and haxe 4's
         // server/module rejects them); they only surface in the dependency
-        // lists of the modules USING them - pinned by
-        // LiveDisplayServerTest.macroDefinedTypeAppearsInModulesAndBlueprintsAfterACompile
+        // lists of the modules USING them (see the display-protocol README)
         for (String dependency : info.dependencies()) {
           if (!listed.contains(dependency)) {
             dependencyOnly.add(dependency);
@@ -279,20 +282,20 @@ public final class HaxeCompilerTypeCatalogService {
         List<String> generated = sourcelessTypes(info.types());
         if (generated == null) return null;
         for (String fqn : generated) {
-          byFqn.put(fqn, new GeneratedType(contextKey, fqn, simpleNameOf(fqn)));
+          byFqn.put(fqn, new GeneratedType(contextKey, fqn, StringUtil.getShortName(fqn)));
         }
       }
 
-      // A dependency-only module IS its single type (the defineType shape) -
+      // A dependency-only module IS its single type (the defineType shape):
       // there is no ModuleInfo to enumerate more from. Real source modules in
-      // the set (std, haxelibs) fall out of the index diff.
+      // the set (std, haxelibs) drop out in the index diff.
       // TODO: Context.defineModule can create multi-type modules; whether the
       //  server exposes their type lists anywhere is unverified - only the
       //  module-named type is catalogued.
       List<String> generatedDependencies = sourcelessTypes(new ArrayList<>(dependencyOnly));
       if (generatedDependencies == null) return null;
       for (String fqn : generatedDependencies) {
-        byFqn.put(fqn, new GeneratedType(contextKey, fqn, simpleNameOf(fqn)));
+        byFqn.put(fqn, new GeneratedType(contextKey, fqn, StringUtil.getShortName(fqn)));
       }
     }
 
@@ -304,16 +307,16 @@ public final class HaxeCompilerTypeCatalogService {
   }
 
   /**
-   * The signatures of the server contexts holding TYPED modules — the
-   * {@code after_init_macros} contexts; the macro context's modules are
-   * macro-only and must not surface in completion.
+   * The signatures of the server contexts holding TYPED modules. The macro
+   * context's modules exist only for the macro interpreter and must not
+   * surface in completion.
    */
   @NotNull
   private static List<String> typedContextSignatures(@NotNull HaxeCompilerDisplayService.Connected connected)
     throws DisplayRequestException {
     List<String> signatures = new ArrayList<>();
     for (HaxeServerContext serverContext : connected.client().contexts(connected.args())) {
-      if ("after_init_macros".equals(serverContext.desc())) {
+      if (serverContext.holdsTypedModules()) {
         signatures.add(serverContext.signature());
       }
     }
@@ -345,14 +348,14 @@ public final class HaxeCompilerTypeCatalogService {
   }
 
   /**
-   * The subset of a module's types that no source index knows — the generated
-   * ones. Null while indexing is in progress (the diff would be wrong).
+   * The types no source index knows, i.e. the generated ones. Null while
+   * indexing is in progress, since the diff would be wrong.
    *
    * A non-blocking read on purpose: these index queries can be forced to
-   * inline-index PENDING files (e.g. everything a define-change reparse just
-   * invalidated), and a blocking read action holding the lock through that
-   * work starves the reparse's write action — the EDT then freezes behind
-   * this background fill. Non-blocking yields to the write and restarts.
+   * index PENDING files inline (for example everything a define change just
+   * invalidated). A blocking read action holding the lock through that work
+   * starves the reparse's write action, and the EDT then freezes behind this
+   * background fill. A non-blocking read yields to the write and restarts.
    */
   @Nullable
   private List<String> sourcelessTypes(@NotNull List<String> typeFqns) {
@@ -361,8 +364,8 @@ public final class HaxeCompilerTypeCatalogService {
       GlobalSearchScope scope = GlobalSearchScope.allScope(project);
       List<String> generated = new ArrayList<>();
       for (String fqn : typeFqns) {
-        // the two SOURCE legs only - asking the unified facade would recurse
-        // into this catalog
+        // the two SOURCE legs only: the unified facade would recurse into
+        // this catalog
         boolean inSource = !HaxeFullyQualifiedClassNameStubIndex.getByFqn(fqn, project, scope).isEmpty()
                            || !HaxeFullyQualifiedClassNameIndex.getByFqn(fqn, project, scope).isEmpty();
         if (!inSource) {
@@ -371,10 +374,5 @@ public final class HaxeCompilerTypeCatalogService {
       }
       return generated;
     }).executeSynchronously();
-  }
-
-  @NotNull
-  private static String simpleNameOf(@NotNull String fqn) {
-    return fqn.substring(fqn.lastIndexOf('.') + 1);
   }
 }

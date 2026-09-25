@@ -6,9 +6,7 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
-import com.intellij.plugins.haxe.model.HaxeDocumentModel;
 import com.intellij.plugins.haxe.model.HaxeGenericParamModel;
-import com.intellij.plugins.haxe.model.fixer.HaxeFixer;
 import com.intellij.plugins.haxe.model.type.HaxeTypeResolver;
 import com.intellij.plugins.haxe.model.type.SpecificHaxeClassReference;
 import com.intellij.psi.PsiElement;
@@ -18,7 +16,6 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.lang.psi.HaxePsiModifier.DYNAMIC;
-import static java.util.function.Predicate.not;
 
 public class HaxeTypeAnnotator implements Annotator {
 

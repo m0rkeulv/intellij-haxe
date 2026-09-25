@@ -13,9 +13,9 @@ import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFil
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Tree context menu: marks the selected build file as its container's tests build
- * file (or unmarks the current one). Test runs compile and launch the marked file,
- * so it supplies the libs, defines and target of every test build.
+ * Tree context menu: marks the selected build file as one of its container's
+ * tests build files, or unmarks it. A test run compiles and launches its tests
+ * build file, which supplies the libs, defines and target of that run.
  */
 public final class HaxeMarkTestsBuildFileAction extends DumbAwareAction {
 

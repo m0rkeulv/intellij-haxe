@@ -66,7 +66,7 @@ public class HaxeClassFieldNameFileIndex extends HaxeComponentBaseIndex {
                             }
 
                         }
-                        return true; // keep iterating;
+                        return true; // keep iterating; false stops at the FIRST file and drops every other candidate
                     }
                 }, scope);
 

@@ -17,7 +17,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The node TEST debug backend: the RUNNER spawns the debuggee itself —
@@ -33,8 +32,6 @@ import java.util.concurrent.TimeUnit;
  * installed before the first test line runs.
  */
 public class NodeTestDebugBackend implements DapBackend {
-
-  private static final long ADAPTER_KILL_WAIT_SECONDS = 2;
 
   private final Path nodeExecutable; // runs the adapter AND the debuggee
   private final int inspectorPort;
@@ -189,32 +186,10 @@ public class NodeTestDebugBackend implements DapBackend {
   public void close() {
     JsDebugSessionMux mux = sessionMux;
     sessionMux = null;
-    if (mux != null) {
-      try {
-        mux.close(); // closes the process session, workers AND the parent connection
-      } catch (IOException ignored) {
-      }
-    }
     DapClient parent = parentClient;
     parentClient = null;
-    if (mux == null && parent != null) {
-      try {
-        parent.close(); // startup failed before the mux existed
-      } catch (IOException ignored) {
-      }
-    }
     Process adapter = adapterProcess;
     adapterProcess = null;
-    if (adapter != null) {
-      adapter.descendants().forEach(ProcessHandle::destroyForcibly);
-      adapter.destroy();
-      try {
-        if (!adapter.waitFor(ADAPTER_KILL_WAIT_SECONDS, TimeUnit.SECONDS)) {
-          adapter.destroyForcibly();
-        }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    }
+    BrowserDebugBackend.closeSession(mux, parent, adapter);
   }
 }

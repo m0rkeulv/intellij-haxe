@@ -15,18 +15,17 @@ import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiFile;
-import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
  * Error highlighting straight from the compiler: one {@code display/diagnostics}
- * request per (debounced) editor pass, carrying the buffer when it diverges
- * from disk. Covers the PROBLEM kinds — compiler/parser errors, deprecation
- * warnings, unresolved identifiers, missing fields; unused imports and
- * removable code belong to their own annotators and toggles. Opt-in via the
- * Haxe Compiler settings page; requires the compilation server and a haxe
- * with the JSON-RPC diagnostics method (4.3+).
+ * request per (debounced) editor pass, carrying the buffer when it differs
+ * from disk. Covers the PROBLEM kinds: compiler and parser errors, deprecation
+ * warnings, unresolved identifiers and missing fields. Unused imports and
+ * removable code have their own annotators and toggles. Opt-in via the Haxe
+ * Compiler settings page; requires the compilation server and a haxe with
+ * the JSON-RPC diagnostics method (4.3+).
  */
 public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
@@ -40,39 +39,29 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
     return HaxeCompilerDiagnosticsBatchInspections.ERRORS_SHORT_NAME;
   }
 
+  /** A problem kind the module's language level does not filter out. */
   @Override
-  public void apply(@NotNull PsiFile file, @Nullable List<Diagnostic> diagnostics, @NotNull AnnotationHolder holder) {
-    if (diagnostics == null) return;
-    Document document = file.getViewProvider().getDocument();
-    if (document == null) return;
-
+  protected boolean handles(@NotNull PsiFile file, @NotNull Diagnostic diagnostic) {
+    if (!isProblemKind(diagnostic.kind())) return false;
     HaxeLanguageLevel level = HaxeLanguageLevelUtil.getLanguageLevel(file);
-    InitializeResult.SemVer haxeVersion =
-      HaxeCompilerDisplayService.getInstance(file.getProject()).connectedHaxeVersion();
-    for (Diagnostic diagnostic : diagnostics) {
-      if (!handles(diagnostic.kind())) continue;
-      if (!HaxeDiagnosticMessageFilter.shouldShow(level, haxeVersion, diagnostic)) continue;
-      TextRange range = HaxeDiagnosticsFetcher.toTextRange(document, diagnostic.range());
-      if (range == null) continue;
-      annotate(holder, file, diagnostic, range, haxeVersion);
-    }
+    return HaxeDiagnosticMessageFilter.shouldShow(level, connectedHaxeVersion(file), diagnostic);
   }
 
   /**
    * The problem kinds. Unused imports and removable code have their own
    * annotators; inactive #if regions are already rendered by the define
-   * context - a weak warning per block would only add noise.
+   * context, so a weak warning per block would only add noise.
    */
-  private static boolean handles(@NotNull DiagnosticKind kind) {
+  private static boolean isProblemKind(@NotNull DiagnosticKind kind) {
     return switch (kind) {
       case COMPILER_ERROR, PARSER_ERROR, DEPRECATION_WARNING, UNRESOLVED_IDENTIFIER, MISSING_FIELDS, UNKNOWN -> true;
       case UNUSED_IMPORT, REMOVABLE_CODE, INACTIVE_BLOCK -> false;
     };
   }
 
-  private static void annotate(@NotNull AnnotationHolder holder, @NotNull PsiFile file,
-                               @NotNull Diagnostic diagnostic, @NotNull TextRange range,
-                               @Nullable InitializeResult.SemVer haxeVersion) {
+  @Override
+  protected void annotate(@NotNull AnnotationHolder holder, @NotNull PsiFile file, @NotNull Document document,
+                          @NotNull Diagnostic diagnostic, @NotNull TextRange range) {
     AnnotationBuilder builder =
       holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), messageOf(diagnostic)).range(range);
     switch (diagnostic.kind()) {
@@ -81,7 +70,7 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
       default -> {
       }
     }
-    IntentionAction modernize = modernizeFixFor(file, diagnostic, range, haxeVersion);
+    IntentionAction modernize = modernizeFixFor(file, diagnostic, range);
     if (modernize != null) {
       builder = builder.withFix(modernize);
     }
@@ -91,16 +80,19 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
   /**
    * A syntax-migration fix when the diagnostic is a deprecation pointing at a
    * construct with a known modern spelling (@:enum abstract, @:final,
-   * @:extern, the renamed std APIs). Deprecation identification is
-   * {@link HaxeDiagnosticMessageFilter}'s - one rule for the filter and the
-   * fix offer.
+   * @:extern, the renamed std APIs). {@link HaxeDiagnosticMessageFilter}
+   * decides what counts as a deprecation, for the filter and this fix alike.
    */
   @Nullable
   private static IntentionAction modernizeFixFor(@NotNull PsiFile file, @NotNull Diagnostic diagnostic,
-                                                 @NotNull TextRange range,
-                                                 @Nullable InitializeResult.SemVer haxeVersion) {
-    if (!HaxeDiagnosticMessageFilter.isDeprecationWarning(diagnostic, haxeVersion)) return null;
+                                                 @NotNull TextRange range) {
+    if (!HaxeDiagnosticMessageFilter.isDeprecationWarning(diagnostic, connectedHaxeVersion(file))) return null;
     return HaxeSyntaxMigrationFixes.modernizeFixAt(file, range);
+  }
+
+  @Nullable
+  private static InitializeResult.SemVer connectedHaxeVersion(@NotNull PsiFile file) {
+    return HaxeCompilerDisplayService.getInstance(file.getProject()).connectedHaxeVersion();
   }
 
   @NotNull

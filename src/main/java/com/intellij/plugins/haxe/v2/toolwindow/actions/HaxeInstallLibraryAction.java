@@ -55,13 +55,13 @@ public final class HaxeInstallLibraryAction extends DumbAwareAction {
       public void run(@NotNull ProgressIndicator indicator) {
         String failure = HaxelibInstaller.install(project, library.name(), library.version(), library.resolvedVersion());
         if (failure == null) {
-          HaxeCommandNotifications.notify(project, HaxeBundle.message("haxe.toolwindow.install.library.success", library.name()),
-                                          "", NotificationType.INFORMATION);
+          String installed = HaxeBundle.message("haxe.toolwindow.install.library.success", library.name());
+          HaxeCommandNotifications.notify(project, installed, NotificationType.INFORMATION);
           HaxeLibrarySync.sync(project, panel::refreshTree);
         }
         else {
-          HaxeCommandNotifications.notify(project, HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name()),
-                                          failure, NotificationType.ERROR);
+          String title = HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name());
+          HaxeCommandNotifications.notify(project, title, failure, NotificationType.ERROR);
         }
       }
     }.queue();

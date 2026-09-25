@@ -4,33 +4,32 @@ import java.util.List;
 import tools.jackson.databind.JsonNode;
 
 /**
- * One entry of a {@code display/diagnostics} result. {@code args} stays raw
- * JSON — its shape depends on {@link DiagnosticKind}; use the typed accessors
- * for the common cases. {@code code} is the LSP-style stable identifier the
- * typedef declares as optional; null when the compiler sends none.
+ * One entry of a {@code display/diagnostics} result.
+ *
+ * {@code args} stays raw JSON because its shape depends on the
+ * {@link DiagnosticKind}; the {@code ...Arg} accessors read the common shapes.
+ * {@code code} is the optional LSP-style identifier of the diagnostic, null
+ * when the compiler sends none (haxe 4 never does).
  */
 public record Diagnostic(DiagnosticKind kind,
                          Range range,
                          DiagnosticSeverity severity,
                          JsonNode args,
-                         String code,
-                         List<RelatedInformation> relatedInformation) {
+                         String code) {
 
-  public record RelatedInformation(Location location, String message, int depth) {
-  }
-
-  /** The message of a COMPILER_ERROR / PARSER_ERROR / DEPRECATION_WARNING (args = plain string). */
+  /** The message of a COMPILER_ERROR, PARSER_ERROR or DEPRECATION_WARNING, whose args are a plain string. */
   public String messageArg() {
     return args != null && args.isString() ? args.asString() : "";
   }
 
-  /** Identifier suggestions of an UNRESOLVED_IDENTIFIER: kind 0 = import candidate, 1 = typo correction. */
+  /** One suggestion of an UNRESOLVED_IDENTIFIER: {@code kind} 0 is an import candidate, 1 a typo correction. */
   public record IdentifierSuggestion(int kind, String name) {
     public boolean isImportCandidate() {
       return kind == 0;
     }
   }
 
+  /** The suggestions of an UNRESOLVED_IDENTIFIER, whose args are an array of them. */
   public List<IdentifierSuggestion> suggestionArgs() {
     if (args == null || !args.isArray()) return List.of();
     return args.valueStream()
@@ -38,15 +37,14 @@ public record Diagnostic(DiagnosticKind kind,
       .toList();
   }
 
-  /** The REMOVABLE_CODE description (args = {description, range}); empty when absent. */
+  /** The description of a REMOVABLE_CODE entry; empty when absent. */
   public String descriptionArg() {
     return args != null ? args.path("description").asString("") : "";
   }
 
   /**
-   * The REMOVABLE_CODE deletion range from args — the span to REMOVE, which
-   * may differ from the diagnostic's display range; null when the compiler
-   * supplies none (callers fall back to the display range).
+   * The span a REMOVABLE_CODE fix should delete. It can be wider than the
+   * highlighted {@link #range()}. Null when the compiler supplies none.
    */
   public Range removableRangeArg() {
     if (args == null) return null;
@@ -56,9 +54,8 @@ public record Diagnostic(DiagnosticKind kind,
   }
 
   /**
-   * The haxe 5 replacement text for the removable span ({@code newCode} on
-   * the ReplaceableCode args); null when absent or empty — both mean plain
-   * removal.
+   * The text haxe 5 offers in place of the removable span ({@code newCode});
+   * null when absent or empty, both of which mean plain removal.
    */
   public String newCodeArg() {
     if (args == null) return null;

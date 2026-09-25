@@ -619,6 +619,7 @@ public class HaxeExpressionEvaluator {
 
     return createUnknown(componentName);
   }
+
   /**
    * Deliberately NOT memoized: the result GROWS as types settle
    * (an occurrence only enters the list once its isReferenceTo resolve

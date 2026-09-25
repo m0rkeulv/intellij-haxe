@@ -2,14 +2,12 @@ package com.intellij.plugins.haxe.profiler.bridge.js;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.intellij.notification.NotificationGroup;
-import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationType;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import com.intellij.plugins.haxe.profiler.HaxeJsProfilerCapture;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
+import com.intellij.plugins.haxe.profiler.HaxeProfilingNotifier;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeCaptureFiles;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerProcessUi;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeLiveCaptures;
@@ -25,7 +23,6 @@ import java.net.URLDecoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,11 +35,8 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The IU-side V8 capture: polls the Chromium child's DevTools endpoint
@@ -82,7 +76,7 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
     return new Capture(project, displayName, sessionFile, debugPort, samplingIntervalUs, contentRoot, baseUrl);
   }
 
-  private static final class Capture implements Handle, WebSocket.Listener {
+  private static final class Capture implements Handle {
     private final Project project;
     private final String displayName;
     private final Path sessionFile;
@@ -93,18 +87,15 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
     /** Parsed source maps by script url; empty = looked and found none. Guarded by {@code segmentLock}. */
     private final Map<String, Optional<JsSourceMap>> scriptSourceMaps = new HashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();
-    private final AtomicInteger nextId = new AtomicInteger(1);
-    private final Map<Integer, CompletableFuture<JsonNode>> pending = new ConcurrentHashMap<>();
     /** DrawFrame instants streamed by the tracing session, drained per segment. */
     private final Queue<Long> drawFrameStamps = new ConcurrentLinkedQueue<>();
-    private final StringBuilder messageParts = new StringBuilder();
     private final AtomicBoolean finished = new AtomicBoolean();
     /** Serializes segment collection against the final collect and the close. */
     private final Object segmentLock = new Object();
     private volatile CompletableFuture<Void> tracingComplete;
     private volatile boolean tracingActive;
     private volatile boolean cancelled;
-    private volatile WebSocket webSocket;
+    private volatile HaxeCdpConnection cdp;
     private volatile HaxeProfilerProcessUi.Session session;
     private OutputStream sessionStream;
     private CpuProfileSessionBuilder builder;
@@ -130,14 +121,11 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
       try {
         String targetSocketUrl = discoverPageTarget();
         if (targetSocketUrl == null) return; // cancelled or timed out - the stop path explains
-        webSocket = HttpClient.newHttpClient()
-          .newWebSocketBuilder()
-          .buildAsync(URI.create(targetSocketUrl), this)
-          .join();
-        call("Profiler.enable", null);
-        call("Profiler.setSamplingInterval", mapper.createObjectNode().put("interval", samplingIntervalUs));
-        call("Profiler.start", null);
-        call("Performance.enable", null);
+        cdp = HaxeCdpConnection.open(targetSocketUrl, this::onEvent);
+        cdp.call("Profiler.enable", null);
+        cdp.call("Profiler.setSamplingInterval", mapper.createObjectNode().put("interval", samplingIntervalUs));
+        cdp.call("Profiler.start", null);
+        cdp.call("Performance.enable", null);
         try {
           startTracing();
           tracingActive = true;
@@ -188,13 +176,11 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
 
     /** The local file a sampled script url serves from, or null for scripts outside the served content. */
     private @Nullable Path servedScriptPath(String scriptUrl) {
-      String noQuery = scriptUrl.split("[?#]")[0]; // strip query/fragment before mapping to a file
-      if (noQuery.startsWith("file://")) {
-        String path = noQuery.substring("file://".length());
-        if (path.length() > 2 && path.charAt(0) == '/' && path.charAt(2) == ':') {
-          path = path.substring(1);
-        }
-        return Path.of(URLDecoder.decode(path, StandardCharsets.UTF_8));
+      // everything before the query or fragment
+      String noQuery = scriptUrl.split("[?#]")[0];
+      String filePath = JsSourceMap.pathOfFileUrl(noQuery);
+      if (filePath != null) {
+        return Path.of(URLDecoder.decode(filePath, StandardCharsets.UTF_8));
       }
       if (contentRoot == null || baseUrl == null) return null;
       String base = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
@@ -229,14 +215,14 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
 
     /** One stop-append(-start) cycle; the caller holds {@code segmentLock}. */
     private void collectSegment(boolean restart) throws Exception {
-      JsonNode result = call("Profiler.stop", null).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      JsonNode result = cdp.call("Profiler.stop", null).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       JsonNode profile = result.path("profile");
       if (profile.isMissingNode()) throw new IOException("Profiler.stop returned no profile");
       List<Long> frameStamps = tracingActive ? collectFrameStamps() : List.of();
       long heapUsed = 0;
       long heapTotal = 0;
       try {
-        JsonNode metrics = call("Performance.getMetrics", null).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        JsonNode metrics = cdp.call("Performance.getMetrics", null).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         for (JsonNode metric : metrics.path("metrics")) {
           String name = metric.path("name").asText();
           if ("JSHeapUsedSize".equals(name)) heapUsed = (long)metric.path("value").asDouble();
@@ -255,7 +241,7 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
         session.dataReady();
       }
       if (restart) {
-        call("Profiler.start", null);
+        cdp.call("Profiler.start", null);
         if (tracingActive) {
           try {
             startTracing();
@@ -273,7 +259,7 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
       try {
         // the completion future must be armed before end() - events stream in between
         tracingComplete = new CompletableFuture<>();
-        call("Tracing.end", null).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        cdp.call("Tracing.end", null).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         tracingComplete.get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       }
       catch (Exception e) {
@@ -295,7 +281,7 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
       // default-enabled categories trace unless excluded - the include list alone is not a filter
       traceConfig.putArray("excludedCategories").add("*");
       config.set("traceConfig", traceConfig);
-      call("Tracing.start", config).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      cdp.call("Tracing.start", config).get(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     /** The DevTools websocket url of the first page target, polling while the browser starts; null when cancelled/overdue. */
@@ -333,23 +319,12 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
       return null;
     }
 
-    /** One CDP request; the future completes with the response's {@code result}. */
-    private CompletableFuture<JsonNode> call(String method, @Nullable JsonNode params) {
-      int id = nextId.getAndIncrement();
-      CompletableFuture<JsonNode> response = new CompletableFuture<>();
-      pending.put(id, response);
-      var message = mapper.createObjectNode().put("id", id).put("method", method);
-      if (params != null) message.set("params", params);
-      webSocket.sendText(message.toString(), true);
-      return response;
-    }
-
     @Override
     public void finishCapture() {
       if (!finished.compareAndSet(false, true)) return;
       cancelled = true;
       synchronized (segmentLock) {
-        if (webSocket != null && builder != null) {
+        if (cdp != null && builder != null) {
           try {
             collectSegment(false);
           }
@@ -359,6 +334,8 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
         }
         finalizeSession();
       }
+      // the browser is killed next; its dropped socket is no failure
+      if (cdp != null) cdp.abandon();
     }
 
     @Override
@@ -367,7 +344,7 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
       cancelled = true;
       // unblock an in-flight Profiler.stop before taking the lock - the
       // browser is gone, its response will never arrive
-      failPendingCalls();
+      if (cdp != null) cdp.abandon();
       synchronized (segmentLock) {
         finalizeSession();
       }
@@ -392,62 +369,11 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
         }
         return;
       }
-      String content = HaxeProfilerBundle.message("haxe.profiler.js.none");
-      if (session != null) {
-        session.failed(content);
-      }
-      else {
-        group().createNotification(content, NotificationType.WARNING).notify(project);
-      }
+      HaxeProfilingNotifier.reportNothingCaptured(project, session, HaxeProfilerBundle.message("haxe.profiler.js.none"));
     }
 
-    private void failPendingCalls() {
-      for (CompletableFuture<JsonNode> response : pending.values()) {
-        response.completeExceptionally(new IOException("browser connection lost"));
-      }
-      pending.clear();
-    }
-
-    private static NotificationGroup group() {
-      return NotificationGroupManager.getInstance().getNotificationGroup("haxe.profiler");
-    }
-
-    // --- WebSocket.Listener: responses arrive in text parts; id-matched futures complete per whole message ---
-
-    @Override
-    public CompletionStage<?> onText(WebSocket socket, CharSequence part, boolean last) {
-      messageParts.append(part);
-      if (last) {
-        String message = messageParts.toString();
-        messageParts.setLength(0);
-        deliver(message);
-      }
-      socket.request(1);
-      return null;
-    }
-
-    private void deliver(String message) {
-      try {
-        JsonNode parsed = mapper.readTree(message);
-        if (parsed.hasNonNull("id")) {
-          CompletableFuture<JsonNode> response = pending.remove(parsed.get("id").asInt());
-          if (response == null) return;
-          if (parsed.has("error")) {
-            response.completeExceptionally(new IOException("CDP error: " + parsed.get("error")));
-          }
-          else {
-            response.complete(parsed.path("result"));
-          }
-          return;
-        }
-        deliverEvent(parsed);
-      }
-      catch (IOException e) {
-        LOG.warn("unreadable CDP message", e);
-      }
-    }
-
-    private void deliverEvent(JsonNode notification) {
+    /** The CDP events: the tracing session's frame instants and its completion. */
+    private void onEvent(JsonNode notification) {
       String method = notification.path("method").asText("");
       if ("Tracing.dataCollected".equals(method)) {
         for (JsonNode event : notification.path("params").path("value")) {
@@ -464,18 +390,6 @@ public class HaxeIuJsProfilerCapture implements HaxeJsProfilerCapture {
           complete.complete(null);
         }
       }
-    }
-
-    @Override
-    public CompletionStage<?> onClose(WebSocket socket, int statusCode, String reason) {
-      failPendingCalls();
-      return null;
-    }
-
-    @Override
-    public void onError(WebSocket socket, Throwable error) {
-      failPendingCalls();
-      if (!finished.get()) LOG.warn("js profiler connection failed", error);
     }
   }
 }

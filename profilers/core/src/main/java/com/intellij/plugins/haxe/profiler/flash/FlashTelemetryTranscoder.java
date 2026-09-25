@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.profiler.flash;
 import com.intellij.plugins.haxe.profiler.flash.Amf3Decoder.Amf3Object;
 import com.intellij.plugins.haxe.profiler.hxt.HxtSessionWriter;
 import com.intellij.plugins.haxe.profiler.hxt.HxtSessionWriter.WeightedStack;
+import com.intellij.plugins.haxe.profiler.model.PseudoFrames;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
 
@@ -142,7 +144,7 @@ public final class FlashTelemetryTranscoder {
           value = decoder.readValue();
         }
         catch (IOException endOrTorn) {
-          break; // clean end, torn tail or foreign bytes - keep completed frames
+          break; // clean end, torn tail or foreign bytes: keep the completed frames
         }
         if (value instanceof Amf3Object message) {
           handle(message);
@@ -207,12 +209,12 @@ public final class FlashTelemetryTranscoder {
       if (!(sample.member("ticktimes") instanceof List<?> tickTimes)) return;
       if (!(sample.member("callstack") instanceof List<?> callstack)) return;
       int depth = callstack.size();
+      if (depth == 0) return;
       int[] rootFirst = new int[depth];
       for (int i = 0; i < depth; i++) {
         if (!(callstack.get(i) instanceof Number index)) return;
         rootFirst[depth - 1 - i] = index.intValue(); // the wire stack is leaf-first
       }
-      if (depth == 0) return;
       for (Object tickTime : tickTimes) {
         if (tickTime instanceof Number time) {
           ticks.add(new Tick(time.longValue(), rootFirst));
@@ -231,10 +233,10 @@ public final class FlashTelemetryTranscoder {
         attributeScript(segments, endUs);
         attributeOrphanTicks(segments, endUs);
         for (Interval render : renderIntervals) {
-          segments.add(Segment.pseudo(render.startUs(), render.endUs(), List.of("[render]")));
+          segments.add(Segment.pseudo(render.startUs(), render.endUs(), List.of(PseudoFrames.RENDER)));
         }
         for (Interval gc : gcIntervals) {
-          segments.add(Segment.pseudo(gc.startUs(), gc.endUs(), List.of("[gc]")));
+          segments.add(Segment.pseudo(gc.startUs(), gc.endUs(), List.of(PseudoFrames.GC)));
         }
         List<Segment> tiled = tiled(segments, endUs);
         int maxNameIndex = 0;
@@ -286,7 +288,7 @@ public final class FlashTelemetryTranscoder {
           }
         }
         if (inside.isEmpty()) {
-          segments.add(Segment.pseudo(script.startUs(), Math.min(script.endUs(), endUs), List.of("[script]")));
+          segments.add(Segment.pseudo(script.startUs(), Math.min(script.endUs(), endUs), List.of(PseudoFrames.SCRIPT)));
           continue;
         }
         long cursor = script.startUs();
@@ -339,7 +341,7 @@ public final class FlashTelemetryTranscoder {
      * (measurement jitter between adjacent spans) clip against the cursor.
      */
     private List<Segment> tiled(List<Segment> segments, long endUs) {
-      segments.sort((a, b) -> Long.compare(a.startUs(), b.startUs()));
+      segments.sort(Comparator.comparingLong(Segment::startUs));
       List<Segment> tiled = new ArrayList<>(segments.size() * 2);
       long cursor = windowStartUs;
       for (Segment segment : segments) {
@@ -347,13 +349,13 @@ public final class FlashTelemetryTranscoder {
         long end = Math.min(segment.endUs(), endUs);
         if (end <= start) continue;
         if (start > cursor) {
-          tiled.add(Segment.pseudo(cursor, start, List.of("[idle]")));
+          tiled.add(Segment.pseudo(cursor, start, List.of(PseudoFrames.IDLE)));
         }
         tiled.add(new Segment(start, end, segment.samplerStack(), segment.pseudoStack()));
         cursor = end;
       }
       if (endUs > cursor) {
-        tiled.add(Segment.pseudo(cursor, endUs, List.of("[idle]")));
+        tiled.add(Segment.pseudo(cursor, endUs, List.of(PseudoFrames.IDLE)));
       }
       return tiled;
     }
@@ -363,8 +365,10 @@ public final class FlashTelemetryTranscoder {
       for (Segment segment : window.segments()) {
         samples.add(new WeightedStack(resolvedStack(segment), segment.endUs() - segment.startUs()));
       }
-      writer.writeFrame(window.endUs() / 1_000_000.0, window.gcUs(),
-                        window.usedKb() * 1024, window.reservedKb() * 1024, samples);
+      double endSeconds = window.endUs() / 1_000_000.0;
+      long usedBytes = window.usedKb() * 1024;
+      long reservedBytes = window.reservedKb() * 1024;
+      writer.writeFrame(endSeconds, window.gcUs(), usedBytes, reservedBytes, samples);
     }
 
     private List<String> resolvedStack(Segment segment) {

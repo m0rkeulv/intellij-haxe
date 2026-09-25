@@ -51,10 +51,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/// M2 wire probe for vscode-js-debug's standalone DAP server (pinned
+/// Wire probe for vscode-js-debug's standalone DAP server (pinned
 /// js-debug-dap v1.117.0, sha256 ad8d04ed..., from the GitHub release), driving
-/// an UNGOOGLED-CHROMIUM fork — the user's chosen first Chromium target. Pins
-/// the parts that differ from the firefox adapter:
+/// a Chromium-family browser. Pins the parts that differ from the firefox
+/// adapter:
 ///
 ///   - launch ordering (does the launch response wait for configurationDone?);
 ///   - the `startDebugging` REVERSE request and the child-session

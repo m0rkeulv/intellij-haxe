@@ -1,14 +1,13 @@
 package com.intellij.plugins.haxe.display.protocol;
 
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import tools.jackson.databind.JsonNode;
 
 /**
- * A {@code haxe.display.JsonModuleTypes.JsonType} kept as raw JSON with typed
- * accessors for what the plugin needs (dot paths, readable signatures). The
- * full typedef family is large and recursive; consumers needing more drill
- * into {@link #args()} directly.
+ * A {@code haxe.display.JsonModuleTypes.JsonType} kept as raw JSON, with
+ * accessors for what the plugin reads: dot paths and readable signatures.
+ * The full typedef family is large and recursive; anything else is read from
+ * {@link #args()} directly.
  */
 public record JsonTypeRef(String kind, JsonNode args) {
 
@@ -21,17 +20,41 @@ public record JsonTypeRef(String kind, JsonNode args) {
     return "TFun".equals(kind);
   }
 
-  /** The dot path of a TInst/TEnum/TType/TAbstract, e.g. {@code haxe.ds.StringMap}; null for other kinds. */
+  /**
+   * The dot path of a TInst/TEnum/TType/TAbstract as Haxe prints it, package
+   * and type name ({@code haxe.ds.StringMap}, {@code Void}); null for other kinds.
+   */
   public String dotPath() {
     JsonNode path = args.path("path");
     if (path.isMissingNode()) return null;
     String typeName = path.path("typeName").asString("");
     if (typeName.isEmpty()) return null;
-    StringBuilder result = new StringBuilder();
-    for (JsonNode pack : path.path("pack")) {
-      result.append(pack.asString("")).append('.');
+    return packagePrefix(path) + typeName;
+  }
+
+  /**
+   * The qualified name of a wire {@code JsonTypePath} ({@code pack},
+   * {@code moduleName}, {@code typeName}) in the form the plugin's class-name
+   * indexes use: {@code pack.Module} for a module's main type, and
+   * {@code pack.Module.SubType} for any other type it declares ({@code Void},
+   * declared in {@code StdTypes}, is {@code StdTypes.Void}). Empty when the
+   * type name is missing.
+   */
+  public static String qualifiedNameOf(JsonNode typePath) {
+    String typeName = typePath.path("typeName").asString("");
+    if (typeName.isEmpty()) return "";
+    String moduleName = typePath.path("moduleName").asString(typeName);
+    String moduleSegment = moduleName.equals(typeName) ? "" : moduleName + ".";
+    return packagePrefix(typePath) + moduleSegment + typeName;
+  }
+
+  /** The {@code pack} segments of a type path, each followed by a dot. */
+  private static String packagePrefix(JsonNode typePath) {
+    StringBuilder prefix = new StringBuilder();
+    for (JsonNode pack : typePath.path("pack")) {
+      prefix.append(pack.asString("")).append('.');
     }
-    return result.append(typeName).toString();
+    return prefix.toString();
   }
 
   /** A human-readable rendering: dot path, function signature, monomorph/dynamic placeholders. */
@@ -50,8 +73,7 @@ public record JsonTypeRef(String kind, JsonNode args) {
   }
 
   private String functionSignature() {
-    String parameters = Stream.of(args.path("args"))
-      .flatMap(JsonNode::valueStream)
+    String parameters = args.path("args").valueStream()
       .map(JsonTypeRef::argumentSignature)
       .collect(Collectors.joining(", "));
     JsonTypeRef ret = of(args.path("ret"));

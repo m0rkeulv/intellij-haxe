@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowEditors;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
@@ -34,9 +35,9 @@ public final class HaxeRemoveNodeAction extends DumbAwareAction {
     Project project = e.getProject();
     if (project == null) return;
     switch (panel.getSelectedUserObject()) {
-      case ModuleNode moduleNode -> panel.confirmAndRemoveModule(moduleNode);
+      case ModuleNode moduleNode -> HaxeToolWindowEditors.confirmAndRemoveModule(project, moduleNode);
       // the same confirmation the Delete key shows - the toolbar path must not skip it
-      case BuildFileRow row -> panel.confirmAndRemoveBuildFile(row);
+      case BuildFileRow row -> HaxeToolWindowEditors.confirmAndRemoveBuildFile(project, row);
       case null, default -> { }
     }
   }

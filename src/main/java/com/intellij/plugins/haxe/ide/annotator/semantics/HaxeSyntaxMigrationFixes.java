@@ -134,8 +134,8 @@ public final class HaxeSyntaxMigrationFixes {
 
   @NotNull
   public static HaxeFixer replaceReferenceFix(@NotNull HaxeReferenceExpression reference, @NotNull String replacement) {
-    return HaxeFixer.create(HaxeBundle.message("haxe.quickfix.replace.with", replacement),
-                            () -> apply(reference, List.of(new Edit(reference.getTextRange(), replacement))));
+    String fixText = HaxeBundle.message("haxe.quickfix.replace.with", replacement);
+    return HaxeFixer.create(fixText, () -> apply(reference, List.of(new Edit(reference.getTextRange(), replacement))));
   }
 
   // ---- entry point for compiler diagnostics ----
@@ -158,7 +158,7 @@ public final class HaxeSyntaxMigrationFixes {
       PsiTreeUtil.getParentOfType(at, HaxeAbstractTypeDeclaration.class, false);
     if (abstractDeclaration != null) {
       HaxeMetadataList enumMetas = HaxeMetadataUtils.getMetadataList(abstractDeclaration, HaxeMeta.COMPILE_TIME, HaxeMeta.ENUM);
-      if (!enumMetas.isEmpty()) return modernizeMetaFix(enumMetas.get(0));
+      if (!enumMetas.isEmpty()) return modernizeMetaFix(enumMetas.getFirst());
     }
 
     HaxeReferenceExpression reference = outermostReferenceOf(at);

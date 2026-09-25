@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.ide.annotator;
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.codeInspection.LocalQuickFix;
 import com.intellij.codeInspection.LocalQuickFixBackedByIntentionAction;
+import com.intellij.codeInspection.ProblemDescriptor;
 import com.intellij.codeInspection.ProblemHighlightType;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.lang.annotation.AnnotationBuilder;
@@ -122,8 +123,10 @@ public final class HaxeProblemReporter {
       }
       if (anchor == null) throw new IllegalStateException("problem created without a range: " + message);
 
-      problems.registerProblem(problems.getManager().createProblemDescriptor(
-        anchor, rangeInAnchor, message, highlightTypeFor(severity), problems.isOnTheFly(), quickFixes()));
+      ProblemHighlightType highlightType = highlightTypeFor(severity);
+      ProblemDescriptor descriptor = problems.getManager()
+        .createProblemDescriptor(anchor, rangeInAnchor, message, highlightType, problems.isOnTheFly(), quickFixes());
+      problems.registerProblem(descriptor);
     }
 
     private LocalQuickFix[] quickFixes() {

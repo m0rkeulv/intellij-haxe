@@ -32,13 +32,13 @@ public class HaxeInactiveBody extends LazyParseablePsiElement implements PsiComm
   }
 
   /**
-   * Whether the branch parsed ERROR-FREE under a graded entry. Formatting
+   * Whether some parser entry parsed the branch without errors. Formatting
    * rebuilds only clean branches; a recovered (error-carrying) parse is
-   * preserved verbatim, like haxe-formatter's own fallback. Touching the
-   * first child forces the lazy parse that records the grade.
+   * preserved verbatim, like the reference formatter's own fallback. Touching
+   * the first child forces the lazy parse that records the entry.
    */
   public boolean hasCleanParse() {
     return getNode().getFirstChildNode() != null
-           && getNode().getUserData(HaxeInactiveBodyElementType.PARSED_GRADE) != null;
+           && getNode().getUserData(HaxeInactiveBodyElementType.CLEAN_PARSE_ENTRY) != null;
   }
 }

@@ -24,6 +24,12 @@ import java.util.regex.Pattern;
 /// then carries the traces on ITS console instead of adl's stdout.
 final class AirTestHost {
 
+  // the SDK's own version tag, e.g. <version>31.0.0</version>
+  private static final Pattern SDK_VERSION = Pattern.compile("<version>\\s*(\\d+)\\.(\\d+)");
+
+  /** Descriptor namespace for SDKs without a description file - old enough that every current runtime accepts it. */
+  private static final String FALLBACK_NAMESPACE_VERSION = "28.0";
+
   private AirTestHost() {
   }
 
@@ -77,18 +83,14 @@ final class AirTestHost {
     }
   }
 
-  // the SDK's own version tag, e.g. <version>31.0.0</version>
-  private static final Pattern SDK_VERSION = Pattern.compile("<version>\\s*(\\d+)\\.(\\d+)");
-
   /**
    * The descriptor namespace version from the SDK's air-sdk-description.xml
-   * (major.minor; the namespace must not exceed the runtime's version). The
-   * fallback covers SDKs without the file — old enough that every current
-   * runtime accepts it.
+   * (major.minor; the namespace must not exceed the runtime's version).
    */
   @NotNull
   static String namespaceVersion(@NotNull Path adlExecutable) {
-    Path sdkRoot = adlExecutable.getParent() != null ? adlExecutable.getParent().getParent() : null;
+    Path binDirectory = adlExecutable.getParent();
+    Path sdkRoot = binDirectory == null ? null : binDirectory.getParent();
     if (sdkRoot != null) {
       try {
         String description = Files.readString(sdkRoot.resolve("air-sdk-description.xml"));
@@ -100,6 +102,6 @@ final class AirTestHost {
       catch (IOException ignored) {
       }
     }
-    return "28.0";
+    return FALLBACK_NAMESPACE_VERSION;
   }
 }

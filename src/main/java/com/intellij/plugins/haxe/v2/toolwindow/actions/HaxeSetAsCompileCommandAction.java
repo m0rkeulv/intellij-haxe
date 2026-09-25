@@ -38,9 +38,8 @@ public final class HaxeSetAsCompileCommandAction extends DumbAwareAction {
     HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
     CompileCommand previous = store.getCompileCommand(fileRow.containerId());
     String arguments = previous == null ? "" : StringUtil.notNullize(previous.arguments());
-    store.setCompileCommand(fileRow.containerId(),
-                            new CompileCommand(actionNode.ownerId(), actionNode.name(), arguments));
-    panel.refreshTree();
+    CompileCommand compileCommand = new CompileCommand(actionNode.ownerId(), actionNode.name(), arguments);
+    store.setCompileCommand(fileRow.containerId(), compileCommand);
   }
 
   @Override

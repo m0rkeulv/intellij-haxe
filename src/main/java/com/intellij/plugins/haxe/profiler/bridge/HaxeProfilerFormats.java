@@ -48,7 +48,7 @@ public final class HaxeProfilerFormats {
     return text + " %";
   }
 
-  /** 0, 250 us, 1.5 ms, 320 ms, 4.2 s - the shortest form for the magnitude. */
+  /** 0, 250 µs, 1.5 ms, 320 ms, 4.2 s - the shortest form for the magnitude. */
   public static String formatUs(long us) {
     if (us == 0) return "0";
     if (us < 1000) return us + " µs";

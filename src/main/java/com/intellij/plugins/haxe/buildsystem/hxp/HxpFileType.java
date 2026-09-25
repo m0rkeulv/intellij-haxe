@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.buildsystem.hxp;
 
+import icons.HaxeIcons;
 import com.intellij.openapi.fileTypes.LanguageFileType;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -58,7 +59,7 @@ public final class HxpFileType extends LanguageFileType {
 
   @Override
   public Icon getIcon() {
-    return icons.HaxeIcons.LIME_LOGO;
+    return HaxeIcons.LIME_LOGO;
   }
 
   @Override

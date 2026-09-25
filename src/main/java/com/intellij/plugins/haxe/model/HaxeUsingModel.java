@@ -156,10 +156,9 @@ public class HaxeUsingModel extends HaxeImportableModel {
   }
 
   /**
-   * The classes this using statement contributes extensions from. Extension
-   * lookup runs once per candidate member resolution, so the statement-path
-   * resolution behind this is cached per psi generation - re-resolving it per
-   * lookup dominated editing profiles of using-heavy macro code.
+   * The classes this using statement contributes extensions from, cached per
+   * PSI modification: extension lookup runs once per candidate member
+   * resolution.
    */
   @NotNull
   public List<HaxeClassModel> getClassModels() {

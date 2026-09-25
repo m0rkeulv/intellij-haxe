@@ -40,6 +40,10 @@ abstract class HaxeFileToolAction extends DumbAwareAction {
   @NotNull
   abstract String configName();
 
+  /** The haxelib the action runs. */
+  @NotNull
+  abstract String toolHaxelib();
+
   @Nullable
   static VirtualFile haxeFile(@NotNull AnActionEvent e) {
     VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
@@ -64,7 +68,7 @@ abstract class HaxeFileToolAction extends DumbAwareAction {
   }
 
   /** {@code haxelib run <tool> <flags> -s <file>} in the config directory, shown in the run console. */
-  void runFileTool(@NotNull AnActionEvent e, @NotNull String tool, @NotNull List<String> flags, @Nullable Runnable onTerminated) {
+  void runFileTool(@NotNull AnActionEvent e, @NotNull List<String> flags, @Nullable Runnable onTerminated) {
     Project project = e.getProject();
     VirtualFile file = haxeFile(e);
     VirtualFile configDirectory = configDirectory(e);
@@ -72,6 +76,7 @@ abstract class HaxeFileToolAction extends DumbAwareAction {
 
     String relative = VfsUtilCore.getRelativePath(file, configDirectory);
     String source = relative != null ? relative : file.getPath();
+    String tool = toolHaxelib();
     List<String> command = new ArrayList<>(List.of(haxelibFor(project, file), "run", tool));
     command.addAll(flags);
     command.addAll(List.of("-s", source));

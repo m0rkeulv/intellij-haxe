@@ -21,14 +21,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireBytes.*;
+import static com.intellij.plugins.haxe.profiler.io.LittleEndian.*;
 
 /**
  * Decodes tracy's DECOMPRESSED item stream (compose with
  * {@link TracyLz4Stream}) into a {@link TracySession}, scoped to what the
  * hxcpp client emits, in the protocol version the welcome settled on (item
  * numbering and sizes come from that version's {@link TracyQueueTable}).
- * Wire rules, verified against the client sources: zone and plot times are
+ * Wire rules: zone and plot times are
  * DELTAS against a running reference that every ThreadContext item RESETS
  * to zero; memory events delta against a separate serial reference; context
  * switches, thread wakeups and sampled callstacks against a THIRD one
@@ -41,6 +41,20 @@ import static com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireBytes.*;
  * table so future traffic degrades to being ignored, never misparsed.
  */
 public final class TracyEventReader {
+
+  /** How often the small series flush to an attached sink while the capture streams. */
+  private static final long SERIES_FLUSH_INTERVAL_NANOS = 500_000_000;
+  /** The flush timer is polled once per this many items — cheap enough for the hot read loop. */
+  private static final int SERIES_CHECK_ITEM_MASK = 0x3F;
+  /**
+   * The smallest free run that counts as a collection: a stray large-object
+   * free should not paint a GC marker.
+   */
+  private static final int MIN_SWEEP_FREES = 4;
+  /** One process-CPU point per 100 ms of scheduler time: coarse enough to stay tiny, fine enough to zoom into. */
+  private static final long PROCESS_CPU_BUCKET_NS = 100_000_000;
+  private static final Hooks NO_HOOKS = new Hooks() {
+  };
 
   private final DataInputStream data;
   private final double timerMul;
@@ -88,11 +102,6 @@ public final class TracyEventReader {
   private int unmatchedZoneEnds;
   private long minNs = Long.MAX_VALUE;
   private long maxNs = Long.MIN_VALUE;
-
-  /** How often the small series flush to an attached sink while the capture streams. */
-  private static final long SERIES_FLUSH_INTERVAL_NANOS = 500_000_000;
-  /** The flush timer is polled once per this many items — cheap enough for the hot read loop. */
-  private static final int SERIES_CHECK_ITEM_MASK = 0x3F;
 
   private long lastSeriesFlushNanos = System.nanoTime();
   private int itemsSinceSeriesCheck;
@@ -197,9 +206,6 @@ public final class TracyEventReader {
     }
   }
 
-  private static final Hooks NO_HOOKS = new Hooks() {
-  };
-
   @NotNull
   public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome) throws IOException {
     return read(decompressed, welcome, NO_HOOKS);
@@ -208,10 +214,7 @@ public final class TracyEventReader {
   @NotNull
   public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome,
                                   @NotNull Hooks hooks) throws IOException {
-    TracyEventReader reader = new TracyEventReader(decompressed, welcome);
-    reader.hooks = hooks;
-    reader.readAll();
-    return reader.freeze(welcome);
+    return readSession(decompressed, welcome, hooks, null, false);
   }
 
   /**
@@ -223,11 +226,7 @@ public final class TracyEventReader {
   @NotNull
   public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome,
                                   @NotNull Hooks hooks, @NotNull ZoneSink zoneSink) throws IOException {
-    TracyEventReader reader = new TracyEventReader(decompressed, welcome);
-    reader.hooks = hooks;
-    reader.zoneSink = zoneSink;
-    reader.readAll();
-    return reader.freeze(welcome);
+    return readSession(decompressed, welcome, hooks, zoneSink, false);
   }
 
   /**
@@ -242,10 +241,15 @@ public final class TracyEventReader {
   public static TracySession readSalvaging(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome,
                                            @NotNull Hooks hooks,
                                            TracyEventReader.@Nullable ZoneSink zoneSink) throws IOException {
+    return readSession(decompressed, welcome, hooks, zoneSink, true);
+  }
+
+  private static TracySession readSession(InputStream decompressed, TracyWelcome welcome, Hooks hooks,
+                                          @Nullable ZoneSink zoneSink, boolean salvageTornStream) throws IOException {
     TracyEventReader reader = new TracyEventReader(decompressed, welcome);
     reader.hooks = hooks;
     reader.zoneSink = zoneSink;
-    reader.salvageTornStream = true;
+    reader.salvageTornStream = salvageTornStream;
     reader.readAll();
     return reader.freeze(welcome);
   }
@@ -298,7 +302,7 @@ public final class TracyEventReader {
           track(timeNs);
         }
         // system-tracing traffic, present only when the process ran with
-        // the privileges the OS backend needs (Windows ETW: elevated).
+        // the privileges the OS backend needs (on Windows: elevated).
         // Switches, wakeups and sampled callstacks share a THIRD delta
         // reference - each must advance it even where its payload is
         // discarded, or every later ctx time is wrong.
@@ -397,14 +401,14 @@ public final class TracyEventReader {
     return new SeriesBatch(frames, plotSlices, cpu, drainProcessCpu(end), memorySlices, sweeps, marks, names);
   }
 
-  /** The label a plot's points flush under; null while its name query is still unanswered. */
+  /** The label a plot's points flush under; null while its name query is still unanswered, unless {@code end}. */
   private @Nullable String plotName(long pointer, boolean end) {
     String resolved = plotNames.get(pointer);
     if (resolved != null) return resolved;
     return end ? "plot@" + Long.toHexString(pointer) : null;
   }
 
-  /** The label a pool's live-bytes points flush under; null while its name query is still unanswered. */
+  /** The label a pool's live-bytes points flush under; null while its name query is still unanswered, unless {@code end}. */
   private @Nullable String poolName(long pointer, boolean end) {
     if (pointer == 0) return "Memory";
     String resolved = strings.get(pointer);
@@ -465,12 +469,6 @@ public final class TracyEventReader {
     track(timeNs);
   }
 
-  /**
-   * The smallest free run that counts as a collection: a stray large-object
-   * free should not paint a GC marker.
-   */
-  private static final int MIN_SWEEP_FREES = 4;
-
   /** Wire order: serial-delta time, owning thread u32, pointer u64, 48-bit size. */
   private void readMemAlloc() throws IOException {
     long timeNs = advanceSerialTime(readLongLe(data));
@@ -523,9 +521,6 @@ public final class TracyEventReader {
     events.add(new TimelineEvent(currentThread, timeNs, text, color));
     track(timeNs);
   }
-
-  /** One process-CPU point per 100 ms of scheduler time: coarse enough to stay tiny, fine enough to zoom into. */
-  private static final long PROCESS_CPU_BUCKET_NS = 100_000_000;
 
   /**
    * Wire order: ctx-delta time, old thread u32, new thread u32, cpu u8,
@@ -713,15 +708,9 @@ public final class TracyEventReader {
       .toList();
     List<Long> frames = frameMarks.stream().map(ns -> ns - base).sorted().toList();
     Map<String, List<TracySession.PlotPoint>> rebasedPlots = new HashMap<>();
-    plots.forEach((pointer, points) -> {
-      String name = plotNames.getOrDefault(pointer, "plot@" + Long.toHexString(pointer));
-      rebasedPlots.put(name, rebase(points, base));
-    });
+    plots.forEach((pointer, points) -> rebasedPlots.put(plotName(pointer, true), rebase(points, base)));
     Map<String, List<TracySession.PlotPoint>> memoryCurves = new HashMap<>();
-    memPools.forEach((pointer, pool) -> {
-      String name = pointer == 0 ? "Memory" : strings.getOrDefault(pointer, "pool@" + Long.toHexString(pointer));
-      memoryCurves.put(name, rebase(pool.points, base));
-    });
+    memPools.forEach((pointer, pool) -> memoryCurves.put(poolName(pointer, true), rebase(pool.points, base)));
     List<TracySession.GcSweep> sweeps = gcSweeps.stream()
       .map(sweep -> new TracySession.GcSweep(sweep.startNs() - base, sweep.endNs() - base,
                                              sweep.freedBytes(), sweep.freedObjects()))
@@ -740,8 +729,8 @@ public final class TracyEventReader {
   private List<TracySession.PlotPoint> processCpuPoints(long base) {
     return processBusyNsByBucket.entrySet().stream()
       .sorted(Map.Entry.comparingByKey())
-      .map(entry -> new TracySession.PlotPoint(Math.max(entry.getKey() * PROCESS_CPU_BUCKET_NS - base, 0),
-                                               entry.getValue() * 100.0 / PROCESS_CPU_BUCKET_NS))
+      .map(TracyEventReader::processCpuPoint)
+      .map(point -> new TracySession.PlotPoint(Math.max(point.timeNs() - base, 0), point.value()))
       .toList();
   }
 
@@ -765,7 +754,7 @@ public final class TracyEventReader {
   }
 
   private void skip(int count) throws IOException {
-    TracyWireBytes.skip(data, count);
+    skipFully(data, count);
   }
 
   private byte[] readPayload(int length) throws IOException {

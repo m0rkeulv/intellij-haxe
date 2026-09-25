@@ -53,12 +53,12 @@ public final class HaxeRegisterBuildFileAction extends DumbAwareAction {
       .toList();
     if (moduleNames.isEmpty()) return;
     if (moduleNames.size() == 1) {
-      HaxeKnownBuildFiles.registerBuildFile(project, moduleNames.get(0), file, null);
+      HaxeKnownBuildFiles.registerBuildFile(project, moduleNames.getFirst(), file, null);
       return;
     }
 
     Module owner = ModuleUtilCore.findModuleForFile(file, project);
-    String preselected = owner != null ? owner.getName() : moduleNames.get(0);
+    String preselected = owner != null ? owner.getName() : moduleNames.getFirst();
     JBPopupFactory.getInstance()
       .createPopupChooserBuilder(moduleNames)
       .setTitle(HaxeBundle.message("haxe.register.build.file.module.chooser.title"))

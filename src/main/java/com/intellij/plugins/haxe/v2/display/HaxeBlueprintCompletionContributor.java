@@ -5,6 +5,7 @@ import com.intellij.codeInsight.completion.CompletionParameters;
 import com.intellij.codeInsight.completion.CompletionResultSet;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
@@ -12,19 +13,17 @@ import com.intellij.plugins.haxe.lang.psi.HaxeResolveResult;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import icons.HaxeIcons;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Adds macro-generated members from the compiler's post-macro blueprints to
  * identifier completion. The static contributors only see PSI declarations;
- * members that exist solely in generated code (HaxeUI XML components and the
- * like) come from the hydrated blueprint cache — no server round trip per
- * popup.
+ * members that exist solely in generated code (fields a macro builds from a
+ * layout file, for example) come from the hydrated blueprint cache, with no
+ * server round trip per popup.
  *
  * Unqualified positions complete the enclosing class's blueprint; qualified
  * ones ({@code this.}, {@code ClassName.}, {@code view.}) complete the
@@ -36,7 +35,6 @@ public class HaxeBlueprintCompletionContributor extends CompletionContributor {
   @Override
   public void fillCompletionVariants(@NotNull CompletionParameters parameters, @NotNull CompletionResultSet result) {
     PsiElement position = parameters.getPosition();
-    // position is the ID token; the reference expression is two parents up
     HaxeReference reference = PsiTreeUtil.getParentOfType(position, HaxeReference.class);
     if (reference == null) return;
 
@@ -52,7 +50,7 @@ public class HaxeBlueprintCompletionContributor extends CompletionContributor {
     }
     if (targetClass == null) return;
 
-    VirtualFile contextFile = fileOf(position);
+    VirtualFile contextFile = HaxeCompilerDisplayService.physicalFileOf(position);
     if (contextFile == null) return;
     TypeBlueprint blueprint = HaxeCompilerResolveService.getInstance(position.getProject())
       .blueprintForType(contextFile, targetClass.getQualifiedName());
@@ -78,16 +76,10 @@ public class HaxeBlueprintCompletionContributor extends CompletionContributor {
     if (model.getMember(member.name(), null) != null) return;
     LookupElementBuilder element = LookupElementBuilder.create(member.name())
       .withIcon(member.isMethod() ? HaxeIcons.Method : HaxeIcons.Field)
-      .withTailText(" (generated)", true);
+      .withTailText(" " + HaxeBundle.message("haxe.generated.completion.tail"), true);
     if (member.type() != null) {
       element = element.withTypeText(member.type().presentable());
     }
     result.addElement(element);
-  }
-
-  @Nullable
-  private static VirtualFile fileOf(@NotNull PsiElement element) {
-    PsiFile file = element.getContainingFile();
-    return file != null ? file.getOriginalFile().getVirtualFile() : null;
   }
 }

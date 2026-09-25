@@ -54,7 +54,6 @@ import static com.intellij.plugins.haxe.ide.completion.KeywordCompletionData.key
 import static com.intellij.plugins.haxe.ide.completion.KeywordCompletionData.keywordWithSpace;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
-import static com.intellij.plugins.haxe.util.UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments;
 import static com.intellij.plugins.haxe.util.UsefulPsiTreeUtil.getPrevSiblingSkipWhiteSpacesAndComments;
 import static java.util.function.Predicate.not;
 

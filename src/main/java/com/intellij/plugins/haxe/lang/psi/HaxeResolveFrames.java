@@ -26,8 +26,8 @@ import java.util.Set;
 /// ```
 ///
 /// THE CACHE GATE FRAME solves one problem: sometimes a resolve finishes
-/// but we know the answer is not trustworthy enough to save (the compute
-/// observed truncated data - see [HaxeEvaluationTaint]), and the
+/// with an answer not trustworthy enough to save (the compute observed
+/// truncated data - see [HaxeEvaluationTaint]), and the
 /// platform's ResolveCache would otherwise store it until the next PSI
 /// change. The platform only skips its cache write when a frame OUTSIDE its
 /// own is flagged with `prohibitResultCaching` - flags on frames
@@ -59,9 +59,9 @@ final class HaxeResolveFrames {
   private final RecursionGuard<PsiElement> cacheGateGuard = RecursionManager.createGuard("haxeResolveCacheGate");
 
   // Re-entry membership is tracked here, not via RecursionGuard.currentStack():
-  // that call walks EVERY guard frame on the thread and allocates a list, and
-  // at one check per resolve it dominated editing profiles on recursion-heavy
-  // files. The run* brackets push/pop; the checks are O(1) and allocation-free.
+  // that call walks EVERY guard frame on the thread and allocates a list, far
+  // too costly at one check per resolve. The run* brackets push/pop; the
+  // checks are O(1) and allocation-free.
   private static final ThreadLocal<Set<HaxeReference>> fullInProgress = identitySet();
   private static final ThreadLocal<Set<HaxeReference>> restrictedInProgress = identitySet();
 

@@ -3,9 +3,10 @@ package com.intellij.plugins.haxe.display.transport;
 import java.util.List;
 
 /**
- * The classified content of one server response: payload lines (the JSON-RPC
- * envelope for display requests, compiler output otherwise), log lines
- * (0x01-prefixed) and whether the fatal-error marker (0x02) appeared.
+ * One server response, classified by line: the payload lines joined (the
+ * JSON-RPC envelope for a display request, compiler output otherwise), the
+ * log lines (0x01-prefixed on the wire) and whether the fatal-error marker
+ * (0x02) appeared.
  */
 public record DisplayResponse(String payload, List<String> logs, boolean hasError) {
 }

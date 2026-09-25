@@ -87,7 +87,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   }
 
   @Override
-  public @NotNull Map<String, HaxeLanguageLevel> getModuleLanguageLevelOverrides() {
+  public @NotNull Map<String, HaxeLanguageLevel> getContainerLanguageLevelOverrides() {
     Map<String, HaxeLanguageLevel> result = new LinkedHashMap<>();
     state.moduleLanguageLevels.forEach((containerId, version) -> {
       HaxeLanguageLevel level = HaxeLanguageLevel.fromVersionString(version);
@@ -99,19 +99,19 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   }
 
   @Override
-  public void setModuleLanguageLevelOverrides(@NotNull Map<String, HaxeLanguageLevel> overrides) {
+  public void setContainerLanguageLevelOverrides(@NotNull Map<String, HaxeLanguageLevel> overrides) {
     Map<String, String> serialized = new TreeMap<>();
     overrides.forEach((containerId, level) -> serialized.put(containerId, level.getVersionString()));
     state.moduleLanguageLevels = serialized;
   }
 
   @Override
-  public @Nullable HaxeLanguageLevel getModuleLanguageLevelOverride(@NotNull String containerId) {
+  public @Nullable HaxeLanguageLevel getContainerLanguageLevelOverride(@NotNull String containerId) {
     return HaxeLanguageLevel.fromVersionString(state.moduleLanguageLevels.get(containerId));
   }
 
   @Override
-  public void setModuleLanguageLevelOverride(@NotNull String containerId, @Nullable HaxeLanguageLevel level) {
+  public void setContainerLanguageLevelOverride(@NotNull String containerId, @Nullable HaxeLanguageLevel level) {
     if (level == null) {
       state.moduleLanguageLevels.remove(containerId);
     }
@@ -122,7 +122,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
 
   @Override
   public @NotNull HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String containerId) {
-    HaxeLanguageLevel override = getModuleLanguageLevelOverride(containerId);
+    HaxeLanguageLevel override = getContainerLanguageLevelOverride(containerId);
     return override != null ? override : defaultLevelFor(containerId);
   }
 

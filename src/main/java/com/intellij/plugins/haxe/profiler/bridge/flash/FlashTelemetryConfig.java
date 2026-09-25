@@ -29,9 +29,9 @@ public final class FlashTelemetryConfig {
     Path home = Path.of(System.getProperty("user.home"));
     config = home.resolve(".telemetry.cfg");
     backup = home.resolve(".telemetry.cfg" + BACKUP_SUFFIX);
-    // SamplerEnabled turns on the stack ticks (debugger runtime only);
-    // CPUCapture the .player.cpu readings; DisplayObjectCapture the
-    // per-object render regions - all verified against AIR 26
+    // SamplerEnabled turns on the stack ticks (debugger runtime only),
+    // CPUCapture the .player.cpu readings, DisplayObjectCapture the
+    // per-object render regions
     written = """
       TelemetryAddress=127.0.0.1:%d
       SamplerEnabled=true
@@ -67,10 +67,10 @@ public final class FlashTelemetryConfig {
     }
   }
 
-  /** A session config from this class (any port): ours to overwrite or delete, never worth backing up. */
+  /** A session config written by this class (any port): overwritten or deleted, never backed up. */
   private static boolean isOurs(@NotNull Path file) throws IOException {
     String content = Files.readString(file);
-    // the loopback telemetry address followed by our fixed key set
+    // the loopback telemetry address followed by the fixed key set above
     return content.matches("(?s)TelemetryAddress=127\\.0\\.0\\.1:\\d+\\s+SamplerEnabled=true\\s+CPUCapture=true\\s+DisplayObjectCapture=true\\s*");
   }
 }

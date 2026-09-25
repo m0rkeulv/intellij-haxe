@@ -4,6 +4,11 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.execution.Executor;
+import com.intellij.execution.executors.DefaultDebugExecutor;
+import com.intellij.execution.executors.DefaultRunExecutor;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowLaunches;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
@@ -31,8 +36,12 @@ public final class HaxeRunProgramAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    if (project == null) return;
     if (panel.getSelectedUserObject() instanceof ProgramNode programNode) {
-      panel.executeProgram(programNode, debug);
+      Executor executor = debug ? DefaultDebugExecutor.getDebugExecutorInstance()
+                                : DefaultRunExecutor.getRunExecutorInstance();
+      HaxeToolWindowLaunches.runProgram(project, programNode, executor);
     }
   }
 

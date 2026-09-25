@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * (hxcpp is not), a tracy client sends a BroadcastMessage about once a
  * second on UDP port 8086 - the port is compile-time, TRACY_PORT moves only
  * the data port - naming its protocol version, data port and pid. The
- * message for OUR data port settles the version to offer before the first
- * handshake; a missed or blocked broadcast just leaves the probe ladder to
- * find it. The socket binds with address reuse so a Tracy GUI on the same
+ * message for the capture's data port settles the version to offer before
+ * the first handshake; a missed or blocked broadcast just leaves the probe
+ * ladder to find it. The socket binds with address reuse so a Tracy GUI on the same
  * machine (it listens on 8086 too) does not block the bind.
  */
 public final class TracyBroadcastListener implements AutoCloseable {
@@ -67,7 +67,7 @@ public final class TracyBroadcastListener implements AutoCloseable {
     }
   }
 
-  /** The version the client announced for our data port, once heard; null until then. */
+  /** The version the client announced for the capture's data port; null until heard. */
   @Nullable
   public TracyProtocolVersion heard() {
     return heard.get();

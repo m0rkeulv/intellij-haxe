@@ -69,7 +69,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     // context-health transitions arrive on background threads
     project.getMessageBus()
       .connect(toolWindow.getDisposable())
-      .subscribe(HaxeBuildConfigListener.TOPIC, () -> ApplicationManager.getApplication().invokeLater(() -> updateStatuses(project, toolWindow)));
+      .subscribe(HaxeBuildConfigListener.TOPIC, () -> updateStatusesLater(project, toolWindow));
 
     // closing a tab means "done with that SDK's server": stop the process and
     // forget the instance (on project close the manager kills everything anyway,
@@ -100,11 +100,6 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
   }
 
   /** Mirrors the manager's instance list into tabs; runs on the EDT (the topic delivers there). */
-  private static Icon statusIcon(boolean hasFailures, boolean running) {
-    if (hasFailures) return AllIcons.General.Error;
-    return running ? AllIcons.General.InspectionsOK : null;
-  }
-
   private static void syncTabs(@NotNull Project project, @NotNull ToolWindow toolWindow) {
     ContentManager contentManager = toolWindow.getContentManager();
     var serverInfos = HaxeCompilationServerManager.getInstance(project).getServers();
@@ -123,6 +118,10 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     updateStatuses(project, toolWindow);
   }
 
+  private static void updateStatusesLater(@NotNull Project project, @NotNull ToolWindow toolWindow) {
+    ApplicationManager.getApplication().invokeLater(() -> updateStatuses(project, toolWindow));
+  }
+
   /** Refreshes every tab's status view and its red/green tab icon. */
   private static void updateStatuses(@NotNull Project project, @NotNull ToolWindow toolWindow) {
     if (project.isDisposed()) return;
@@ -138,6 +137,12 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
       status.update(project, serverId);
       content.setIcon(statusIcon(status.hasFailures(), running));
     }
+  }
+
+  @Nullable
+  private static Icon statusIcon(boolean hasFailures, boolean running) {
+    if (hasFailures) return AllIcons.General.Error;
+    return running ? AllIcons.General.InspectionsOK : null;
   }
 
   @Nullable
@@ -169,8 +174,8 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     manager.addOutputListener(info.id(), listener);
 
     DefaultActionGroup toolbarGroup = new DefaultActionGroup();
-    toolbarGroup.add(new StartTabServerAction(project, info.id()));
-    toolbarGroup.add(new RestartTabServerAction(project, info.id()));
+    toolbarGroup.add(new StartTabServerAction(project, info.id(), false));
+    toolbarGroup.add(new StartTabServerAction(project, info.id(), true));
     toolbarGroup.add(new StopTabServerAction(project, info.id()));
 
     // console left, status view right - failures need selectable text, not tooltips
@@ -246,7 +251,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      e.getPresentation().setEnabled(!HaxeCompilationServerManager.getInstance(project).isRunning());
+      e.getPresentation().setEnabled(!HaxeCompilationServerManager.getInstance(project).isAnyRunning());
     }
 
     @Override
@@ -255,45 +260,22 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
     }
   }
 
+  /**
+   * Start (enabled while the server is stopped) and Restart (while it runs):
+   * restartServer on a dead instance is a plain start.
+   */
   private static final class StartTabServerAction extends DumbAwareAction {
     private final Project project;
     private final String serverId;
+    private final boolean restart;
 
-    StartTabServerAction(@NotNull Project project, @NotNull String serverId) {
-      super(HaxeBundle.message("haxe.server.console.start"), null, AllIcons.Actions.Execute);
+    StartTabServerAction(@NotNull Project project, @NotNull String serverId, boolean restart) {
+      super(HaxeBundle.message(restart ? "haxe.server.console.restart" : "haxe.server.console.start"),
+            null,
+            restart ? AllIcons.Actions.Restart : AllIcons.Actions.Execute);
       this.project = project;
       this.serverId = serverId;
-    }
-
-    @Override
-    public void actionPerformed(@NotNull AnActionEvent e) {
-      if (!HaxeProjectTrust.confirmForAction(project, HaxeBundle.message("haxe.trust.action.server.start"))) {
-        return;
-      }
-      // restartServer on a dead instance is a plain start; process creation must stay off the EDT
-      AppExecutorUtil.getAppExecutorService()
-        .execute(() -> HaxeCompilationServerManager.getInstance(project).restartServer(serverId));
-    }
-
-    @Override
-    public void update(@NotNull AnActionEvent e) {
-      e.getPresentation().setEnabled(!HaxeCompilationServerManager.getInstance(project).isRunning(serverId));
-    }
-
-    @Override
-    public @NotNull ActionUpdateThread getActionUpdateThread() {
-      return ActionUpdateThread.BGT;
-    }
-  }
-
-  private static final class RestartTabServerAction extends DumbAwareAction {
-    private final Project project;
-    private final String serverId;
-
-    RestartTabServerAction(@NotNull Project project, @NotNull String serverId) {
-      super(HaxeBundle.message("haxe.server.console.restart"), null, AllIcons.Actions.Restart);
-      this.project = project;
-      this.serverId = serverId;
+      this.restart = restart;
     }
 
     @Override
@@ -308,7 +290,8 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      e.getPresentation().setEnabled(HaxeCompilationServerManager.getInstance(project).isRunning(serverId));
+      boolean running = HaxeCompilationServerManager.getInstance(project).isRunning(serverId);
+      e.getPresentation().setEnabled(running == restart);
     }
 
     @Override

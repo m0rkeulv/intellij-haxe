@@ -9,8 +9,8 @@ import java.util.regex.Pattern;
 /**
  * One {@code Called from} line of a Haxe stack trace: the source file and
  * line it names, and where that span sits in the text. Two spellings exist:
- * the neko VM's own dump ({@code Called from openfl/filters/BlurFilter.hx
- * line 86}; a frame without source prints {@code Called from a C function})
+ * the neko VM's own dump ({@code Called from shapes/Circle.hx line 86}; a
+ * frame without source prints {@code Called from a C function})
  * and {@code haxe.CallStack}'s ({@code Called from Main.main (Main.hx line 12)},
  * HashLink spells it {@code Called from Main.main(Main.hx:12)}).
  */

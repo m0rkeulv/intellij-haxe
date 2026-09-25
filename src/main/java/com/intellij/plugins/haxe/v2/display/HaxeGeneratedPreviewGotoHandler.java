@@ -10,17 +10,16 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import lombok.CustomLog;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 
 /**
  * Redirects go-to-declaration on members that exist ONLY in the compiler's
- * post-macro world (blueprint-resolved, no source declaration) to the
+ * post-macro program (blueprint-resolved, no source declaration) to the
  * generated-code preview: a dump build produces the module's typed-AST text
  * and the caret lands on the member. The dump build runs under a cancelable
- * modal progress — canceling abandons the navigation, not the build; a
- * finished build still lands in the cache for the next attempt.
+ * modal progress. Canceling abandons the navigation, not the build: a build
+ * that finishes anyway lands in the cache for the next attempt.
  */
 @CustomLog
 public class HaxeGeneratedPreviewGotoHandler implements GotoDeclarationHandler {
@@ -41,8 +40,7 @@ public class HaxeGeneratedPreviewGotoHandler implements GotoDeclarationHandler {
     String dotPath = resolvedFile.getUserData(HaxeCompilerResolveService.BLUEPRINT_DOT_PATH);
     if (dotPath == null) return null;
 
-    PsiFile sourceFile = sourceElement.getContainingFile();
-    VirtualFile contextFile = sourceFile != null ? sourceFile.getOriginalFile().getVirtualFile() : null;
+    VirtualFile contextFile = HaxeCompilerDisplayService.physicalFileOf(sourceElement);
     if (contextFile == null) return null;
     HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile);
     if (context == null) return null;
@@ -50,6 +48,4 @@ public class HaxeGeneratedPreviewGotoHandler implements GotoDeclarationHandler {
     String memberName = reference.getReferenceName();
     return new PsiElement[]{HaxeGeneratedPreviewTarget.createElement(resolved, context, dotPath, memberName)};
   }
-
-
 }

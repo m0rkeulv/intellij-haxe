@@ -22,9 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Reads a build file's declared target, defines and library dependencies.
- * Call inside a read action. HXP files cannot be inspected statically —
- * they need `lime display` (planned) and report empty info for now.
+ * Reads a build file's declared target, defines and library dependencies
+ * statically; call inside a read action. HXP files are Haxe code and report
+ * empty info here: {@code HaxeLimeProjectInfoService} evaluates them (and
+ * lime/openfl projects with their conditions applied).
  */
 @CustomLog
 public final class HaxeBuildFileInspector {
@@ -42,7 +43,7 @@ public final class HaxeBuildFileInspector {
   @NotNull
   public static HaxeBuildFileInfo inspect(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
     // inspectSections never answers an empty list (unreadable files come back as one EMPTY info)
-    return inspectSections(project, buildFile).get(0);
+    return inspectSections(project, buildFile).getFirst();
   }
 
   /** One info per {@code --next} compilation section (see {@link #sectionContents}); non-hxml files have one. */

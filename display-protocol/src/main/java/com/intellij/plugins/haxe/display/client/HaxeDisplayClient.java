@@ -12,14 +12,17 @@ import java.util.List;
 import java.util.Map;
 import tools.jackson.databind.JsonNode;
 
-/// Typed requests against one `haxe --wait <port>` server. Every call is
-/// one connect-request-close exchange; `baseArgs` is the build's normal
-/// argument list (the display request rides on it — it defines the cache
-/// context the server answers from). Instances are cheap and stateless: create
-/// one per server address.
+/// Typed requests against one `haxe --wait <port>` server. Every call is one
+/// connect-request-close exchange.
+///
+/// `baseArgs` is the build's normal argument list. The display request is
+/// appended to it, and it selects the cache context the server answers from.
+///
+/// An instance holds no connection, only the server address and an optional
+/// observer, so creating one per request is fine.
 public class HaxeDisplayClient {
 
-  /** Notified after every request round-trip — the IDE records per-server metrics from it. */
+  /** Notified after every request round-trip; the IDE records per-server metrics from it. */
   public interface RequestObserver {
     void afterRequest(String method, long millis, boolean success);
   }
@@ -65,10 +68,10 @@ public class HaxeDisplayClient {
   }
 
   /**
-   * Whole-project diagnostics (empty params): every file the compile touches
-   * that has problems. Unlike the per-file form, dependencies' own parse
-   * errors surface here — the display parser is error-tolerant when a broken
-   * file is merely depended upon.
+   * Diagnostics for every file the compile touches (empty params). Unlike the
+   * per-file form, this also reports parse errors inside dependencies: the
+   * per-file request parses a broken dependency error-tolerantly and stays
+   * silent about it.
    */
   public List<FileDiagnostics> projectDiagnostics(List<String> baseArgs) throws DisplayRequestException {
     return DisplayJson.decodeDiagnostics(rpc(baseArgs, DisplayMethods.DIAGNOSTICS, Map.of()));
@@ -122,7 +125,7 @@ public class HaxeDisplayClient {
       "path", modulePath)));
   }
 
-  /** The post-macro blueprint of one type — all members with resolved types. */
+  /** The post-macro blueprint of one type: all its members with their types. */
   public TypeBlueprint typeBlueprint(List<String> baseArgs, String signature, String modulePath, String typeName)
     throws DisplayRequestException {
     JsonNode data = rpc(baseArgs, DisplayMethods.SERVER_TYPE, Map.of(
@@ -172,9 +175,9 @@ public class HaxeDisplayClient {
   }
 
   /**
-   * A failed compile answers with the compiler's error text as the payload,
-   * not a JSON envelope: an unparseable payload plus the error flag is a
-   * compiler failure, not a malformed response.
+   * A failed compile answers with the compiler's error text instead of a
+   * JSON envelope. An unparseable payload together with the error marker is
+   * therefore a compiler failure, not a malformed response.
    */
   private static JsonNode unwrapClassified(String method, DisplayResponse response) throws DisplayRequestException {
     try {
@@ -186,9 +189,8 @@ public class HaxeDisplayClient {
   }
 
   /**
-   * The compiler's explanation of a failure: usually its log lines (e.g. a
-   * define override making a library uncompilable) — surface their tail —
-   * and for a plain-text error report without logs, the payload itself.
+   * The compiler's explanation of a failure: the last few log lines when
+   * there are any, otherwise the payload of a plain-text error report.
    */
   private static String failureDetail(DisplayResponse response) {
     List<String> lines = response.logs().stream()

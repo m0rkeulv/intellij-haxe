@@ -23,7 +23,7 @@ public final class TracyLz4Stream extends InputStream {
 
   /** LZ4's maximum back-reference distance — how much output the next frame may reach into. */
   private static final int WINDOW_SIZE = 64 * 1024;
-  /** The client targets 256 KB per uncompressed frame (TracyProtocol.hpp TargetFrameSize). */
+  /** The client's target size of one uncompressed frame. */
   private static final int MAX_FRAME_SIZE = 256 * 1024;
   private static final byte[] NOTHING = new byte[0];
 

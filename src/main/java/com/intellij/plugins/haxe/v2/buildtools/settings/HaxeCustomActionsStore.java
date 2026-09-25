@@ -84,7 +84,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     if (container == null) return List.of();
     return container.actions.stream()
       .filter(action -> !StringUtil.isEmptyOrSpaces(action.name))
-      .map(action -> new CustomAction(action.name, StringUtil.notNullize(action.command), StringUtil.notNullize(action.workDirectory)))
+      .map(HaxeCustomActionsStore::toAction)
       .toList();
   }
 
@@ -111,6 +111,12 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     if (container != null) {
       container.actions.removeIf(action -> name.equals(action.name));
     }
+  }
+
+  @NotNull
+  private static CustomAction toAction(@NotNull ActionState actionState) {
+    String command = StringUtil.notNullize(actionState.command);
+    return new CustomAction(actionState.name, command, StringUtil.notNullize(actionState.workDirectory));
   }
 
   @NotNull

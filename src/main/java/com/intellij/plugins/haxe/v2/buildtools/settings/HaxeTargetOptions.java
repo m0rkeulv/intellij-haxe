@@ -69,7 +69,6 @@ public final class HaxeTargetOptions {
       .orElseGet(() -> defaultTarget(type, targets));
   }
 
-
   /**
    * The framework's declared default (each target enum's {@code DEFAULT}) —
    * reordering the configured list does not change it. The first row serves

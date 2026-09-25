@@ -3,6 +3,8 @@ package com.intellij.plugins.haxe.v2.toolwindow.actions;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowEditors;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.TargetNode;
@@ -23,8 +25,10 @@ public final class HaxeSelectTargetAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    if (project == null) return;
     if (panel.getSelectedUserObject() instanceof TargetNode targetNode && targetNode.selectable()) {
-      panel.showTargetPopup(targetNode, panel.getSelectionPopupPoint());
+      HaxeToolWindowEditors.showTargetPopup(project, targetNode, panel.getSelectionPopupPoint());
     }
   }
 

@@ -133,7 +133,7 @@ public final class HaxelibLocalDocs {
     }
     String ref = head.substring("ref: ".length()).trim();
     // strip only the ref namespace - branch names themselves may contain
-    // slashes (refs/heads/castlewars/prod -> castlewars/prod)
+    // slashes (refs/heads/feature/login -> feature/login)
     String headsPrefix = "refs/heads/";
     String branch = ref.startsWith(headsPrefix) ? ref.substring(headsPrefix.length()) : ref;
     String commit = readTrimmed(gitDir.resolve(ref));

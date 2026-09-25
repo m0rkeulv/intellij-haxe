@@ -11,16 +11,15 @@ import java.util.List;
 import static com.intellij.plugins.haxe.lang.psi.HaxeResolveChecks.*;
 
 /**
- * A util that allows us to perform faster isReferenceTo checks for local fields.
- * Normal resolve can be very slow for untyped parameters as the default Resolve
- * will attempt to find type in some of the resolve steps.
- *
- * Since this is just a check if the reference is to a local component,
- * we don't need to try to find EnumValues or class types.  we can
- * save time by just doing the local steps.
+ * A fast isReferenceTo for local-scoped targets (parameters, locals, local
+ * functions, capture variables, type parameters). Only the tree-walk resolve
+ * checks can reach such a target, so the full pipeline's expression-evaluating
+ * checks, which are slow for untyped parameters, are skipped.
  */
 public final class HaxeIsReferenceToUtil {
 
+  private HaxeIsReferenceToUtil() {
+  }
 
   /** Candidate kinds only the tree-walk check family can resolve to. */
   public static boolean isLocalScopedTarget(@NotNull HaxeComponentName componentName) {
@@ -56,10 +55,10 @@ public final class HaxeIsReferenceToUtil {
     if (result == null) result = checkIsSwitchVar(reference);
     if (result == null) result = checkCaptureVarReference(reference);
     if (result == null) result = checkByTreeWalk(reference, scope);
-    // Safe for bare switch-case identifiers (even one shadowing an enum value of the switched type)
-    // this fast path only answers for local-scoped targets, every full-pipeline check skipped here
-    // resolves only to non-local elements, and both pipelines run the same tree walk first,
-    // so a local target gets the same answer either way.
+    // Safe for bare switch-case identifiers, even one shadowing an enum value of
+    // the switched type: this path only answers for local-scoped targets, the
+    // full-pipeline checks skipped here resolve only to non-local elements, and
+    // both pipelines run the same tree walk first.
     if (result == null) result = checkCaptureVar(reference);
 
     if (result == null || result.isEmpty()) return Boolean.FALSE;
@@ -78,9 +77,7 @@ public final class HaxeIsReferenceToUtil {
     return parts != null && parts.length >= 2 && parts[0] != reference;
   }
 
-  /**
-   * Nearest enclosing function for parameters and locals, class for class typeParameters.
-   */
+  /** The nearest enclosing function for parameters and locals, the class for class type parameters. */
   private static @NotNull PsiElement declaringScope(HaxeComponentName target) {
     PsiElement declaration = target.getParent();
     PsiElement scope = PsiTreeUtil.getParentOfType(declaration, HaxeMethod.class, HaxeFunctionLiteral.class, HaxeClass.class);

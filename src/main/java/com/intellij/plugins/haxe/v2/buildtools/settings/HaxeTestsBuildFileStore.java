@@ -28,34 +28,6 @@ import java.util.function.Predicate;
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeTestsBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeTestsBuildFileStore implements PersistentStateComponent<HaxeTestsBuildFileStore.State> {
-  private final @Nullable Project project;
-
-  public HaxeTestsBuildFileStore(@NotNull Project project) {
-    this.project = project;
-  }
-
-  /** State tests exercise load/get/set without a project; no events fire then. */
-  @TestOnly
-  public HaxeTestsBuildFileStore() {
-    this.project = null;
-  }
-
-  // cached consumers (the gutter marker context) key on this; bumped on
-  // every mutation and on state load
-  private final SimpleModificationTracker modificationTracker = new SimpleModificationTracker();
-
-  private void notifyChanged() {
-    modificationTracker.incModificationCount();
-    if (project != null) {
-      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
-    }
-  }
-
-  /** Bumped on every marked-set change - cache dependencies use it. */
-  @NotNull
-  public ModificationTracker getModificationTracker() {
-    return modificationTracker;
-  }
 
   public static final class State {
     public List<ContainerTestsFile> testsFiles = new ArrayList<>();
@@ -67,11 +39,31 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     public String filePath;
   }
 
+  private final @Nullable Project project;
+  // cached consumers (the gutter marker context) key on this; bumped on
+  // every mutation and on state load
+  private final SimpleModificationTracker modificationTracker = new SimpleModificationTracker();
   private State state = new State();
+
+  public HaxeTestsBuildFileStore(@NotNull Project project) {
+    this.project = project;
+  }
+
+  /** State tests exercise load/get/set without a project; no events fire then. */
+  @TestOnly
+  public HaxeTestsBuildFileStore() {
+    this.project = null;
+  }
 
   @NotNull
   public static HaxeTestsBuildFileStore getInstance(@NotNull Project project) {
     return project.getService(HaxeTestsBuildFileStore.class);
+  }
+
+  /** Bumped on every marked-set change - cache dependencies use it. */
+  @NotNull
+  public ModificationTracker getModificationTracker() {
+    return modificationTracker;
   }
 
   @Override
@@ -111,20 +103,11 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
       .toList();
   }
 
-  /** Matches the entry identified by the container/path pair. */
-  @NotNull
-  private static Predicate<ContainerTestsFile> entryFor(@NotNull String containerId, @NotNull String filePath) {
-    return entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath);
-  }
-
   /** Marks a tests build file in the container (clearing any exclusion); already-marked files stay marked once. */
   public void markTestsFile(@NotNull String containerId, @NotNull String filePath) {
     boolean marked = state.testsFiles.stream().anyMatch(entryFor(containerId, filePath));
     if (!marked) {
-      ContainerTestsFile entry = new ContainerTestsFile();
-      entry.containerId = containerId;
-      entry.filePath = filePath;
-      state.testsFiles.add(entry);
+      state.testsFiles.add(newEntry(containerId, filePath));
     }
     state.excludedFiles.removeIf(entryFor(containerId, filePath));
     notifyChanged();
@@ -139,10 +122,7 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     state.testsFiles.removeIf(entryFor(containerId, filePath));
     boolean excluded = state.excludedFiles.stream().anyMatch(entryFor(containerId, filePath));
     if (!excluded) {
-      ContainerTestsFile entry = new ContainerTestsFile();
-      entry.containerId = containerId;
-      entry.filePath = filePath;
-      state.excludedFiles.add(entry);
+      state.excludedFiles.add(newEntry(containerId, filePath));
     }
     notifyChanged();
   }
@@ -193,5 +173,24 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
       if (segment.equals("tests")) return true;
     }
     return false;
+  }
+
+  /** Matches the entry identified by the container/path pair. */
+  @NotNull
+  private static Predicate<ContainerTestsFile> entryFor(@NotNull String containerId, @NotNull String filePath) {
+    return entry -> containerId.equals(entry.containerId) && filePath.equals(entry.filePath);
+  }
+
+  @NotNull
+  private static ContainerTestsFile newEntry(@NotNull String containerId, @NotNull String filePath) {
+    ContainerTestsFile entry = new ContainerTestsFile();
+    entry.containerId = containerId;
+    entry.filePath = filePath;
+    return entry;
+  }
+
+  private void notifyChanged() {
+    modificationTracker.incModificationCount();
+    HaxeBuildSettingsListener.publish(project);
   }
 }

@@ -17,6 +17,7 @@ import com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCach
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
 import com.intellij.plugins.haxe.model.evaluator.HaxeSwitchSubjectTypeCache;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorContext;
+import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionContextContainer;
 import com.intellij.plugins.haxe.model.evaluator.callexpression.HaxeCallExpressionEvaluation;
 import com.intellij.plugins.haxe.model.type.*;
@@ -50,16 +51,16 @@ import static com.intellij.plugins.haxe.model.type.SpecificTypeReference.*;
 import static com.intellij.plugins.haxe.util.HaxeDebugLogUtil.traceAs;
 import static com.intellij.plugins.haxe.util.HaxeResolveUtil.*;
 import static com.intellij.plugins.haxe.util.HaxeStringUtil.elide;
-import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 import static com.intellij.plugins.haxe.lang.psi.HaxeResolver.EMPTY_LIST;
 import static com.intellij.plugins.haxe.lang.psi.HaxeResolver.MAX_DEBUG_MESSAGE_LENGTH;
 
 /**
- * Collection of all the methods used by HaxeResolver to try to find a references.
- * Moved here to its own util class to try to ma HaxeResolver class simpler and easier to understand.
+ * The individual checks {@link HaxeResolver} runs, in its order, to resolve a
+ * reference. Each check answers the elements it resolved, or null to let the
+ * next check try.
  */
 @CustomLog
-public class HaxeResolveChecks {
+public final class HaxeResolveChecks {
 
   private HaxeResolveChecks() {
   }
@@ -149,30 +150,41 @@ public class HaxeResolveChecks {
           if(member != null) return List.of(member.getBasePsi());
 
         } else if (parentMeta.isType(MULTI_TYPE)) {
-          HaxeAbstractTypeDeclaration typeDeclaration = null;
-          // check if metadata is on first module member  first as matadatas are currently parsed as outside the module
-          PsiElement metaParent = parentMeta.getParent();
-          HaxeModule module = PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeModule.class);
-          if(module != null) {
-            typeDeclaration = PsiTreeUtil.getChildOfType(module, HaxeAbstractTypeDeclaration.class);
-          }else {
-            typeDeclaration = PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeAbstractTypeDeclaration.class);
-          }
-          if(typeDeclaration != null) {
-            HaxeGenericParam param = typeDeclaration.getGenericParam();
-            if(param != null) {
-              for (HaxeGenericListPart part : param.getGenericListPartList()) {
-                HaxeComponentName name = part.getComponentName();
-                if(name != null && name.textMatches(reference)) {
-                  return List.of(name);
-                }
-              }
-            }
-          }
+          return multiTypeParameter(parentMeta, reference);
         }
       }
         return null;
     }
+
+  /** A `@:multiType(T)` argument names a type parameter of the abstract the metadata annotates. */
+  @Nullable
+  private static List<? extends PsiElement> multiTypeParameter(HaxeMetadataCompileTimeMeta meta, HaxeReference reference) {
+    HaxeAbstractTypeDeclaration typeDeclaration = annotatedAbstract(meta);
+    HaxeGenericParam param = typeDeclaration == null ? null : typeDeclaration.getGenericParam();
+    if (param == null) return null;
+    for (HaxeGenericListPart part : param.getGenericListPartList()) {
+      HaxeComponentName name = part.getComponentName();
+      if (name != null && name.textMatches(reference)) {
+        return List.of(name);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Metadata before a module's first member parses outside the module, so
+   * the annotated abstract is either inside the next module or the next
+   * sibling itself.
+   */
+  @Nullable
+  private static HaxeAbstractTypeDeclaration annotatedAbstract(HaxeMetadataCompileTimeMeta meta) {
+    PsiElement metaParent = meta.getParent();
+    HaxeModule module = PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeModule.class);
+    if (module != null) {
+      return PsiTreeUtil.getChildOfType(module, HaxeAbstractTypeDeclaration.class);
+    }
+    return PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeAbstractTypeDeclaration.class);
+  }
 
   /**
    * Checks if reference is to a method or field that does not exist in the std but that the compiler accepts
@@ -620,7 +632,7 @@ public class HaxeResolveChecks {
         if(index> -1) {
           HaxeModel modelForElement = getModelForElement(objectLiteral.getParent());
           if (modelForElement instanceof HaxeBaseMemberModel fieldModel) {
-            HaxeModel fieldTypeModel = getGetModelFromResultHolder(fieldModel.getResultType());
+            HaxeModel fieldTypeModel = getGetModelFromResultHolder(fieldModel.getResultType(null));
             if(fieldTypeModel instanceof HaxeClassModel fieldClassModel) {
               return fieldClassModel.getMember(objectLiteralElement.getName(), null);
             }
@@ -820,8 +832,8 @@ public class HaxeResolveChecks {
         }
 
 
-        HaxePsiField field = findFieldIfNull(fieldFromReferenceExpression, referenceParent);
-        HaxeParameter parameter = findParameterIfNull(parameterFromReferenceExpression, referenceParent);
+        HaxePsiField field = fieldOrEnclosing(fieldFromReferenceExpression, referenceParent);
+        HaxeParameter parameter = parameterOrEnclosing(parameterFromReferenceExpression, referenceParent);
         HaxeTypeTag tag = null;
         HaxeVarInit init = null;
         if (field != null) {
@@ -1225,26 +1237,13 @@ public class HaxeResolveChecks {
 
           HaxeMethod method = PsiTreeUtil.getParentOfType(reference, HaxeMethod.class);
           if (method != null && method.getGenericParam() != null) {
-            for (HaxeGenericParamModel param : method.getModel().getGenericParams()) {
-              HaxeClass aClass = param.haxeClass;
-              HaxeComponentName name = aClass.getComponentName();
-              if (name != null && reference.textMatches(name)) {
-                HaxeNamedComponent component = aClass.getTypeComponent();
-                if (component != null) return List.of(component);
-              }
-            }
+            List<? extends PsiElement> methodParameter = typeParameterComponent(reference, method.getModel().getGenericParams());
+            if (methodParameter != null) return methodParameter;
           }
 
           HaxeClass haxeClass = PsiTreeUtil.getParentOfType(reference, HaxeClass.class);
           if (haxeClass != null && haxeClass.getGenericParam() != null) {
-            for (HaxeGenericParamModel param : haxeClass.getModel().getGenericParams()) {
-              HaxeClass aClass = param.haxeClass;
-              HaxeComponentName name = aClass.getComponentName();
-              if (name != null && reference.textMatches(name)) {
-                HaxeNamedComponent component = aClass.getTypeComponent();
-                if (component != null) return List.of(component);
-              }
-            }
+            return typeParameterComponent(reference, haxeClass.getModel().getGenericParams());
           }
         }else {
           HaxeGenericParam genericParam = PsiTreeUtil.getParentOfType(reference, HaxeGenericParam.class);
@@ -1257,6 +1256,19 @@ public class HaxeResolveChecks {
             }
           }
         }
+      }
+    }
+    return null;
+  }
+
+  /** The type component of the parameter named like the reference, or null. */
+  @Nullable
+  private static List<? extends PsiElement> typeParameterComponent(HaxeReference reference, List<HaxeGenericParamModel> params) {
+    for (HaxeGenericParamModel param : params) {
+      HaxeComponentName name = param.haxeClass.getComponentName();
+      if (name != null && reference.textMatches(name)) {
+        HaxeNamedComponent component = param.haxeClass.getTypeComponent();
+        if (component != null) return List.of(component);
       }
     }
     return null;
@@ -1295,7 +1307,7 @@ public class HaxeResolveChecks {
         }
       }
     } else if (parent instanceof HaxeExtractorMatchAssignExpression assignExpression) {
-      // Last attempt to resolve  enum value (not extractor), normally imports would solve this but  some typedefs can omit HaxeResolveChecks.
+      // Last attempt to resolve  enum value (not extractor), normally imports would solve this but  some typedefs can omit the import.
       HaxeSwitchStatement type = PsiTreeUtil.getParentOfType(reference, HaxeSwitchStatement.class);
       if (type != null) {
         HaxeExpression expression = type.getExpression();
@@ -2045,9 +2057,6 @@ public class HaxeResolveChecks {
   /// For instance, it will find a type constraint from a subClass if the reference is a type parameter
   /// for a sub-class.  For example: `myType<K:constrainedType> extends superType<K>` will
   /// resolve to `constrainedType` if the reference being resolved is the second `K`.
-  ///
-  /// @param reference
-  /// @return
   static List<? extends PsiElement> checkByTreeWalk(HaxeReference reference,  @Nullable PsiElement maxScope) {
     boolean shouldCollectAll = reference.getParent() instanceof HaxeCallExpression;
 
@@ -2699,6 +2708,7 @@ public class HaxeResolveChecks {
     }
   }
 
+  /** The first overload the call site fits, as its component name. */
   private static @Nullable List<? extends PsiElement> checkMethodOverloads(HaxeReference reference, List<HaxeBaseMemberModel> members) {
     // this is probably far from the best solution for method overloads but it seems to work for method calls
     // it wont work for function type assign, but might attempt to add that later if its necessary (mlo).
@@ -2707,7 +2717,7 @@ public class HaxeResolveChecks {
         if (reference.getParent() instanceof HaxeCallExpression callExpression) {
           HaxeCallExpressionEvaluation evaluate = cachedHaxeCallExpressionEvaluation(methodModel.getMethod(), callExpression);
           if (evaluate != null && evaluate.isValid()) {
-            return Collections.singletonList(member.getNameOrBasePsi()); // should be ComponentName
+            return Collections.singletonList(member.getNameOrBasePsi());
           }
         } else if (reference.getParent() instanceof HaxeCallExpressionList argumentList) {
           int argIndex = argumentList.getExpressionList().indexOf(reference);
@@ -2722,7 +2732,7 @@ public class HaxeResolveChecks {
                     if (parameterType != null) {
                       SpecificFunctionReference functionType = methodModel.getFunctionType(null);
                       if (functionType.canAssign(parameterType)) {
-                        return Collections.singletonList(member.getNameOrBasePsi());// // should be ComponentName
+                        return Collections.singletonList(member.getNameOrBasePsi());
                       }
                     }
                   }
@@ -2742,7 +2752,7 @@ public class HaxeResolveChecks {
             if(expected  != null) {
               ResultHolder functionType = methodModel.getFunctionType(null).createHolder();
               if(functionType.canAssign(expected)){
-                return Collections.singletonList(member.getNameOrBasePsi()); // should be ComponentName
+                return Collections.singletonList(member.getNameOrBasePsi());
               }
             }
           }
@@ -2758,7 +2768,7 @@ public class HaxeResolveChecks {
       HaxeCallExpressionContextContainer contextContainer = createContextForConstructorCall(newExpression, constructor.getMethod().getModel());
       HaxeCallExpressionEvaluation evaluation = contextContainer.evaluateContexts();
       if (evaluation != null && evaluation.isValid()) {
-        return Collections.singletonList(constructor.getNameOrBasePsi()); // should be ComponentName
+        return Collections.singletonList(constructor.getNameOrBasePsi());
       }
     }
     return null;
@@ -2924,15 +2934,13 @@ public class HaxeResolveChecks {
     return componentName;
   }
 
-
-
-  private static HaxePsiField findFieldIfNull(@Nullable HaxePsiField fromReference, PsiElement referenceParent) {
+  private static HaxePsiField fieldOrEnclosing(@Nullable HaxePsiField fromReference, PsiElement referenceParent) {
     if (fromReference != null) return fromReference;
     return PsiTreeUtil.getParentOfType(referenceParent, HaxePsiField.class, true,
                                        HaxeCallExpression.class, HaxeNewExpression.class);
   }
 
-  private static HaxeParameter findParameterIfNull(@Nullable HaxeParameter fromReference, PsiElement referenceParent) {
+  private static HaxeParameter parameterOrEnclosing(@Nullable HaxeParameter fromReference, PsiElement referenceParent) {
     if (fromReference != null) return fromReference;
     return PsiTreeUtil.getParentOfType(referenceParent, HaxeParameter.class, true,
                                        HaxeCallExpression.class, HaxeNewExpression.class);

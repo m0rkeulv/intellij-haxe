@@ -19,10 +19,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Watches a profiled run for its dump file. Every lane writes it only on an
- * orderly shutdown — a killed process, including the IDE Stop button,
- * produces nothing — so the exit notification either opens the snapshot or
- * shows the caller's lane-specific explanation of why there is none.
+ * The profiling lanes' user-facing outcome. {@link #watch} follows a run
+ * whose dump file appears only on an orderly shutdown (a killed process,
+ * including the IDE Stop button, produces nothing); the capture receivers
+ * report through the shared helpers. An outcome lands in the run's profiler
+ * tab when it has one, else in a notification.
  */
 public final class HaxeProfilingNotifier {
 
@@ -31,7 +32,7 @@ public final class HaxeProfilingNotifier {
 
   /**
    * {@code missingMessageKey}: a HaxeProfilerBundle key taking the exit code
-   * as {0} — each lane explains its own dump rules. With a {@code session}
+   * as {0}; each lane explains its own dump rules. With a {@code session}
    * the outcome lands in its profiler tab instead of a notification.
    */
   public static void watch(@NotNull Project project, @NotNull ProcessHandler handler,
@@ -54,17 +55,12 @@ public final class HaxeProfilingNotifier {
         session.dataReady();
       }
       else {
-        notifySnapshotWritten(project, dumpPath);
+        String content = HaxeProfilerBundle.message("haxe.profiler.dump.written", dumpPath.toString());
+        notifySnapshotReady(project, content, dumpPath);
       }
       return;
     }
-    String content = HaxeProfilerBundle.message(missingMessageKey, exitCode);
-    if (session != null) {
-      session.failed(content);
-    }
-    else {
-      group().createNotification(content, NotificationType.WARNING).notify(project);
-    }
+    reportNothingCaptured(project, session, HaxeProfilerBundle.message(missingMessageKey, exitCode));
   }
 
   private static boolean writtenSince(Path dumpPath, long startedAt) {
@@ -76,25 +72,35 @@ public final class HaxeProfilingNotifier {
     }
   }
 
-  private static void notifySnapshotWritten(Project project, Path dumpPath) {
-    String content = HaxeProfilerBundle.message("haxe.profiler.dump.written", dumpPath.toString());
+  /** Announces a finished snapshot with an action opening it, or revealing the file where no profiler viewer exists. */
+  public static void notifySnapshotReady(@NotNull Project project, @NotNull String content, @NotNull Path snapshot) {
     Notification notification = group().createNotification(content, NotificationType.INFORMATION);
-
     HaxeProfilerSnapshotOpener opener = HaxeProfilerSnapshotOpener.getInstance();
     if (opener != null) {
       String openText = HaxeProfilerBundle.message("haxe.profiler.dump.open");
-      notification.addAction(NotificationAction.createSimpleExpiring(openText, () -> opener.open(project, dumpPath)));
+      notification.addAction(NotificationAction.createSimpleExpiring(openText, () -> opener.open(project, snapshot)));
     }
     else {
-      // no IU profiler present - at least lead the user to the file
-      notification.addAction(NotificationAction.createSimple(RevealFileAction.getActionName(),
-                                                            () -> RevealFileAction.openFile(dumpPath.toFile())));
+      String revealText = RevealFileAction.getActionName();
+      notification.addAction(NotificationAction.createSimple(revealText, () -> RevealFileAction.openFile(snapshot.toFile())));
     }
     notification.notify(project);
   }
 
+  /** Explains an empty capture in the run's profiler tab, or in a warning when the run has none. */
+  public static void reportNothingCaptured(@NotNull Project project, @Nullable HaxeProfilerProcessUi.Session session,
+                                           @NotNull String content) {
+    if (session != null) {
+      session.failed(content);
+    }
+    else {
+      group().createNotification(content, NotificationType.WARNING).notify(project);
+    }
+  }
+
+  /** The profiling notification group. */
   @NotNull
-  private static NotificationGroup group() {
+  public static NotificationGroup group() {
     return NotificationGroupManager.getInstance().getNotificationGroup("haxe.profiler");
   }
 }

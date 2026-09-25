@@ -370,8 +370,6 @@ public class HaxeCallExpressionContext {
         return evaluation;
     }
 
-
-
     private boolean isBindIgnoreArgument(CallExpressionArgumentModel argumentModel) {
         return isBindCall && argumentModel.getPsiElement().textMatches("_");
     }

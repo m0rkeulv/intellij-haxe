@@ -32,6 +32,7 @@ import com.intellij.plugins.haxe.runner.neko.NekoConfigurationFactory;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserConfigurationFactory;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionConfigurationFactory;
 import com.intellij.util.containers.ContainerUtil;
+import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -42,11 +43,14 @@ import javax.swing.*;
  * dialog shows them nested under a single Haxe node:
  * <ul>
  *   <li>HXCPP Application (legacy) — the old hxcpp.DebugSocket debugger</li>
+ *   <li>Haxe Action — one action of a build file</li>
  *   <li>HashLink Application</li>
  *   <li>HXCPP Application (IntelliJ)</li>
  *   <li>HXCPP Application (vshaxe)</li>
+ *   <li>Interp (eval) Application</li>
  *   <li>Browser Application</li>
- *   <li>Haxe Flash Application</li>
+ *   <li>Haxe Flash Application and AIR Application</li>
+ *   <li>Neko Application</li>
  * </ul>
  *
  * Compatibility: the type keeps the historical id
@@ -93,7 +97,7 @@ public class HaxeRunConfigurationType implements ConfigurationType {
   }
 
   public Icon getIcon() {
-    return icons.HaxeIcons.HAXE_LOGO;
+    return HaxeIcons.HAXE_LOGO;
   }
 
   @NotNull

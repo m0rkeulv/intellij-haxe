@@ -29,9 +29,8 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 public class HaxeLexer extends LookAheadLexer {
   // PPBODY: the flex lexer runs the FULL rule set over inactive conditional
   // branches and remaps every token (whitespace included) to PPBODY, so a
-  // branch is a contiguous run; merging folds it into one blob token per
-  // region between directives - the unit the inactive-branch handling
-  // (post-format alignment, later lazy parsing) operates on
+  // branch is a contiguous run; merging folds it into one token per region
+  // between directives, the chameleon HaxeInactiveBodyElementType parses
   private static final TokenSet tokensToMerge = TokenSet.create(
     MSL_COMMENT,
     MML_COMMENT,

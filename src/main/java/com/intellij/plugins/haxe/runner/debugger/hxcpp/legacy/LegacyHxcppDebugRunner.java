@@ -14,6 +14,7 @@ import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugProcessStarter;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerManager;
+import com.intellij.xdebugger.XSessionStartedResult;
 import java.io.IOException;
 import org.jetbrains.annotations.NotNull;
 
@@ -44,31 +45,32 @@ public class LegacyHxcppDebugRunner extends GenericProgramRunner<RunnerSettings>
     LegacyHxcppRunConfiguration configuration = (LegacyHxcppRunConfiguration)environment.getRunProfile();
     Module module = configuration.requireModule();
 
-    XDebugSession debugSession = XDebuggerManager.getInstance(environment.getProject())
-      .startSession(environment, new XDebugProcessStarter() {
-        @NotNull
-        @Override
-        public XDebugProcess start(@NotNull XDebugSession session) throws ExecutionException {
-          try {
-            LegacyHxcppDebugProcess debugProcess =
-              new LegacyHxcppDebugProcess(session, module, configuration.getPort());
-            if (configuration.isRemoteDebugging()) {
-              debugProcess.info(
-                HaxeDebuggerBundle.message("legacy.hxcpp.runner.listening", configuration.getPort()));
-            }
-            else {
-              debugProcess.setExecutionResult(
-                state.execute(environment.getExecutor(), LegacyHxcppDebugRunner.this));
-            }
-            debugProcess.start();
-            return debugProcess;
+    XDebugProcessStarter starter = new XDebugProcessStarter() {
+      @NotNull
+      @Override
+      public XDebugProcess start(@NotNull XDebugSession session) throws ExecutionException {
+        try {
+          LegacyHxcppDebugProcess debugProcess = new LegacyHxcppDebugProcess(session, module, configuration.getPort());
+          if (configuration.isRemoteDebugging()) {
+            debugProcess.info(HaxeDebuggerBundle.message("legacy.hxcpp.runner.listening", configuration.getPort()));
           }
-          catch (IOException e) {
-            throw new ExecutionException(e.getMessage(), e);
+          else {
+            debugProcess.setExecutionResult(state.execute(environment.getExecutor(), LegacyHxcppDebugRunner.this));
           }
+          debugProcess.start();
+          return debugProcess;
         }
-      });
-
-    return debugSession.getRunContentDescriptor();
+        catch (IOException e) {
+          throw new ExecutionException(e.getMessage(), e);
+        }
+      }
+    };
+    // the session builder hands the descriptor back split-debugger-safely
+    // (XDebugSession's own getRunContentDescriptor is deprecated)
+    XSessionStartedResult started = XDebuggerManager.getInstance(environment.getProject())
+      .newSessionBuilder(starter)
+      .environment(environment)
+      .startSession();
+    return started.getRunContentDescriptor();
   }
 }

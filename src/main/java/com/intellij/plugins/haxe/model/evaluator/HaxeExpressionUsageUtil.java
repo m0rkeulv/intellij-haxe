@@ -69,11 +69,8 @@ public class HaxeExpressionUsageUtil {
     if (index == -1) return null;
 
     if (resolved instanceof HaxeMethod method) {
-      // evaluate-with-hole: the call must not evaluate the argument whose
-      // type this query exists to determine - the hole removes the re-entry
-      // that previously ended in the evaluator's recursion guard. Served
-      // from the call cache: this runs once per usage per reference resolve,
-      // and rebuilding the context each time dominated editing profiles.
+      // the argument being typed is the call's hole: evaluating it would re-enter
+      // this query. Cached, since this runs once per usage per reference resolve.
       HoleEvaluation evaluated = HaxeCallExpressionEvaluatorCacheService.cachedHoleEvaluation(method, callExpression, index);
       if (evaluated != null) {
         int parameterIndex = evaluated.staticExtension() ? index + 1 : index;
@@ -91,9 +88,7 @@ public class HaxeExpressionUsageUtil {
     if (list != null) index = list.indexOf(referenceExpression);
     if (index == -1) return null;
     ResultHolder  assignHint=  lookForAssignHints(newExpression);
-    // evaluate-with-hole: the call must not evaluate the argument whose
-    // type this query exists to determine - the hole removes the re-entry
-    // that previously ended in the evaluator's recursion guard
+    // the argument being typed is the call's hole: evaluating it would re-enter this query
     HaxeCallExpressionContextContainer contextContainer = HaxeCallExpressionUtil.createContextForConstructorCall(newExpression, assignHint, index);
     HaxeCallExpressionEvaluation evaluation = contextContainer.evaluateContexts();
       if(evaluation != null) {
@@ -138,9 +133,7 @@ public class HaxeExpressionUsageUtil {
     int index = -1;
     if (list != null) index = list.getExpressionList().indexOf(referenceExpression);
     if (index == -1) return null;
-    // evaluate-with-hole: the call must not evaluate the argument whose
-    // type this query exists to determine - the hole removes the re-entry
-    // that previously ended in the evaluator's recursion guard
+    // the argument being typed is the call's hole: evaluating it would re-enter this query
     HaxeCallExpressionContext context = HaxeCallExpressionUtil.createContextForFunctionCall(callExpression, functionReference, index);
     HaxeCallExpressionEvaluation evaluated = context.evaluate();
     if (context.isStaticExtension) index++;

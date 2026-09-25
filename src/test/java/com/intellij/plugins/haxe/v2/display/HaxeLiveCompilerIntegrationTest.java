@@ -33,7 +33,7 @@ import java.util.List;
  * synchronous seams: production scheduling is disabled in unit-test mode, and
  * a stepping debugger session stays deterministic.
  */
-@DisplayName("Live compiler integration: catalog, resolve and completion (live)")
+@DisplayName("Compiler services: compiler integration (live)")
 public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestCase {
 
   private static final String GENERATED_FQN = "gen.GeneratedThing";
@@ -48,10 +48,9 @@ public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestC
     assumeTrue(haxeAvailable(), "haxe not on PATH - skipping live compiler integration test");
 
     // real files on disk: the compilation server compiles what the fixture copied
-    myFixture.copyFileToProject("build.hxml");
+    VirtualFile buildFile = myFixture.copyFileToProject("build.hxml");
     myFixture.copyFileToProject("Main.hx");
-    VirtualFile buildFile = myFixture.copyFileToProject("GenMacro.hx").getParent().findChild("build.hxml");
-    assertNotNull(buildFile);
+    myFixture.copyFileToProject("GenMacro.hx");
 
     // the module's Build command supplies the display context (same wiring the
     // tool window's Compile command row writes)
@@ -135,5 +134,4 @@ public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestC
     UIUtil.dispatchAllInvocationEvents();
     catalog.fillNowForTests();
   }
-
 }

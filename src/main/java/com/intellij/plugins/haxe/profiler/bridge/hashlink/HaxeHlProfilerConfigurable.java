@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.bridge.hashlink;
 
 import com.intellij.openapi.options.UnnamedConfigurable;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.ui.components.JBTextField;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -41,11 +42,6 @@ final class HaxeHlProfilerConfigurable implements UnnamedConfigurable {
 
   /** A non-numeric entry falls back to the stored value rather than failing apply. */
   private int parsedSamples() {
-    try {
-      return Integer.parseInt(samplesField.getText().trim());
-    }
-    catch (NumberFormatException e) {
-      return state.getSamplesPerSecond();
-    }
+    return StringUtil.parseInt(samplesField.getText().trim(), state.getSamplesPerSecond());
   }
 }

@@ -7,7 +7,6 @@ import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.plugins.haxe.HaxeToolkitLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.inspections.resolve.HaxeUnresolvedSymbolInspection;
-import com.intellij.util.ArrayUtil;
 
 import java.util.HashSet;
 import java.util.List;

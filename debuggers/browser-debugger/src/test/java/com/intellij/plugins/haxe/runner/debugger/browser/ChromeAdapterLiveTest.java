@@ -25,9 +25,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/// Test that verifies live that we can connect and start a debugger session with a Chrome browser.
-/// We don't do nay breakpoints here, but verify that we can connect and capture output.
-/// Require a Chrome-based browser, Node.js and Haxe and utest (Haxe test framework)
+/// Runs a utest tests build in a Chrome-family browser through the js-debug adapter
+/// and checks that the session connects and captures the test output (no
+/// breakpoints). Needs a Chrome-family browser, node, haxe and utest.
 @DisplayName("Browser debugger: test capture (live)")
 public class ChromeAdapterLiveTest {
   private static final long TIMEOUT = 15_000;

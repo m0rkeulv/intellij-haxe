@@ -18,16 +18,18 @@ import java.util.Map;
 import static com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexDataUtil.createIndexData;
 
 public class HaxeFullyQualifiedNameIndexer implements DataIndexer<String, HaxeComponentIndexData, FileContent> {
-  private final CollectType collectType;
 
-  public HaxeFullyQualifiedNameIndexer(CollectType type) {
-      collectType = type;
-  }
-
-    public enum CollectType{
+    /** Which qualified names one index keys: each FQN index gets its own indexer instance. */
+    public enum CollectType {
         TYPES,
         MEMBERS,
         MODULES
+    }
+
+    private final CollectType collectType;
+
+    public HaxeFullyQualifiedNameIndexer(CollectType type) {
+        collectType = type;
     }
 
     @Override
@@ -41,18 +43,16 @@ public class HaxeFullyQualifiedNameIndexer implements DataIndexer<String, HaxeCo
                 return Map.of();
             }
 
-
-
             HaxeModule module = haxeFile.getModule();
             if(module != null && module.getModel() instanceof HaxeModuleModel moduleModel ) {
-              List<HaxeClassModel> classes = moduleModel.getClasses();
-              Map<String, HaxeComponentIndexData> indexDataMap = new HashMap<>();
-                switch (collectType){
-                  case MODULES -> indexDataMap.put(moduleModel.getQName(), createIndexData(moduleModel));
-                  case TYPES -> indexDataMap.putAll(collectAllClasses(classes));
-                  case MEMBERS -> {
-                      indexDataMap.putAll(collectAllClassMembers(classes));
-                      indexDataMap.putAll(collectAllModuleMembers(moduleModel));
+                List<HaxeClassModel> classes = moduleModel.getClasses();
+                Map<String, HaxeComponentIndexData> indexDataMap = new HashMap<>();
+                switch (collectType) {
+                    case MODULES -> indexDataMap.put(moduleModel.getQName(), createIndexData(moduleModel));
+                    case TYPES -> indexDataMap.putAll(collectAllClasses(classes));
+                    case MEMBERS -> {
+                        indexDataMap.putAll(collectAllClassMembers(classes));
+                        indexDataMap.putAll(collectAllModuleMembers(moduleModel));
                     }
                 }
                 return indexDataMap;
@@ -122,4 +122,3 @@ public class HaxeFullyQualifiedNameIndexer implements DataIndexer<String, HaxeCo
         return result;
     }
 }
-

@@ -108,7 +108,7 @@ public class HaxeCompilerProjectSettingsTest {
   public void effectiveLevelFallsBackToDefault() {
     HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.setDefaultLanguageLevel(HaxeLanguageLevel.HAXE_4_2);
-    settings.setModuleLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_3_4);
+    settings.setContainerLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_3_4);
 
     assertEquals(HaxeLanguageLevel.HAXE_3_4, settings.getEffectiveLanguageLevel("app"));
     assertEquals(HaxeLanguageLevel.HAXE_4_2, settings.getEffectiveLanguageLevel("lib"));
@@ -118,10 +118,10 @@ public class HaxeCompilerProjectSettingsTest {
   @DisplayName("clearing an override restores default")
   public void clearingAnOverrideRestoresDefault() {
     HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
-    settings.setModuleLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_4_0);
-    settings.setModuleLanguageLevelOverride("app", null);
+    settings.setContainerLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_4_0);
+    settings.setContainerLanguageLevelOverride("app", null);
 
-    assertNull(settings.getModuleLanguageLevelOverride("app"));
+    assertNull(settings.getContainerLanguageLevelOverride("app"));
     assertEquals(settings.getDefaultLanguageLevel(), settings.getEffectiveLanguageLevel("app"));
   }
 
@@ -129,11 +129,11 @@ public class HaxeCompilerProjectSettingsTest {
   @DisplayName("overrides map replaces previous entries")
   public void overridesMapReplacesPreviousEntries() {
     HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
-    settings.setModuleLanguageLevelOverride("old", HaxeLanguageLevel.HAXE_4_0);
-    settings.setModuleLanguageLevelOverrides(Map.of("app", HaxeLanguageLevel.HAXE_4_1));
+    settings.setContainerLanguageLevelOverride("old", HaxeLanguageLevel.HAXE_4_0);
+    settings.setContainerLanguageLevelOverrides(Map.of("app", HaxeLanguageLevel.HAXE_4_1));
 
-    assertNull(settings.getModuleLanguageLevelOverride("old"));
-    assertEquals(Map.of("app", HaxeLanguageLevel.HAXE_4_1), settings.getModuleLanguageLevelOverrides());
+    assertNull(settings.getContainerLanguageLevelOverride("old"));
+    assertEquals(Map.of("app", HaxeLanguageLevel.HAXE_4_1), settings.getContainerLanguageLevelOverrides());
   }
 
   @Test
@@ -141,8 +141,8 @@ public class HaxeCompilerProjectSettingsTest {
   public void stateSurvivesXmlSerializationRoundTrip() {
     HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.setDefaultLanguageLevel(HaxeLanguageLevel.HAXE_4_3);
-    settings.setModuleLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_5_0);
-    settings.setModuleLanguageLevelOverride("legacy", HaxeLanguageLevel.HAXE_3_4);
+    settings.setContainerLanguageLevelOverride("app", HaxeLanguageLevel.HAXE_5_0);
+    settings.setContainerLanguageLevelOverride("legacy", HaxeLanguageLevel.HAXE_3_4);
 
     Element serialized = XmlSerializer.serialize(settings.getState());
     HaxeCompilerProjectSettings.State deserialized =
@@ -152,8 +152,8 @@ public class HaxeCompilerProjectSettingsTest {
     reloaded.loadState(deserialized);
 
     assertEquals(HaxeLanguageLevel.HAXE_4_3, reloaded.getDefaultLanguageLevel());
-    assertEquals(HaxeLanguageLevel.HAXE_5_0, reloaded.getModuleLanguageLevelOverride("app"));
-    assertEquals(HaxeLanguageLevel.HAXE_3_4, reloaded.getModuleLanguageLevelOverride("legacy"));
+    assertEquals(HaxeLanguageLevel.HAXE_5_0, reloaded.getContainerLanguageLevelOverride("app"));
+    assertEquals(HaxeLanguageLevel.HAXE_3_4, reloaded.getContainerLanguageLevelOverride("legacy"));
   }
 
   @Test
@@ -167,8 +167,8 @@ public class HaxeCompilerProjectSettingsTest {
     settings.loadState(state);
 
     assertEquals(HaxeLanguageLevel.latest(), settings.getDefaultLanguageLevel());
-    assertNull(settings.getModuleLanguageLevelOverride("app"));
-    assertTrue(settings.getModuleLanguageLevelOverrides().isEmpty());
+    assertNull(settings.getContainerLanguageLevelOverride("app"));
+    assertTrue(settings.getContainerLanguageLevelOverrides().isEmpty());
   }
 
   @Test

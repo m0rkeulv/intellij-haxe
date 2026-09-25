@@ -1,12 +1,12 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -15,11 +15,13 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibCommandUtils;
+import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibPathParser.LibrarySection;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import lombok.CustomLog;
@@ -47,6 +49,9 @@ public final class HaxeLibrarySync {
 
   public static final String MANAGED_PREFIX = "haxelib: ";
 
+  /** The toolchain libraries hxp build scripts import from. */
+  private static final List<String> HXP_TOOLCHAIN_LIBRARIES = List.of("hxp", "lime");
+
   private HaxeLibrarySync() {
   }
 
@@ -71,8 +76,8 @@ public final class HaxeLibrarySync {
     new Task.Backgroundable(project, HaxeBundle.message("haxe.library.sync.progress"), false) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        Map<Module, List<HaxeBuildFileInfo.HaxeLibDependency>> dependencies =
-          ReadAction.computeBlocking(() -> collectDependencies(project));
+        Map<Module, List<HaxeLibDependency>> dependencies =
+          HaxeReadActions.compute(() -> collectDependencies(project));
         Map<String, Map<String, List<String>>> byModuleName = new LinkedHashMap<>();
         dependencies.forEach((module, moduleDependencies) ->
           byModuleName.put(module.getName(), resolveClasspaths(project, module, moduleDependencies, indicator)));
@@ -84,19 +89,16 @@ public final class HaxeLibrarySync {
   }
 
   @NotNull
-  static Map<Module, List<HaxeBuildFileInfo.HaxeLibDependency>> collectDependencies(@NotNull Project project) {
-    Map<Module, List<HaxeBuildFileInfo.HaxeLibDependency>> dependencies = new LinkedHashMap<>();
+  static Map<Module, List<HaxeLibDependency>> collectDependencies(@NotNull Project project) {
+    Map<Module, List<HaxeLibDependency>> dependencies = new LinkedHashMap<>();
     for (Module module : ModuleManager.getInstance(project).getModules()) {
       List<HaxeBuildFile> buildFiles = HaxeKnownBuildFiles.forModule(project, module);
       List<HaxeBuildFile> sources = dependencySources(project, module, buildFiles);
 
-      List<HaxeBuildFileInfo.HaxeLibDependency> moduleDependencies = new ArrayList<>();
+      List<HaxeLibDependency> moduleDependencies = new ArrayList<>();
       for (HaxeBuildFile buildFile : sources) {
-        for (HaxeBuildFileInfo.HaxeLibDependency dependency : effectiveLibraries(project, module, buildFile)) {
-          boolean known = moduleDependencies.stream().anyMatch(existing -> existing.name().equals(dependency.name()));
-          if (!known) {
-            moduleDependencies.add(dependency);
-          }
+        for (HaxeLibDependency dependency : effectiveLibraries(project, module, buildFile)) {
+          addIfNameAbsent(moduleDependencies, dependency);
         }
       }
       addHxpToolchainLibraries(buildFiles, moduleDependencies);
@@ -113,15 +115,19 @@ public final class HaxeLibrarySync {
    * only the compiler will complain.
    */
   private static void addHxpToolchainLibraries(@NotNull List<HaxeBuildFile> buildFiles,
-                                               @NotNull List<HaxeBuildFileInfo.HaxeLibDependency> dependencies) {
+                                               @NotNull List<HaxeLibDependency> dependencies) {
     boolean hasHxpScript = buildFiles.stream()
       .anyMatch(file -> file.type() == HaxeBuildFileType.HXP_PROJECT || file.type() == HaxeBuildFileType.HXP_SCRIPT);
     if (!hasHxpScript) return;
-    for (String lib : List.of("hxp", "lime")) {
-      boolean known = dependencies.stream().anyMatch(existing -> existing.name().equals(lib));
-      if (!known) {
-        dependencies.add(new HaxeBuildFileInfo.HaxeLibDependency(lib, null));
-      }
+    for (String library : HXP_TOOLCHAIN_LIBRARIES) {
+      addIfNameAbsent(dependencies, new HaxeLibDependency(library, null));
+    }
+  }
+
+  private static void addIfNameAbsent(@NotNull List<HaxeLibDependency> dependencies, @NotNull HaxeLibDependency dependency) {
+    boolean known = dependencies.stream().anyMatch(existing -> existing.name().equals(dependency.name()));
+    if (!known) {
+      dependencies.add(dependency);
     }
   }
 
@@ -133,7 +139,7 @@ public final class HaxeLibrarySync {
    * only the legacy lime-display path ran (its hxml has no -lib entries).
    */
   @NotNull
-  private static List<HaxeBuildFileInfo.HaxeLibDependency> effectiveLibraries(@NotNull Project project,
+  private static List<HaxeLibDependency> effectiveLibraries(@NotNull Project project,
                                                                               @NotNull Module module,
                                                                               @NotNull HaxeBuildFile buildFile) {
     HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
@@ -191,12 +197,12 @@ public final class HaxeLibrarySync {
     return null;
   }
 
-  /** The container's marked (or convention-suggested) tests build files that this module owns - gating shared via {@link HaxeTestFrameworks#testsBuildPaths}. */
+  /** The container's marked (or convention-suggested) tests build files that this module owns (see {@link HaxeTestFrameworks#testsBuildPaths}). */
   @NotNull
   private static List<HaxeBuildFile> testsBuildFiles(@NotNull Project project,
                                                      @NotNull Module module,
                                                      @NotNull List<HaxeBuildFile> buildFiles) {
-    Map<String, List<HaxeBuildFileInfo.HaxeLibDependency>> librariesByPath = new LinkedHashMap<>();
+    Map<String, List<HaxeLibDependency>> librariesByPath = new LinkedHashMap<>();
     for (HaxeBuildFile buildFile : buildFiles) {
       librariesByPath.put(buildFile.file().getPath(), HaxeBuildSections.inspectSelected(project, buildFile).libraries());
     }
@@ -218,35 +224,27 @@ public final class HaxeLibrarySync {
     for (HaxeBuildFile buildFile : scanned) {
       if (buildFile.file().getPath().equals(path)) return buildFile;
     }
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    return type == null ? null : new HaxeBuildFile(file, type);
+    return HaxeBuildFileScanner.findBuildFile(project, path);
   }
 
   private static boolean ownedBy(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull Module module) {
     return HaxeContainers.containerIdFor(project, buildFile.file()).equals(module.getName());
   }
 
-
   @NotNull
   private static Map<String, List<String>> resolveClasspaths(@NotNull Project project,
                                                              @NotNull Module module,
-                                                             @NotNull List<HaxeBuildFileInfo.HaxeLibDependency> dependencies,
+                                                             @NotNull List<HaxeLibDependency> dependencies,
                                                              @NotNull ProgressIndicator indicator) {
     VirtualFile workDir = ProjectUtil.guessProjectDir(project);
     Sdk sdk = HaxeToolPathResolver.resolveSdk(project, module.getName());
     Map<String, List<String>> libraries = new LinkedHashMap<>();
     if (sdk != null && workDir != null) {
-      for (HaxeBuildFileInfo.HaxeLibDependency dependency : dependencies) {
+      for (HaxeLibDependency dependency : dependencies) {
         indicator.setText2(dependency.name());
         List<String> output = haxelibPathOutput(sdk, workDir, dependency);
-        // one External Libraries entry PER library in the output: `haxelib
-        // path` prints the requested lib and its transitive dependencies, and
-        // attaching the whole closure to the requested lib's entry mounts
-        // dependency sources under the wrong library (and duplicates type
-        // definitions when entries disagree on a dependency's version)
-        for (HaxelibPathParser.LibrarySection section : HaxelibPathParser.parseSections(dependency.name(), output)) {
+        // one External Libraries entry PER library in the output (see HaxelibPathParser.parseSections)
+        for (LibrarySection section : HaxelibPathParser.parseSections(dependency.name(), output)) {
           if (section.classpaths().isEmpty()) continue;
           String version = sectionVersion(section, dependency);
           String entryName = version == null ? section.name() : section.name() + " " + version;
@@ -260,8 +258,8 @@ public final class HaxeLibrarySync {
 
   /// The section carries its own version; the queried library itself may only know it from the dependency.
   @Nullable
-  private static String sectionVersion(HaxelibPathParser.LibrarySection section,
-                                       HaxeBuildFileInfo.HaxeLibDependency dependency) {
+  private static String sectionVersion(LibrarySection section,
+                                       HaxeLibDependency dependency) {
     if (section.version() != null) return section.version();
     return section.name().equals(dependency.name()) ? dependency.version() : null;
   }
@@ -271,7 +269,7 @@ public final class HaxeLibrarySync {
    * {@code -D} marker still names the release in the checkout's
    * haxelib.json, so the entry says which it really is.
    */
-  private static boolean isScmCheckout(HaxelibPathParser.LibrarySection section) {
+  private static boolean isScmCheckout(LibrarySection section) {
     for (String classpath : section.classpaths()) {
       String[] segments = classpath.replace('\\', '/').split("/");
       for (int i = 1; i < segments.length; i++) {
@@ -296,13 +294,12 @@ public final class HaxeLibrarySync {
   @NotNull
   private static List<String> haxelibPathOutput(@NotNull Sdk sdk,
                                                 @NotNull VirtualFile workDir,
-                                                @NotNull HaxeBuildFileInfo.HaxeLibDependency dependency) {
+                                                @NotNull HaxeLibDependency dependency) {
     String spec = dependency.name();
-    // a release version like 1.2.3 can be passed to `haxelib path`; git/path specs cannot
-    if (dependency.version() != null && dependency.version().matches("\\d+(\\.\\d+)*([-.].*)?")) {
+    // a release version can be passed to `haxelib path`; git/path specs cannot
+    if (HaxelibSemVer.isReleaseVersion(dependency.version())) {
       spec += ":" + dependency.version();
     }
     return HaxelibCommandUtils.issueHaxelibCommand(sdk, workDir, "path", spec);
   }
-
 }

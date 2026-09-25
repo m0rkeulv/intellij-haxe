@@ -88,7 +88,7 @@ public class HaxeIncompatibleInitializationInspection extends HaxeInspection {
       }
 
       if (!leftType.canAssign(rightType) && !rightType.canAssign(leftType)) {
-        // the haxe compiler seems to always mark the right expression as incorrect so we do the same
+        // the haxe compiler marks the right-hand expression as incorrect; so does the inspection
         HaxeStandardAnnotation.typeMismatch(reporter, right, leftType.toPresentationString(), rightType.toPresentationString()).create();
       }
     }

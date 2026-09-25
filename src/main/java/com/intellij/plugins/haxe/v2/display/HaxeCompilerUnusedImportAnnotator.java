@@ -9,16 +9,14 @@ import com.intellij.plugins.haxe.display.protocol.Diagnostic;
 import com.intellij.plugins.haxe.display.protocol.DiagnosticKind;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiFile;
-import java.util.List;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Unused imports straight from the compiler's {@code display/diagnostics},
- * with a remove-the-import quick fix from the reported range. While its
- * toggle is on it REPLACES the plugin's own unused-import inspection (which
- * gates itself off), so the compiler's post-macro view is the single source
- * of truth for what an import is worth.
+ * with a quick fix removing the reported range. While its toggle is on it
+ * REPLACES the plugin's own unused-import inspection (which gates itself
+ * off), so the compiler's post-macro view alone decides whether an import is
+ * used.
  */
 public class HaxeCompilerUnusedImportAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
@@ -33,22 +31,19 @@ public class HaxeCompilerUnusedImportAnnotator extends HaxeCompilerDiagnosticsAn
   }
 
   @Override
-  public void apply(@NotNull PsiFile file, @Nullable List<Diagnostic> diagnostics, @NotNull AnnotationHolder holder) {
-    if (diagnostics == null) return;
-    Document document = file.getViewProvider().getDocument();
-    if (document == null) return;
-    for (Diagnostic diagnostic : diagnostics) {
-      if (diagnostic.kind() != DiagnosticKind.UNUSED_IMPORT) continue;
-      TextRange range = HaxeDiagnosticsFetcher.toTextRange(document, diagnostic.range());
-      if (range == null) continue;
+  protected boolean handles(@NotNull PsiFile file, @NotNull Diagnostic diagnostic) {
+    return diagnostic.kind() == DiagnosticKind.UNUSED_IMPORT;
+  }
 
-      HaxeReplaceRangeQuickFix fix = new HaxeReplaceRangeQuickFix(
-        HaxeBundle.message("haxe.diagnostics.fix.remove.import"), range, document.getText(range), "");
-      holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), HaxeBundle.message("haxe.diagnostics.unused.import"))
-        .range(range)
-        .highlightType(ProblemHighlightType.LIKE_UNUSED_SYMBOL)
-        .withFix(fix)
-        .create();
-    }
+  @Override
+  protected void annotate(@NotNull AnnotationHolder holder, @NotNull PsiFile file, @NotNull Document document,
+                          @NotNull Diagnostic diagnostic, @NotNull TextRange range) {
+    String fixName = HaxeBundle.message("haxe.diagnostics.fix.remove.import");
+    HaxeReplaceRangeQuickFix fix = new HaxeReplaceRangeQuickFix(fixName, range, document.getText(range), "");
+    holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), HaxeBundle.message("haxe.diagnostics.unused.import"))
+      .range(range)
+      .highlightType(ProblemHighlightType.LIKE_UNUSED_SYMBOL)
+      .withFix(fix)
+      .create();
   }
 }

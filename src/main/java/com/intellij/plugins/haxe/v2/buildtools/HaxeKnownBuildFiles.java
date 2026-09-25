@@ -66,7 +66,7 @@ public final class HaxeKnownBuildFiles {
     String stored = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
     if (stored != null) return stored;
     List<HaxeBuildFile> known = all(project);
-    return known.size() == 1 ? known.get(0).file().getPath() : null;
+    return known.size() == 1 ? known.getFirst().file().getPath() : null;
   }
 
   /**

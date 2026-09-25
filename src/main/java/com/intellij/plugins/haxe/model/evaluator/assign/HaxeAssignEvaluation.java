@@ -6,8 +6,6 @@ import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeTypeParameterDeclaration;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeTypeParameterScope;
 import com.intellij.plugins.haxe.model.*;
-import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
-import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorContext;
 import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;

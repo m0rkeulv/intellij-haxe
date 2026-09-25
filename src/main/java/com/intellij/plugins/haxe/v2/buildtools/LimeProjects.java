@@ -52,7 +52,9 @@ public final class LimeProjects {
   public static final Set<String> BROWSER_TARGETS = Set.of("html5");
 
   /** The app file every lime platform falls back to when the project xml declares none. */
-  public static final String DEFAULT_APP_FILE = "MyApplication";
+  private static final String DEFAULT_APP_FILE = "MyApplication";
+
+  private static final String AIR_SDK_DEFINE_PREFIX = "-DAIR_SDK=";
 
   private LimeProjects() {
   }
@@ -65,7 +67,7 @@ public final class LimeProjects {
 
   /** The declared {@code <app file>} name, or lime's default when the project xml declares none. */
   @NotNull
-  public static String appFileOrDefault(@Nullable String declaredAppFile) {
+  private static String appFileOrDefault(@Nullable String declaredAppFile) {
     return StringUtil.defaultIfEmpty(declaredAppFile, DEFAULT_APP_FILE);
   }
 
@@ -96,10 +98,10 @@ public final class LimeProjects {
     return HaxeTargetOptions.targetFlagsFor(type, HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file));
   }
 
-  /// A `haxelib run lime|openfl …` invocation. The lime tool forwards a
-  /// trailing `--connect <port>` pair into the haxe builds it generates
-  /// (CommandLineTools.hx treats --connect as a haxeflag whose next argument is
-  /// captured with it), so these commands can use the compilation server too.
+  /// Whether the command is a `haxelib run lime|openfl …` invocation. The lime
+  /// tool treats `--connect` as a haxe flag and forwards it together with the
+  /// port after it into the haxe builds it generates, so these commands can
+  /// use the compilation server too.
   public static boolean isToolCommand(@NotNull List<String> command) {
     if (command.size() < 3 || !"run".equals(command.get(1))) return false;
     String tool = command.get(2);
@@ -113,8 +115,8 @@ public final class LimeProjects {
                                            @NotNull VirtualFile file,
                                            @NotNull HaxeBuildFileType type,
                                            @NotNull String actionName) {
-    List<String> command = new ArrayList<>(List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
-                                                   "run", toolFor(type), actionName, file.getName()));
+    String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
+    List<String> command = new ArrayList<>(List.of(haxelib, "run", toolFor(type), actionName, file.getName()));
     List<String> targetFlags = selectedTargetFlags(project, type, file);
     command.addAll(targetFlags);
     command.addAll(airSdkDefine(project, targetFlags));
@@ -135,7 +137,7 @@ public final class LimeProjects {
     String flexSdkName = HaxeToolPathResolver.resolveFlexSdkName(project, null);
     Sdk sdk = flexSdkName == null ? null : ProjectJdkTable.getInstance().findJdk(flexSdkName);
     if (sdk == null || sdk.getHomePath() == null) return List.of();
-    return List.of("-DAIR_SDK=" + sdk.getHomePath());
+    return List.of(AIR_SDK_DEFINE_PREFIX + sdk.getHomePath());
   }
 
   /**
@@ -165,8 +167,8 @@ public final class LimeProjects {
         return null;
       }
       if (output.getExitCode() != 0) {
-        LOG.warn(tool + " display failed (exit " + output.getExitCode() + ") for " + fileName + " " + targetFlag
-                 + ": " + StringUtil.trimLog(output.getStderr(), 500));
+        String stderr = StringUtil.trimLog(output.getStderr(), 500);
+        LOG.warn(tool + " display failed (exit " + output.getExitCode() + ") for " + fileName + " " + targetFlag + ": " + stderr);
         return null;
       }
       List<String> arguments = HxmlArguments.parseLines(output.getStdoutLines());
@@ -195,8 +197,8 @@ public final class LimeProjects {
   @NotNull
   public static Map<String, String> commandEnvironment(@NotNull List<String> command) {
     for (String argument : command) {
-      if (argument.startsWith("-DAIR_SDK=")) {
-        return Map.of("AIR_SDK", argument.substring("-DAIR_SDK=".length()));
+      if (argument.startsWith(AIR_SDK_DEFINE_PREFIX)) {
+        return Map.of("AIR_SDK", argument.substring(AIR_SDK_DEFINE_PREFIX.length()));
       }
     }
     return Map.of();
@@ -276,7 +278,12 @@ public final class LimeProjects {
   /** The export subdirectory a target builds into; "cpp" is the tool's alias for the host platform. */
   @NotNull
   private static String targetDirectory(@NotNull String targetFlag) {
-    if (!targetFlag.equals("cpp")) return targetFlag;
+    return targetFlag.equals("cpp") ? hostPlatformTarget() : targetFlag;
+  }
+
+  /** The lime target naming the host desktop platform. */
+  @NotNull
+  public static String hostPlatformTarget() {
     if (SystemInfo.isWindows) return "windows";
     return SystemInfo.isMac ? "mac" : "linux";
   }

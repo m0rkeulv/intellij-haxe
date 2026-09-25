@@ -4,6 +4,8 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ModuleNode;
@@ -27,9 +29,11 @@ public final class HaxeRunUnitTestsAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    if (project == null) return;
     String buildFilePath = panel.resolveTestsPath(panel.getSelectedUserObject());
     if (buildFilePath != null) {
-      panel.runUnitTests(buildFilePath);
+      HaxeTestRunConfigurations.run(project, buildFilePath);
     }
   }
 

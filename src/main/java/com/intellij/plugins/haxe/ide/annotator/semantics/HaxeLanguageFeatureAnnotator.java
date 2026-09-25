@@ -22,8 +22,8 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Flags language constructs the module's language level does not support:
  * newer syntax below its introduction level, and constructs removed at the
- * level in use. The feature/level pairs come from doc/haxe-language-levels.md;
- * the grammar accepts the superset, so these are post-parse checks.
+ * level in use. The grammar accepts the superset of all levels, so these
+ * are post-parse checks.
  */
 public class HaxeLanguageFeatureAnnotator implements Annotator, DumbAware {
 
@@ -32,33 +32,7 @@ public class HaxeLanguageFeatureAnnotator implements Annotator, DumbAware {
     if (AnnotatorUtil.shouldSkip(element)) return;
 
     if (element instanceof LeafPsiElement leaf) {
-      IElementType type = leaf.getElementType();
-      if (type == HaxeTokenTypes.OQUEST_DOT) {
-        requireLevel(holder, element, HaxeLanguageLevel.HAXE_4_3, "haxe.feature.safe.navigation");
-      }
-      else if (type == HaxeTokenTypes.KFINAL) {
-        // every final position (fields, locals, classes, methods) is 4.0+;
-        // 3.4 only had the @:final metadata, which is META text, not this token
-        requireLevel(holder, element, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.final.keyword",
-                     HaxeSyntaxMigrationFixes.finalKeywordDowngradeFix(element));
-      }
-      else if (type == HaxeTokenTypes.KEXTERN && isMemberModifierContext(element)) {
-        // the extern CLASS keyword is old; extern as a FIELD/METHOD modifier is
-        // 4.0+ (3.4 spelled it @:extern)
-        requireLevel(holder, element, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.extern.field.modifier",
-                     HaxeSyntaxMigrationFixes.externModifierDowngradeFix(element));
-      }
-      else if (type == HaxeTokenTypes.OBIT_AND && isIntersectionTypeContext(element)) {
-        requireLevel(holder, element, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.intersection.types");
-      }
-      else if (type == HaxeTokenTypes.LITBIN && !HaxeLanguageLevelUtil.isAtLeast(element, HaxeLanguageLevel.HAXE_5_0)) {
-        // WARNING, not error: the plugin's lexer has always accepted 0b
-        // literals, but the compiler only gained them in Haxe 5
-        HaxeStandardAnnotation.requiresLanguageLevel(holder, element, HaxeLanguageLevel.HAXE_5_0,
-                                                     HaxeBundle.message("haxe.feature.binary.literals"),
-                                                     HighlightSeverity.WARNING)
-          .create();
-      }
+      annotateLeaf(leaf, holder);
       return;
     }
 
@@ -80,15 +54,7 @@ public class HaxeLanguageFeatureAnnotator implements Annotator, DumbAware {
         requireLevel(holder, nameOrSelf(method), HaxeLanguageLevel.HAXE_4_2, "haxe.feature.module.fields");
       case HaxeKeyValueIterator iterator ->
         requireLevel(holder, iterator, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.key.value.iterators");
-      case HaxeAbstractTypeDeclaration declaration -> {
-        // the enum/abstract keywords live under the ABSTRACT_CLASS_TYPE child
-        HaxeAbstractClassType classType = PsiTreeUtil.getChildOfType(declaration, HaxeAbstractClassType.class);
-        ASTNode enumToken = classType == null ? null : classType.getNode().findChildByType(HaxeTokenTypes.KENUM);
-        if (enumToken != null) {
-          requireLevel(holder, enumToken.getPsi(), HaxeLanguageLevel.HAXE_4_0, "haxe.feature.enum.abstract",
-                       HaxeSyntaxMigrationFixes.enumKeywordDowngradeFix(enumToken.getPsi()));
-        }
-      }
+      case HaxeAbstractTypeDeclaration declaration -> checkEnumAbstract(declaration, holder);
       case HaxeFunctionLiteral literal -> checkArrowFunction(literal, holder);
       case HaxePropertyAccessor accessor -> checkPropertyAccessor(accessor, holder);
       case HaxeCatchStatement catchStatement -> checkUntypedCatch(catchStatement, holder);
@@ -96,6 +62,50 @@ public class HaxeLanguageFeatureAnnotator implements Annotator, DumbAware {
       case HaxeReferenceExpression reference -> checkApiMigration(reference, holder);
       default -> { }
     }
+  }
+
+  /** Token-level features: operators and keywords whose mere presence needs a level. */
+  private static void annotateLeaf(@NotNull LeafPsiElement leaf, @NotNull AnnotationHolder holder) {
+    IElementType type = leaf.getElementType();
+    if (type == HaxeTokenTypes.OQUEST_DOT) {
+      requireLevel(holder, leaf, HaxeLanguageLevel.HAXE_4_3, "haxe.feature.safe.navigation");
+    }
+    else if (type == HaxeTokenTypes.KFINAL) {
+      // every final position (fields, locals, classes, methods) is 4.0+;
+      // 3.4 only had the @:final metadata, which is META text, not this token
+      requireLevel(holder, leaf, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.final.keyword",
+                   HaxeSyntaxMigrationFixes.finalKeywordDowngradeFix(leaf));
+    }
+    else if (type == HaxeTokenTypes.KEXTERN && isMemberModifierContext(leaf)) {
+      // the extern CLASS keyword is old; extern as a FIELD/METHOD modifier is
+      // 4.0+ (3.4 spelled it @:extern)
+      requireLevel(holder, leaf, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.extern.field.modifier",
+                   HaxeSyntaxMigrationFixes.externModifierDowngradeFix(leaf));
+    }
+    else if (type == HaxeTokenTypes.OBIT_AND && isIntersectionTypeContext(leaf)) {
+      requireLevel(holder, leaf, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.intersection.types");
+    }
+    else if (type == HaxeTokenTypes.LITBIN) {
+      checkBinaryLiteral(leaf, holder);
+    }
+  }
+
+  /** A WARNING, not an error: the plugin's lexer has always accepted 0b literals, but the compiler only gained them in Haxe 5. */
+  private static void checkBinaryLiteral(@NotNull LeafPsiElement literal, @NotNull AnnotationHolder holder) {
+    if (HaxeLanguageLevelUtil.isAtLeast(literal, HaxeLanguageLevel.HAXE_5_0)) return;
+    String feature = HaxeBundle.message("haxe.feature.binary.literals");
+    HaxeStandardAnnotation.requiresLanguageLevel(holder, literal, HaxeLanguageLevel.HAXE_5_0, feature, HighlightSeverity.WARNING)
+      .create();
+  }
+
+  /** The {@code enum} of {@code enum abstract} is 4.0+ (the keywords live under the ABSTRACT_CLASS_TYPE child). */
+  private static void checkEnumAbstract(@NotNull HaxeAbstractTypeDeclaration declaration, @NotNull AnnotationHolder holder) {
+    HaxeAbstractClassType classType = PsiTreeUtil.getChildOfType(declaration, HaxeAbstractClassType.class);
+    ASTNode enumToken = classType == null ? null : classType.getNode().findChildByType(HaxeTokenTypes.KENUM);
+    if (enumToken == null) return;
+    PsiElement keyword = enumToken.getPsi();
+    requireLevel(holder, keyword, HaxeLanguageLevel.HAXE_4_0, "haxe.feature.enum.abstract",
+                 HaxeSyntaxMigrationFixes.enumKeywordDowngradeFix(keyword));
   }
 
   /** The `catch (e)` shorthand (implicit haxe.Exception) is 4.1+. */

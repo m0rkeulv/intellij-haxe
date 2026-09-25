@@ -3,7 +3,6 @@ package com.intellij.plugins.haxe.ide.hint.types;
 import com.intellij.codeInsight.hints.declarative.*;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
-import com.intellij.plugins.haxe.lang.psi.HaxeResolver;
 import com.intellij.plugins.haxe.lang.psi.HaxeSwitchCaseCaptureVar;
 import com.intellij.plugins.haxe.lang.psi.HaxeSwitchCaseExpr;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;

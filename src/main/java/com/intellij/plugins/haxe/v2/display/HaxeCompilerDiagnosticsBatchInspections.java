@@ -6,21 +6,21 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Batch identities for the compiler-diagnostics external annotators. Pairing
- * ({@link com.intellij.lang.annotation.ExternalAnnotator#getPairedBatchInspectionShortName})
+ * an annotator with one ({@code ExternalAnnotator.getPairedBatchInspectionShortName})
  * does two things: Inspect Code runs the annotator at all (unpaired external
- * annotators are skipped in batch mode) and its findings land under the Haxe
+ * annotators are skipped in batch mode), and its findings land under the Haxe
  * inspection group instead of the catch-all "General &gt; Annotator" node.
- * The compiler-settings toggles stay the primary gate — a disabled feature
- * collects nothing in batch just as on-the-fly.
+ * The compiler-settings toggles stay the primary gate: a disabled feature
+ * collects nothing in batch, just as on the fly.
  */
 public final class HaxeCompilerDiagnosticsBatchInspections {
-
-  private HaxeCompilerDiagnosticsBatchInspections() {
-  }
 
   public static final String ERRORS_SHORT_NAME = "HaxeCompilerDiagnostics";
   public static final String UNUSED_IMPORT_SHORT_NAME = "HaxeCompilerUnusedImport";
   public static final String REMOVABLE_CODE_SHORT_NAME = "HaxeCompilerRemovableCode";
+
+  private HaxeCompilerDiagnosticsBatchInspections() {
+  }
 
   public static class Errors extends LocalInspectionTool implements ExternalAnnotatorBatchInspection {
     @Override

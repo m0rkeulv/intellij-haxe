@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Compiler services: generated code preview sanitizer")
+@DisplayName("Compiler services: generated code preview sanitize")
 public class HaxeGeneratedCodePreviewSanitizeTest {
 
   @Test

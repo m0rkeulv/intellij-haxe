@@ -4,6 +4,8 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowLaunches;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.EnvCompileCommandNode;
@@ -23,15 +25,17 @@ public final class HaxeRunCompileCommandAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
-    if (panel.getSelectedUserObject() instanceof EnvCompileCommandNode buildCommand) {
-      panel.runCompileCommand(buildCommand);
+    Project project = e.getProject();
+    if (project == null) return;
+    if (panel.getSelectedUserObject() instanceof EnvCompileCommandNode compileCommand) {
+      HaxeToolWindowLaunches.runCompileCommand(project, compileCommand);
     }
   }
 
   @Override
   public void update(@NotNull AnActionEvent e) {
-    boolean runnable = panel.getSelectedUserObject() instanceof EnvCompileCommandNode buildCommand
-                       && buildCommand.command() != null;
+    boolean runnable = panel.getSelectedUserObject() instanceof EnvCompileCommandNode compileCommand
+                       && compileCommand.command() != null;
     e.getPresentation().setEnabledAndVisible(runnable);
   }
 

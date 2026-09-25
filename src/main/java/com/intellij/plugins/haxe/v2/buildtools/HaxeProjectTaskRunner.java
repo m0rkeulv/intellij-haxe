@@ -11,9 +11,9 @@ import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.task.ModuleBuildTask;
@@ -30,6 +30,7 @@ import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -80,8 +81,8 @@ public final class HaxeProjectTaskRunner extends ProjectTaskRunner {
       ConsoleView console = TextConsoleBuilderFactory.getInstance()
         .createBuilder(project)
         .getConsole();
-      RunContentDescriptor descriptor = new RunContentDescriptor(
-        console, null, console.getComponent(), HaxeBundle.message("haxe.build.console.title"), HaxeIcons.HAXE_LOGO);
+      String title = HaxeBundle.message("haxe.build.console.title");
+      RunContentDescriptor descriptor = new RunContentDescriptor(console, null, console.getComponent(), title, HaxeIcons.HAXE_LOGO);
       RunContentManager.getInstance(project)
         .showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
 
@@ -94,39 +95,44 @@ public final class HaxeProjectTaskRunner extends ProjectTaskRunner {
   private static Result buildAll(@NotNull Project project, @NotNull Set<String> containerIds, @NotNull ConsoleView console) {
     HaxeUnsavedDocuments.saveAll();
     for (String containerId : containerIds) {
-      HaxeCompileCommands.Resolved resolved =
-        ReadAction.computeBlocking(() -> HaxeCompileCommands.resolve(project, containerId));
-      if (resolved == null) {
-        // canRun saw a command, but it may have gone stale since - not an error
-        continue;
-      }
-      var command = HaxeCompileCommands.connectIfEnabled(project, containerId, resolved.connectEligible(), resolved.command());
-      console.print("[" + containerId + "] " + String.join(" ", command) + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
-
-      try {
-        GeneralCommandLine commandLine = new GeneralCommandLine(command)
-          .withWorkDirectory(resolved.workDirectory())
-          .withEnvironment(LimeProjects.commandEnvironment(command));
-        ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess();
-        if (!output.getStdout().isEmpty()) {
-          console.print(output.getStdout(), ConsoleViewContentType.NORMAL_OUTPUT);
-        }
-        if (!output.getStderr().isEmpty()) {
-          console.print(output.getStderr(), ConsoleViewContentType.ERROR_OUTPUT);
-        }
-        if (output.getExitCode() != 0) {
-          console.print(HaxeBundle.message("haxe.build.console.failed", containerId, output.getExitCode()) + "\n",
-                        ConsoleViewContentType.ERROR_OUTPUT);
-          return TaskRunnerResults.FAILURE;
-        }
-      }
-      catch (ExecutionException e) {
-        console.print(HaxeBundle.message("haxe.build.console.start.failed", containerId, e.getMessage()) + "\n",
-                      ConsoleViewContentType.ERROR_OUTPUT);
+      if (!buildContainer(project, containerId, console)) {
         return TaskRunnerResults.FAILURE;
       }
     }
     console.print(HaxeBundle.message("haxe.build.console.done") + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
     return TaskRunnerResults.SUCCESS;
+  }
+
+  /** Runs the container's build command with its output in the console; false when it failed. */
+  private static boolean buildContainer(@NotNull Project project, @NotNull String containerId, @NotNull ConsoleView console) {
+    HaxeCompileCommands.Resolved resolved = HaxeReadActions.compute(() -> HaxeCompileCommands.resolve(project, containerId));
+    if (resolved == null) {
+      // canRun saw a command, but it may have gone stale since - not an error
+      return true;
+    }
+    List<String> command = HaxeCompileCommands.connectIfEnabled(project, containerId, resolved.connectEligible(), resolved.command());
+    console.print("[" + containerId + "] " + String.join(" ", command) + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
+    try {
+      GeneralCommandLine commandLine = new GeneralCommandLine(command)
+        .withWorkDirectory(resolved.workDirectory())
+        .withEnvironment(LimeProjects.commandEnvironment(command));
+      ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess();
+      if (!output.getStdout().isEmpty()) {
+        console.print(output.getStdout(), ConsoleViewContentType.NORMAL_OUTPUT);
+      }
+      if (!output.getStderr().isEmpty()) {
+        console.print(output.getStderr(), ConsoleViewContentType.ERROR_OUTPUT);
+      }
+      if (output.getExitCode() == 0) return true;
+
+      String failure = HaxeBundle.message("haxe.build.console.failed", containerId, output.getExitCode());
+      console.print(failure + "\n", ConsoleViewContentType.ERROR_OUTPUT);
+      return false;
+    }
+    catch (ExecutionException e) {
+      String failure = HaxeBundle.message("haxe.build.console.start.failed", containerId, e.getMessage());
+      console.print(failure + "\n", ConsoleViewContentType.ERROR_OUTPUT);
+      return false;
+    }
   }
 }

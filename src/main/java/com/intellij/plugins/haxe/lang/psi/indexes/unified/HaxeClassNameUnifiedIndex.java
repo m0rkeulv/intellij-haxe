@@ -48,9 +48,8 @@ public class HaxeClassNameUnifiedIndex {
         Collection<HaxeClass> stubResults = HaxeClassNameStubIndex.getByNameFiltered(name, project, scope);
         Collection<HaxeComponentIndexData> values = HaxeClassNameFileIndex.getValues(name, project, scope);
 
-        // target-package filter: classes of inactive targets (flash.* while building
-        // hl, ...) must not be offered - the stub filter only covers sdk-root files,
-        // so library-shipped target externs need the package check on both paths
+        // the stub filter only covers sdk-root files; library-shipped target
+        // externs need the package check on both paths
         List<HaxeClassLookupData> stubList = stubResults.stream()
                 .map(HaxeClass::getModel)
                 .filter(model -> LookupUtil.isActiveTargetPackage(model.getQualifiedInfo().getPackageName(), project))
@@ -113,9 +112,7 @@ public class HaxeClassNameUnifiedIndex {
         haxeClasses.addAll(fileResults);
         haxeClasses.addAll(compilerResults);
 
-        // classes of inactive targets (flash.* while building hl, ...) must not be
-        // offered as import candidates - the stub-side filter only covers sdk-root
-        // files, not library-shipped target externs
+        // the stub-side filter only covers sdk-root files, not library-shipped target externs
         return haxeClasses.stream()
           .filter(haxeClass -> LookupUtil.isActiveTargetPackage(packageNameOf(haxeClass), project))
           .toList();

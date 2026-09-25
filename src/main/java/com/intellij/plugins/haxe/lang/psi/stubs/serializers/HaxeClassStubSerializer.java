@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.lang.psi.stubs.serializers;
 
-import com.intellij.plugins.haxe.HaxeComponentType;
 import com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexUtil;
 import com.intellij.plugins.haxe.lang.psi.stubs.index.HaxeClassNameStubIndex;
 import com.intellij.plugins.haxe.lang.psi.stubs.index.fqn.HaxeFullyQualifiedClassNameStubIndex;

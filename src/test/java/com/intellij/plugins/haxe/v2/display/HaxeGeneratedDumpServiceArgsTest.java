@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Compiler services: generated dump build arguments")
+@DisplayName("Compiler services: generated dump service args")
 public class HaxeGeneratedDumpServiceArgsTest {
 
   private static final Path DUMP_ROOT = Path.of("dump-root");

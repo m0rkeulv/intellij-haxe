@@ -103,7 +103,7 @@ public final class HaxeClassInspectionUtil {
           } else {
             final HaxeMethodModel implementMethodModel = methodImplementation.get();
 
-            // We should check if signature in inherited method differs from method provided by interface
+            // an inherited implementation's signature may differ from the interface method
             HaxeClassModel declaringClass = implementMethodModel.getDeclaringClass();
 
             if (declaringClass != null && declaringClass != classModel) {

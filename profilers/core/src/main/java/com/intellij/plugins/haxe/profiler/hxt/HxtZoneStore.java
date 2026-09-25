@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.hxt;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
+import com.intellij.plugins.haxe.profiler.model.ProfilerThread;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
@@ -17,7 +18,6 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,22 +25,23 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.DataFormatException;
-import java.util.zip.Inflater;
+
+import static com.intellij.plugins.haxe.profiler.io.LittleEndian.*;
 
 /**
- * A zone capture served FROM ITS FILE: opening indexes the zone chunks
- * and reads the small records, but the zones themselves stay on disk —
- * {@link #scanZones} decodes only chunks whose time/duration bounds pass
+ * A zone capture served FROM ITS FILE: opening indexes the zone chunks and
+ * reads the small records, but the zones themselves stay on disk.
+ * {@link #scanZones} decodes only chunks whose time and duration bounds pass
  * the query, so a minutes-long capture never loads whole. Zones stream in
  * close order (per thread a post-order walk of the zone tree, depth
  * included) with times rebased to the session's zero. Series records may
- * repeat — a live writer streams increments — and append; v6 files carry
- * their stamps RAW like the zones (rebased here), v5 wrote them
- * pre-rebased.
+ * repeat, since a live writer streams increments, and append; v6 files carry
+ * their stamps RAW like the zones (rebased here), v5 wrote them pre-rebased.
  */
 public final class HxtZoneStore {
 
+  /** The oldest zone-capture layout this store reads. */
+  static final int OLDEST_VERSION = 5;
   /** Files from this version on carry their series stamps RAW; older ones wrote them pre-rebased. */
   private static final int RAW_SERIES_VERSION = 6;
   // TODO: record the protocol version in the HXTS header; a stored session is never decoded through the wire reader again
@@ -111,13 +112,16 @@ public final class HxtZoneStore {
     try (InputStream raw = new BufferedInputStream(Files.newInputStream(file))) {
       CountingStream in = new CountingStream(raw);
       DataInputStream data = new DataInputStream(in);
-      version = HxtSessionTranslator.readZoneHeader(data);
+      version = HxtFormat.readHeader(data).version();
+      if (version < OLDEST_VERSION || version > HxtZoneWriter.VERSION) {
+        throw new ProfilerFormatException("unsupported HXTS zone version " + version);
+      }
       while (true) {
         int type;
         int length;
         try {
           type = data.readUnsignedByte();
-          length = readI32(data);
+          length = readIntLe(data);
         }
         catch (EOFException end) {
           break; // clean end, or a live writer caught mid-record-header
@@ -126,11 +130,11 @@ public final class HxtZoneStore {
           ChunkRef chunk;
           int count;
           try {
-            count = readI32(data);
-            long minStart = readI64(data);
-            long maxEnd = readI64(data);
-            long maxDuration = readI64(data);
-            int compressedLength = length - (4 + 8 + 8 + 8);
+            count = readIntLe(data);
+            long minStart = readLongLe(data);
+            long maxEnd = readLongLe(data);
+            long maxDuration = readLongLe(data);
+            int compressedLength = length - HxtFormat.CHUNK_BOUNDS_BYTES;
             chunk = new ChunkRef(in.position, compressedLength, count, minStart, maxEnd, maxDuration);
             data.skipNBytes(compressedLength);
           }
@@ -148,52 +152,52 @@ public final class HxtZoneStore {
         DataInputStream payload = new DataInputStream(new ByteArrayInputStream(payloadBytes));
         switch (type) {
           case HxtZoneWriter.SRCLOC_RECORD -> {
-            int count = readI32(payload);
+            int count = readIntLe(payload);
             for (int i = 0; i < count; i++) {
-              locations.add(new TracySourceLocation(readString(payload), readString(payload),
-                                                    readI32(payload), readI32(payload)));
+              locations.add(new TracySourceLocation(readString16Le(payload), readString16Le(payload),
+                                                    readIntLe(payload), readIntLe(payload)));
             }
           }
           case HxtZoneWriter.FRAMES_RECORD -> {
-            int count = readI32(payload);
-            for (int i = 0; i < count; i++) frames.add(readI64(payload));
+            int count = readIntLe(payload);
+            for (int i = 0; i < count; i++) frames.add(readLongLe(payload));
           }
           // series records may arrive incrementally from a live writer - append
           case HxtZoneWriter.PLOT_RECORD ->
-            plots.computeIfAbsent(readString(payload), key -> new ArrayList<>()).addAll(readPoints(payload));
+            plots.computeIfAbsent(readString16Le(payload), key -> new ArrayList<>()).addAll(readPoints(payload));
           case HxtZoneWriter.CPU_RECORD -> cpu.addAll(readPoints(payload));
           case HxtZoneWriter.PROCESS_CPU_RECORD -> processCpu.addAll(readPoints(payload));
           case HxtZoneWriter.THREAD_RECORD -> {
-            int id = readI32(payload);
-            threadNames.put(id, readString(payload));
-            threadZones.put(id, readI64(payload));
+            int id = readIntLe(payload);
+            threadNames.put(id, readString16Le(payload));
+            threadZones.put(id, readLongLe(payload));
           }
           case HxtZoneWriter.MEMORY_RECORD ->
-            memoryCurves.computeIfAbsent(readString(payload), key -> new ArrayList<>()).addAll(readPoints(payload));
+            memoryCurves.computeIfAbsent(readString16Le(payload), key -> new ArrayList<>()).addAll(readPoints(payload));
           case HxtZoneWriter.GC_RECORD -> {
-            int count = readI32(payload);
+            int count = readIntLe(payload);
             for (int i = 0; i < count; i++) {
-              gcSweeps.add(new TracySession.GcSweep(readI64(payload), readI64(payload),
-                                                    readI64(payload), readI32(payload)));
+              gcSweeps.add(new TracySession.GcSweep(readLongLe(payload), readLongLe(payload),
+                                                    readLongLe(payload), readIntLe(payload)));
             }
           }
           case HxtZoneWriter.EVENTS_RECORD -> {
-            int count = readI32(payload);
+            int count = readIntLe(payload);
             for (int i = 0; i < count; i++) {
-              int eventThread = readI32(payload);
-              long timeNs = readI64(payload);
-              int color = readI32(payload);
-              events.add(new TimelineEvent(eventThread, timeNs, readString(payload), color));
+              int eventThread = readIntLe(payload);
+              long timeNs = readLongLe(payload);
+              int color = readIntLe(payload);
+              events.add(new TimelineEvent(eventThread, timeNs, readString16Le(payload), color));
             }
           }
           case HxtZoneWriter.INFO_RECORD -> {
             infoSeen = true;
-            programName = readString(payload);
-            pid = readI64(payload);
-            epoch = readI64(payload);
-            durationNs = readI64(payload);
-            unmatched = readI32(payload);
-            baseNs = readI64(payload);
+            programName = readString16Le(payload);
+            pid = readLongLe(payload);
+            epoch = readLongLe(payload);
+            durationNs = readLongLe(payload);
+            unmatched = readIntLe(payload);
+            baseNs = readLongLe(payload);
             // optional trailing field - files written before it stay readable
             if (payload.available() > 0) compressionLevel = payload.readUnsignedByte();
           }
@@ -228,7 +232,7 @@ public final class HxtZoneStore {
     processCpu = rebasedPoints(processCpu, seriesShiftNs);
     gcSweeps = rebasedSweeps(gcSweeps, seriesShiftNs);
     events = rebasedEvents(events, seriesShiftNs);
-    TracyWelcome welcome = new TracyWelcome(STORED_SESSION_PROTOCOL, 1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
+    TracyWelcome welcome = storedWelcome(programName, pid, epoch);
     TracySession session = new TracySession(welcome, List.of(), List.copyOf(frames), Map.copyOf(plots),
                                             Map.copyOf(memoryCurves), List.copyOf(gcSweeps), List.copyOf(events),
                                             List.copyOf(cpu), List.copyOf(processCpu), Map.copyOf(threadNames),
@@ -239,6 +243,14 @@ public final class HxtZoneStore {
       .toList();
     return new HxtZoneStore(file, session, List.copyOf(locations), List.copyOf(chunks),
                             threads, baseNs, zoneCount, compressionLevel);
+  }
+
+  /**
+   * The welcome of a stored session: only the program name, pid and epoch
+   * are kept in INFO; the timer is already applied (one tick = 1 ns).
+   */
+  private static TracyWelcome storedWelcome(String programName, long pid, long epoch) {
+    return new TracyWelcome(STORED_SESSION_PROTOCOL, 1.0, 0, 0, 0, 0, epoch, 0, pid, 0, false, programName);
   }
 
   /** The raw stamp bounds across every small series; MAX/MIN sentinels when there are none. */
@@ -378,7 +390,7 @@ public final class HxtZoneStore {
     access.readFully(buffers.compressed, 0, chunk.compressedLength());
     int byteLength = chunk.zoneCount() * HxtZoneWriter.ZONE_BYTES;
     if (buffers.raw.length < byteLength) buffers.raw = new byte[byteLength];
-    decompressChunk(buffers.compressed, chunk.compressedLength(), buffers.raw, byteLength);
+    HxtFormat.inflate(buffers.compressed, chunk.compressedLength(), buffers.raw, byteLength);
     ByteBuffer zones = ByteBuffer.wrap(buffers.raw, 0, byteLength).order(ByteOrder.LITTLE_ENDIAN);
     long previousStartNs = 0;
     for (int i = 0; i < chunk.zoneCount(); i++) {
@@ -398,60 +410,19 @@ public final class HxtZoneStore {
     }
   }
 
-  private static void decompressChunk(byte[] compressed, int compressedLength,
-                                      byte[] raw, int expectedLength) throws IOException {
-    Inflater inflater = new Inflater();
-    inflater.setInput(compressed, 0, compressedLength);
-    try {
-      int total = 0;
-      while (total < expectedLength) {
-        int read = inflater.inflate(raw, total, expectedLength - total);
-        if (read == 0) {
-          throw new ProfilerFormatException("zone chunk decompressed short: " + total + " of " + expectedLength);
-        }
-        total += read;
-      }
-    }
-    catch (DataFormatException corrupted) {
-      throw new ProfilerFormatException("zone chunk does not decompress: " + corrupted.getMessage());
-    }
-    finally {
-      inflater.end();
-    }
-  }
-
   private static String threadName(Map<Integer, String> names, int threadId) {
     String name = names.get(threadId);
     // a LIVE capture's incremental THREAD records carry no name yet
-    return name != null && !name.isEmpty() ? name : "Thread " + Integer.toUnsignedString(threadId);
+    return name != null && !name.isEmpty() ? name : ProfilerThread.unnamed(threadId);
   }
 
   private static List<TracySession.PlotPoint> readPoints(DataInputStream payload) throws IOException {
-    int count = readI32(payload);
+    int count = readIntLe(payload);
     List<TracySession.PlotPoint> points = new ArrayList<>(count);
     for (int i = 0; i < count; i++) {
-      points.add(new TracySession.PlotPoint(readI64(payload), Double.longBitsToDouble(readI64(payload))));
+      points.add(new TracySession.PlotPoint(readLongLe(payload), readDoubleLe(payload)));
     }
     return points;
-  }
-
-  private static String readString(DataInputStream payload) throws IOException {
-    int length = payload.readUnsignedByte() | payload.readUnsignedByte() << 8;
-    byte[] utf8 = payload.readNBytes(length);
-    if (utf8.length < length) throw new EOFException();
-    return new String(utf8, StandardCharsets.UTF_8);
-  }
-
-  private static int readI32(DataInputStream data) throws IOException {
-    int value = 0;
-    for (int i = 0; i < 4; i++) value |= data.readUnsignedByte() << (8 * i);
-    return value;
-  }
-
-  private static long readI64(DataInputStream data) throws IOException {
-    long value = 0;
-    for (int i = 0; i < 8; i++) value |= (long)data.readUnsignedByte() << (8 * i);
-    return value;
   }
 
   /** Tracks the absolute file position so chunk payload offsets can be recorded. */

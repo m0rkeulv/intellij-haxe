@@ -3,6 +3,8 @@ package com.intellij.plugins.haxe.v2.toolwindow.actions;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowEditors;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.EnvSdkNode;
@@ -22,8 +24,10 @@ public final class HaxeSelectEnvironmentSdkAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    if (project == null) return;
     if (panel.getSelectedUserObject() instanceof EnvSdkNode sdkNode) {
-      panel.showEnvironmentSdkPopup(sdkNode, panel.getSelectionPopupPoint());
+      HaxeToolWindowEditors.showEnvironmentSdkPopup(project, sdkNode, panel.getSelectionPopupPoint());
     }
   }
 

@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.toolwindow.actions;
 
+import icons.HaxeIcons;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -19,7 +20,7 @@ import java.util.List;
 
 /**
  * Tool window "Execute Haxe Command" button (the Gradle/Maven "execute" equivalent).
- * Prompts for compiler arguments and reports the output as a notification.
+ * Prompts for compiler arguments and runs haxe with them in a console.
  */
 public final class HaxeExecuteCommandAction extends DumbAwareAction {
 
@@ -40,7 +41,7 @@ public final class HaxeExecuteCommandAction extends DumbAwareAction {
     String arguments = Messages.showInputDialog(project,
                                                 HaxeBundle.message("haxe.toolwindow.execute.prompt"),
                                                 HaxeBundle.message("haxe.toolwindow.execute.title"),
-                                                icons.HaxeIcons.HAXE_LOGO,
+                                                HaxeIcons.HAXE_LOGO,
                                                 properties.getValue(LAST_COMMAND_KEY, "--version"),
                                                 null);
     if (StringUtil.isEmptyOrSpaces(arguments)) return;

@@ -22,12 +22,11 @@ import javax.swing.ImageIcon;
 import javax.swing.JPanel;
 
 /**
- * Detail view of a point in the capture: header lines (the first in bold)
- * above the call stack, leaf frame first, double-click navigating to a
- * frame's Haxe source — the Call Chart's detail pane for selected runs and
- * marker-lane spans.
+ * The Call Chart's details pane: header lines (the first in bold), then
+ * optionally a frame breakdown and a screenshot, above a call stack listed
+ * leaf first. Double-clicking a stack frame opens its Haxe source.
  */
-final class HaxeStackDetailPanel extends BorderLayoutPanel {
+final class HaxeChartDetailsPanel extends BorderLayoutPanel {
   private final Project project;
   private final JPanel header = new JPanel();
   private final HaxeFrameBreakdownView breakdown = new HaxeFrameBreakdownView();
@@ -37,7 +36,7 @@ final class HaxeStackDetailPanel extends BorderLayoutPanel {
   private List<StackFrame> leafFirstFrames = List.of();
   private int revision;
 
-  HaxeStackDetailPanel(@NotNull Project project) {
+  HaxeChartDetailsPanel(@NotNull Project project) {
     this.project = project;
     header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
     header.setBorder(JBUI.Borders.empty(4, 6));
@@ -48,8 +47,7 @@ final class HaxeStackDetailPanel extends BorderLayoutPanel {
     top.addToCenter(breakdown);
     top.addToBottom(image);
     addToTop(top);
-    // a selection without stack rows (a frame's breakdown) leaves the list
-    // empty on purpose - the platform's "Nothing to show" would be wrong
+    // most selections carry no stack; the platform's "Nothing to show" would read as an error
     list.getEmptyText().setText("");
     addToCenter(new JBScrollPane(list));
     list.addMouseListener(new MouseAdapter() {
@@ -95,9 +93,9 @@ final class HaxeStackDetailPanel extends BorderLayoutPanel {
   }
 
   /**
-   * Every {@link #showStack} bumps this; an async detail loader captures
-   * the value after its initial render and only applies its result while
-   * it still matches — a newer selection silently wins.
+   * Bumped by every {@link #showStack}. An asynchronous loader reads it after
+   * its initial render and applies its result only while it still matches,
+   * so a newer selection wins.
    */
   int revision() {
     return revision;

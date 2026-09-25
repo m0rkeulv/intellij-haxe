@@ -29,7 +29,6 @@ public class HaxeExpressionEvaluatorCacheService  {
   public static boolean skipCaching = false;// just convenience flag for debugging
 
 
-
   public HaxeExpressionEvaluatorCacheService() {
     LowMemoryWatcher.register(() -> {
       clearCaches();
@@ -77,7 +76,7 @@ public class HaxeExpressionEvaluatorCacheService  {
       // has a real type (evaluating it fresh at top level finds it).
       // Only at guard depth zero does Unknown reliably mean "genuinely has
       // no type" rather than "could not look at itself mid-evaluation".
-      boolean cacheableFailure = isUnknown  && !HaxeEvaluationTaint.insideGuardedComputation();
+      boolean cacheableFailure = isUnknown && !HaxeEvaluationTaint.insideGuardedComputation();
 
       if (cacheableSuccess || cacheableFailure) {
         cacheMap.put(key, holder);
@@ -89,12 +88,12 @@ public class HaxeExpressionEvaluatorCacheService  {
 
 
   /**
-   * Inferred method return types under the certainty rule: a result computed
-   * while truncation was observed (a probe gate refusal, a prevention) is
-   * served but NOT stored, so a later clean compute can land. A
-   * PsiDependentCache here froze the first tower-computed Unknown for the
-   * span between two code changes and starved every later consumer - the return-type inlay and
-   * any local initialized from the call.
+   * Inferred method return types. A result computed while truncation was
+   * observed (a probe gate refusal, a prevention) is served but NOT stored,
+   * so a later clean compute can land; a plain PSI-dependent cache would
+   * keep the first Unknown computed deep inside an evaluation until the next
+   * code change, starving every later consumer (the return-type inlay, any
+   * local initialized from the call).
    */
   public @NotNull ResultHolder methodReturnType(@NotNull PsiElement method, @NotNull Supplier<ResultHolder> compute) {
     ResultHolder cached = methodReturnTypes.get(method);

@@ -36,6 +36,7 @@ import com.intellij.plugins.haxe.ide.module.HaxeModuleSettings
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType
 import com.intellij.plugins.haxe.v2.buildtools.HxmlProjects
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects
+import com.intellij.plugins.haxe.v2.buildtools.NmeProjects
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore
@@ -60,6 +61,7 @@ class HaxeV1Migrator(private val project: Project, private val scope: CoroutineS
     fun getInstance(project: Project): HaxeV1Migrator = project.service()
 
     private const val LEGACY_TYPE_ID = "HAXE_MODULE"
+    internal const val NOTIFICATION_GROUP_ID = "haxe.v1.migration"
   }
 
   fun convertAsync() {
@@ -112,11 +114,7 @@ class HaxeV1Migrator(private val project: Project, private val scope: CoroutineS
       val moduleSettings = HaxeModuleSettings.getInstance(module)
       val output = outputArtifact(moduleSettings)
 
-      val flashTargeted = (moduleSettings.isUseHxmlToBuild || moduleSettings.isUseUserPropertiesToBuild)
-                          && moduleSettings.haxeTarget == HaxeTarget.FLASH
-                          || moduleSettings.isUseOpenFLToBuild && moduleSettings.openFLTarget == OpenFLTarget.FLASH
-                          || moduleSettings.isUseNmmlToBuild && moduleSettings.nmeTarget == NMETarget.FLASH
-      if (flashTargeted) {
+      if (isFlashTargeted(moduleSettings)) {
         plans += ConfigurationPlan.Flash(settings.name, module.name, output ?: "", moduleSettings.flexSdkName ?: "")
       } else if (output != null) {
         plans += ConfigurationPlan.Hxcpp(settings.name, module.name, output)
@@ -125,6 +123,13 @@ class HaxeV1Migrator(private val project: Project, private val scope: CoroutineS
       // window's Build & run creates the right flavour on demand
     }
     return plans
+  }
+
+  private fun isFlashTargeted(settings: HaxeModuleSettings): Boolean {
+    val haxeTargeted = settings.isUseHxmlToBuild || settings.isUseUserPropertiesToBuild
+    return haxeTargeted && settings.haxeTarget == HaxeTarget.FLASH
+           || settings.isUseOpenFLToBuild && settings.openFLTarget == OpenFLTarget.FLASH
+           || settings.isUseNmmlToBuild && settings.nmeTarget == NMETarget.FLASH
   }
 
   private fun outputArtifact(settings: HaxeModuleSettings): String? {
@@ -197,29 +202,31 @@ class HaxeV1Migrator(private val project: Project, private val scope: CoroutineS
       val buildFilePath = when {
         settings.isUseHxmlToBuild -> settings.hxmlPath
         settings.isUseOpenFLToBuild -> settings.openFLPath
-        // recorded so the tool window lists it; V2 offers no NMML build actions
         settings.isUseNmmlToBuild -> settings.nmmlPath
         else -> null
       }?.takeIf { it.isNotBlank() }
 
       val buildFile = buildFilePath?.let { LocalFileSystem.getInstance().findFileByPath(it) }
       if (buildFile != null && buildFile.isValid) {
-        val action = if (settings.isUseHxmlToBuild) HxmlProjects.BUILD_ACTION else LimeProjects.BUILD_ACTION
+        val action = when {
+          settings.isUseHxmlToBuild -> HxmlProjects.BUILD_ACTION
+          settings.isUseNmmlToBuild -> NmeProjects.BUILD_ACTION
+          else -> LimeProjects.BUILD_ACTION
+        }
         environment.setCompileCommand(
           module.name,
           HaxeEnvironmentStore.CompileCommand(buildFile.path, action, settings.arguments ?: ""))
         if (activeStore.activeFilePath.isNullOrBlank()) {
           activeStore.setActiveFile(buildFile.path)
         }
-        // the tool window's target dropdown uses the target enum NAMES as ids
-        when {
-          settings.isUseOpenFLToBuild -> settings.openFLTarget?.let {
-            HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(buildFile, it.name)
-          }
-          settings.isUseNmmlToBuild -> settings.nmeTarget?.let {
-            HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(buildFile, it.name)
-          }
+        // target selection ids are the configured target names, which the
+        // built-in lists seed from the enums' display strings (toString)
+        val legacyTarget = when {
+          settings.isUseOpenFLToBuild -> settings.openFLTarget
+          settings.isUseNmmlToBuild -> settings.nmeTarget
+          else -> null
         }
+        legacyTarget?.let { HaxeTargetSelectionStore.getInstance(project).setSelectedTargetId(buildFile, it.toString()) }
       }
     }
     return converted
@@ -228,7 +235,7 @@ class HaxeV1Migrator(private val project: Project, private val scope: CoroutineS
   private fun notifyDone(converted: List<String>) {
     if (project.isDisposed) return
     NotificationGroupManager.getInstance()
-      .getNotificationGroup("haxe.v1.migration")
+      .getNotificationGroup(NOTIFICATION_GROUP_ID)
       .createNotification(
         HaxeProjectBundle.message("haxe.v1.migration.done.title"),
         HaxeProjectBundle.message("haxe.v1.migration.done.content", converted.size, converted.joinToString(", ")),

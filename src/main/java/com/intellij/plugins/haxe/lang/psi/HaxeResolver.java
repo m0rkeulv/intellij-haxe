@@ -23,9 +23,9 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.progress.ProgressIndicatorProvider;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.lang.psi.impl.*;
 import com.intellij.plugins.haxe.model.*;
+import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.plugins.haxe.util.HaxeDebugUtil;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerResolveService;
@@ -43,7 +43,6 @@ import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.*;
 import static com.intellij.plugins.haxe.model.type.SpecificTypeReference.*;
 import static com.intellij.plugins.haxe.util.HaxeDebugLogUtil.traceAs;
 import static com.intellij.plugins.haxe.util.HaxeResolveUtil.*;
-import com.intellij.plugins.haxe.model.evaluator.HaxeEvaluationTaint;
 import static com.intellij.plugins.haxe.lang.psi.HaxeResolveChecks.*;
 
 /**

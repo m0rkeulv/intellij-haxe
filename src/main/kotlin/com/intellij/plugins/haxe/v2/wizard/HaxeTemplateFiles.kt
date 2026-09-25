@@ -2,13 +2,14 @@ package com.intellij.plugins.haxe.v2.wizard
 
 import com.intellij.ide.fileTemplates.FileTemplateManager
 import com.intellij.openapi.project.Project
+import com.intellij.plugins.haxe.HaxeWizardBundle
 
 /**
  * Renders the project-generator files from the platform file templates in
  * {@code fileTemplates/j2ee/Haxe Project *.ft} (the "Haxe project" group under
  * Settings | File and Code Templates | Other — user-customizable). Code owns
  * the CONDITIONAL assembly (which lines a target needs, escaping); the
- * templates own the file shapes. See doc/project-templates-wizard.md.
+ * templates own the file shapes.
  */
 object HaxeTemplateFiles {
 
@@ -22,27 +23,28 @@ object HaxeTemplateFiles {
    * generator to HL/C sources. The legacy source-generating targets carry
    * the support library the compiler requires for them.
    */
-  enum class HxmlTargetOption(val label: String, private val outputFlag: String, val defaultOutput: String, val lib: String? = null) {
-    HASHLINK_VM("HashLink (VM bytecode)", "--hl", "out/app.hl"),
-    HASHLINK_C("HashLink (HL/C sources)", "--hl", "out/c/main.c"),
-    JAVASCRIPT("JavaScript", "--js", "out/app.js"),
-    NEKO("Neko", "--neko", "out/app.n"),
-    CPP("C++ (hxcpp)", "--cpp", "out/cpp"),
-    JVM("JVM (.jar)", "--jvm", "out/app.jar"),
-    JAVA_LEGACY("Java (generated sources)", "--java", "out/java", "hxjava"),
-    CSHARP("C# (generated sources)", "--cs", "out/cs", "hxcs"),
-    PHP("PHP", "--php", "out/php"),
-    PYTHON("Python", "--python", "out/app.py"),
-    LUA("Lua", "--lua", "out/app.lua"),
-    FLASH("Flash", "--swf", "out/app.swf"),
-    INTERP("Eval (interpreter)", "--interp", "");
+  enum class HxmlTargetOption(private val labelKey: String, private val outputFlag: String, val defaultOutput: String,
+                              val lib: String? = null) {
+    HASHLINK_VM("haxe.wizard.hxml.target.hashlink.vm", "--hl", "out/app.hl"),
+    HASHLINK_C("haxe.wizard.hxml.target.hashlink.c", "--hl", "out/c/main.c"),
+    JAVASCRIPT("haxe.wizard.hxml.target.javascript", "--js", "out/app.js"),
+    NEKO("haxe.wizard.hxml.target.neko", "--neko", "out/app.n"),
+    CPP("haxe.wizard.hxml.target.cpp", "--cpp", "out/cpp"),
+    JVM("haxe.wizard.hxml.target.jvm", "--jvm", "out/app.jar"),
+    JAVA_LEGACY("haxe.wizard.hxml.target.java", "--java", "out/java", "hxjava"),
+    CSHARP("haxe.wizard.hxml.target.csharp", "--cs", "out/cs", "hxcs"),
+    PHP("haxe.wizard.hxml.target.php", "--php", "out/php"),
+    PYTHON("haxe.wizard.hxml.target.python", "--python", "out/app.py"),
+    LUA("haxe.wizard.hxml.target.lua", "--lua", "out/app.lua"),
+    FLASH("haxe.wizard.hxml.target.flash", "--swf", "out/app.swf"),
+    INTERP("haxe.wizard.hxml.target.interp", "--interp", "");
 
     /** Whether the target writes anything — the interpreter runs the program instead. */
     val hasOutput: Boolean get() = defaultOutput.isNotEmpty()
 
     fun outputLine(output: String): String = if (hasOutput) "$outputFlag $output" else outputFlag
 
-    override fun toString(): String = label
+    override fun toString(): String = HaxeWizardBundle.message(labelKey)
   }
 
   /**
@@ -81,24 +83,20 @@ object HaxeTemplateFiles {
 
   /** project.xml for lime or openfl ("haxelib" decides which framework the file pulls in). */
   fun limeProjectXml(project: Project, haxelib: String, title: String, pkg: String, width: Int, height: Int, fps: Int): String =
-    render(project, "Haxe Project Lime", mapOf(
-      "TITLE" to xml(title),
-      "PACKAGE" to xml(pkg),
-      "FILE" to xml(fileNameOf(title)),
-      "WIDTH" to width.toString(),
-      "HEIGHT" to height.toString(),
-      "FPS" to fps.toString(),
-      "HAXELIB" to haxelib))
+    render(project, "Haxe Project Lime", appVariables(title, pkg, width, height, fps) + ("HAXELIB" to haxelib))
 
   /** project.nmml for NME. */
   fun nmmlProjectXml(project: Project, title: String, pkg: String, width: Int, height: Int, fps: Int): String =
-    render(project, "Haxe Project NME", mapOf(
-      "TITLE" to xml(title),
-      "PACKAGE" to xml(pkg),
-      "FILE" to xml(fileNameOf(title)),
-      "WIDTH" to width.toString(),
-      "HEIGHT" to height.toString(),
-      "FPS" to fps.toString()))
+    render(project, "Haxe Project NME", appVariables(title, pkg, width, height, fps))
+
+  /** The application variables the lime-family project templates share. */
+  private fun appVariables(title: String, pkg: String, width: Int, height: Int, fps: Int): Map<String, String> = mapOf(
+    "TITLE" to xml(title),
+    "PACKAGE" to xml(pkg),
+    "FILE" to xml(fileNameOf(title)),
+    "WIDTH" to width.toString(),
+    "HEIGHT" to height.toString(),
+    "FPS" to fps.toString())
 
   fun limeMainHx(project: Project): String = render(project, "Haxe Project Lime Main", emptyMap())
 

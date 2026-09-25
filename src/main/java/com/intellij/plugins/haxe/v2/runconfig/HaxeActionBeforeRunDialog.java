@@ -90,8 +90,9 @@ final class HaxeActionBeforeRunDialog extends DialogWrapper {
     super.doOKAction();
   }
 
-  /// Additions derive from the file type and selected target.
-  private List<String> debugAdditionsFor(String path) {
+  /** The file's debug additions (from its type and selected target), or null without a file. */
+  @Nullable
+  private List<String> debugAdditionsFor(@NotNull String path) {
     if (path.isEmpty()) return null;
     return HaxeActionBeforeRunTaskProvider.debugAdditions(project, path);
   }
@@ -105,8 +106,8 @@ final class HaxeActionBeforeRunDialog extends DialogWrapper {
       injectDebugCheckBox.setEnabled(false);
     }
     else {
-      injectDebugPreview.setText(
-        HaxeDebuggerBundle.message("haxe.before.run.dialog.inject.debug.preview", String.join(" ", additions)));
+      String preview = HaxeDebuggerBundle.message("haxe.before.run.dialog.inject.debug.preview", String.join(" ", additions));
+      injectDebugPreview.setText(preview);
       injectDebugCheckBox.setEnabled(true);
     }
   }

@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.BeforeRunTask;
 import com.intellij.execution.Executor;
-import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.executors.DefaultDebugExecutor;
@@ -15,6 +14,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeConfigurationLaunches;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
@@ -25,7 +25,7 @@ import java.util.List;
 
 /**
  * The single dispatch every unit-test entry point (tool window tree, container
- * context action; gutter markers in a later phase) converges on: find or create
+ * context actions, gutter markers) converges on: find or create
  * the tests build file's run configuration, update its filter, and launch it
  * through the run-configuration machinery so it lands in the dropdown and can
  * be rerun from the main UI.
@@ -44,10 +44,7 @@ public final class HaxeTestRunConfigurations {
     String wantedClass = StringUtil.notNullize(testClass);
     String wantedMethod = StringUtil.notNullize(testMethod);
     RunnerAndConfigurationSettings settings = runManager.getAllSettings().stream()
-      .filter(candidate -> candidate.getConfiguration() instanceof HaxeTestRunConfiguration configuration
-                           && configuration.getBuildFilePath().equals(buildFilePath)
-                           && configuration.getTestClass().equals(wantedClass)
-                           && configuration.getTestMethod().equals(wantedMethod))
+      .filter(candidate -> runsSelection(candidate, buildFilePath, wantedClass, wantedMethod))
       .findFirst()
       .orElse(null);
 
@@ -69,6 +66,16 @@ public final class HaxeTestRunConfigurations {
       runManager.addConfiguration(settings);
     }
     return settings;
+  }
+
+  private static boolean runsSelection(@NotNull RunnerAndConfigurationSettings candidate,
+                                       @NotNull String buildFilePath,
+                                       @NotNull String testClass,
+                                       @NotNull String testMethod) {
+    return candidate.getConfiguration() instanceof HaxeTestRunConfiguration configuration
+           && configuration.getBuildFilePath().equals(buildFilePath)
+           && configuration.getTestClass().equals(testClass)
+           && configuration.getTestMethod().equals(testMethod);
   }
 
   /** Runs the build file's tests under the Run executor, selecting the configuration in the dropdown. */
@@ -103,10 +110,7 @@ public final class HaxeTestRunConfigurations {
                              @Nullable String testMethod,
                              @NotNull Executor executor) {
     RunnerAndConfigurationSettings settings = findOrCreate(project, buildFilePath, testClass, testMethod);
-    RunManager.getInstance(project).setSelectedConfiguration(settings);
-    // ExecutionUtil (not ProgramRunnerUtil) routes through restartRunProfile,
-    // which enforces single-instance configurations with the stop-and-rerun dialog
-    ExecutionUtil.runConfiguration(settings, executor);
+    HaxeConfigurationLaunches.runSelected(project, settings, executor);
   }
 
   /** Whether the tests build's target has a debug lane (interp, HL, desktop C++ - see {@code HaxeTestDebugRunner}). */

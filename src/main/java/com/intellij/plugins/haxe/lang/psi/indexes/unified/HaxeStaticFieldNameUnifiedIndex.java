@@ -7,7 +7,6 @@ import com.intellij.plugins.haxe.ide.lookup.indexed.data.HaxeMemberLookupData;
 import com.intellij.plugins.haxe.lang.psi.HaxePsiField;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.data.HaxeComponentIndexData;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.extension.HaxeStaticFieldNameFileIndex;
-import com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexUtil;
 import com.intellij.plugins.haxe.lang.psi.stubs.index.HaxeStaticFieldNameStubIndex;
 import com.intellij.plugins.haxe.model.FullyQualifiedInfo;
 import com.intellij.plugins.haxe.model.HaxeMemberModel;

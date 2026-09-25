@@ -3,25 +3,12 @@ package limeparser;
 import haxe.io.Path;
 
 /**
-	Evaluates a lime/openfl project.xml the way lime's ProjectXMLParser does,
-	but collects only the build-configuration subset the IDE needs: defines,
-	haxedefs, haxelibs (with versions) and source classpaths. Conditional
-	if/unless attributes, <section> grouping, <include> files and ${} variable
-	substitution are honoured; application/window/asset elements are ignored.
-
-	Semantics mirror lime's isValidElement: an `if` value is an OR ("||") of
-	AND groups (space-separated tokens); a token passes when it is "true",
-	a known define, a known environment variable or the current command, and
-	fails when it is "false" or unknown. `unless` uses the same evaluation and
-	excludes the element on a match.
-**/
-/**
-	A haxelib and its transitive dependency chain as `haxelib path` reports it:
-	the classpaths belong to this one library; includeXml is the content of its
-	include.xml when it ships one (lime merges those as nested projects);
-	extraDefines are -D entries from the library's extraParams.hxml (haxelib
-	prints that file inline); extraArgs are its remaining compiler arguments
-	(--macro lines etc. - not evaluatable statically, surfaced for reference).
+	A haxelib as `haxelib path` reports it: the classpaths belong to this one
+	library; includeXml is the content of its include.xml when it ships one
+	(lime merges those as nested projects); extraDefines are the -D entries
+	of the library's extraParams.hxml; extraArgs are its remaining compiler
+	arguments (--macro lines and the like), which cannot be evaluated
+	statically and are kept for reference only.
 **/
 typedef ResolvedHaxelib = {
 	name:String,
@@ -33,32 +20,50 @@ typedef ResolvedHaxelib = {
 	extraArgs:Array<String>
 }
 
+/**
+	Evaluates a lime/openfl project.xml the way lime's own parser does, but
+	collects only the build configuration the IDE needs: defines, haxedefs,
+	haxelibs (with versions), source classpaths and the app's export layout.
+	Conditional if/unless attributes, <section> grouping, <include> files and
+	${} variable substitution are honoured; window, asset and other elements
+	are ignored.
+
+	An `if` value is an OR ("||") of AND groups (space-separated tokens); a
+	token passes when it is "true", a known define, a known environment
+	variable or the current command, and fails when it is "false" or
+	unknown. `unless` uses the same evaluation and excludes the element on a
+	match.
+**/
 class ProjectXmlEvaluator {
-	/** Resolves an <include path="..."/> reference to file content, or null when unreadable. **/
+	/** An include resolver that finds no files. **/
 	public static final NO_INCLUDES:String->Null<String> = path -> null;
 
-	/** Resolves a haxelib (and its transitive deps, in order), or null when unresolvable. **/
-	public static final NO_HAXELIBS:(String, String) -> Null<Array<ResolvedHaxelib>> = (name, version) -> null;
+	static final NO_HAXELIBS:(String, String) -> Null<Array<ResolvedHaxelib>> = (name, version) -> null;
+
+	// ${name} variable reference; the name group excludes closing braces
+	static final VAR_REFERENCE = ~/\$\{([^}]+)\}/;
 
 	public final defines:Map<String, String> = [];
 	public final haxedefs:Map<String, String> = [];
 	public final haxelibs:Array<{name:String, version:String}> = [];
 	public final sources:Array<String> = [];
-	// <app> attributes drive the export layout (path) and the executable name (file);
-	// lime's default export root is "bin" ("Export" is only a template convention)
+	// <app> attributes drive the export layout (path) and the executable name
+	// (file); lime's default export root is "bin"
 	public var appPath:String = "bin";
 	public var appFile:String = "";
 
 	final environment:Map<String, String>;
 	final command:String;
+	/** Resolves an <include path="..."/> reference to file content, or null when unreadable. **/
 	final includeResolver:String->Null<String>;
+	/** Resolves a haxelib and its transitive dependencies in order, or null when unresolvable. **/
 	final haxelibResolver:(String, String) -> Null<Array<ResolvedHaxelib>>;
 	final visitedIncludes:Array<String> = [];
-	// asset library handlers: type -> handler haxelib (<library handler="swf" type="swf"/>,
-	// registered by openfl's include.xml) and the asset types the project declares
+	// asset type -> the haxelib handling it (<library handler="swf" type="swf"/>,
+	// usually registered by a library's include.xml)
 	final libraryHandlers:Map<String, String> = [];
 	final declaredAssetTypes:Array<String> = [];
-	// library include.xml paths resolve against the library root, not the project
+	// paths in a library's include.xml resolve against the library root, not the project
 	var pathBase:String = "";
 
 	public function new(seedDefines:Map<String, String>, command:String,
@@ -73,11 +78,17 @@ class ProjectXmlEvaluator {
 		this.haxelibResolver = haxelibResolver != null ? haxelibResolver : NO_HAXELIBS;
 	}
 
+	/** Splits a `name=value` define; a bare name gets an empty value. **/
+	public static function splitDefine(text:String):{name:String, value:String} {
+		var pair = text.split("=");
+		return {name: pair[0], value: pair.slice(1).join("=")};
+	}
+
+	/** Lime accepts both <project> and legacy <xml> roots. **/
 	public function parse(content:String):Void {
 		var xml = try Xml.parse(content) catch (e:Dynamic) null;
 		if (xml == null) return;
 		for (element in xml.elements()) {
-			// lime accepts both <project> and legacy <xml> roots
 			parseElements(element, "");
 		}
 		resolveAssetHandlers();
@@ -85,15 +96,15 @@ class ProjectXmlEvaluator {
 
 	/**
 		An asset library whose type has a registered handler pulls that handler
-		haxelib into the build (lime runs `haxelib run <handler> process`, whose
-		result merges the handler lib itself - e.g. swf for .swf assets). The
-		handler map usually comes from a library include.xml, so this resolves
-		after the whole project is parsed, like lime's AssetHelper does.
+		haxelib into the build, as lime does when it runs the handler to process
+		the assets (the swf library for .swf assets, for example). The handler
+		usually comes from a library's include.xml, so this runs after the whole
+		project is parsed.
 	**/
 	function resolveAssetHandlers():Void {
 		for (type in declaredAssetTypes) {
 			var handler = libraryHandlers.get(type);
-			if (handler != null && !Lambda.exists(haxelibs, lib -> lib.name == handler)) {
+			if (handler != null && !isRegistered(handler)) {
 				resolveAndRegister(handler, "");
 			}
 		}
@@ -104,98 +115,116 @@ class ProjectXmlEvaluator {
 			if (!isValidElement(element, section)) continue;
 
 			switch (element.nodeName) {
-				case "section":
-					parseElements(element, "");
-				case "include":
-					parseInclude(element);
-				case "set":
-					var name = element.get("name");
-					var value = substitute(orEmpty(element.get("value")));
-					defines.set(name, value);
-					environment.set(name, value);
-				case "unset":
-					defines.remove(element.get("name"));
-					environment.remove(element.get("name"));
-				case "define":
-					var name = element.get("name");
-					var value = substitute(orEmpty(element.get("value")));
-					defines.set(name, value);
-					haxedefs.set(name, value);
-					environment.set(name, value);
-				case "undefine":
-					defines.remove(element.get("name"));
-					haxedefs.remove(element.get("name"));
-					environment.remove(element.get("name"));
-				case "setenv":
-					var name = element.get("name");
-					var value = substitute(orEmpty(element.get("value")));
-					environment.set(name, value);
-					defines.set(name, value);
-				case "haxedef":
-					haxedefs.set(substitute(element.get("name")), substitute(orEmpty(element.get("value"))));
-				case "haxelib":
-					parseHaxelib(element);
-				case "source", "classpath":
-					var path = element.exists("path") ? element.get("path") : element.get("name");
-					if (path != null) {
-						sources.push(rebase(substitute(path)));
-					}
-				case "app":
-					if (element.exists("path")) appPath = substitute(element.get("path"));
-					if (element.exists("file")) appFile = substitute(element.get("file"));
-				case "library":
-					if (element.exists("handler") && element.exists("type")) {
-						libraryHandlers.set(substitute(element.get("type")), substitute(element.get("handler")));
-					} else {
-						var type = element.exists("type") ? substitute(element.get("type"))
-							: element.exists("path") ? Path.extension(substitute(element.get("path"))).toLowerCase() : "";
-						if (type != "" && !declaredAssetTypes.contains(type)) {
-							declaredAssetTypes.push(type);
-						}
-					}
+				case "section": parseElements(element, "");
+				case "include": parseInclude(element);
+				case "set", "setenv": assign(element, false);
+				case "define": assign(element, true);
+				case "unset": unassign(element, false);
+				case "undefine": unassign(element, true);
+				case "haxedef": haxedefs.set(attribute(element, "name"), attribute(element, "value"));
+				case "haxelib": parseHaxelib(element);
+				case "source", "classpath": parseSource(element);
+				case "app": parseApp(element);
+				case "library": parseLibrary(element);
 				default:
-					// app/meta/window/assets/icon/... carry no build configuration
+					// window, meta, assets, icon and the like carry no build configuration
 			}
 		}
 	}
 
-	function parseHaxelib(element:Xml):Void {
-		var name = substitute(element.get("name"));
-		if (name == null || name == "") return;
-		var version = substitute(orEmpty(element.get("version")));
-		resolveAndRegister(name, version);
+	/** <set>/<setenv> set a define and an environment variable; <define> also sets a haxedef. **/
+	function assign(element:Xml, alsoHaxedef:Bool):Void {
+		var name = element.get("name");
+		var value = attribute(element, "value");
+		defines.set(name, value);
+		environment.set(name, value);
+		if (alsoHaxedef) {
+			haxedefs.set(name, value);
+		}
 	}
 
+	/** The inverse of `assign`. **/
+	function unassign(element:Xml, alsoHaxedef:Bool):Void {
+		var name = element.get("name");
+		defines.remove(name);
+		environment.remove(name);
+		if (alsoHaxedef) {
+			haxedefs.remove(name);
+		}
+	}
+
+	/** The attribute with its variables substituted; empty when absent. **/
+	function attribute(element:Xml, name:String):String {
+		return substitute(element.get(name));
+	}
+
+	function parseSource(element:Xml):Void {
+		var path = element.exists("path") ? element.get("path") : element.get("name");
+		if (path != null) {
+			sources.push(rebase(substitute(path)));
+		}
+	}
+
+	function parseApp(element:Xml):Void {
+		if (element.exists("path")) appPath = attribute(element, "path");
+		if (element.exists("file")) appFile = attribute(element, "file");
+	}
+
+	/** Either registers an asset handler (both handler and type given) or declares an asset library. **/
+	function parseLibrary(element:Xml):Void {
+		if (element.exists("handler") && element.exists("type")) {
+			libraryHandlers.set(attribute(element, "type"), attribute(element, "handler"));
+			return;
+		}
+		var type = assetTypeOf(element);
+		if (type != "" && !declaredAssetTypes.contains(type)) {
+			declaredAssetTypes.push(type);
+		}
+	}
+
+	/** The declared type, else the library file's extension. **/
+	function assetTypeOf(element:Xml):String {
+		if (element.exists("type")) return attribute(element, "type");
+		if (element.exists("path")) return Path.extension(attribute(element, "path")).toLowerCase();
+		return "";
+	}
+
+	function parseHaxelib(element:Xml):Void {
+		var name = attribute(element, "name");
+		if (name == "") return;
+		resolveAndRegister(name, attribute(element, "version"));
+	}
+
+	/**
+		Registers the haxelib and its transitive dependencies. Each library's
+		include.xml merges as a nested project and can add more haxelibs,
+		haxedefs and sources.
+	**/
 	function resolveAndRegister(name:String, version:String):Void {
-		if (Lambda.exists(haxelibs, lib -> lib.name == name)) return;
+		if (isRegistered(name)) return;
 
 		var resolved = haxelibResolver(name, version);
 		if (resolved == null) {
 			registerHaxelib(name, version, version);
 			return;
 		}
-		// the resolver returns the library plus its transitive dependency chain;
-		// each library's include.xml merges as a nested project (lime's
-		// HXProject.fromHaxelib) - it can add more haxelibs, haxedefs and sources
 		for (library in resolved) {
-			if (Lambda.exists(haxelibs, lib -> lib.name == library.name)) continue;
-			// only the project's own pin is a pin: the resolved version is what
-			// the checkout's haxelib.json says, and echoing it as a request
-			// would make a later `haxelib path name:version` pick that release
-			// over the repository's current (git/dev) selection
-			var declaredVersion = library.name == name ? version : "";
-			registerHaxelib(library.name, declaredVersion, library.version);
+			if (isRegistered(library.name)) continue;
+			// Only the project's own version is a pin. A dependency's resolved
+			// version comes from its checkout, and listing it as a pin would make
+			// a later `haxelib path name:version` pick that release over the
+			// repository's current (git or dev) selection.
+			var pinnedVersion = library.name == name ? version : "";
+			registerHaxelib(library.name, pinnedVersion, library.version);
 			for (classpath in library.classpaths) {
 				if (!sources.contains(classpath)) {
 					sources.push(classpath);
 				}
 			}
-			// extraParams.hxml -D entries are real compile-context defines
 			for (extraDefine in library.extraDefines) {
-				var pair = extraDefine.split("=");
-				var value = pair.length > 1 ? pair.slice(1).join("=") : "";
-				defines.set(pair[0], value);
-				haxedefs.set(pair[0], value);
+				var define = splitDefine(extraDefine);
+				defines.set(define.name, define.value);
+				haxedefs.set(define.name, define.value);
 			}
 			if (library.includeXml != null) {
 				parseLibraryInclude(library.includeXml, library.root);
@@ -203,11 +232,17 @@ class ProjectXmlEvaluator {
 		}
 	}
 
-	/** The listed version is the project's DECLARED pin (empty when none); the define carries the resolved one. **/
-	function registerHaxelib(name:String, declaredVersion:String, resolvedVersion:String):Void {
-		haxelibs.push({name: name, version: declaredVersion});
-		// lime defines each haxelib's name so later conditions can test for it
-		// (why if="openfl" works below a <haxelib name="openfl"/> line)
+	function isRegistered(name:String):Bool {
+		return Lambda.exists(haxelibs, lib -> lib.name == name);
+	}
+
+	/**
+		Lists the haxelib with the project's pinned version (empty when none).
+		Like lime, it also defines the library's name with its resolved version,
+		which is why `if="openfl"` works below a `<haxelib name="openfl"/>` line.
+	**/
+	function registerHaxelib(name:String, pinnedVersion:String, resolvedVersion:String):Void {
+		haxelibs.push({name: name, version: pinnedVersion});
 		if (!defines.exists(name)) {
 			defines.set(name, resolvedVersion);
 		}
@@ -246,62 +281,48 @@ class ProjectXmlEvaluator {
 		}
 	}
 
+	/** Inside an included section only the matching <section> element counts. **/
 	function isValidElement(element:Xml, section:String):Bool {
 		var ifValue = element.get("if");
-		if (ifValue != null && !matchesConditions(ifValue)) {
-			return false;
-		}
-
+		if (ifValue != null && !matchesConditions(ifValue)) return false;
 		var unlessValue = element.get("unless");
-		if (unlessValue != null && matchesConditions(unlessValue)) {
-			return false;
-		}
-
-		if (section != "") {
-			if (element.nodeName != "section") return false;
-			if (!element.exists("id")) return false;
-			if (substitute(element.get("id")) != section) return false;
-		}
-
-		return true;
+		if (unlessValue != null && matchesConditions(unlessValue)) return false;
+		if (section == "") return true;
+		return element.nodeName == "section" && element.exists("id") && attribute(element, "id") == section;
 	}
 
-	// OR over "||" segments, each segment an AND over space-separated tokens
+	/** OR over "||" segments, each segment an AND over space-separated tokens. **/
 	function matchesConditions(value:String):Bool {
-		var anyMatched = false;
 		for (segment in substitute(value).split("||")) {
-			var allMatched = true;
-			for (token in substitute(segment).split(" ")) {
-				var check = StringTools.trim(substitute(token));
-				if (check == "false") {
-					allMatched = false;
-				} else if (check != "" && check != "true"
-						&& !defines.exists(check)
-						&& !environment.exists(check)
-						&& check != command) {
-					allMatched = false;
-				}
-			}
-			if (allMatched) {
-				anyMatched = true;
+			var tokens = substitute(segment).split(" ").map(token -> StringTools.trim(substitute(token)));
+			if (Lambda.foreach(tokens, tokenPasses)) {
+				return true;
 			}
 		}
-		return anyMatched;
+		return false;
 	}
 
-	// ${name} variable reference; the name group excludes closing braces
-	static final VAR_REFERENCE = ~/\$\{([^}]+)\}/;
+	function tokenPasses(token:String):Bool {
+		if (token == "" || token == "true") return true;
+		if (token == "false") return false;
+		return defines.exists(token) || environment.exists(token) || token == command;
+	}
 
 	function substitute(value:Null<String>):String {
 		if (value == null) return "";
 		var result = value;
 		while (VAR_REFERENCE.match(result)) {
-			var name = VAR_REFERENCE.matched(1);
-			var replacement = defines.exists(name) ? defines.get(name)
-				: environment.exists(name) ? environment.get(name) : "";
+			var replacement = variable(VAR_REFERENCE.matched(1));
 			result = VAR_REFERENCE.matchedLeft() + replacement + VAR_REFERENCE.matchedRight();
 		}
 		return result;
+	}
+
+	/** A define first, then an environment variable; unknown names read as empty. **/
+	function variable(name:String):String {
+		if (defines.exists(name)) return defines.get(name);
+		if (environment.exists(name)) return environment.get(name);
+		return "";
 	}
 
 	static function orEmpty(value:Null<String>):String {

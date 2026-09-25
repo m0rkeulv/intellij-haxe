@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.profiler.bridge.js;
 
-import com.intellij.profiler.api.configurations.ProfilerConfigurationState;
+import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerConfigurationStateBase;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -8,15 +8,16 @@ import org.jetbrains.annotations.NotNull;
  * and V8's sampling interval in microseconds (CDP
  * {@code Profiler.setSamplingInterval}; 1000 is V8's own default).
  */
-public final class HaxeJsProfilerConfigurationState implements ProfilerConfigurationState {
+public final class HaxeJsProfilerConfigurationState extends HaxeProfilerConfigurationStateBase {
 
   static final int DEFAULT_SAMPLING_INTERVAL_US = 1000;
+  private static final int MIN_SAMPLING_INTERVAL_US = 100;
+  private static final int MAX_SAMPLING_INTERVAL_US = 1_000_000;
 
-  private String displayName;
   private int samplingIntervalUs = DEFAULT_SAMPLING_INTERVAL_US;
 
   public HaxeJsProfilerConfigurationState(@NotNull String displayName) {
-    this.displayName = displayName;
+    super(displayName);
   }
 
   @Override
@@ -24,21 +25,11 @@ public final class HaxeJsProfilerConfigurationState implements ProfilerConfigura
     return HaxeJsProfilerConfigurationType.ID;
   }
 
-  @Override
-  public @NotNull String getDisplayName() {
-    return displayName;
-  }
-
-  @Override
-  public void setDisplayName(@NotNull String name) {
-    displayName = name;
-  }
-
   public int getSamplingIntervalUs() {
     return samplingIntervalUs;
   }
 
   public void setSamplingIntervalUs(int intervalUs) {
-    samplingIntervalUs = Math.max(100, Math.min(intervalUs, 1_000_000));
+    samplingIntervalUs = Math.clamp(intervalUs, MIN_SAMPLING_INTERVAL_US, MAX_SAMPLING_INTERVAL_US);
   }
 }

@@ -21,9 +21,10 @@ import static com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexDataUtil
 import static com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeInheritanceIndexUtil.superTypeSimpleName;
 
 /**
- *  Keys are simple name (aka not FQN) since we are not allowed to read outside the fie being indexed.
- *  We solve the problem with multiple classes with the same name by getting FQN and filter on lookup.
- *  its slightly slower than FQN but getting FQN would throw errors due to how we  resolved FQN.
+ * Keys are the supertypes' SIMPLE names: an indexer may not read outside the
+ * indexed file, and resolving a supertype's qualified name would. Supertypes
+ * sharing a simple name are told apart at lookup, which checks each
+ * candidate's qualified name.
  */
 public class HaxeTypedefInheritanceIndexer implements DataIndexer<String, List<HaxeComponentIndexData>, FileContent> {
 
@@ -44,8 +45,6 @@ public class HaxeTypedefInheritanceIndexer implements DataIndexer<String, List<H
             }
 
             return collectSuperClasses(classes);
-
-
         }
         return Map.of();
     }

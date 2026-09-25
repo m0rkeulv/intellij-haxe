@@ -7,6 +7,8 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.PopupStep;
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep;
+import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowLaunches;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
@@ -39,11 +41,12 @@ public final class HaxeProfileProgramAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
-    if (!(panel.getSelectedUserObject() instanceof ProgramNode programNode)) return;
+    Project project = e.getProject();
+    if (project == null || !(panel.getSelectedUserObject() instanceof ProgramNode programNode)) return;
     List<ProfilerEntry> entries = profilerEntriesFor(programNode);
     if (entries.isEmpty()) return; // raced a settings change - the action was disabled a moment ago
     if (entries.size() == 1) {
-      panel.executeProgramWithProfiler(programNode, entries.get(0).executor());
+      HaxeToolWindowLaunches.runProgram(project, programNode, entries.getFirst().executor());
       return;
     }
     BaseListPopupStep<ProfilerEntry> step =
@@ -60,7 +63,7 @@ public final class HaxeProfileProgramAction extends DumbAwareAction {
 
         @Override
         public @Nullable PopupStep<?> onChosen(ProfilerEntry entry, boolean finalChoice) {
-          return doFinalStep(() -> panel.executeProgramWithProfiler(programNode, entry.executor()));
+          return doFinalStep(() -> HaxeToolWindowLaunches.runProgram(project, programNode, entry.executor()));
         }
       };
     JBPopupFactory.getInstance()
@@ -75,7 +78,7 @@ public final class HaxeProfileProgramAction extends DumbAwareAction {
                                   : List.of();
     e.getPresentation().setEnabledAndVisible(!entries.isEmpty());
     e.getPresentation().setText(entries.size() == 1
-                                ? HaxeBundle.message("haxe.toolwindow.profile.action.with", entries.get(0).displayName())
+                                ? HaxeBundle.message("haxe.toolwindow.profile.action.with", entries.getFirst().displayName())
                                 : HaxeBundle.message("haxe.toolwindow.profile.action"));
   }
 

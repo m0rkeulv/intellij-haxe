@@ -143,7 +143,8 @@ public class HaxeTypeUtils {
     public record MapKeyValueTypes(@NotNull ResultHolder key, @NotNull ResultHolder value) {}
 
     /**
-     * Attempts to find the types for Keys and Values in Maps
+     * The key and value types of a map type: the parameters of its array-access
+     * setter, else of set() when the class implements IMap. Null for other types.
      */
     @Nullable
     public static MapKeyValueTypes tryFindMapKeyValueTypes(SpecificTypeReference reference) {
@@ -180,13 +181,11 @@ public class HaxeTypeUtils {
     }
 
     private static boolean implementsIMap(@NotNull HaxeClass haxeClass) {
-        String qualifiedName = haxeClass.getFullyQualifiedName();
-        if (qualifiedName.equals(IMAP)) return true;
+        if (IMAP.equals(haxeClass.getFullyQualifiedName())) return true;
         return haxeClass.getHaxeImplementsList().stream()
-          .map(type -> type.getReferenceExpression().resolve())
-          .map(HaxeClass.class::cast)
+          .map(type -> type.getReferenceExpression().resolveHaxeClass().getHaxeClass())
           .filter(Objects::nonNull)
-          .anyMatch(aClass ->  aClass.getFullyQualifiedName().equals(IMAP));
+          .anyMatch(implemented -> IMAP.equals(implemented.getFullyQualifiedName()));
     }
 
 }

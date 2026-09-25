@@ -27,7 +27,13 @@ import java.util.TreeMap;
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeToolWindowSections", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class HaxeSectionSelectionStore implements PersistentStateComponent<HaxeSectionSelectionStore.State> {
+
+  public static final class State {
+    public Map<String, String> sectionsByFile = new TreeMap<>();
+  }
+
   private final @Nullable Project project;
+  private State state = new State();
 
   public HaxeSectionSelectionStore(@NotNull Project project) {
     this.project = project;
@@ -38,18 +44,6 @@ public final class HaxeSectionSelectionStore implements PersistentStateComponent
   public HaxeSectionSelectionStore() {
     this.project = null;
   }
-
-  private void notifyChanged() {
-    if (project != null) {
-      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
-    }
-  }
-
-  public static final class State {
-    public Map<String, String> sectionsByFile = new TreeMap<>();
-  }
-
-  private State state = new State();
 
   @NotNull
   public static HaxeSectionSelectionStore getInstance(@NotNull Project project) {
@@ -67,7 +61,7 @@ public final class HaxeSectionSelectionStore implements PersistentStateComponent
       state.sectionsByFile = new TreeMap<>();
     }
     this.state = state;
-    notifyChanged();
+    HaxeBuildSettingsListener.publish(project);
   }
 
   /** The selected section's index among the given identities; the first section when nothing (or a removed section) is stored. */
@@ -80,6 +74,6 @@ public final class HaxeSectionSelectionStore implements PersistentStateComponent
 
   public void setSelectedSection(@NotNull VirtualFile buildFile, @NotNull String sectionId) {
     state.sectionsByFile.put(buildFile.getPath(), sectionId);
-    notifyChanged();
+    HaxeBuildSettingsListener.publish(project);
   }
 }

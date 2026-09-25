@@ -2,9 +2,11 @@ package com.intellij.plugins.haxe.display.client;
 
 import com.intellij.plugins.haxe.display.protocol.*;
 import com.intellij.plugins.haxe.display.protocol.server.HaxeServerContext;
+import com.intellij.plugins.haxe.display.protocol.server.ModuleInfo;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -21,7 +23,7 @@ public class DisplayJsonTest {
   @Test
   @DisplayName("request envelope carries jsonrpc id method and params")
   public void requestEnvelopeCarriesJsonrpcIdMethodAndParams() {
-    String request = DisplayJson.encodeRequest("display/hover", java.util.Map.of("offset", 42));
+    String request = DisplayJson.encodeRequest("display/hover", Map.of("offset", 42));
     assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"display/hover\",\"params\":{\"offset\":42}}", request);
   }
 
@@ -132,6 +134,26 @@ public class DisplayJsonTest {
     assertEquals("js", context.platform());
     assertEquals("c5da38c653f9", context.signature());
     assertEquals("1", context.defines().get("js"));
+  }
+
+  @Test
+  @DisplayName("module types decode to qualified names")
+  public void moduleTypesDecodeToQualifiedNames() throws Exception {
+    // server/module of pack.Shapes, which declares its main type and a sub-type (trimmed)
+    String payload = """
+      {"jsonrpc":"2.0","id":1,"result":{"result":{"id":7,"file":"src/pack/Shapes.hx","sign":"a1b2",
+        "path":{"pack":["pack"],"moduleName":"Shapes"},
+        "types":[
+          {"pack":["pack"],"moduleName":"Shapes","typeName":"Shapes"},
+          {"pack":["pack"],"moduleName":"Shapes","typeName":"Circle"}],
+        "dependencies":[{"path":"haxe.ds.StringMap","sign":"c3d4"}],"dependents":[]},
+        "timestamp":1.0}}""";
+
+    ModuleInfo module = DisplayJson.decodeModule(DisplayJson.unwrap(payload));
+
+    assertEquals("a1b2", module.sign());
+    assertEquals(List.of("pack.Shapes", "pack.Shapes.Circle"), module.types());
+    assertEquals(List.of("haxe.ds.StringMap"), module.dependencies());
   }
 
   @Test

@@ -58,7 +58,7 @@ public class HaxeUnusedMethodInspection extends LocalInspectionTool {
                                     psiReference.getElement().getParent() instanceof HaxeType type
                                                    && type.getParent() instanceof HaxeNewExpression)
                             .findAll();
-                    // if new expression(s) found then we stop here, no need to do another search
+                    // a new expression found - no further search needed
                     if (!references.isEmpty()) return;
                 }
 

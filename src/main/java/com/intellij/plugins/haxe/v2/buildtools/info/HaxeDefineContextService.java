@@ -1,11 +1,5 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
-import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
-import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;
-import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
@@ -20,13 +14,13 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
-import com.intellij.util.text.SemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import com.intellij.util.messages.MessageBusConnection;
+import com.intellij.util.text.SemVer;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -53,51 +47,6 @@ import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG
 @CustomLog
 public final class HaxeDefineContextService implements Disposable, HaxeBuildSettingsListener {
 
-  private record Snapshot(@NotNull String key, @NotNull Map<String, String> defines) {
-  }
-
-  private final Project project;
-  private volatile Snapshot snapshot;
-
-  public HaxeDefineContextService(@NotNull Project project) {
-    this.project = project;
-    // any build-settings mutation invalidates the derived define context;
-    // config changes (language level, compiler settings) feed haxe_ver so
-    // they invalidate it too
-    project.getMessageBus().connect().subscribe(HaxeBuildSettingsListener.TOPIC, this);
-    project.getMessageBus().connect().subscribe(HaxeBuildConfigListener.TOPIC,
-                                                (HaxeBuildConfigListener)this::buildSettingsChanged);
-  }
-
-  /**
-   * Drops the derived context and recomputes in the background — a settings
-   * mutation must reach parsing (re-index) and highlighting WITHOUT relying on
-   * the tool window being open to call {@link #refreshAsync()}.
-   */
-  @Override
-  public void buildSettingsChanged() {
-    snapshot = null;
-    fastState = null;
-    effectiveActivePathComputed = false;
-    activeContainerIdComputed = false;
-    refreshAsync();
-  }
-
-  public static HaxeDefineContextService getInstance(@NotNull Project project) {
-    return project.getService(HaxeDefineContextService.class);
-  }
-
-  /**
-   * Lock-free identity of every input reachable without VFS or read-action
-   * work: the active path, the file's content stamp and the three stores'
-   * modification counters. A match short-circuits the whole computation -
-   * this runs per candidate inside index lookups, so the fast path must not
-   * touch findFileByPath or take a read action.
-   */
-  private record FastState(@NotNull String path, @NotNull VirtualFile file, long contentStamp,
-                           @Nullable Map<String, String> defines) {
-  }
-
   /**
    * Sentinel for {@link #lastComputed}: no consumer has been handed a define
    * context yet, so nothing was parsed against one and no reparse is owed.
@@ -105,6 +54,28 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    */
   private static final Map<String, String> NEVER_HANDED_OUT = new LinkedHashMap<>();
 
+  /** Every input of a computed context; a mismatch invalidates the cached one. */
+  private record ContextKey(@NotNull String path, @NotNull HaxeBuildFileType type, long contentStamp,
+                            @Nullable String targetId, @Nullable String sdkName, @Nullable String customTarget,
+                            @NotNull String compilerVersion, @NotNull List<EnvironmentDefine> overrides) {
+  }
+
+  private record Snapshot(@NotNull ContextKey key, @NotNull Map<String, String> defines) {
+  }
+
+  /**
+   * Lock-free identity of every input reachable without VFS or read-action
+   * work: the active path and the file's content stamp. A match
+   * short-circuits the whole computation - this runs per candidate inside
+   * index lookups, so the fast path must not touch findFileByPath or take a
+   * read action.
+   */
+  private record FastState(@NotNull String path, @NotNull VirtualFile file, long contentStamp,
+                           @Nullable Map<String, String> defines) {
+  }
+
+  private final Project project;
+  private volatile Snapshot snapshot;
   private volatile FastState fastState;
   /** The defines most recently handed to a consumer — what current PSI state was parsed against. */
   private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
@@ -121,18 +92,30 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   private volatile String activeContainerId;
   private volatile boolean activeContainerIdComputed;
 
-  @Nullable
-  private String effectiveActivePath() {
-    if (!effectiveActivePathComputed) {
-      effectiveActivePath = ReadAction.computeBlocking(() -> HaxeKnownBuildFiles.effectiveActivePath(project));
-      effectiveActivePathComputed = true;
-    }
-    return effectiveActivePath;
+  public HaxeDefineContextService(@NotNull Project project) {
+    this.project = project;
+    // config changes (language level, compiler settings) feed haxe_ver, so they invalidate the context too
+    MessageBusConnection connection = project.getMessageBus().connect(this);
+    connection.subscribe(HaxeBuildSettingsListener.TOPIC, this);
+    connection.subscribe(HaxeBuildConfigListener.TOPIC, (HaxeBuildConfigListener)this::buildSettingsChanged);
   }
 
-  private static long contentStamp(@NotNull VirtualFile file) {
-    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
-    return document != null ? document.getModificationStamp() : file.getModificationStamp();
+  public static HaxeDefineContextService getInstance(@NotNull Project project) {
+    return project.getService(HaxeDefineContextService.class);
+  }
+
+  /**
+   * Drops the derived context and recomputes in the background — a settings
+   * mutation must reach parsing (re-index) and highlighting WITHOUT relying on
+   * the tool window being open to call {@link #refreshAsync()}.
+   */
+  @Override
+  public void buildSettingsChanged() {
+    snapshot = null;
+    fastState = null;
+    effectiveActivePathComputed = false;
+    activeContainerIdComputed = false;
+    refreshAsync();
   }
 
   /**
@@ -165,19 +148,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       return null;
     }
 
-    Map<String, String> result = ReadAction.computeBlocking(() -> {
-      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-      if (type == null) return null;
-
-      String key = cacheKey(file, type);
-      Snapshot current = snapshot;
-      if (current != null && current.key().equals(key)) {
-        return current.defines();
-      }
-      Map<String, String> defines = compute(file, type);
-      snapshot = new Snapshot(key, defines);
-      return defines;
-    });
+    Map<String, String> result = HaxeReadActions.compute(() -> cachedOrComputedDefines(file));
     fastState = new FastState(path, file, contentStamp(file), result);
     lastComputed = result;
     return result;
@@ -192,6 +163,60 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   public void refreshAsync() {
     if (!refreshQueued.compareAndSet(false, true)) return;
     AppExecutorUtil.getAppExecutorService().execute(this::refreshNow);
+  }
+
+  /**
+   * Whether the ACTIVE build context defines the name before environment
+   * overrides apply — the define quickfix uses this to decide between merely
+   * dropping its own override and masking a build-file define with a REMOVE
+   * entry. False when no v2 active build file is configured.
+   */
+  public boolean isDefinedWithoutOverrides(@NotNull String name) {
+    VirtualFile file = activeBuildFile();
+    if (file == null) return false;
+    return HaxeReadActions.compute(() -> {
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+      if (type == null) return false;
+      return baseDefines(file, type).containsKey(name);
+    });
+  }
+
+  /**
+   * The container owning the ACTIVE build file, or null without one — where
+   * define overrides belong, and the container library/SDK elements resolve
+   * their language level against. Cached (the language level lookup calls
+   * this per annotated element); callers hold the read lock.
+   */
+  @Nullable
+  public String activeContainerId() {
+    if (!activeContainerIdComputed) {
+      VirtualFile file = activeBuildFile();
+      activeContainerId = file == null ? null : HaxeContainers.containerIdFor(project, file);
+      activeContainerIdComputed = true;
+    }
+    return activeContainerId;
+  }
+
+  @Nullable
+  private String effectiveActivePath() {
+    if (!effectiveActivePathComputed) {
+      effectiveActivePath = HaxeReadActions.compute(() -> HaxeKnownBuildFiles.effectiveActivePath(project));
+      effectiveActivePathComputed = true;
+    }
+    return effectiveActivePath;
+  }
+
+  @Nullable
+  private VirtualFile activeBuildFile() {
+    String path = effectiveActivePath();
+    if (StringUtil.isEmptyOrSpaces(path)) return null;
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    return file != null && file.isValid() ? file : null;
+  }
+
+  private static long contentStamp(@NotNull VirtualFile file) {
+    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
+    return document != null ? document.getModificationStamp() : file.getModificationStamp();
   }
 
   private void refreshNow() {
@@ -222,20 +247,32 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     }
   }
 
-  /** Cheap identity of every input; a mismatch invalidates the cached context. */
+  /** The snapshot's defines while its inputs are unchanged, else a fresh computation. Call in a read action. */
+  @Nullable
+  private Map<String, String> cachedOrComputedDefines(@NotNull VirtualFile file) {
+    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+    if (type == null) return null;
+
+    ContextKey key = contextKey(file, type);
+    Snapshot current = snapshot;
+    if (current != null && current.key().equals(key)) {
+      return current.defines();
+    }
+    Map<String, String> defines = compute(file, type);
+    snapshot = new Snapshot(key, defines);
+    return defines;
+  }
+
   @NotNull
-  private String cacheKey(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
-    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
-    long stamp = document != null ? document.getModificationStamp() : file.getModificationStamp();
-
+  private ContextKey contextKey(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
     String containerId = HaxeContainers.containerIdFor(project, file);
+    HaxeEnvironmentStore environment = HaxeEnvironmentStore.getInstance(project);
     String targetId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file);
-    String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    String customTarget = HaxeEnvironmentStore.getInstance(project).getCustomTarget(containerId);
-    String compilerIdentity = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
-    List<EnvironmentDefine> overrides = HaxeEnvironmentStore.getInstance(project).getDefines(containerId);
-
-    return file.getPath() + '|' + type + '|' + stamp + '|' + targetId + '|' + sdkName + '|' + customTarget + '|' + compilerIdentity + '|' + overrides;
+    String sdkName = environment.getSdkName(containerId);
+    String customTarget = environment.getCustomTarget(containerId);
+    String compilerVersion = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
+    List<EnvironmentDefine> overrides = environment.getDefines(containerId);
+    return new ContextKey(file.getPath(), type, contentStamp(file), targetId, sdkName, customTarget, compilerVersion, overrides);
   }
 
   @NotNull
@@ -344,48 +381,6 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       }
     }
     return null;
-  }
-
-  /**
-   * Whether the ACTIVE build context defines the name before environment
-   * overrides apply — the define quickfix uses this to decide between merely
-   * dropping its own override and masking a build-file define with a REMOVE
-   * entry. False when no v2 active build file is configured.
-   */
-  public boolean isDefinedWithoutOverrides(@NotNull String name) {
-    String path = HaxeKnownBuildFiles.effectiveActivePath(project);
-    if (StringUtil.isEmptyOrSpaces(path)) return false;
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    if (file == null || !file.isValid()) return false;
-    return HaxeReadActions.compute(() -> {
-      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-      if (type == null) return false;
-      return baseDefines(file, type).containsKey(name);
-    });
-  }
-
-  /**
-   * The container owning the ACTIVE build file, or null without one — where
-   * define overrides belong, and the container library/SDK elements resolve
-   * their language level against. Cached (the language level lookup calls
-   * this per annotated element); callers hold the read lock.
-   */
-  @Nullable
-  public String activeContainerId() {
-    if (!activeContainerIdComputed) {
-      activeContainerId = computeActiveContainerId();
-      activeContainerIdComputed = true;
-    }
-    return activeContainerId;
-  }
-
-  @Nullable
-  private String computeActiveContainerId() {
-    String path = effectiveActivePath();
-    if (StringUtil.isEmptyOrSpaces(path)) return null;
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    if (file == null || !file.isValid()) return null;
-    return HaxeContainers.containerIdFor(project, file);
   }
 
   /**

@@ -5,9 +5,9 @@ import java.util.List;
 
 /**
  * The post-macro shape of one type ({@code server/type}): every member with
- * its resolved type, INCLUDING macro-generated ones that exist in no source
- * file. This is what member lookups on statically-unresolvable receivers
- * resolve against.
+ * its type, including macro-generated members that exist in no source file.
+ * Member lookups that static resolution cannot answer resolve against it.
+ * Haxe 5 sends the member types unresolved (see the README).
  */
 public record TypeBlueprint(String name,
                             String kind,
@@ -21,6 +21,7 @@ public record TypeBlueprint(String name,
     }
   }
 
+  /** The instance or static member named {@code memberName}; null when the type has none. */
   public Member findMember(String memberName) {
     for (Member member : fields) {
       if (member.name().equals(memberName)) return member;

@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.externalSystem.autoimport.ExternalSystemProjectAware;
 import com.intellij.openapi.externalSystem.autoimport.ExternalSystemProjectId;
 import com.intellij.openapi.externalSystem.autoimport.ExternalSystemProjectListener;
@@ -12,6 +11,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
@@ -47,7 +47,7 @@ public final class HaxeBuildFilesProjectAware implements ExternalSystemProjectAw
 
   @Override
   public @NotNull Set<String> getSettingsFiles() {
-    return ReadAction.computeBlocking(() -> {
+    return HaxeReadActions.compute(() -> {
       Set<String> files = new HashSet<>();
       for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scanProjectRoot(project)) {
         files.add(buildFile.file().getPath());

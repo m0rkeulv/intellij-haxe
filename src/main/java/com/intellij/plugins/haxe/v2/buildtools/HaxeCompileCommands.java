@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
@@ -41,20 +40,20 @@ public final class HaxeCompileCommands {
     HaxeEnvironmentStore.CompileCommand stored = HaxeEnvironmentStore.getInstance(project).getCompileCommand(containerId);
     if (stored == null) return null;
 
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(stored.buildFilePath());
-    if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return null;
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, stored.buildFilePath());
+    if (buildFile == null) return null;
 
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    ActionCommand action = stored.actionName() == null ? null
-      : actionCommand(project, environmentSdk, containerId, file, type, stored.actionName());
-    List<String> base = action != null ? action.command()
-                                       : HaxeBuildFileActions.defaultCommand(project, environmentSdk, file, type);
-    if (base == null || base.isEmpty()) return null;
+    ActionCommand action = stored.actionName() == null
+                           ? null
+                           : actionCommand(project, environmentSdk, containerId, buildFile, stored.actionName());
+    List<String> base = action != null
+                        ? action.command()
+                        : HaxeBuildSystem.of(buildFile.type()).defaultCommand(project, environmentSdk, buildFile);
+    if (base.isEmpty()) return null;
 
     String workDirectory = action == null ? null : action.workDirectory();
-    return buildResolved(project, containerId, environmentSdk, file, base, stored.arguments(), workDirectory);
+    return buildResolved(project, containerId, environmentSdk, buildFile.file(), base, stored.arguments(), workDirectory);
   }
 
   /**
@@ -67,17 +66,15 @@ public final class HaxeCompileCommands {
                                        @NotNull String buildFilePath,
                                        @NotNull String actionName,
                                        @NotNull String extraArguments) {
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
+    if (buildFile == null) return null;
 
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null || !file.isValid()) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return null;
-
-    String containerId = HaxeContainers.containerIdFor(project, file);
+    String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    ActionCommand action = actionCommand(project, environmentSdk, containerId, file, type, actionName);
+    ActionCommand action = actionCommand(project, environmentSdk, containerId, buildFile, actionName);
     if (action == null || action.command().isEmpty()) return null;
-    return buildResolved(project, containerId, environmentSdk, file, action.command(), extraArguments, action.workDirectory());
+    return buildResolved(project, containerId, environmentSdk, buildFile.file(), action.command(), extraArguments,
+                         action.workDirectory());
   }
 
   /** Action names offered for a build file: the type's defaults plus its custom actions. */
@@ -86,7 +83,7 @@ public final class HaxeCompileCommands {
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     List<String> names = new ArrayList<>();
     if (type != null) {
-      names.addAll(HaxeBuildFileActions.defaultActionNames(type));
+      names.addAll(HaxeBuildSystem.of(type).defaultActionNames());
     }
     for (HaxeCustomActionsStore.CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(file.getPath())) {
       if (!names.contains(custom.name())) {
@@ -191,12 +188,12 @@ public final class HaxeCompileCommands {
   private static ActionCommand actionCommand(@NotNull Project project,
                                              @Nullable String environmentSdk,
                                              @NotNull String containerId,
-                                             @NotNull VirtualFile file,
-                                             @NotNull HaxeBuildFileType type,
+                                             @NotNull HaxeBuildFile buildFile,
                                              @NotNull String actionName) {
-    List<String> defaultAction = HaxeBuildFileActions.defaultActionCommand(project, environmentSdk, file, type, actionName);
+    List<String> defaultAction = HaxeBuildSystem.of(buildFile.type()).actionCommand(project, environmentSdk, buildFile, actionName);
     if (defaultAction != null) return new ActionCommand(defaultAction, null);
 
+    VirtualFile file = buildFile.file();
     HaxeCustomActionsStore.CustomAction custom = HaxeCustomActionsStore.getInstance(project).getActions(file.getPath()).stream()
       .filter(action -> action.name().equals(actionName))
       .findFirst()
@@ -205,7 +202,7 @@ public final class HaxeCompileCommands {
 
     String moduleRoot = HaxeContainers.containerRootPath(project, containerId);
     String projectRoot = HaxeContainers.projectRootPath(project);
-    String expanded = HaxeCustomCommands.expandTarget(project, file, type, custom.command());
+    String expanded = HaxeCustomCommands.expandTarget(project, file, buildFile.type(), custom.command());
     List<String> command = HaxeCustomCommands.parse(HaxeCustomCommands.expandRoots(expanded, moduleRoot, projectRoot));
     String workDirectory = HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), null, moduleRoot, projectRoot);
     return new ActionCommand(command, workDirectory);

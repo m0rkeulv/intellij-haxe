@@ -25,17 +25,17 @@ import javax.swing.*;
  */
 public final class HaxeCustomActionDialog extends DialogWrapper {
 
-  private JPanel panel;
-  private JBTextField nameField;
-  private JBTextField commandField;
-  private JBTextField workDirectoryField;
-  private JTextPane hintArea;
-
   /** The values being edited; action rows and tool rows share the dialog. */
   public record EditedCommand(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
   }
 
   private final String nameRequiredKey;
+
+  private JPanel panel;
+  private JBTextField nameField;
+  private JBTextField commandField;
+  private JBTextField workDirectoryField;
+  private JTextPane hintArea;
 
   private HaxeCustomActionDialog(@NotNull Project project, @Nullable EditedCommand initial,
                                  @NotNull String addTitleKey, @NotNull String editTitleKey,
@@ -61,8 +61,9 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   /** A build file's custom action: the hint documents work directory and placeholder expansion. */
   @NotNull
   public static HaxeCustomActionDialog forAction(@NotNull Project project, @Nullable CustomAction initial) {
-    EditedCommand edited = initial == null ? null
-      : new EditedCommand(initial.name(), initial.command(), initial.workDirectory());
+    EditedCommand edited = initial == null
+                           ? null
+                           : new EditedCommand(initial.name(), initial.command(), initial.workDirectory());
     return new HaxeCustomActionDialog(project, edited,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",
                                       null, "haxe.custom.action.dialog.name.required");

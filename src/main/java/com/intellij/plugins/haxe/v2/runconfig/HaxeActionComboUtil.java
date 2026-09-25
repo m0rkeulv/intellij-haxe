@@ -27,13 +27,10 @@ final class HaxeActionComboUtil {
                                 @NotNull ComboBox<String> combo,
                                 @Nullable String buildFilePath,
                                 @Nullable String selectedAction) {
+    String previous = selectedAction != null ? selectedAction : StringUtil.notNullize((String)combo.getEditor().getItem());
+    VirtualFile file = StringUtil.isEmptyOrSpaces(buildFilePath) ? null : LocalFileSystem.getInstance().findFileByPath(buildFilePath);
 
     DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-    boolean emptyOrSpaces = StringUtil.isEmptyOrSpaces(buildFilePath);
-
-    String previous = selectedAction != null ? selectedAction : StringUtil.notNullize((String)combo.getEditor().getItem());
-    VirtualFile file = emptyOrSpaces ? null : LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-
     if (file != null && file.isValid()) {
       // type detection may sniff file content - EDT has no implicit read access
       ReadAction.computeBlocking(() -> HaxeCompileCommands.availableActionNames(project, file))

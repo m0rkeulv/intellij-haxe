@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * Imports a haxe-formatter (HaxeCheckstyle) hxformat.json as a code style
  * scheme: the hxformat DEFAULTS first, then the file's overrides. Config keys
- * we cannot honor are listed in the post-import message.
+ * that cannot be honored are listed in the post-import message.
  */
 public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
 

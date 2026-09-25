@@ -9,11 +9,10 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.util.PathUtil;
@@ -25,7 +24,9 @@ import javax.swing.*;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Editor for {@link HaxeActionRunConfiguration}: a module filter, the build file
@@ -116,44 +117,21 @@ public final class HaxeActionRunConfigurationEditor extends SettingsEditor<HaxeA
     HaxeActionComboUtil.refillActionCombo(project, actionCombo, (String)fileCombo.getSelectedItem(), selectedAction);
   }
 
-  /** The chosen module's build files (detected + manually added), or every known build file. */
+  /** The chosen module's known build files (detected + manually added - hidden), or every known build file. */
   @NotNull
   private Set<String> collectBuildFilePaths(@Nullable String moduleName) {
-    // the scanner walks module roots - EDT has no implicit read access
-    return ReadAction.computeBlocking(() -> {
-      Set<String> paths = new LinkedHashSet<>();
-      HaxeBuildFilesStore filesStore = HaxeBuildFilesStore.getInstance(project);
-
-      if (moduleName != null) {
-        Module module = ModuleManager.getInstance(project).findModuleByName(moduleName);
-        if (module != null) {
-          for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scan(module)) {
-            paths.add(buildFile.file().getPath());
-          }
-        }
-        paths.addAll(filesStore.getAddedPaths(moduleName));
-        return sortedByName(paths);
-      }
-
-      for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scanProjectRoot(project)) {
-        paths.add(buildFile.file().getPath());
-      }
-      for (Module module : ModuleManager.getInstance(project).getModules()) {
-        for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scan(module)) {
-          paths.add(buildFile.file().getPath());
-        }
-      }
-      paths.addAll(filesStore.getAllAddedPaths());
-      return sortedByName(paths);
-    });
+    // the scan walks module roots - EDT has no implicit read access
+    List<HaxeBuildFile> known = ReadAction.computeBlocking(() -> knownBuildFiles(moduleName));
+    return known.stream()
+      .map(buildFile -> buildFile.file().getPath())
+      .sorted(Comparator.comparing(PathUtil::getFileName, String.CASE_INSENSITIVE_ORDER))
+      .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   @NotNull
-  private static Set<String> sortedByName(@NotNull Set<String> paths) {
-    Set<String> sorted = new LinkedHashSet<>();
-    paths.stream()
-      .sorted(Comparator.comparing(PathUtil::getFileName, String.CASE_INSENSITIVE_ORDER))
-      .forEach(sorted::add);
-    return sorted;
+  private List<HaxeBuildFile> knownBuildFiles(@Nullable String moduleName) {
+    if (moduleName == null) return HaxeKnownBuildFiles.all(project);
+    Module module = ModuleManager.getInstance(project).findModuleByName(moduleName);
+    return module == null ? List.of() : HaxeKnownBuildFiles.forModule(project, module);
   }
 }

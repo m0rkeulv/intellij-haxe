@@ -20,6 +20,16 @@ public record HaxeBuildFileInfo(@Nullable HaxeTarget target,
 
   public static final HaxeBuildFileInfo EMPTY = new HaxeBuildFileInfo(null, null, List.of(), List.of(), List.of());
 
+  @NotNull
+  public HaxeBuildFileInfo withTarget(@Nullable HaxeTarget target, @Nullable String targetOutput) {
+    return new HaxeBuildFileInfo(target, targetOutput, defines, libraries, classpaths);
+  }
+
+  @NotNull
+  public HaxeBuildFileInfo withLibraries(@NotNull List<HaxeLibDependency> libraries) {
+    return new HaxeBuildFileInfo(target, targetOutput, defines, libraries, classpaths);
+  }
+
   /// A `-D name=value` compiler define.
   public record HaxeDefine(@NotNull String name, @Nullable String value) {
   }

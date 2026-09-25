@@ -41,7 +41,7 @@ public class HaxeLanguageLevelContainerResolutionTest extends HaxeCodeInsightFix
     VirtualFile buildFile = myFixture.addFileToProject("build.hxml", "-cp src\n--main Main\n").getVirtualFile();
     HaxeBuildFilesStore.getInstance(getProject()).addFile(getModule().getName(), buildFile.getPath());
     HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(buildFile.getPath());
-    HaxeCompilerSettings.getInstance(getProject()).setModuleLanguageLevelOverride(getModule().getName(), HaxeLanguageLevel.HAXE_4_0);
+    HaxeCompilerSettings.getInstance(getProject()).setContainerLanguageLevelOverride(getModule().getName(), HaxeLanguageLevel.HAXE_4_0);
 
     PsiFile libraryFile = libraryPsiFile();
 

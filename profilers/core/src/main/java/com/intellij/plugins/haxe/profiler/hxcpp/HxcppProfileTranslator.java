@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.profiler.hxcpp;
 
 import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;

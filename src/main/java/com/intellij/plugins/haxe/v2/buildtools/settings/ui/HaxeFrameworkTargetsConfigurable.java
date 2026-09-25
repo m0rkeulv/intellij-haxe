@@ -31,13 +31,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * One framework's target table (Settings | Haxe | Frameworks | Lime/OpenFL/NME):
  * Name / Haxe target / Flags rows with add, remove and reordering — the row
- * order is the selector order and the FIRST row is the default target. The
- * first flag is the tool's target word; removing every row restores the
- * built-in defaults on next use.
+ * order is the selector order; the framework's built-in default target stays
+ * the default while its row exists, else the first row takes over. The first
+ * flag is the tool's target word; removing every row restores the built-in
+ * defaults on next use.
  */
 public abstract class HaxeFrameworkTargetsConfigurable implements SearchableConfigurable {
 
@@ -153,11 +155,9 @@ public abstract class HaxeFrameworkTargetsConfigurable implements SearchableConf
   }
 
   private static final class TargetColumn extends ColumnInfo<TargetRow, String> {
-    private static final List<String> CHOICES = new ArrayList<>();
-    static {
-      CHOICES.add("");
-      Arrays.stream(HaxeTarget.values()).map(Enum::name).forEach(CHOICES::add);
-    }
+    // blank first: the backend is informational and may stay unknown
+    private static final String[] CHOICES = Stream.concat(Stream.of(""), Arrays.stream(HaxeTarget.values()).map(Enum::name))
+      .toArray(String[]::new);
 
     TargetColumn() {
       super(HaxeBundle.message("haxe.frameworks.targets.column.target"));
@@ -180,7 +180,7 @@ public abstract class HaxeFrameworkTargetsConfigurable implements SearchableConf
 
     @Override
     public TableCellEditor getEditor(TargetRow row) {
-      return new DefaultCellEditor(new ComboBox<>(CHOICES.toArray(String[]::new)));
+      return new DefaultCellEditor(new ComboBox<>(CHOICES));
     }
   }
 

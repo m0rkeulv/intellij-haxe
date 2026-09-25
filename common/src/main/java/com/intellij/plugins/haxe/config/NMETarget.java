@@ -1,9 +1,9 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * NME targets based on commandline output from "NME help"
+ * The targets the nme command line tool builds for, as listed by {@code nme help}.
  */
-public enum NMETarget {
+public enum NMETarget implements FrameworkTarget {
 
   CPP("Desktop (C++)", HaxeTarget.CPP, "cpp"),
   CPPIA("Cppia", HaxeTarget.CPPIA, "cppia"),
@@ -40,15 +40,20 @@ public enum NMETarget {
     this.outputTarget = target;
   }
 
+  @Override
   public String getTargetFlag() {
     return flags.length > 0 ? flags[0] : "";
   }
 
+  @Override
   public String[] getFlags() {
     return flags;
   }
 
-  public HaxeTarget getOutputTarget() { return outputTarget; }
+  @Override
+  public HaxeTarget getOutputTarget() {
+    return outputTarget;
+  }
 
   @Override
   public String toString() {

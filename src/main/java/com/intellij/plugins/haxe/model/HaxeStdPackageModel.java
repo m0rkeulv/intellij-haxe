@@ -71,8 +71,7 @@ public class HaxeStdPackageModel extends HaxePackageModel {
   }
 
   private HaxeFileModel getStdFileModel() {
-    // TODO: resolve() still re-creates this per call; serve it from the same
-    //       CachedValue as getStdRootTypes if it shows up in profiles.
+    // TODO: serve this per-call file model from a CachedValue like getStdRootTypes
     final HaxeFile file = getFile(STD_TYPES);
     if (file != null) {
       return HaxeStdTypesFileModel.fromFile(file);

@@ -28,7 +28,7 @@ internal object HaxeTemplateScaffold {
   /** Creates the module under base name/path; returns the content root path, or null when the wizard lacks base data. */
   fun createModule(project: Project, step: NewProjectWizardStep): String? {
     val base = step.baseData ?: return null
-    val contentRoot = "${base.path}/${base.name}"
+    val contentRoot = contentRootOf(step) ?: return null
 
     HaxeSdkType.getInstance().ensureSdk()
 
@@ -42,9 +42,9 @@ internal object HaxeTemplateScaffold {
 
   /**
    * Writes the template's files (paths relative to the content root, parent
-   * dirs created) and returns the created build file when {@code buildFileName}
-   * names one of them — registered as the project's active build file, with
-   * the target selection stored when {@code targetId} is given.
+   * dirs created). When {@code buildFileName} names one of them, that file
+   * becomes the project's active build file and its container's compile
+   * command, with the target selection stored when {@code targetId} is given.
    */
   fun writeAndRegister(project: Project,
                        contentRoot: String,
@@ -91,8 +91,7 @@ internal object HaxeTemplateScaffold {
    * empty directory alive when the project is a git repository.
    */
   fun createLocalHaxelibRepo(project: Project, step: NewProjectWizardStep, gitEnabled: Boolean) {
-    val base = step.baseData ?: return
-    val contentRoot = "${base.path}/${base.name}"
+    val contentRoot = contentRootOf(step) ?: return
     WriteAction.runAndWait<IOException> {
       val root = VfsUtil.createDirectoryIfMissing(contentRoot) ?: return@runAndWait
       val repo = VfsUtil.createDirectoryIfMissing(root, ".haxelib")
@@ -102,6 +101,9 @@ internal object HaxeTemplateScaffold {
       excludeFromModule(project, repo)
     }
   }
+
+  private fun contentRootOf(step: NewProjectWizardStep): String? =
+    step.baseData?.let { base -> "${base.path}/${base.name}" }
 
   private fun excludeFromModule(project: Project, folder: VirtualFile) {
     val module = ModuleUtilCore.findModuleForFile(folder, project) ?: return

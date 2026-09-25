@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.lang.psi.indexes.filebased.externalizer;
 
 import com.intellij.plugins.haxe.HaxeComponentType;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.data.HaxeComponentIndexData;
-import com.intellij.plugins.haxe.model.FullyQualifiedInfo;
 import com.intellij.util.io.DataExternalizer;
 import com.intellij.util.io.IOUtil;
 import org.jetbrains.annotations.NotNull;

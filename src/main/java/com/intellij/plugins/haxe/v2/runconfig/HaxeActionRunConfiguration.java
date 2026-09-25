@@ -14,12 +14,12 @@ import com.intellij.execution.process.KillableColoredProcessHandler;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessTerminatedListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolCommandLines;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
@@ -88,11 +88,8 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
     if (StringUtil.isEmptyOrSpaces(actionName)) {
       throw new RuntimeConfigurationError(HaxeBundle.message("haxe.action.config.no.action"));
     }
-    HaxeCompileCommands.Resolved resolved =
-      ReadAction.computeBlocking(() -> HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments));
-    if (resolved == null) {
-      throw new RuntimeConfigurationError(
-        HaxeBundle.message("haxe.action.config.unresolvable", actionName, PathUtil.getFileName(buildFilePath)));
+    if (resolve() == null) {
+      throw new RuntimeConfigurationError(unresolvableMessage());
     }
   }
 
@@ -108,14 +105,12 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
       @Override
       protected @NotNull ProcessHandler startProcess() throws ExecutionException {
         HaxeUnsavedDocuments.saveAll();
-        HaxeCompileCommands.Resolved resolved = ReadAction.computeBlocking(
-          () -> HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments));
+        HaxeCompileCommands.Resolved resolved = resolve();
         if (resolved == null) {
-          throw new ExecutionException(
-            HaxeBundle.message("haxe.action.config.unresolvable", actionName, PathUtil.getFileName(buildFilePath)));
+          throw new ExecutionException(unresolvableMessage());
         }
-        List<String> command = HaxeCompileCommands.connectIfEnabled(
-          getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
+        List<String> command =
+          HaxeCompileCommands.connectIfEnabled(getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
         GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory());
         KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine) {
           // a run action wraps the app - long-running, sparse output; the default reader
@@ -129,6 +124,17 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
         return processHandler;
       }
     };
+  }
+
+  /** The referenced action's command as currently configured, or null when it no longer resolves. */
+  @Nullable
+  private HaxeCompileCommands.Resolved resolve() {
+    return HaxeReadActions.compute(() -> HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments));
+  }
+
+  @NotNull
+  private String unresolvableMessage() {
+    return HaxeBundle.message("haxe.action.config.unresolvable", actionName, PathUtil.getFileName(buildFilePath));
   }
 
   @Override

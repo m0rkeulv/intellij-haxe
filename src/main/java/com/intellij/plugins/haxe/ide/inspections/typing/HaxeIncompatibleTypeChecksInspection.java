@@ -27,7 +27,7 @@ public class HaxeIncompatibleTypeChecksInspection extends HaxeInspection {
 
   public static void check(@NotNull HaxeTypeCheckExpr expr, @NotNull HaxeProblemReporter reporter) {
     if(PsiTreeUtil.getParentOfType(expr, HaxeMacroValueExpression.class) != null) {
-      //TODO ignoring typeCheck for expressions inside macro expressions for now (Types can be dynamic with reification etc)
+      // TODO: type checks inside macro expressions (reification makes their types dynamic)
       return;
     }
     final PsiElement[] children = expr.getChildren();

@@ -4,6 +4,7 @@ import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
@@ -46,7 +47,7 @@ public final class HaxeCustomCommands {
                                     @NotNull HaxeBuildFileType type,
                                     @NotNull String command) {
     if (!command.contains(TARGET_VARIABLE)) return command;
-    String targetFlag = HaxeBuildFileActions.selectedTargetFlag(project, file, type);
+    String targetFlag = HaxeBuildSystem.of(type).selectedTargetFlag(project, new HaxeBuildFile(file, type));
     return targetFlag == null ? command : command.replace(TARGET_VARIABLE, targetFlag);
   }
 

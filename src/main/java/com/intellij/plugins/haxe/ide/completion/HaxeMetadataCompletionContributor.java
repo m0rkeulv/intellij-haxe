@@ -4,7 +4,6 @@ import com.intellij.codeInsight.completion.*;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.NlsSafe;
 import com.intellij.patterns.PsiElementPattern;
 import com.intellij.plugins.haxe.ide.lookup.HaxeLookupElement;
 import com.intellij.plugins.haxe.lang.psi.*;

@@ -4,13 +4,14 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.plugins.haxe.ide.projectStructure.detection.HaxeProjectFileDetectionUtil;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeType;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.psi.PsiManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -76,7 +77,6 @@ public final class HaxeBuildFileScanner {
     }
   }
 
-
   private record DetectedType(long modificationStamp, @Nullable HaxeBuildFileType type) {
   }
 
@@ -87,6 +87,15 @@ public final class HaxeBuildFileScanner {
   // compilation); build files are few, so a cache keyed by path +
   // modification stamp stays tiny
   private static final Map<String, DetectedType> detectionCache = new ConcurrentHashMap<>();
+
+  /** The typed build file at the path, or null when the path names no valid build file. */
+  @Nullable
+  public static HaxeBuildFile findBuildFile(@NotNull Project project, @NotNull String path) {
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+    if (file == null || !file.isValid()) return null;
+    HaxeBuildFileType type = detectType(project, file);
+    return type == null ? null : new HaxeBuildFile(file, type);
+  }
 
   /** Detects the build file type of an arbitrary file (any xml name is accepted). */
   @Nullable
@@ -129,7 +138,7 @@ public final class HaxeBuildFileScanner {
    * actions or targets for it would run `lime build` against a non-project.
    */
   private static boolean isLimeHxpProject(@NotNull Project project, @NotNull VirtualFile file) {
-    return ReadAction.compute(() -> {
+    return HaxeReadActions.compute(() -> {
       if (!(PsiManager.getInstance(project).findFile(file) instanceof HaxeFile haxeFile)) return false;
       for (HaxeClass haxeClass : haxeFile.getClassList()) {
         for (HaxeType extendsType : haxeClass.getHaxeExtendsList()) {

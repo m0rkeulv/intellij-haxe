@@ -20,19 +20,18 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The compile behind a selection run (gutter marker or context menu: one or
- * more suites, or one test) on an hxml tests build: the build's SELECTED section with its entry point swapped for a generated
- * template main — the original {@code --main}/{@code -x} stripped, the
- * target's output redirected into a per-run directory under a short temp
- * root (the real tests artifact must not be overwritten; see
- * {@link #generatedDirectory} for why short), and the generated
- * main's classpath appended. A lime-family build instead compiles through
- * its tool with the generated main overriding the app's (see
- * {@code HaxeTestLaunchPlanner}); only {@link #generatedDirectory} serves
- * it. Templates live under
- * {@code resources/testFrameworks/<framework>/}; the suite list is
- * substituted at generation time as {@code ${NEW_SUITES}} ({@code new A(),
- * new B()}) or {@code ${ADD_SUITES}} ({@code add(A); add(B);}), a
- * single-class template as {@code ${TEST_CLASS}} / {@code ${TEST_METHOD}}.
+ * more suites, or one test) on an hxml tests build: the build's SELECTED
+ * section with its entry point swapped for a generated template main — the
+ * original {@code --main}/{@code -x} stripped, the target's output redirected
+ * into a per-run directory under a short temp root (the real tests artifact
+ * must not be overwritten; see {@link #generatedDirectory} for why short),
+ * and the generated main's classpath appended. A lime-family build instead
+ * compiles through its tool with the generated main overriding the app's
+ * (see {@code HaxeTestLaunchPlanner}); only {@link #generatedDirectory}
+ * serves it. Templates live under {@code resources/testFrameworks/<framework>/};
+ * the suite list is substituted at generation time as {@code ${NEW_SUITES}}
+ * ({@code new A(), new B()}) or {@code ${ADD_SUITES}} ({@code add(A); add(B);}),
+ * a single-class template as {@code ${TEST_CLASS}} / {@code ${TEST_METHOD}}.
  */
 @CustomLog
 final class HaxeTestSingleRuns {
@@ -45,7 +44,7 @@ final class HaxeTestSingleRuns {
 
     @NotNull
     String firstClass() {
-      return testClasses.get(0);
+      return testClasses.getFirst();
     }
   }
 
@@ -69,22 +68,21 @@ final class HaxeTestSingleRuns {
                                                      @NotNull HaxeTestFramework framework,
                                                      @NotNull String extraArguments,
                                                      @NotNull SingleRun singleRun) {
-    HaxeCompileCommands.Resolved resolved = HaxeCompileCommands.resolveAction(
-      project, buildFile.getPath(), defaultBuildAction(), extraArguments);
+    String buildAction = HaxeBuildSystem.of(HaxeBuildFileType.HXML).defaultBuildActionName();
+    HaxeCompileCommands.Resolved resolved = HaxeCompileCommands.resolveAction(project, buildFile.getPath(), buildAction, extraArguments);
     if (resolved == null) return null;
 
     int fileArgumentIndex = resolved.command().indexOf(HaxeBuildWorkDirectories.fileArgument(project, buildFile));
     if (fileArgumentIndex < 0) return null;
 
-    String section = HaxeBuildSections.selectedSectionContent(
-      project, new HaxeBuildFile(buildFile, HaxeBuildFileType.HXML));
+    HaxeBuildFile hxml = new HaxeBuildFile(buildFile, HaxeBuildFileType.HXML);
+    String section = HaxeBuildSections.selectedSectionContent(project, hxml);
     if (section == null) return null;
 
     Path generated = generatedDirectory(buildFile.getPath(), framework, singleRun);
     if (generated == null) return null;
 
-    List<String> sectionArguments = swapEntryPoint(
-      HxmlArguments.parseLines(section.lines().toList()), generated);
+    List<String> sectionArguments = swapEntryPoint(HxmlArguments.parseLines(section.lines().toList()), generated);
     List<String> command = new ArrayList<>(resolved.command().subList(0, fileArgumentIndex));
     command.addAll(sectionArguments);
     command.addAll(resolved.command().subList(fileArgumentIndex + 1, resolved.command().size()));
@@ -92,8 +90,8 @@ final class HaxeTestSingleRuns {
     command.add(generated.toString());
     command.add("--main");
     command.add(MAIN_CLASS);
-    return new HaxeCompileCommands.Resolved(
-      resolved.containerId(), command, resolved.workDirectory(), resolved.presentable(), resolved.connectEligible());
+    return new HaxeCompileCommands.Resolved(resolved.containerId(), command, resolved.workDirectory(), resolved.presentable(),
+                                            resolved.connectEligible());
   }
 
   /**
@@ -165,8 +163,8 @@ final class HaxeTestSingleRuns {
    */
   @Nullable
   static Path generatedDirectory(@NotNull String buildFilePath,
-                                         @NotNull HaxeTestFramework framework,
-                                         @NotNull SingleRun singleRun) {
+                                 @NotNull HaxeTestFramework framework,
+                                 @NotNull SingleRun singleRun) {
     String templateName = framework.singleRunTemplate(singleRun.singleTest());
     if (templateName == null) return null;
     String source = substitutedTemplate(framework, templateName, singleRun);
@@ -187,7 +185,8 @@ final class HaxeTestSingleRuns {
         Files.writeString(main, source);
       }
       return root;
-    } catch (IOException e) {
+    }
+    catch (IOException e) {
       log.warn("cannot generate the single-run main: " + e.getMessage());
       return null;
     }
@@ -215,7 +214,8 @@ final class HaxeTestSingleRuns {
         substituted = substituted.replace("${TEST_METHOD}", singleRun.testMethod());
       }
       return substituted;
-    } catch (IOException e) {
+    }
+    catch (IOException e) {
       log.warn("cannot read single-run template " + resource + ": " + e.getMessage());
       return null;
     }
@@ -240,8 +240,4 @@ final class HaxeTestSingleRuns {
     return "/testFrameworks/" + framework.libraryName() + "/" + templateName;
   }
 
-  @NotNull
-  private static String defaultBuildAction() {
-    return HaxeBuildFileActions.defaultBuildActionName(HaxeBuildFileType.HXML);
-  }
 }

@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.runner.debugger.browser;
 import com.intellij.execution.ExecutionException;
 import com.intellij.ide.browsers.WebBrowser;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
@@ -23,7 +24,7 @@ public final class HaxeBrowserTestSupport {
   private HaxeBrowserTestSupport() {
   }
 
-  /** The backend serving [webRoot]; shared by the run host and the debug session. */
+  /** The backend serving {@code webRoot}; shared by the run host and the debug session. */
   @NotNull
   public static BrowserDebugBackend createBackend(@NotNull Project project, @NotNull Path webRoot)
     throws ExecutionException {
@@ -41,13 +42,8 @@ public final class HaxeBrowserTestSupport {
     if (executable == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.browser.no.executable", browser.getName()));
     }
-    String node = HaxeToolPathResolver.resolveNodeExecutable(project, null);
-    return new BrowserDebugBackend(BrowserFamily.CHROMIUM,
-                                   node != null ? node : "",
-                                   executable.toString(),
-                                   true,
-                                   webRoot,
-                                   null);
+    String node = StringUtil.notNullize(HaxeToolPathResolver.resolveNodeExecutable(project, null));
+    return new BrowserDebugBackend(BrowserFamily.CHROMIUM, node, executable.toString(), true, webRoot, null);
   }
 
   /** The RUN lane's process: orchestrates the backend and ends on the reporters' completion sentinel. */

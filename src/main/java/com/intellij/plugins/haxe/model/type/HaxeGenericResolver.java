@@ -65,7 +65,6 @@ public class HaxeGenericResolver {
     resolvers.add(new ResolverEntry(name, typeParameter, specificType, scope, restIndex));
   }
 
-
     public void addConstraint(@NotNull HaxeTypeParameterDeclaration typeParameter, @NotNull ResultHolder specificType) {
         addConstraint(typeParameter, specificType, -1);
     }
@@ -90,7 +89,6 @@ public class HaxeGenericResolver {
     arguments.removeIf(entry -> entry.typeParameter().equals(typeParameter));
     arguments.add(new ResolverEntry(name,typeParameter,  specificType, null));
   }
-
 
   public void addArguments(@NotNull HaxeGenericResolver otherResolver) {
     for (ResolverEntry argument : otherResolver.arguments) {
@@ -545,9 +543,7 @@ public class HaxeGenericResolver {
     }
   }
 
-  /**
-   *  key used for caching evaluation results
-   */
+  /** The key evaluation caches use for this resolver's entries. */
   public String toCacheString() {
     if (isEmpty()) return "EMPTY";
     StringBuilder builder = new StringBuilder(128);
@@ -564,7 +560,7 @@ public class HaxeGenericResolver {
   }
 
   private static void appendEntryKeys(StringBuilder builder, List<ResolverEntry> entries) {
-    // simpler form of concurrency guard, used to check if we have the same object references stored.
+    // identity set of the types being expanded: a recursive type cuts instead of looping
     Set<SpecificTypeReference> walkPath = Collections.newSetFromMap(new IdentityHashMap<>());
 
     for (ResolverEntry entry : entries) {
@@ -574,7 +570,6 @@ public class HaxeGenericResolver {
       if (entry.index() >= 0) builder.append('@').append(entry.index());
       builder.append(';');
     }
-
   }
 
   public HaxeGenericResolver withoutMethodTypeParameters() {

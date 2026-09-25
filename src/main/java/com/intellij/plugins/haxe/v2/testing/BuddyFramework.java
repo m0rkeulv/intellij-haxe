@@ -20,7 +20,7 @@ import java.util.Set;
  * ({@code buddy.SingleSuite} chains through it) or implements the
  * {@code buddy.Buddy} main marker. Individual specs are describe/it CLOSURES
  * — there is no method PSI to detect, so {@link #isTestMethod} is always
- * false (the VSCode adapter shares that ceiling).
+ * false.
  *
  * buddy selects its reporter from {@code -D reporter=<fqcn>}, so the shipped
  * {@code intellij_buddy.TcReporter} rides in without macro patching. It

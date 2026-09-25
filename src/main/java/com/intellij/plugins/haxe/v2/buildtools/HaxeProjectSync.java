@@ -4,7 +4,6 @@ import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -24,7 +23,7 @@ public final class HaxeProjectSync {
   public static void sync(@NotNull Project project, @Nullable Runnable onFinished) {
     ApplicationManager.getApplication().invokeLater(() -> {
       if (project.isDisposed()) return;
-      FileDocumentManager.getInstance().saveAllDocuments();
+      HaxeUnsavedDocuments.saveAll();
       HaxeLimeProjectInfoService.getInstance(project).clearCache();
       HaxeNmeProjectInfoService.getInstance(project).clearCache();
       HaxeLibrarySync.sync(project, () -> {

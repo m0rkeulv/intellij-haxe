@@ -58,19 +58,18 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
     // forward slashes keep backslash escaping out of the equation
     String macroCall = "ijhaxe.ProfilerBoot.use('" + dumpPath.toString().replace('\\', '/') + "')";
     String classpath = macroRoot.toString().replace('\\', '/');
-    // HXCPP_TELEMETRY builds the runtime's telemetry instrumentation in
-    // (alloc/GC hooks, dormant until started) - groundwork for the telemetry
-    // collector lane; verified to coexist with the report profiler
+    // HXCPP_TELEMETRY builds the runtime's telemetry hooks in (alloc/GC,
+    // dormant until started); they coexist with the report profiler
+    List<String> additions = defineArgs(limeFamily, List.of("HXCPP_PROFILER", "HXCPP_STACK_TRACE", "HXCPP_TELEMETRY"));
     if (limeFamily) {
       // lime turns each --haxeflag value into one hxml line, where a flag
       // takes the rest of the line as its argument - spaces need no quoting
-      return List.of("-DHXCPP_PROFILER", "-DHXCPP_STACK_TRACE", "-DHXCPP_TELEMETRY",
-                     "--haxeflag=-cp " + classpath,
-                     "--haxeflag=--macro " + macroCall);
+      additions.addAll(List.of("--haxeflag=-cp " + classpath, "--haxeflag=--macro " + macroCall));
     }
-    return List.of("-D", "HXCPP_PROFILER", "-D", "HXCPP_STACK_TRACE", "-D", "HXCPP_TELEMETRY",
-                   "-cp", classpath,
-                   "--macro", macroCall);
+    else {
+      additions.addAll(List.of("-cp", classpath, "--macro", macroCall));
+    }
+    return additions;
   }
 
   @Override
@@ -78,27 +77,17 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
     if (!(HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHxcppTracyProfilerConfigurationState state)) return null;
     // HXCPP_TELEMETRY is the master switch, HXCPP_TRACY picks the tracy
     // implementation, and the zones need the stack-frame instrumentation.
-    // HXCPP_STACK_LINE is REQUIRED, not optional: TelemetryTracy.cpp reads
-    // StackFrame::lineNumber unconditionally, and that member only exists
-    // with the define - a tracy build without it fails to compile.
-    // HXCPP_TRACY_MEMORY adds the GC alloc/free hooks feeding the memory
-    // curves and GC lane; the settings page toggles it (runtime cost).
-    List<String> additions = new ArrayList<>();
+    // HXCPP_STACK_LINE is REQUIRED, not optional: hxcpp's tracy integration
+    // reads each stack frame's line number unconditionally, and that field
+    // only exists with the define, so a tracy build without it fails to
+    // compile. HXCPP_TRACY_MEMORY adds the GC alloc/free hooks feeding the
+    // memory curves and GC lane; the settings page toggles it (runtime cost).
     List<String> defines = new ArrayList<>(List.of("HXCPP_TELEMETRY", "HXCPP_TRACY",
                                                    "HXCPP_STACK_TRACE", "HXCPP_STACK_LINE"));
     if (state.isCaptureMemory()) {
-      defines.add(2, "HXCPP_TRACY_MEMORY");
+      defines.add("HXCPP_TRACY_MEMORY");
     }
-    for (String define : defines) {
-      if (limeFamily) {
-        additions.add("-D" + define);
-      }
-      else {
-        additions.add("-D");
-        additions.add(define);
-      }
-    }
-    return additions;
+    return defineArgs(limeFamily, defines);
   }
 
   @Override
@@ -108,7 +97,7 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
     // main loop emits an end-of-frame marker and pauses sampling across
     // present() under it, so frames align and vsync wait stays out of the
     // samples. Code without the guard is unaffected - an unknown define is inert.
-    return limeFamily ? List.of("-Dhl_profile") : List.of("-D", "hl_profile");
+    return defineArgs(limeFamily, List.of("hl_profile"));
   }
 
   @Override
@@ -144,8 +133,8 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
 
   @Override
   public boolean hxcppTracyElevatedFor(@NotNull Executor executor) {
-    // tracy's system tracing has Windows (ETW) and Linux (ftrace/perf)
-    // backends only - elevating on macOS would gain nothing
+    // tracy's system tracing has Windows and Linux backends only;
+    // elevating on macOS would gain nothing
     if (!SystemInfo.isWindows && !SystemInfo.isLinux) return false;
     return HaxeProfilerConfigurations.stateFor(executor) instanceof HaxeHxcppTracyProfilerConfigurationState state
            && state.isCollectProcessCpu();
@@ -166,6 +155,21 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
       }
     }
     return entries;
+  }
+
+  /** Compile defines in the build tool's spelling: lime takes {@code -Dname}, plain haxe {@code -D name}. */
+  private static List<String> defineArgs(boolean limeFamily, List<String> names) {
+    List<String> args = new ArrayList<>();
+    for (String name : names) {
+      if (limeFamily) {
+        args.add("-D" + name);
+      }
+      else {
+        args.add("-D");
+        args.add(name);
+      }
+    }
+    return args;
   }
 
   /**

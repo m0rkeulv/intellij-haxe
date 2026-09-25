@@ -20,8 +20,7 @@ import org.jetbrains.annotations.Nullable;
  * module's effective level (Settings | Compiler | Haxe Compiler, mirrored by
  * the tool window's Language level row). Library/SDK elements use the active
  * build container's level; project files outside any module use the project
- * default. See doc/haxe-language-levels.md for what each level supports.
- * Call in a read action.
+ * default. Call in a read action.
  */
 public final class HaxeLanguageLevelUtil {
 
@@ -38,9 +37,15 @@ public final class HaxeLanguageLevelUtil {
    */
   @Nullable
   public static HaxeLanguageLevel fromCompiler(@NotNull Project project, @Nullable String containerId) {
-    Sdk sdk = containerId != null ? HaxeToolPathResolver.resolveSdk(project, containerId)
-                                  : HaxeToolPathResolver.findConfiguredSdk(project);
+    Sdk sdk = sdkFor(project, containerId);
     return sdk == null ? null : HaxeLanguageLevel.fromVersionString(sdk.getVersionString());
+  }
+
+  /** The container's SDK, or the project-wide one for a null container. */
+  @Nullable
+  private static Sdk sdkFor(@NotNull Project project, @Nullable String containerId) {
+    return containerId != null ? HaxeToolPathResolver.resolveSdk(project, containerId)
+                               : HaxeToolPathResolver.findConfiguredSdk(project);
   }
 
   /**
@@ -54,8 +59,7 @@ public final class HaxeLanguageLevelUtil {
   public static String getHaxeVersion(@NotNull Project project, @Nullable String containerId) {
     HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(project);
     if (!settings.isUseLanguageLevelForConditionals()) {
-      Sdk sdk = containerId != null ? HaxeToolPathResolver.resolveSdk(project, containerId)
-                                    : HaxeToolPathResolver.findConfiguredSdk(project);
+      Sdk sdk = sdkFor(project, containerId);
       String version = sdk != null ? sdk.getVersionString() : null;
       if (version != null) return version;
     }
@@ -110,7 +114,7 @@ public final class HaxeLanguageLevelUtil {
     HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(project);
     String containerId = containerIdOf(context);
     if (containerId != null) {
-      settings.setModuleLanguageLevelOverride(containerId, level);
+      settings.setContainerLanguageLevelOverride(containerId, level);
     }
     else {
       settings.setDefaultLanguageLevel(level);

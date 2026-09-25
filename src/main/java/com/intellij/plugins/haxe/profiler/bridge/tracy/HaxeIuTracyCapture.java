@@ -1,16 +1,12 @@
 package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.execution.Executor;
-import com.intellij.notification.Notification;
-import com.intellij.notification.NotificationAction;
-import com.intellij.notification.NotificationGroup;
-import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
 import com.intellij.plugins.haxe.profiler.HaxeProfilerProcessUi;
-import com.intellij.plugins.haxe.profiler.HaxeProfilerSnapshotOpener;
+import com.intellij.plugins.haxe.profiler.HaxeProfilingNotifier;
 import com.intellij.plugins.haxe.profiler.HaxeTracyCapture;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeCaptureFiles;
 import com.intellij.plugins.haxe.profiler.bridge.HaxeIuProfilerProcessUi;
@@ -43,9 +39,9 @@ import java.util.stream.Collectors;
  * (handed to the process via TRACY_PORT), listens for the client's
  * broadcast to learn its protocol version, connects out with retries while
  * the process lives (offering the pinned version, else the announced one
- * and then the probe ladder), captures the session and persists it as an
- * HXTS v2 file. The exit notification offers to open it, or explains why
- * nothing was captured.
+ * and then the probe ladder), and spools the session into an HXTS zone
+ * capture while it streams. The session opens in its profiler tab, or a
+ * notification explains why nothing was captured.
  */
 public class HaxeIuTracyCapture implements HaxeTracyCapture {
 
@@ -220,11 +216,11 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
       }
       // recompress BEFORE the completion rebuild: a store opened on the
       // live-level file keeps its chunk OFFSETS, and the recompressed
-      // replacement lays chunks out differently - a rebuild racing the
-      // rewrite ends up scanning garbage at stale offsets (the call chart
-      // and frame breakdowns read the file lazily and came up empty). The
-      // live view keeps refreshing off the untouched original meanwhile,
-      // and its per-tick reopen picks up the swapped file cleanly.
+      // replacement lays chunks out differently, so a rebuild racing the
+      // rewrite would scan the new file at stale offsets (the call chart and
+      // frame breakdowns read it lazily). The live view keeps refreshing off
+      // the untouched original meanwhile, and its per-tick reopen picks up
+      // the swapped file cleanly.
       if (finalLevel > liveLevel) {
         try {
           HxtZoneRecompressor.recompress(sessionFile, finalLevel);
@@ -286,30 +282,18 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
 
     private void notifyCaptured(long zoneCount, TracyProtocolVersion protocol) {
       String protocolLabel = HaxeHxcppTracyProfilerConfigurationType.protocolLabel(protocol);
-      String content = HaxeProfilerBundle.message("haxe.profiler.tracy.captured",
-                                                  sessionFile.toString(), zoneCount, protocolLabel);
-      Notification notification = group().createNotification(content, NotificationType.INFORMATION);
-      HaxeProfilerSnapshotOpener opener = HaxeProfilerSnapshotOpener.getInstance();
-      if (opener != null) {
-        String openText = HaxeProfilerBundle.message("haxe.profiler.dump.open");
-        notification.addAction(NotificationAction.createSimpleExpiring(openText, () -> opener.open(project, sessionFile)));
-      }
-      notification.notify(project);
+      String content = HaxeProfilerBundle.message("haxe.profiler.tracy.captured", sessionFile.toString(), zoneCount, protocolLabel);
+      HaxeProfilingNotifier.notifySnapshotReady(project, content, sessionFile);
     }
 
     private void notifyNothingCaptured() {
-      String content = HaxeProfilerBundle.message("haxe.profiler.tracy.none");
-      group().createNotification(content, NotificationType.WARNING).notify(project);
+      HaxeProfilingNotifier.reportNothingCaptured(project, null, HaxeProfilerBundle.message("haxe.profiler.tracy.none"));
     }
 
     private void notifyProtocolUnsupported(List<TracyProtocolVersion> refused) {
       String offered = refused.stream().map(version -> String.valueOf(version.wire())).collect(Collectors.joining(", "));
       String content = HaxeProfilerBundle.message("haxe.profiler.tracy.protocol.unsupported", offered);
-      group().createNotification(content, NotificationType.ERROR).notify(project);
-    }
-
-    private static NotificationGroup group() {
-      return NotificationGroupManager.getInstance().getNotificationGroup("haxe.profiler");
+      HaxeProfilingNotifier.group().createNotification(content, NotificationType.ERROR).notify(project);
     }
   }
 }

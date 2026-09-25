@@ -46,7 +46,7 @@ public class HaxeAssignmentTypeCompatibilityInspection extends HaxeInspection {
 
     ResultHolder rhsType = HaxeTypeResolver.getPsiElementType(rhs, psi, rhsResolver);
 
-    // check if we try to assign to a method reference, if so its required ot be dynamic
+    // assigning to a method reference requires it to be dynamic
     if(lhs instanceof HaxeReferenceExpression referenceExpression) {
       PsiElement resolve = referenceExpression.resolve();
       if(resolve instanceof HaxeMethodDeclaration methodDeclaration) {

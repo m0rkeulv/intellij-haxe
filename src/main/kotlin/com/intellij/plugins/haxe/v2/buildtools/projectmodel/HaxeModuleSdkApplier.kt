@@ -6,7 +6,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.platform.backend.workspace.WorkspaceModel
 import com.intellij.platform.workspace.jps.entities.InheritedSdkDependency
-import com.intellij.platform.workspace.jps.entities.ModuleEntity
+import com.intellij.platform.workspace.jps.entities.ModuleId
 import com.intellij.platform.workspace.jps.entities.SdkId
 import com.intellij.platform.workspace.jps.entities.modifyModuleEntity
 import com.intellij.platform.workspace.jps.entities.sdkId
@@ -36,8 +36,7 @@ class HaxeModuleSdkApplier(private val project: Project, private val scope: Coro
   fun applyAsync(moduleName: String, sdkName: String?) {
     scope.launch {
       WorkspaceModel.getInstance(project).update("Haxe module SDK") { builder ->
-        val module = builder.entities(ModuleEntity::class.java).firstOrNull { it.name == moduleName }
-          ?: return@update
+        val module = builder.resolve(ModuleId(moduleName)) ?: return@update
         builder.modifyModuleEntity(module) {
           // the sdkId setter replaces an explicit SDK but leaves an
           // inherited-SDK marker alone - drop it, inheriting is exactly

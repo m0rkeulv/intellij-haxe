@@ -8,25 +8,17 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Time projections of a snapshot for timeline views: per-thread activity
- * spans, sampled-activity and GC series, and frame durations from the
- * target's end-of-frame markers. All times are MILLISECONDS relative to
- * {@link #captureStartSeconds} so viewers get zero-based axes.
+ * Time projections of a snapshot for the chart views: the time-ordered
+ * flame tree, GC and frame spans, and the sampled-activity series. Times are
+ * relative to {@link #captureStartSeconds} so viewers get zero-based axes.
  * <p>
- * The activity series is sample DENSITY, not CPU usage — a sampling dump
- * carries no scheduler data. A target that can measure real CPU load feeds
- * it as another series next to these.
+ * The activity series is sample DENSITY, not CPU usage: a sampling dump
+ * carries no scheduler data.
  */
 public final class ProfilerTimeline {
-
-  /** A span on a thread's lane and how many samples landed inside it. */
-  public record TimeSpan(long startMs, long endMs, int sampleCount) {
-  }
 
   /** One chart point. */
   public record SeriesPoint(long timeMs, double value) {
@@ -48,6 +40,17 @@ public final class ProfilerTimeline {
       return endUs - startUs;
     }
   }
+
+  /** A span on the capture's microsecond time axis (shared with {@link #flameTree}). */
+  public record UsSpan(long startUs, long endUs) {
+    public long durationUs() {
+      return endUs - startUs;
+    }
+  }
+
+  /** Samples further apart than this many sampling periods (and at least {@link #MIN_SAMPLING_GAP_US}) break runs. */
+  private static final int SAMPLING_GAP_PERIODS = 5;
+  private static final long MIN_SAMPLING_GAP_US = 20_000;
 
   private ProfilerTimeline() {
   }
@@ -78,39 +81,6 @@ public final class ProfilerTimeline {
   }
 
   /**
-   * The thread's sampled activity as fixed-width blocks: one span per
-   * {@code blockMs}-wide bucket that contains samples, empty buckets leaving
-   * lane gaps. Blocks are the clickable timeline unit — each maps back to
-   * its bucket's samples for {@link #dominantStack}.
-   */
-  // TODO: unconsumed since the Timeline tab's removal - intended for the live-view charts.
-  @NotNull
-  public static List<TimeSpan> activityBlocks(@NotNull ProfilerSnapshot snapshot, int threadId, long blockMs) {
-    if (blockMs <= 0) return List.of();
-    double start = captureStartSeconds(snapshot);
-
-    List<TimeSpan> blocks = new ArrayList<>();
-    long currentBlock = -1;
-    int count = 0;
-    for (StackSample sample : snapshot.samples()) {
-      if (sample.threadId() != threadId) continue;
-      long block = Math.round((sample.time() - start) * 1000) / blockMs;
-      if (block != currentBlock) {
-        if (count > 0) {
-          blocks.add(new TimeSpan(currentBlock * blockMs, (currentBlock + 1) * blockMs, count));
-        }
-        currentBlock = block;
-        count = 0;
-      }
-      count++;
-    }
-    if (count > 0) {
-      blocks.add(new TimeSpan(currentBlock * blockMs, (currentBlock + 1) * blockMs, count));
-    }
-    return blocks;
-  }
-
-  /**
    * The thread's samples as a time-ordered flame tree (what Chrome renders
    * for a cpuProfile): a run extends while consecutive samples keep the same
    * frame AND every ancestor above it; a sampling gap far beyond the period
@@ -137,7 +107,7 @@ public final class ProfilerTimeline {
   public static FlameNode flameTree(@NotNull ProfilerSnapshot snapshot, int threadId, int maxDepth,
                                     long fromUs, long toUs) {
     long periodUs = periodUs(snapshot.samplesPerSecond());
-    long gapUs = Math.max(5 * periodUs, 20_000);
+    long gapUs = samplingGapUs(periodUs);
     double start = captureStartSeconds(snapshot);
 
     NodeBuilder root = new NodeBuilder(null, 0);
@@ -148,7 +118,7 @@ public final class ProfilerTimeline {
     boolean any = false;
     for (StackSample sample : snapshot.samples()) {
       if (sample.threadId() != threadId) continue;
-      long timeUs = Math.round((sample.time() - start) * 1_000_000);
+      long timeUs = microsSince(start, sample.time());
       if (!any) {
         firstUs = timeUs;
         any = true;
@@ -204,13 +174,6 @@ public final class ProfilerTimeline {
     return current;
   }
 
-  /** A span on the capture's microsecond time axis (shared with {@link #flameTree}). */
-  public record UsSpan(long startUs, long endUs) {
-    public long durationUs() {
-      return endUs - startUs;
-    }
-  }
-
   /**
    * Contiguous runs of GC-flagged samples on the thread as spans, each
    * extended one sampling period like the flame runs; a clean sample or a
@@ -219,7 +182,7 @@ public final class ProfilerTimeline {
   @NotNull
   public static List<UsSpan> gcSpans(@NotNull ProfilerSnapshot snapshot, int threadId) {
     long periodUs = periodUs(snapshot.samplesPerSecond());
-    long gapUs = Math.max(5 * periodUs, 20_000);
+    long gapUs = samplingGapUs(periodUs);
     double start = captureStartSeconds(snapshot);
 
     List<UsSpan> spans = new ArrayList<>();
@@ -227,7 +190,7 @@ public final class ProfilerTimeline {
     long spanEndUs = 0;
     for (StackSample sample : snapshot.samples()) {
       if (sample.threadId() != threadId) continue;
-      long timeUs = Math.round((sample.time() - start) * 1_000_000);
+      long timeUs = microsSince(start, sample.time());
       boolean continues = sample.inGc() && spanStartUs >= 0 && timeUs - spanEndUs <= gapUs;
       if (continues) {
         spanEndUs = timeUs + periodUs;
@@ -261,8 +224,8 @@ public final class ProfilerTimeline {
     for (ProfilerEvent event : snapshot.events()) {
       if (event.threadId() != threadId || event.code() != ProfilerEvent.FRAME_CODE) continue;
       if (!Double.isNaN(previousFrameEnd)) {
-        spans.add(new UsSpan(Math.round((previousFrameEnd - start) * 1_000_000),
-                             Math.round((event.time() - start) * 1_000_000)));
+        spans.add(new UsSpan(microsSince(start, previousFrameEnd),
+                             microsSince(start, event.time())));
       }
       previousFrameEnd = event.time();
     }
@@ -285,7 +248,7 @@ public final class ProfilerTimeline {
       if (event.code() != ProfilerEvent.GC_TIME_CODE) continue;
       long gcUs = parsedMicros(event.data());
       if (gcUs <= 0) continue;
-      long endUs = Math.round((event.time() - start) * 1_000_000);
+      long endUs = microsSince(start, event.time());
       long startUs = Math.max(endUs - gcUs, previousEndUs);
       if (startUs >= endUs) continue;
       spans.add(new UsSpan(startUs, endUs));
@@ -301,6 +264,33 @@ public final class ProfilerTimeline {
     catch (NumberFormatException e) {
       return 0;
     }
+  }
+
+  /**
+   * A flame node over time-ordered children, with idle fillers wherever the
+   * children leave part of {@code [startUs, endUs)} uncovered, so sibling
+   * positions stay time-true.
+   */
+  @NotNull
+  public static FlameNode flameNode(@Nullable StackFrame frame, long startUs, long endUs, int samples,
+                                    @NotNull List<FlameNode> children) {
+    List<FlameNode> tiled = new ArrayList<>(children.size());
+    long covered = startUs;
+    for (FlameNode child : children) {
+      if (child.startUs() > covered) {
+        tiled.add(idleFiller(covered, child.startUs()));
+      }
+      tiled.add(child);
+      covered = child.endUs();
+    }
+    if (!tiled.isEmpty() && covered < endUs) {
+      tiled.add(idleFiller(covered, endUs));
+    }
+    return new FlameNode(frame, startUs, endUs, samples, List.copyOf(tiled), false);
+  }
+
+  private static FlameNode idleFiller(long startUs, long endUs) {
+    return new FlameNode(null, startUs, endUs, 0, List.of(), true);
   }
 
   /**
@@ -360,6 +350,18 @@ public final class ProfilerTimeline {
     return common;
   }
 
+  private static long samplingGapUs(long periodUs) {
+    return Math.max(SAMPLING_GAP_PERIODS * periodUs, MIN_SAMPLING_GAP_US);
+  }
+
+  private static long microsSince(double startSeconds, double timeSeconds) {
+    return Math.round((timeSeconds - startSeconds) * 1_000_000);
+  }
+
+  private static long millisSince(double startSeconds, double timeSeconds) {
+    return Math.round((timeSeconds - startSeconds) * 1000);
+  }
+
   private static long periodUs(int samplesPerSecond) {
     return samplesPerSecond > 0 ? Math.max(1, Math.round(1_000_000.0 / samplesPerSecond)) : 1000;
   }
@@ -377,56 +379,13 @@ public final class ProfilerTimeline {
       this.endUs = startUs;
     }
 
-    /** Freezes the subtree, inserting idle fillers wherever children leave part of this node uncovered. */
     FlameNode freeze() {
-      List<FlameNode> frozen = new ArrayList<>(children.size());
-      long covered = startUs;
-      for (NodeBuilder child : children) {
-        if (child.startUs > covered) {
-          frozen.add(new FlameNode(null, covered, child.startUs, 0, List.of(), true));
-        }
-        frozen.add(child.freeze());
-        covered = child.endUs;
-      }
-      if (!frozen.isEmpty() && covered < endUs) {
-        frozen.add(new FlameNode(null, covered, endUs, 0, List.of(), true));
-      }
-      return new FlameNode(frame, startUs, endUs, samples, List.copyOf(frozen), false);
+      List<FlameNode> frozenChildren = children.stream().map(NodeBuilder::freeze).toList();
+      return flameNode(frame, startUs, endUs, samples, frozenChildren);
     }
-  }
-
-  /**
-   * The most frequent identical stack among the thread's samples inside
-   * {@code [fromMs, toMs)} — what the thread was doing in a clicked block.
-   * Empty when no sample falls inside. Frames come back ROOT-FIRST like the
-   * samples carry them; a tie keeps the earliest-seen stack.
-   */
-  // TODO: unconsumed since the Timeline tab's removal - intended for the live-view charts.
-  @NotNull
-  public static List<StackFrame> dominantStack(@NotNull ProfilerSnapshot snapshot, int threadId, long fromMs, long toMs) {
-    double start = captureStartSeconds(snapshot);
-
-    Map<List<StackFrame>, Integer> counts = new LinkedHashMap<>();
-    for (StackSample sample : snapshot.samples()) {
-      if (sample.threadId() != threadId) continue;
-      long timeMs = Math.round((sample.time() - start) * 1000);
-      if (timeMs < fromMs || timeMs >= toMs) continue;
-      counts.merge(sample.frames(), 1, Integer::sum);
-    }
-
-    List<StackFrame> dominant = List.of();
-    int best = 0;
-    for (Map.Entry<List<StackFrame>, Integer> entry : counts.entrySet()) {
-      if (entry.getValue() > best) {
-        best = entry.getValue();
-        dominant = entry.getKey();
-      }
-    }
-    return dominant;
   }
 
   /** Samples per second across ALL threads, bucketed; GC-flagged samples only when {@code gcOnly}. */
-  // TODO: unconsumed since the Timeline tab's removal - intended for the live-view charts.
   @NotNull
   public static List<SeriesPoint> activitySeries(@NotNull ProfilerSnapshot snapshot, long bucketMs, boolean gcOnly) {
     if (snapshot.samples().isEmpty() || bucketMs <= 0) return List.of();
@@ -435,7 +394,7 @@ public final class ProfilerTimeline {
     int[] counts = new int[bucketCount];
     for (StackSample sample : snapshot.samples()) {
       if (gcOnly && !sample.inGc()) continue;
-      int bucket = (int)(Math.round((sample.time() - start) * 1000) / bucketMs);
+      int bucket = (int)(millisSince(start, sample.time()) / bucketMs);
       if (bucket >= 0 && bucket < bucketCount) counts[bucket]++;
     }
 
@@ -446,25 +405,4 @@ public final class ProfilerTimeline {
     return series;
   }
 
-  /**
-   * Frame durations from the thread's end-of-frame markers (event code 0):
-   * one point per completed frame, placed at the frame's end, value =
-   * milliseconds the frame took. Empty when the app emits no frame events.
-   */
-  // TODO: unconsumed since the Timeline tab's removal - intended for the live-view charts.
-  @NotNull
-  public static List<SeriesPoint> frameDurationSeries(@NotNull ProfilerSnapshot snapshot, int threadId) {
-    double start = captureStartSeconds(snapshot);
-    List<SeriesPoint> series = new ArrayList<>();
-    double previousFrameEnd = Double.NaN;
-    for (ProfilerEvent event : snapshot.events()) {
-      if (event.threadId() != threadId || event.code() != ProfilerEvent.FRAME_CODE) continue;
-      if (!Double.isNaN(previousFrameEnd)) {
-        long timeMs = Math.round((event.time() - start) * 1000);
-        series.add(new SeriesPoint(timeMs, (event.time() - previousFrameEnd) * 1000));
-      }
-      previousFrameEnd = event.time();
-    }
-    return series;
-  }
 }

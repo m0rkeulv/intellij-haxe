@@ -1712,7 +1712,8 @@ public class HaxeResolveUtil {
   public static HaxeResolveResult fullyResolveTypedef(@Nullable HaxeClass typedef, @Nullable HaxeGenericSpecialization specialization) {
     if (null == typedef) return HaxeResolveResult.EMPTY;
 
-    HashSet<String> recursionGuard = new HashSet<>(); // Track which typedefs we've already resolved so we don't end up in an infinite loop.
+    // typedefs already resolved - a cyclic typedef chain must not loop forever
+    HashSet<String> recursionGuard = new HashSet<>();
 
     HaxeResolveResult result = HaxeResolveResult.EMPTY;
     HaxeClassModel model = typedef.getModel();

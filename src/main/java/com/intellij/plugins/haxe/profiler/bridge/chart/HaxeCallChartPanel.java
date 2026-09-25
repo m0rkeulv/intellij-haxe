@@ -62,20 +62,21 @@ import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 
 /**
- * A Chrome/Android-style call chart over one thread's time-ordered flame
- * tree ({@link ProfilerTimeline#flameTree}): x = time under a ruler, one row
- * per stack depth with the outermost call on top. Marker lanes between the
- * ruler and the runs carry named span sources on the same axis (frames, GC
- * collections — any provider). Runs too narrow for a pixel paint as
- * 1&nbsp;px slivers so activity stays visible at any zoom; idle spans stay
- * unpainted. The horizontal axis is VIRTUAL: the panel always fills the
- * viewport and paints the window given by a view-start time and scale, so
- * the deepest zoom does not depend on session length (a session-wide
- * component would overflow int pixel coordinates); its own scrollbar
- * ({@link #createHorizontalScrollBar()}) scrolls that axis. Ctrl+wheel
- * zooms around the pointer, shift+wheel pans, plain wheel keeps scrolling
- * the pane vertically; a click selects a run and reports its call chain to
- * the selection listener, double-click opens its Haxe source.
+ * A call chart over one thread's time-ordered flame tree
+ * ({@link ProfilerTimeline#flameTree}): time runs left to right under a
+ * ruler, one row per stack depth with the outermost call on top. Bands
+ * between the ruler and the runs chart other data on the same axis: curves,
+ * the events row and marker lanes (frames, GC). Runs narrower than a pixel
+ * paint as 1&nbsp;px slivers so activity stays visible at any zoom; idle
+ * spans stay unpainted.
+ * <p>
+ * The horizontal axis is virtual: the panel always fills the viewport and
+ * paints the window given by a view start and a scale, because a
+ * session-wide component would overflow int pixel coordinates at deep
+ * zoom. Its own scrollbar ({@link #createHorizontalScrollBar()}) scrolls
+ * that axis. Ctrl+wheel zooms around the pointer, shift+wheel pans, and the
+ * plain wheel scrolls the pane vertically. A click selects a run and
+ * reports its call chain; a double-click opens its Haxe source.
  */
 final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
@@ -474,13 +475,10 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     rowCount = ProfilerTimeline.treeDepth(tree);
     usPerPixel = 0;
     viewStartUs = tree.startUs();
-    selected = null;
-    clearSpanSelection();
-    clearCurveSelection();
+    clearPointSelections();
     rangeBandKey = null;
     anchorBandKey = null;
     pendingSearchTarget = null;
-    selectedEvent = null;
     selectionListener.accept(List.of());
     syncScrollBar();
     revalidate();
@@ -597,9 +595,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private void fireViewChanged() {
     if (viewListener == null) return;
     boolean wholeSession = usPerPixel <= 0;
-    long visibleUs = wholeSession
-                     ? Math.max(root.durationUs(), 1)
-                     : (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+    long visibleUs = wholeSession ? Math.max(root.durationUs(), 1) : zoomedVisibleUs();
     viewListener.viewChanged(viewLeftUs(), visibleUs, wholeSession);
   }
 
@@ -733,10 +729,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     FlameNode node = findSearchNode(target);
     if (node == null) return;
     pendingSearchTarget = null;
+    clearPointSelections();
     selected = node;
-    clearSpanSelection();
-    clearCurveSelection();
-    selectedEvent = null;
     selectionListener.accept(pathOfNode(node));
   }
 
@@ -821,6 +815,14 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private void clearSpanSelection() {
     selectedSpan = null;
     selectedSpanLane = null;
+  }
+
+  /** Clears the selected run, span, curve reading and event; only one of them shows at a time. */
+  private void clearPointSelections() {
+    selected = null;
+    clearSpanSelection();
+    clearCurveSelection();
+    selectedEvent = null;
   }
 
   @Override
@@ -980,13 +982,16 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
   private String bandLabel(Band band) {
     return switch (band) {
-      case Band.CurveBand(CurveLane lane) -> lane.points().isEmpty()
-                                             ? lane.name()
-                                             : lane.name() + " — peak " + lane.formatted(lane.peak());
+      case Band.CurveBand(CurveLane lane) -> curveBandLabel(lane);
       case Band.MarkerBand(MarkerLane lane) -> lane.name();
       case Band.EventsBand ignored -> HaxeProfilerBundle.message("haxe.profiler.callchart.lane.events");
       case Band.CallsBand ignored -> HaxeProfilerBundle.message("haxe.profiler.callchart.lane.calls");
     };
+  }
+
+  private static String curveBandLabel(CurveLane lane) {
+    if (lane.points().isEmpty()) return lane.name();
+    return HaxeProfilerBundle.message("haxe.profiler.callchart.lane.peak", lane.name(), lane.formatted(lane.peak()));
   }
 
   /** The run rows, the outermost call on top; an empty tree keeps the placeholder like any other lane. */
@@ -1004,7 +1009,6 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private int chevronX() {
     return Math.max(0, getWidth() - JBUI.scale(40));
   }
-
 
   /** The left-edge drag handle: two dotted columns, the visual promise that the band can be rearranged. */
   private void paintGrip(Graphics2D g, int top, int height) {
@@ -1153,7 +1157,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     int grip = JBUI.scale(4);
     TimeEvent best = null;
     int bestDistance = grip + 1;
-    for (int i = Math.max(firstEventAtOrAfter(timeAt(point.x - grip)) - 1, 0); i < events.size(); i++) {
+    int from = Math.max(firstEventAtOrAfter(timeAt(point.x - grip)) - 1, 0);
+    for (int i = from; i < events.size(); i++) {
       int distance = Math.abs(xOf(events.get(i).timeUs()) - point.x);
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -1226,11 +1231,9 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   private void selectAt(Point point) {
     clearRangeSelection(); // a plain click hands the details panel back to point selections
     rememberRangeAnchor(point);
+    clearPointSelections();
     if (onEventsBand(point.y)) {
       TimeEvent event = eventAt(point);
-      selected = null;
-      clearSpanSelection();
-      clearCurveSelection();
       selectedEvent = event;
       if (event != null) {
         eventSelectionListener.accept(event);
@@ -1244,13 +1247,10 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
     CurveLane curveLane = curveLaneAt(point);
     if (curveLane != null) {
-      selected = null;
-      clearSpanSelection();
       long instantUs = timeAt(point.x);
       CurvePoint lastChange = lastChangeAt(curveLane, instantUs);
       if (lastChange == null) {
-        // before the pool's first event there is no reading to select
-        clearCurveSelection();
+        // before the curve's first point there is no reading to select
         selectionListener.accept(List.of());
       }
       else {
@@ -1264,8 +1264,6 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     MarkerLane lane = laneAt(point);
     if (lane != null) {
       UsSpan span = spanAt(lane, timeAt(point.x));
-      selected = null;
-      clearCurveSelection();
       selectedSpan = span;
       selectedSpanLane = span == null ? null : lane;
       if (span != null) {
@@ -1280,8 +1278,6 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
 
     List<FlameNode> path = pathAt(point);
     selected = path.isEmpty() ? null : path.getLast();
-    clearSpanSelection();
-    clearCurveSelection();
     selectionListener.accept(path);
     repaint();
   }
@@ -1315,11 +1311,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     rangeBandKey = band.key();
     rangeFromUs = Math.min(anchorUs, clickUs);
     rangeToUs = Math.max(anchorUs, clickUs);
-    // the range replaces any point selection - two selections would fight over the details panel
-    selected = null;
-    clearSpanSelection();
-    clearCurveSelection();
-    selectedEvent = null;
+    // the range replaces any point selection; both would compete for the details panel
+    clearPointSelections();
     fireRangeSelected();
     repaint();
     return true;
@@ -1341,11 +1334,8 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     if (!rangeDragging) {
       rangeDragging = true;
       rangeBandKey = armedRangeBandKey;
-      // the range replaces any point selection - two selections would fight over the details panel
-      selected = null;
-      clearSpanSelection();
-      clearCurveSelection();
-      selectedEvent = null;
+      // the range replaces any point selection; both would compete for the details panel
+      clearPointSelections();
     }
     long draggedUs = Math.max(timeAt(x), 0);
     rangeFromUs = Math.min(rangeAnchorUs, draggedUs);
@@ -1436,12 +1426,12 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     }
   }
 
-  private void bindKey(String stroke, Runnable navigation) {
+  private void bindKey(String stroke, Runnable action) {
     getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(stroke), stroke);
     getActionMap().put(stroke, new AbstractAction() {
       @Override
       public void actionPerformed(ActionEvent event) {
-        navigation.run();
+        action.run();
       }
     });
   }
@@ -1552,7 +1542,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
   /** Scrolls just enough to bring a keyboard selection into view; scrolling away counts as leaving live-follow. */
   private void revealTime(long startUs, long endUs) {
     if (usPerPixel <= 0) return; // the whole session is on screen
-    long visibleUs = (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+    long visibleUs = zoomedVisibleUs();
     long marginUs = visibleUs / 10;
     long newStartUs;
     if (startUs < viewStartUs) {
@@ -1747,9 +1737,14 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     fireViewChanged();
   }
 
+  /** The time the zoomed view spans across the panel's width. */
+  private long zoomedVisibleUs() {
+    return (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+  }
+
   /** Moves the zoomed view's left edge, clamped so the view never leaves the session. */
   private void setViewStart(long startUs) {
-    long visibleUs = (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+    long visibleUs = zoomedVisibleUs();
     long maxStartUs = root.startUs() + Math.max(0, root.durationUs() - visibleUs);
     viewStartUs = Math.max(root.startUs(), Math.min(startUs, maxStartUs));
   }
@@ -1766,7 +1761,7 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
         scrollBar.setValues(0, SCROLL_RESOLUTION, 0, SCROLL_RESOLUTION);
         return;
       }
-      long visibleUs = (long)Math.ceil(Math.max(1, getWidth()) * usPerPixel);
+      long visibleUs = zoomedVisibleUs();
       int extent = (int)Math.min(SCROLL_RESOLUTION, Math.max(1, (long)(SCROLL_RESOLUTION * (double)visibleUs / durationUs)));
       int value = (int)Math.round((viewStartUs - root.startUs()) / (double)durationUs * SCROLL_RESOLUTION);
       scrollBar.setEnabled(extent < SCROLL_RESOLUTION);
@@ -1832,7 +1827,6 @@ final class HaxeCallChartPanel extends JComponent implements Scrollable {
     }
     return -1;
   }
-
 
   /** The key of the band whose bottom divider is under {@code y}; null when none is. Collapsed bands and the depth-sized calls lane are not resizable. */
   @Nullable

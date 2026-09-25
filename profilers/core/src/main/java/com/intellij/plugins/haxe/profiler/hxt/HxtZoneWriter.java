@@ -1,25 +1,24 @@
 package com.intellij.plugins.haxe.profiler.hxt;
 
+import com.intellij.plugins.haxe.profiler.io.LittleEndianPayload;
+import com.intellij.plugins.haxe.profiler.model.ProfilerThread;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
 import com.intellij.plugins.haxe.profiler.tracy.TracyEventReader;
 import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.zip.Deflater;
 
 /**
  * Streams an HXTS v6 zone capture to disk WHILE it is being received:
@@ -87,6 +86,7 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
   static final int PROCESS_CPU_RECORD = 12;
 
   static final int ZONE_BYTES = 4 + 2 + 8 + 8 + 4;
+  private static final String TARGET = "hxcpp-tracy";
   private static final int CHUNK_ZONES = 65_536;
   /** The archive level a finished file settles at (zlib's knee on our data). */
   public static final int FINAL_LEVEL = 6;
@@ -99,18 +99,18 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
    */
   public static final int LIVE_LEVEL = 1;
 
+  /**
+   * A partial chunk also flushes once it is this old: a full chunk takes
+   * seconds to fill at ordinary zone rates, and a live view can only see
+   * what is on disk; without an age bound its refresh cadence IS the
+   * chunk-fill time.
+   */
+  private static final long MAX_CHUNK_AGE_NANOS = 500_000_000;
+
   private final OutputStream out;
   private final int level;
   private final Map<TracySourceLocation, Integer> locationIndex = new LinkedHashMap<>();
   private int flushedLocations;
-
-  /**
-   * A partial chunk also flushes once it is this old: a full chunk takes
-   * seconds to fill at ordinary zone rates, and a live view can only see
-   * what is on disk — without an age bound its refresh cadence IS the
-   * chunk-fill time.
-   */
-  private static final long MAX_CHUNK_AGE_NANOS = 500_000_000;
 
   private final ByteBuffer chunk = ByteBuffer.allocate(CHUNK_ZONES * ZONE_BYTES).order(ByteOrder.LITTLE_ENDIAN);
   private long chunkOpenedAtNanos;
@@ -134,13 +134,8 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
   public HxtZoneWriter(@NotNull OutputStream out, double epochSeconds, int level) throws IOException {
     this.out = out;
     this.level = level;
-    Payload header = new Payload();
-    header.bytes.writeBytes(HxtSessionTranslator.MAGIC);
-    header.u16(VERSION);
-    header.i32(0); // tick rate - meaningless for exact zones
-    header.f64(epochSeconds);
-    header.string("hxcpp-tracy");
-    out.write(header.bytes.toByteArray());
+    // the tick rate is meaningless for exact zones
+    HxtFormat.writeHeader(out, new HxtFormat.Header(VERSION, 0, epochSeconds, TARGET));
     resetChunk();
   }
 
@@ -225,20 +220,20 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
     // the picker must list it either way
     Map<Integer, String> threadNames = new TreeMap<>(session.threadNames());
     for (Integer threadId : zoneCountByThread.keySet()) {
-      threadNames.putIfAbsent(threadId, "Thread " + Integer.toUnsignedString(threadId));
+      threadNames.putIfAbsent(threadId, ProfilerThread.unnamed(threadId));
     }
     for (Map.Entry<Integer, String> thread : threadNames.entrySet()) {
       record(THREAD_RECORD, threadPayload(thread.getKey(), thread.getValue()));
     }
 
-    Payload info = new Payload();
-    info.string(session.welcome().programName());
-    info.i64(session.welcome().pid());
-    info.i64(session.welcome().epoch());
-    info.i64(session.durationNs());
-    info.i32(session.unmatchedZoneEnds());
-    info.i64(baseNs);
-    info.u8(level);
+    LittleEndianPayload info = new LittleEndianPayload()
+      .string16(session.welcome().programName())
+      .i64(session.welcome().pid())
+      .i64(session.welcome().epoch())
+      .i64(session.durationNs())
+      .i32(session.unmatchedZoneEnds())
+      .i64(baseNs)
+      .u8(level);
     record(INFO_RECORD, info);
   }
 
@@ -261,111 +256,93 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
     }
   }
 
-  private static Payload framesPayload(List<Long> frameMarksNs, long shiftNs) {
-    Payload frames = new Payload();
-    frames.i32(frameMarksNs.size());
+  private static LittleEndianPayload framesPayload(List<Long> frameMarksNs, long shiftNs) {
+    LittleEndianPayload frames = new LittleEndianPayload().i32(frameMarksNs.size());
     for (long ns : frameMarksNs) frames.i64(ns + shiftNs);
     return frames;
   }
 
-  private static Payload namedPointsPayload(String name, List<TracySession.PlotPoint> points, long shiftNs) {
-    Payload payload = new Payload();
-    payload.string(name);
-    payload.points(points, shiftNs);
+  private static LittleEndianPayload namedPointsPayload(String name, List<TracySession.PlotPoint> points, long shiftNs) {
+    return appendPoints(new LittleEndianPayload().string16(name), points, shiftNs);
+  }
+
+  private static LittleEndianPayload pointsPayload(List<TracySession.PlotPoint> points, long shiftNs) {
+    return appendPoints(new LittleEndianPayload(), points, shiftNs);
+  }
+
+  private static LittleEndianPayload appendPoints(LittleEndianPayload payload, List<TracySession.PlotPoint> points,
+                                                  long shiftNs) {
+    payload.i32(points.size());
+    for (TracySession.PlotPoint point : points) {
+      payload.i64(point.timeNs() + shiftNs).f64(point.value());
+    }
     return payload;
   }
 
-  private static Payload pointsPayload(List<TracySession.PlotPoint> points, long shiftNs) {
-    Payload payload = new Payload();
-    payload.points(points, shiftNs);
-    return payload;
-  }
-
-  private static Payload sweepsPayload(List<TracySession.GcSweep> gcSweeps, long shiftNs) {
-    Payload sweeps = new Payload();
-    sweeps.i32(gcSweeps.size());
+  private static LittleEndianPayload sweepsPayload(List<TracySession.GcSweep> gcSweeps, long shiftNs) {
+    LittleEndianPayload sweeps = new LittleEndianPayload().i32(gcSweeps.size());
     for (TracySession.GcSweep sweep : gcSweeps) {
-      sweeps.i64(sweep.startNs() + shiftNs);
-      sweeps.i64(sweep.endNs() + shiftNs);
-      sweeps.i64(sweep.freedBytes());
-      sweeps.i32(sweep.freedObjects());
+      sweeps.i64(sweep.startNs() + shiftNs)
+        .i64(sweep.endNs() + shiftNs)
+        .i64(sweep.freedBytes())
+        .i32(sweep.freedObjects());
     }
     return sweeps;
   }
 
-  private static Payload eventsPayload(List<TimelineEvent> timelineEvents, long shiftNs) {
-    Payload events = new Payload();
-    events.i32(timelineEvents.size());
+  private static LittleEndianPayload eventsPayload(List<TimelineEvent> timelineEvents, long shiftNs) {
+    LittleEndianPayload events = new LittleEndianPayload().i32(timelineEvents.size());
     for (TimelineEvent event : timelineEvents) {
-      events.i32(event.threadId());
-      events.i64(event.timeNs() + shiftNs);
-      events.i32(event.color());
-      events.string(event.text());
+      events.i32(event.threadId())
+        .i64(event.timeNs() + shiftNs)
+        .i32(event.color())
+        .string16(event.text());
     }
     return events;
   }
 
-  private Payload threadPayload(int threadId, String name) {
-    Payload payload = new Payload();
-    payload.i32(threadId);
-    payload.string(name);
-    payload.i64(zoneCountByThread.getOrDefault(threadId, 0L));
-    return payload;
+  private LittleEndianPayload threadPayload(int threadId, String name) {
+    return new LittleEndianPayload()
+      .i32(threadId)
+      .string16(name)
+      .i64(zoneCountByThread.getOrDefault(threadId, 0L));
   }
 
   /** New source locations first (chunks index into the accumulated table), then the zone chunk with its bounds. */
   private void flushChunk() throws IOException {
     if (locationIndex.size() > flushedLocations) {
-      Payload locations = new Payload();
       List<TracySourceLocation> all = List.copyOf(locationIndex.keySet());
       List<TracySourceLocation> fresh = all.subList(flushedLocations, all.size());
-      locations.i32(fresh.size());
+      LittleEndianPayload locations = new LittleEndianPayload().i32(fresh.size());
       for (TracySourceLocation location : fresh) {
-        locations.string(location.function());
-        locations.string(location.file());
-        locations.i32(location.line());
-        locations.i32(location.color());
+        locations.string16(location.function())
+          .string16(location.file())
+          .i32(location.line())
+          .i32(location.color());
       }
       record(SRCLOC_RECORD, locations);
       flushedLocations = locationIndex.size();
     }
     if (chunkZones == 0) return;
 
-    // the JDK's own zlib, NOT commons-compress: the latter's LZ77
-    // compressor falls into a pathological slow path on real zone data
-    // (~6 s per chunk, measured), and this runs on the socket thread the
-    // app's exit drain waits behind; deflate also out-compresses it
-    Deflater deflater = new Deflater(level);
-    deflater.setInput(chunk.array(), 0, chunk.position());
-    deflater.finish();
-    ByteArrayOutputStream compressed = new ByteArrayOutputStream();
-    byte[] buffer = new byte[64 * 1024];
-    while (!deflater.finished()) {
-      int written = deflater.deflate(buffer);
-      compressed.write(buffer, 0, written);
-    }
-    deflater.end();
-
-    out.write(ZONES_RECORD);
-    int length = 4 + 8 + 8 + 8 + compressed.size();
-    for (int i = 0; i < 4; i++) out.write(length >> (8 * i) & 0xFF);
-    Payload bounds = new Payload();
-    bounds.i32(chunkZones);
-    bounds.i64(chunkMinStartNs);
-    bounds.i64(chunkMaxEndNs);
-    bounds.i64(chunkMaxDurationNs);
-    out.write(bounds.bytes.toByteArray());
-    compressed.writeTo(out);
+    // the JDK's own zlib, NOT commons-compress: the latter's LZ77 compressor
+    // falls into a pathological slow path on real zone data (seconds per
+    // chunk), and this runs on the socket thread the app's exit drain waits
+    // behind; deflate also compresses better
+    byte[] compressed = HxtFormat.deflate(chunk.array(), chunk.position(), level);
+    LittleEndianPayload zones = new LittleEndianPayload()
+      .i32(chunkZones)
+      .i64(chunkMinStartNs)
+      .i64(chunkMaxEndNs)
+      .i64(chunkMaxDurationNs)
+      .raw(compressed);
+    record(ZONES_RECORD, zones);
     flushedZones = zoneCount;
 
     // first-sighted threads announce themselves nameless, so a live reader
     // has a thread list before finish()'s named records override these
     for (Integer threadId : unannouncedThreads) {
-      Payload payload = new Payload();
-      payload.i32(threadId);
-      payload.string("");
-      payload.i64(zoneCountByThread.get(threadId));
-      record(THREAD_RECORD, payload);
+      record(THREAD_RECORD, threadPayload(threadId, ""));
     }
     unannouncedThreads.clear();
     out.flush(); // a live reader re-reads the file while it grows
@@ -382,50 +359,7 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
     previousStartNs = 0; // each chunk's delta stream restarts, so chunks stay independent
   }
 
-  private void record(int type, Payload payload) throws IOException {
-    out.write(type);
-    byte[] bytes = payload.bytes.toByteArray();
-    for (int i = 0; i < 4; i++) out.write(bytes.length >> (8 * i) & 0xFF);
-    out.write(bytes);
-  }
-
-  /** Little-endian payload assembly for one record. */
-  private static final class Payload {
-    final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-
-    void u8(int value) {
-      bytes.write(value & 0xFF);
-    }
-
-    void u16(int value) {
-      bytes.write(value & 0xFF);
-      bytes.write(value >> 8 & 0xFF);
-    }
-
-    void i32(int value) {
-      for (int i = 0; i < 4; i++) bytes.write(value >> (8 * i) & 0xFF);
-    }
-
-    void i64(long value) {
-      for (int i = 0; i < 8; i++) bytes.write((int)(value >> (8 * i) & 0xFF));
-    }
-
-    void f64(double value) {
-      i64(Double.doubleToLongBits(value));
-    }
-
-    void string(String value) {
-      byte[] utf8 = value.getBytes(StandardCharsets.UTF_8);
-      u16(utf8.length);
-      bytes.writeBytes(utf8);
-    }
-
-    void points(List<TracySession.PlotPoint> points, long shiftNs) {
-      i32(points.size());
-      for (TracySession.PlotPoint point : points) {
-        i64(point.timeNs() + shiftNs);
-        i64(Double.doubleToLongBits(point.value()));
-      }
-    }
+  private void record(int type, LittleEndianPayload payload) throws IOException {
+    HxtFormat.writeRecord(out, type, payload);
   }
 }

@@ -4,20 +4,76 @@ import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The per-build-system traits behind one interface, so run/debug callers stop
- * growing per-type switches. Each implementation resolves the file's CURRENT
- * selection itself — the tool window's target row for lime/nme, the selected
- * {@code --next} section for hxml. Whether a resolved target can be DEBUGGED
- * is not a build-system trait: that lives in {@code HaxeDebugSupport}, one
- * home shared by program and test sessions.
+ * The per-build-system traits behind one interface, so callers never switch on
+ * the build file type themselves: the built-in actions and their commands, the
+ * selected target, and what a debug compile adds. Each implementation resolves
+ * the file's CURRENT selection itself — the tool window's target row for
+ * lime/nme, the selected {@code --next} section for hxml. Whether a resolved
+ * target can be DEBUGGED is not a build-system trait: that lives in
+ * {@code HaxeDebugSupport}, one home shared by program and test sessions.
+ * <p>
+ * The dispatch lives in {@code buildtools} rather than on
+ * {@link HaxeBuildFileType}: it maps types to build-tool facts, and putting it
+ * on the enum would make {@code buildsystem} import {@code buildtools}.
  */
 public interface HaxeBuildSystem {
+
+  /** Target ids compiled through hxcpp whose output the HXCPP (IntelliJ) debugger can attach to ("cpp" is nme's host-desktop word; lime and nme share the rest). */
+  List<String> DESKTOP_CPP_TARGETS = List.of("windows", "linux", "mac", "cpp");
+
+  /** The build system serving the file type. */
+  @NotNull
+  static HaxeBuildSystem of(@NotNull HaxeBuildFileType type) {
+    return switch (type) {
+      case HXML -> HxmlBuildSystem.INSTANCE;
+      case OPENFL, LIME, HXP_PROJECT -> LimeBuildSystem.INSTANCE;
+      case NMML -> NmeBuildSystem.INSTANCE;
+      case HXP_SCRIPT -> HxpScriptBuildSystem.INSTANCE;
+    };
+  }
+
+  /** The default build action's NAME - the stored identifier a resolve-by-name uses (not the localized label). */
+  @NotNull
+  String defaultBuildActionName();
+
+  /**
+   * The built-in action names, in menu order (custom actions come on top of
+   * these). Configurations store and resolve actions by these names, so they
+   * are never localized.
+   */
+  @NotNull
+  List<String> defaultActionNames();
+
+  /** A named built-in action's command; null when the name is not one of the built-ins. */
+  @Nullable
+  List<String> actionCommand(@NotNull Project project, @Nullable String environmentSdk, @NotNull HaxeBuildFile buildFile,
+                             @NotNull String actionName);
+
+  /** The short form a tree row shows for a built-in action: the tool, the action and the target flags. */
+  @NotNull
+  String presentableCommand(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull String actionName);
+
+  /** The command compiling the file with the default build action. */
+  @NotNull
+  default List<String> defaultCommand(@NotNull Project project, @Nullable String environmentSdk, @NotNull HaxeBuildFile buildFile) {
+    return Objects.requireNonNull(actionCommand(project, environmentSdk, buildFile, defaultBuildActionName()));
+  }
+
+  /**
+   * The file's currently selected target flag (e.g. "windows", "html5"); null
+   * for systems without a selectable target (hxml declares its own, a plain
+   * hxp script decides in code).
+   */
+  @Nullable
+  default String selectedTargetFlag(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
+    return null;
+  }
 
   /**
    * The haxe target the build file's current selection compiles to, or null
@@ -36,89 +92,4 @@ public interface HaxeBuildSystem {
    */
   @Nullable
   List<String> debugCompileAdditions(@NotNull Project project, @NotNull HaxeBuildFile buildFile);
-
-  /** The build system serving the file type. */
-  @NotNull
-  static HaxeBuildSystem of(@NotNull HaxeBuildFileType type) {
-    return switch (type) {
-      case HXML -> HXML_SYSTEM;
-      case OPENFL, LIME, HXP_PROJECT -> LIME_SYSTEM;
-      case NMML -> NME_SYSTEM;
-      // a plain hxp script generates its compiler args in code - nothing to derive statically
-      case HXP_SCRIPT -> UNKNOWN_SYSTEM;
-    };
-  }
-
-  /** Target ids compiled through hxcpp whose output the HXCPP (IntelliJ) debugger can attach to ("cpp" is nme's host-desktop word; lime and nme share the rest). */
-  List<String> DESKTOP_CPP_TARGETS = List.of("windows", "linux", "mac", "cpp");
-
-  HaxeBuildSystem HXML_SYSTEM = new HaxeBuildSystem() {
-    @Override
-    public HaxeTarget launchTarget(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      return HaxeBuildSections.inspectSelected(project, buildFile).target();
-    }
-
-    @Override
-    public List<String> debugCompileAdditions(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      HaxeTarget target = launchTarget(project, buildFile);
-      return target != null ? HaxeDebugAdditions.forTarget(target) : null;
-    }
-  };
-
-  HaxeBuildSystem LIME_SYSTEM = new HaxeBuildSystem() {
-    @Override
-    public HaxeTarget launchTarget(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      return LimeProjects.targetFor(LimeProjects.selectedTargetFlag(project, buildFile.type(), buildFile.file()));
-    }
-
-    @Override
-    public List<String> debugCompileAdditions(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      // the lime tool takes -debug itself and forwards it into the haxe build it
-      // generates - one flag covers every lime target
-      List<String> additions = new ArrayList<>();
-      additions.add("-debug");
-      String targetFlag = LimeProjects.selectedTargetFlag(project, buildFile.type(), buildFile.file());
-      // hxcpp debugging needs the in-debuggee DAP server compiled in; lime's
-      // --haxelib override merges the lib exactly like a project <haxelib>
-      // entry (include.xml and extraParams included), so no project.xml edit.
-      // Run builds never get this: additions apply only under the Debug executor.
-      if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
-        additions.add("--haxelib=" + HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB);
-      }
-      return additions;
-    }
-  };
-
-  HaxeBuildSystem NME_SYSTEM = new HaxeBuildSystem() {
-    @Override
-    public HaxeTarget launchTarget(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      return NmeProjects.targetFor(NmeProjects.selectedTargetFlag(project, buildFile.file()));
-    }
-
-    @Override
-    public List<String> debugCompileAdditions(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      List<String> additions = new ArrayList<>();
-      additions.add("-debug");
-      String targetFlag = NmeProjects.selectedTargetFlag(project, buildFile.file());
-      // nme has no lime-style --haxelib override; a single-token "--library
-      // <lib>" haxeflag becomes one line of the generated build.hxml, and
-      // haxe pulls the lib with its extraParams (the server-injection macro).
-      if (DESKTOP_CPP_TARGETS.contains(targetFlag)) {
-        additions.add("--library " + HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB);
-      }
-      return additions;
-    }
-  };
-
-  HaxeBuildSystem UNKNOWN_SYSTEM = new HaxeBuildSystem() {
-    @Override
-    public HaxeTarget launchTarget(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      return null;
-    }
-
-    @Override
-    public List<String> debugCompileAdditions(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-      return null;
-    }
-  };
 }

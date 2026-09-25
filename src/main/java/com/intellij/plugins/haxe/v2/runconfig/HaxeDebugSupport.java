@@ -7,10 +7,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Set;
 
 /**
- * ONE home for "does a debugger lane exist for this target". Program and
- * test sessions gate on it alike — they used to keep separate answers, and
- * neko offered a program Debug it has no debugger for. The build-system side
- * of the question (which target does THIS file's selection compile to) is
+ * ONE home for "does a debugger lane exist for this target": program and
+ * test sessions both gate on it. The build-system side of the question
+ * (which target does THIS file's selection compile to) is
  * {@code HaxeBuildSystem}'s job.
  */
 public final class HaxeDebugSupport {

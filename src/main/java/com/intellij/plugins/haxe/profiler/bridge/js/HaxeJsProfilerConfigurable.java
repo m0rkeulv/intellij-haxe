@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.bridge.js;
 
 import com.intellij.openapi.options.UnnamedConfigurable;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.ui.components.JBTextField;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -41,11 +42,6 @@ final class HaxeJsProfilerConfigurable implements UnnamedConfigurable {
 
   /** A non-numeric entry falls back to the stored value rather than failing apply. */
   private int parsedInterval() {
-    try {
-      return Integer.parseInt(intervalField.getText().trim());
-    }
-    catch (NumberFormatException e) {
-      return state.getSamplingIntervalUs();
-    }
+    return StringUtil.parseInt(intervalField.getText().trim(), state.getSamplingIntervalUs());
   }
 }

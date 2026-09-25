@@ -14,10 +14,6 @@ public enum DiagnosticSeverity {
     this.code = code;
   }
 
-  public int code() {
-    return code;
-  }
-
   public static DiagnosticSeverity fromCode(int code) {
     for (DiagnosticSeverity severity : values()) {
       if (severity.code == code) return severity;

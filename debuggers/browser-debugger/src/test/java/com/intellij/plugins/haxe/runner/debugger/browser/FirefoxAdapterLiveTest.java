@@ -485,7 +485,7 @@ public class FirefoxAdapterLiveTest {
     // the sources. Register -> load once -> reload (K) is the single working
     // sequence; its cost is that a worker PAUSED at a breakpoint when the
     // reload fires lingers as a zombie thread (pinned by the
-    // workerThreadsAcrossRefresh probe), which the module README documents.
+    // workerThreadsAcrossRefresh probe).
     String worked = null;
     for (String variant : LOAD_VARIANTS) {
       Files.writeString(appJs, pristineAppJs);

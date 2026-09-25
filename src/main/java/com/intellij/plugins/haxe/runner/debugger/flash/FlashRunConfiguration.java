@@ -10,12 +10,12 @@ import com.intellij.execution.configurations.RuntimeConfigurationError;
 import com.intellij.execution.configurations.RuntimeConfigurationException;
 import com.intellij.execution.configurations.RuntimeConfigurationWarning;
 import com.intellij.execution.runners.ExecutionEnvironment;
-import com.intellij.openapi.module.Module;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.WriteExternalException;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
@@ -30,8 +30,7 @@ import org.jetbrains.annotations.Nullable;
  * A Flash run/debug configuration: the compiled {@code .swf} plus the Flex SDK
  * whose debugger drives the session (the Flash/Flex plugin must be installed
  * for debugging). Plain Run launches the swf with the configured player
- * executable. Replaces the flash half of the legacy module-settings-driven
- * "Haxe Application" configuration.
+ * executable.
  */
 public class FlashRunConfiguration extends DapRunConfigurationBase {
   private static final String SWF_FILE = "swfFile";
@@ -84,8 +83,7 @@ public class FlashRunConfiguration extends DapRunConfigurationBase {
     if (!flashPlayerPath.isBlank()) {
       return flashPlayerPath;
     }
-    String fromRuntimes = HaxeToolPathResolver.resolveFlashPlayerExecutable(getProject(), null);
-    return fromRuntimes != null ? fromRuntimes : "";
+    return StringUtil.notNullize(HaxeToolPathResolver.resolveFlashPlayerExecutable(getProject(), null));
   }
 
   @Override
@@ -137,9 +135,11 @@ public class FlashRunConfiguration extends DapRunConfigurationBase {
   @NotNull
   public Path resolveSwf() throws ExecutionException {
     Path swf = resolveSwfOrNull();
-    if (swf == null || !Files.isRegularFile(swf)) {
-      throw new ExecutionException(
-        HaxeDebuggerBundle.message("flash.runner.swf.missing", swf != null ? swf.toString() : "<not set>"));
+    if (swf == null) {
+      throw new ExecutionException(HaxeDebuggerBundle.message("flash.runner.no.swf"));
+    }
+    if (!Files.isRegularFile(swf)) {
+      throw new ExecutionException(HaxeDebuggerBundle.message("flash.runner.swf.missing", swf.toString()));
     }
     return swf;
   }

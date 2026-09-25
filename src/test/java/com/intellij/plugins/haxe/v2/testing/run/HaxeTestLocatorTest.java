@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.Location;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestNameLocation;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
@@ -40,7 +41,7 @@ public class HaxeTestLocatorTest extends HaxeLightFixtureTestCase {
 
   private PsiElement locate(String name) {
     List<Location> locations = HaxeTestLocator.INSTANCE.getLocation(
-      HaxeTestLocator.PROTOCOL, name, getProject(), GlobalSearchScope.allScope(getProject()));
+      HaxeTestNameLocation.PROTOCOL, name, getProject(), GlobalSearchScope.allScope(getProject()));
     return locations.isEmpty() ? null : locations.get(0).getPsiElement();
   }
 

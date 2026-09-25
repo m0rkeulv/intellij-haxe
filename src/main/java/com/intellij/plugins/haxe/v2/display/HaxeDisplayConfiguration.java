@@ -14,12 +14,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The pipeline turning a build context into the argument list a display
- * request sends: COLLECT the build's arguments (one-level hxml expansion when
- * needed), APPLY the container's IDE define overrides, then the transport
- * sends the result over the server socket. Without the overrides the server's
- * view of which {@code #if} branches are alive diverges from the editor's
- * define context — diagnostics and completion would follow the raw build
+ * Applies the container's IDE define overrides to the build's arguments
+ * before a display request sends them. Without the overrides, the server's
+ * view of which {@code #if} branches are active differs from the editor's
+ * define context, and diagnostics and completion would follow the raw build
  * file instead of what the user configured.
  */
 public final class HaxeDisplayConfiguration {
@@ -33,7 +31,7 @@ public final class HaxeDisplayConfiguration {
       return removedNames.isEmpty() && setArgs.isEmpty();
     }
 
-    /** Cache-key material — contexts with different overrides are different server contexts. */
+    /** Cache-key material: contexts with different overrides are different server contexts. */
     @NotNull
     public String signature() {
       return isEmpty() ? "" : "-" + String.join(",", removedNames) + "+" + String.join(",", setArgs);
@@ -44,12 +42,12 @@ public final class HaxeDisplayConfiguration {
   }
 
   /// The container's overrides as arguments: SETs become `-D name[=value]`, REMOVEs name the defines to strip.
-  // TODO: the container's Custom target setting is not forwarded as
-  //       "--custom-target" here - the flag exists only in Haxe 5, so it must
-  //       be gated on the container's compiler version first (an hxml-declared
-  //       custom target reaches the display server through the hxml itself).
   @NotNull
   public static DefineOverrides overridesFor(@NotNull Project project, @NotNull String containerId) {
+    // TODO: the container's Custom target setting is not forwarded as
+    //  "--custom-target" - the flag exists only in Haxe 5, so it must be gated
+    //  on the container's compiler version first (an hxml-declared custom
+    //  target reaches the display server through the hxml itself).
     Set<String> removed = new LinkedHashSet<>();
     List<String> set = new ArrayList<>();
     for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
@@ -64,17 +62,15 @@ public final class HaxeDisplayConfiguration {
     return removed.isEmpty() && set.isEmpty() ? DefineOverrides.EMPTY : new DefineOverrides(removed, set);
   }
 
-  /// Applies the overrides to the build's base arguments. SETs simply append —
-  /// a later `-D` wins over an earlier value of the same define. A
-  /// REMOVE has no CLI form, so it forces one-level hxml expansion (an hxml
-  /// reference hides the `-D` lines to strip) and drops the matching
+  /// Applies the overrides to the build's base arguments. SETs simply
+  /// append: a later `-D` wins over an earlier value of the same define. A
+  /// REMOVE has no command-line form, so it expands hxml references one level
+  /// (a reference hides the `-D` lines to strip) and drops the matching
   /// define pairs.
   @NotNull
   public static List<String> applyOverrides(@NotNull List<String> baseArgs, @NotNull DefineOverrides overrides) {
     if (overrides.isEmpty()) return baseArgs;
-
     List<String> args = baseWithRemovals(baseArgs, overrides);
-
     args.addAll(overrides.setArgs());
     return args;
   }
@@ -89,8 +85,8 @@ public final class HaxeDisplayConfiguration {
     List<String> kept = new ArrayList<>(args.size());
     for (int i = 0; i < args.size(); i++) {
       String arg = args.get(i);
-      boolean containsArg = HxmlFileParser.DEFINE_FLAGS.contains(arg);
-      if (containsArg && i + 1 < args.size()) {
+      boolean isDefineFlag = HxmlFileParser.DEFINE_FLAGS.contains(arg);
+      if (isDefineFlag && i + 1 < args.size()) {
         String value = args.get(i + 1);
         // the define's name is everything before the optional =value
         int equals = value.indexOf('=');

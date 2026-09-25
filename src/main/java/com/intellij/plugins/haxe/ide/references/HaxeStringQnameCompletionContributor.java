@@ -72,7 +72,7 @@ public class HaxeStringQnameCompletionContributor extends CompletionContributor 
           int dot = fqn.indexOf('.');
           String first = dot < 0 ? fqn : fqn.substring(0, dot);
           if (seen.add(first)) {
-            matched.addElement(LookupElementBuilder.create(first).withIcon(dot < 0 ? AllIcons.Nodes.Class : AllIcons.Nodes.Package));
+            matched.addElement(segmentElement(first, dot < 0));
           }
         }
         return;
@@ -85,7 +85,7 @@ public class HaxeStringQnameCompletionContributor extends CompletionContributor 
         int dot = rest.indexOf('.');
         String next = dot < 0 ? rest : rest.substring(0, dot);
         if (!next.isEmpty() && seen.add(next)) {
-          matched.addElement(LookupElementBuilder.create(next).withIcon(dot < 0 ? AllIcons.Nodes.Class : AllIcons.Nodes.Package));
+          matched.addElement(segmentElement(next, dot < 0));
         }
       }
 
@@ -98,6 +98,12 @@ public class HaxeStringQnameCompletionContributor extends CompletionContributor 
           }
         }
       }
+    }
+
+    /** A package or class segment of a qualified name: the last segment of an FQN is its class. */
+    @NotNull
+    private static LookupElementBuilder segmentElement(@NotNull String segment, boolean classSegment) {
+      return LookupElementBuilder.create(segment).withIcon(classSegment ? AllIcons.Nodes.Class : AllIcons.Nodes.Package);
     }
   }
 }

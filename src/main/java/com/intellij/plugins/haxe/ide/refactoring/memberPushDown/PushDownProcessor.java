@@ -133,7 +133,7 @@ public class PushDownProcessor extends BaseRefactoringProcessor {
   protected UsageInfo @NotNull [] findUsages() {
     GlobalSearchScope scope = GlobalSearchScope.projectScope(myClass.getProject());
     final List<UsageInfo> usages = new ArrayList<>();
-    for (PsiReference reference : ReferencesSearch.search(myClass, scope, false).asIterable()) {
+    for (PsiReference reference : ReferencesSearch.search(myClass, scope, false).findAll()) {
       PsiClass psiClass = PsiTreeUtil.getParentOfType(reference.getElement(), PsiClass.class);
       if (psiClass != null) {
         usages.add(new UsageInfo(psiClass));

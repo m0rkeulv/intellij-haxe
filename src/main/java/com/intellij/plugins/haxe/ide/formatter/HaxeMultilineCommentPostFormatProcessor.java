@@ -116,6 +116,7 @@ public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProces
   private static String reindent(String text, String baseIndent, CommonCodeStyleSettings.IndentOptions options) {
     if (!text.startsWith("/*") || !text.endsWith("*/") || text.length() < 4) return text;
     String content = text.substring(2, text.length() - 2);
+    // every line, trailing empty ones kept
     String[] lines = content.split("\n", -1);
     if (lines.length < 2) return text;
     boolean starRailed = starRailed(lines);

@@ -6,7 +6,6 @@ import com.intellij.plugins.haxe.profiler.model.ProfilerThread;
 import com.intellij.plugins.haxe.profiler.model.StackFrame;
 import com.intellij.plugins.haxe.profiler.model.StackSample;
 import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline.SeriesPoint;
-import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline.TimeSpan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,36 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("HashLink profiler: timeline projections")
+@DisplayName("Profiler: timeline")
 public class ProfilerTimelineTest {
 
   private static final int MAIN_TID = 1;
   private static final int WORKER_TID = 2;
-
-  @Test
-  @DisplayName("activity blocks bucket samples and leave idle gaps")
-  public void testActivityBlocksBucketSamplesAndLeaveIdleGaps() {
-    // 5 samples inside the first 100 ms block, silence, 3 in the block at 1000 ms
-    List<StackSample> samples = new ArrayList<>();
-    for (int i = 0; i < 5; i++) samples.add(sample(1.0 + i * 0.01, MAIN_TID, false));
-    for (int i = 0; i < 3; i++) samples.add(sample(2.0 + i * 0.01, MAIN_TID, false));
-    ProfilerSnapshot snapshot = snapshot(100, samples, List.of());
-
-    List<TimeSpan> blocks = ProfilerTimeline.activityBlocks(snapshot, MAIN_TID, 100);
-
-    assertEquals(List.of(new TimeSpan(0, 100, 5), new TimeSpan(1000, 1100, 3)), blocks);
-  }
-
-  @Test
-  @DisplayName("activity blocks only cover the requested thread")
-  public void testActivityBlocksOnlyCoverTheRequestedThread() {
-    List<StackSample> samples = List.of(sample(1.0, MAIN_TID, false), sample(1.001, WORKER_TID, false));
-    ProfilerSnapshot snapshot = snapshot(1000, samples, List.of());
-
-    List<TimeSpan> blocks = ProfilerTimeline.activityBlocks(snapshot, WORKER_TID, 100);
-
-    assertEquals(List.of(new TimeSpan(0, 100, 1)), blocks);
-  }
 
   @Test
   @DisplayName("flame tree merges runs and keeps callee changes as time ordered children")
@@ -260,23 +234,6 @@ public class ProfilerTimelineTest {
   }
 
   @Test
-  @DisplayName("dominant stack is the most frequent one inside the range")
-  public void testDominantStackIsTheMostFrequentOneInsideTheRange() {
-    List<StackFrame> busy = List.of(new StackFrame("Main.main", "Main.hx", 1), new StackFrame("Game.update", "Game.hx", 10));
-    List<StackFrame> rare = List.of(new StackFrame("Main.main", "Main.hx", 1), new StackFrame("Game.render", "Game.hx", 30));
-    List<StackSample> samples = List.of(new StackSample(1.00, MAIN_TID, busy, 1, false),
-                                        new StackSample(1.01, MAIN_TID, rare, 1, false),
-                                        new StackSample(1.02, MAIN_TID, busy, 1, false),
-                                        // outside the queried range and on another thread - both ignored
-                                        new StackSample(1.30, MAIN_TID, rare, 1, false),
-                                        new StackSample(1.03, WORKER_TID, rare, 1, false));
-    ProfilerSnapshot snapshot = snapshot(100, samples, List.of());
-
-    assertEquals(busy, ProfilerTimeline.dominantStack(snapshot, MAIN_TID, 0, 100));
-    assertEquals(List.of(), ProfilerTimeline.dominantStack(snapshot, MAIN_TID, 500, 600), "no samples, no stack");
-  }
-
-  @Test
   @DisplayName("activity series buckets samples into rates")
   public void testActivitySeriesBucketsSamplesIntoRates() {
     // 4 samples inside the first 100 ms bucket, none in the second
@@ -303,24 +260,6 @@ public class ProfilerTimelineTest {
     List<SeriesPoint> series = ProfilerTimeline.activitySeries(snapshot, 100, true);
 
     assertEquals(new SeriesPoint(0, 20.0), series.getFirst(), "2 GC samples in 100 ms = 20/s");
-  }
-
-  @Test
-  @DisplayName("frame durations come from consecutive end of frame events")
-  public void testFrameDurationsComeFromConsecutiveEndOfFrameEvents() {
-    List<ProfilerEvent> events = List.of(new ProfilerEvent(1.0, MAIN_TID, 0, ""),
-                                         new ProfilerEvent(1.016, MAIN_TID, 0, ""),
-                                         new ProfilerEvent(1.05, MAIN_TID, 0, ""),
-                                         new ProfilerEvent(1.06, WORKER_TID, 0, ""),
-                                         new ProfilerEvent(1.07, MAIN_TID, 7, "custom"));
-    ProfilerSnapshot snapshot = snapshot(100, List.of(), events);
-
-    List<SeriesPoint> series = ProfilerTimeline.frameDurationSeries(snapshot, MAIN_TID);
-
-    assertEquals(2, series.size(), "two completed frames; other threads and custom events do not count");
-    assertEquals(16, series.get(0).timeMs());
-    assertEquals(16.0, series.get(0).value(), 0.0001);
-    assertEquals(34.0, series.get(1).value(), 0.0001);
   }
 
   @Test

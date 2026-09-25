@@ -14,7 +14,6 @@ import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
@@ -39,6 +38,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
  * Read-side model for the Haxe tool window: scans containers (modules and the
  * project root), merges detected and manually added build files, parses each
  * and resolves the per-container environment, compile-command and server rows.
- * Produces plain data - turning it into Swing nodes stays with the panel.
+ * Produces plain data - {@link HaxeToolWindowTreeBuilder} turns it into Swing nodes.
  */
 final class HaxeToolWindowModelBuilder {
 
@@ -88,32 +88,6 @@ final class HaxeToolWindowModelBuilder {
   }
 
   /** A container before global active-file resolution. */
-  private static Set<String> activeDefineNames(@Nullable FileEntry activeEntry) {
-    if (activeEntry == null) return Set.of();
-    return activeEntry.info().defines().stream()
-      .map(HaxeBuildFileInfo.HaxeDefine::name)
-      .collect(Collectors.toSet());
-  }
-
-  /// The entry the stored compile command points at; null when unset or no longer scanned.
-  private static FileEntry chosenEntry(List<FileEntry> files, @Nullable HaxeEnvironmentStore.CompileCommand stored) {
-    if (stored == null) return null;
-    return files.stream()
-      .filter(entry -> entry.buildFile().file().getPath().equals(stored.buildFilePath()))
-      .findFirst()
-      .orElse(null);
-  }
-
-  /// The stored action override when it still exists, else the type's default build action.
-  private static ActionNode resolveBaseAction(FileEntry chosen, HaxeEnvironmentStore.CompileCommand stored,
-                                              HaxeBuildFile buildFile) {
-    if (stored.actionName() != null) {
-      ActionNode overrideAction = findAction(chosen.actions(), stored.actionName());
-      if (overrideAction != null) return overrideAction;
-    }
-    return findAction(chosen.actions(), HaxeBuildFileActions.defaultBuildActionName(buildFile.type()));
-  }
-
   private record RawContainer(String id, String displayName, boolean projectRoot, List<FileEntry> files) {
   }
 
@@ -154,6 +128,15 @@ final class HaxeToolWindowModelBuilder {
     return containers;
   }
 
+  /** The active build file's define names - the environment rows mark overrides of these. */
+  @NotNull
+  private static Set<String> activeDefineNames(@Nullable FileEntry activeEntry) {
+    if (activeEntry == null) return Set.of();
+    return activeEntry.info().defines().stream()
+      .map(HaxeBuildFileInfo.HaxeDefine::name)
+      .collect(Collectors.toSet());
+  }
+
   /** Whether the user attached anything to the container: environment overrides, custom actions or custom tools. */
   private boolean hasUserConfiguration(@NotNull String containerId) {
     return HaxeEnvironmentStore.getInstance(project).hasUserOverrides(containerId)
@@ -180,35 +163,44 @@ final class HaxeToolWindowModelBuilder {
 
     if (rootDir.findChild(HaxeToolConfigs.CHECKSTYLE_CONFIG_NAME) != null) {
       String name = HaxeBundle.message("haxe.toolwindow.tool.checkstyle");
-      tools.add(detectedTool(raw.id(), name, haxelib, "checkstyle", HaxeToolConfigs.CHECKSTYLE_CONFIG_NAME, sources, List.of(), workDirectory));
+      List<String> command = toolCommand(haxelib, HaxeToolConfigs.CHECKSTYLE_HAXELIB, List.of(), sources);
+      tools.add(detectedTool(raw.id(), name, command, HaxeToolConfigs.CHECKSTYLE_CONFIG_NAME, workDirectory));
     }
     if (rootDir.findChild(HaxeToolConfigs.FORMATTER_CONFIG_NAME) != null) {
       String formatName = HaxeBundle.message("haxe.toolwindow.tool.format");
       String checkName = HaxeBundle.message("haxe.toolwindow.tool.format.check");
-      tools.add(detectedTool(raw.id(), formatName, haxelib, "formatter", HaxeToolConfigs.FORMATTER_CONFIG_NAME, sources, List.of(), workDirectory));
-      tools.add(detectedTool(raw.id(), checkName, haxelib, "formatter", HaxeToolConfigs.FORMATTER_CONFIG_NAME, sources, List.of("--check"), workDirectory));
+      List<String> format = toolCommand(haxelib, HaxeToolConfigs.FORMATTER_HAXELIB, List.of(), sources);
+      List<String> check = toolCommand(haxelib, HaxeToolConfigs.FORMATTER_HAXELIB, List.of("--check"), sources);
+      tools.add(detectedTool(raw.id(), formatName, format, HaxeToolConfigs.FORMATTER_CONFIG_NAME, workDirectory));
+      tools.add(detectedTool(raw.id(), checkName, check, HaxeToolConfigs.FORMATTER_CONFIG_NAME, workDirectory));
     }
     String projectRoot = HaxeContainers.projectRootPath(project);
     for (HaxeCustomToolsStore.CustomTool custom : HaxeCustomToolsStore.getInstance(project).getTools(raw.id())) {
-      List<String> command = HaxeCustomCommands.parse(HaxeCustomCommands.expandRoots(custom.command(), workDirectory, projectRoot));
-      String toolWorkDirectory = HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, workDirectory, projectRoot);
+      String expanded = HaxeCustomCommands.expandRoots(custom.command(), workDirectory, projectRoot);
+      List<String> command = HaxeCustomCommands.parse(expanded);
+      String toolWorkDirectory =
+        HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, workDirectory, projectRoot);
       tools.add(new ToolNode(raw.id(), custom.name(), command, toolWorkDirectory, custom.command(), true));
     }
     return tools;
   }
 
-  /** The row's gray tail names the config file the tool was detected from, not the full command. */
+  /** {@code haxelib run <tool> [modes] -s <source>...}: mode flags (--check) go before the source list. */
   @NotNull
-  private static ToolNode detectedTool(@NotNull String containerId, @NotNull String name, @NotNull String haxelib,
-                                       @NotNull String tool, @NotNull String configName,
-                                       @NotNull List<String> sources, @NotNull List<String> extra,
-                                       @NotNull String workDirectory) {
+  private static List<String> toolCommand(@NotNull String haxelib, @NotNull String tool,
+                                          @NotNull List<String> modes, @NotNull List<String> sources) {
     List<String> command = new ArrayList<>(List.of(haxelib, "run", tool));
-    // mode flags (--check) go before the source list
-    command.addAll(extra);
+    command.addAll(modes);
     for (String source : sources) {
       command.addAll(List.of("-s", source));
     }
+    return command;
+  }
+
+  /** The row's gray tail names the config file the tool was detected from, not the full command. */
+  @NotNull
+  private static ToolNode detectedTool(@NotNull String containerId, @NotNull String name, @NotNull List<String> command,
+                                       @NotNull String configName, @NotNull String workDirectory) {
     return new ToolNode(containerId, name, command, workDirectory, configName, false);
   }
 
@@ -322,16 +314,18 @@ final class HaxeToolWindowModelBuilder {
   private FileEntry fileEntry(@NotNull String containerId, @NotNull HaxeBuildFile buildFile,
                               @NotNull Set<String> manualPaths) {
     List<String> sections = multiSectionContents(buildFile);
-    List<String> sectionIds = sections.isEmpty() ? List.of()
-      : HxmlFileParser.sectionIds(buildFile.file().getName(), sections);
-    List<String> sectionLabels = sectionLabels(sectionIds);
+    List<String> sectionIds = sections.isEmpty()
+                              ? List.of()
+                              : HxmlFileParser.sectionIds(buildFile.file().getName(), sections);
     List<String> sectionDescriptors = sections.isEmpty() ? List.of() : HxmlFileParser.sectionDescriptors(sections);
-    int selectedSection = sectionIds.isEmpty() ? 0
-      : HaxeSectionSelectionStore.getInstance(project).getSelectedSection(buildFile.file(), sectionIds);
-    return new FileEntry(buildFile, effectiveInfo(containerId, buildFile),
-                         manualPaths.contains(buildFile.file().getPath()),
-                         buildFileActions(containerId, buildFile),
-                         sectionIds, sectionLabels, sectionDescriptors, selectedSection);
+    int selectedSection = sectionIds.isEmpty()
+                          ? 0
+                          : HaxeSectionSelectionStore.getInstance(project).getSelectedSection(buildFile.file(), sectionIds);
+
+    HaxeBuildFileInfo info = effectiveInfo(containerId, buildFile);
+    boolean manual = manualPaths.contains(buildFile.file().getPath());
+    List<ActionNode> actions = buildFileActions(containerId, buildFile);
+    return new FileEntry(buildFile, info, manual, actions, sectionIds, sectionLabels(sectionIds), sectionDescriptors, selectedSection);
   }
 
   /** The {@code --next} sections of a multi-section hxml; empty for single-section files and other build types. */
@@ -392,8 +386,7 @@ final class HaxeToolWindowModelBuilder {
     var libraries = !display.libraries().isEmpty() ? display.libraries() : raw.libraries();
     // target + output come from the evaluation too: the actual haxe target and
     // artifact path of the SELECTED lime target (the raw xml declares neither)
-    return new HaxeBuildFileInfo(display.target(), display.targetOutput(), display.defines(), libraries,
-                                 display.classpaths());
+    return display.withLibraries(libraries);
   }
 
   /**
@@ -420,8 +413,7 @@ final class HaxeToolWindowModelBuilder {
     }
     HaxeBuildFileInfo prepared = evaluation.info();
     var libraries = !prepared.libraries().isEmpty() ? prepared.libraries() : raw.libraries();
-    return new HaxeBuildFileInfo(withArtifact.target(), withArtifact.targetOutput(), prepared.defines(), libraries,
-                                 prepared.classpaths());
+    return prepared.withTarget(withArtifact.target(), withArtifact.targetOutput()).withLibraries(libraries);
   }
 
   /**
@@ -443,7 +435,8 @@ final class HaxeToolWindowModelBuilder {
       // the row shows the expanded command, so a ${target} action reads like the default ones
       String expanded = HaxeCustomCommands.expandTarget(project, buildFile.file(), buildFile.type(), custom.command());
       List<String> command = HaxeCustomCommands.parse(HaxeCustomCommands.expandRoots(expanded, moduleRoot, projectRoot));
-      String actionWorkDirectory = HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, moduleRoot, projectRoot);
+      String actionWorkDirectory =
+        HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, moduleRoot, projectRoot);
       actions.add(new ActionNode(ownerId, custom.name(), command, actionWorkDirectory, expanded, true));
     }
     return actions;
@@ -454,41 +447,11 @@ final class HaxeToolWindowModelBuilder {
                                  @NotNull HaxeBuildFile buildFile,
                                  @Nullable String environmentSdk,
                                  @Nullable String workDirectory) {
-    VirtualFile file = buildFile.file();
-    HaxeBuildFileType type = buildFile.type();
-    switch (type) {
-      case HXML -> {
-        List<String> command = HxmlProjects.buildCommand(project, environmentSdk, file);
-        // the name doubles as the action's stored IDENTITY (resolve-by-name in
-        // configurations) - the non-localized constant, like the other types' names
-        actions.add(new ActionNode(ownerId, HxmlProjects.BUILD_ACTION, command, workDirectory, "haxe " + file.getName(), false));
-      }
-      case OPENFL, LIME, HXP_PROJECT -> {
-        String tool = LimeProjects.toolFor(type);
-        String targetFlags = String.join(" ", LimeProjects.selectedTargetFlags(project, type, file));
-        for (String actionName : LimeProjects.DEFAULT_ACTIONS) {
-          List<String> command = LimeProjects.actionCommand(project, environmentSdk, file, type, actionName);
-          String presentable = tool + " " + actionName + " " + targetFlags;
-          actions.add(new ActionNode(ownerId, actionName, command, workDirectory, presentable, false));
-        }
-      }
-      case HXP_SCRIPT -> {
-        // a plain hxp script builds itself - the hxp tool runs it, no lime target
-        List<String> command = HxpScriptProjects.buildCommand(project, environmentSdk, file);
-
-        String presentable = "hxp " + file.getName();
-        ActionNode actionNode = new ActionNode(ownerId, HxpScriptProjects.BUILD_ACTION, command,
-                                      workDirectory, presentable, false);
-        actions.add(actionNode);
-      }
-      case NMML -> {
-        String targetFlags = String.join(" ", NmeProjects.selectedTargetFlags(project, file));
-        for (String actionName : NmeProjects.DEFAULT_ACTIONS) {
-          List<String> command = NmeProjects.actionCommand(project, environmentSdk, file, actionName);
-          String presentable = "nme " + actionName + " " + targetFlags;
-          actions.add(new ActionNode(ownerId, actionName, command, workDirectory, presentable, false));
-        }
-      }
+    HaxeBuildSystem buildSystem = HaxeBuildSystem.of(buildFile.type());
+    for (String actionName : buildSystem.defaultActionNames()) {
+      List<String> command = buildSystem.actionCommand(project, environmentSdk, buildFile, actionName);
+      String presentable = buildSystem.presentableCommand(project, buildFile, actionName);
+      actions.add(new ActionNode(ownerId, actionName, Objects.requireNonNull(command), workDirectory, presentable, false));
     }
   }
 
@@ -502,22 +465,20 @@ final class HaxeToolWindowModelBuilder {
       .map(entry -> entry.buildFile().file().getPath())
       .toList();
     Map<String, List<String>> actionNamesByFile = files.stream()
-      .collect(Collectors.toMap(entry -> entry.buildFile().file().getPath(),
-                                entry -> entry.actions().stream().map(ActionNode::name).toList()));
+      .collect(Collectors.toMap(entry -> entry.buildFile().file().getPath(), HaxeToolWindowModelBuilder::actionNames));
 
     HaxeEnvironmentStore.CompileCommand stored = HaxeEnvironmentStore.getInstance(project).getCompileCommand(containerId);
     FileEntry chosen = chosenEntry(files, stored);
     if (chosen == null) {
-      return new EnvCompileCommandNode(containerId, HaxeBundle.message("haxe.toolwindow.compile.command.not.set"),
-                                       null, null, candidatePaths, actionNamesByFile, false);
+      String notSet = HaxeBundle.message("haxe.toolwindow.compile.command.not.set");
+      return new EnvCompileCommandNode(containerId, notSet, null, null, candidatePaths, actionNamesByFile, false);
     }
 
     HaxeBuildFile buildFile = chosen.buildFile();
     ActionNode baseAction = resolveBaseAction(chosen, stored, buildFile);
     if (baseAction == null || baseAction.command().isEmpty()) {
-      return new EnvCompileCommandNode(containerId,
-                                       HaxeBundle.message("haxe.toolwindow.compile.command.unsupported", buildFile.file().getName()),
-                                       null, null, candidatePaths, actionNamesByFile, false);
+      String unsupported = HaxeBundle.message("haxe.toolwindow.compile.command.unsupported", buildFile.file().getName());
+      return new EnvCompileCommandNode(containerId, unsupported, null, null, candidatePaths, actionNamesByFile, false);
     }
 
     List<String> command = new ArrayList<>(baseAction.command());
@@ -527,6 +488,32 @@ final class HaxeToolWindowModelBuilder {
     boolean connectEligible = HaxeCompileCommands.connectEligible(project, environmentSdk, command, buildFile.file());
     return new EnvCompileCommandNode(containerId, display, command, baseAction.workDirectory(), candidatePaths,
                                      actionNamesByFile, connectEligible);
+  }
+
+  /// The entry the stored compile command points at; null when unset or no longer scanned.
+  private static FileEntry chosenEntry(List<FileEntry> files, @Nullable HaxeEnvironmentStore.CompileCommand stored) {
+    if (stored == null) return null;
+    return files.stream()
+      .filter(entry -> entry.buildFile().file().getPath().equals(stored.buildFilePath()))
+      .findFirst()
+      .orElse(null);
+  }
+
+  /// The stored action override when it still exists, else the type's default build action.
+  private static ActionNode resolveBaseAction(FileEntry chosen, HaxeEnvironmentStore.CompileCommand stored,
+                                              HaxeBuildFile buildFile) {
+    if (stored.actionName() != null) {
+      ActionNode overrideAction = findAction(chosen.actions(), stored.actionName());
+      if (overrideAction != null) return overrideAction;
+    }
+    return findAction(chosen.actions(), HaxeBuildSystem.of(buildFile.type()).defaultBuildActionName());
+  }
+
+  @NotNull
+  private static List<String> actionNames(@NotNull FileEntry entry) {
+    return entry.actions().stream()
+      .map(ActionNode::name)
+      .toList();
   }
 
   @Nullable
@@ -556,10 +543,10 @@ final class HaxeToolWindowModelBuilder {
 
     // same store the Haxe Compiler settings page edits - the two stay in sync
     HaxeCompilerSettings compilerSettings = HaxeCompilerSettings.getInstance(project);
-    HaxeLanguageLevel levelOverride = compilerSettings.getModuleLanguageLevelOverride(containerId);
+    HaxeLanguageLevel levelOverride = compilerSettings.getContainerLanguageLevelOverride(containerId);
     String levelDisplay = levelOverride != null
-      ? levelOverride.getPresentableText()
-      : defaultLevelDisplay(compilerSettings, containerId);
+                          ? levelOverride.getPresentableText()
+                          : defaultLevelDisplay(compilerSettings, containerId);
 
     List<EnvDefineNode> defines = environmentStore.getDefines(containerId).stream()
       .map(define -> new EnvDefineNode(containerId, define.name(), define.value(), define.effect(),
@@ -582,8 +569,8 @@ final class HaxeToolWindowModelBuilder {
     boolean moduleUses = HaxeEnvironmentStore.getInstance(project).isUsingCompilationServer(containerId);
     // per-module SDKs mean per-SDK server instances - this row reports the one
     // THIS container's compiles connect to, not whichever server happens to run
-    String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
-    int port = HaxeCompilationServerManager.getInstance(project).getRunningPort(sdkName);
+    String serverId = HaxeCompilationServerManager.serverIdFor(project, containerId);
+    int port = HaxeCompilationServerManager.getInstance(project).runningPort(serverId);
     boolean running = port > 0;
 
     String display;

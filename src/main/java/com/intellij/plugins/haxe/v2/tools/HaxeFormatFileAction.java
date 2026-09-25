@@ -17,11 +17,17 @@ public final class HaxeFormatFileAction extends HaxeFileToolAction {
   }
 
   @Override
+  @NotNull
+  String toolHaxelib() {
+    return HaxeToolConfigs.FORMATTER_HAXELIB;
+  }
+
+  @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
     VirtualFile file = haxeFile(e);
     if (file == null) return;
     // the tool rewrites the file on disk behind the editor's back
     Runnable refresh = () -> file.refresh(true, false);
-    runFileTool(e, "formatter", List.of(), refresh);
+    runFileTool(e, List.of(), refresh);
   }
 }

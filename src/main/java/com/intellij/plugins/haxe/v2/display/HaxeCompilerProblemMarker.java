@@ -11,7 +11,7 @@ import com.intellij.plugins.haxe.display.protocol.Diagnostic;
 import com.intellij.plugins.haxe.display.protocol.DiagnosticSeverity;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.problems.WolfTheProblemSolver;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,7 +29,7 @@ import org.jetbrains.annotations.NotNull;
 @Service(Service.Level.PROJECT)
 public final class HaxeCompilerProblemMarker {
 
-  /** Identity handed to the wolf so our marks never clear another source's. */
+  /** The external-source identity of these marks, so clearing them never clears another source's. */
   private static final Object SOURCE = new Object();
 
   private final Project project;
@@ -50,8 +50,7 @@ public final class HaxeCompilerProblemMarker {
    * absent from the response get cleared. Call on a background thread.
    */
   public void updateFromDiagnostics(@NotNull String editedFilePath, @NotNull List<FileDiagnostics> results) {
-    Set<String> nowBroken = new HashSet<>();
-    Map<String, VirtualFile> resolved = new ConcurrentHashMap<>();
+    Map<String, VirtualFile> nowBroken = new HashMap<>();
     for (FileDiagnostics entry : results) {
       if (FileUtil.pathsEqual(entry.file(), editedFilePath)) continue;
       if (!hasErrorSeverity(entry)) continue;
@@ -60,13 +59,12 @@ public final class HaxeCompilerProblemMarker {
       // library files are not the user's problem to fix - only mark project content
       boolean inContent = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInContent(file));
       if (!inContent) continue;
-      nowBroken.add(file.getPath());
-      resolved.put(file.getPath(), file);
+      nowBroken.put(file.getPath(), file);
     }
 
     WolfTheProblemSolver wolf = WolfTheProblemSolver.getInstance(project);
     for (String path : markedPaths) {
-      if (!nowBroken.contains(path)) {
+      if (!nowBroken.containsKey(path)) {
         VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
         if (file != null) {
           wolf.clearProblemsFromExternalSource(file, SOURCE);
@@ -74,9 +72,9 @@ public final class HaxeCompilerProblemMarker {
         markedPaths.remove(path);
       }
     }
-    for (String path : nowBroken) {
-      wolf.reportProblemsFromExternalSource(resolved.get(path), SOURCE);
-      markedPaths.add(path);
+    for (Map.Entry<String, VirtualFile> broken : nowBroken.entrySet()) {
+      wolf.reportProblemsFromExternalSource(broken.getValue(), SOURCE);
+      markedPaths.add(broken.getKey());
     }
   }
 

@@ -14,9 +14,9 @@ import java.util.List;
 /// connect, write every argument followed by `\n` and a single trailing
 /// `\0`, read until the server closes, close.
 ///
-/// Strictly one socket per request, closed immediately: the server processes
-/// one connection at a time and an idle open connection stalls every other
-/// client (including builds) until a server-side read timeout. Never pool.
+/// Strictly one socket per request, closed immediately. The server serves one
+/// connection at a time, and an open idle connection stalls every other
+/// client, builds included, until a server-side read timeout. Never pool.
 public final class HaxeDisplayTransport {
 
   private static final int CONNECT_TIMEOUT_MS = 3_000;
@@ -31,15 +31,12 @@ public final class HaxeDisplayTransport {
   }
 
   private static byte[] encode(List<String> args) {
-    StringBuilder body = new StringBuilder();
+    StringBuilder message = new StringBuilder();
     for (String arg : args) {
-      body.append(arg).append('\n');
+      message.append(arg).append('\n');
     }
-    byte[] text = body.toString().getBytes(StandardCharsets.UTF_8);
-    byte[] message = new byte[text.length + 1];
-    System.arraycopy(text, 0, message, 0, text.length);
-    message[text.length] = 0;
-    return message;
+    message.append('\0');
+    return message.toString().getBytes(StandardCharsets.UTF_8);
   }
 
   private static byte[] exchange(String host, int port, byte[] message, int readTimeoutMs)

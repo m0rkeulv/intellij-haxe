@@ -20,7 +20,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.util.HaxeFileUtil;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.util.HaxeNameUtils;
-import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiElement;
@@ -34,10 +33,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.stream.Collectors;
 import com.intellij.openapi.project.IndexNotReadyException;
-import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiManager;
-import org.jspecify.annotations.NonNull;
 
 public class HaxePackageModel implements HaxeExposableModel {
   private final HaxeProjectModel project;
@@ -139,7 +136,6 @@ public class HaxePackageModel implements HaxeExposableModel {
     String packagePath = HaxeFileUtil.joinPath(parts.subList(0, parts.size() - 1));
     String accessPath = null != packagePath && !packagePath.isEmpty() ? HaxeFileUtil.joinPath(path, packagePath) : path;
     try {
-
       // target-specific files ("MyClass.js.hx") can shadow plain normal files ("MyClass.hx") when a target is active.
       HaxeFile variantFile = findActiveVariantFileByIndex(fname, accessPath);
       if (variantFile != null) return variantFile;
@@ -164,9 +160,9 @@ public class HaxePackageModel implements HaxeExposableModel {
 
   /**
    * Index-backed lookup: one FilenameIndex query with candidates matched to
-   * this root - then any project root, since some libs share package names -
-   * by relative path. Replaces a findSubdirectory walk per package segment
-   * per source root, which dominated resolve time in import-heavy files.
+   * this root, then to any project root since some libs share package names,
+   * by relative path. Much cheaper than walking subdirectories per package
+   * segment per source root.
    * <p>
    * An empty candidate set is a definitive miss: every root the models serve
    * is an order-entry root (module source roots and library classes roots via
@@ -182,7 +178,7 @@ public class HaxePackageModel implements HaxeExposableModel {
     Collection<VirtualFile> candidates = HaxeFilenameCandidateCache.getInstance(project.getProject()).candidatesFor(fname + ".hx");
     if (candidates.isEmpty()) return null;
 
-    String relative = getRelative(fname, accessPath);
+    String relative = relativeFilePath(fname, accessPath);
     VirtualFile found = findInRoot(root, relative, candidates);
     if (found != null) return asHaxeFile(found);
 
@@ -191,7 +187,6 @@ public class HaxePackageModel implements HaxeExposableModel {
       found = findInRoot(other, relative, candidates);
       if (found != null) return asHaxeFile(found);
     }
-    
     return null;
   }
 
@@ -208,7 +203,7 @@ public class HaxePackageModel implements HaxeExposableModel {
     return file != null && candidates.contains(file) ? file : null;
   }
 
-  private static @NonNull String getRelative(String fname, String accessPath) {
+  private static @NotNull String relativeFilePath(String fname, String accessPath) {
     // package paths mix '.' and '/' separators depending on the caller
     return accessPath == null || accessPath.isEmpty()
            ? fname + ".hx"
@@ -275,9 +270,8 @@ public class HaxePackageModel implements HaxeExposableModel {
 
   /**
    * The main class of every module in this package. Cached on the package
-   * directory: the same-package check runs this for every reference that no
-   * earlier check resolved, and re-enumerating the directory per reference
-   * dominated resolve time in editing profiles. Invalidates on ANY PSI change
+   * directory, since the same-package check runs this for every reference no
+   * earlier check resolved. Invalidates on ANY PSI change
    * (global modification count) - a PsiDirectory has no per-directory
    * timestamp, so finer dependencies cannot exist; the global count also
    * covers files added to or removed from the directory.

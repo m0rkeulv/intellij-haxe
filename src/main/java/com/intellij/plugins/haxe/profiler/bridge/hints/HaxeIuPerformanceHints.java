@@ -25,12 +25,12 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Gutter time hints for Haxe sources, driven by our own profiler
+ * Gutter time hints for Haxe sources, driven by the Haxe profiler
  * snapshots: when one opens in the profiler tool window, every open (and
  * later-opened) .hx editor whose file the capture touched gets a column of
- * rounded time chips ({@link HaxeLineChipGutter}) — per function for tracy
- * captures (zones carry the function's declaration line), per frame line
- * for sampled ones — red when a line's share of the session is high. The
+ * rounded time chips ({@link HaxeLineChipGutter}), per function for tracy
+ * captures (zones carry the function's declaration line) and per frame line
+ * for sampled ones, red when a line's share of the session is high. The
  * stock In-Editor Performance Hints plugin only reads JFR snapshots, so
  * this is its Haxe counterpart on the same listener hook.
  */

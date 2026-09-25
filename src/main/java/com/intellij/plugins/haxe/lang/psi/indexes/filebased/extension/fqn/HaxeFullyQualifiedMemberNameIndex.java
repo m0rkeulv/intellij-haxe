@@ -1,19 +1,13 @@
 package com.intellij.plugins.haxe.lang.psi.indexes.filebased.extension.fqn;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.lang.psi.HaxeClass;
-import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.data.HaxeComponentIndexData;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.extension.HaxeComponentBaseIndex;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.indexer.HaxeFullyQualifiedNameIndexer;
 import com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexUtil;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiManager;
 import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.util.Processor;
 import com.intellij.util.indexing.DataIndexer;
 import com.intellij.util.indexing.FileBasedIndex;
 import com.intellij.util.indexing.FileContent;
@@ -26,8 +20,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.intellij.plugins.haxe.lang.psi.indexes.filebased.extension.fqn.HaxeFqnIndexUtil.resolveModule;
 
@@ -99,12 +91,12 @@ public class HaxeFullyQualifiedMemberNameIndex extends HaxeComponentBaseIndex {
     }
 
 
-    private static boolean addMemberOrParameter(HaxeBaseMemberModel member, FullyQualifiedInfo fqn, List<PsiElement> results) {
-        if (findAndAddMember(fqn, results, member)) return true;
+    /** Adds the member, or its parameter when the FQN names one. */
+    private static void addMemberOrParameter(HaxeBaseMemberModel member, FullyQualifiedInfo fqn, List<PsiElement> results) {
+        if (findAndAddMember(fqn, results, member)) return;
         if (member instanceof HaxeMethodModel methodModel) {
-            return findAndAddParameter(fqn, results, methodModel);
+            findAndAddParameter(fqn, results, methodModel);
         }
-        return false;
     }
 
     private static boolean findAndAddMember(FullyQualifiedInfo fqn, List<PsiElement> results, HaxeBaseMemberModel member) {

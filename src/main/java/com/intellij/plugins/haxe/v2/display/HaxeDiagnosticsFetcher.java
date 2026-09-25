@@ -27,12 +27,11 @@ import org.jetbrains.annotations.Nullable;
  * per-feature annotator (errors, unused imports, removable code) collects
  * through {@link #collect} and fetches through {@link #fetch}.
  *
- * The cache keeps the LAST KNOWN diagnostics per file. Within the TTL it
- * also means one editor pass costs ONE wire request no matter how many
- * annotators consume it — but its real job is surviving transient fetch
- * failures (server restarting, one refused socket): a settings-driven
- * re-highlight then still renders the last known diagnostics instead of
- * silently wiping them until the next edit.
+ * The cache keeps the LAST KNOWN diagnostics per file. Within the TTL, one
+ * editor pass costs one request however many annotators consume it. Its main
+ * job, though, is surviving transient fetch failures (a restarting server, a
+ * refused socket): a re-highlight then still renders the last known
+ * diagnostics instead of wiping them until the next edit.
  */
 final class HaxeDiagnosticsFetcher {
 
@@ -47,11 +46,10 @@ final class HaxeDiagnosticsFetcher {
   }
 
   /**
-   * Last known diagnostics per file path, one map per PROJECT (a file open in
-   * two projects must not render the other project's diagnostics, and a
-   * per-project cache clear must not wipe every project). Entries persist
-   * past the TTL as the transient-failure fallback; the service dies with
-   * its project.
+   * Last known diagnostics per file path, one map per PROJECT: a file open in
+   * two projects must not render the other project's diagnostics, and one
+   * project's cache clear must not wipe the others. Entries outlive the TTL
+   * as the transient-failure fallback; the service dies with its project.
    */
   @Service(Service.Level.PROJECT)
   static final class Cache {
@@ -105,9 +103,9 @@ final class HaxeDiagnosticsFetcher {
   }
 
   /**
-   * This file's diagnostics, fetched once per (file, buffer state) and shared
-   * across the annotators of one pass. The whole-project sweep feeding the
-   * Project view problem marks rides along on the cache-filling call only.
+   * This file's diagnostics, fetched once per file and buffer state and
+   * shared by the annotators of one pass. Only the call that fills the cache
+   * also runs the whole-project sweep feeding the Project view problem marks.
    */
   @Nullable
   static List<Diagnostic> fetch(@NotNull Request request) {
@@ -131,8 +129,8 @@ final class HaxeDiagnosticsFetcher {
       return cached != null ? cached.diagnostics() : null;
     }
 
-    // the whole-project sweep is what surfaces OTHER files' errors - the
-    // per-file request above tolerates broken dependencies; its findings
+    // only the whole-project sweep surfaces errors in OTHER files (the
+    // per-file request stays silent about broken dependencies); its findings
     // become Project view problem marks instead of editor annotations
     List<FileDiagnostics> sweep = request.service().projectDiagnostics(request.context());
     if (sweep != null) {

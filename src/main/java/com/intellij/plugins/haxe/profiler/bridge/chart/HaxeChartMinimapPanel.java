@@ -18,11 +18,11 @@ import java.util.function.BiConsumer;
 
 /**
  * The whole session in one strip above the Call Chart: frame-duration bars
- * (a taller bar is a slower frame, so hitches stand out) or a coarse
- * activity silhouette when the capture has no frames, with the chart's
- * current view as a draggable window — drag inside to pan, drag an edge to
- * zoom, click outside to jump. The chart pushes view changes back through
- * {@link #showWindow}, so the two stay in lockstep.
+ * (a taller bar is a slower frame, so hitches stand out), or a coarse
+ * activity silhouette when the capture has no frames. The chart's current
+ * view shows as a window: drag inside it to pan, drag an edge to zoom,
+ * click outside it to jump. The chart reports every view change back
+ * through {@link #showWindow}.
  */
 final class HaxeChartMinimapPanel extends JComponent {
 

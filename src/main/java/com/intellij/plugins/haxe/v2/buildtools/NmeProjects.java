@@ -46,7 +46,7 @@ public final class NmeProjects {
     return HaxeTargetOptions.targetFlagsFor(HaxeBuildFileType.NMML, targetId);
   }
 
-  /// A `haxelib run nme …` invocation. These can compile through the
+  /// Whether the command is a `haxelib run nme …` invocation. These can compile through the
   /// server, but only as a single `"--connect <port>"` token - the tool's
   /// two-token forwarding is broken (see
   /// [HaxeCompileCommands#connectIfEnabled]).
@@ -65,8 +65,8 @@ public final class NmeProjects {
                                            @Nullable String environmentSdk,
                                            @NotNull VirtualFile file,
                                            @NotNull String actionName) {
-    List<String> command = new ArrayList<>(List.of(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk),
-                                                   "run", "nme", actionName, file.getName()));
+    String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
+    List<String> command = new ArrayList<>(List.of(haxelib, "run", "nme", actionName, file.getName()));
     command.addAll(selectedTargetFlags(project, file));
     return command;
   }
@@ -92,7 +92,7 @@ public final class NmeProjects {
     String outputRoot = appPath != null ? appPath : "bin";
     TargetArtifact artifact = targetArtifact(selectedTargetFlag(project, file), appFile, outputRoot);
     if (artifact == null) return raw;
-    return new HaxeBuildFileInfo(artifact.target(), artifact.relativeOutput(), raw.defines(), raw.libraries(), raw.classpaths());
+    return raw.withTarget(artifact.target(), artifact.relativeOutput());
   }
 
   /** The haxe compilation target behind an nme CLI target id ("cpp" is nme's host-desktop word), or null for an unknown id. */

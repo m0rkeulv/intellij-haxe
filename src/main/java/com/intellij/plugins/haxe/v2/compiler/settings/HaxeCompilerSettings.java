@@ -48,15 +48,15 @@ public interface HaxeCompilerSettings {
 
   /** Explicit per-container overrides, keyed by container id. Containers without an entry use the default. */
   @NotNull
-  Map<String, HaxeLanguageLevel> getModuleLanguageLevelOverrides();
+  Map<String, HaxeLanguageLevel> getContainerLanguageLevelOverrides();
 
-  void setModuleLanguageLevelOverrides(@NotNull Map<String, HaxeLanguageLevel> overrides);
+  void setContainerLanguageLevelOverrides(@NotNull Map<String, HaxeLanguageLevel> overrides);
 
   @Nullable
-  HaxeLanguageLevel getModuleLanguageLevelOverride(@NotNull String containerId);
+  HaxeLanguageLevel getContainerLanguageLevelOverride(@NotNull String containerId);
 
   /** Sets or clears (when {@code level} is null) the override for a single container. */
-  void setModuleLanguageLevelOverride(@NotNull String containerId, @Nullable HaxeLanguageLevel level);
+  void setContainerLanguageLevelOverride(@NotNull String containerId, @Nullable HaxeLanguageLevel level);
 
   @NotNull
   HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String containerId);

@@ -18,8 +18,7 @@ import javax.swing.Icon
  * generic New Project entry: one page with SDK selection and a project
  * TEMPLATE switcher (Empty, HXML, Lime, OpenFL, NME, Haxelib), each template
  * generating configured files and wiring the v2 stores. The language-dropdown
- * entry ({@code HaxeNewProjectWizard}) is a separate, simpler surface and
- * stays. See doc/project-templates-wizard.md.
+ * entry ({@code HaxeNewProjectWizard}) is a separate, simpler surface.
  */
 class HaxeProjectGenerator : GeneratorNewProjectWizard {
 

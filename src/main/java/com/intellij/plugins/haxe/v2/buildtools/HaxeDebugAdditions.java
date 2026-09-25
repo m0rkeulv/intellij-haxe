@@ -6,11 +6,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * Compiler additions that make a target's output debuggable, applied on top of the
- * action's normal compile. The first concrete form of the planned "profiles"
- * concept: a named argument set layered over a build.
- */
+/** Compiler additions that make a target's output debuggable, applied on top of the action's normal compile. */
 public final class HaxeDebugAdditions {
 
   /** The haxelib id of the in-debuggee DAP server hxcpp debug builds compile in. */

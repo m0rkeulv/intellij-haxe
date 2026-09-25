@@ -35,13 +35,13 @@ import org.jetbrains.annotations.Nullable;
  * spawns no debuggee.
  *
  * FIREFOX (vscode-firefox-debug, single session — wire behaviour pinned by
- * FirefoxAdapterLiveProbe): initialize needs pathFormat=path, the initialized
+ * FirefoxAdapterLiveTest): initialize needs pathFormat=path, the initialized
  * event arrives only after launch, no configurationDone, lazy breakpoint
  * verification, literal native-path matching, and the serve-mode first-page
  * refresh that makes load-time breakpoints reachable.
  *
  * CHROMIUM (vscode-js-debug's dapDebugServer, parent+child sessions — wire
- * behaviour pinned by JsDebugAdapterLiveProbe): {@link #connect()} runs the
+ * behaviour pinned by JsDebugAdapterLiveTest): {@link #connect()} runs the
  * PARENT session itself (initialize, fire-and-forget launch, configurationDone
  * on initialized, then the {@code startDebugging} reverse request hands over
  * the child configuration) and returns the CHILD connection — so the generic
@@ -438,26 +438,35 @@ public class BrowserDebugBackend implements DapBackend {
     }
     JsDebugSessionMux mux = sessionMux;
     sessionMux = null;
-    if (mux != null) {
-      try {
-        mux.close(); // closes page, workers AND the parent connection
-      } catch (IOException ignored) {
-      }
-    }
     DapClient parent = parentClient;
     parentClient = null;
-    if (mux == null && parent != null) {
+    Process adapter = adapterProcess;
+    adapterProcess = null;
+    closeSession(mux, parent, adapter);
+  }
+
+  /**
+   * Tears a js-debug session down: the mux (page or process, workers AND the
+   * parent connection), else the parent alone (startup failed before the mux
+   * existed), then the adapter's WHOLE process tree - killing node does not
+   * kill the browser it spawned, and when the graceful DAP disconnect did not
+   * happen (forced teardown) every session would otherwise leak a headless
+   * browser.
+   */
+  static void closeSession(@Nullable JsDebugSessionMux mux, @Nullable DapClient parent, @Nullable Process adapter) {
+    if (mux != null) {
       try {
-        parent.close(); // startup failed before the mux existed
+        mux.close();
       } catch (IOException ignored) {
       }
     }
-    Process adapter = adapterProcess;
-    adapterProcess = null;
+    else if (parent != null) {
+      try {
+        parent.close();
+      } catch (IOException ignored) {
+      }
+    }
     if (adapter != null) {
-      // reap the WHOLE tree: killing node does not kill the browser it
-      // spawned, and when the graceful DAP disconnect did not happen (forced
-      // teardown) every session would otherwise leak a headless browser.
       adapter.descendants().forEach(ProcessHandle::destroyForcibly);
       adapter.destroy();
       try {

@@ -92,20 +92,10 @@ public final class DisplayJson {
   }
 
   private static Diagnostic decodeDiagnostic(JsonNode entry) {
-    List<Diagnostic.RelatedInformation> related = new ArrayList<>();
-    for (JsonNode info : entry.path("relatedInformation")) {
-      related.add(new Diagnostic.RelatedInformation(
-        decodeLocation(info.path("location")),
-        info.path("message").asString(""),
-        info.path("depth").asInt(0)));
-    }
-    return new Diagnostic(
-      DiagnosticKind.fromCode(entry.path("kind").asInt(-1)),
-      Range.fromJson(entry.path("range")),
-      DiagnosticSeverity.fromCode(entry.path("severity").asInt(-1)),
-      entry.path("args"),
-      entry.path("code").isString() ? entry.path("code").asString() : null,
-      List.copyOf(related));
+    DiagnosticKind kind = DiagnosticKind.fromCode(entry.path("kind").asInt(-1));
+    DiagnosticSeverity severity = DiagnosticSeverity.fromCode(entry.path("severity").asInt(-1));
+    String code = entry.path("code").isString() ? entry.path("code").asString() : null;
+    return new Diagnostic(kind, Range.fromJson(entry.path("range")), severity, entry.path("args"), code);
   }
 
   public static List<Location> decodeLocations(JsonNode data) {
@@ -124,11 +114,7 @@ public final class DisplayJson {
   public static HoverInfo decodeHover(JsonNode data) {
     if (data.isNull() || data.isMissingNode()) return null;
     JsonNode item = data.path("item");
-    return new HoverInfo(
-      Range.fromJson(data.path("range")),
-      item.path("kind").asString(""),
-      JsonTypeRef.of(item.path("type")),
-      data.path("documentation").asString(null));
+    return new HoverInfo(Range.fromJson(data.path("range")), item.path("kind").asString(""), JsonTypeRef.of(item.path("type")));
   }
 
   public static List<HaxeServerContext> decodeContexts(JsonNode data) {
@@ -139,27 +125,22 @@ public final class DisplayJson {
     return List.copyOf(contexts);
   }
 
-  public static HaxeServerContext decodeContext(JsonNode entry) {
-    List<String> classPaths = new ArrayList<>();
-    for (JsonNode path : entry.path("classPaths")) {
-      classPaths.add(path.asString(""));
-    }
+  private static HaxeServerContext decodeContext(JsonNode entry) {
     Map<String, String> defines = new LinkedHashMap<>();
     for (JsonNode define : entry.path("defines")) {
       defines.put(define.path("key").asString(""), define.path("value").asString(""));
     }
-    int index = entry.path("index").asInt(0);
     String desc = entry.path("desc").asString("");
     String signature = entry.path("signature").asString("");
     String platform = entry.path("platform").asString("");
-    return new HaxeServerContext(index, desc, signature, platform, List.copyOf(classPaths), defines);
+    return new HaxeServerContext(desc, signature, platform, defines);
   }
 
   public static ServerMemory decodeServerMemory(JsonNode data) {
     List<ServerMemory.ContextSize> contexts = new ArrayList<>();
     for (JsonNode entry : data.path("contexts")) {
-      contexts.add(new ServerMemory.ContextSize(decodeContext(entry.path("context")),
-                                                entry.path("size").asLong(0)));
+      HaxeServerContext context = decodeContext(entry.path("context"));
+      contexts.add(new ServerMemory.ContextSize(context, entry.path("size").asLong(0)));
     }
     long totalCache = data.path("memory").path("totalCache").asLong(0);
     return new ServerMemory(totalCache, List.copyOf(contexts));
@@ -186,18 +167,13 @@ public final class DisplayJson {
 
   public static ModuleInfo decodeModule(JsonNode data) {
     List<String> types = new ArrayList<>();
-    for (JsonNode type : data.path("types")) {
-      types.add(type.path("typeName").asString(""));
+    for (JsonNode typePath : data.path("types")) {
+      types.add(JsonTypeRef.qualifiedNameOf(typePath));
     }
-    return new ModuleInfo(
-      data.path("file").asString(""),
-      data.path("sign").asString(""),
-      List.copyOf(types),
-      decodeModuleIds(data.path("dependencies")),
-      decodeModuleIds(data.path("dependents")));
+    return new ModuleInfo(data.path("sign").asString(""), List.copyOf(types), decodeModulePaths(data.path("dependencies")));
   }
 
-  private static List<String> decodeModuleIds(JsonNode node) {
+  private static List<String> decodeModulePaths(JsonNode node) {
     List<String> paths = new ArrayList<>();
     for (JsonNode entry : node) {
       paths.add(entry.path("path").asString(""));

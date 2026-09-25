@@ -1,10 +1,11 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * Default openFL Targets (based on lime targets)<br/>
- * See <a href="https://lime.openfl.org/docs/getting-started/targets/">Lime targets docs</a>
+ * The targets the openfl command line tool builds for; openfl delegates to
+ * lime, so these are the lime targets an openfl project typically uses.
+ * See <a href="https://lime.openfl.org/docs/getting-started/targets/">the lime targets documentation</a>.
  */
-public enum OpenFLTarget {
+public enum OpenFLTarget implements FrameworkTarget {
 
   HTML5("HTML5", HaxeTarget.JAVA_SCRIPT, "html5"),
   WINDOWS("Windows", HaxeTarget.CPP, "windows"),
@@ -34,15 +35,20 @@ public enum OpenFLTarget {
     this.outputTarget = target;
   }
 
+  @Override
   public String getTargetFlag() {
     return flags.length > 0 ? flags[0] : "";
   }
 
+  @Override
   public String[] getFlags() {
     return flags;
   }
 
-  public HaxeTarget getOutputTarget() { return outputTarget; }
+  @Override
+  public HaxeTarget getOutputTarget() {
+    return outputTarget;
+  }
 
   @Override
   public String toString() {

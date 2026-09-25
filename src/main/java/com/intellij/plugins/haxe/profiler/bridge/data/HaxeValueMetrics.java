@@ -10,9 +10,9 @@ import com.intellij.profiler.ui.threadview.ThreadMetric;
 import java.util.Locale;
 
 /**
- * The metrics our call trees carry. The stock {@link TimeValueMetric} is
- * hard-wired to milliseconds, which would floor our exact sub-millisecond
- * zone times to 0 — so time stays in MICROSECONDS with adaptive formatting;
+ * The metrics the Haxe call trees carry. The stock {@link TimeValueMetric}
+ * is hard-wired to milliseconds, which would floor exact sub-millisecond
+ * zone times to 0, so time stays in MICROSECONDS with adaptive formatting;
  * thread metrics delegate to the stock singletons.
  */
 final class HaxeValueMetrics {

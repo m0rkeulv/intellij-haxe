@@ -57,7 +57,7 @@ abstract public class HaxeMemberModel extends HaxeBaseMemberModel {
 
   public boolean isPublic() {
     HaxeClassModel declaringClass = getDeclaringClass();
-    return ClassDeclaredOrDefaultPublic(declaringClass)
+    return isPublicByDeclarationOrDefault(declaringClass)
            || (declaringClass != null && isOverriddenPublicMethod());
   }
 
@@ -72,11 +72,11 @@ abstract public class HaxeMemberModel extends HaxeBaseMemberModel {
    */
   public boolean isDeclaredPublic() {
     HaxeClassModel declaringClass = getDeclaringClass();
-    return ClassDeclaredOrDefaultPublic(declaringClass) || (declaringClass != null && hasModifier(OVERRIDE) && !hasModifier(PRIVATE));
+    return isPublicByDeclarationOrDefault(declaringClass) || (declaringClass != null && hasModifier(OVERRIDE) && !hasModifier(PRIVATE));
   }
 
   /** The terms {@link #isPublic()} and {@link #isDeclaredPublic()} share — everything but their override term. */
-  private boolean ClassDeclaredOrDefaultPublic(@Nullable HaxeClassModel declaringClass) {
+  private boolean isPublicByDeclarationOrDefault(@Nullable HaxeClassModel declaringClass) {
     if (declaringClass == null) {
       // Module member
       return !hasModifier(PRIVATE);

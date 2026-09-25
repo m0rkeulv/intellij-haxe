@@ -13,7 +13,6 @@ import com.intellij.plugins.haxe.model.fixer.HaxeFixer;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.Nullable;
 import java.util.*;
-import static java.util.function.Predicate.not;
 import static java.util.stream.Collectors.toList;
 import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 import com.intellij.plugins.haxe.ide.inspections.hierarchy.HaxeClassInspectionUtil;

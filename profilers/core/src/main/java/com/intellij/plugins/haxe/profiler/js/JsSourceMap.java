@@ -85,20 +85,27 @@ public final class JsSourceMap {
    */
   private static String resolveSource(Path mapFile, String sourceRoot, String source) {
     String combined = sourceRoot.isEmpty() ? source : sourceRoot + (sourceRoot.endsWith("/") ? "" : "/") + source;
-    if (combined.startsWith("file://")) {
-      String path = combined.substring("file://".length());
-      // file:///C:/x arrives with a leading slash before the drive letter
-      if (path.length() > 2 && path.charAt(0) == '/' && path.charAt(2) == ':') {
-        path = path.substring(1);
-      }
-      return path;
-    }
+    String fromUrl = pathOfFileUrl(combined);
+    if (fromUrl != null) return fromUrl;
     Path parent = mapFile.getParent();
     if (parent == null) return combined;
     return parent.resolve(combined)
       .normalize()
       .toString()
       .replace('\\', '/');
+  }
+
+  /**
+   * The plain path of a {@code file://} URL; null for anything else.
+   * {@code file:///C:/x} arrives with a slash before the drive letter, which
+   * is dropped.
+   */
+  @Nullable
+  public static String pathOfFileUrl(@NotNull String url) {
+    if (!url.startsWith("file://")) return null;
+    String path = url.substring("file://".length());
+    boolean slashBeforeDrive = path.length() > 2 && path.charAt(0) == '/' && path.charAt(2) == ':';
+    return slashBeforeDrive ? path.substring(1) : path;
   }
 
   /**
@@ -112,8 +119,6 @@ public final class JsSourceMap {
     Vlq vlq = new Vlq(mappings);
     int sourceIndex = 0;
     int sourceLine = 0;
-    int sourceColumn = 0;
-    int nameIndex = 0;
 
     List<Entry> line = new ArrayList<>();
     int generatedColumn = 0;
@@ -130,9 +135,9 @@ public final class JsSourceMap {
       if (vlq.inSegment()) {
         sourceIndex += vlq.next();
         sourceLine += vlq.next();
-        sourceColumn += vlq.next();
+        vlq.next(); // source column, not kept
         if (vlq.inSegment()) {
-          nameIndex += vlq.next();
+          vlq.next(); // name index, not kept
         }
         line.add(new Entry(generatedColumn, sourceIndex, sourceLine));
       }

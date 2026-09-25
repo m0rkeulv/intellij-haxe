@@ -34,6 +34,11 @@ import java.util.Map;
 public final class CpuProfileTranslator {
 
   public static final String TARGET = "v8";
+  // V8's synthetic nodes: time the engine spent outside any script function
+  static final String IDLE_NODE = "(idle)";
+  static final String PROGRAM_NODE = "(program)";
+  static final String GC_NODE = "(garbage collector)";
+  private static final String ROOT_NODE = "(root)";
   /** Sample times are exact microseconds, so the model ticks once per microsecond. */
   private static final int MICROSECOND_TICKS = 1_000_000;
 
@@ -56,20 +61,25 @@ public final class CpuProfileTranslator {
     JsonNode deltas = profile.path("timeDeltas");
     long timeUs = profile.path("startTime").asLong(0);
     for (int i = 0; i < samples.size(); i++) {
+      long deltaUs = deltas.path(i).asLong(0);
       // Chrome writes occasional negative deltas (timer adjustments); clamping keeps time monotonic
-      timeUs += Math.max(deltas.path(i).asLong(0), 0);
+      timeUs += Math.max(deltaUs, 0);
       int nodeId = samples.path(i).asInt(-1);
       String function = tree.functionOf(nodeId);
-      if ("(idle)".equals(function) || "(program)".equals(function)) continue;
+      if (isIdleNode(function)) continue;
       List<StackFrame> stack = tree.stackOf(nodeId);
       if (stack.isEmpty()) continue;
-      long weight = Math.max(deltas.path(i).asLong(0), 1);
-      converted.add(new StackSample(timeUs / 1_000_000.0, 0, stack, weight, "(garbage collector)".equals(function)));
+      long weight = Math.max(deltaUs, 1);
+      converted.add(new StackSample(timeUs / 1_000_000.0, 0, stack, weight, GC_NODE.equals(function)));
     }
 
-    List<ProfilerThread> threads = List.of(new ProfilerThread(0, "Main"));
-    return new ProfilerSnapshot(TARGET, 1, MICROSECOND_TICKS, threads,
-                                List.copyOf(converted), List.of(), List.of());
+    List<ProfilerThread> threads = List.of(ProfilerThread.main());
+    return new ProfilerSnapshot(TARGET, 1, MICROSECOND_TICKS, threads, List.copyOf(converted), List.of(), List.of());
+  }
+
+  /** Whether a sample on this function is the engine idling: {@code (idle)} or {@code (program)}. */
+  static boolean isIdleNode(@NotNull String function) {
+    return IDLE_NODE.equals(function) || PROGRAM_NODE.equals(function);
   }
 
   /** Builds a model frame from one raw V8 call frame; the session builder swaps in a source-mapping variant. */
@@ -117,7 +127,7 @@ public final class CpuProfileTranslator {
       return node.path("callFrame").path("functionName").asString("");
     }
 
-    /** The root path to {@code nodeId}, cached per node; V8's "(root)" node stays out of stacks. */
+    /** The root path to {@code nodeId}, cached per node; V8's {@code (root)} node stays out of stacks. */
     List<StackFrame> stackOf(int nodeId) {
       List<StackFrame> cached = stacks.get(nodeId);
       if (cached != null) return cached;
@@ -129,11 +139,11 @@ public final class CpuProfileTranslator {
         if (node == null) break;
         JsonNode callFrame = node.path("callFrame");
         String function = callFrame.path("functionName").asString("");
-        if (!"(root)".equals(function)) {
-          stack.add(resolver.resolve(function,
-                                     callFrame.path("url").asString(""),
-                                     callFrame.path("lineNumber").asInt(-1),
-                                     callFrame.path("columnNumber").asInt(-1)));
+        if (!ROOT_NODE.equals(function)) {
+          String url = callFrame.path("url").asString("");
+          int line0 = callFrame.path("lineNumber").asInt(-1);
+          int column0 = callFrame.path("columnNumber").asInt(-1);
+          stack.add(resolver.resolve(function, url, line0, column0));
         }
         current = parents.get(current);
       }
@@ -153,14 +163,7 @@ public final class CpuProfileTranslator {
   @Nullable
   private static String fileOf(String url) {
     if (url.isEmpty()) return null;
-    if (url.startsWith("file://")) {
-      String path = url.substring("file://".length());
-      // file:///C:/x arrives with a leading slash before the drive letter
-      if (path.length() > 2 && path.charAt(0) == '/' && path.charAt(2) == ':') {
-        path = path.substring(1);
-      }
-      return path;
-    }
-    return url;
+    String path = JsSourceMap.pathOfFileUrl(url);
+    return path != null ? path : url;
   }
 }

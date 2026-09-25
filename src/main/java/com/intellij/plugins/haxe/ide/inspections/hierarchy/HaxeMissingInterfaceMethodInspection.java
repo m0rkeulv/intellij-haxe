@@ -34,9 +34,9 @@ public class HaxeMissingInterfaceMethodInspection extends HaxeInspection {
   }
   private static void checkAbstractBaseMethods(final HaxeClassModel clazz, final HaxeProblemReporter reporter) {
     List<HaxeClassReferenceModel> types = clazz.getExtendingTypes();
-    // for classes its only  allowed to extend one sub-class so we can look for frist element
+    // a class extends at most one superclass
     if (!types.isEmpty()) {
-      HaxeClassReferenceModel model = types.get(0);
+      HaxeClassReferenceModel model = types.getFirst();
       if (model.getHaxeClassModel() != null && model.getHaxeClassModel().isAbstractClass()) {
         checkAbstractMethods(clazz, model, reporter);
       }

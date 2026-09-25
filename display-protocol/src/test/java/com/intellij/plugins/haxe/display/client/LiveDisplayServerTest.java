@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -23,8 +24,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * The full flow against a real {@code haxe --wait} server. Self-skips when no
- * haxe executable is on the PATH.
+ * The full flow against a real {@code haxe --wait} server. Opt-in with
+ * {@code -PdisplayTests=true}; drives the PATH haxe or the one named by
+ * {@code -PdisplayTestHaxe}, and self-skips when that haxe cannot run.
  */
 @DisplayName("Display protocol: live server (integration)")
 public class LiveDisplayServerTest {
@@ -38,12 +40,12 @@ public class LiveDisplayServerTest {
     }
     """;
 
-  @TempDir
-  static Path workDir;
-
   /// Which compiler to drive: the default PATH haxe, or an alternative
   /// binary via -PdisplayTestHaxe (e.g. a haxe 5 preview).
   private static final String HAXE_EXE = System.getProperty("display.test.haxe", "haxe");
+
+  @TempDir
+  static Path workDir;
 
   private static Process server;
   private static int port;
@@ -70,35 +72,6 @@ public class LiveDisplayServerTest {
     waitUntilAccepting();
     serverVersion = client.initialize(baseArgs).haxeVersion();
     System.out.println("[live] driving haxe " + serverVersion);
-  }
-
-  /// The capability helpers below name the haxe 5 behavior changes one by
-  /// one - a test gates on the capability it exercises, never on a bare
-  /// version check borrowed from an unrelated capability.
-  private static boolean isHaxe5OrNewer() {
-    return serverVersion.major() >= 5;
-  }
-
-  /// Haxe 5+ populates the LSP-style diagnostic code with -w warning identifiers.
-  private static boolean sendsDiagnosticCodes() {
-    return isHaxe5OrNewer();
-  }
-
-  /// Haxe 5 renames the removable-code kind to ReplaceableCode and may supply newCode.
-  private static boolean sendsReplaceableCode() {
-    return isHaxe5OrNewer();
-  }
-
-  /// Haxe 5 answers server/module for defineType-created modules too.
-  private static boolean servesDefinedModuleInfo() {
-    return isHaxe5OrNewer();
-  }
-
-  /// Haxe 5 (preview) serializes server/type member types BEFORE forcing lazy
-  /// typing, so fields arrive as unresolved TMono; 4.x answers concrete types.
-  /// Names and shapes are reliable on both - only type resolution differs.
-  private static boolean blueprintTypesResolved() {
-    return !isHaxe5OrNewer();
   }
 
   @AfterAll
@@ -154,19 +127,12 @@ public class LiveDisplayServerTest {
     client.invalidate(baseArgs, fixtureFile);
     List<FileDiagnostics> results = client.diagnostics(baseArgs, fixtureFile, withOldEnumAbstract);
 
-    List<Diagnostic> all = results.stream().flatMap(file -> file.diagnostics().stream()).toList();
-    for (Diagnostic diagnostic : all) {
-      System.out.println("[live] diag kind=" + diagnostic.kind() + " severity=" + diagnostic.severity()
-                         + " code=" + diagnostic.code() + " args=" + diagnostic.args());
-    }
-    Diagnostic deprecation = all.stream()
+    Diagnostic deprecation = results.stream()
+      .flatMap(file -> file.diagnostics().stream())
       .filter(diagnostic -> diagnostic.messageArg().contains("deprecated"))
       .findFirst()
       .orElse(null);
     assertNotNull(deprecation, "@:enum abstract must surface a deprecation warning");
-    System.out.println("[live] deprecation message = " + deprecation.messageArg());
-    System.out.println("[live] deprecation code    = " + deprecation.code());
-    System.out.println("[live] deprecation args    = " + deprecation.args());
 
     // What identification the wire offers, per compiler generation: 4.x sends
     // prose only; 5+ fills code with the SPECIFIC -w warning identifier
@@ -189,7 +155,6 @@ public class LiveDisplayServerTest {
     boolean stillWarned = filtered.stream()
       .flatMap(file -> file.diagnostics().stream())
       .anyMatch(diagnostic -> diagnostic.messageArg().contains("deprecated"));
-    System.out.println("[live] with -w -WDeprecated stillWarned=" + stillWarned);
     assertFalse(stillWarned, "-w -WDeprecated must suppress the deprecation warning class");
   }
 
@@ -213,8 +178,6 @@ public class LiveDisplayServerTest {
       .findFirst()
       .orElse(null);
     assertNotNull(removable, "the unused local must surface as REMOVABLE_CODE");
-    System.out.println("[live] removable args = " + removable.args());
-    System.out.println("[live] display range  = " + removable.range());
 
     // The wire fact the remove quick fix relies on: the args' removal span
     // covers the BINDING ("var dummy:Int = ") and deliberately KEEPS the
@@ -225,9 +188,11 @@ public class LiveDisplayServerTest {
       System.out.println("[live] haxe5 replaceable newCode = " + removable.args().path("newCode"));
       return;
     }
-    String varLine = "var dummy:Int = 0;";
     List<String> lines = withUnusedVar.lines().toList();
-    int varLineIndex = lines.indexOf(lines.stream().filter(l -> l.contains(varLine)).findFirst().orElseThrow());
+    int varLineIndex = IntStream.range(0, lines.size())
+      .filter(index -> lines.get(index).contains("var dummy:Int = 0;"))
+      .findFirst()
+      .orElseThrow();
     int initializerColumn = lines.get(varLineIndex).indexOf("0;");
     boolean initializerKept = removal.end().line() == varLineIndex && removal.end().character() <= initializerColumn;
     assertTrue(initializerKept, "expected the removal range to end before the initializer, got " + removal);
@@ -264,7 +229,8 @@ public class LiveDisplayServerTest {
     List<HaxeServerContext> contexts = client.contexts(baseArgs);
     HaxeServerContext modulesContext = contexts.stream()
       .filter(context -> contextHasModule(baseArgs, context, "Live"))
-      .findFirst().orElse(null);
+      .findFirst()
+      .orElse(null);
     assertNotNull(modulesContext, "a context holding the compiled module must exist");
 
     TypeBlueprint blueprint = client.typeBlueprint(baseArgs, modulesContext.signature(), "Live", "Live");
@@ -334,7 +300,7 @@ public class LiveDisplayServerTest {
 
     HaxeServerContext context = typedContextHolding(genArgs, "LiveGen");
     assertNotNull(context, "the typed context must list the compiled module");
-    assertEquals("after_init_macros", context.desc(), "the IDE filters typed contexts by this desc");
+    assertTrue(context.holdsTypedModules(), "the IDE filters typed contexts by their desc");
 
     // a defineType-created module is INVISIBLE to the flat listing and has no
     // ModuleInfo of its own; it surfaces only in the dependency lists of the
@@ -364,6 +330,35 @@ public class LiveDisplayServerTest {
       assertEquals("String", blueprint.findMember("tag").type().dotPath());
       assertEquals("() -> String", blueprint.findMember("make").type().presentable());
     }
+  }
+
+  /// The capability helpers below name the haxe 5 behavior changes one by
+  /// one - a test gates on the capability it exercises, never on a bare
+  /// version check borrowed from an unrelated capability.
+  private static boolean isHaxe5OrNewer() {
+    return serverVersion.major() >= 5;
+  }
+
+  /// Haxe 5+ populates the LSP-style diagnostic code with -w warning identifiers.
+  private static boolean sendsDiagnosticCodes() {
+    return isHaxe5OrNewer();
+  }
+
+  /// Haxe 5 renames the removable-code kind to ReplaceableCode and may supply newCode.
+  private static boolean sendsReplaceableCode() {
+    return isHaxe5OrNewer();
+  }
+
+  /// Haxe 5 answers server/module for defineType-created modules too.
+  private static boolean servesDefinedModuleInfo() {
+    return isHaxe5OrNewer();
+  }
+
+  /// Haxe 5 (preview) serializes server/type member types BEFORE forcing lazy
+  /// typing, so fields arrive as unresolved TMono; 4.x answers concrete types.
+  /// Names and shapes are reliable on both - only type resolution differs.
+  private static boolean blueprintTypesResolved() {
+    return !isHaxe5OrNewer();
   }
 
   /** The server context whose module cache holds {@code module}, or null (also while no cache exists at all). */

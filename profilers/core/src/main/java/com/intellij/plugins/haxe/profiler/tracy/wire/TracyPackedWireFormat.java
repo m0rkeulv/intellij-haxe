@@ -5,7 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.DataInputStream;
 import java.io.IOException;
 
-import static com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireBytes.*;
+import static com.intellij.plugins.haxe.profiler.io.LittleEndian.*;
 
 /**
  * Protocol 82's encoding (Tracy 0.14): the client packs static zone begins,
@@ -62,7 +62,7 @@ final class TracyPackedWireFormat implements TracyWireFormat {
   /** Wire order: thread, then the packed delta. */
   @Override
   public long callstackSampleDelta(@NotNull TracyQueueType type, @NotNull DataInputStream in) throws IOException {
-    skip(in, 4);
+    skipFully(in, 4);
     return switch (type) {
       case CallstackSample16, CallstackSampleContextSwitch16 -> readU16Le(in);
       case CallstackSample32, CallstackSampleContextSwitch32 -> readDelta32(in);

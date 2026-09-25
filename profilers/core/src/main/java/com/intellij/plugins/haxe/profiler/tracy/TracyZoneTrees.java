@@ -1,18 +1,15 @@
 package com.intellij.plugins.haxe.profiler.tracy;
 
-import com.intellij.plugins.haxe.profiler.model.ProfilerThread;
 import com.intellij.plugins.haxe.profiler.model.StackFrame;
+import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline;
 import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline.FlameNode;
 import com.intellij.plugins.haxe.profiler.timeline.ProfilerTimeline.UsSpan;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Chart projections of a zone capture. Zones are EXACT intervals, so the
@@ -23,19 +20,6 @@ import java.util.Map;
 public final class TracyZoneTrees {
 
   private TracyZoneTrees() {
-  }
-
-  /**
-   * The thread's zones as a time-ordered flame tree — the call chart's
-   * input. Idle fillers keep children time-true, like the sampled builder;
-   * {@code samples} is 1 per node: a zone is one measured run.
-   */
-  @NotNull
-  public static FlameNode threadTree(@NotNull TracySession session, int threadId) {
-    List<TracyZone> ordered = session.zones().stream()
-      .filter(zone -> zone.threadId() == threadId)
-      .toList();
-    return treeFromOrdered(ordered, session.durationNs());
   }
 
   /** Builds the flame tree from one thread's START-ORDERED zones (windowed loads sort before calling). */
@@ -51,9 +35,9 @@ public final class TracyZoneTrees {
       }
       Builder parent = open.isEmpty() ? root : open.peek();
       // exact data can still collide on the µs grid; clamp inside the parent
-      Builder child = new Builder(frameOf(zone.location()),
-                                  Math.max(startUs, parent.startUs),
-                                  Math.min(Math.max(endUs, startUs + 1), parent.endUs));
+      long clampedStartUs = Math.max(startUs, parent.startUs);
+      long clampedEndUs = Math.min(endUs, parent.endUs);
+      Builder child = new Builder(frameOf(zone.location()), clampedStartUs, clampedEndUs);
       parent.children.add(child);
       open.push(child);
     }
@@ -79,32 +63,13 @@ public final class TracyZoneTrees {
     return spans;
   }
 
-  /** The captured threads, busiest first, named when a ThreadName answer arrived. */
-  @NotNull
-  public static List<ProfilerThread> threads(@NotNull TracySession session) {
-    Map<Integer, Long> zoneCounts = new HashMap<>();
-    for (TracyZone zone : session.zones()) {
-      zoneCounts.merge(zone.threadId(), 1L, Long::sum);
-    }
-    return zoneCounts.entrySet().stream()
-      .sorted(Comparator.comparingLong(Map.Entry<Integer, Long>::getValue).reversed())
-      .map(entry -> new ProfilerThread(entry.getKey(), threadName(session, entry.getKey())))
-      .toList();
-  }
-
-  @NotNull
-  private static String threadName(TracySession session, int threadId) {
-    String name = session.threadNames().get(threadId);
-    return name != null ? name : "Thread " + Integer.toUnsignedString(threadId);
-  }
-
   @NotNull
   private static StackFrame frameOf(TracySourceLocation location) {
     String file = location.file().isEmpty() ? null : location.file();
     return new StackFrame(location.function(), file, location.line() > 0 ? location.line() : StackFrame.NO_LINE);
   }
 
-  /** Mirrors the sampled builder's freeze: children plus idle fillers covering the parent. */
+  /** A zone's node under construction; one measured run, so every node counts one sample. */
   private static final class Builder {
     final StackFrame frame;
     final long startUs;
@@ -118,19 +83,8 @@ public final class TracyZoneTrees {
     }
 
     FlameNode freeze() {
-      List<FlameNode> frozen = new ArrayList<>(children.size());
-      long covered = startUs;
-      for (Builder child : children) {
-        if (child.startUs > covered) {
-          frozen.add(new FlameNode(null, covered, child.startUs, 0, List.of(), true));
-        }
-        frozen.add(child.freeze());
-        covered = child.endUs;
-      }
-      if (!frozen.isEmpty() && covered < endUs) {
-        frozen.add(new FlameNode(null, covered, endUs, 0, List.of(), true));
-      }
-      return new FlameNode(frame, startUs, endUs, 1, List.copyOf(frozen), false);
+      List<FlameNode> frozenChildren = children.stream().map(Builder::freeze).toList();
+      return ProfilerTimeline.flameNode(frame, startUs, endUs, 1, frozenChildren);
     }
   }
 }

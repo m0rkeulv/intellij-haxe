@@ -27,15 +27,13 @@ public class HaxeSdkAdditionalDataBaseImpl implements HaxeSdkAdditionalDataBase 
   private String homePath = "";
   private String haxelibPath = "";
 
-  private String nekoBinPath = ""; // Neko executable
-  private String hlBinPath = ""; // HashLink executable
-  private String nodeBinPath = ""; // NodeJS executable
-  private String flashPlayerPath = ""; // Flash player (projector) executable
-
-  private String flexSdkName = ""; // Flex/AIR SDK (entry in SDK table)
-
-
-
+  private String nekoBinPath = "";
+  private String hlBinPath = "";
+  private String nodeBinPath = "";
+  /** The Flash player (projector) executable. */
+  private String flashPlayerPath = "";
+  /** The Flex/AIR SDK, by its name in the SDK table. */
+  private String flexSdkName = "";
   private boolean removeCompletionDuplicatesFlag = true;
 
   public HaxeSdkAdditionalDataBaseImpl() {

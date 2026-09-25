@@ -13,6 +13,7 @@ import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.util.HaxeModuleDetection;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
@@ -138,21 +139,15 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
       // restarts it. Unrelated edits (haxelib/neko/hashlink paths) keep the warm caches.
       HaxeCompilationServerManager.getInstance(project).stop();
     }
+    // the tool window's rows and the define context derive from these settings
+    project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
   }
 
   /** Haxe modules without an Environment override follow the default SDK. */
   private void applyDefaultSdkToModules() {
     HaxeModuleSdkApplier applier = HaxeModuleSdkApplier.getInstance(project);
     HaxeEnvironmentStore environment = HaxeEnvironmentStore.getInstance(project);
-    ReadAction.nonBlocking(() -> {
-        List<String> names = new ArrayList<>();
-        for (Module module : ModuleManager.getInstance(project).getModules()) {
-          if (HaxeModuleDetection.isHaxeModule(module) && environment.getSdkName(module.getName()) == null) {
-            names.add(module.getName());
-          }
-        }
-        return names;
-      })
+    ReadAction.nonBlocking(() -> modulesFollowingDefaultSdk(environment))
       .inSmartMode(project)
       .finishOnUiThread(ModalityState.defaultModalityState(), names -> {
         for (String moduleName : names) {
@@ -160,6 +155,17 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
         }
       })
       .submit(AppExecutorUtil.getAppExecutorService());
+  }
+
+  @NotNull
+  private List<String> modulesFollowingDefaultSdk(@NotNull HaxeEnvironmentStore environment) {
+    List<String> names = new ArrayList<>();
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      if (HaxeModuleDetection.isHaxeModule(module) && environment.getSdkName(module.getName()) == null) {
+        names.add(module.getName());
+      }
+    }
+    return names;
   }
 
   @Override

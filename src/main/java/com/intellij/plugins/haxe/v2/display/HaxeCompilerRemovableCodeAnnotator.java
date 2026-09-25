@@ -10,18 +10,15 @@ import com.intellij.plugins.haxe.display.protocol.DiagnosticKind;
 import com.intellij.plugins.haxe.display.protocol.Range;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiFile;
-import java.util.List;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
- * Removable code straight from the compiler's {@code display/diagnostics}
- * (unused pattern variables and similar spans the typer proves dead), with a
- * quick fix taking the args' removal range — which may be wider than the
- * highlighted span. Haxe 5 may supply a {@code newCode} replacement; the fix
- * then replaces instead of deleting. While its toggle is on it REPLACES the
- * plugin's unused field/function/local-var inspections (they gate themselves
- * off).
+ * Removable code straight from the compiler's {@code display/diagnostics}:
+ * unused pattern variables and similar spans the typer proves dead. The quick
+ * fix removes the args' removal range, which may be wider than the highlighted
+ * span; when haxe 5 supplies {@code newCode}, it replaces instead. While its
+ * toggle is on it REPLACES the plugin's unused field, function and local
+ * variable inspections (they gate themselves off).
  */
 public class HaxeCompilerRemovableCodeAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
@@ -36,25 +33,19 @@ public class HaxeCompilerRemovableCodeAnnotator extends HaxeCompilerDiagnosticsA
   }
 
   @Override
-  public void apply(@NotNull PsiFile file, @Nullable List<Diagnostic> diagnostics, @NotNull AnnotationHolder holder) {
-    if (diagnostics == null) return;
-    Document document = file.getViewProvider().getDocument();
-    if (document == null) return;
-    for (Diagnostic diagnostic : diagnostics) {
-      if (diagnostic.kind() != DiagnosticKind.REMOVABLE_CODE) continue;
-      TextRange range = HaxeDiagnosticsFetcher.toTextRange(document, diagnostic.range());
-      if (range == null) continue;
+  protected boolean handles(@NotNull PsiFile file, @NotNull Diagnostic diagnostic) {
+    return diagnostic.kind() == DiagnosticKind.REMOVABLE_CODE;
+  }
 
-      String message = messageOf(diagnostic);
-      var builder = holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), message)
-        .range(range)
-        .highlightType(ProblemHighlightType.LIKE_UNUSED_SYMBOL);
-      TextRange removal = removalRange(document, diagnostic, range);
-      if (removal != null) {
-        builder = builder.withFix(fixFor(diagnostic, document, removal));
-      }
-      builder.create();
-    }
+  @Override
+  protected void annotate(@NotNull AnnotationHolder holder, @NotNull PsiFile file, @NotNull Document document,
+                          @NotNull Diagnostic diagnostic, @NotNull TextRange range) {
+    TextRange removal = removalRange(document, diagnostic, range);
+    holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), messageOf(diagnostic))
+      .range(range)
+      .highlightType(ProblemHighlightType.LIKE_UNUSED_SYMBOL)
+      .withFix(fixFor(diagnostic, document, removal))
+      .create();
   }
 
   @NotNull
@@ -73,8 +64,8 @@ public class HaxeCompilerRemovableCodeAnnotator extends HaxeCompilerDiagnosticsA
     return description.isBlank() ? HaxeBundle.message("haxe.diagnostics.generic") : description;
   }
 
-  /** The args' removal span when the compiler supplies one, else the highlighted span. */
-  @Nullable
+  /** The args' removal span when the compiler supplies one that still fits the document, else the highlighted span. */
+  @NotNull
   private static TextRange removalRange(@NotNull Document document, @NotNull Diagnostic diagnostic,
                                         @NotNull TextRange highlighted) {
     Range fromArgs = diagnostic.removableRangeArg();

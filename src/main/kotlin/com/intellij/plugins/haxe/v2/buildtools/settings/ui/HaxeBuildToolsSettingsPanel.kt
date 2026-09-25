@@ -165,26 +165,17 @@ class HaxeBuildToolsSettingsPanel {
   }
 
   fun isLiveTestReporting(): Boolean = liveTestReportingCheckBox.isSelected
-
   fun isServerEnabled(): Boolean = serverEnabledCheckBox.isSelected
 
   /** 0 when blank or unparsable (= pick a free port automatically). */
-  fun getServerPort(): Int =
-    serverPortField.text.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0
+  fun getServerPort(): Int = serverPortField.text.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0
 
   fun getServerArguments(): String = serverArgumentsField.text.trim()
-
   fun getSelectedSdkName(): String? = sdkCombo.selectedItem as String?
-
   fun getHaxelibPath(): String = haxelibField.text.trim()
-
   fun getNekoPath(): String = nekoField.text.trim()
-
   fun getHashlinkPath(): String = hashlinkField.text.trim()
-
   fun getNodePath(): String = nodeField.text.trim()
-
   fun getFlashPlayerPath(): String = flashPlayerField.text.trim()
-
   fun getFlexSdkName(): String = flexSdkSelector.getSelectedName()
 }

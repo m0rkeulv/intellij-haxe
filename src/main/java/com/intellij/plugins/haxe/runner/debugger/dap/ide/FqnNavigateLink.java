@@ -10,30 +10,29 @@ import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil;
 import com.intellij.plugins.haxe.util.HaxeQnameResolveUtil;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.pom.Navigatable;
 import com.intellij.psi.PsiElement;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.xdebugger.frame.XFullValueEvaluator;
 import com.intellij.xdebugger.frame.XValueNode;
 import org.jetbrains.annotations.NotNull;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
-
-
+/** Turns a debugger value naming a class or member into a "Navigate" link on its tree node. */
 final class FqnNavigateLink {
 
   static void attach(@NotNull XValueNode node, @NotNull Project project, @NotNull String value) {
     String possibleQname = stripFunctionPrefix(value);
     if (HaxeReferenceUtil.textCanBeQname(possibleQname)) {
-      new Task.Backgroundable(project, "Resolving",  true) {
+      new Task.Backgroundable(project, HaxeDebuggerBundle.message("dap.debugger.value.navigate.resolving"), true) {
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
           PsiElement element = resolve(project, possibleQname);
           if (element instanceof HaxeNamedComponent component) {
             // getName() reads the stub tree - back under the read lock, the
             // resolve() above releases it before returning
-            String componentName = ReadAction.compute(component::getName);
+            String componentName = HaxeReadActions.compute(component::getName);
             String message = HaxeDebuggerBundle.message("dap.debugger.value.navigate.link");
             String tooltip = HaxeDebuggerBundle.message("dap.debugger.value.navigate.tooltip", componentName);
             node.setFullValueEvaluator(new NavigatableValue(message, tooltip, possibleQname, project).setShowValuePopup(false));
@@ -43,12 +42,14 @@ final class FqnNavigateLink {
     }
   }
 
-  private static @Nullable PsiElement resolve(@NonNull Project project, @NonNull String value) {
+  private static @Nullable PsiElement resolve(@NotNull Project project, @NotNull String value) {
     try {
       return ReadAction.computeCancellable(() -> HaxeQnameResolveUtil.findClassOrMember(value, project));
-    }catch (ProcessCanceledException e) {
+    }
+    catch (ProcessCanceledException e) {
       throw e;
-    }catch (Exception e) {
+    }
+    catch (Exception e) {
       return null;
     }
   }

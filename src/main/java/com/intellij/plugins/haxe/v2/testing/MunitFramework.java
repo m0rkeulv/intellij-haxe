@@ -18,7 +18,7 @@ import java.util.List;
  * munit has no TeamCity reporter of its own, so the shipped
  * {@code intellij_munit} client (attached into {@code massive.munit.TestRunner}
  * by its build macro) IS the IDE's result channel, not an optional
- * enhancement. Wire facts, all verified against munit 2.3.5: the runner hangs
+ * enhancement. Wire facts (munit 2.3.5): the runner hangs
  * on the eval interpreter (munit predates it); the classic TestMain exits 0
  * even on failures (its delayed completion handler misses the process end),
  * so verdicts come from the events alone; munit has no test-filter define.
@@ -90,6 +90,10 @@ public final class MunitFramework implements HaxeTestFramework {
 
   private static boolean hasTestMetadata(@NotNull HaxeMethod method) {
     return method.getMetadataList(HaxeMeta.RUN_TIME).stream()
-      .anyMatch(meta -> TEST_METADATA.stream().anyMatch(meta::isType));
+      .anyMatch(MunitFramework::isTestMetadata);
+  }
+
+  private static boolean isTestMetadata(@NotNull HaxeMeta meta) {
+    return TEST_METADATA.stream().anyMatch(meta::isType);
   }
 }

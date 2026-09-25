@@ -38,7 +38,6 @@ class HaxeProjectSdkStep(parent: NewProjectWizardStep) : AbstractNewProjectWizar
     builder.row(HaxeWizardBundle.message("haxe.wizard.sdk.label")) {
       cell(combo).align(AlignX.FILL)
     }
-
   }
 
   override fun setupProject(project: Project) {

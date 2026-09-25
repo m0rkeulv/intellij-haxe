@@ -7,6 +7,7 @@ import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.config.FrameworkTarget;
 import com.intellij.plugins.haxe.config.LimeTarget;
 import com.intellij.plugins.haxe.config.NMETarget;
 import com.intellij.plugins.haxe.config.OpenFLTarget;
@@ -41,7 +42,7 @@ public final class HaxeFrameworkTargetSettings implements PersistentStateCompone
   public record TargetDefinition(@NotNull String name, @Nullable HaxeTarget target, @NotNull List<String> flags) {
     @NotNull
     public String primaryFlag() {
-      return flags.isEmpty() ? "" : flags.get(0);
+      return flags.isEmpty() ? "" : flags.getFirst();
     }
   }
 
@@ -81,11 +82,7 @@ public final class HaxeFrameworkTargetSettings implements PersistentStateCompone
     List<TargetRow> rows = targets.stream()
       .map(HaxeFrameworkTargetSettings::toRow)
       .collect(Collectors.toCollection(ArrayList::new));
-    switch (framework) {
-      case LIME -> state.lime = rows;
-      case OPENFL -> state.openfl = rows;
-      case NME -> state.nme = rows;
-    }
+    storeRows(framework, rows);
   }
 
   /** The stored rows as the settings table edits them (the defaults rendered as rows when nothing is stored). */
@@ -114,11 +111,7 @@ public final class HaxeFrameworkTargetSettings implements PersistentStateCompone
       .filter(row -> !StringUtil.isEmptyOrSpaces(row.name) || !StringUtil.isEmptyOrSpaces(row.flags))
       .map(HaxeFrameworkTargetSettings::copyRow)
       .collect(Collectors.toCollection(ArrayList::new));
-    switch (framework) {
-      case LIME -> state.lime = kept;
-      case OPENFL -> state.openfl = kept;
-      case NME -> state.nme = kept;
-    }
+    storeRows(framework, kept);
   }
 
   /** The name of the framework's built-in default target (each target enum declares its own {@code DEFAULT}). */
@@ -134,17 +127,19 @@ public final class HaxeFrameworkTargetSettings implements PersistentStateCompone
   /** The built-in list a framework starts from — and returns to when every row is removed. */
   @NotNull
   public static List<TargetDefinition> defaults(@NotNull Framework framework) {
-    return switch (framework) {
-      case LIME -> Arrays.stream(LimeTarget.values())
-        .map(target -> new TargetDefinition(target.toString(), target.getOutputTarget(), List.of(target.getFlags())))
-        .toList();
-      case OPENFL -> Arrays.stream(OpenFLTarget.values())
-        .map(target -> new TargetDefinition(target.toString(), target.getOutputTarget(), List.of(target.getFlags())))
-        .toList();
-      case NME -> Arrays.stream(NMETarget.values())
-        .map(target -> new TargetDefinition(target.toString(), target.getOutputTarget(), List.of(target.getFlags())))
-        .toList();
+    FrameworkTarget[] targets = switch (framework) {
+      case LIME -> LimeTarget.values();
+      case OPENFL -> OpenFLTarget.values();
+      case NME -> NMETarget.values();
     };
+    return Arrays.stream(targets)
+      .map(HaxeFrameworkTargetSettings::definitionOf)
+      .toList();
+  }
+
+  @NotNull
+  private static TargetDefinition definitionOf(@NotNull FrameworkTarget target) {
+    return new TargetDefinition(target.toString(), target.getOutputTarget(), List.of(target.getFlags()));
   }
 
   @NotNull
@@ -154,6 +149,14 @@ public final class HaxeFrameworkTargetSettings implements PersistentStateCompone
       case OPENFL -> state.openfl;
       case NME -> state.nme;
     };
+  }
+
+  private void storeRows(@NotNull Framework framework, @NotNull List<TargetRow> rows) {
+    switch (framework) {
+      case LIME -> state.lime = rows;
+      case OPENFL -> state.openfl = rows;
+      case NME -> state.nme = rows;
+    }
   }
 
   @NotNull

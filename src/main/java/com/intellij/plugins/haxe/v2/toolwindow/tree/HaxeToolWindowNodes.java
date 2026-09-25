@@ -62,10 +62,11 @@ public final class HaxeToolWindowNodes {
   }
 
   /**
-   * A build file row; at most one per container is active (its configuration drives
-   * the build). Manual rows were added by hand and can be removed; auto-detected
-   * rows can only be hidden. {@code testsFile} marks the container's tests build
-   * file - the one test runs compile and launch.
+   * A build file row; at most one in the project is active (its defines drive the
+   * parse context). Manual rows were added by hand and can be removed;
+   * auto-detected rows can only be hidden. {@code testsFile} marks one of the
+   * container's tests build files; {@code frameworkDetected} = its libraries
+   * include a known test framework.
    */
   public record BuildFileRow(@NotNull HaxeBuildFile buildFile, @NotNull String containerId, boolean active,
                              boolean manual, boolean testsFile, boolean frameworkDetected)
@@ -107,7 +108,7 @@ public final class HaxeToolWindowNodes {
     }
   }
 
-  /** "Tests" grouping row under the container's marked tests build file, holding the test-run entries. */
+  /** "Tests" grouping row under a tests build file, holding the test-run entries. */
   public record TestsGroupNode() implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
@@ -185,8 +186,8 @@ public final class HaxeToolWindowNodes {
    * output through its run configuration (the build attached as a before-launch
    * step). Present only when the target output is launchable; {@code kind} is the
    * configuration kind shown in gray ("HashLink Application", …). Target and
-   * output are captured at tree-build time - for lime files they come from the
-   * selected target's `lime display` hxml.
+   * output are captured at tree-build time - for lime/nme files they come from
+   * the selected target's background evaluation.
    */
   public record ProgramNode(@NotNull HaxeBuildFile buildFile,
                             @NotNull String kind,
@@ -204,7 +205,7 @@ public final class HaxeToolWindowNodes {
   }
 
   /**
-   * "Run Unit Tests" row under the container's marked tests build file: launches
+   * "Run Unit Tests" row under a tests build file: launches
    * the tests through the unit-test run configuration (SM test console), with the
    * compile attached as a before-launch step. Deliberately NOT named after lime's
    * unrelated default {@code test} action (build-and-launch).
@@ -299,7 +300,7 @@ public final class HaxeToolWindowNodes {
     }
   }
 
-  /** "Environment" row under a container: its SDK choice and user defines. */
+  /** "Environment" row under a container: its SDK, language level, define overrides and custom target. */
   public record EnvironmentNode(@NotNull String containerId,
                                 @NotNull String displayName,
                                 @NotNull Set<String> activeBuildFileDefines) implements HaxeToolWindowNode {
@@ -389,10 +390,6 @@ public final class HaxeToolWindowNodes {
    * container's last failed compiler request (a build context that does not
    * compile), shown as a warning on the row.
    */
-  /** Renderer fragment tag on the server row's failure text: clicking it opens the server console's status view. */
-  public record ServerFailureLink(@NotNull String containerId) {
-  }
-
   public record CompilationServerNode(@NotNull String containerId,
                                       @NotNull String display,
                                       boolean projectEnabled,
@@ -409,6 +406,10 @@ public final class HaxeToolWindowNodes {
     public String speedSearchText() {
       return display;
     }
+  }
+
+  /** Renderer fragment tag on the server row's failure text: clicking it opens the server console's status view. */
+  public record ServerFailureLink(@NotNull String containerId) {
   }
 
   /**
@@ -435,7 +436,7 @@ public final class HaxeToolWindowNodes {
     }
   }
 
-  /** A user define entry; inBuildFile = the container's active build file declares the same name. */
+  /** A user define entry; {@code inBuildFile} = the active build file declares the same name. */
   public record EnvDefineNode(@NotNull String containerId,
                               @NotNull String name,
                               @NotNull String value,

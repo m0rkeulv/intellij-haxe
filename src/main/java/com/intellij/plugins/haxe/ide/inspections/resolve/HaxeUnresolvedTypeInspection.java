@@ -30,8 +30,8 @@ import com.intellij.plugins.haxe.ide.inspections.HaxeInspection;
 /**
  * Type or reference names that do not resolve but DO match a known class or
  * public static member elsewhere in the project — the add-import cases.
- * Converted from {@code HaxeUnresolvedTypeAnnotator} so its findings carry a
- * profile toggle/severity and land under the Haxe group in batch runs;
+ * As an inspection its findings carry a profile toggle/severity and land
+ * under the Haxe group in batch runs;
  * expression-level unresolved references are {@link HaxeUnresolvedSymbolInspection}.
  */
 public class HaxeUnresolvedTypeInspection extends HaxeInspection {
@@ -75,7 +75,7 @@ public class HaxeUnresolvedTypeInspection extends HaxeInspection {
     boolean membersFound = !members.isEmpty();
 
     if (classesFound || membersFound) {
-      // operator overload metas don't have "real" references so we skip this check
+      // operator overload metas have no "real" references - the check is skipped
       if (isCompileTimeMeta(expression, HaxeMeta.OP)) return;
       // a HaxeType's reference expression is visited both as the type's child
       // and as a reference in its own right - report the span once

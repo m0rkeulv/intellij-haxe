@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.wizard;
 
-import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

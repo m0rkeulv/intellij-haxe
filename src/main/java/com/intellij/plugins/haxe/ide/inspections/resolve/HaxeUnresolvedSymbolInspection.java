@@ -151,7 +151,7 @@ public class HaxeUnresolvedSymbolInspection extends LocalInspectionTool {
     private boolean isInsideMetadataToIgnore(PsiElement nameIdentifier) {
       HaxeMetadataCompileTimeMeta meta = PsiTreeUtil.getParentOfType(nameIdentifier, HaxeMetadataCompileTimeMeta.class);
       if(meta != null) {
-        // might want to add more meta types here when we see more cases where  the parameter list contains unresolvable values.
+        // TODO: other meta types whose parameter lists hold unresolvable values
         if(meta.isType(HaxeMetadataCompileTimeMeta.OP)) return true;
       }
       return false;

@@ -3,16 +3,13 @@ package com.intellij.plugins.haxe.profiler.bridge;
 import com.intellij.execution.Executor;
 import com.intellij.execution.executors.RunExecutorSettings;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
-import com.intellij.plugins.haxe.profiler.bridge.flash.HaxeFlashProfilerConfigurationType;
-import com.intellij.plugins.haxe.profiler.bridge.hashlink.HaxeHlProfilerConfigurationType;
-import com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeHxcppProfilerConfigurationType;
-import com.intellij.plugins.haxe.profiler.bridge.js.HaxeJsProfilerConfigurationType;
-import com.intellij.plugins.haxe.profiler.bridge.tracy.HaxeHxcppTracyProfilerConfigurationType;
 import com.intellij.profiler.DefaultProfilerExecutorGroup;
 import com.intellij.profiler.api.configurations.ProfilerConfigurationState;
+import com.intellij.profiler.api.configurations.ProfilerConfigurationType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -42,15 +39,16 @@ public final class HaxeProfilerConfigurations {
            : null;
   }
 
-  /** Which profiler configuration types serve each lane — the ONE home of that mapping; the switch is exhaustive, so a new lane fails compilation here instead of NPE-ing at runtime. */
+  /** The ids of the registered Haxe profiler configuration types serving the lane. */
   @NotNull
   public static Set<String> typeIdsFor(HaxeProfilableRunConfiguration.@NotNull Lane lane) {
-    return switch (lane) {
-      case HASHLINK -> Set.of(HaxeHlProfilerConfigurationType.ID);
-      case HXCPP -> Set.of(HaxeHxcppProfilerConfigurationType.ID, HaxeHxcppTracyProfilerConfigurationType.ID);
-      case FLASH -> Set.of(HaxeFlashProfilerConfigurationType.ID);
-      case JS -> Set.of(HaxeJsProfilerConfigurationType.ID);
-    };
+    Set<String> ids = new HashSet<>();
+    for (ProfilerConfigurationType<?> type : ProfilerConfigurationType.Companion.getEP_NAME().getExtensionList()) {
+      if (type instanceof HaxeProfilerConfigurationTypeBase<?> haxeType && haxeType.lane() == lane) {
+        ids.add(type.getId());
+      }
+    }
+    return ids;
   }
 
   /** The type's FIRST registered state, or its template when none is registered yet. */
@@ -69,12 +67,11 @@ public final class HaxeProfilerConfigurations {
     return templateFor(configurationTypeId);
   }
 
+  /** The registered configuration type's template state. */
   private static ProfilerConfigurationState templateFor(String configurationTypeId) {
-    return switch (configurationTypeId) {
-      case HaxeHlProfilerConfigurationType.ID -> new HaxeHlProfilerConfigurationType().getTemplateState();
-      case HaxeHxcppProfilerConfigurationType.ID -> new HaxeHxcppProfilerConfigurationType().getTemplateState();
-      case HaxeHxcppTracyProfilerConfigurationType.ID -> new HaxeHxcppTracyProfilerConfigurationType().getTemplateState();
-      default -> throw new IllegalArgumentException("unknown profiler configuration type " + configurationTypeId);
-    };
+    for (ProfilerConfigurationType<?> type : ProfilerConfigurationType.Companion.getEP_NAME().getExtensionList()) {
+      if (type.getId().equals(configurationTypeId)) return type.getTemplateState();
+    }
+    throw new IllegalArgumentException("unknown profiler configuration type " + configurationTypeId);
   }
 }

@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import static com.intellij.testFramework.UsefulTestCase.assertSameElements;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.List;
 
 import static com.intellij.plugins.haxe.haxelib.HaxelibMetadata.*;
 

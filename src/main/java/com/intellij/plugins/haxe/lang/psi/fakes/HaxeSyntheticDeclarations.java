@@ -3,7 +3,6 @@ package com.intellij.plugins.haxe.lang.psi.fakes;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.ModificationTracker;
-import com.intellij.plugins.haxe.lang.psi.HaxeEnumDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxeModule;
@@ -227,20 +226,19 @@ public class HaxeSyntheticDeclarations {
         return (HaxeMethod)member.getBasePsi();
     }
 
+    /** The values `@:analyzer(...)` accepts. */
     public static HaxeClassModel getAnalyzerOptions(Project project) {
-        HaxeFile LanguageFeaturesFile = getLanguageFeaturesFile(project);
-        HaxeModule module = LanguageFeaturesFile.getModule();
-        HaxeModuleModel model = (HaxeModuleModel) module.getModel();
-        return model.getClass("AnalyzerOptions");
+        return languageFeaturesModule(project).getClass("AnalyzerOptions");
     }
 
     private static @Nullable HaxeBaseMemberModel findOrCreateMember(Project project, String name) {
-        HaxeFile LanguageFeaturesFile = getLanguageFeaturesFile(project);
-        HaxeModule module = LanguageFeaturesFile.getModule();
-        HaxeModuleModel model = (HaxeModuleModel) module.getModel();
-        HaxeClassModel aClass = model.getClass("LanguageFeature");
-        HaxeBaseMemberModel member = aClass.getMember(name, null);
-        return member;
+        HaxeClassModel aClass = languageFeaturesModule(project).getClass("LanguageFeature");
+        return aClass.getMember(name, null);
+    }
+
+    private static HaxeModuleModel languageFeaturesModule(Project project) {
+        HaxeModule module = getLanguageFeaturesFile(project).getModule();
+        return (HaxeModuleModel)module.getModel();
     }
 
     private static HaxeFile getLanguageFeaturesFile(Project project) {

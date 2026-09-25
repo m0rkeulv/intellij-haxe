@@ -9,20 +9,26 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.TreeMap;
-import java.util.Map;
 import org.jetbrains.annotations.TestOnly;
+
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Remembers the target platform the user picked per build file in the Haxe tool
  * window. Stored in the workspace file: target choice is a per-developer setting,
- * not project configuration. Will fold into the planned profiles concept.
+ * not project configuration.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeToolWindowTargets", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class HaxeTargetSelectionStore implements PersistentStateComponent<HaxeTargetSelectionStore.State> {
+
+  public static final class State {
+    public Map<String, String> targetsByFile = new TreeMap<>();
+  }
+
   private final @Nullable Project project;
+  private State state = new State();
 
   public HaxeTargetSelectionStore(@NotNull Project project) {
     this.project = project;
@@ -33,19 +39,6 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
   public HaxeTargetSelectionStore() {
     this.project = null;
   }
-
-  private void notifyChanged() {
-    if (project != null) {
-      project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
-    }
-  }
-
-
-  public static final class State {
-    public Map<String, String> targetsByFile = new TreeMap<>();
-  }
-
-  private State state = new State();
 
   @NotNull
   public static HaxeTargetSelectionStore getInstance(@NotNull Project project) {
@@ -63,7 +56,7 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
       state.targetsByFile = new TreeMap<>();
     }
     this.state = state;
-    notifyChanged();
+    HaxeBuildSettingsListener.publish(project);
   }
 
   @Nullable
@@ -73,6 +66,6 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
 
   public void setSelectedTargetId(@NotNull VirtualFile buildFile, @NotNull String targetId) {
     state.targetsByFile.put(buildFile.getPath(), targetId);
-    notifyChanged();
+    HaxeBuildSettingsListener.publish(project);
   }
 }

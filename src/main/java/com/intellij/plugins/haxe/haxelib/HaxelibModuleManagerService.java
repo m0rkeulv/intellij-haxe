@@ -17,7 +17,6 @@
  */
 package com.intellij.plugins.haxe.haxelib;
 
-import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.LogLevel;
@@ -26,13 +25,9 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManagerListener;
-import com.intellij.openapi.startup.ProjectActivity;
 import com.intellij.plugins.haxe.haxelib.definitions.HaxeDefineDetectionManager;
-import kotlin.Unit;
-import kotlin.coroutines.Continuation;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 

@@ -22,27 +22,20 @@ import com.intellij.lang.LanguageASTFactory;
 import com.intellij.lang.LanguageBraceMatching;
 import com.intellij.lang.LanguageParserDefinitions;
 import com.intellij.plugins.haxe.ide.HaxeBraceMatcher;
-import com.intellij.lang.injection.MultiHostInjector;
-import com.intellij.lang.injection.MultiHostRegistrar;
-import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.metadata.HaxeMetadataLanguage;
 import com.intellij.plugins.haxe.metadata.parser.HaxeMetadataParserDefinition;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
-import com.intellij.psi.PsiElement;
 import com.intellij.testFramework.EdtTestUtil;
 import com.intellij.testFramework.ParsingTestCase;
 import com.intellij.testFramework.TestApplicationManager;
 import com.intellij.util.ThrowableRunnable;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Jupiter front for the platform's JUnit3-style {@link ParsingTestCase}: the

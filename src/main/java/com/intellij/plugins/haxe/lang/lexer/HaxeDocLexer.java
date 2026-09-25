@@ -223,7 +223,7 @@ public class HaxeDocLexer extends LexerBase {
 
   private static void addOrMergeWhitespace(@NotNull List<Segment> segments, int start, int end) {
     if (!segments.isEmpty()) {
-      Segment last = segments.get(segments.size() - 1);
+      Segment last = segments.getLast();
       if (last.type == TokenType.WHITE_SPACE && last.end == start) {
         segments.set(segments.size() - 1, new Segment(TokenType.WHITE_SPACE, last.start, end));
         return;

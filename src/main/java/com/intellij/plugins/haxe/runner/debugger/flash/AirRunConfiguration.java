@@ -29,7 +29,6 @@ import com.intellij.plugins.haxe.profiler.HaxeProfilerExecutorSupport;
 import com.intellij.plugins.haxe.profiler.HaxeTelemetryCapture;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
-import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.util.execution.ParametersListUtil;
 import java.io.IOException;
@@ -294,7 +293,7 @@ public class AirRunConfiguration extends DapRunConfigurationBase implements Haxe
     if (sdk == null || sdk.getHomePath() == null) {
       throw new ExecutionException(HaxeBundle.message("flex.sdk.not.found", sdkName));
     }
-    Path adl = Path.of(sdk.getHomePath(), "bin", HaxeSdkUtilBase.getExecutableName("adl"));
+    Path adl = HaxeToolPathResolver.adlInSdk(sdk.getHomePath());
     if (!Files.isRegularFile(adl)) {
       throw new ExecutionException(HaxeDebuggerBundle.message("air.runner.adl.missing", sdkName, adl.toString()));
     }

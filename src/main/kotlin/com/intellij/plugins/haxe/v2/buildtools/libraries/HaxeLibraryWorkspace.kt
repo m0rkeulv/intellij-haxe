@@ -26,8 +26,7 @@ import kotlinx.coroutines.withContext
 /**
  * Applies resolved haxelib classpaths to the workspace model: one module-level
  * [LibraryEntity] per haxelib (managed-name prefixed) plus a [LibraryDependency]
- * on the owning module. Replaces the ModuleRootModificationUtil-based apply —
- * the workspace model is the platform's preferred project-structure API.
+ * on the owning module.
  */
 @Service(Service.Level.PROJECT)
 class HaxeLibraryWorkspace(private val project: Project, private val scope: CoroutineScope) {

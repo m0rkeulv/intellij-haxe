@@ -3,7 +3,6 @@ package com.intellij.plugins.haxe.lang.psi.stubs.stub;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxePsiModifier;
 import com.intellij.plugins.haxe.model.HaxeCompilerMetadata;
-import com.intellij.psi.stubs.IStubElementType;
 import com.intellij.psi.stubs.StubBase;
 import com.intellij.psi.stubs.StubElement;
 import com.intellij.psi.tree.IElementType;
@@ -114,7 +113,7 @@ public class HaxeMethodStub extends StubBase<HaxeMethod> implements StubWithMeta
     return (keywordFlags & KEYWORD_DYNAMIC) != 0;
   }
 
-  /** flag to let us know we must resolve the overridden method's visibility. */
+  /** A bare `override`: the real visibility is the overridden method's, resolved at query time. */
   public boolean isVisibilityInherited() {
     return (propertyFlags & VISIBILITY_INHERITED) != 0;
   }

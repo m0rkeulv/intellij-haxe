@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
-import static com.intellij.plugins.haxe.profiler.tracy.wire.TracyWireBytes.*;
+import static com.intellij.plugins.haxe.profiler.io.LittleEndian.*;
 
 /**
  * The encoding shared by protocols 69, 74 and 76 (Tracy 0.11 to 0.13):
@@ -82,7 +82,7 @@ final class TracyClassicWireFormat implements TracyWireFormat {
   @Override
   public long callstackSampleDelta(@NotNull TracyQueueType type, @NotNull DataInputStream in) throws IOException {
     long delta = readLongLe(in);
-    skip(in, 4);
+    skipFully(in, 4);
     return delta;
   }
 

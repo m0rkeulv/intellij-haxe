@@ -1,12 +1,9 @@
 package com.intellij.plugins.haxe.v2.testing;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
 import java.util.ArrayList;
@@ -33,7 +30,8 @@ public final class HaxeTestFrameworks {
   @NotNull
   public static HaxeTestFramework forBuildFile(@NotNull Project project, @NotNull String buildFilePath) {
     HaxeTestFramework detected = detectedFrameworkFor(project, buildFilePath);
-    return detected != null ? detected : ALL.get(ALL.size() - 1);
+    // utest, the last in detection order, is the default
+    return detected != null ? detected : ALL.getLast();
   }
 
   /**
@@ -47,10 +45,9 @@ public final class HaxeTestFrameworks {
    */
   @Nullable
   public static HaxeTestFramework detectedFrameworkFor(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    HaxeBuildFileType type = file == null || !file.isValid() ? null : HaxeBuildFileScanner.detectType(project, file);
-    if (type == null) return null;
-    return detectedFramework(HaxeBuildSections.inspectSelected(project, new HaxeBuildFile(file, type)).libraries());
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
+    if (buildFile == null) return null;
+    return detectedFramework(HaxeBuildSections.inspectSelected(project, buildFile).libraries());
   }
 
   /** The framework the library list declares, or null when none of the known frameworks is among them. */

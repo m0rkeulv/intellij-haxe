@@ -24,13 +24,12 @@ public class HaxeFlexLexer extends FlexAdapter {
   /**
    * Folded into {@link #getState()} while the lexer is in YYINITIAL right
    * after a value-completing token. The editor's incremental highlighter
-   * restarts lexing only at token boundaries whose saved int state equals a
-   * fresh lexer's, and it reproduces context from that int alone - without
-   * this bit a restart forgot {@code lastSignificantToken} and relexed a
-   * following {@code <} as an XML-literal start (the PSI stayed correct
-   * because the parser lexes from offset 0; only editor highlighting broke,
-   * and stayed broken). Flex state numbers stop at 20, so the flag is clear
-   * of them.
+   * restarts lexing at token boundaries and reproduces the lexer's context
+   * from the saved int state alone; without this bit a restart loses
+   * {@code lastSignificantToken} and lexes a following {@code <} as an
+   * XML-literal start. The parser always lexes from offset 0, so only editor
+   * highlighting depends on it. Flex state numbers stop at 20, so the flag is
+   * clear of them.
    */
   static final int VALUE_CONTEXT_STATE_FLAG = 0x100;
 

@@ -199,7 +199,7 @@ public final class HaxeToolPathResolver {
     Sdk sdk = sdkName != null ? ProjectJdkTable.getInstance().findJdk(sdkName) : null;
     if (sdk == null) {
       List<Sdk> haxeSdks = ProjectJdkTable.getInstance().getSdksOfType(HaxeSdkType.getInstance());
-      sdk = haxeSdks.isEmpty() ? null : haxeSdks.get(0);
+      sdk = haxeSdks.isEmpty() ? null : haxeSdks.getFirst();
     }
     HaxeSdkData data = sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData sdkData ? sdkData : null;
 
@@ -244,19 +244,25 @@ public final class HaxeToolPathResolver {
     String flexSdkName = resolveFlexSdkName(project, null);
     Sdk sdk = flexSdkName == null ? null : ProjectJdkTable.getInstance().findJdk(flexSdkName);
     if (sdk != null && sdk.getHomePath() != null) {
-      Path adl = Path.of(sdk.getHomePath(), "bin", HaxeSdkUtilBase.getExecutableName("adl"));
+      Path adl = adlInSdk(sdk.getHomePath());
       if (Files.isRegularFile(adl)) {
         return adl.toString();
       }
     }
     String airSdkHome = System.getenv("AIR_SDK");
     if (airSdkHome != null && !airSdkHome.isBlank()) {
-      Path adl = Path.of(airSdkHome, "bin", HaxeSdkUtilBase.getExecutableName("adl"));
+      Path adl = adlInSdk(airSdkHome);
       if (Files.isRegularFile(adl)) {
         return adl.toString();
       }
     }
     return null;
+  }
+
+  /** Where a Flex/AIR SDK keeps its adl, whether or not it exists. */
+  @NotNull
+  public static Path adlInSdk(@NotNull String sdkHome) {
+    return Path.of(sdkHome, "bin", HaxeSdkUtilBase.getExecutableName("adl"));
   }
 
   /** The configured value may point at the executable itself or its directory. */
@@ -321,6 +327,6 @@ public final class HaxeToolPathResolver {
       }
     }
     List<Sdk> haxeSdks = ProjectJdkTable.getInstance().getSdksOfType(HaxeSdkType.getInstance());
-    return haxeSdks.isEmpty() ? null : haxeSdks.get(0);
+    return haxeSdks.isEmpty() ? null : haxeSdks.getFirst();
   }
 }

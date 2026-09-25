@@ -3,13 +3,13 @@ package com.intellij.plugins.haxe.display.protocol.server;
 import java.util.List;
 
 /**
- * The dependency-relevant subset of {@code server/module}: where the module
- * lives and which modules it depends on / is depended on by — the signal for
- * dropping cached blueprints when a file changes.
+ * The part of a {@code server/module} answer the type catalog uses.
+ * {@code sign} changes whenever the module is retyped; {@code types} lists
+ * the qualified names of the types the module declares (see
+ * {@code JsonTypeRef.qualifiedNameOf}); {@code dependencies} lists the module
+ * paths it depends on.
  */
-public record ModuleInfo(String file,
-                         String sign,
+public record ModuleInfo(String sign,
                          List<String> types,
-                         List<String> dependencies,
-                         List<String> dependents) {
+                         List<String> dependencies) {
 }

@@ -13,7 +13,6 @@ import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
-import java.io.IOException;
 
 import static com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubFilterUtil.docsConditionalOrSpacing;
 import static com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubFilterUtil.isElementTypeToSkip;

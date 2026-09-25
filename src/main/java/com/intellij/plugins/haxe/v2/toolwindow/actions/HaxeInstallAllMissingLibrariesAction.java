@@ -58,29 +58,23 @@ public final class HaxeInstallAllMissingLibrariesAction extends DumbAwareAction 
         for (LibraryNode library : missing) {
           indicator.checkCanceled();
           indicator.setText(HaxeBundle.message("haxe.toolwindow.install.library.progress", library.name()));
-
           String failure = HaxelibInstaller.install(project, library.name(), library.version(), library.resolvedVersion());
-
           if (failure != null) {
             failed.add(library.name());
-            HaxeCommandNotifications.notify(project,
-                                            HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name()),
-                                            failure, NotificationType.ERROR);
+            String title = HaxeBundle.message("haxe.toolwindow.install.library.failed", library.name());
+            HaxeCommandNotifications.notify(project, title, failure, NotificationType.ERROR);
           }
         }
-        int installed = missing.size() - failed.size();
 
+        int installed = missing.size() - failed.size();
         if (installed > 0) {
-          HaxeCommandNotifications.notify(project,
-                                          HaxeBundle.message("haxe.toolwindow.install.all.missing.success", installed),
-                                          "", NotificationType.INFORMATION);
+          String summary = HaxeBundle.message("haxe.toolwindow.install.all.missing.success", installed);
+          HaxeCommandNotifications.notify(project, summary, NotificationType.INFORMATION);
         }
         if (!failed.isEmpty()) {
-          HaxeCommandNotifications.notify(project,
-                                          HaxeBundle.message("haxe.toolwindow.install.all.missing.failed", String.join(", ", failed)),
-                                          "", NotificationType.ERROR);
+          String summary = HaxeBundle.message("haxe.toolwindow.install.all.missing.failed", String.join(", ", failed));
+          HaxeCommandNotifications.notify(project, summary, NotificationType.ERROR);
         }
-
         HaxeLibrarySync.sync(project, panel::refreshTree);
       }
     }.queue();

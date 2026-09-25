@@ -32,9 +32,7 @@ public final class HaxeConfigureEnvironmentAction extends DumbAwareAction {
     HaxeEnvironmentDialog dialog = new HaxeEnvironmentDialog(project, environment.containerId(),
                                                              environment.displayName(),
                                                              environment.activeBuildFileDefines());
-    if (dialog.showAndGet()) {
-      panel.refreshTree();
-    }
+    dialog.show();
   }
 
   @Override

@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
@@ -30,7 +29,7 @@ import java.util.regex.Pattern;
  * Best-effort mapping of a haxe output line to the test that printed it.
  * utest's TeamCity reporter emits its whole event batch after the run, so
  * output can never interleave with test events — but `trace` prefixes every
- * line with the call site (`src/unit/crypto/Blake2sTest.hx:78:`), and that
+ * line with the call site (`src/unit/MathTest.hx:78:`), and that
  * file plus line resolves through PSI to a method of a test class, whose
  * TeamCity-shaped name the batch will later carry. Lines without a position
  * prefix (plain Sys.println) and call sites outside test methods (helpers,
@@ -73,9 +72,10 @@ final class HaxeTestOutputAttributor {
     return null;
   }
 
+  /** Output processing runs on a pooled thread without read access. */
   @NotNull
   private List<MethodSpan> methodSpans(@NotNull String path) {
-    return ReadAction.computeBlocking(() -> computeMethodSpans(path));
+    return HaxeReadActions.compute(() -> computeMethodSpans(path));
   }
 
   @NotNull
@@ -114,9 +114,6 @@ final class HaxeTestOutputAttributor {
   private VirtualFile resolveFile(@NotNull String path) {
     if (workDirectory == null || OSAgnosticPathUtil.isAbsolute(path)) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(workDirectory + "/" + path);
-    if (file == null) return null;
-    // the file index needs a read action - output processing runs on a pooled thread without one
-    boolean inContent = HaxeReadActions.compute(() -> ProjectFileIndex.getInstance(project).isInContent(file));
-    return inContent ? file : null;
+    return file != null && ProjectFileIndex.getInstance(project).isInContent(file) ? file : null;
   }
 }

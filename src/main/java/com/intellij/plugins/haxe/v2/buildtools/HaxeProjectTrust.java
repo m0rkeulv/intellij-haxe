@@ -4,7 +4,6 @@ import com.intellij.ide.trustedProjects.TrustedProjects;
 import com.intellij.ide.trustedProjects.TrustedProjectsListener;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationAction;
-import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -21,8 +20,7 @@ import org.jetbrains.annotations.NotNull;
  * The trust gate in front of everything that can execute PROJECT-AUTHORED
  * code — hxp scripts, {@code haxelib run lime|openfl|nme} tools from the
  * project's local repository, and any compile (macros run). Plain SDK-tool
- * reads (haxelib list/info/path, haxe --help) stay ungated. See
- * doc/trusted-projects.md for the full execution map.
+ * reads (haxelib list/info/path, haxe --help) stay ungated.
  */
 public final class HaxeProjectTrust {
 
@@ -102,13 +100,9 @@ public final class HaxeProjectTrust {
           }
         }
       };
-    NotificationGroupManager.getInstance()
-      .getNotificationGroup("haxe.command")
-      .createNotification(HaxeBundle.message("haxe.trust.notification.title"),
-                          HaxeBundle.message("haxe.trust.notification.content"),
-                          NotificationType.WARNING)
-      .addAction(trustAction)
-      .notify(project);
+    String title = HaxeBundle.message("haxe.trust.notification.title");
+    String content = HaxeBundle.message("haxe.trust.notification.content");
+    HaxeCommandNotifications.notify(project, title, content, NotificationType.WARNING, trustAction);
   }
 
   /**

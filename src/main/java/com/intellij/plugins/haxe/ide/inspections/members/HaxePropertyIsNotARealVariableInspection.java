@@ -68,7 +68,7 @@ public class HaxePropertyIsNotARealVariableInspection extends HaxeInspection {
 
   private static void checkFieldAccessFromGetterSetter(@NotNull HaxeProblemReporter reporter, HaxeReferenceExpression expression) {
     if(expression.getParent() instanceof HaxeType) return;
-    // ignore chained expression as we only want to check self referencing
+    // chained expressions are skipped - only self references matter
     // and updating other instances should be allowed
     // TODO: this also (incorrectly?) skips this check for `this.property`
     if(expression.getChildren().length > 1) return;

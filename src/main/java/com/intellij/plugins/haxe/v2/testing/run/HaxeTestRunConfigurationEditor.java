@@ -1,16 +1,13 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.util.PathUtil;
@@ -20,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 import javax.swing.*;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -67,28 +65,14 @@ public final class HaxeTestRunConfigurationEditor extends SettingsEditor<HaxeTes
       .getPanel();
   }
 
-  /** Every known build file (detected + manually added), sorted by file name. */
+  /** Every known build file (detected + manually added - hidden), sorted by file name. */
   @NotNull
   private Set<String> collectBuildFilePaths() {
-    // the scanner walks module roots - EDT has no implicit read access
-    Set<String> paths = ReadAction.computeBlocking(this::scanKnownBuildFiles);
-    return paths.stream()
+    // the scan walks module roots - EDT has no implicit read access
+    List<HaxeBuildFile> known = ReadAction.computeBlocking(() -> HaxeKnownBuildFiles.all(project));
+    return known.stream()
+      .map(buildFile -> buildFile.file().getPath())
       .sorted(Comparator.comparing(PathUtil::getFileName, String.CASE_INSENSITIVE_ORDER))
       .collect(Collectors.toCollection(LinkedHashSet::new));
-  }
-
-  @NotNull
-  private Set<String> scanKnownBuildFiles() {
-    Set<String> collected = new LinkedHashSet<>();
-    for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scanProjectRoot(project)) {
-      collected.add(buildFile.file().getPath());
-    }
-    for (Module module : ModuleManager.getInstance(project).getModules()) {
-      for (HaxeBuildFile buildFile : HaxeBuildFileScanner.scan(module)) {
-        collected.add(buildFile.file().getPath());
-      }
-    }
-    collected.addAll(HaxeBuildFilesStore.getInstance(project).getAllAddedPaths());
-    return collected;
   }
 }

@@ -85,7 +85,7 @@ public final class HaxeCustomToolsStore implements PersistentStateComponent<Haxe
     if (container == null) return List.of();
     return container.tools.stream()
       .filter(tool -> !StringUtil.isEmptyOrSpaces(tool.name))
-      .map(tool -> new CustomTool(tool.name, StringUtil.notNullize(tool.command), StringUtil.notNullize(tool.workDirectory)))
+      .map(HaxeCustomToolsStore::toTool)
       .toList();
   }
 
@@ -112,6 +112,12 @@ public final class HaxeCustomToolsStore implements PersistentStateComponent<Haxe
     if (container != null) {
       container.tools.removeIf(tool -> name.equals(tool.name));
     }
+  }
+
+  @NotNull
+  private static CustomTool toTool(@NotNull ToolState toolState) {
+    String command = StringUtil.notNullize(toolState.command);
+    return new CustomTool(toolState.name, command, StringUtil.notNullize(toolState.workDirectory));
   }
 
   @NotNull

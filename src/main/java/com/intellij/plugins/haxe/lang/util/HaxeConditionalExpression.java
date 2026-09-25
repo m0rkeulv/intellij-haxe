@@ -188,7 +188,7 @@ public class HaxeConditionalExpression {
     try {
       Stack<ASTNode> postfix = infixToPostfix();
       evaluatePostfixTokens(postfix);
-      return postfix.isEmpty() ? null : "Invalid condition expression";
+      return postfix.isEmpty() ? null : HaxeBundle.message("haxe.cc.diagnostic.invalid.condition");
     }
     catch (CalculationException e) {
       return e.getMessage();
@@ -252,22 +252,36 @@ public class HaxeConditionalExpression {
         condition.extend(String.valueOf(c), CLOSING_QUOTE);
         i = end + 1;
       }
-      else if (text.startsWith("==", i)) { condition.extend("==", OEQ); i += 2; }
-      else if (text.startsWith("!=", i)) { condition.extend("!=", ONOT_EQ); i += 2; }
-      else if (text.startsWith(">=", i)) { condition.extend(">=", OGREATER_OR_EQUAL); i += 2; }
-      else if (text.startsWith("<=", i)) { condition.extend("<=", OLESS_OR_EQUAL); i += 2; }
-      else if (text.startsWith("&&", i)) { condition.extend("&&", OCOND_AND); i += 2; }
-      else if (text.startsWith("||", i)) { condition.extend("||", OCOND_OR); i += 2; }
-      else if (c == '!') { condition.extend("!", ONOT); i++; }
-      else if (c == '>') { condition.extend(">", OGREATER); i++; }
-      else if (c == '<') { condition.extend("<", OLESS); i++; }
-      else if (c == '(') { condition.extend("(", PLPAREN); i++; }
-      else if (c == ')') { condition.extend(")", PRPAREN); i++; }
       else {
-        return null;
+        Map.Entry<String, IElementType> operator = operatorAt(text, i);
+        if (operator == null) return null;
+        condition.extend(operator.getKey(), operator.getValue());
+        i += operator.getKey().length();
       }
     }
     return condition;
+  }
+
+  /** The operators a condition may hold, two-character ones first so they win over their one-character prefixes. */
+  private static final List<Map.Entry<String, IElementType>> CONDITION_OPERATORS = List.of(
+    Map.entry("==", OEQ),
+    Map.entry("!=", ONOT_EQ),
+    Map.entry(">=", OGREATER_OR_EQUAL),
+    Map.entry("<=", OLESS_OR_EQUAL),
+    Map.entry("&&", OCOND_AND),
+    Map.entry("||", OCOND_OR),
+    Map.entry("!", ONOT),
+    Map.entry(">", OGREATER),
+    Map.entry("<", OLESS),
+    Map.entry("(", PLPAREN),
+    Map.entry(")", PRPAREN));
+
+  @Nullable
+  private static Map.Entry<String, IElementType> operatorAt(String text, int offset) {
+    for (Map.Entry<String, IElementType> operator : CONDITION_OPERATORS) {
+      if (text.startsWith(operator.getKey(), offset)) return operator;
+    }
+    return null;
   }
 
   public String tokensToString(List<ASTNode> nodes) {
@@ -354,11 +368,11 @@ public class HaxeConditionalExpression {
   }
 
   /**
-   * The single function conditions support is {@code version("literal")}
-   * (per the compiler's parserEntry.ml). Each such call folds into ONE
-   * synthetic operand so the shunting-yard sees a plain value; any other
-   * call shape stays untouched and later fails evaluation to FALSE -
-   * mirroring the compiler's hard error as an inactive branch.
+   * The only function the compiler accepts in a condition is
+   * {@code version("literal")}. Each such call folds into ONE synthetic
+   * operand so the shunting-yard sees a plain value; any other call shape
+   * stays untouched and later fails evaluation to FALSE, mirroring the
+   * compiler's hard error as an inactive branch.
    */
   private static ArrayList<ASTNode> foldVersionCalls(ArrayList<ASTNode> source) {
     ArrayList<ASTNode> folded = new ArrayList<>(source.size());
@@ -436,9 +450,7 @@ public class HaxeConditionalExpression {
             }
           }
           if (operatorStack.isEmpty() && !foundLeftParen) {
-            // mismatched parens.
-            // TODO: Report errors back through a reporter class.
-            throw new CalculationException("Mismatched right parenthesis.");
+            throw new CalculationException(HaxeBundle.message("haxe.cc.diagnostic.unmatched.right.paren"));
           }
         }
         else if (isCCOperator(token)) {
@@ -463,9 +475,7 @@ public class HaxeConditionalExpression {
     while(!operatorStack.isEmpty()) {
       ASTNode node = operatorStack.pop();
       if (isLeftParen(node)) {
-        // Mismatched parens.
-        // TODO: Report errors back through a reporter class.
-        throw new CalculationException("Mismatched left parenthesis.");
+        throw new CalculationException(HaxeBundle.message("haxe.cc.diagnostic.unmatched.left.paren"));
       } else {
         postfixOutput.push(node);
       }
@@ -536,7 +546,7 @@ public class HaxeConditionalExpression {
   private static Object versionValue(ASTNode node) throws CalculationException {
     HaxelibSemVer version = HaxelibSemVer.parseCompilerVersion(node.getText());
     if (version == null) {
-      throw new CalculationException("Invalid version string \"" + node.getText() + "\". Should follow SemVer.");
+      throw new CalculationException(HaxeBundle.message("haxe.cc.diagnostic.invalid.version", node.getText()));
     }
     return version;
   }
@@ -584,9 +594,6 @@ public class HaxeConditionalExpression {
     Map<String, String> definitionMap = projectDefinitions(context);
     if (definitionMap.containsKey(name)) {
       String value = definitionMap.get(name);
-      // a define set without a value carries "1" in the compiler.
-      // that way flags stay comparable: `#if (myVersion < "9.0.0")` should evaluate
-      // just fine even if we do not provide a value and just use myVersion as a flag.
       if (null == value || value.isEmpty()) {
         return identifierValue(FLAG_DEFINE_VALUE);
       } else {
@@ -676,8 +683,7 @@ public class HaxeConditionalExpression {
     }
 
 
-    throw new CompareException("Invalid value comparison between '"
-                                   + lhs.toString() + "' and '" + rhs.toString() + "'.");
+    throw new CompareException(HaxeBundle.message("haxe.cc.diagnostic.invalid.comparison", lhs, rhs));
   }
 
   @Nullable
@@ -700,8 +706,7 @@ public class HaxeConditionalExpression {
       return HaxeBundle.message("haxe.cc.diagnostic.version.needs.three.parts", text, padToThreeParts(text));
     }
     if (bad instanceof String) {
-      // mirrors the compiler's exact wording for an unparsable version literal
-      return "Invalid version string \"" + text + "\". Should follow SemVer.";
+      return HaxeBundle.message("haxe.cc.diagnostic.invalid.version", text);
     }
     return HaxeBundle.message("haxe.cc.diagnostic.version.compare.kind", kindName(bad));
   }

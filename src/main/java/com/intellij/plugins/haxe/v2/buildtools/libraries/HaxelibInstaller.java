@@ -117,8 +117,8 @@ public final class HaxelibInstaller {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
       if (output.getExitCode() != 0 || output.isTimeout()) {
         String detail = StringUtil.trimTrailing(output.getStdout() + "\n" + output.getStderr());
-        log.warn("haxelib command failed (exit " + output.getExitCode() + "): "
-                 + commandLine.getCommandLineString() + "\n" + detail);
+        String commandText = commandLine.getCommandLineString();
+        log.warn("haxelib command failed (exit " + output.getExitCode() + "): " + commandText + "\n" + detail);
         return detail;
       }
       return null;
@@ -160,12 +160,7 @@ public final class HaxelibInstaller {
                                 && !previous.equals(version);
     if (!selectionHijacked) return;
 
-    GeneralCommandLine commandLine = haxelibCommand(project, List.of("set", name, previous, "--always"));
-    try {
-      new CapturingProcessHandler(commandLine).runProcess(INSTALL_TIMEOUT_MS);
-    }
-    catch (ExecutionException e) {
-      // the install itself succeeded; a failed restore only leaves the new version selected
-    }
+    // the install itself succeeded; a failed restore only leaves the new version selected
+    setCurrent(project, name, previous);
   }
 }

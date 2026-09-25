@@ -3,27 +3,14 @@ package com.intellij.plugins.haxe.ide.inspections.unused;
 import com.intellij.codeInspection.*;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.ide.annotator.HaxeAnnotatingVisitor;
 import com.intellij.plugins.haxe.lang.psi.*;
-import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
-import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorSearchUtil;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiParserFacade;
-import com.intellij.psi.PsiReference;
-import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.psi.search.SearchScope;
-import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.intellij.util.ArrayUtil;
-import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.KEEP;
 
@@ -50,7 +37,7 @@ public class HaxeUnusedDeclarationsFixes  {
           HaxeVarInit init = varDeclaration.getVarInit();
           if (varDeclaration.getParent() instanceof  HaxeLocalVarDeclarationList declarationList) {
             if(declarationList.getLocalVarDeclarationList().size() == 1) {
-              //if exact 1 we can remove var, else
+              // the only variable of its declaration - the whole declaration goes
               if (init != null && init.getExpression() != null) {
                 Collection<HaxeReference> references = PsiTreeUtil.findChildrenOfType(init, HaxeReferenceExpression.class);
                 if (references.isEmpty()) {

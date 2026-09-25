@@ -28,7 +28,7 @@ import java.util.List;
  * completion works from the first character; qualified-name and
  * absolute-path references attach only when the target resolves. What
  * PAINTS as a link is gated separately on shape + resolution — prose never
- * lights up. See doc/string-path-fqn-links.md.
+ * lights up.
  */
 public class HaxeStringLiteralReferenceContributor extends PsiReferenceContributor {
 

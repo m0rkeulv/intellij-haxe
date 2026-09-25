@@ -9,11 +9,12 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.backend.workspace.WorkspaceModel
 import com.intellij.platform.workspace.jps.entities.ContentRootEntity
 import com.intellij.platform.workspace.jps.entities.ExcludeUrlEntity
-import com.intellij.platform.workspace.jps.entities.ModuleEntity
+import com.intellij.platform.workspace.jps.entities.ModuleId
 import com.intellij.platform.workspace.jps.entities.SourceRootEntity
 import com.intellij.platform.workspace.jps.entities.SourceRootTypeId
 import com.intellij.platform.workspace.jps.entities.modifyContentRootEntity
 import com.intellij.platform.workspace.storage.MutableEntityStorage
+import com.intellij.platform.workspace.storage.url.VirtualFileUrl
 import com.intellij.platform.workspace.storage.url.VirtualFileUrlManager
 import com.intellij.plugins.haxe.v2.buildsystem.*
 import java.io.File
@@ -30,6 +31,8 @@ object HaxeSourceRootsInitializer {
   // matches how the platform serializes java-like source roots; the v2 wizard's src/ uses the same
   private val SOURCE_ROOT_TYPE = SourceRootTypeId("java-source")
 
+  internal data class RootsPlan(val moduleName: String, val sourceDirs: List<String>, val excludeDirs: List<String>)
+
   suspend fun initialize(project: Project) {
     val plans = smartReadAction(project) { plan(project) }
     applyPlans(project, plans)
@@ -41,7 +44,7 @@ object HaxeSourceRootsInitializer {
     val urlManager = workspaceModel.getVirtualFileUrlManager()
     workspaceModel.update("Haxe source roots from build files") { builder ->
       for (plan in plans) {
-        val module = builder.entities(ModuleEntity::class.java).firstOrNull { it.name == plan.moduleName } ?: continue
+        val module = builder.resolve(ModuleId(plan.moduleName)) ?: continue
         for (contentRoot in module.contentRoots) {
           applyToContentRoot(builder, contentRoot, plan, urlManager)
         }
@@ -49,12 +52,9 @@ object HaxeSourceRootsInitializer {
     }
   }
 
-  internal data class RootsPlan(val moduleName: String, val sourceDirs: List<String>, val excludeDirs: List<String>)
-
   /** Whether the module still has no source roots — the state the first-open setup applies to. */
   fun moduleHasNoSourceRoots(project: Project, moduleName: String): Boolean {
-    val snapshot = WorkspaceModel.getInstance(project).currentSnapshot
-    val entity = snapshot.entities(ModuleEntity::class.java).firstOrNull { it.name == moduleName } ?: return false
+    val entity = WorkspaceModel.getInstance(project).currentSnapshot.resolve(ModuleId(moduleName)) ?: return false
     return entity.contentRoots.none { it.sourceRoots.isNotEmpty() }
   }
 
@@ -67,11 +67,10 @@ object HaxeSourceRootsInitializer {
    */
   fun uncoveredSourceDirs(project: Project, moduleName: String, buildFile: HaxeBuildFile): List<String> {
     val plan = planFor(project, moduleName, listOf(buildFile)) ?: return emptyList()
-    val snapshot = WorkspaceModel.getInstance(project).currentSnapshot
-    val entity = snapshot.entities(ModuleEntity::class.java).firstOrNull { it.name == moduleName } ?: return emptyList()
+    val entity = WorkspaceModel.getInstance(project).currentSnapshot.resolve(ModuleId(moduleName)) ?: return emptyList()
     val existingRoots = entity.contentRoots
       .flatMap { it.sourceRoots }
-      .map { it.url.url.removePrefix("file://") }
+      .map { localPath(it.url) }
     return plan.sourceDirs.filter { dir -> existingRoots.none { root -> FileUtil.isAncestor(root, dir, false) } }
   }
 
@@ -133,13 +132,15 @@ object HaxeSourceRootsInitializer {
     return if (FileUtil.isAbsolute(clean)) clean else base.path + "/" + clean
   }
 
+  private fun localPath(url: VirtualFileUrl): String = url.url.removePrefix("file://")
+
   private fun applyToContentRoot(
     builder: MutableEntityStorage,
     contentRoot: ContentRootEntity,
     plan: RootsPlan,
     urlManager: VirtualFileUrlManager,
   ) {
-    val rootPath = contentRoot.url.url.removePrefix("file://")
+    val rootPath = localPath(contentRoot.url)
     val existingSources = contentRoot.sourceRoots.map { it.url.url }.toSet()
     val existingExcludes = contentRoot.excludedUrls.map { it.url.url }.toSet()
     val source = contentRoot.entitySource

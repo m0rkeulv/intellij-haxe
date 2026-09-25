@@ -7,7 +7,6 @@ import com.intellij.plugins.haxe.display.protocol.InitializeResult;
 import com.intellij.plugins.haxe.display.protocol.Position;
 import com.intellij.plugins.haxe.display.protocol.Range;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.node.StringNode;
@@ -56,8 +55,9 @@ public class HaxeDiagnosticMessageFilterTest {
   @Test
   @DisplayName("errors always show")
   public void errorsAlwaysShow() {
-    Diagnostic error = new Diagnostic(DiagnosticKind.COMPILER_ERROR, anyRange(), DiagnosticSeverity.ERROR,
-                                      StringNode.valueOf(ENUM_ABSTRACT_DEPRECATION), null, List.of());
+    StringNode message = StringNode.valueOf(ENUM_ABSTRACT_DEPRECATION);
+    Diagnostic error = new Diagnostic(DiagnosticKind.COMPILER_ERROR, anyRange(), DiagnosticSeverity.ERROR, message, null);
+
     assertTrue(HaxeDiagnosticMessageFilter.shouldShow(HaxeLanguageLevel.HAXE_3_4, HAXE_4_3_7, error));
   }
 
@@ -65,6 +65,7 @@ public class HaxeDiagnosticMessageFilterTest {
   @DisplayName("unknown deprecations show")
   public void unknownDeprecationsShow() {
     Diagnostic unknown = warning(DiagnosticKind.DEPRECATION_WARNING, "SomeApi is deprecated, use OtherApi", null);
+
     assertTrue(HaxeDiagnosticMessageFilter.shouldShow(HaxeLanguageLevel.HAXE_3_4, HAXE_4_3_7, unknown));
   }
 
@@ -72,6 +73,7 @@ public class HaxeDiagnosticMessageFilterTest {
   @DisplayName("non deprecation warning codes show")
   public void nonDeprecationWarningCodesShow() {
     Diagnostic pointless = warning(DiagnosticKind.COMPILER_ERROR, "This code has no effect", "WPointlessCode");
+
     assertTrue(HaxeDiagnosticMessageFilter.shouldShow(HaxeLanguageLevel.HAXE_3_4, HAXE_5_0_0, pointless));
   }
 
@@ -81,11 +83,12 @@ public class HaxeDiagnosticMessageFilterTest {
     // a 5+ compiler sends codes; a warning WITHOUT one is not a warning-class
     // diagnostic, so the fragile message matching must not engage
     Diagnostic uncoded = warning(DiagnosticKind.COMPILER_ERROR, ENUM_ABSTRACT_DEPRECATION, null);
+
     assertTrue(HaxeDiagnosticMessageFilter.shouldShow(HaxeLanguageLevel.HAXE_3_4, HAXE_5_0_0, uncoded));
   }
 
   private static Diagnostic warning(DiagnosticKind kind, String message, String code) {
-    return new Diagnostic(kind, anyRange(), DiagnosticSeverity.WARNING, StringNode.valueOf(message), code, List.of());
+    return new Diagnostic(kind, anyRange(), DiagnosticSeverity.WARNING, StringNode.valueOf(message), code);
   }
 
   private static Range anyRange() {

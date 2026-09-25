@@ -54,6 +54,8 @@ public final class HaxeCompilationServerManager implements Disposable {
   /** The managed server always runs on the local machine; every client connects to loopback. */
   public static final String SERVER_HOST = "127.0.0.1";
 
+  private static final int BACKLOG_LIMIT = 2000;
+
   /** Receives one server's process output (and lifecycle lines) for the server console window. */
   public interface ServerOutputListener {
     void onOutput(@NotNull String text, @NotNull Key<?> outputType);
@@ -66,21 +68,17 @@ public final class HaxeCompilationServerManager implements Disposable {
   private record OutputChunk(@NotNull String text, @NotNull Key<?> outputType) {
   }
 
-  private static final int BACKLOG_LIMIT = 2000;
-
   private static final class ServerInstance {
     final String exePath;
     final String displayName;
-    @Nullable final String sdkName;
     final List<ServerOutputListener> listeners = new CopyOnWriteArrayList<>();
     final Deque<OutputChunk> backlog = new ArrayDeque<>();
     OSProcessHandler handler;
     int port = -1;
 
-    ServerInstance(String exePath, String displayName, @Nullable String sdkName) {
+    ServerInstance(String exePath, String displayName) {
       this.exePath = exePath;
       this.displayName = displayName;
-      this.sdkName = sdkName;
     }
 
     boolean isAlive() {
@@ -98,6 +96,13 @@ public final class HaxeCompilationServerManager implements Disposable {
   @NotNull
   public static HaxeCompilationServerManager getInstance(@NotNull Project project) {
     return project.getService(HaxeCompilationServerManager.class);
+  }
+
+  /** The id of the server instance serving the container: its effective SDK's haxe executable. */
+  @NotNull
+  public static String serverIdFor(@NotNull Project project, @NotNull String containerId) {
+    String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
+    return HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
   }
 
   /**
@@ -118,7 +123,7 @@ public final class HaxeCompilationServerManager implements Disposable {
     String exePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
     ServerInstance instance = servers.get(exePath);
     if (instance == null) {
-      instance = new ServerInstance(exePath, displayNameFor(preferredSdkName, exePath), preferredSdkName);
+      instance = new ServerInstance(exePath, displayNameFor(preferredSdkName, exePath));
       servers.put(exePath, instance);
     }
     if (instance.isAlive()) {
@@ -128,13 +133,11 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   /** The running server's port for the given SDK's binary, or -1. */
-  public synchronized int getRunningPort(@Nullable String preferredSdkName) {
-    String exePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
-    ServerInstance instance = servers.get(exePath);
-    return instance != null && instance.isAlive() ? instance.port : -1;
+  public synchronized int runningPortForSdk(@Nullable String preferredSdkName) {
+    return runningPort(HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName));
   }
 
-  public synchronized boolean isRunning() {
+  public synchronized boolean isAnyRunning() {
     return servers.values().stream().anyMatch(ServerInstance::isAlive);
   }
 
@@ -239,41 +242,9 @@ public final class HaxeCompilationServerManager implements Disposable {
     HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
     try {
       int chosenPort = choosePortLocked(settings, instance);
-      List<String> command = new ArrayList<>();
-      command.add(instance.exePath);
-      command.addAll(ParametersListUtil.parse(settings.getCompilationServerArguments()));
-      command.add("--wait");
-      command.add(String.valueOf(chosenPort));
-
-      // the process handler itself announces the command line as its first output
-      GeneralCommandLine commandLine = new GeneralCommandLine(command);
-      // every request carries its own --cwd, so the server's working directory
-      // is irrelevant - and a missing project directory (fixture projects,
-      // freshly moved projects) must not fail the start
-      String basePath = project.getBasePath();
-      if (basePath != null && new File(basePath).isDirectory()) {
-        commandLine.withWorkDirectory(basePath);
-      }
-      OSProcessHandler handler = new OSProcessHandler(commandLine) {
-        // long-running, mostly idle daemon - the default reader busy-polls and wastes CPU
-        @Override
-        protected @NotNull BaseOutputReader.Options readerOptions() {
-          return BaseOutputReader.Options.forMostlySilentProcess();
-        }
-      };
-      handler.addProcessListener(new ProcessListener() {
-        @Override
-        public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
-          broadcast(instance, event.getText(), outputType);
-        }
-
-        @Override
-        public void processTerminated(@NotNull ProcessEvent event) {
-          broadcast(instance, HaxeBundle.message("haxe.compilation.server.terminated", event.getExitCode()) + "\n",
-                    ProcessOutputType.SYSTEM);
-          onServerTerminated(instance, handler, event.getExitCode());
-        }
-      });
+      GeneralCommandLine commandLine = serverCommandLine(settings, instance, chosenPort);
+      OSProcessHandler handler = newServerHandler(commandLine);
+      handler.addProcessListener(new ServerOutputForwarder(instance, handler));
       handler.startNotify();
       instance.handler = handler;
       instance.port = chosenPort;
@@ -285,6 +256,60 @@ public final class HaxeCompilationServerManager implements Disposable {
       notifyStartFailed(StringUtil.notNullize(e.getMessage()));
       stopInstanceLocked(instance);
       return -1;
+    }
+  }
+
+  @NotNull
+  private GeneralCommandLine serverCommandLine(HaxeBuildToolSettings settings, ServerInstance instance, int port) {
+    List<String> command = new ArrayList<>();
+    command.add(instance.exePath);
+    command.addAll(ParametersListUtil.parse(settings.getCompilationServerArguments()));
+    command.add("--wait");
+    command.add(String.valueOf(port));
+
+    GeneralCommandLine commandLine = new GeneralCommandLine(command);
+    // every request carries its own --cwd, so the server's working directory
+    // is irrelevant - and a missing project directory (fixture projects,
+    // freshly moved projects) must not fail the start
+    String basePath = project.getBasePath();
+    if (basePath != null && new File(basePath).isDirectory()) {
+      commandLine.withWorkDirectory(basePath);
+    }
+    return commandLine;
+  }
+
+  /** The process handler announces the command line as its first output. */
+  @NotNull
+  private static OSProcessHandler newServerHandler(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
+    return new OSProcessHandler(commandLine) {
+      // long-running, mostly idle daemon - the default reader busy-polls and wastes CPU
+      @Override
+      protected @NotNull BaseOutputReader.Options readerOptions() {
+        return BaseOutputReader.Options.forMostlySilentProcess();
+      }
+    };
+  }
+
+  /** Feeds one server process's output to its console sinks and reports its termination. */
+  private final class ServerOutputForwarder implements ProcessListener {
+    private final ServerInstance instance;
+    private final OSProcessHandler handler;
+
+    ServerOutputForwarder(ServerInstance instance, OSProcessHandler handler) {
+      this.instance = instance;
+      this.handler = handler;
+    }
+
+    @Override
+    public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
+      broadcast(instance, event.getText(), outputType);
+    }
+
+    @Override
+    public void processTerminated(@NotNull ProcessEvent event) {
+      String terminated = HaxeBundle.message("haxe.compilation.server.terminated", event.getExitCode()) + "\n";
+      broadcast(instance, terminated, ProcessOutputType.SYSTEM);
+      onServerTerminated(instance, handler, event.getExitCode());
     }
   }
 

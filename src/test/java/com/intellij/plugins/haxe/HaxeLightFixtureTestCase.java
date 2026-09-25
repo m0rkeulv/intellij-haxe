@@ -5,6 +5,7 @@ import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.util.RecursionManager;
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
+import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
@@ -70,13 +71,19 @@ public abstract class HaxeLightFixtureTestCase extends HaxeCodeInsightFixtureTes
     CodeStyleSettingsManager.getInstance(myFixture.getProject()).dropTemporarySettings();
   }
 
+  /** A detached copy of the project code style, to mutate and install as temporary settings. */
+  protected CodeStyleSettings projectSettingsCopy() {
+    CodeStyleSettings projectSettings = CodeStyle.getSettings(myFixture.getProject());
+    return CodeStyleSettingsManager.getInstance(myFixture.getProject()).cloneSettings(projectSettings);
+  }
+
   /**
    * Reformats {@code source} under a temporary copy of the project code
    * style mutated by {@code configure}; the shared teardown drops the
    * temporary settings. Returns the file text after the reformat.
    */
   protected String reformat(String fileName, Consumer<CodeStyleSettings> configure, String source) {
-    CodeStyleSettings settings = CodeStyleSettingsManager.getSettings(myFixture.getProject()).clone();
+    CodeStyleSettings settings = projectSettingsCopy();
     configure.accept(settings);
     CodeStyleSettingsManager.getInstance(myFixture.getProject()).setTemporarySettings(settings);
     myFixture.configureByText(fileName, source);

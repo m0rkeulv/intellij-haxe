@@ -7,6 +7,7 @@ import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +16,8 @@ import java.util.List;
  * Manual corrections to build file auto-detection, per container: files the user
  * added by hand (subfolders, unusually named project xml) and auto-detected files
  * the user hid. Shares {@code .idea/haxeBuildConfig.xml} with the other build-config
- * stores.
+ * stores. The known build files decide the active one's single-file fallback, so
+ * every change publishes {@link HaxeBuildSettingsListener}.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeBuildFiles", storages = @Storage("haxeBuildConfig.xml"))
@@ -31,7 +33,18 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
     public List<String> hiddenPaths = new ArrayList<>();
   }
 
+  private final @Nullable Project project;
   private State state = new State();
+
+  public HaxeBuildFilesStore(@NotNull Project project) {
+    this.project = project;
+  }
+
+  /** State tests exercise load/get/set without a project; no events fire then. */
+  @TestOnly
+  public HaxeBuildFilesStore() {
+    this.project = null;
+  }
 
   @NotNull
   public static HaxeBuildFilesStore getInstance(@NotNull Project project) {
@@ -53,6 +66,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
       if (container.hiddenPaths == null) container.hiddenPaths = new ArrayList<>();
     });
     this.state = state;
+    HaxeBuildSettingsListener.publish(project);
   }
 
   @NotNull
@@ -82,6 +96,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
     if (!container.addedPaths.contains(path)) {
       container.addedPaths.add(path);
     }
+    HaxeBuildSettingsListener.publish(project);
   }
 
   /** Removes a manual entry, or hides an auto-detected file. */
@@ -90,6 +105,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
     if (!container.addedPaths.remove(path) && !container.hiddenPaths.contains(path)) {
       container.hiddenPaths.add(path);
     }
+    HaxeBuildSettingsListener.publish(project);
   }
 
   @Nullable

@@ -81,7 +81,7 @@ public class HaxeIsTypeExpressionInspection extends HaxeInspection {
 
       PsiElement parent = expr.getParent();
       if (parent instanceof HaxeAssignExpression) {
-        // "a = b is expression" parses (in our parser) as "a = (b is expression)", so the parent is actually the assignment.
+        // "a = b is expression" parses (in this plugin's parser) as "a = (b is expression)", so the parent is actually the assignment.
         TextRange assignMarkerRange = new TextRange(parent.getTextOffset(), lhs.getTextRange().getEndOffset());
 
         reporter.problem(HighlightSeverity.ERROR, HaxeBundle.message("haxe.semantic.is.operator.4_1.lhs.cannot.be.assignment"))

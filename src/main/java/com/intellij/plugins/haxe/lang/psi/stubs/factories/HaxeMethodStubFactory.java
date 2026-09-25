@@ -1,7 +1,5 @@
 package com.intellij.plugins.haxe.lang.psi.stubs.factories;
 
-import com.intellij.lang.ASTNode;
-import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxePsiModifier;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeMethodStub;
@@ -11,9 +9,7 @@ import com.intellij.plugins.haxe.model.HaxeMemberModel;
 import com.intellij.psi.stubs.StubElement;
 import com.intellij.psi.stubs.StubElementFactory;
 import com.intellij.plugins.haxe.lang.lexer.HaxeElementType;
-import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.NotNull;
-import org.jspecify.annotations.NonNull;
 
 import java.util.function.BiFunction;
 
@@ -83,9 +79,9 @@ public class HaxeMethodStubFactory implements StubElementFactory<HaxeMethodStub,
     if (psi.isConstructor())  flags |= HaxeMethodStub.IS_CONSTRUCTOR;
     if (psi.hasParameters())  flags |= HaxeMethodStub.HAS_PARAMETERS;
     if (psi.isVarArgs())      flags |= HaxeMethodStub.HAS_VARARG_PARAMETERS;
-    // overridden methods without public/private keywords inherit visibility from the overridden
-    // method, which indexing cannot resolve (reading outside the indexed file is forbidden)
-    // the flag defers the parent-chain check to query time.
+    // a bare `override` inherits the overridden method's visibility, which
+    // indexing cannot resolve (it may not read other files); the flag defers
+    // that check to query time
     if (psi.getModel() instanceof HaxeMemberModel member && member.isVisibilityInheritedFromParent()) {
       flags |= HaxeMethodStub.VISIBILITY_INHERITED;
     }

@@ -30,7 +30,6 @@ public final class HaxeSetActiveBuildFileAction extends DumbAwareAction {
     Project project = e.getProject();
     if (project != null && panel.getSelectedUserObject() instanceof BuildFileRow row && !row.active()) {
       HaxeActiveBuildFileStore.getInstance(project).setActiveFile(row.buildFile().file().getPath());
-      panel.refreshTree();
       // module libraries follow the active file - detach the previous file's set
       HaxeLibrarySync.sync(project, panel::refreshTree);
     }

@@ -11,7 +11,6 @@ import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
@@ -68,8 +67,7 @@ final class HaxeServerStatusPanel extends JPanel {
 
     Map<String, String> failures = new LinkedHashMap<>();
     HaxeContextFailures.getInstance(project).snapshot().forEach((containerId, failure) -> {
-      String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
-      if (serverId.equals(HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName))) {
+      if (serverId.equals(HaxeCompilationServerManager.serverIdFor(project, containerId))) {
         failures.put(containerId, failure);
       }
     });
@@ -87,17 +85,16 @@ final class HaxeServerStatusPanel extends JPanel {
     StringBuilder text = new StringBuilder();
     HaxeServerMetrics.Snapshot requests = HaxeServerMetrics.getInstance(project).snapshot(serverId);
     if (requests.requests() > 0) {
-      text.append(HaxeBundle.message("haxe.server.console.stats.requests", requests.requests(), requests.failures(),
-                                     requests.lastMillis(), requests.averageMillis()));
-      text.append('\n');
+      String requestStats = HaxeBundle.message("haxe.server.console.stats.requests", requests.requests(), requests.failures(),
+                                               requests.lastMillis(), requests.averageMillis());
+      text.append(requestStats).append('\n');
     }
     if (serverStats != null) {
       text.append(serverStats).append('\n');
     }
     if (failing) {
       if (!text.isEmpty()) text.append('\n');
-      failures.forEach((containerId, failure) -> text.append('[').append(containerId).append("] ")
-        .append(failure).append("\n\n"));
+      failures.forEach((containerId, failure) -> text.append("[%s] %s\n\n".formatted(containerId, failure)));
     }
     details.setText(text.toString().stripTrailing());
     details.setCaretPosition(0);
@@ -145,14 +142,13 @@ final class HaxeServerStatusPanel extends JPanel {
 
   @NotNull
   private static String renderMemory(@NotNull ServerMemory memory) {
-    StringBuilder text = new StringBuilder();
-    text.append(HaxeBundle.message("haxe.server.console.stats.memory",
-                                   StringUtil.formatFileSize(memory.totalCache()), memory.contexts().size()));
+    String totalCache = StringUtil.formatFileSize(memory.totalCache());
+    StringBuilder text = new StringBuilder(HaxeBundle.message("haxe.server.console.stats.memory", totalCache, memory.contexts().size()));
     for (ServerMemory.ContextSize context : memory.contexts()) {
       // the signature prefix identifies the context in server logs; platform + size are the useful glance
-      text.append("\n  ").append(context.context().platform())
-        .append(" [").append(StringUtil.first(context.context().signature(), 8, false)).append("] ")
-        .append(StringUtil.formatFileSize(context.size()));
+      String signature = StringUtil.first(context.context().signature(), 8, false);
+      String size = StringUtil.formatFileSize(context.size());
+      text.append("\n  %s [%s] %s".formatted(context.context().platform(), signature, size));
     }
     return text.toString();
   }

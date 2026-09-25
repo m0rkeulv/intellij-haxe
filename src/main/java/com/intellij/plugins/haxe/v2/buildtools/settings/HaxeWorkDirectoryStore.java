@@ -21,11 +21,6 @@ import java.util.List;
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeWorkDirectories", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeWorkDirectoryStore implements PersistentStateComponent<HaxeWorkDirectoryStore.State> {
-  private final @NotNull Project project;
-
-  public HaxeWorkDirectoryStore(@NotNull Project project) {
-    this.project = project;
-  }
 
   public static final class State {
     public List<FileWorkDirectory> files = new ArrayList<>();
@@ -36,7 +31,12 @@ public final class HaxeWorkDirectoryStore implements PersistentStateComponent<Ha
     public String workDirectory;
   }
 
+  private final @NotNull Project project;
   private State state = new State();
+
+  public HaxeWorkDirectoryStore(@NotNull Project project) {
+    this.project = project;
+  }
 
   @NotNull
   public static HaxeWorkDirectoryStore getInstance(@NotNull Project project) {
@@ -75,10 +75,6 @@ public final class HaxeWorkDirectoryStore implements PersistentStateComponent<Ha
       entry.workDirectory = workDirectory;
       state.files.add(entry);
     }
-    notifyChanged();
-  }
-
-  private void notifyChanged() {
-    project.getMessageBus().syncPublisher(HaxeBuildSettingsListener.TOPIC).buildSettingsChanged();
+    HaxeBuildSettingsListener.publish(project);
   }
 }

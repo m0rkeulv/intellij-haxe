@@ -4,6 +4,7 @@ import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManag
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.config.HaxeTarget;
@@ -50,6 +51,9 @@ public final class HaxeGeneratedDumpService {
   }
 
   private static final int DUMP_COMPILE_TIMEOUT_MS = 120_000;
+  private static final int WINDOWS_MAX_PATH = 260;
+  /** Room reserved below the dump root for {@code dump/<target>/<package path>/<Module>.dump}. */
+  private static final int DUMP_TREE_HEADROOM = 120;
 
   private final Project project;
   private final Map<String, DumpState> states = new ConcurrentHashMap<>();
@@ -90,9 +94,9 @@ public final class HaxeGeneratedDumpService {
       return null;
     }
 
-    // the compiler's dump writer (and some generators) mkdir only the last
-    // path segment - a missing parent is a fatal ENOENT, so the tree must
-    // exist before the build
+    // the compiler's dump writer (and some generators) create only the last
+    // path segment, and a missing parent is fatal, so the tree must exist
+    // before the build
     try {
       Files.createDirectories(dumpRoot.resolve("dump"));
       Files.createDirectories(dumpRoot.resolve("out"));
@@ -127,13 +131,13 @@ public final class HaxeGeneratedDumpService {
   }
 
   /**
-   * The HashLink generator hardcodes two extra dump files
-   * ({@code dump/hlopt.txt}, {@code dump/hlcode.txt}) RELATIVE to the
-   * compile cwd, ignoring dump-path (genhl.ml) — without that directory the
-   * whole build fails. For HL dump builds the directory is created up front
-   * and removed afterwards; returns null when nothing was created, including
-   * a PRE-EXISTING {@code dump/}, which belongs to the user and keeps
-   * whatever the compiler writes into it.
+   * The HashLink generator writes two extra dump files
+   * ({@code dump/hlopt.txt}, {@code dump/hlcode.txt}) RELATIVE to the compile
+   * cwd, ignoring dump-path, and the whole build fails when that directory is
+   * missing. For HL dump builds it is created up front and removed afterwards.
+   * Returns the created directory, or null when nothing was created; a
+   * PRE-EXISTING {@code dump/} belongs to the user and keeps whatever the
+   * compiler writes into it.
    */
   @Nullable
   private static Path prepareHlScratchDir(@NotNull DumpBuild dumpBuild) {
@@ -181,7 +185,7 @@ public final class HaxeGeneratedDumpService {
     Path direct = targetDumpDir.resolve(dotPath.replace('.', '/') + ".dump");
     if (Files.isRegularFile(direct)) return direct;
 
-    String fileName = dotPath.substring(dotPath.lastIndexOf('.') + 1) + ".dump";
+    String fileName = StringUtil.getShortName(dotPath) + ".dump";
     try (Stream<Path> files = Files.walk(targetDumpDir)) {
       return files.filter(f -> f.getFileName().toString().equals(fileName)).findFirst().orElse(null);
     } catch (IOException e) {
@@ -189,17 +193,12 @@ public final class HaxeGeneratedDumpService {
     }
   }
 
-  private static final int WINDOWS_MAX_PATH = 260;
-  // room reserved below the root for dump/<target>/<package path>/<Module>.dump;
-  // a deep haxeui package tree measured ~80 chars
-  private static final int DUMP_TREE_HEADROOM = 120;
-
   /**
-   * Prefers the IDE system dir; falls back to the OS temp dir when the
-   * system dir sits too deep for Windows' 260-char path cap (dev sandboxes
-   * nest it inside the project) — the compiler's dump writer fails mid-dump
-   * once root + package tree crosses it. A cleaned temp just means the next
-   * navigation regenerates.
+   * The dump root: under the IDE system dir, or under the OS temp dir when the
+   * system dir sits too deep for Windows' 260-char path limit (a development
+   * sandbox nests it inside the project). The compiler's dump writer fails
+   * mid-dump once root plus package tree cross the limit. A cleaned temp dir
+   * only means the next navigation regenerates.
    */
   @NotNull
   private Path dumpRootFor(@NotNull String contextKey) {
@@ -216,8 +215,8 @@ public final class HaxeGeneratedDumpService {
   /// output redirected into the dump root, native compilation and `-cmd`
   /// post-build steps dropped, dump defines appended. Null when the argument
   /// shape cannot be made safe (`-x`/`--run` execute the program) or no
-  /// target flag is visible — a target hidden inside a NESTED hxml reference
-  /// (one-level expansion leaves it) refuses too.
+  /// target flag is visible, which includes a target hidden in a NESTED hxml
+  /// reference (expansion is one level deep).
   /// TODO: `--next` sections get the dump defines appended only after
   ///  the last section; multi-build hxml dumps only that section's modules.
   @Nullable
@@ -232,12 +231,12 @@ public final class HaxeGeneratedDumpService {
         continue;
       }
       // lime's display hxml ends with --no-output (it exists for IDE
-      // completion) - but no generation pass means no dumps, and output is
-      // redirected into the dump root anyway
+      // completion), but without a generation pass there are no dumps; the
+      // output is redirected into the dump root anyway
       if (arg.equals("--no-output")) continue;
       HaxeTarget target = HxmlFileParser.targetForFlag(arg);
       // --interp is a target flag but takes no output argument and runs no
-      // generation pass - it must not swallow the next argument
+      // generation pass, so it must not swallow the next argument
       boolean producesOutput = target != null && (target.isOutputToDirectory() || target.isOutputToSingleFile());
       boolean redirectableOutput = producesOutput && i + 1 < buildArgs.size();
       if (redirectableOutput) {
@@ -253,12 +252,8 @@ public final class HaxeGeneratedDumpService {
     //  the eval generator writes dumps at all needs a live check first
     if (dumpTarget == null) return null;
 
-    args.add("-D");
-    args.add("no-compilation");
-    args.add("-D");
-    args.add("dump=pretty");
-    args.add("-D");
-    args.add("dump-path=" + dumpRoot.resolve("dump"));
+    String dumpPath = "dump-path=" + dumpRoot.resolve("dump");
+    args.addAll(List.of("-D", "no-compilation", "-D", "dump=pretty", "-D", dumpPath));
     return new DumpBuild(args, dumpTarget);
   }
 
@@ -270,11 +265,11 @@ public final class HaxeGeneratedDumpService {
   }
 
   /**
-   * Dumps land under {@code <dump-path>/<target>/...} — and a build that
-   * runs macros ALSO writes a {@code macro/} sibling holding the macro
-   * interpreter's modules, so "pick any directory" navigates to the wrong
-   * world. The target's own subdirectory name is preferred; the
-   * newest-non-macro fallback covers a compiler name diverging from ours.
+   * The target's dump directory. Dumps land under {@code <dump-path>/<target>/},
+   * and a build that runs macros ALSO writes a {@code macro/} sibling holding
+   * the macro interpreter's modules, so any directory will not do. The
+   * target's expected subdirectory name comes first; the newest non-macro
+   * directory covers a compiler that names it differently.
    */
   @Nullable
   private static Path targetDumpDir(@NotNull Path dumpParent, @NotNull HaxeTarget target) {

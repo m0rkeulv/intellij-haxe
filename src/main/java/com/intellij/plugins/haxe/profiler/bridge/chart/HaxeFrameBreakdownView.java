@@ -19,11 +19,9 @@ import java.util.List;
 import javax.swing.JComponent;
 
 /**
- * A frame's time shares as bar rows — the summary group (script, render,
- * GC, idle categories) above the biggest individual parts, each row a
- * color chip, name, duration, and a share bar with its percent of the
- * frame. The look profilers train users on; the numbers come straight
- * from the capture's own breakdown.
+ * A frame's time shares as bar rows: the category summary above the biggest
+ * individual parts. Each row shows a color chip, the name, the duration and
+ * a share bar with its percent of the frame.
  */
 final class HaxeFrameBreakdownView extends JComponent {
 

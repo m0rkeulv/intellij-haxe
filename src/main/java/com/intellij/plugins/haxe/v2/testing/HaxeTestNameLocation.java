@@ -39,6 +39,9 @@ public final class HaxeTestNameLocation {
    */
   public static final String PROTOCOL = "haxe:test";
 
+  /** Carries the run's tests build file on a converter-injected hint: {@code haxe:test://<name>?build=<path>}. */
+  public static final String BUILD_HINT = "?build=";
+
   private HaxeTestNameLocation() {
   }
 
@@ -48,6 +51,17 @@ public final class HaxeTestNameLocation {
                                    @NotNull Project project,
                                    @NotNull GlobalSearchScope scope) {
     return resolve(reportedName, null, project, scope);
+  }
+
+  /** Resolves a {@link #PROTOCOL} hint's path: the reported name, tie-broken by its optional {@link #BUILD_HINT}. */
+  @Nullable
+  public static PsiElement resolveHint(@NotNull String hintPath,
+                                       @NotNull Project project,
+                                       @NotNull GlobalSearchScope scope) {
+    int marker = hintPath.lastIndexOf(BUILD_HINT);
+    if (marker < 0) return resolve(hintPath, null, project, scope);
+    String buildFilePath = hintPath.substring(marker + BUILD_HINT.length());
+    return resolve(hintPath.substring(0, marker), buildFilePath, project, scope);
   }
 
   /**
@@ -86,11 +100,11 @@ public final class HaxeTestNameLocation {
                                         @NotNull GlobalSearchScope scope) {
     List<HaxeClass> candidates = classCandidates(teamcityName, project, scope);
     if (candidates.isEmpty()) return null;
-    if (classpathDirs.isEmpty() || candidates.size() == 1) return candidates.get(0);
+    if (classpathDirs.isEmpty() || candidates.size() == 1) return candidates.getFirst();
     return candidates.stream()
       .filter(candidate -> underAny(candidate, classpathDirs))
       .findFirst()
-      .orElse(candidates.get(0));
+      .orElse(candidates.getFirst());
   }
 
   @NotNull

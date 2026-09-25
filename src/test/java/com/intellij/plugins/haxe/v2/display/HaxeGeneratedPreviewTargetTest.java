@@ -25,7 +25,6 @@ public class HaxeGeneratedPreviewTargetTest extends HaxeLightFixtureTestCase {
     return "";
   }
 
-
   /**
    * The implementation popup wraps targets in smart pointers and navigates the
    * dereferenced element through EditSourceUtil, which builds a file/offset

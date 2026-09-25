@@ -11,17 +11,18 @@ import sys.io.File;
 	Haxe script and runs via the user's haxe with -lib lime -lib hxp (see
 	HxpEvaluator).
 
-	Usage: LimeProjectParser <project.xml|project.hxp> [--target <id>] [--command <cmd>] [-D name[=value]]...
-
 	The caller supplies the seed defines (target, platform, tool versions) via
-	-D; the tool itself stays ignorant of how they are derived. Relative
-	<include> paths resolve against the project file's directory.
+	-D; the tool does not derive them itself. Relative <include> paths resolve
+	against the project file's directory.
 **/
 class Main {
+	static final USAGE = "usage: LimeProjectParser <project.xml|project.hxp> [--target <id>] [--command <cmd>]"
+		+ " [--haxe <executable>] [--haxelib <executable>] [-D name[=value]]...\n";
+
 	static function main():Void {
 		var args = Sys.args();
 		if (args.length == 0) {
-			Sys.stderr().writeString("usage: LimeProjectParser <project.xml|project.hxp> [--target <id>] [--command <cmd>] [-D name[=value]]...\n");
+			Sys.stderr().writeString(USAGE);
 			Sys.exit(2);
 		}
 
@@ -34,20 +35,15 @@ class Main {
 
 		var i = 0;
 		while (i < args.length) {
-			var arg = args[i];
-			if (arg == "--command" && i + 1 < args.length) {
-				command = args[++i];
-			} else if (arg == "--target" && i + 1 < args.length) {
-				target = args[++i];
-			} else if (arg == "--haxe" && i + 1 < args.length) {
-				haxeExecutable = args[++i];
-			} else if (arg == "--haxelib" && i + 1 < args.length) {
-				haxelibExecutable = args[++i];
-			} else if (arg == "-D" && i + 1 < args.length) {
-				var pair = args[++i].split("=");
-				seedDefines.set(pair[0], pair.length > 1 ? pair.slice(1).join("=") : "");
-			} else if (projectFile == null) {
-				projectFile = arg;
+			var hasValue = i + 1 < args.length;
+			switch (args[i]) {
+				case "--command" if (hasValue): command = args[++i];
+				case "--target" if (hasValue): target = args[++i];
+				case "--haxe" if (hasValue): haxeExecutable = args[++i];
+				case "--haxelib" if (hasValue): haxelibExecutable = args[++i];
+				case "-D" if (hasValue): addDefine(seedDefines, args[++i]);
+				case arg if (projectFile == null): projectFile = arg;
+				case _:
 			}
 			i++;
 		}
@@ -67,13 +63,9 @@ class Main {
 		}
 
 		var projectDirectory = Path.directory(FileSystem.absolutePath(projectFile));
-		var evaluator = new ProjectXmlEvaluator(seedDefines, command, Sys.environment(), path -> {
-			var resolved = Path.isAbsolute(path) ? path : Path.join([projectDirectory, path]);
-			if (FileSystem.exists(resolved) && FileSystem.isDirectory(resolved)) {
-				resolved = Path.join([resolved, "include.xml"]);
-			}
-			return FileSystem.exists(resolved) ? File.getContent(resolved) : null;
-		}, HaxelibLookup.resolver(haxelibExecutable));
+		var includeReader = readInclude.bind(projectDirectory);
+		var haxelibResolver = HaxelibLookup.resolver(haxelibExecutable);
+		var evaluator = new ProjectXmlEvaluator(seedDefines, command, Sys.environment(), includeReader, haxelibResolver);
 		evaluator.parse(File.getContent(projectFile));
 
 		Sys.println(Json.stringify({
@@ -83,6 +75,20 @@ class Main {
 			sources: evaluator.sources,
 			app: {path: evaluator.appPath, file: evaluator.appFile},
 		}));
+	}
+
+	static function addDefine(defines:Map<String, String>, text:String):Void {
+		var define = ProjectXmlEvaluator.splitDefine(text);
+		defines.set(define.name, define.value);
+	}
+
+	/** An include path relative to the project directory; a directory stands for its include.xml. **/
+	static function readInclude(projectDirectory:String, path:String):Null<String> {
+		var resolved = Path.isAbsolute(path) ? path : Path.join([projectDirectory, path]);
+		if (FileSystem.exists(resolved) && FileSystem.isDirectory(resolved)) {
+			resolved = Path.join([resolved, "include.xml"]);
+		}
+		return FileSystem.exists(resolved) ? File.getContent(resolved) : null;
 	}
 
 	static function mapToObject(map:Map<String, String>):Dynamic {

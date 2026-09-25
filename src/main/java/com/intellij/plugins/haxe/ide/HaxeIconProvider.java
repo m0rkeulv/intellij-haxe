@@ -43,7 +43,7 @@ public class HaxeIconProvider extends IconProvider {
     if (element instanceof HaxeFile) {
       return getHaxeFileIcon((HaxeFile)element, flags);
     }
-    // TODO: revisit icons - for now hxformat.json shares haxelib.json's icon
+    // TODO: a dedicated hxformat.json icon (it shares haxelib.json's)
     if (element instanceof PsiFile file && HaxeHxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName())) {
       return HaxeIcons.HAXELIB_JSON;
     }

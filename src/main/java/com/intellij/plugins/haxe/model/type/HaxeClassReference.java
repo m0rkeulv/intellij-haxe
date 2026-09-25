@@ -41,12 +41,9 @@ public class HaxeClassReference {
   public final PsiElement elementContext;
   public final HaxeClassModel classModel;
   public HaxeClass clazz;
-
   private final boolean isTypeParameter;
+  /** The key {@link HaxeGenericResolver#toCacheString()} uses for this class; computed once. */
   private String cacheKey;
-
-
-
 
   public HaxeClassReference(@NotNull HaxeClassModel classModel, @NotNull PsiElement elementContext) {
     this.name = getClassName(classModel);
@@ -145,7 +142,6 @@ public class HaxeClassReference {
     return this.name;
   }
 
-  // key used for GenericResolver cacheString (stored to avoid recompute)
   public String getCacheKey() {
     if (this.cacheKey == null) {
       this.cacheKey = computeCacheKey();
@@ -158,7 +154,7 @@ public class HaxeClassReference {
 
     HaxeClass haxeClass = classModel.haxeClass;
     if (haxeClass instanceof HaxeAnonymousType) {
-      //  to keep things light we just use the file ID and offset for anonymous types
+      // an anonymous type has no name: its file and offset identify it
       return "{}@" + anonymousTypeCacheKey(classModel.getBasePsi());
     }
 

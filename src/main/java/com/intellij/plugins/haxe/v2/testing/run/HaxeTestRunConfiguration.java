@@ -28,6 +28,7 @@ import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -44,15 +45,17 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Runs a container's tests build file as unit tests. Reference-style like
  * {@code HaxeActionRunConfiguration}: only the tests build file path, an
- * optional filter pattern and the selected suites/test are stored - the launch
- * re-resolves everything at run time, so target and SDK changes always apply. The SM test console attaches to
- * the RUN process; for artifact targets the compile happens in the attached
- * before-run step (kept in sync by {@link #syncCompileStep()}), while interp
- * builds compile-and-run as the single test process.
+ * optional filter pattern and the selected suites/test are stored - the
+ * launch re-resolves everything at run time, so target and SDK changes always
+ * apply. The SM test console attaches to the RUN process; for artifact
+ * targets the compile happens in the attached before-run step (kept in sync
+ * by {@link #syncCompileStep()}), while interp builds compile-and-run as the
+ * single test process.
  */
 public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProfileState>
   implements SMRunnerConsolePropertiesProvider {
@@ -161,7 +164,7 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
     if (file == null || !file.isValid()) return null;
     // the before-run task calls this on a pooled thread
     return ReadAction.nonBlocking(() -> {
-        HaxeTestFramework framework = HaxeTestLaunchPlanner.frameworkFor(getProject(), buildFilePath);
+        HaxeTestFramework framework = HaxeTestFrameworks.forBuildFile(getProject(), buildFilePath);
         return HaxeTestLaunchPlanner.singleRunCompile(getProject(), file, framework, run);
       })
       .executeSynchronously();
@@ -207,14 +210,14 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
   @Nullable
   public String currentCompileArguments() {
     return HaxeReadActions.compute(
-      () -> HaxeTestLaunchPlanner.compileArguments(getProject(), buildFilePath, filterPattern, singleRun()));
+      () -> HaxeTestCompileArguments.compileArguments(getProject(), buildFilePath, filterPattern, singleRun()));
   }
 
   @NotNull
   private String buildActionName() {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
     HaxeBuildFileType type = file == null ? null : HaxeBuildFileScanner.detectType(getProject(), file);
-    return HaxeBuildFileActions.defaultBuildActionName(type != null ? type : HaxeBuildFileType.HXML);
+    return HaxeBuildSystem.of(Objects.requireNonNullElse(type, HaxeBuildFileType.HXML)).defaultBuildActionName();
   }
 
   @Override
@@ -224,11 +227,22 @@ public class HaxeTestRunConfiguration extends LocatableConfigurationBase<RunProf
 
   @Override
   public void checkConfiguration() throws RuntimeConfigurationException {
+    // checked from the editor (EDT) and before launches (background threads)
+    String problem = HaxeReadActions.compute(this::planProblem);
+    if (problem != null) {
+      throw new RuntimeConfigurationError(problem);
+    }
+  }
+
+  /** Why no launch can be planned, or null when it can. Call in a read action. */
+  @Nullable
+  private String planProblem() {
     try {
-      ReadAction.computeBlocking(() -> HaxeTestLaunchPlanner.planFor(this));
+      HaxeTestLaunchPlanner.planFor(this);
+      return null;
     }
     catch (ExecutionException e) {
-      throw new RuntimeConfigurationError(e.getMessage());
+      return e.getMessage();
     }
   }
 

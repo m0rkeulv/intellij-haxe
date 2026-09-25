@@ -1214,6 +1214,7 @@ public class HaxeSpacingProcessor {
       .replaceFirst("^import\\s+", "")
       .replaceFirst("\\s.*$", "")
       .replaceFirst(";$", "");
+    // the dotted name's segments
     String[] segments = text.split("\\.");
     int depth = Math.max(1, myHaxeCodeStyleSettings.IMPORT_GROUP_PACKAGE_DEPTH);
     int keep = Math.min(depth, segments.length);
@@ -1224,7 +1225,7 @@ public class HaxeSpacingProcessor {
     if (null == block && null == type) return false;
     List<Block> subBlocks = block.getSubBlocks();
     if (!subBlocks.isEmpty()) {
-      Block first = subBlocks.get(0);
+      Block first = subBlocks.getFirst();
       final ASTNode node = ((AbstractBlock)first).getNode();
       return node.getElementType() == type;
     }

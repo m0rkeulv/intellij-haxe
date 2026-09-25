@@ -3,7 +3,8 @@ package com.intellij.plugins.haxe.profiler.bridge.chart;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.plugins.haxe.HaxeProfilerBundle;
-import com.intellij.plugins.haxe.profiler.bridge.chart.HaxeCallChartTab.CurveCategory;
+import com.intellij.plugins.haxe.profiler.bridge.chart.HaxeChartData.CurveCategory;
+import com.intellij.plugins.haxe.profiler.bridge.chart.HaxeChartLanes.Visibility;
 import com.intellij.ui.components.JBCheckBox;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -23,12 +24,7 @@ import javax.swing.JPanel;
  */
 final class HaxeChartViewDialog extends DialogWrapper {
 
-  /** One snapshot of every lane's visibility; {@code calls} is the call chart itself. */
-  record Lanes(boolean frames, boolean gc, boolean events, boolean calls,
-               @NotNull Map<CurveCategory, Boolean> curves) {
-  }
-
-  private final Lanes defaults;
+  private final Visibility defaults;
   private JPanel panel;
   private JBCheckBox framesBox;
   private JBCheckBox gcBox;
@@ -39,12 +35,12 @@ final class HaxeChartViewDialog extends DialogWrapper {
   private JBCheckBox eventsBox;
   private JBCheckBox callsBox;
 
-  HaxeChartViewDialog(@Nullable Project project, @NotNull Lanes current, @NotNull Lanes defaults) {
+  HaxeChartViewDialog(@Nullable Project project, @NotNull Visibility current, @NotNull Visibility defaults) {
     super(project);
     this.defaults = defaults;
     setTitle(HaxeProfilerBundle.message("haxe.profiler.callchart.configure.view"));
     init();
-    setLanes(current);
+    setVisibility(current);
   }
 
   @Override
@@ -57,31 +53,31 @@ final class HaxeChartViewDialog extends DialogWrapper {
     return new Action[]{new DialogWrapperAction(HaxeProfilerBundle.message("haxe.profiler.callchart.view.default")) {
       @Override
       protected void doAction(ActionEvent event) {
-        setLanes(defaults);
+        setVisibility(defaults);
       }
     }};
   }
 
-  private void setLanes(Lanes lanes) {
-    framesBox.setSelected(lanes.frames());
-    gcBox.setSelected(lanes.gc());
-    eventsBox.setSelected(lanes.events());
-    callsBox.setSelected(lanes.calls());
-    memoryBox.setSelected(lanes.curves().getOrDefault(CurveCategory.MEMORY, false));
-    gpuMemoryBox.setSelected(lanes.curves().getOrDefault(CurveCategory.GPU_MEMORY, false));
-    cpuBox.setSelected(lanes.curves().getOrDefault(CurveCategory.CPU_LOAD, false));
-    gpuLoadBox.setSelected(lanes.curves().getOrDefault(CurveCategory.GPU_LOAD, false));
+  private void setVisibility(Visibility visibility) {
+    framesBox.setSelected(visibility.frames());
+    gcBox.setSelected(visibility.gc());
+    eventsBox.setSelected(visibility.events());
+    callsBox.setSelected(visibility.calls());
+    memoryBox.setSelected(visibility.curves().getOrDefault(CurveCategory.MEMORY, false));
+    gpuMemoryBox.setSelected(visibility.curves().getOrDefault(CurveCategory.GPU_MEMORY, false));
+    cpuBox.setSelected(visibility.curves().getOrDefault(CurveCategory.CPU_LOAD, false));
+    gpuLoadBox.setSelected(visibility.curves().getOrDefault(CurveCategory.GPU_LOAD, false));
   }
 
   /** The chosen visibility after OK. */
   @NotNull
-  Lanes lanes() {
+  Visibility visibility() {
     Map<CurveCategory, Boolean> curves = new EnumMap<>(CurveCategory.class);
     curves.put(CurveCategory.MEMORY, memoryBox.isSelected());
     curves.put(CurveCategory.GPU_MEMORY, gpuMemoryBox.isSelected());
     curves.put(CurveCategory.CPU_LOAD, cpuBox.isSelected());
     curves.put(CurveCategory.GPU_LOAD, gpuLoadBox.isSelected());
-    return new Lanes(framesBox.isSelected(), gcBox.isSelected(), eventsBox.isSelected(),
+    return new Visibility(framesBox.isSelected(), gcBox.isSelected(), eventsBox.isSelected(),
                      callsBox.isSelected(), curves);
   }
 }

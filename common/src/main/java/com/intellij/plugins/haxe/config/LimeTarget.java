@@ -1,10 +1,10 @@
 package com.intellij.plugins.haxe.config;
 
 /**
- * Lime Targets based on console output and
- * <a href="https://lime.openfl.org/docs/getting-started/targets/">Lime targets docs</a>
+ * The targets the lime command line tool builds for, as listed by
+ * {@code lime help} and <a href="https://lime.openfl.org/docs/getting-started/targets/">the lime targets documentation</a>.
  */
-public enum LimeTarget {
+public enum LimeTarget implements FrameworkTarget {
 
   AIR("Adobe AIR", HaxeTarget.FLASH, "air"),
   ANDROID("Android", HaxeTarget.CPP, "android"),
@@ -34,15 +34,20 @@ public enum LimeTarget {
     this.outputTarget = target;
   }
 
+  @Override
   public String getTargetFlag() {
     return flags.length > 0 ? flags[0] : "";
   }
 
+  @Override
   public String[] getFlags() {
     return flags;
   }
 
-  public HaxeTarget getOutputTarget() { return outputTarget; }
+  @Override
+  public HaxeTarget getOutputTarget() {
+    return outputTarget;
+  }
 
   @Override
   public String toString() {

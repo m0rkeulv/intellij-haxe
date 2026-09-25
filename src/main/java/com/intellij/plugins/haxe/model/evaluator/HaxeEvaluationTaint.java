@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * cache serves evaluations computed on other stacks — including
  * guard-truncated ones it deliberately stores (they terminate deep resolve
  * recursion). A consumer of such an entry inherits the truncation while its
- * own stamp stays clean, so "complete" would be judged on laundered data.
+ * own stamp stays clean, so "complete" would be judged on truncated data.
  *
  * Any observation of truncated data — a fired prevention, a memoized cycle
  * value, a guard-dirty cache entry — bumps a per-thread counter. Caching
@@ -58,7 +58,7 @@ public final class HaxeEvaluationTaint {
 
   /**
    * True while the current thread is inside a computation running under any
-   * of our recursion guards. In there, a result can be shaped by the held
+   * guard entered through {@link #computeOrTaint}. In there, a result can be shaped by the held
    * guard keys and the surrounding evaluation context WITHOUT any prevention
    * firing (self-reference bails, skipped scope contributions), so a clean
    * stamp and clean taint do not make a FAILURE trustworthy: the same

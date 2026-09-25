@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.Location;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestNameLocation;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.psi.PsiElement;
@@ -29,7 +30,7 @@ public class HaxeTestLocatorBuildTieBreakTest extends HaxeCodeInsightFixtureTest
 
   private PsiElement locate(String name) {
     List<Location> locations = HaxeTestLocator.INSTANCE.getLocation(
-      HaxeTestLocator.PROTOCOL, name, getProject(), GlobalSearchScope.allScope(getProject()));
+      HaxeTestNameLocation.PROTOCOL, name, getProject(), GlobalSearchScope.allScope(getProject()));
     return locations.isEmpty() ? null : locations.get(0).getPsiElement();
   }
 

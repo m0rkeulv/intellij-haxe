@@ -13,7 +13,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("Display: configuration pipeline")
+@DisplayName("Compiler services: display configuration")
 public class HaxeDisplayConfigurationTest {
 
   @Test
@@ -23,6 +23,7 @@ public class HaxeDisplayConfigurationTest {
     DefineOverrides overrides = new DefineOverrides(Set.of(), List.of("-D", "console=ps4", "-D", "debug_hud"));
 
     List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
+
     assertEquals(List.of("--cwd", "dir", "build.hxml", "-D", "console=ps4", "-D", "debug_hud"), applied);
   }
 
@@ -30,6 +31,7 @@ public class HaxeDisplayConfigurationTest {
   @DisplayName("empty overrides leave the arguments untouched")
   public void testEmptyOverridesLeaveTheArgumentsUntouched() {
     List<String> base = List.of("--cwd", "dir", "build.hxml");
+
     assertSame(base, HaxeDisplayConfiguration.applyOverrides(base, DefineOverrides.EMPTY));
   }
 
@@ -40,6 +42,7 @@ public class HaxeDisplayConfigurationTest {
     DefineOverrides overrides = new DefineOverrides(Set.of("alpha", "gamma"), List.of());
 
     List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
+
     assertEquals(List.of("-D", "beta=2", "-cp", "src"), applied);
   }
 
@@ -55,6 +58,7 @@ public class HaxeDisplayConfigurationTest {
     DefineOverrides overrides = new DefineOverrides(Set.of("legacy_api"), List.of("-D", "modern_api"));
 
     List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
+
     assertFalse(applied.contains("legacy_api"), "removed define must not survive expansion, got: " + applied);
     assertTrue(applied.containsAll(List.of("-cp", "src", "-main", "Main")), "expanded hxml flags expected, got: " + applied);
     assertTrue(applied.containsAll(List.of("-D", "modern_api")), "set override appended, got: " + applied);
@@ -66,6 +70,7 @@ public class HaxeDisplayConfigurationTest {
   public void testOverrideSignaturesSeparateServerContexts() {
     DefineOverrides first = new DefineOverrides(Set.of("a"), List.of("-D", "b"));
     DefineOverrides second = new DefineOverrides(Set.of("a"), List.of("-D", "c"));
+
     assertNotEquals(first.signature(), second.signature());
     assertTrue(DefineOverrides.EMPTY.signature().isEmpty());
   }

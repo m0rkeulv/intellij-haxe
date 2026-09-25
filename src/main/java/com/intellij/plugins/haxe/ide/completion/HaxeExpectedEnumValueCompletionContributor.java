@@ -78,8 +78,7 @@ public class HaxeExpectedEnumValueCompletionContributor extends CompletionContri
       return assignTargetDeclaredType(assign, reference);
     }
     if (parent instanceof HaxeVarInit varInit && varInit.getParent() instanceof HaxeParameter parameter) {
-      HaxeTypeTag tag = parameter.getTypeTag();
-      return tag == null ? null : HaxeTypeResolver.getTypeFromTypeTag(tag, parameter);
+      return taggedType(parameter.getTypeTag(), parameter);
     }
     // covers type-tagged var initializers, call and constructor arguments (through the cached
     // call evaluation), returns, and array/object literals nested in those
@@ -90,22 +89,24 @@ public class HaxeExpectedEnumValueCompletionContributor extends CompletionContri
   private static ResultHolder assignTargetDeclaredType(@NotNull HaxeAssignExpression assign,
                                                        @NotNull HaxeReferenceExpression reference) {
     List<HaxeExpression> expressions = assign.getExpressionList();
-    if (expressions.size() < 2 || expressions.get(0) == reference) return null;
-    if (!(expressions.get(0) instanceof HaxeReferenceExpression target)) return null;
+    if (expressions.size() < 2) return null;
+    HaxeExpression left = expressions.getFirst();
+    if (left == reference || !(left instanceof HaxeReferenceExpression target)) return null;
 
     PsiElement resolved = target.resolve();
     if (resolved == null) return null;
     HaxePsiField field = PsiTreeUtil.getParentOfType(resolved, HaxePsiField.class, false);
     if (field != null) {
-      HaxeTypeTag tag = field.getTypeTag();
-      return tag == null ? null : HaxeTypeResolver.getTypeFromTypeTag(tag, field);
+      return taggedType(field.getTypeTag(), field);
     }
     HaxeParameter parameter = PsiTreeUtil.getParentOfType(resolved, HaxeParameter.class, false);
-    if (parameter != null) {
-      HaxeTypeTag tag = parameter.getTypeTag();
-      return tag == null ? null : HaxeTypeResolver.getTypeFromTypeTag(tag, parameter);
-    }
-    return null;
+    return parameter == null ? null : taggedType(parameter.getTypeTag(), parameter);
+  }
+
+  /** The type a declaration's tag names; null without a tag (the type would need inference). */
+  @Nullable
+  private static ResultHolder taggedType(@Nullable HaxeTypeTag tag, @NotNull PsiElement declaration) {
+    return tag == null ? null : HaxeTypeResolver.getTypeFromTypeTag(tag, declaration);
   }
 
   @Nullable

@@ -1,13 +1,9 @@
 package com.intellij.plugins.haxe.ide;
 
-import com.intellij.codeInspection.LocalInspectionTool;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
-import com.intellij.util.ArrayUtil;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Set;
 
 
 @DisplayName("Annotation: allow access annotator")

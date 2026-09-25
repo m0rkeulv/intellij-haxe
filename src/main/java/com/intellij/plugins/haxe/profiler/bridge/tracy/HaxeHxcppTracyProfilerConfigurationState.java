@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.plugins.haxe.profiler.hxt.HxtZoneWriter;
 import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
-import com.intellij.profiler.api.configurations.ProfilerConfigurationState;
+import com.intellij.plugins.haxe.profiler.bridge.HaxeProfilerConfigurationStateBase;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,18 +19,17 @@ import org.jetbrains.annotations.Nullable;
  * client: none pinned = detect it (the client's broadcast, else the probe
  * ladder), a pinned one is offered alone.
  */
-public final class HaxeHxcppTracyProfilerConfigurationState implements ProfilerConfigurationState {
+public final class HaxeHxcppTracyProfilerConfigurationState extends HaxeProfilerConfigurationStateBase {
 
   static final int DEFAULT_COMPRESSION_LEVEL = HxtZoneWriter.FINAL_LEVEL;
 
-  private String displayName;
   private int compressionLevel = DEFAULT_COMPRESSION_LEVEL;
   private boolean captureMemory = true;
   private boolean collectProcessCpu;
   private @Nullable TracyProtocolVersion pinnedProtocol;
 
   public HaxeHxcppTracyProfilerConfigurationState(@NotNull String displayName) {
-    this.displayName = displayName;
+    super(displayName);
   }
 
   @Override
@@ -38,22 +37,12 @@ public final class HaxeHxcppTracyProfilerConfigurationState implements ProfilerC
     return HaxeHxcppTracyProfilerConfigurationType.ID;
   }
 
-  @Override
-  public @NotNull String getDisplayName() {
-    return displayName;
-  }
-
-  @Override
-  public void setDisplayName(@NotNull String name) {
-    displayName = name;
-  }
-
   public int getCompressionLevel() {
     return compressionLevel;
   }
 
   public void setCompressionLevel(int level) {
-    compressionLevel = Math.max(0, Math.min(level, 9));
+    compressionLevel = Math.clamp(level, 0, 9);
   }
 
   public boolean isCaptureMemory() {

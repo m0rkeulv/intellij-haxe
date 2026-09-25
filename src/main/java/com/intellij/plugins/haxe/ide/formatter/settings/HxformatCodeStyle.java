@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
@@ -10,7 +11,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +19,7 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
 /**
- * Maps haxe-formatter (HaxeCheckstyle) configuration onto our code style
+ * Maps haxe-formatter (HaxeCheckstyle) configuration onto the plugin's code style
  * settings. {@link #applyDefaults} is the settings image of a DEFAULT
  * hxformat.json; {@link #applyJson} lays a config file's overrides on top
  * and reports the keys it could not honor.
@@ -29,7 +29,7 @@ public final class HxformatCodeStyle {
   private HxformatCodeStyle() {
   }
 
-  /** Our settings equivalent of a DEFAULT hxformat.json (haxe-formatter 1.18). */
+  /** The settings equivalent of a DEFAULT hxformat.json (haxe-formatter 1.18). */
   public static void applyDefaults(@NotNull CodeStyleSettings settings) {
     resetWrapFields(settings);
     CodeStyleSettings.IndentOptions indent = settings.getIndentOptions(HaxeFileType.INSTANCE);
@@ -246,7 +246,7 @@ public final class HxformatCodeStyle {
 
   /**
    * Applies an hxformat.json's overrides on top of {@link #applyDefaults}.
-   * Returns the config paths present in the file that we could not honor.
+   * Returns the config paths present in the file that could not be honored.
    */
   public static List<String> applyJson(@NotNull CodeStyleSettings settings, @NotNull JsonNode root) {
     Applier applier = new Applier(settings, root);
@@ -259,7 +259,7 @@ public final class HxformatCodeStyle {
     // WhitespacePolicy values that put a space AFTER the token / BEFORE it
     private static final Set<String> SPACE_AFTER_POLICIES = Set.of("after", "onlyAfter", "around");
     private static final Set<String> SPACE_BEFORE_POLICIES = Set.of("before", "onlyBefore", "around");
-    /** betweenImportsLevel value -> our grouping depth; "all" separates every import, which a full-path key reproduces. */
+    /** betweenImportsLevel value -> the grouping depth; "all" separates every import, which a full-path key reproduces. */
     private static final Map<String, Integer> IMPORT_LEVEL_DEPTHS = Map.of(
       "all", 99,
       "firstLevelPackage", 1,
@@ -327,7 +327,7 @@ public final class HxformatCodeStyle {
       if (margin != null) {
         settings.setRightMargin(HaxeLanguage.INSTANCE, margin);
       }
-      // we never column-align array matrices
+      // array matrices are never column-aligned
       acceptOnly("wrapping.arrayMatrixWrap", "noMatrixWrap");
       wrapConstruct("wrapping.arrayWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
       wrapConstruct("wrapping.mapWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
@@ -344,7 +344,7 @@ public final class HxformatCodeStyle {
         String path = "wrapping." + construct;
         if (node(path) != null) {
           markConsumedSubtree(path);
-          unsupported.add(path + " (no wrap target on our side)");
+          unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.no.wrap.target", path));
         }
       }
       if (node("wrapping.multiVar") != null) {
@@ -365,7 +365,7 @@ public final class HxformatCodeStyle {
             }
           }
         }
-        unsupported.add("wrapping.multiVar (only the line-length split is reproduced)");
+        unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.multi.var"));
       }
     }
 
@@ -391,7 +391,7 @@ public final class HxformatCodeStyle {
             break;
           }
         }
-        unsupported.add(path + ".rules (rule engine approximated by one policy)");
+        unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.rules", path));
       }
       if (type == null && construct.get("defaultWrap") != null) {
         type = construct.get("defaultWrap").asText();
@@ -446,7 +446,7 @@ public final class HxformatCodeStyle {
       acceptOnly("lineEnds.metadataOther", "none");
       // per-construct curly overrides: acceptable only when they restate what
       // the global import already produces (object literals are inherently
-      // After-style on our side, whatever BRACE_STYLE says)
+      // After-style here, whatever BRACE_STYLE says)
       String effectiveLeft = leftCurly == null ? "after" : leftCurly;
       String effectiveEmpty = emptyCurly == null ? "noBreak" : emptyCurly;
       for (String construct : List.of("blockCurly", "anonFunctionCurly", "anonTypeCurly", "typedefCurly")) {
@@ -564,7 +564,7 @@ public final class HxformatCodeStyle {
       }
       String interpolation = str("whitespace.formatStringInterpolation");
       if (interpolation != null && !"true".equals(interpolation)) {
-        unsupported.add("whitespace.formatStringInterpolation=false (interpolations always format)");
+        unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.string.interpolation"));
       }
       String arrow = str("whitespace.arrowFunctionsPolicy");
       if (arrow != null) {
@@ -624,7 +624,7 @@ public final class HxformatCodeStyle {
       String sharpParens = "whitespace.parenConfig.sharpConditionParens";
       if (node(sharpParens) != null) {
         markConsumedSubtree(sharpParens);
-        unsupported.add(sharpParens + " (#if condition spacing is PSI-deferred)");
+        unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.sharp.parens", sharpParens));
       }
     }
 
@@ -708,7 +708,7 @@ public final class HxformatCodeStyle {
         applyImportGrouping(betweenImports == null ? 1 : betweenImports,
                             importsLevel == null ? "all" : importsLevel);
       }
-      // the remaining flat-set boundaries our single member-blank model covers
+      // the remaining flat-set boundaries the single member-blank model covers
       // at THEIR defaults only
       acceptOnly("emptyLines.classEmptyLines.betweenStaticVars", "0");
       applyInt("emptyLines.classEmptyLines.afterStaticVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
@@ -724,7 +724,7 @@ public final class HxformatCodeStyle {
         String path = "emptyLines." + kind;
         if (node(path) != null) {
           markConsumedSubtree(path);
-          unsupported.add(path + " (one shared member-blank set for all type kinds)");
+          unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.member.blanks", path));
         }
       }
       for (String key : List.of("afterIf", "beforeElse", "afterElse", "beforeEnd", "beforeError", "afterError")) {
@@ -736,7 +736,7 @@ public final class HxformatCodeStyle {
       acceptOnly("emptyLines.afterBlocks", "remove");
       acceptOnly("emptyLines.finalNewline", "true");
       acceptOnly("emptyLines.beforePackage", "0");
-      // "ignore" keeps the written shape, which 0 also does on our side
+      // "ignore" keeps the written shape, which 0 also does here
       applyCommentPolicy("emptyLines.beforeDocCommentEmptyLines", value -> haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = value);
       applyCommentPolicy("emptyLines.afterFieldsWithDocComments", value -> haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = value);
       acceptOnly("emptyLines.betweenMultilineComments", "0");
@@ -753,7 +753,7 @@ public final class HxformatCodeStyle {
       }
       Integer depth = IMPORT_LEVEL_DEPTHS.get(level);
       if (depth == null) {
-        // fullPackage compares the package WITHOUT the class name - our key
+        // fullPackage compares the package WITHOUT the class name - the import-order key
         // includes it, so same-package imports would still separate
         unsupported.add("emptyLines.importAndUsing.betweenImportsLevel=" + level);
         return;
@@ -805,7 +805,7 @@ public final class HxformatCodeStyle {
     }
 
     /**
-     * Custom opBoolChain rules: the one-per-line thresholds our splitter
+     * Custom opBoolChain rules: the one-per-line thresholds the splitter
      * reproduces are lifted from matching rule shapes (an onePerLineAfterFirst
      * rule's itemCount / lineLength+anyItemLength conditions, a noWrap rule's
      * totalItemLength guard); everything else stays with wrapConstruct's
@@ -870,7 +870,7 @@ public final class HxformatCodeStyle {
       }
     }
 
-    /** Consumes the key when it holds the only value we support; reports it otherwise. */
+    /** Consumes the key when it holds the only supported value; reports it otherwise. */
     private void acceptOnly(String path, String supportedValue) {
       String value = str(path);
       if (value != null && !supportedValue.equals(value)) {
@@ -887,9 +887,7 @@ public final class HxformatCodeStyle {
 
     private void markConsumed(JsonNode subtree, String path) {
       consumed.add(path);
-      Iterator<Map.Entry<String, JsonNode>> fields = subtree.fields();
-      while (fields.hasNext()) {
-        Map.Entry<String, JsonNode> field = fields.next();
+      for (Map.Entry<String, JsonNode> field : subtree.properties()) {
         markConsumed(field.getValue(), path + "." + field.getKey());
       }
     }
@@ -901,9 +899,7 @@ public final class HxformatCodeStyle {
         }
         return;
       }
-      Iterator<Map.Entry<String, JsonNode>> fields = subtree.fields();
-      while (fields.hasNext()) {
-        Map.Entry<String, JsonNode> field = fields.next();
+      for (Map.Entry<String, JsonNode> field : subtree.properties()) {
         String childPath = path.isEmpty() ? field.getKey() : path + "." + field.getKey();
         if (consumed.contains(childPath)) continue;
         collectLeftovers(field.getValue(), childPath);
@@ -929,7 +925,8 @@ public final class HxformatCodeStyle {
     @Nullable
     private JsonNode node(String path) {
       JsonNode current = root;
-      for (String part : path.split("\\.")) {
+      // the dotted config path's segments
+    for (String part : path.split("\\.")) {
         current = current.get(part);
         if (current == null) return null;
       }

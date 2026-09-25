@@ -23,6 +23,8 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import com.intellij.util.PsiErrorElementUtil;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,10 +50,10 @@ import org.jetbrains.annotations.Nullable;
 public final class HaxeCompilerDisplayService {
 
   /**
-   * The read-action half of a request. Either {@code args} is present (HXML)
-   * or {@code lime} still needs resolving on a background thread. The
-   * container's define overrides ride along and are applied to whichever
-   * argument list resolves.
+   * The read-action half of a request. Either {@code args} is known already
+   * (HXML, NMML) or {@code lime} still needs resolving on a background thread.
+   * The container's define overrides are applied to whichever argument list
+   * results.
    */
   public record DisplayContext(@Nullable List<String> args,
                                @Nullable LimeDisplaySpec lime,
@@ -81,6 +83,7 @@ public final class HaxeCompilerDisplayService {
   }
 
   private static final int LIME_DISPLAY_TIMEOUT_MS = 60_000;
+  private static final int CONTEXT_COMPILE_TIMEOUT_MS = 120_000;
 
   private final Project project;
   private final Map<String, CachedLimeArgs> limeArgsCache = new ConcurrentHashMap<>();
@@ -159,14 +162,15 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * HXML context args. A single-section file rides as the file reference the
-   * server expands itself; a {@code --next} chain is scoped to the SELECTED
-   * section, synthesized as compiler arguments. Passing the chained file
-   * would make every server request carry ALL sections — each context compile
-   * (module-cache warm-up, failure probes, per-request processing) then
-   * grinds through every target sequentially and stalls later {@code
-   * --connect} builds behind it, and diagnostics would answer for the first
-   * section instead of the one the tool window follows.
+   * HXML context args. A single-section file is passed as a file reference,
+   * which the server expands itself. A {@code --next} chain is narrowed to the
+   * SELECTED section, spelled out as compiler arguments.
+   *
+   * Passing a chained file would make every server request carry ALL
+   * sections: each context compile (cache warm-up, failure probes, every
+   * request) would then build every target in turn and stall later
+   * {@code --connect} builds behind it, and diagnostics would answer for the
+   * first section instead of the one the tool window follows.
    */
   @NotNull
   private List<String> hxmlContextArgs(@NotNull VirtualFile buildFile, @NotNull String directory) {
@@ -230,10 +234,10 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * An empty display response usually means the build context itself does not
-   * compile — and the json-rpc channel then carries NO reason at all. A plain
-   * probe compile of the same arguments DOES report the errors, so run one and
-   * let its output explain the failure (e.g. a define override making a
+   * An empty display response usually means the build context itself does
+   * not compile, and the JSON-RPC channel then carries no reason at all. A
+   * plain compile of the same arguments does report the errors, so one is run
+   * to explain the failure (for example a define override that makes a
    * library uncompilable).
    */
   @NotNull
@@ -242,10 +246,8 @@ public final class HaxeCompilerDisplayService {
     if (!message.endsWith("empty response")) {
       return message;
     }
-    List<String> compileArgs = new ArrayList<>(connected.args());
-    compileArgs.add("--no-output");
     try {
-      DisplayResponse compiled = HaxeDisplayTransport.request(HaxeCompilationServerManager.SERVER_HOST, connected.port(), compileArgs, 120_000);
+      DisplayResponse compiled = compileContext(connected);
       String errors = compiled.hasError() ? compiled.payload().strip() : "";
       return errors.isEmpty() ? message
                               : HaxeBundle.message("haxe.display.context.compile.failed", errors);
@@ -255,10 +257,10 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * Whole-project diagnostics — the sweep that surfaces OTHER files' parse
-   * errors (the per-file form tolerates broken dependencies). Uses the disk
-   * state of every file. Null when the server is unavailable. Call on a
-   * background thread.
+   * Whole-project diagnostics: the sweep that surfaces parse errors in OTHER
+   * files, which the per-file request stays silent about. Uses the disk state
+   * of every file. Null when the server is unavailable. Call on a background
+   * thread.
    */
   @Nullable
   public List<FileDiagnostics> projectDiagnostics(@NotNull DisplayContext context) {
@@ -273,18 +275,17 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * Whether the file parses cleanly (no {@code PsiErrorElement}). Server
-   * requests and hydrations are pointless while it does not — the compiler
-   * will choke on the same text, and the parser's own error highlighting
-   * already covers the broken interval. Cached per PSI modification; call in
-   * a read action. Cache READS stay allowed regardless — only server-touching
-   * work gates on this.
+   * Whether the file parses cleanly (no {@code PsiErrorElement}). New server
+   * work is pointless while it does not: the compiler fails on the same text,
+   * and the parser's own error highlighting already marks it. Reading cached
+   * compiler results stays fine. Cached per PSI modification; call in a read
+   * action.
    */
   public static boolean isSyntaxClean(@NotNull Project project, @NotNull VirtualFile file) {
     return !PsiErrorElementUtil.hasErrors(project, file);
   }
 
-  /** Stable identity of a context's argument source — cache-key material for the sibling services. */
+  /** A stable identity of a context's argument source, used as a cache key by the sibling services. */
   @NotNull
   static String contextKey(@NotNull DisplayContext context) {
     String base;
@@ -341,25 +342,24 @@ public final class HaxeCompilerDisplayService {
     return args;
   }
 
-
   // --- server connection ---
 
   /**
-   * Resolves args, ensures the server runs and checks (once per server) that
-   * it supports {@code method}; null when any of that fails. Background
-   * threads only.
-   */
-  /**
    * Memory statistics of the compilation server already RUNNING on {@code port}.
    * Unlike the context-based requests, {@code server/memory} needs no build
-   * context - it reports per-context sizes for whatever the server has
-   * compiled. Performs a socket round-trip: call on a background thread.
+   * context: it reports per-context sizes for whatever the server has
+   * compiled. Performs a socket round-trip; call on a background thread.
    */
   @NotNull
   public static ServerMemory fetchServerMemory(int port) throws DisplayRequestException {
     return new HaxeDisplayClient(HaxeCompilationServerManager.SERVER_HOST, port).serverMemory(List.of());
   }
 
+  /**
+   * Resolves the context's args, ensures the server runs and checks (once per
+   * server) that it supports {@code method}; null when any of that fails.
+   * Background threads only.
+   */
   @Nullable
   Connected connectFor(@NotNull DisplayContext context, @NotNull String method) {
     List<String> args = resolveArgs(context);
@@ -409,17 +409,16 @@ public final class HaxeCompilerDisplayService {
   // --- context warm-up ---
 
   /**
-   * The server's module cache only fills from an actual compile — warm each
-   * context once per session. A FAILED compile (broken code) must not count
-   * as warmed, or module lookups stay broken until a purge even after the
-   * code is fixed; the next attempt retries instead. Background threads only.
+   * The server's module cache only fills from an actual compile, so each
+   * context is compiled once per session. A FAILED compile (broken code) does
+   * not count: marking it warm would leave module lookups broken until a
+   * purge, even after the code is fixed. The next call retries instead.
+   * Background threads only.
    */
   boolean ensureContextCompiled(@NotNull Connected connected, @NotNull String contextKey) {
     if (compiledContexts.contains(contextKey)) return true;
-    List<String> compileArgs = new ArrayList<>(connected.args());
-    compileArgs.add("--no-output");
     try {
-      DisplayResponse compiled = HaxeDisplayTransport.request(HaxeCompilationServerManager.SERVER_HOST, connected.port(), compileArgs, 120_000);
+      DisplayResponse compiled = compileContext(connected);
       if (compiled.hasError()) {
         log.info("context warm-up compile reported errors - will retry: " + compiled.payload());
         return false;
@@ -432,9 +431,25 @@ public final class HaxeCompilerDisplayService {
     }
   }
 
+  /** A plain {@code --no-output} compile of the connected context through the server. */
+  @NotNull
+  private static DisplayResponse compileContext(@NotNull Connected connected) throws DisplayRequestException {
+    List<String> compileArgs = new ArrayList<>(connected.args());
+    compileArgs.add("--no-output");
+    return HaxeDisplayTransport.request(HaxeCompilationServerManager.SERVER_HOST, connected.port(), compileArgs,
+                                        CONTEXT_COMPILE_TIMEOUT_MS);
+  }
+
   /** Forget which contexts were warmed; the next module lookup re-compiles. */
   public void resetCompiledContexts() {
     compiledContexts.clear();
+  }
+
+  /** The file on disk behind an element; a completion copy maps back to its original. */
+  @Nullable
+  static VirtualFile physicalFileOf(@NotNull PsiElement element) {
+    PsiFile file = element.getContainingFile();
+    return file != null ? file.getOriginalFile().getVirtualFile() : null;
   }
 
   // --- build file resolution ---

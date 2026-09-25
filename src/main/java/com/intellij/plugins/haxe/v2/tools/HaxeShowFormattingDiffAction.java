@@ -39,8 +39,8 @@ public final class HaxeShowFormattingDiffAction extends HaxeFileToolAction {
 
   private static final int FORMAT_TIMEOUT_MS = 60_000;
 
-  // runPipe's exit codes: 0 formatted, 1 formatting disabled for the file,
-  // 2 format failure, 3 usage/path errors, -1 stdin read errors
+  // the formatter's --stdin exit codes: 0 formatted, 1 formatting disabled for
+  // the file, 2 format failure, 3 usage/path errors, -1 stdin read errors
   private static final int EXIT_FORMATTED = 0;
   private static final int EXIT_DISABLED = 1;
 
@@ -48,6 +48,12 @@ public final class HaxeShowFormattingDiffAction extends HaxeFileToolAction {
   @NotNull
   String configName() {
     return HaxeToolConfigs.FORMATTER_CONFIG_NAME;
+  }
+
+  @Override
+  @NotNull
+  String toolHaxelib() {
+    return HaxeToolConfigs.FORMATTER_HAXELIB;
   }
 
   @Override
@@ -72,7 +78,7 @@ public final class HaxeShowFormattingDiffAction extends HaxeFileToolAction {
 
   private static void formatAndShow(@NotNull Project project, @NotNull VirtualFile file, @NotNull Document document,
                                     @NotNull String before, @NotNull String haxelib, @NotNull String workDirectory) {
-    GeneralCommandLine commandLine = new GeneralCommandLine(haxelib, "run", "formatter", "--stdin", "-s", file.getPath())
+    GeneralCommandLine commandLine = new GeneralCommandLine(haxelib, "run", HaxeToolConfigs.FORMATTER_HAXELIB, "--stdin", "-s", file.getPath())
       .withWorkingDirectory(Path.of(workDirectory))
       .withCharset(StandardCharsets.UTF_8);
 

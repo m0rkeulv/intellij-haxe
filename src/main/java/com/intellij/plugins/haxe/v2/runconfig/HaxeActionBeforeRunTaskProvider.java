@@ -23,14 +23,12 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task.Backgroundable;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
@@ -45,8 +43,8 @@ import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfiguration;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.util.PathUtil;
+import com.intellij.util.xmlb.XmlSerializerUtil;
 import icons.HaxeIcons;
-import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.concurrency.Promise;
@@ -69,87 +67,83 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
   public static final Key<Task> ID = Key.create("HaxeActionBeforeRun");
 
-  public static final class Task extends BeforeRunTask<Task> {
-    private static final String BUILD_FILE = "buildFile";
-    private static final String ACTION = "action";
-    private static final String ARGUMENTS = "arguments";
-    private static final String INJECT_DEBUG = "injectDebugArguments";
-    private static final String SECTION_SCOPED = "sectionScoped";
+  public static final class Task extends BeforeRunTask<Task> implements PersistentStateComponent<Task.State> {
 
-    private String buildFilePath = "";
-    private String actionName = HxmlProjects.BUILD_ACTION;
-    private String extraArguments = "";
-    // opt-out for projects whose build files already carry the debug flags/lib
-    private boolean injectDebugArguments = true;
-    // test compiles set this: a multi-section hxml compiles only its selected
-    // --next section, so the extra arguments reach that section (they would
-    // otherwise land in the LAST one - haxe's trailing-argument rule)
-    private boolean sectionScoped = false;
+    /** Serialized as {@code <option name="field" value="..."/>} children: the field names are the stored keys. */
+    public static final class State {
+      public String buildFile = "";
+      public String action = HxmlProjects.BUILD_ACTION;
+      public String arguments = "";
+      // opt-out for projects whose build files already carry the debug flags/lib
+      public boolean injectDebugArguments = true;
+      // test compiles set this: a multi-section hxml compiles only its selected
+      // --next section, so the extra arguments reach that section (they would
+      // otherwise land in the LAST one - haxe's trailing-argument rule)
+      public boolean sectionScoped;
+    }
+
+    private State state = new State();
 
     public Task() {
       super(ID);
     }
 
+    @Override
+    public @NotNull State getState() {
+      return state;
+    }
+
+    @Override
+    public void loadState(@NotNull State state) {
+      this.state = state;
+    }
+
+    /** The copy gets its own state - the platform edits cloned tasks in the configuration dialog. */
+    @Override
+    public Task clone() {
+      Task copy = (Task)super.clone();
+      copy.state = XmlSerializerUtil.createCopy(state);
+      return copy;
+    }
+
     public String getBuildFilePath() {
-      return buildFilePath;
+      return StringUtil.notNullize(state.buildFile);
     }
 
     public String getActionName() {
-      return actionName;
+      return StringUtil.notNullize(state.action, HxmlProjects.BUILD_ACTION);
     }
 
     public String getExtraArguments() {
-      return extraArguments;
+      return StringUtil.notNullize(state.arguments);
     }
 
     public boolean isInjectDebugArguments() {
-      return injectDebugArguments;
-    }
-
-    public void setBuildFilePath(@Nullable String path) {
-      buildFilePath = StringUtil.notNullize(path);
-    }
-
-    public void setActionName(@Nullable String name) {
-      actionName = StringUtil.notNullize(name);
-    }
-
-    public void setExtraArguments(@Nullable String arguments) {
-      extraArguments = StringUtil.notNullize(arguments);
-    }
-
-    public void setInjectDebugArguments(boolean inject) {
-      injectDebugArguments = inject;
+      return state.injectDebugArguments;
     }
 
     public boolean isSectionScoped() {
-      return sectionScoped;
+      return state.sectionScoped;
+    }
+
+    public void setBuildFilePath(@Nullable String path) {
+      state.buildFile = StringUtil.notNullize(path);
+    }
+
+    public void setActionName(@Nullable String name) {
+      state.action = StringUtil.notNullize(name);
+    }
+
+    public void setExtraArguments(@Nullable String arguments) {
+      state.arguments = StringUtil.notNullize(arguments);
+    }
+
+    public void setInjectDebugArguments(boolean inject) {
+      state.injectDebugArguments = inject;
     }
 
     public void setSectionScoped(boolean scoped) {
-      sectionScoped = scoped;
-    }
-
-    @Override
-    public void writeExternal(@NotNull Element element) {
-      super.writeExternal(element);
-      JDOMExternalizerUtil.writeField(element, BUILD_FILE, buildFilePath);
-      JDOMExternalizerUtil.writeField(element, ACTION, actionName);
-      JDOMExternalizerUtil.writeField(element, ARGUMENTS, extraArguments);
-      JDOMExternalizerUtil.writeField(element, INJECT_DEBUG, String.valueOf(injectDebugArguments));
-      JDOMExternalizerUtil.writeField(element, SECTION_SCOPED, String.valueOf(sectionScoped));
-    }
-
-    @Override
-    public void readExternal(@NotNull Element element) {
-      super.readExternal(element);
-      buildFilePath = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, BUILD_FILE));
-      actionName = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, ACTION),
-                                         HxmlProjects.BUILD_ACTION);
-      extraArguments = StringUtil.notNullize(JDOMExternalizerUtil.readField(element, ARGUMENTS));
-      // absent in configurations saved before the option existed - keep injecting
-      injectDebugArguments = !"false".equals(JDOMExternalizerUtil.readField(element, INJECT_DEBUG));
-      sectionScoped = "true".equals(JDOMExternalizerUtil.readField(element, SECTION_SCOPED));
+      state.sectionScoped = scoped;
     }
   }
 
@@ -201,14 +195,11 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                              @NotNull ExecutionEnvironment environment,
                              @NotNull Task task) {
     Project project = configuration.getProject();
-    boolean debug = DefaultDebugExecutor.EXECUTOR_ID.equals(environment.getExecutor().getId());
-
     // safe mode blocks run configurations platform-side; this is the backstop
     // for any launch path that slips through - no dialog off the EDT
     if (!HaxeProjectTrust.isTrusted(project)) {
-      HaxeCommandNotifications.notify(project, getName(),
-                                      HaxeDebuggerBundle.message("haxe.before.run.untrusted"),
-                                      NotificationType.ERROR);
+      String message = HaxeDebuggerBundle.message("haxe.before.run.untrusted");
+      HaxeCommandNotifications.notify(project, getName(), message, NotificationType.ERROR);
       return false;
     }
 
@@ -217,32 +208,65 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     // snapshot goes stale when the framework/reporter wiring evolves. An
     // hxml single-run (gutter) compile arrives fully formed: its generated
     // main replaces the build's own, so the action-plus-file resolution and
-    // the section scoping below must not touch it.
+    // the section scoping must not touch it.
     boolean templateCompile = configuration instanceof HaxeTestRunConfiguration testConfiguration
                               && testConfiguration.compilesThroughTemplate();
+    HaxeCompileCommands.Resolved resolved = resolveCompile(project, configuration, task, templateCompile);
+    if (resolved == null) return false;
+
+    List<String> command = compileCommand(project, configuration, environment.getExecutor(), task, templateCompile, resolved);
+    if (command == null) return false;
+
+    String title = HaxeDebuggerBundle.message("haxe.before.run.build.title",
+                                              task.getActionName(), PathUtil.getFileName(task.getBuildFilePath()));
+    String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
+    return runInBuildView(project, command, workDirectory, title);
+  }
+
+  /** The compile to run, or null when it does not resolve (the user was notified). */
+  @Nullable
+  private static HaxeCompileCommands.Resolved resolveCompile(@NotNull Project project,
+                                                            @NotNull RunConfiguration configuration,
+                                                            @NotNull Task task,
+                                                            boolean templateCompile) {
     HaxeCompileCommands.Resolved resolved;
     if (templateCompile) {
       resolved = ((HaxeTestRunConfiguration)configuration).resolveSingleRunCompile();
-    } else {
+    }
+    else {
       String extraArguments = configuration instanceof HaxeTestRunConfiguration testConfiguration
                               ? testConfiguration.currentCompileArguments()
                               : task.getExtraArguments();
       if (extraArguments == null) {
         String buildFileName = PathUtil.getFileName(task.getBuildFilePath());
         notifyFailure(project, HaxeBundle.message("haxe.test.single.unresolvable", buildFileName));
-        return false;
+        return null;
       }
-      resolved = ReadAction.nonBlocking(
-          () -> HaxeCompileCommands.resolveAction(project, task.getBuildFilePath(), task.getActionName(), extraArguments))
+      String buildFilePath = task.getBuildFilePath();
+      String actionName = task.getActionName();
+      resolved = ReadAction.nonBlocking(() -> HaxeCompileCommands.resolveAction(project, buildFilePath, actionName, extraArguments))
         .executeSynchronously();
     }
     if (resolved == null) {
       notifyFailure(project, HaxeDebuggerBundle.message("haxe.before.run.unresolvable", task.getBuildFilePath()));
-      return false;
     }
-    HaxeCompileCommands.Resolved resolvedCompile = resolved;
+    return resolved;
+  }
 
-    List<String> command = new ArrayList<>(baseCommand(project, task, templateCompile, resolvedCompile));
+  /**
+   * The resolved command plus the launch's debug and profiling additions,
+   * connected to the compilation server when enabled; null when the debug
+   * build lacks its server lib (the user was notified).
+   */
+  @Nullable
+  private static List<String> compileCommand(@NotNull Project project,
+                                             @NotNull RunConfiguration configuration,
+                                             @NotNull Executor executor,
+                                             @NotNull Task task,
+                                             boolean templateCompile,
+                                             @NotNull HaxeCompileCommands.Resolved resolved) {
+    List<String> command = new ArrayList<>(baseCommand(project, task, templateCompile, resolved));
+    boolean debug = DefaultDebugExecutor.EXECUTOR_ID.equals(executor.getId());
     if (debug && task.isInjectDebugArguments()) {
       // a single-run compile is a DIRECT haxe compile whatever the build
       // system, so its additions use the haxe spelling - the tool spellings
@@ -251,27 +275,28 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                                ? singleRunDebugAdditions(project, task.getBuildFilePath())
                                : debugAdditions(project, task.getBuildFilePath());
       if (additions != null) {
-        if (!ensureHxcppDebugServerInstalled(project, additions)) {
-          return false;
-        }
+        if (!ensureHxcppDebugServerInstalled(project, additions)) return null;
         command.addAll(additions);
       }
     }
     if (!templateCompile) {
-      List<String> profilingAdditions = profilingAdditions(project, configuration, environment.getExecutor(), task);
+      List<String> profilingAdditions = profilingAdditions(project, configuration, executor, task);
       if (profilingAdditions != null) {
         command.addAll(profilingAdditions);
       }
     }
-    command = HaxeCompileCommands.connectIfEnabled(project, resolved.containerId(), resolved.connectEligible(), command);
+    return HaxeCompileCommands.connectIfEnabled(project, resolved.containerId(), resolved.connectEligible(), command);
+  }
 
-    // the compile streams into the Build tool window (activated on start) -
-    // it runs before the launch, and without visible output a native build's
-    // minutes of compilation look like a hang
-    String title = HaxeDebuggerBundle.message("haxe.before.run.build.title",
-                                              task.getActionName(), PathUtil.getFileName(task.getBuildFilePath()));
-    String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
-
+  /**
+   * Runs the compile with its output streamed into the Build tool window
+   * (activated on start) - it runs before the launch, and without visible
+   * output a native build's minutes of compilation look like a hang.
+   */
+  private static boolean runInBuildView(@NotNull Project project,
+                                        @NotNull List<String> command,
+                                        @NotNull String workDirectory,
+                                        @NotNull String title) {
     KillableColoredProcessHandler handler;
     try {
       GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, workDirectory);
@@ -299,8 +324,8 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     handler.addProcessListener(new ProcessListener() {
       @Override
       public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
-        progress.output(event.getText(),
-                        outputType instanceof ProcessOutputType type ? type : ProcessOutputType.STDOUT);
+        ProcessOutputType type = outputType instanceof ProcessOutputType outputKind ? outputKind : ProcessOutputType.STDOUT;
+        progress.output(event.getText(), type);
       }
     });
     handler.startNotify();
@@ -310,8 +335,8 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     }
     int exitCode = Objects.requireNonNullElse(handler.getExitCode(), -1);
     if (exitCode != 0) {
-      progress.fail(System.currentTimeMillis(),
-                    HaxeDebuggerBundle.message("haxe.before.run.failed", String.valueOf(exitCode)));
+      String failure = HaxeDebuggerBundle.message("haxe.before.run.failed", String.valueOf(exitCode));
+      progress.fail(System.currentTimeMillis(), failure);
       return false;
     }
     progress.finish();
@@ -394,9 +419,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   private static List<String> sectionScopedCommand(@NotNull Project project,
                                                    @NotNull String buildFilePath,
                                                    @NotNull List<String> command) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null || HaxeBuildFileScanner.detectType(project, file) != HaxeBuildFileType.HXML) return command;
-    return HxmlProjects.scopeToSelectedSection(project, file, command);
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
+    if (buildFile == null || buildFile.type() != HaxeBuildFileType.HXML) return command;
+    return HxmlProjects.scopeToSelectedSection(project, buildFile.file(), command);
   }
 
   /**
@@ -430,7 +455,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                                                  @NotNull RunConfiguration configuration,
                                                  @NotNull Executor executor,
                                                  @NotNull Task task) {
-    HaxeBuildFile buildFile = resolveBuildFile(project, task.getBuildFilePath());
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, task.getBuildFilePath());
     if (buildFile == null) return null;
     boolean limeFamily = buildFile.type() != HaxeBuildFileType.HXML;
     if (configuration instanceof HxcppIntellijRunConfiguration hxcpp) {
@@ -455,7 +480,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   /** The build system's debug compile additions for the file's current selection, or null when it has none. */
   @Nullable
   static List<String> debugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
-    HaxeBuildFile buildFile = resolveBuildFile(project, buildFilePath);
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
     if (buildFile == null) return null;
     return HaxeReadActions.compute(
       () -> HaxeBuildSystem.of(buildFile.type()).debugCompileAdditions(project, buildFile));
@@ -464,22 +489,13 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
   /** Debug additions for a single-run compile: always the plain haxe spelling for the selected target (see the call site). */
   @Nullable
   private static List<String> singleRunDebugAdditions(@NotNull Project project, @NotNull String buildFilePath) {
-    HaxeBuildFile buildFile = resolveBuildFile(project, buildFilePath);
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
     if (buildFile == null) return null;
     return ReadAction.nonBlocking(() -> {
         HaxeTarget target = HaxeBuildSystem.of(buildFile.type()).launchTarget(project, buildFile);
         return target != null ? HaxeDebugAdditions.forTarget(target) : null;
       })
       .executeSynchronously();
-  }
-
-  /** The path's typed build-file handle, or null when it resolves to no known build file. */
-  @Nullable
-  private static HaxeBuildFile resolveBuildFile(@NotNull Project project, @NotNull String buildFilePath) {
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
-    if (file == null) return null;
-    HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
-    return type == null ? null : new HaxeBuildFile(file, type);
   }
 
   /**
@@ -516,14 +532,12 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       public void run(@NotNull ProgressIndicator indicator) {
         String failure = HaxelibInstaller.install(project, HaxeDebugAdditions.HXCPP_DEBUG_SERVER_LIB, null, null);
         if (failure != null) {
-          HaxeCommandNotifications.notify(project,
-                                          HaxeDebuggerBundle.message("haxe.before.run.debug.server.install.failed"),
-                                          failure, NotificationType.ERROR);
+          String title = HaxeDebuggerBundle.message("haxe.before.run.debug.server.install.failed");
+          HaxeCommandNotifications.notify(project, title, failure, NotificationType.ERROR);
         }
         else {
-          HaxeCommandNotifications.notify(project,
-                                          HaxeDebuggerBundle.message("haxe.before.run.debug.server.installed"),
-                                          NotificationType.INFORMATION);
+          String message = HaxeDebuggerBundle.message("haxe.before.run.debug.server.installed");
+          HaxeCommandNotifications.notify(project, message, NotificationType.INFORMATION);
         }
       }
     }.queue();

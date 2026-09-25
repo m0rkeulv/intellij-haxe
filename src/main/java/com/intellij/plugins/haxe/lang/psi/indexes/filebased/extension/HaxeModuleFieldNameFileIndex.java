@@ -8,7 +8,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxePsiField;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.data.HaxeComponentIndexData;
 import com.intellij.plugins.haxe.lang.psi.indexes.filebased.indexer.HaxeClassFieldNameIndexer;
 import com.intellij.plugins.haxe.lang.psi.indexes.utils.HaxeIndexUtil;
-import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeFieldModel;
 import com.intellij.plugins.haxe.model.HaxeModuleModel;
 import com.intellij.psi.PsiFile;

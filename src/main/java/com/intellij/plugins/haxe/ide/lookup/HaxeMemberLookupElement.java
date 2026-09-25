@@ -62,8 +62,8 @@ public class HaxeMemberLookupElement extends LookupElement implements HaxeLookup
   private boolean bold = false;
   private Icon icon = null;
 
-  // Resolving types can be slow, so we defer this to a background thread
-  // and update presentation once we got the results.
+  // resolving types can be slow: it runs in the background and the
+  // presentation updates once the results arrive
   private volatile boolean expensivePresentationCalculated = false;
 
   private volatile String resolvedTypeText;
