@@ -33,5 +33,12 @@ class Main {
 		// six operands on a line past the margin: filled
 		var total = aaaaaaaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbb + ccccccccccccccccccccccccc - ddddddddddddddddddddddddd
 			+ eeeeeeeeeeeeeeeeeeeeeeeee - fffff;
+		// a multi-var the split puts one per line: each declarator is its own line, no chain breaks
+		var xe = x + width,
+			ye = y + height,
+			cx1 = -ellipseWidth + (ellipseWidth * SIN45),
+			cx2 = -ellipseWidth + (ellipseWidth * TAN22),
+			cy1 = -ellipseHeight + (ellipseHeight * SIN45),
+			cy2 = -ellipseHeight + (ellipseHeight * TAN22);
 	}
 }

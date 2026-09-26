@@ -25,6 +25,9 @@ import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.psi.codeStyle.*;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+import java.util.Locale;
+
 import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.WrappingOrBraceOption.*;
 import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.BlankLinesOption.*;
 import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.SpacingOption.*;
@@ -167,6 +170,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.object.field.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "ADD_LINE_COMMENT_SPACE", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.line.comment"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.after.object.field.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
     }
@@ -190,6 +195,21 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.between.single.line.types"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_AFTER_LBRACE",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.keep.after.lbrace"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_AFTER_CASE_COLON",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.keep.after.case.colon"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_BETWEEN_FIELD_GROUPS",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.between.field.groups"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_BEFORE_FIELD_DOC_COMMENT",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.before.field.doc"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_AFTER_DOCUMENTED_FIELD",
+                                HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.documented.field"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
     }
     else if (settingsType == SettingsType.WRAPPING_AND_BRACES_SETTINGS) {
       consumer.showStandardOptions(
@@ -245,7 +265,50 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
                                 HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.format.doc.comments"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.comments.group"));
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "REINDENT_MULTILINE_COMMENTS",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.reindent.multiline.comments"), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.comments.group"));
+      showBodyPlacements(consumer);
+      showChainOptions(consumer);
     }
+  }
+
+  /** Where each construct's non-block body goes (hxformat's sameLine.*Body), a combo box per construct. */
+  private static void showBodyPlacements(@NotNull CodeStyleSettingsCustomizable consumer) {
+    String group = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.bodies.group");
+    String[] names = {
+      HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.body.default"),
+      HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.body.next.line"),
+      HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.body.same.line"),
+      HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.body.keep")};
+    int[] values = {
+      HaxeCodeStyleSettings.BODY_PLACEMENT_DEFAULT,
+      HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE,
+      HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE,
+      HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP};
+    for (String construct : List.of("IF", "ELSE", "FOR", "WHILE", "DO_WHILE", "TRY", "CATCH", "CASE")) {
+      String title = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.body." + construct.toLowerCase(Locale.ROOT));
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, construct + "_BODY_PLACEMENT", title, group, names, values);
+    }
+  }
+
+  /** The operator chain, call argument and multi-var rules (hxformat's wrapping.* rule thresholds). */
+  private static void showChainOptions(@NotNull CodeStyleSettingsCustomizable consumer) {
+    String chains = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.chains.group");
+    consumer.showCustomOption(HaxeCodeStyleSettings.class, "INDENT_WRAPPED_OPERATOR_CHAINS",
+                              HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.chains.indent"), chains);
+    for (String kind : List.of("BOOL", "ADD")) {
+      String prefix = "haxe.codestyle.wrapping.chains." + kind.toLowerCase(Locale.ROOT) + ".";
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_LINE_LENGTH", HaxeCodeStyleBundle.message(prefix + "line.length"), chains);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_ITEM_LENGTH", HaxeCodeStyleBundle.message(prefix + "item.length"), chains);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_ITEM_COUNT", HaxeCodeStyleBundle.message(prefix + "item.count"), chains);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_TOTAL_LENGTH", HaxeCodeStyleBundle.message(prefix + "total.length"), chains);
+    }
+    String arguments = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.arguments.group");
+    consumer.showCustomOption(HaxeCodeStyleSettings.class, "FILL_CALL_ARGUMENTS_ON_JOINED_LINE",
+                              HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.arguments.fill.joined"), arguments);
+    String multiVar = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.multi.var.group");
+    consumer.showCustomOption(HaxeCodeStyleSettings.class, "MULTI_VAR_SPLIT_WIDTH",
+                              HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.multi.var.split.width"), multiVar);
+    consumer.showCustomOption(HaxeCodeStyleSettings.class, "MULTI_VAR_FILL_ITEM_LENGTH",
+                              HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.multi.var.fill.item"), multiVar);
   }
 
   @Override

@@ -1,7 +1,9 @@
 package com.intellij.plugins.haxe.ide.formatter;
 
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeFormatterDefaults;
 import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
@@ -28,6 +30,9 @@ final class HaxeJoinedLine {
     TokenSet.create(BLOCK_STATEMENT, SWITCH_CASE_BLOCK, MODULE, PPBODY, INACTIVE_STATEMENT_LIST, INACTIVE_MEMBER_LIST,
                     INACTIVE_MODULE_LIST));
 
+  // the ", " between items, as the tool counts it in item lengths
+  static final int SEPARATOR_WIDTH = 2;
+
   private final CharSequence text;
   private final int start;
   private final int end;
@@ -41,26 +46,115 @@ final class HaxeJoinedLine {
   }
 
   @Nullable
-  static HaxeJoinedLine of(@NotNull ASTNode node, @NotNull CommonCodeStyleSettings common) {
+  static HaxeJoinedLine of(@NotNull ASTNode node, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     PsiFile file = node.getPsi().getContainingFile();
     if (file == null) return null;
     CharSequence text = file.getViewProvider().getContents();
-    int tabSize = common.getIndentOptions() == null ? 4 : common.getIndentOptions().TAB_SIZE;
+    int tabSize = tabSize(common);
     ASTNode statement = statementOf(node);
     // the line starts at its first character, not the statement's: same-line
     // metadata sits beside its declaration in the PSI
     String lineIndent = HaxeIndentText.lineIndentAt(text, statement.getStartOffset());
     int lineStart = HaxeIndentText.lineStartOffset(text, statement.getStartOffset()) + lineIndent.length();
     int indent = HaxeIndentText.indentWidth(lineIndent, tabSize);
-    HaxeJoinedLine statementLine = new HaxeJoinedLine(text, lineStart, firstBodyStart(statement), indent);
+    HaxeJoinedLine line = new HaxeJoinedLine(text, lineStart, firstBodyStart(statement), indent);
+
+    // a multi-var the split puts one declarator per line: the node's
+    // declarator is its line, later ones a step in
+    ASTNode declarator = splitDeclaratorOf(node, statement, common, haxe);
+    if (declarator != null) {
+      boolean first = declarator.getTreePrev() == null || findPrevious(declarator, LOCAL_VAR_DECLARATION) == null;
+      int declaratorStart = first ? lineStart : declarator.getStartOffset();
+      int declaratorEnd = declarator.getStartOffset() + declarator.getTextLength();
+      line = new HaxeJoinedLine(text, declaratorStart, declaratorEnd, first ? indent : indent + tabSize);
+    }
+
+    // an operand of an exploding operator chain starts its own line, its
+    // leading operator first, one step in from the chain's line
+    ASTNode operand = explodedChainOperandOf(node, statement, common, haxe);
+    if (operand != null) {
+      HaxeJoinedLine chainLine = of(operand.getTreeParent(), common, haxe);
+      ASTNode leadingOperator = previousCode(operand);
+      int operandStart = leadingOperator == null ? operand.getStartOffset() : leadingOperator.getStartOffset();
+      int chainIndent = chainLine == null ? indent : chainLine.indent;
+      line = new HaxeJoinedLine(text, operandStart, operand.getStartOffset() + operand.getTextLength(), chainIndent + tabSize);
+    }
 
     int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
     boolean chainsChop = common.METHOD_CALL_CHAIN_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP;
-    ASTNode link = chainsChop && statementLine.width() > margin ? chainLinkOf(node, statement) : null;
-    if (link == null) return statementLine;
+    ASTNode link = chainsChop && line.width() > margin ? chainLinkOf(node, statement) : null;
+    if (link == null) return line;
     ASTNode dot = link.getFirstChildNode().findChildByType(ODOT);
     int linkStart = dot == null ? link.getStartOffset() : dot.getStartOffset();
-    return new HaxeJoinedLine(text, linkStart, link.getStartOffset() + link.getTextLength(), indent + tabSize);
+    return new HaxeJoinedLine(text, linkStart, link.getStartOffset() + link.getTextLength(), line.indent + tabSize);
+  }
+
+  /** The declarator holding the node, when its declaration list splits one per line. */
+  @Nullable
+  private static ASTNode splitDeclaratorOf(ASTNode node, ASTNode statement, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
+    for (ASTNode ancestor = node; ancestor != null && ancestor != statement; ancestor = ancestor.getTreeParent()) {
+      if (ancestor.getElementType() != LOCAL_VAR_DECLARATION) continue;
+      ASTNode list = ancestor.getTreeParent();
+      boolean splits = list != null
+                       && list.getElementType() == LOCAL_VAR_DECLARATION_LIST
+                       && HaxeMultiVarSplit.splits(list, common, haxe);
+      return splits ? ancestor : null;
+    }
+    return null;
+  }
+
+  /**
+   * The innermost operand holding the node whose operator chain (of either
+   * kind) explodes, below the statement; null when no enclosing chain does.
+   */
+  @Nullable
+  private static ASTNode explodedChainOperandOf(ASTNode node, ASTNode statement, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
+    for (ASTNode ancestor = node; ancestor != null && ancestor != statement; ancestor = ancestor.getTreeParent()) {
+      ASTNode parent = ancestor.getTreeParent();
+      if (parent == null) return null;
+      for (HaxeOperatorChainRules.Kind kind : HaxeOperatorChainRules.Kind.values()) {
+        boolean operand = kind.chainTypes.contains(parent.getElementType()) && !kind.isOperator(ancestor)
+                          && !kind.chainTypes.contains(ancestor.getElementType());
+        if (operand && HaxeOperatorChainRules.explodes(kind, parent, common, haxe)) return ancestor;
+      }
+    }
+    return null;
+  }
+
+  @Nullable
+  private static ASTNode previousCode(ASTNode node) {
+    ASTNode previous = node.getTreePrev();
+    while (previous != null && (WHITESPACES.contains(previous.getElementType()) || COMMENTS.contains(previous.getElementType()))) {
+      previous = previous.getTreePrev();
+    }
+    return previous;
+  }
+
+  @Nullable
+  private static ASTNode findPrevious(ASTNode node, IElementType type) {
+    for (ASTNode previous = node.getTreePrev(); previous != null; previous = previous.getTreePrev()) {
+      if (previous.getElementType() == type) return previous;
+    }
+    return null;
+  }
+
+  /** The tab width the columns count with; the tool's default when the scheme carries no indent options. */
+  static int tabSize(@NotNull CommonCodeStyleSettings common) {
+    CommonCodeStyleSettings.IndentOptions options = common.getIndentOptions();
+    return options == null ? HaxeFormatterDefaults.TAB_WIDTH : options.TAB_SIZE;
+  }
+
+  /** The node's width as it prints on one line: every whitespace run one space. */
+  static int oneLineWidth(@NotNull ASTNode node) {
+    CharSequence chars = node.getChars();
+    int width = 0;
+    boolean inWhitespace = false;
+    for (int i = 0; i < chars.length(); i++) {
+      boolean whitespace = Character.isWhitespace(chars.charAt(i));
+      if (!whitespace || !inWhitespace) width++;
+      inWhitespace = whitespace;
+    }
+    return width;
   }
 
   /** The line's width when printed. */

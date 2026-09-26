@@ -28,3 +28,12 @@ haxelib run formatter -s <rule>\hxformat.hx
 ```
 
 Generated with formatter 1.18.0.
+
+`default-hxformat.json` is the tool's complete built-in configuration, the
+word `HaxeFormatterDefaults` is checked against (`HaxeFormatterDefaultsTest`).
+The tool only writes it over an EXISTING file:
+
+```
+type nul > default-hxformat.json
+haxelib run formatter --default-config <absolute path>\default-hxformat.json
+```

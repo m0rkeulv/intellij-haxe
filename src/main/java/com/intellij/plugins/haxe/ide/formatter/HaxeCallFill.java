@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.ide.formatter;
 
 import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.NotNull;
@@ -28,21 +29,21 @@ final class HaxeCallFill {
 
   /** The arguments of the list that start a new line; empty when the joined line fits the margin. */
   @NotNull
-  static List<ASTNode> brokenArguments(@NotNull ASTNode list, @NotNull CommonCodeStyleSettings common) {
+  static List<ASTNode> brokenArguments(@NotNull ASTNode list, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     List<ASTNode> broken = new ArrayList<>();
-    HaxeJoinedLine line = HaxeJoinedLine.of(list, common);
+    HaxeJoinedLine line = HaxeJoinedLine.of(list, common, haxe);
     if (line == null) return broken;
     int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
     if (line.width() < margin) return broken;
-    int tabSize = common.getIndentOptions() == null ? 4 : common.getIndentOptions().TAB_SIZE;
+    int tabSize = HaxeJoinedLine.tabSize(common);
 
     List<ASTNode> arguments = arguments(list);
     if (arguments.isEmpty()) return broken;
     // the first argument stays on the paren's line however long it is
-    int column = line.columnAfter(arguments.getFirst()) + 2;
+    int column = line.columnAfter(arguments.getFirst()) + HaxeJoinedLine.SEPARATOR_WIDTH;
     for (int i = 1; i < arguments.size(); i++) {
       ASTNode argument = arguments.get(i);
-      int width = HaxeAdditiveChainRules.oneLineWidth(argument) + (i < arguments.size() - 1 ? 2 : 0);
+      int width = HaxeJoinedLine.oneLineWidth(argument) + (i < arguments.size() - 1 ? HaxeJoinedLine.SEPARATOR_WIDTH : 0);
       if (column + width >= margin) {
         broken.add(argument);
         column = line.indent() + tabSize + width;

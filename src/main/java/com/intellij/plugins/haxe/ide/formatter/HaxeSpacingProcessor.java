@@ -31,7 +31,6 @@ import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.formatter.FormatterUtil;
 import com.intellij.psi.formatter.common.AbstractBlock;
@@ -58,6 +57,8 @@ public class HaxeSpacingProcessor {
   private final ASTNode myNode;
   private final CommonCodeStyleSettings mySettings;
   private final HaxeCodeStyleSettings myHaxeCodeStyleSettings;
+  // a spacing bound the engine never reaches (it adds one to keepBlankLines, so MAX_VALUE would overflow)
+  private static final int UNBOUNDED = 9999;
   // whether the pair being spaced keeps a written line break: the
   // KEEP_LINE_BREAKS setting (off during the platform's second reformat,
   // which drops custom breaks), or a construct whose written layout stands
@@ -148,7 +149,7 @@ public class HaxeSpacingProcessor {
     // and blank lines are markdown content (paragraphs) and are all kept.
     // The engine computes keepBlankLines + 1, so MAX_VALUE would overflow.
     if (myNode.getElementType() == DOC_COMMENT) {
-      return Spacing.createSpacing(0, 9999, 0, true, 9999);
+      return Spacing.createSpacing(0, UNBOUNDED, 0, true, UNBOUNDED);
     }
 
     final IElementType elementType = myNode.getElementType();
@@ -278,17 +279,24 @@ public class HaxeSpacingProcessor {
 
     // type2 == PRCURLY is the EMPTY body - the before-} rule below keeps its
     // (caret) line, which smart enter and live templates rely on
+    // a typedef body under next-line braces lists one field per line, its
+    // braces on their own lines (rightCurly=both); other type bodies keep
+    // their written shape
+    boolean typedefLines = typedefBodyExpands(elementType);
     if (type1 == PLCURLY && type2 != PRCURLY && isClassBodyType(elementType) && isFirstChild(child1)) {
       // the setting is exact here (kept blanks would defeat "0 after the header")
-      int lineFeeds = isType ? 0 : 1 + mySettings.BLANK_LINES_AFTER_CLASS_HEADER;
+      int lineFeeds = isType && !typedefLines ? 0 : 1 + mySettings.BLANK_LINES_AFTER_CLASS_HEADER;
       return Spacing.createSpacing(0, 0, lineFeeds, keepLineBreaks, mySettings.BLANK_LINES_AFTER_CLASS_HEADER);
     }
 
     // type1 == PLCURLY is the EMPTY body - kept as written ({} stays inline,
     // a caret line stays for smart enter)
     if (type2 == PRCURLY && type1 != PLCURLY && isClassBodyType(elementType) && isLastChild(child2)) {
-      int lineFeeds = isType ? 0 : 1 + mySettings.BLANK_LINES_BEFORE_CLASS_END;
+      int lineFeeds = isType && !typedefLines ? 0 : 1 + mySettings.BLANK_LINES_BEFORE_CLASS_END;
       return Spacing.createSpacing(0, 0, lineFeeds, keepLineBreaks, mySettings.KEEP_BLANK_LINES_BEFORE_RBRACE);
+    }
+    if (typedefLines && elementType == ANONYMOUS_TYPE_FIELD_LIST && type1 == OCOMMA) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
     }
 
     // a blank line hugging a plain block's brace has its own keep cap
@@ -591,6 +599,18 @@ public class HaxeSpacingProcessor {
     if (valueBlock) {
       return setBraceSpace(mySettings.SPACE_AROUND_ASSIGNMENT_OPERATORS, mySettings.BRACE_STYLE, child1.getTextRange());
     }
+    // a typedef's body brace too (lineEnds.typedefCurly follows leftCurly)
+    boolean typedefBody = elementType == TYPEDEF_DECLARATION && type1 == OASSIGN && typeType2 == ANONYMOUS_TYPE;
+    if (typedefBody) {
+      return setBraceSpace(mySettings.SPACE_AROUND_ASSIGNMENT_OPERATORS, mySettings.BRACE_STYLE, child1.getTextRange());
+    }
+    // a multi-line anonymous type in a type hint opens on the next line, one
+    // step in (lineEnds.anonTypeCurly follows leftCurly); a one-line one
+    // stays on the hint's line
+    boolean hintedAnonymousType = elementType == TYPE_TAG && type1 == OCOLON && typeType2 == ANONYMOUS_TYPE;
+    if (hintedAnonymousType && nextLineBraces() && node2.textContains('\n')) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
+    }
 
     //
     // Spacing around assignment operators (=, -=, etc.)
@@ -611,13 +631,14 @@ public class HaxeSpacingProcessor {
     //
     // Spacing around  logical operators (&&, OR, etc.)
     //
-    // wrapping.opBoolChain: a qualifying chain goes one operand per line
-    // with LEADING operators; other chains keep their written shape
+    // wrapping.opBoolChain: a chain that explodes, or fills past the margin,
+    // breaks before the operator with the operator LEADING
+    // (HaxeOperatorChainRules)
     boolean logicChain = elementType == LOGIC_AND_EXPRESSION || elementType == LOGIC_OR_EXPRESSION;
-    if (logicChain && LOGIC_OPERATORS.contains(typeType2) && boolChainSplitsOnePerLine(myNode)) {
+    if (logicChain && LOGIC_OPERATORS.contains(typeType2) && chainBreaksBefore(HaxeOperatorChainRules.Kind.LOGIC, node2)) {
       return Spacing.createSpacing(0, 0, 1, false, 0);
     }
-    if (logicChain && LOGIC_OPERATORS.contains(typeType1) && boolChainSplitsOnePerLine(myNode)) {
+    if (logicChain && LOGIC_OPERATORS.contains(typeType1) && chainBreaksBefore(HaxeOperatorChainRules.Kind.LOGIC, node1)) {
       return Spacing.createSpacing(1, 1, 0, false, 0);
     }
     if (LOGIC_OPERATORS.contains(typeType1) || LOGIC_OPERATORS.contains(typeType2)) {
@@ -646,14 +667,12 @@ public class HaxeSpacingProcessor {
     //
     // Spacing around  additive operators ( +, -, etc.)
     //
-    // wrapping.opAddSubChain: a chain that explodes, or fills past the
-    // margin, breaks before the operator with the operator LEADING
-    // (HaxeAdditiveChainRules)
+    // wrapping.opAddSubChain, the same way
     boolean additiveChain = elementType == ADDITIVE_EXPRESSION;
-    if (additiveChain && ADDITIVE_OPERATORS.contains(typeType2) && additiveChainBreaksBefore(node2)) {
+    if (additiveChain && ADDITIVE_OPERATORS.contains(typeType2) && chainBreaksBefore(HaxeOperatorChainRules.Kind.ADDITIVE, node2)) {
       return Spacing.createSpacing(0, 0, 1, false, 0);
     }
-    if (additiveChain && ADDITIVE_OPERATORS.contains(typeType1) && additiveChainBreaksBefore(node1)) {
+    if (additiveChain && ADDITIVE_OPERATORS.contains(typeType1) && chainBreaksBefore(HaxeOperatorChainRules.Kind.ADDITIVE, node1)) {
       return Spacing.createSpacing(1, 1, 0, false, 0);
     }
     //ADDITIVE_OPERATOR == type2
@@ -726,7 +745,7 @@ public class HaxeSpacingProcessor {
     // width breaks after every comma; under the width the written shape is
     // kept (the tool's length-based joins are not reproduced)
     if (elementType == LOCAL_VAR_DECLARATION_LIST && type1 == OCOMMA && type2 == LOCAL_VAR_DECLARATION
-        && multiVarLineExceedsSplitWidth()) {
+        && HaxeMultiVarSplit.splits(myNode, mySettings, myHaxeCodeStyleSettings)) {
       return Spacing.createSpacing(0, 0, 1, false, 0);
     }
 
@@ -818,7 +837,6 @@ public class HaxeSpacingProcessor {
         return type;
       }
     }
-
 
       return null;
   }
@@ -1048,60 +1066,38 @@ public class HaxeSpacingProcessor {
   }
 
   /** Whether the whole multi-var statement, joined onto its current line, would pass the configured split width. */
-  private boolean multiVarLineExceedsSplitWidth() {
-    int splitWidth = myHaxeCodeStyleSettings.MULTI_VAR_SPLIT_WIDTH;
-    if (splitWidth <= 0) return false;
-    // a declarator at or under the fill threshold keeps the list filling
-    // (the tool's anyItemLength rule precedes its split rule)
-    int fillItemLength = myHaxeCodeStyleSettings.MULTI_VAR_FILL_ITEM_LENGTH;
-    if (fillItemLength > 0 && shortestDeclaratorLength(myNode) <= fillItemLength) return false;
-    PsiFile file = myNode.getPsi().getContainingFile();
-    if (file == null) return false;
-    // the statement's post-format line indent matches its current one in all
-    // but pathological inputs - good enough for a width heuristic
-    CharSequence text = file.getViewProvider().getContents();
-    String lineIndent = HaxeIndentText.lineIndentAt(text, myNode.getStartOffset());
-    int indentColumns = HaxeIndentText.indentWidth(lineIndent, tabSize());
-    return indentColumns + oneLineWidth(myNode) >= splitWidth;
-  }
-
-  /** The node's width as it would print on one line: every whitespace run (line breaks included) one space. */
-  private static int oneLineWidth(@NotNull ASTNode node) {
-    // any whitespace run, joined into the single space it prints as
-    return node.getText().replaceAll("\\s+", " ").length();
-  }
-
-  private int tabSize() {
-    CommonCodeStyleSettings.IndentOptions options = mySettings.getIndentOptions();
-    return options == null ? 4 : options.TAB_SIZE;
-  }
-
   /** The pair's second node is a call argument (after a comma) that the joined-line fill moves down. */
   private boolean callFillBreaksBefore(ASTNode argument, IElementType type1) {
     if (type1 != OCOMMA) return false;
     ASTNode list = HaxeCallFill.listOf(argument);
-    return list != null && HaxeCallFill.brokenArguments(list, mySettings).contains(argument);
+    return list != null && HaxeCallFill.brokenArguments(list, mySettings, myHaxeCodeStyleSettings).contains(argument);
   }
 
-  private boolean additiveChainBreaksBefore(ASTNode operator) {
-    return HaxeAdditiveChainRules.breaksBefore(operator, mySettings, myHaxeCodeStyleSettings);
+  private boolean nextLineBraces() {
+    return mySettings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE
+           || mySettings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE_SHIFTED
+           || mySettings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE_SHIFTED2;
   }
 
-  /**
-   * The shortest declarator as haxe-formatter measures its multiVar items:
-   * each with its trailing comma or semicolon, the first one two wider (its
-   * item starts at the var keyword's gap).
-   */
-  private static int shortestDeclaratorLength(@NotNull ASTNode declarationList) {
-    int shortest = Integer.MAX_VALUE;
-    boolean first = true;
-    for (ASTNode child = declarationList.getFirstChildNode(); child != null; child = child.getTreeNext()) {
-      if (child.getElementType() != LOCAL_VAR_DECLARATION) continue;
-      int trailing = first ? 2 : 1;
-      shortest = Math.min(shortest, oneLineWidth(child) + trailing);
-      first = false;
-    }
-    return shortest == Integer.MAX_VALUE ? 0 : shortest;
+  /** The pair sits in a typedef's body (or its field list) under a next-line brace style. */
+  private boolean typedefBodyExpands(IElementType elementType) {
+    if (!nextLineBraces()) return false;
+    ASTNode body = elementType == ANONYMOUS_TYPE_BODY ? myNode
+                   : elementType == ANONYMOUS_TYPE_FIELD_LIST ? myNode.getTreeParent()
+                   : null;
+    return body != null && isTypedefBody(body);
+  }
+
+  /** The anonymous type body of a typedef declaration (body - type - wrapper - typedef). */
+  private static boolean isTypedefBody(ASTNode body) {
+    ASTNode type = body.getTreeParent();
+    ASTNode wrapper = type == null ? null : type.getTreeParent();
+    ASTNode owner = wrapper == null ? null : wrapper.getTreeParent();
+    return owner != null && owner.getElementType() == TYPEDEF_DECLARATION;
+  }
+
+  private boolean chainBreaksBefore(HaxeOperatorChainRules.Kind kind, ASTNode operator) {
+    return HaxeOperatorChainRules.breaksBefore(kind, operator, mySettings, myHaxeCodeStyleSettings);
   }
 
   private static boolean isImportOrUsing(@Nullable IElementType type) {
@@ -1129,68 +1125,6 @@ public class HaxeSpacingProcessor {
       return isImportOrUsing(type);
     }
     return false;
-  }
-
-  /**
-   * Whether the whole and/or chain around this expression goes one operand
-   * per line, per the configured opBoolChain thresholds (inclusive, like
-   * the tool's conditions): a joined line reaching the line threshold while
-   * holding an operand at the item threshold, or the operand count reached
-   * with items totaling more than the total guard. The chain spans every
-   * same-chain nesting level (mixed && and || included, matching the tool);
-   * a parenthesized group counts as ONE operand and starts a chain of its
-   * own. Line length is measured as the chain JOINED onto its current line
-   * (the trailing close-parens are not counted - a few columns of slack no
-   * threshold sits on).
-   */
-  private boolean boolChainSplitsOnePerLine(@NotNull ASTNode chainMember) {
-    HaxeCodeStyleSettings haxe = myHaxeCodeStyleSettings;
-    ASTNode root = chainMember;
-    while (root.getTreeParent() != null && isLogicExpression(root.getTreeParent().getElementType())) {
-      root = root.getTreeParent();
-    }
-    int[] metrics = new int[3];
-    collectBoolChainItems(root, metrics);
-    boolean countTrigger = haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT > 0
-                           && metrics[0] >= haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT
-                           && metrics[1] > haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH;
-    if (countTrigger) return true;
-    if (haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH <= 0 || haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH <= 0) return false;
-    if (metrics[2] < haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH) return false;
-    PsiFile file = root.getPsi().getContainingFile();
-    if (file == null) return false;
-    CharSequence text = file.getViewProvider().getContents();
-    int startColumn = HaxeIndentText.columnAt(text, root.getStartOffset(), tabSize());
-    return startColumn + oneLineWidth(root) >= haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH;
-  }
-
-  /** Fills {count, total item length, longest item length}. */
-  private static void collectBoolChainItems(@NotNull ASTNode chain, int[] metrics) {
-    for (ASTNode child = chain.getFirstChildNode(); child != null; child = child.getTreeNext()) {
-      IElementType type = child.getElementType();
-      if (WHITESPACES.contains(type) || COMMENTS.contains(type) || LOGIC_OPERATORS.contains(childTokenType(child))) {
-        continue;
-      }
-      if (isLogicExpression(type)) {
-        collectBoolChainItems(child, metrics);
-        continue;
-      }
-      metrics[0]++;
-      int length = oneLineWidth(child);
-      metrics[1] += length;
-      metrics[2] = Math.max(metrics[2], length);
-    }
-  }
-
-  private static boolean isLogicExpression(@Nullable IElementType type) {
-    return type == LOGIC_AND_EXPRESSION || type == LOGIC_OR_EXPRESSION;
-  }
-
-  /** The wrapped operator element's own token, for set membership tests. */
-  @Nullable
-  private static IElementType childTokenType(@NotNull ASTNode node) {
-    ASTNode first = node.getFirstChildNode();
-    return first == null ? node.getElementType() : first.getElementType();
   }
 
   /** The case belongs to a switch used as a VALUE - its bodies keep their written line per expressionCase=keep. */

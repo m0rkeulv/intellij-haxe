@@ -124,21 +124,16 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // the chain starts on, the way haxe-formatter indents its wraps; off
     // keeps the classic alignment-driven continuation behavior
     public boolean INDENT_WRAPPED_OPERATOR_CHAINS = false;
-    // and/or chains split one operand per line, operators leading, when
-    // the joined line reaches SPLIT_LINE_LENGTH holding an operand of
-    // SPLIT_ITEM_LENGTH, or when SPLIT_ITEM_COUNT operands total more than
-    // SPLIT_TOTAL_LENGTH (hxformat's wrapping.opBoolChain conditions,
-    // inclusive like the tool's); 0 disables a trigger
+    // &&/|| and +/- chains follow hxformat's wrapping.opBoolChain and
+    // opAddSubChain rules (see HaxeOperatorChainRules): a joined line
+    // reaching SPLIT_LINE_LENGTH breaks before every operator when an operand
+    // reaches SPLIT_ITEM_LENGTH, else only where it overflows; a fitting line
+    // breaks before every operator once SPLIT_ITEM_COUNT operands total more
+    // than SPLIT_TOTAL_LENGTH. 0 line length keeps the written shape
     public int BOOL_CHAIN_SPLIT_LINE_LENGTH = 0;
     public int BOOL_CHAIN_SPLIT_ITEM_LENGTH = 0;
     public int BOOL_CHAIN_SPLIT_ITEM_COUNT = 0;
     public int BOOL_CHAIN_SPLIT_TOTAL_LENGTH = 0;
-    // +/- chains follow hxformat's wrapping.opAddSubChain rules (see
-    // HaxeAdditiveChainRules): a joined line past SPLIT_LINE_LENGTH breaks
-    // before every operator when an operand reaches SPLIT_ITEM_LENGTH, else
-    // only where it overflows; a fitting line breaks before every operator
-    // once SPLIT_ITEM_COUNT operands total more than SPLIT_TOTAL_LENGTH.
-    // 0 line length keeps the written shape
     public int ADD_CHAIN_SPLIT_LINE_LENGTH = 0;
     public int ADD_CHAIN_SPLIT_ITEM_LENGTH = 0;
     public int ADD_CHAIN_SPLIT_ITEM_COUNT = 0;

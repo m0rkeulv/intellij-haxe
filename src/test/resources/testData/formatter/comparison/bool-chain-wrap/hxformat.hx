@@ -37,5 +37,14 @@ class Main {
 		if (buffer.width < placement.tx || buffer.renderContextHandle != renderContextHandle) {
 			placement.ty = 5;
 		}
+		if (buffer != null) {
+			if (buffer.width > 0) {
+				if (buffer.height > 0) {
+					var needsFill = (displayObject.opaqueBackground != null
+						&& (bitmapWidth != filterWidth || bitmapHeight != filterHeight));
+					var fillColor = displayObject.opaqueBackground != null ? (0xFF << 24) | displayObject.opaqueBackground : 0;
+				}
+			}
+		}
 	}
 }

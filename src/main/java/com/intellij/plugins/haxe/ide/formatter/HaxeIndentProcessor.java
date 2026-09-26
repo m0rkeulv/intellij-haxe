@@ -18,6 +18,7 @@
  */
 package com.intellij.plugins.haxe.ide.formatter;
 
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeFormatterDefaults;
 import com.intellij.formatting.Indent;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.editor.Document;
@@ -271,6 +272,11 @@ public class HaxeIndentProcessor {
     if (parentType == ANONYMOUS_TYPE_BODY) {
       return Indent.getNormalIndent();
     }
+    // an anonymous type opened on the line after its type hint's colon
+    // (next-line braces) sits one step in; on the hint's line the step is moot
+    if (parentType == TYPE_TAG && elementType == TYPE_OR_ANONYMOUS) {
+      return Indent.getNormalIndent();
+    }
     // metadata sits BESIDE its declaration in the PSI, so a declaration
     // opened by same-line metadata never starts its own line - the engine
     // then anchors the body's next-line '{' past the declaration's indent,
@@ -373,8 +379,8 @@ public class HaxeIndentProcessor {
   /** One member step plus the continuation, in columns - for anchors that lost the member step to same-line metadata. */
   private Indent memberStepPlusContinuation() {
     CommonCodeStyleSettings.IndentOptions options = settings.getIndentOptions();
-    int indentSize = options == null ? 4 : options.INDENT_SIZE;
-    int continuationSize = options == null ? 8 : options.CONTINUATION_INDENT_SIZE;
+    int indentSize = options == null ? HaxeFormatterDefaults.TAB_WIDTH : options.INDENT_SIZE;
+    int continuationSize = options == null ? HaxeFormatterDefaults.CONTINUATION_STEPS * HaxeFormatterDefaults.TAB_WIDTH : options.CONTINUATION_INDENT_SIZE;
     return Indent.getSpaceIndent(indentSize + continuationSize);
   }
 

@@ -313,6 +313,20 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("allman typedef braces")
+  public void testAllmanTypedefBraces() throws Exception {
+    // lineEnds.leftCurly=both reaches typedefCurly/anonTypeCurly too: a
+    // typedef body opens on its own line and lists one field per line; a
+    // multi-line anonymous type in a type hint opens one step in; one-line
+    // anonymous types in hints stay inline
+    doParityTest("allman-typedef-braces", settings -> {
+      CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+      common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+      common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+    });
+  }
+
+  @Test
   @DisplayName("allman meta first member")
   public void testAllmanMetaFirstMember() throws Exception {
     // classEmptyLines.beginType=0 holds when the first member opens with

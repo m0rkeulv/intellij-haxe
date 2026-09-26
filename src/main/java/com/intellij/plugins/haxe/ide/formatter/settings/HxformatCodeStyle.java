@@ -33,16 +33,16 @@ public final class HxformatCodeStyle {
   public static void applyDefaults(@NotNull CodeStyleSettings settings) {
     resetWrapFields(settings);
     CodeStyleSettings.IndentOptions indent = settings.getIndentOptions(HaxeFileType.INSTANCE);
-    // indentation.character="tab", tabWidth=4
+    // indentation.character="tab", tabWidth
     indent.USE_TAB_CHARACTER = true;
-    indent.TAB_SIZE = 4;
-    indent.INDENT_SIZE = 4;
+    indent.TAB_SIZE = HaxeFormatterDefaults.TAB_WIDTH;
+    indent.INDENT_SIZE = HaxeFormatterDefaults.TAB_WIDTH;
     // a wrapped declaration header (implementsExtends) continues TWO steps in
-    indent.CONTINUATION_INDENT_SIZE = 8;
+    indent.CONTINUATION_INDENT_SIZE = HaxeFormatterDefaults.CONTINUATION_STEPS * HaxeFormatterDefaults.TAB_WIDTH;
 
     CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
-    // wrapping.maxLineLength=160
-    settings.setRightMargin(HaxeLanguage.INSTANCE, 160);
+    // wrapping.maxLineLength
+    settings.setRightMargin(HaxeLanguage.INSTANCE, HaxeFormatterDefaults.MAX_LINE_LENGTH);
     // lineEnds.leftCurly=After / rightCurly=Both
     common.BRACE_STYLE = CommonCodeStyleSettings.END_OF_LINE;
     common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.END_OF_LINE;
@@ -101,22 +101,20 @@ public final class HxformatCodeStyle {
     common.SPACE_BEFORE_WHILE_KEYWORD = true;
     common.SPACE_BEFORE_CATCH_KEYWORD = true;
 
-    // emptyLines: maxAnywhereInFile=1, afterPackage=1, beforeType=1,
-    // betweenTypes=1, betweenVars=0, betweenFunctions=1, beginType=0,
-    // endType=0 (afterLeftCurly/beforeRightCurly=Remove)
+    // emptyLines (the tool's defaults, see HaxeFormatterDefaults)
     common.KEEP_LINE_BREAKS = true;
     // haxe-formatter indents every comment to its scope - no first-column exception
     common.KEEP_FIRST_COLUMN_COMMENT = false;
-    common.KEEP_BLANK_LINES_IN_CODE = 1;
-    common.KEEP_BLANK_LINES_IN_DECLARATIONS = 1;
-    common.KEEP_BLANK_LINES_BEFORE_RBRACE = 0;
-    common.BLANK_LINES_AFTER_PACKAGE = 1;
-    common.BLANK_LINES_AFTER_IMPORTS = 1;
-    common.BLANK_LINES_AROUND_CLASS = 1;
-    common.BLANK_LINES_AFTER_CLASS_HEADER = 0;
-    common.BLANK_LINES_AROUND_FIELD = 0;
-    common.BLANK_LINES_AROUND_METHOD = 1;
-    common.BLANK_LINES_BEFORE_CLASS_END = 0;
+    common.KEEP_BLANK_LINES_IN_CODE = HaxeFormatterDefaults.MAX_BLANK_LINES;
+    common.KEEP_BLANK_LINES_IN_DECLARATIONS = HaxeFormatterDefaults.MAX_BLANK_LINES;
+    common.KEEP_BLANK_LINES_BEFORE_RBRACE = HaxeFormatterDefaults.BLANK_LINES_AT_BLOCK_EDGES;
+    common.BLANK_LINES_AFTER_PACKAGE = HaxeFormatterDefaults.BLANK_LINES_AFTER_PACKAGE;
+    common.BLANK_LINES_AFTER_IMPORTS = HaxeFormatterDefaults.BLANK_LINES_AFTER_IMPORTS;
+    common.BLANK_LINES_AROUND_CLASS = HaxeFormatterDefaults.BLANK_LINES_BETWEEN_TYPES;
+    common.BLANK_LINES_AFTER_CLASS_HEADER = HaxeFormatterDefaults.BLANK_LINES_BEGIN_TYPE;
+    common.BLANK_LINES_AROUND_FIELD = HaxeFormatterDefaults.BLANK_LINES_BETWEEN_VARS;
+    common.BLANK_LINES_AROUND_METHOD = HaxeFormatterDefaults.BLANK_LINES_BETWEEN_FUNCTIONS;
+    common.BLANK_LINES_BEFORE_CLASS_END = HaxeFormatterDefaults.BLANK_LINES_END_TYPE;
 
     // sameLine.ifBody/elseBody/forBody/whileBody/doWhileBody/tryBody/
     // catchBody=Next (the per-construct placements below carry the policy;
@@ -192,49 +190,41 @@ public final class HxformatCodeStyle {
     haxe.CATCH_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
     // sameLine.caseBody=Next (expression switches keep, per expressionCase)
     haxe.CASE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
-    // classEmptyLines.afterStaticVars/afterPrivateVars=1 - a staticness or
+    // classEmptyLines.afterStaticVars/afterPrivateVars - a staticness or
     // visibility change splits the var block
-    haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = 1;
-    // beforeDocCommentEmptyLines/afterFieldsWithDocComments=One - a
-    // documented field stands off from both neighbors
-    haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = 1;
-    haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = 1;
-    // emptyLines.afterLeftCurly=Remove
-    haxe.KEEP_BLANK_LINES_AFTER_LBRACE = 0;
-    // emptyLines.beforeBlocks=Remove (the case-body edge)
-    haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = 0;
+    haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = HaxeFormatterDefaults.BLANK_LINES_BETWEEN_VAR_GROUPS;
+    // beforeDocCommentEmptyLines/afterFieldsWithDocComments - a documented
+    // field stands off from both neighbors
+    haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = HaxeFormatterDefaults.BLANK_LINES_AROUND_DOCUMENTED_FIELD;
+    haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = HaxeFormatterDefaults.BLANK_LINES_AROUND_DOCUMENTED_FIELD;
+    // emptyLines.afterLeftCurly=Remove, beforeBlocks=Remove (the case-body edge)
+    haxe.KEEP_BLANK_LINES_AFTER_LBRACE = HaxeFormatterDefaults.BLANK_LINES_AT_BLOCK_EDGES;
+    haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = HaxeFormatterDefaults.BLANK_LINES_AT_BLOCK_EDGES;
     // haxe-formatter indents every wrapped operator chain one step from
     // the chain's line (no operand alignment)
     haxe.INDENT_WRAPPED_OPERATOR_CHAINS = true;
-    // wrapping.opBoolChain defaults: one operand per line past these
-    // (inclusive) thresholds - line 140 with an item of 40, or 4 operands
-    // totaling more than 120
-    haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = 140;
-    haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = 40;
-    haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = 4;
-    haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = 120;
-    // wrapping.opAddSubChain: lineLength >= 160 (+ anyItemLength >= 60 ->
-    // onePerLineAfterFirst, else fillLine); itemCount >= 4 ->
-    // onePerLineAfterFirst unless totalItemLength <= 120
-    haxe.ADD_CHAIN_SPLIT_LINE_LENGTH = 160;
-    haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH = 60;
-    haxe.ADD_CHAIN_SPLIT_ITEM_COUNT = 4;
-    haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = 120;
+    // wrapping.opBoolChain / opAddSubChain rule thresholds
+    haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = HaxeFormatterDefaults.BOOL_CHAIN_LINE_LENGTH;
+    haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = HaxeFormatterDefaults.BOOL_CHAIN_ITEM_LENGTH;
+    haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = HaxeFormatterDefaults.BOOL_CHAIN_ITEM_COUNT;
+    haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = HaxeFormatterDefaults.BOOL_CHAIN_TOTAL_LENGTH;
+    haxe.ADD_CHAIN_SPLIT_LINE_LENGTH = HaxeFormatterDefaults.ADD_CHAIN_LINE_LENGTH;
+    haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH = HaxeFormatterDefaults.ADD_CHAIN_ITEM_LENGTH;
+    haxe.ADD_CHAIN_SPLIT_ITEM_COUNT = HaxeFormatterDefaults.ADD_CHAIN_ITEM_COUNT;
+    haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = HaxeFormatterDefaults.ADD_CHAIN_TOTAL_LENGTH;
     // wrapping.callParameter fillLine fills the line as written on one line
     haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE = true;
-    // wrapping.multiVar: lineLengthLargerThan=80 -> onePerLineAfterFirst,
-    // preceded by anyItemLengthLessThan=15 -> fillLine (the length-based
-    // JOIN of short multi-vars is not reproduced)
-    haxe.MULTI_VAR_SPLIT_WIDTH = 80;
-    haxe.MULTI_VAR_FILL_ITEM_LENGTH = 15;
-    // emptyLines.importAndUsing.beforeType=1
-    haxe.MINIMUM_BLANK_LINES_AFTER_USING = 1;
-    // emptyLines.betweenSingleLineTypes=0
-    haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 0;
-    // emptyLines.importAndUsing.betweenImports=0
-    haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS = 0;
-    // emptyLines.afterFileHeaderComment=1
-    haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = 1;
+    // wrapping.multiVar: lineLength -> onePerLineAfterFirst, preceded by
+    // anyItemLength -> fillLine (the length-based JOIN of short multi-vars
+    // is not reproduced)
+    haxe.MULTI_VAR_SPLIT_WIDTH = HaxeFormatterDefaults.MULTI_VAR_LINE_LENGTH;
+    haxe.MULTI_VAR_FILL_ITEM_LENGTH = HaxeFormatterDefaults.MULTI_VAR_FILL_ITEM_LENGTH;
+    // emptyLines.importAndUsing.beforeType, betweenSingleLineTypes,
+    // importAndUsing.betweenImports, afterFileHeaderComment
+    haxe.MINIMUM_BLANK_LINES_AFTER_USING = HaxeFormatterDefaults.BLANK_LINES_AFTER_IMPORTS;
+    haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = HaxeFormatterDefaults.BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES;
+    haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS = HaxeFormatterDefaults.BLANK_LINES_BETWEEN_IMPORTS;
+    haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = HaxeFormatterDefaults.BLANK_LINES_AFTER_FILE_HEADER;
     haxe.BLANK_LINES_BETWEEN_IMPORT_GROUPS = 0;
     haxe.IMPORT_GROUP_PACKAGE_DEPTH = 1;
   }
