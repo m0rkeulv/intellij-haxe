@@ -28,7 +28,12 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     // settings per file while present, like EditorConfig support does
     public boolean USE_PROJECT_HXFORMAT = true;
 
+    // the three arrow kinds space separately, as haxe-formatter does: arrow
+    // functions (x -> x), Haxe 4 function types ((Int) -> Int) and Haxe 3
+    // function types (Int -> Int; the hxformat profile leaves those unspaced)
     public boolean SPACE_AROUND_ARROW = true;
+    public boolean SPACE_AROUND_FUNCTION_TYPE_ARROW = true;
+    public boolean SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW = true;
     public boolean SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_AFTER_TYPE_REFERENCE_COLON = false;
     public boolean SPACE_WITHIN_TYPE_PARAMETERS = false;

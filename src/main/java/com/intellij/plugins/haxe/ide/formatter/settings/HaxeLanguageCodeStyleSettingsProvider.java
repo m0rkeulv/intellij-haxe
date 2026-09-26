@@ -35,6 +35,16 @@ import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.OptionAnc
  */
 public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSettingsProvider {
 
+  /**
+   * The spacing rules keep written line breaks through KEEP_LINE_BREAKS, so
+   * the platform's second-reformat flow applies: a reformat that kept custom
+   * breaks reports them, and repeating it offers to drop them.
+   */
+  @Override
+  public boolean usesCommonKeepLineBreaks() {
+    return true;
+  }
+
   @NotNull
   @Override
   public Language getLanguage() {
@@ -138,6 +148,10 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       // placements and names mirror Java/Kotlin/Groovy: arrow spacing sits
       // with the operators, colon options use Kotlin's phrasing
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.arrow"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_FUNCTION_TYPE_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.function.type.arrow"),
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
+      consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.old.function.type.arrow"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.type.colon"),
                                 CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);

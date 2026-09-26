@@ -26,6 +26,13 @@ final class HaxeFormatterTokenSets {
   // a list's own punctuation, which never indents like an item
   static final TokenSet LIST_PUNCTUATION = TokenSet.create(PLPAREN, PRPAREN, OCOMMA);
 
+  // an opening bracket hugs an inline #if/#end that follows it
+  static final TokenSet OPENING_BRACKETS = TokenSet.create(PLPAREN, PLBRACK, PLCURLY);
+
+  // the tokens that hug an inline #end before them (haxe-formatter marks no
+  // space after #end before these; their own policies keep them snug)
+  static final TokenSet HUGS_CLOSING_DIRECTIVE = TokenSet.create(OCOMMA, OSEMI, PRPAREN, PRBRACK, PRCURLY, ODOT);
+
   private HaxeFormatterTokenSets() {
   }
 }

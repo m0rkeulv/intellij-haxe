@@ -137,8 +137,9 @@ public class HaxeWrappingProcessor {
         }
         return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.CALL_PARAMETERS_WRAP), true);
       }
-      if (FUNCTION_DEFINITION.contains(parentType) &&
-          mySettings.METHOD_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
+      // an enum constructor's parameters wrap like a signature's
+      boolean signature = FUNCTION_DEFINITION.contains(parentType) || parentType == ENUM_VALUE_DECLARATION_CONSTRUCTOR;
+      if (signature && mySettings.METHOD_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
         if (myNode.getFirstChildNode() == child) {
           return createWrap(mySettings.METHOD_PARAMETERS_LPAREN_ON_NEXT_LINE);
         }
@@ -155,6 +156,13 @@ public class HaxeWrappingProcessor {
           return createWrap(mySettings.CALL_PARAMETERS_RPAREN_ON_NEXT_LINE);
         }
       }
+    }
+    // `new T(a, b)` keeps its arguments as direct children (no list node);
+    // they wrap like call arguments
+    if (elementType == NEW_EXPRESSION
+        && mySettings.CALL_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
+        && isNewArgument(child)) {
+      return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.CALL_PARAMETERS_WRAP), true);
     }
 
     //
@@ -238,6 +246,14 @@ public class HaxeWrappingProcessor {
 
   private boolean isRightOperand(ASTNode child) {
     return myNode.getLastChildNode() == child;
+  }
+
+  /** An argument of {@code new T(...)}: follows the opening paren or a comma, and is not the closing paren. */
+  private static boolean isNewArgument(ASTNode child) {
+    if (child.getElementType() == PRPAREN) return false;
+    ASTNode previous = FormatterUtil.getPreviousNonWhitespaceSibling(child);
+    IElementType previousType = previous == null ? null : previous.getElementType();
+    return previousType == PLPAREN || previousType == OCOMMA;
   }
 
   private static Wrap createWrap(boolean isNormal) {

@@ -229,6 +229,24 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("conditional inline spacing")
+  public void testConditionalInlineSpacing() throws Exception {
+    // directives INSIDE an expression or a type stay on their line; #end
+    // takes a space before it (except after an opening bracket) and after
+    // it before an identifier/keyword/opening bracket, never before , or ;
+    doParityTest("conditional-inline-spacing");
+  }
+
+  @Test
+  @DisplayName("conditional case end")
+  public void testConditionalCaseEnd() throws Exception {
+    // a directive closing a region opened INSIDE a case body aligns with
+    // that body, even though it sits past the body's last statement; a
+    // region wrapping whole cases keeps its directives at case level
+    doParityTest("conditional-case-end");
+  }
+
+  @Test
   @DisplayName("expression same line")
   public void testExpressionSameLine() throws Exception {
     doParityTest("expression-same-line");
@@ -276,6 +294,30 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     // lineEnds.leftCurly=both, objectLiteralCurly.leftCurly=after (fixture
     // hxformat.json): Allman blocks with cuddled object literals
     doParityTest("openfl-braces", settings -> {
+      CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+      common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+      common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+    });
+  }
+
+  @Test
+  @DisplayName("allman value blocks")
+  public void testAllmanValueBlocks() throws Exception {
+    // same config as openfl-braces: a block, function literal or arrow body
+    // used as a VALUE opens on its own line one step in from the declaration
+    doParityTest("allman-value-blocks", settings -> {
+      CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+      common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+      common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+    });
+  }
+
+  @Test
+  @DisplayName("allman meta first member")
+  public void testAllmanMetaFirstMember() throws Exception {
+    // classEmptyLines.beginType=0 holds when the first member opens with
+    // metadata, a multi-line string argument included
+    doParityTest("allman-meta-first-member", settings -> {
       CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
       common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
       common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
@@ -373,8 +415,9 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("multi var wrap indent")
   public void testMultiVarWrapIndent() throws Exception {
     // a declarator wrapped onto its own line continues one step in from the
-    // var line; the written break is kept either way (the tool's length-based
-    // join/split of multi-vars stays unsupported)
+    // var line; a list whose joined line passes 80 columns splits after every
+    // comma unless a declarator is short enough (<= 15 as the tool measures
+    // it: with its comma, the first one two wider), which keeps it filling
     doParityTest("multi-var-wrap-indent");
   }
 

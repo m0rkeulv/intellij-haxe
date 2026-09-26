@@ -30,6 +30,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
+import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.Nullable;
 
 import static com.intellij.plugins.haxe.lang.lexer.HaxeDocTokenTypes.*;
@@ -117,7 +118,11 @@ public class HaxeIndentProcessor {
       if (parentType == SWITCH_BLOCK) {
         boolean emptyCaseBody = (prevSiblingType == SWITCH_CASE || prevSiblingType == DEFAULT_CASE)
                                 && caseBodyIsEmpty(prevSibling);
-        return emptyCaseBody ? Indent.getContinuationIndent() : Indent.getNormalIndent();
+        // a directive past a case body's last statement lands here too (the
+        // parser closes the body before it); one closing a region OPENED in
+        // that body still aligns with the body, like its #if does
+        boolean bodyLevel = emptyCaseBody || closesRegionOpenedInCaseBody(node);
+        return bodyLevel ? Indent.getContinuationIndent() : Indent.getNormalIndent();
       }
       return Indent.getNormalIndent();
     }
@@ -249,6 +254,13 @@ public class HaxeIndentProcessor {
         elementType != BLOCK_STATEMENT) {
       return Indent.getNormalIndent();
     }
+    // a block used as a VALUE steps in from its declaration once the brace
+    // style puts its { on the next line (haxe-formatter indents such a brace
+    // one level; the contents then step from it). On the = line the step is
+    // moot: a block's own indent counts only when it starts a line.
+    if (elementType == VALUE_INIT_BLOCK && (parentType == VAR_INIT || parentType == ASSIGN_EXPRESSION)) {
+      return Indent.getNormalIndent();
+    }
     // IF_STATEMENT statement components
     if ((parentType == GUARDED_STATEMENT || parentType == ELSE_STATEMENT) &&
         elementType != BLOCK_STATEMENT &&
@@ -322,6 +334,32 @@ public class HaxeIndentProcessor {
   }
 
   /** The case carries no body statements - a comment following it then reads as its body. */
+  /** A #else/#elseif/#end at switch-block level whose #if sits inside a case body. */
+  private static boolean closesRegionOpenedInCaseBody(ASTNode directive) {
+    IElementType type = directive.getElementType();
+    if (type != PPEND && type != PPELSE && type != PPELSEIF) return false;
+    ASTNode opener = openingDirective(directive);
+    return opener != null && opener.getTreeParent() != directive.getTreeParent();
+  }
+
+  /** The #if opening the region the directive belongs to, through nested regions. */
+  @Nullable
+  private static ASTNode openingDirective(ASTNode directive) {
+    int depth = 0;
+    PsiElement leaf = directive.getPsi();
+    while ((leaf = PsiTreeUtil.prevLeaf(leaf)) != null) {
+      IElementType type = leaf.getNode().getElementType();
+      if (type == PPEND) {
+        depth++;
+      }
+      else if (type == PPIF) {
+        if (depth == 0) return leaf.getNode();
+        depth--;
+      }
+    }
+    return null;
+  }
+
   private static boolean caseBodyIsEmpty(ASTNode switchCase) {
     ASTNode block = switchCase.findChildByType(SWITCH_CASE_BLOCK);
     if (block == null) return true;

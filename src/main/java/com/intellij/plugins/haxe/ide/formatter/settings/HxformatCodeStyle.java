@@ -141,6 +141,12 @@ public final class HxformatCodeStyle {
     //       (ours packs one item more at the boundary), so written break
     //       points are preserved instead.
     common.METHOD_PARAMETERS_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
+    // wrapping.callParameter: NoWrap below its item-count and length
+    // thresholds, FillLine past the margin - so a line that a second reformat
+    // joined breaks again where it overflows. (The operator chains keep their
+    // own split rule: a margin wrap on them would let an operand's break win
+    // over a chopped method chain.)
+    common.CALL_PARAMETERS_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
     // haxe-formatter indents wrapped parameters and arguments (one step for
     // arguments, two for a signature); it never aligns them under the first
     common.ALIGN_MULTILINE_PARAMETERS = false;
@@ -149,8 +155,11 @@ public final class HxformatCodeStyle {
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     // haxe-formatter always reindents plain /*..*/ comment interiors
     haxe.REINDENT_MULTILINE_COMMENTS = true;
-    // whitespace.arrowFunctionsPolicy/functionTypeHaxe4Policy=Around
+    // whitespace.arrowFunctionsPolicy/functionTypeHaxe4Policy=Around,
+    // functionTypeHaxe3Policy=None
     haxe.SPACE_AROUND_ARROW = true;
+    haxe.SPACE_AROUND_FUNCTION_TYPE_ARROW = true;
+    haxe.SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW = false;
     // whitespace.typeHintColonPolicy=None
     haxe.SPACE_BEFORE_TYPE_REFERENCE_COLON = false;
     haxe.SPACE_AFTER_TYPE_REFERENCE_COLON = false;
@@ -570,8 +579,14 @@ public final class HxformatCodeStyle {
       if (arrow != null) {
         haxe.SPACE_AROUND_ARROW = "around".equals(arrow);
       }
-      acceptOnly("whitespace.functionTypeHaxe4Policy", "around");
-      acceptOnly("whitespace.functionTypeHaxe3Policy", "none");
+      String functionTypeArrow = str("whitespace.functionTypeHaxe4Policy");
+      if (functionTypeArrow != null) {
+        haxe.SPACE_AROUND_FUNCTION_TYPE_ARROW = "around".equals(functionTypeArrow);
+      }
+      String oldFunctionTypeArrow = str("whitespace.functionTypeHaxe3Policy");
+      if (oldFunctionTypeArrow != null) {
+        haxe.SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW = "around".equals(oldFunctionTypeArrow);
+      }
       acceptOnly("whitespace.dotPolicy", "none");
       acceptOnly("whitespace.colonPolicy", "none");
       acceptOnly("whitespace.caseColonPolicy", "onlyAfter");
