@@ -646,6 +646,16 @@ public class HaxeSpacingProcessor {
     //
     // Spacing around  additive operators ( +, -, etc.)
     //
+    // wrapping.opAddSubChain: a chain that explodes, or fills past the
+    // margin, breaks before the operator with the operator LEADING
+    // (HaxeAdditiveChainRules)
+    boolean additiveChain = elementType == ADDITIVE_EXPRESSION;
+    if (additiveChain && ADDITIVE_OPERATORS.contains(typeType2) && additiveChainBreaksBefore(node2)) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
+    }
+    if (additiveChain && ADDITIVE_OPERATORS.contains(typeType1) && additiveChainBreaksBefore(node1)) {
+      return Spacing.createSpacing(1, 1, 0, false, 0);
+    }
     //ADDITIVE_OPERATOR == type2
     if ((ADDITIVE_OPERATORS.contains(typeType1) || ADDITIVE_OPERATORS.contains(typeType2)) &&
         elementType != PREFIX_EXPRESSION) {
@@ -720,6 +730,12 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, 1, false, 0);
     }
 
+    // wrapping.callParameter fillLine judged on the JOINED line: an argument
+    // the tool moves down starts its line here too, whatever fits after the
+    // other breaks (HaxeCallFill)
+    if (myHaxeCodeStyleSettings.FILL_CALL_ARGUMENTS_ON_JOINED_LINE && callFillBreaksBefore(node2, type1)) {
+      return Spacing.createSpacing(0, 0, 1, false, 0);
+    }
     if (type1 == OCOMMA && (elementType == PARAMETER_LIST || elementType == EXPRESSION_LIST || elementType == CALL_EXPRESSION_LIST) &&
         (parentType == CALL_EXPRESSION ||
          parentType == NEW_EXPRESSION ||
@@ -1060,7 +1076,17 @@ public class HaxeSpacingProcessor {
     return options == null ? 4 : options.TAB_SIZE;
   }
 
-  /** The shortest declarator's one-line width in the multi-var list. */
+  /** The pair's second node is a call argument (after a comma) that the joined-line fill moves down. */
+  private boolean callFillBreaksBefore(ASTNode argument, IElementType type1) {
+    if (type1 != OCOMMA) return false;
+    ASTNode list = HaxeCallFill.listOf(argument);
+    return list != null && HaxeCallFill.brokenArguments(list, mySettings).contains(argument);
+  }
+
+  private boolean additiveChainBreaksBefore(ASTNode operator) {
+    return HaxeAdditiveChainRules.breaksBefore(operator, mySettings, myHaxeCodeStyleSettings);
+  }
+
   /**
    * The shortest declarator as haxe-formatter measures its multiVar items:
    * each with its trailing comma or semicolon, the first one two wider (its

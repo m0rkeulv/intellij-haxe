@@ -213,6 +213,15 @@ public final class HxformatCodeStyle {
     haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = 40;
     haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = 4;
     haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = 120;
+    // wrapping.opAddSubChain: lineLength >= 160 (+ anyItemLength >= 60 ->
+    // onePerLineAfterFirst, else fillLine); itemCount >= 4 ->
+    // onePerLineAfterFirst unless totalItemLength <= 120
+    haxe.ADD_CHAIN_SPLIT_LINE_LENGTH = 160;
+    haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH = 60;
+    haxe.ADD_CHAIN_SPLIT_ITEM_COUNT = 4;
+    haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = 120;
+    // wrapping.callParameter fillLine fills the line as written on one line
+    haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE = true;
     // wrapping.multiVar: lineLengthLargerThan=80 -> onePerLineAfterFirst,
     // preceded by anyItemLengthLessThan=15 -> fillLine (the length-based
     // JOIN of short multi-vars is not reproduced)
@@ -348,6 +357,7 @@ public final class HxformatCodeStyle {
       wrapConstruct("wrapping.callParameter", value -> common.CALL_PARAMETERS_WRAP = value);
       wrapConstruct("wrapping.opBoolChain", value -> common.BINARY_OPERATION_WRAP = value);
       applyBoolChainRules();
+      applyAddChainRules();
       wrapConstruct("wrapping.opAddSubChain", value -> common.BINARY_OPERATION_WRAP = value);
       for (String construct : List.of("typeParameter", "metadataCallParameter", "casePattern", "anonType")) {
         String path = "wrapping." + construct;
@@ -847,6 +857,37 @@ public final class HxformatCodeStyle {
           Integer total = conditionValue(rule, "totalItemLength <= n");
           if (total != null) {
             haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = total;
+          }
+        }
+      }
+    }
+
+    /**
+     * Custom opAddSubChain rules, read the same way: an onePerLineAfterFirst
+     * rule's itemCount / lineLength+anyItemLength conditions, a noWrap rule's
+     * totalItemLength guard.
+     */
+    private void applyAddChainRules() {
+      JsonNode rules = node("wrapping.opAddSubChain.rules");
+      if (rules == null || !rules.isArray()) return;
+      for (JsonNode rule : rules) {
+        String type = rule.path("type").asText("");
+        if ("onePerLineAfterFirst".equals(type)) {
+          Integer count = conditionValue(rule, "itemCount >= n");
+          if (count != null) {
+            haxe.ADD_CHAIN_SPLIT_ITEM_COUNT = count;
+          }
+          Integer line = conditionValue(rule, "lineLength >= n");
+          Integer item = conditionValue(rule, "anyItemLength >= n");
+          if (line != null && item != null) {
+            haxe.ADD_CHAIN_SPLIT_LINE_LENGTH = line;
+            haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH = item;
+          }
+        }
+        if ("noWrap".equals(type)) {
+          Integer total = conditionValue(rule, "totalItemLength <= n");
+          if (total != null) {
+            haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = total;
           }
         }
       }

@@ -9,6 +9,13 @@ import com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -166,6 +173,31 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
       	}
       }
       """, formatted);
+  }
+
+  @Test
+  @DisplayName("second pass leaves haxe-formatter output alone")
+  public void testSecondPassLeavesHaxeFormatterOutputAlone() throws IOException {
+    // the tool's own output holds no custom breaks: every break it kept is
+    // one its rules produce, so dropping ours must reproduce it exactly
+    List<Path> rules;
+    try (Stream<Path> directories = Files.list(Path.of(getTestDataPath()))) {
+      rules = directories.filter(Files::isDirectory).filter(HaxeSecondReformatTest::usesDefaultConfig).sorted().toList();
+    }
+
+    List<String> changed = new ArrayList<>();
+    for (Path rule : rules) {
+      String formatted = Files.readString(rule.resolve("hxformat.hx")).replace("\r\n", "\n");
+      String secondPass = reformat("Main.hx", HaxeSecondReformatTest::secondPass, formatted);
+      if (!secondPass.strip().equals(formatted.strip())) changed.add(rule.getFileName().toString());
+    }
+
+    assertTrue(changed.isEmpty(), "fixtures the second pass changed: " + changed);
+  }
+
+  /** A fixture generated with the tool's defaults - no hxformat.json beside it. */
+  private static boolean usesDefaultConfig(Path rule) {
+    return !Files.exists(rule.resolve("hxformat.json"));
   }
 
   /** The hxformat defaults with custom line breaks dropped, as the platform reruns the reformat. */

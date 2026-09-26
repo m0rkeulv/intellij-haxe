@@ -133,6 +133,21 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
     public int BOOL_CHAIN_SPLIT_ITEM_LENGTH = 0;
     public int BOOL_CHAIN_SPLIT_ITEM_COUNT = 0;
     public int BOOL_CHAIN_SPLIT_TOTAL_LENGTH = 0;
+    // +/- chains follow hxformat's wrapping.opAddSubChain rules (see
+    // HaxeAdditiveChainRules): a joined line past SPLIT_LINE_LENGTH breaks
+    // before every operator when an operand reaches SPLIT_ITEM_LENGTH, else
+    // only where it overflows; a fitting line breaks before every operator
+    // once SPLIT_ITEM_COUNT operands total more than SPLIT_TOTAL_LENGTH.
+    // 0 line length keeps the written shape
+    public int ADD_CHAIN_SPLIT_LINE_LENGTH = 0;
+    public int ADD_CHAIN_SPLIT_ITEM_LENGTH = 0;
+    public int ADD_CHAIN_SPLIT_ITEM_COUNT = 0;
+    public int ADD_CHAIN_SPLIT_TOTAL_LENGTH = 0;
+    // call arguments fill the JOINED line the way hxformat's callParameter
+    // fillLine does: an argument reaching the margin on that line starts a
+    // new line even where the other breaks would have made it fit; off
+    // leaves the margin wrap to the layout as formatted
+    public boolean FILL_CALL_ARGUMENTS_ON_JOINED_LINE = false;
     // a multi-var declaration whose JOINED line would pass this many columns
     // splits one declarator per line (hxformat's wrapping.multiVar
     // lineLengthLargerThan rule); 0 keeps the written shape. A declarator at

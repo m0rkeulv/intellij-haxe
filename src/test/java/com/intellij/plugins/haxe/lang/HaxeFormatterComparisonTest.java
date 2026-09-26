@@ -483,6 +483,15 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("additive chain rules")
+  public void testAdditiveChainRules() throws Exception {
+    // wrapping.opAddSubChain on JOINED input: the chains of one call are
+    // judged together (operand count and total), a long line explodes or
+    // fills them, a short one explodes past 4 operands totalling over 120
+    doParityTest("additive-chain-rules");
+  }
+
+  @Test
   @DisplayName("additive arg wrap")
   public void testAdditiveArgWrap() throws Exception {
     // a call argument's wrapped arithmetic continuation stays ONE step past
