@@ -3,7 +3,8 @@ package com.intellij.plugins.haxe.lang;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeHxformatSettingsModifier;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatConfigCache;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatSettingsModifier;
 import com.intellij.psi.PsiFile;
 import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
@@ -21,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * disableFormatting falls back to the scheme.
  */
 @DisplayName("Formatting: project hxformat.json override")
-public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
+public class HxformatModifierTest extends HaxeLightFixtureTestCase {
 
   private static final String MAIN_HX_SOURCE = "class Main {}";
 
@@ -38,7 +39,7 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
 
     TransientCodeStyleSettings settings = transientFor(file);
-    assertTrue(new HaxeHxformatSettingsModifier().modifySettings(settings, file), "the config must apply");
+    assertTrue(new HxformatSettingsModifier().modifySettings(settings, file), "the config must apply");
 
     assertEquals(101, settings.getRightMargin(HaxeLanguage.INSTANCE));
     assertFalse(settings.getIndentOptions(file.getFileType()).USE_TAB_CHARACTER);
@@ -51,11 +52,11 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
     PsiFile override = myFixture.addFileToProject("configs/hxformat.json", """
       { "wrapping": { "maxLineLength": 91 } }""");
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
-    com.intellij.plugins.haxe.ide.formatter.settings.HaxeHxformatConfigCache.getInstance(getProject())
+    HxformatConfigCache.getInstance(getProject())
       .setOverrideConfigUrl(override.getVirtualFile().getUrl());
 
     TransientCodeStyleSettings settings = transientFor(file);
-    assertTrue(new HaxeHxformatSettingsModifier().modifySettings(settings, file), "the override must apply");
+    assertTrue(new HxformatSettingsModifier().modifySettings(settings, file), "the override must apply");
     assertEquals(91, settings.getRightMargin(HaxeLanguage.INSTANCE));
   }
 
@@ -67,11 +68,11 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
     myFixture.addFileToProject("hxformat.json", """
       { "wrapping": { "maxLineLength": 101 } }""");
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
-    com.intellij.plugins.haxe.ide.formatter.settings.HaxeHxformatConfigCache.getInstance(getProject())
+    HxformatConfigCache.getInstance(getProject())
       .setOverrideConfigUrl(override.getVirtualFile().getUrl());
 
     TransientCodeStyleSettings settings = transientFor(file);
-    assertTrue(new HaxeHxformatSettingsModifier().modifySettings(settings, file), "the config must apply");
+    assertTrue(new HxformatSettingsModifier().modifySettings(settings, file), "the config must apply");
     assertEquals(101, settings.getRightMargin(HaxeLanguage.INSTANCE));
   }
 
@@ -85,7 +86,7 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
       { "wrapping": { "maxLineLength": 101 } }""");
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
 
-    assertFalse(new HaxeHxformatSettingsModifier().modifySettings(transientFor(file), file),
+    assertFalse(new HxformatSettingsModifier().modifySettings(transientFor(file), file),
                 "the toggle must opt out of the project config");
   }
 
@@ -96,7 +97,7 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
       { "disableFormatting": true, "wrapping": { "maxLineLength": 101 } }""");
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
 
-    assertFalse(new HaxeHxformatSettingsModifier().modifySettings(transientFor(file), file),
+    assertFalse(new HxformatSettingsModifier().modifySettings(transientFor(file), file),
                 "disableFormatting must fall back to the scheme settings");
   }
 
@@ -105,7 +106,7 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
   public void testNoConfigLeavesTheSchemeUntouched() {
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
 
-    assertFalse(new HaxeHxformatSettingsModifier().modifySettings(transientFor(file), file));
+    assertFalse(new HxformatSettingsModifier().modifySettings(transientFor(file), file));
   }
 
   @Test
@@ -115,7 +116,7 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
 
     CodeStyleStatusBarUIContributor contributor =
-      new HaxeHxformatSettingsModifier().getStatusBarUiContributor(transientFor(file));
+      new HxformatSettingsModifier().getStatusBarUiContributor(transientFor(file));
 
     assertNotNull(contributor, "a governed file must get a status bar entry");
     assertEquals("hxformat", contributor.getStatusText(file));
@@ -129,7 +130,7 @@ public class HaxeHxformatModifierTest extends HaxeLightFixtureTestCase {
   public void testStatusBarContributorAbsentWithoutAConfig() {
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
 
-    assertNull(new HaxeHxformatSettingsModifier().getStatusBarUiContributor(transientFor(file)));
+    assertNull(new HxformatSettingsModifier().getStatusBarUiContributor(transientFor(file)));
   }
 
   private TransientCodeStyleSettings transientFor(PsiFile file) {

@@ -24,6 +24,9 @@ import com.intellij.formatting.Spacing;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeCallArgumentFill;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeMultiVarSplit;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeOperatorChainRules;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeTag;
 import com.intellij.plugins.haxe.metadata.lexer.HaxeMetadataTokenTypes;
@@ -751,7 +754,7 @@ public class HaxeSpacingProcessor {
 
     // wrapping.callParameter fillLine judged on the JOINED line: an argument
     // the tool moves down starts its line here too, whatever fits after the
-    // other breaks (HaxeCallFill)
+    // other breaks (HaxeCallArgumentFill)
     if (myHaxeCodeStyleSettings.FILL_CALL_ARGUMENTS_ON_JOINED_LINE && callFillBreaksBefore(node2, type1)) {
       return Spacing.createSpacing(0, 0, 1, false, 0);
     }
@@ -1065,12 +1068,11 @@ public class HaxeSpacingProcessor {
     return Spacing.createSpacing(0, 1, 0, true, keepBlankLines);
   }
 
-  /** Whether the whole multi-var statement, joined onto its current line, would pass the configured split width. */
   /** The pair's second node is a call argument (after a comma) that the joined-line fill moves down. */
   private boolean callFillBreaksBefore(ASTNode argument, IElementType type1) {
     if (type1 != OCOMMA) return false;
-    ASTNode list = HaxeCallFill.listOf(argument);
-    return list != null && HaxeCallFill.brokenArguments(list, mySettings, myHaxeCodeStyleSettings).contains(argument);
+    ASTNode list = HaxeCallArgumentFill.listOf(argument);
+    return list != null && HaxeCallArgumentFill.brokenArguments(list, mySettings, myHaxeCodeStyleSettings).contains(argument);
   }
 
   private boolean nextLineBraces() {

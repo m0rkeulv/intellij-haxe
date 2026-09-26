@@ -1,6 +1,7 @@
-package com.intellij.plugins.haxe.ide.formatter;
+package com.intellij.plugins.haxe.ide.formatter.wrapping;
 
 import com.intellij.lang.ASTNode;
+import com.intellij.plugins.haxe.ide.formatter.HaxeIndentText;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -9,12 +10,12 @@ import org.jetbrains.annotations.NotNull;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.LOCAL_VAR_DECLARATION;
 
 /**
- * hxformat's wrapping.multiVar split: a declaration list whose joined line
- * passes the split width goes one declarator per line - unless a declarator
- * is short enough, as the tool measures it, to keep the list filling (its
- * anyItemLength rule precedes the split rule).
+ * haxe-formatter's wrapping.multiVar split: a declaration list whose joined
+ * line passes the split width goes one declarator per line - unless a
+ * declarator is short enough, as the tool measures it, to keep the list
+ * filling (its anyItemLength rule precedes the split rule).
  */
-final class HaxeMultiVarSplit {
+public final class HaxeMultiVarSplit {
 
   // the tool measures a declarator with its trailing comma or semicolon; the
   // first one also carries the var keyword's gap
@@ -24,7 +25,7 @@ final class HaxeMultiVarSplit {
   private HaxeMultiVarSplit() {
   }
 
-  static boolean splits(@NotNull ASTNode declarationList, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
+  public static boolean splits(@NotNull ASTNode declarationList, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     int splitWidth = haxe.MULTI_VAR_SPLIT_WIDTH;
     if (splitWidth <= 0) return false;
     int fillItemLength = haxe.MULTI_VAR_FILL_ITEM_LENGTH;

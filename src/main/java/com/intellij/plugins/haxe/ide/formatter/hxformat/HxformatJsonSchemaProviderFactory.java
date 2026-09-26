@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.formatter.settings;
+package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -29,7 +29,7 @@ public class HxformatJsonSchemaProviderFactory implements JsonSchemaProviderFact
   private static class HxformatSchemaProvider implements JsonSchemaFileProvider {
     @Override
     public boolean isAvailable(@NotNull VirtualFile file) {
-      return HaxeHxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName());
+      return HxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName());
     }
 
     @Override

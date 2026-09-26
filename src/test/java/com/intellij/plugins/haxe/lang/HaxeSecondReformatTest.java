@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.lang;
 
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.plugins.haxe.ide.formatter.settings.HxformatCodeStyle;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatDefaultProfile;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider;
@@ -54,7 +54,7 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("first pass keeps custom line breaks")
   public void testFirstPassKeepsCustomLineBreaks() {
-    String formatted = reformat("Main.hx", HxformatCodeStyle::applyDefaults, WRAPPED_CALL_SOURCE);
+    String formatted = reformat("Main.hx", HxformatDefaultProfile::apply, WRAPPED_CALL_SOURCE);
 
     assertEquals(WRAPPED_CALL_SOURCE, formatted);
   }
@@ -202,7 +202,7 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
 
   /** The hxformat defaults with custom line breaks dropped, as the platform reruns the reformat. */
   private static void secondPass(CodeStyleSettings settings) {
-    HxformatCodeStyle.applyDefaults(settings);
+    HxformatDefaultProfile.apply(settings);
     settings.getCommonSettings(HaxeLanguage.INSTANCE).KEEP_LINE_BREAKS = false;
   }
 

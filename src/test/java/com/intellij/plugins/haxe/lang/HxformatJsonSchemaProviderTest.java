@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.plugins.haxe.ide.formatter.settings.HxformatJsonSchemaProviderFactory;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatJsonSchemaProviderFactory;
 import com.jetbrains.jsonSchema.extension.JsonSchemaFileProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

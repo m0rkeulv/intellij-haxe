@@ -1,9 +1,10 @@
-package com.intellij.plugins.haxe.ide.formatter.settings;
+package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.application.options.CodeStyle;
@@ -21,7 +22,7 @@ import org.jetbrains.annotations.Nullable;
  * TRANSIENT settings - no scheme is created or changed. Opt-out per scheme
  * via {@link HaxeCodeStyleSettings#USE_PROJECT_HXFORMAT}.
  */
-public class HaxeHxformatSettingsModifier implements CodeStyleSettingsModifier {
+public class HxformatSettingsModifier implements CodeStyleSettingsModifier {
 
   @Override
   public boolean modifySettings(@NotNull TransientCodeStyleSettings settings, @NotNull PsiFile file) {
@@ -29,10 +30,10 @@ public class HaxeHxformatSettingsModifier implements CodeStyleSettingsModifier {
     if (!settings.getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT) return false;
     VirtualFile virtualFile = file.getOriginalFile().getVirtualFile();
     if (virtualFile == null) return false;
-    VirtualFile configFile = HaxeHxformatConfigCache.findConfig(file.getProject(), virtualFile);
+    VirtualFile configFile = HxformatConfigCache.findConfig(file.getProject(), virtualFile);
     if (configFile == null) return false;
 
-    HaxeHxformatConfigCache cache = HaxeHxformatConfigCache.getInstance(file.getProject());
+    HxformatConfigCache cache = HxformatConfigCache.getInstance(file.getProject());
     settings.addDependency(cache.tracker());
     JsonNode root = cache.parsed(configFile);
     if (root == null) return false;
@@ -40,8 +41,8 @@ public class HaxeHxformatSettingsModifier implements CodeStyleSettingsModifier {
     // closest IDE equivalent is falling back to the plain scheme settings
     if (root.path("disableFormatting").asBoolean(false)) return false;
 
-    HxformatCodeStyle.applyDefaults(settings);
-    HxformatCodeStyle.applyJson(settings, root);
+    HxformatDefaultProfile.apply(settings);
+    HxformatJsonMapper.apply(settings, root);
     return true;
   }
 
@@ -61,7 +62,7 @@ public class HaxeHxformatSettingsModifier implements CodeStyleSettingsModifier {
     if (file == null) return null;
     VirtualFile virtualFile = file.getVirtualFile();
     if (virtualFile == null) return null;
-    VirtualFile configFile = HaxeHxformatConfigCache.findConfig(file.getProject(), virtualFile);
-    return configFile == null ? null : new HaxeHxformatStatusBarContributor(configFile);
+    VirtualFile configFile = HxformatConfigCache.findConfig(file.getProject(), virtualFile);
+    return configFile == null ? null : new HxformatStatusBarContributor(configFile);
   }
 }

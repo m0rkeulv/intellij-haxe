@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.formatter.settings;
+package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.application.options.CodeStyle;
 import com.intellij.openapi.actionSystem.AnAction;
@@ -7,6 +7,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.modifier.CodeStyleStatusBarUIContributor;
@@ -21,11 +22,11 @@ import javax.swing.*;
  * governs the current file: names the config, opens it, and offers the same
  * opt-out as {@link HaxeCodeStyleSettings#USE_PROJECT_HXFORMAT}.
  */
-class HaxeHxformatStatusBarContributor implements CodeStyleStatusBarUIContributor {
+class HxformatStatusBarContributor implements CodeStyleStatusBarUIContributor {
 
   private final VirtualFile configFile;
 
-  HaxeHxformatStatusBarContributor(@NotNull VirtualFile configFile) {
+  HxformatStatusBarContributor(@NotNull VirtualFile configFile) {
     this.configFile = configFile;
   }
 

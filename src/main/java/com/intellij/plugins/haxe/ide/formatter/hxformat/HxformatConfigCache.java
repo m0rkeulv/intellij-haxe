@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.formatter.settings;
+package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Parsed hxformat.json configs for {@link HaxeHxformatSettingsModifier}, plus
+ * Parsed hxformat.json configs for {@link HxformatSettingsModifier}, plus
  * the user's explicitly chosen fallback config ("Use as Haxe Formatting
  * Rules"), persisted per project. Any VFS change to a file named
  * hxformat.json - and any override change - bumps the tracker (invalidating
@@ -37,14 +37,14 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeHxformatConfig", storages = @Storage("haxeFormatter.xml"))
-public final class HaxeHxformatConfigCache implements PersistentStateComponent<HaxeHxformatConfigCache.State> {
+public final class HxformatConfigCache implements PersistentStateComponent<HxformatConfigCache.State> {
 
   public static final class State {
     public String overrideConfigUrl;
   }
 
   public static final String HXFORMAT_FILE_NAME = "hxformat.json";
-  private static final Logger LOG = Logger.getInstance(HaxeHxformatConfigCache.class);
+  private static final Logger LOG = Logger.getInstance(HxformatConfigCache.class);
   // jackson mappers are thread-safe once configured; one per parse is waste
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -53,8 +53,8 @@ public final class HaxeHxformatConfigCache implements PersistentStateComponent<H
   private final Project project;
   private State state = new State();
 
-  public static HaxeHxformatConfigCache getInstance(@NotNull Project project) {
-    return project.getService(HaxeHxformatConfigCache.class);
+  public static HxformatConfigCache getInstance(@NotNull Project project) {
+    return project.getService(HxformatConfigCache.class);
   }
 
   @Override
@@ -67,7 +67,7 @@ public final class HaxeHxformatConfigCache implements PersistentStateComponent<H
     this.state = state;
   }
 
-  public HaxeHxformatConfigCache(@NotNull Project project) {
+  public HxformatConfigCache(@NotNull Project project) {
     this.project = project;
     project.getMessageBus().connect().subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
       @Override

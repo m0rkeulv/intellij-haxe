@@ -5,7 +5,8 @@ import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.ide.formatter.settings.HxformatCodeStyle;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatDefaultProfile;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatJsonMapper;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import org.junit.jupiter.api.DisplayName;
@@ -43,7 +44,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
                         "importAndUsing": { "betweenImports": 1, "betweenImportsLevel": "secondLevelPackage" } }
       }""");
 
-    List<String> unsupported = HxformatCodeStyle.applyJson(settings, root);
+    List<String> unsupported = HxformatJsonMapper.apply(settings, root);
 
     CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
@@ -123,7 +124,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
         }
       }""");
 
-    List<String> unsupported = HxformatCodeStyle.applyJson(settings, root);
+    List<String> unsupported = HxformatJsonMapper.apply(settings, root);
 
     CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
     assertEquals(CommonCodeStyleSettings.NEXT_LINE, common.BRACE_STYLE);
@@ -170,7 +171,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
         }
       }""");
 
-    List<String> unsupported = HxformatCodeStyle.applyJson(settings, root);
+    List<String> unsupported = HxformatJsonMapper.apply(settings, root);
 
     CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
@@ -207,7 +208,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
         ] } }
       }""");
 
-    HxformatCodeStyle.applyJson(settings, root);
+    HxformatJsonMapper.apply(settings, root);
 
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     assertEquals(100, haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH);
@@ -221,7 +222,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
   public void testEmptyFileImportsCompletely() throws Exception {
     CodeStyleSettings settings = freshDefaults();
 
-    List<String> unsupported = HxformatCodeStyle.applyJson(settings, new ObjectMapper().readTree("{}"));
+    List<String> unsupported = HxformatJsonMapper.apply(settings, new ObjectMapper().readTree("{}"));
 
     assertTrue(unsupported.isEmpty(), "a default config maps completely");
   }
@@ -243,14 +244,14 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
                         "importAndUsing": { "betweenImports": 0 } }
       }""");
 
-    List<String> unsupported = HxformatCodeStyle.applyJson(settings, root);
+    List<String> unsupported = HxformatJsonMapper.apply(settings, root);
 
     assertTrue(unsupported.isEmpty(), "spelled-out defaults map completely, got: " + unsupported);
   }
 
   private CodeStyleSettings freshDefaults() {
     CodeStyleSettings settings = projectSettingsCopy();
-    HxformatCodeStyle.applyDefaults(settings);
+    HxformatDefaultProfile.apply(settings);
     return settings;
   }
 }

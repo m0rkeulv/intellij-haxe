@@ -5,7 +5,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.ide.formatter.settings.HxformatCodeStyle;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatDefaultProfile;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
@@ -45,7 +45,7 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     CodeStyleSettings tempSettings = projectSettingsCopy();
     // the production defaults mapping IS the parity profile - the fixtures
     // guard the hxformat.json importer's baseline
-    HxformatCodeStyle.applyDefaults(tempSettings);
+    HxformatDefaultProfile.apply(tempSettings);
     CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
   }
 
@@ -528,7 +528,7 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   private void doParityTest(String rule, Consumer<CodeStyleSettings> tweak) throws Exception {
     Project project = getProject();
     CodeStyleSettings tempSettings = projectSettingsCopy();
-    HxformatCodeStyle.applyDefaults(tempSettings);
+    HxformatDefaultProfile.apply(tempSettings);
     tweak.accept(tempSettings);
     CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
     doParityTest(rule);

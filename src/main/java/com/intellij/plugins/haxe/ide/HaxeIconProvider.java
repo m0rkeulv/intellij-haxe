@@ -20,7 +20,7 @@ package com.intellij.plugins.haxe.ide;
 import com.intellij.ide.IconProvider;
 import com.intellij.openapi.util.Iconable;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeHxformatConfigCache;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatConfigCache;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
@@ -44,7 +44,7 @@ public class HaxeIconProvider extends IconProvider {
       return getHaxeFileIcon((HaxeFile)element, flags);
     }
     // TODO: a dedicated hxformat.json icon (it shares haxelib.json's)
-    if (element instanceof PsiFile file && HaxeHxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName())) {
+    if (element instanceof PsiFile file && HxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName())) {
       return HaxeIcons.HAXELIB_JSON;
     }
     return null;

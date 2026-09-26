@@ -1,6 +1,8 @@
-package com.intellij.plugins.haxe.ide.formatter.settings;
+package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeOptionsPreviewPanelBase;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
@@ -13,15 +15,15 @@ import javax.swing.JPanel;
 
 /**
  * The hxformat tab: whether a project's own hxformat.json overrides the
- * scheme's Haxe formatting per file (see HaxeHxformatSettingsModifier).
+ * scheme's Haxe formatting per file (see HxformatSettingsModifier).
  * No preview - the tab only hosts the toggle.
  */
-public class HaxeHxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
+public class HxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   private final JBCheckBox useProjectConfig =
     new JBCheckBox(HaxeCodeStyleBundle.message("hxformat.panel.use.project.config"));
 
-  protected HaxeHxformatCodeStylePanel(CodeStyleSettings settings) {
+  public HxformatCodeStylePanel(CodeStyleSettings settings) {
     super(settings);
     JBLabel description = new JBLabel(HaxeCodeStyleBundle.message("hxformat.panel.description"));
     description.setComponentStyle(UIUtil.ComponentStyle.SMALL);

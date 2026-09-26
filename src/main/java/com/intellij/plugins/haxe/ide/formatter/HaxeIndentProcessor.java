@@ -18,7 +18,6 @@
  */
 package com.intellij.plugins.haxe.ide.formatter;
 
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeFormatterDefaults;
 import com.intellij.formatting.Indent;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.editor.Document;
@@ -378,10 +377,8 @@ public class HaxeIndentProcessor {
 
   /** One member step plus the continuation, in columns - for anchors that lost the member step to same-line metadata. */
   private Indent memberStepPlusContinuation() {
-    CommonCodeStyleSettings.IndentOptions options = settings.getIndentOptions();
-    int indentSize = options == null ? HaxeFormatterDefaults.TAB_WIDTH : options.INDENT_SIZE;
-    int continuationSize = options == null ? HaxeFormatterDefaults.CONTINUATION_STEPS * HaxeFormatterDefaults.TAB_WIDTH : options.CONTINUATION_INDENT_SIZE;
-    return Indent.getSpaceIndent(indentSize + continuationSize);
+    CommonCodeStyleSettings.IndentOptions options = HaxeIndentText.indentOptions(settings);
+    return Indent.getSpaceIndent(options.INDENT_SIZE + options.CONTINUATION_INDENT_SIZE);
   }
 
   /**

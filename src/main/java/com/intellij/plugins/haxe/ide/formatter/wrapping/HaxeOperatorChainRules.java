@@ -1,6 +1,5 @@
-package com.intellij.plugins.haxe.ide.formatter;
+package com.intellij.plugins.haxe.ide.formatter.wrapping;
 
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeFormatterDefaults;
 import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
@@ -29,7 +28,7 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * <pre>
  * line reaching LINE_LENGTH and an operand reaching ITEM_LENGTH -> EXPLODE (a break before every operator)
  * line reaching LINE_LENGTH                                     -> FILL    (a break before an operator that overflows)
- * up to 3 operands and the line fits the margin                 -> NONE
+ * up to KEEP_ITEM_COUNT operands and the line fits the margin   -> NONE
  * total up to TOTAL_LENGTH and the line fits                    -> NONE
  * ITEM_COUNT operands or more                                   -> EXPLODE
  * otherwise                                                     -> NONE
@@ -38,9 +37,13 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * Lengths come from the joined line ({@link HaxeJoinedLine}); in the total
  * every operand counts two more, the separator that follows it.
  */
-final class HaxeOperatorChainRules {
+public final class HaxeOperatorChainRules {
 
-  enum Kind {
+  // the noWrap rule both kinds share: a chain of this many operands or fewer
+  // on a line within the margin is left alone (not configurable in the tool)
+  public static final int KEEP_ITEM_COUNT = 3;
+
+  public enum Kind {
     ADDITIVE(TokenSet.create(ADDITIVE_EXPRESSION), ADDITIVE_OPERATORS, 1),
     LOGIC(TokenSet.create(LOGIC_AND_EXPRESSION, LOGIC_OR_EXPRESSION), LOGIC_OPERATORS, 2);
 
@@ -61,12 +64,15 @@ final class HaxeOperatorChainRules {
       return operators.contains(first == null ? node.getElementType() : first.getElementType());
     }
 
-    /** The kind's thresholds as configured (line length, item length, item count, total length). */
-    int[] thresholds(HaxeCodeStyleSettings haxe) {
+    Thresholds thresholds(HaxeCodeStyleSettings haxe) {
       return this == ADDITIVE
-             ? new int[]{haxe.ADD_CHAIN_SPLIT_LINE_LENGTH, haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH, haxe.ADD_CHAIN_SPLIT_ITEM_COUNT, haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH}
-             : new int[]{haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH, haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH, haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT, haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH};
+             ? new Thresholds(haxe.ADD_CHAIN_SPLIT_LINE_LENGTH, haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH, haxe.ADD_CHAIN_SPLIT_ITEM_COUNT, haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH)
+             : new Thresholds(haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH, haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH, haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT, haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH);
     }
+  }
+
+  /** The kind's thresholds as configured; a line length of 0 turns the rules off. */
+  private record Thresholds(int lineLength, int itemLength, int itemCount, int totalLength) {
   }
 
   private enum Split { NONE, FILL, EXPLODE }
@@ -87,8 +93,8 @@ final class HaxeOperatorChainRules {
    * and space that trail it, would reach the margin on the joined line (the
    * fill then continues one step in, operator leading).
    */
-  static boolean breaksBefore(@NotNull Kind kind, @NotNull ASTNode operator,
-                              @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
+  public static boolean breaksBefore(@NotNull Kind kind, @NotNull ASTNode operator,
+                                     @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     Split split = decide(kind, operator, common, haxe);
     if (split == Split.NONE) return false;
     if (split == Split.EXPLODE) return true;
@@ -138,12 +144,8 @@ final class HaxeOperatorChainRules {
   }
 
   private static Split decideRoot(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
-    int[] thresholds = kind.thresholds(haxe);
-    int lineThreshold = thresholds[0];
-    int itemThreshold = thresholds[1];
-    int countThreshold = thresholds[2];
-    int totalThreshold = thresholds[3];
-    if (lineThreshold <= 0) return Split.NONE;
+    Thresholds thresholds = kind.thresholds(haxe);
+    if (thresholds.lineLength() <= 0) return Split.NONE;
     ASTNode scope = scopeOf(chain);
     List<ASTNode> operands = new ArrayList<>();
     for (ASTNode item : scopeItems(kind, scope, chain)) {
@@ -164,11 +166,11 @@ final class HaxeOperatorChainRules {
     ASTNode judged = HaxeJoinedLine.STATEMENT_CONTAINERS.contains(scope.getElementType()) ? chain : scope;
     int lineLength = judgedLineLength(judged, common, haxe);
     boolean exceeds = lineLength > margin;
-    if (lineLength >= lineThreshold && longest >= itemThreshold) return Split.EXPLODE;
-    if (lineLength >= lineThreshold) return Split.FILL;
-    if (operands.size() <= HaxeFormatterDefaults.CHAIN_KEEP_ITEM_COUNT && !exceeds) return Split.NONE;
-    if (total <= totalThreshold && !exceeds) return Split.NONE;
-    if (operands.size() >= countThreshold) return Split.EXPLODE;
+    if (lineLength >= thresholds.lineLength() && longest >= thresholds.itemLength()) return Split.EXPLODE;
+    if (lineLength >= thresholds.lineLength()) return Split.FILL;
+    if (operands.size() <= KEEP_ITEM_COUNT && !exceeds) return Split.NONE;
+    if (total <= thresholds.totalLength() && !exceeds) return Split.NONE;
+    if (operands.size() >= thresholds.itemCount()) return Split.EXPLODE;
     return Split.NONE;
   }
 
@@ -224,7 +226,7 @@ final class HaxeOperatorChainRules {
     if (line == null) return 0;
     boolean callArguments = ARGUMENT_LISTS.contains(scope.getElementType()) || scope.getElementType() == NEW_EXPRESSION;
     if (!callArguments) return line.width();
-    List<ASTNode> broken = HaxeCallFill.brokenArguments(scope, common, haxe);
+    List<ASTNode> broken = HaxeCallArgumentFill.brokenArguments(scope, common, haxe);
     if (broken.isEmpty()) return line.width();
     return line.columnBefore(broken.getFirst()) - 1;
   }

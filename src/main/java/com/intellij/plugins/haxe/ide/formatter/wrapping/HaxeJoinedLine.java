@@ -1,8 +1,8 @@
-package com.intellij.plugins.haxe.ide.formatter;
+package com.intellij.plugins.haxe.ide.formatter.wrapping;
 
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeFormatterDefaults;
 import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.formatter.HaxeIndentText;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -22,16 +22,16 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * the margin and the node lies inside such a link. Columns count the line's
  * indent in tab-expanded width.
  */
-final class HaxeJoinedLine {
+public final class HaxeJoinedLine {
 
   // the containers whose children start their own lines
-  static final TokenSet STATEMENT_CONTAINERS = TokenSet.orSet(
+  public static final TokenSet STATEMENT_CONTAINERS = TokenSet.orSet(
     CLASS_BODY_TYPES,
     TokenSet.create(BLOCK_STATEMENT, SWITCH_CASE_BLOCK, MODULE, PPBODY, INACTIVE_STATEMENT_LIST, INACTIVE_MEMBER_LIST,
                     INACTIVE_MODULE_LIST));
 
   // the ", " between items, as the tool counts it in item lengths
-  static final int SEPARATOR_WIDTH = 2;
+  public static final int SEPARATOR_WIDTH = 2;
 
   private final CharSequence text;
   private final int start;
@@ -46,7 +46,7 @@ final class HaxeJoinedLine {
   }
 
   @Nullable
-  static HaxeJoinedLine of(@NotNull ASTNode node, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
+  public static HaxeJoinedLine of(@NotNull ASTNode node, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     PsiFile file = node.getPsi().getContainingFile();
     if (file == null) return null;
     CharSequence text = file.getViewProvider().getContents();
@@ -138,10 +138,9 @@ final class HaxeJoinedLine {
     return null;
   }
 
-  /** The tab width the columns count with; the tool's default when the scheme carries no indent options. */
+  /** The tab width the columns count with. */
   static int tabSize(@NotNull CommonCodeStyleSettings common) {
-    CommonCodeStyleSettings.IndentOptions options = common.getIndentOptions();
-    return options == null ? HaxeFormatterDefaults.TAB_WIDTH : options.TAB_SIZE;
+    return HaxeIndentText.indentOptions(common).TAB_SIZE;
   }
 
   /** The node's width as it prints on one line: every whitespace run one space. */
@@ -158,21 +157,21 @@ final class HaxeJoinedLine {
   }
 
   /** The line's width when printed. */
-  int width() {
+  public int width() {
     return indent + collapsedWidth(start, end);
   }
 
   /** The column the node's first character lands on. */
-  int columnBefore(@NotNull ASTNode node) {
+  public int columnBefore(@NotNull ASTNode node) {
     return indent + collapsedWidth(start, node.getStartOffset());
   }
 
   /** The column right after the node's last character. */
-  int columnAfter(@NotNull ASTNode node) {
+  public int columnAfter(@NotNull ASTNode node) {
     return indent + collapsedWidth(start, node.getStartOffset() + node.getTextLength());
   }
 
-  int indent() {
+  public int indent() {
     return indent;
   }
 

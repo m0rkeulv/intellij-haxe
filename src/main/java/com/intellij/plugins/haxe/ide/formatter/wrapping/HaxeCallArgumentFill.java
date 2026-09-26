@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.formatter;
+package com.intellij.plugins.haxe.ide.formatter.wrapping;
 
 import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.HaxeLanguage;
@@ -22,14 +22,14 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * comma and space included) that would reach the margin starts a new line
  * one step in; the first argument stays on the paren's line.
  */
-final class HaxeCallFill {
+public final class HaxeCallArgumentFill {
 
-  private HaxeCallFill() {
+  private HaxeCallArgumentFill() {
   }
 
   /** The arguments of the list that start a new line; empty when the joined line fits the margin. */
   @NotNull
-  static List<ASTNode> brokenArguments(@NotNull ASTNode list, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
+  public static List<ASTNode> brokenArguments(@NotNull ASTNode list, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     List<ASTNode> broken = new ArrayList<>();
     HaxeJoinedLine line = HaxeJoinedLine.of(list, common, haxe);
     if (line == null) return broken;
@@ -77,7 +77,7 @@ final class HaxeCallFill {
    * the new-expression holding it (functionSignature fills the same way).
    */
   @Nullable
-  static ASTNode listOf(@NotNull ASTNode argument) {
+  public static ASTNode listOf(@NotNull ASTNode argument) {
     ASTNode parent = argument.getTreeParent();
     if (parent == null) return null;
     if (parent.getElementType() == NEW_EXPRESSION) return parent;

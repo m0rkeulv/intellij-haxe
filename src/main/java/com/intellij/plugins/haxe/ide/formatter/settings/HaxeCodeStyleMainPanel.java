@@ -19,6 +19,7 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.intellij.application.options.TabbedLanguageCodeStylePanel;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatCodeStylePanel;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 
 /**
@@ -34,6 +35,6 @@ public class HaxeCodeStyleMainPanel extends TabbedLanguageCodeStylePanel {
     super.initTabs(settings);
     addTab(new HaxeImportsCodeStylePanel(settings));
     addTab(new HaxeConditionalCompilationPanel(settings));
-    addTab(new HaxeHxformatCodeStylePanel(settings));
+    addTab(new HxformatCodeStylePanel(settings));
   }
 }

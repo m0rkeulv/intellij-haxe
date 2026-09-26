@@ -23,7 +23,7 @@ import java.awt.BorderLayout;
  * {@link #initPanel}; option listeners call {@link #previewChanged} so the
  * preview reformats from the edited values immediately.
  */
-abstract class HaxeOptionsPreviewPanelBase extends CodeStyleAbstractPanel {
+public abstract class HaxeOptionsPreviewPanelBase extends CodeStyleAbstractPanel {
 
   private JPanel panel;
 

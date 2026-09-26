@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.formatter.settings;
+package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.application.options.CodeStyle;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.ToggleAction;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -20,7 +21,7 @@ import org.jetbrains.annotations.Nullable;
  * only clears the fallback; the integration stays on (the settings checkbox
  * owns that).
  */
-public final class HaxeUseFormattingRulesAction extends ToggleAction implements DumbAware {
+public final class HxformatUseAsRulesAction extends ToggleAction implements DumbAware {
 
   @Override
   public @NotNull ActionUpdateThread getActionUpdateThread() {
@@ -38,7 +39,7 @@ public final class HaxeUseFormattingRulesAction extends ToggleAction implements 
     Project project = e.getProject();
     VirtualFile file = configFile(e);
     if (project == null || file == null) return false;
-    return file.getUrl().equals(HaxeHxformatConfigCache.getInstance(project).overrideConfigUrl());
+    return file.getUrl().equals(HxformatConfigCache.getInstance(project).overrideConfigUrl());
   }
 
   @Override
@@ -50,7 +51,7 @@ public final class HaxeUseFormattingRulesAction extends ToggleAction implements 
       CodeStyle.getSettings(project).getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT = true;
     }
     // setOverrideConfigUrl re-triggers code style recalculation either way
-    HaxeHxformatConfigCache.getInstance(project).setOverrideConfigUrl(state ? file.getUrl() : null);
+    HxformatConfigCache.getInstance(project).setOverrideConfigUrl(state ? file.getUrl() : null);
   }
 
   @Nullable
@@ -58,7 +59,7 @@ public final class HaxeUseFormattingRulesAction extends ToggleAction implements 
     if (e.getProject() == null) return null;
     VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
     boolean isConfig = file != null && !file.isDirectory()
-                       && HaxeHxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName());
+                       && HxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName());
     return isConfig ? file : null;
   }
 }

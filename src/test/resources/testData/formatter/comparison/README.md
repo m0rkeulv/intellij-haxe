@@ -14,7 +14,7 @@ Each rule directory holds:
 
 The test configures our code style to the haxe-formatter DEFAULTS (tabs,
 end-of-line braces, spaced keywords/operators, ...) via
-`HxformatCodeStyle.applyDefaults` in its setUp. Rules claiming parity assert our output
+`HxformatDefaultProfile.apply` in its setUp. Rules claiming parity assert our output
 equals `hxformat.hx` byte-for-byte (modulo the trailing newline, which the
 IDE manages at save time); the rest pin `plugin.hx` as a regression baseline.
 
@@ -30,7 +30,7 @@ haxelib run formatter -s <rule>\hxformat.hx
 Generated with formatter 1.18.0.
 
 `default-hxformat.json` is the tool's complete built-in configuration, the
-word `HaxeFormatterDefaults` is checked against (`HaxeFormatterDefaultsTest`).
+word `HxformatDefaults` is checked against (`HxformatDefaultsTest`).
 The tool only writes it over an EXISTING file:
 
 ```

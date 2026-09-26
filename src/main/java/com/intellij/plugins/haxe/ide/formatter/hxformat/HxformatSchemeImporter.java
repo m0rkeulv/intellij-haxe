@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.ide.formatter.settings;
+package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.intellij.openapi.diagnostic.Logger;
@@ -42,8 +42,8 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
     lastUnsupported = List.of();
     JsonNode root = readJson(selectedFile);
     CodeStyleScheme scheme = schemeFactory.createNewScheme(selectedFile.getNameWithoutExtension());
-    HxformatCodeStyle.applyDefaults(scheme.getCodeStyleSettings());
-    lastUnsupported = HxformatCodeStyle.applyJson(scheme.getCodeStyleSettings(), root);
+    HxformatDefaultProfile.apply(scheme.getCodeStyleSettings());
+    lastUnsupported = HxformatJsonMapper.apply(scheme.getCodeStyleSettings(), root);
     // the post-import balloon is short-lived - the log keeps the full list
     for (String key : lastUnsupported) {
       LOG.warn("hxformat.json import: unsupported setting " + key + " (from " + selectedFile.getPath() + ")");
@@ -67,7 +67,7 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
   @NotNull
   private static JsonNode readJson(@NotNull VirtualFile file) throws SchemeImportException {
     try {
-      return HaxeHxformatConfigCache.readJsonTree(file);
+      return HxformatConfigCache.readJsonTree(file);
     }
     catch (IOException e) {
       throw new SchemeImportException(HaxeCodeStyleBundle.message("hxformat.import.parse.error", e.getMessage()));

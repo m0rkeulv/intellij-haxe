@@ -259,23 +259,4 @@ public class HaxeWrappingProcessor {
   private static Wrap createWrap(boolean isNormal) {
     return Wrap.createWrap(isNormal ? WrapType.NORMAL : WrapType.NONE, true);
   }
-
-  private static Wrap createChildWrap(ASTNode child, int parentWrap, boolean newLineAfterLBrace, boolean newLineBeforeRBrace) {
-    IElementType childType = child.getElementType();
-    if (childType != PLPAREN && childType != PRPAREN) {
-      if (FormatterUtil.isPrecededBy(child, PLBRACK)) {
-        if (newLineAfterLBrace) {
-          return Wrap.createChildWrap(Wrap.createWrap(parentWrap, true), WrapType.ALWAYS, true);
-        }
-        else {
-          return Wrap.createWrap(WrapType.NONE, true);
-        }
-      }
-      return Wrap.createWrap(WrappingUtil.getWrapType(parentWrap), true);
-    }
-    if (childType == PRBRACK && newLineBeforeRBrace) {
-      return Wrap.createWrap(WrapType.ALWAYS, true);
-    }
-    return Wrap.createWrap(WrapType.NONE, true);
-  }
 }
