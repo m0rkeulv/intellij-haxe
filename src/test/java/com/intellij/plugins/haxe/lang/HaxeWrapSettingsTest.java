@@ -398,6 +398,38 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("object chop item count rule alone")
+  public void testObjectChopItemCountRuleAlone() {
+    // the count threshold stands on its own: four fields go one per line
+    // however short the line, three written on one line stay as written
+    Consumer<HaxeCodeStyleSettings> countOnly = haxe -> haxe.OBJECT_CHOP_ITEM_COUNT = 4;
+    String source = """
+      class Main {
+      	static function main() {
+      		var three = {a: 1, b: 2, c: 3};
+      		var four = {a: 1, b: 2, c: 3, d: 4};
+      	}
+      }
+      """;
+
+    String formatted = reformat(haxeSettings(countOnly), source);
+
+    assertEquals("""
+      class Main {
+          static function main() {
+              var three = {a: 1, b: 2, c: 3};
+              var four = {
+                  a: 1,
+                  b: 2,
+                  c: 3,
+                  d: 4
+              };
+          }
+      }
+      """, formatted);
+  }
+
+  @Test
   @DisplayName("array chop item count rule alone")
   public void testArrayChopItemCountRuleAlone() {
     // the count threshold stands on its own: four items go one per line

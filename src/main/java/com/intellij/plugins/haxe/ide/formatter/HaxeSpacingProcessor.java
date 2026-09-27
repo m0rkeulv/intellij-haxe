@@ -26,7 +26,7 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.RegionEnd;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.ide.formatter.wrapping.*;
-import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeArrayLiteralRules.Decision;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeLiteralItemRules.Decision;
 import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeOperatorChainRules.Kind;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeTag;
@@ -74,12 +74,13 @@ public class HaxeSpacingProcessor {
   private static final List<BiFunction<HaxeSpacingProcessor, Pair, Spacing>> PHASES = List.of(
     HaxeSpacingProcessor::fileSectionSpacing,
     HaxeSpacingProcessor::typeDeclarationSpacing,
+    // before the brace rules: an object literal's braces follow its item decision
+    HaxeSpacingProcessor::literalItemSpacing,
     HaxeSpacingProcessor::typeBodyBraceSpacing,
     HaxeSpacingProcessor::caseBodySpacing,
     HaxeSpacingProcessor::stackedCommentSpacing,
     HaxeSpacingProcessor::memberSpacing,
     HaxeSpacingProcessor::bodyPlacementSpacing,
-    HaxeSpacingProcessor::arrayItemSpacing,
     HaxeSpacingProcessor::bracketSpacing,
     HaxeSpacingProcessor::parenBeforeSpacing,
     HaxeSpacingProcessor::braceBeforeSpacing,
@@ -512,37 +513,41 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * wrapping.arrayWrap on an array literal's items (HaxeArrayLiteralRules):
-   * one per line starts every item and the closing bracket on its own line,
-   * the leading-break fill only the first item and the bracket (the items
-   * then re-pack under their wrap, written breaks gone), keep joins every
-   * written break. Comments keep their own spacing; null leaves the pair to
-   * the later phases.
+   * wrapping.arrayWrap / mapWrap / objectLiteral on a literal's items
+   * (HaxeLiteralItemRules): one per line starts every item and the closing
+   * bracket on its own line, the leading-break fill only the first item and
+   * the bracket (the items then re-pack under their wrap, written breaks
+   * gone), keep joins every written break - an object's braces hug their
+   * fields, as the tool prints them. Comments keep their own spacing; null
+   * leaves the pair to the later phases.
    */
   @Nullable
-  private Spacing arrayItemSpacing(Pair pair) {
-    ASTNode literal = arrayLiteralOf();
+  private Spacing literalItemSpacing(Pair pair) {
+    ASTNode literal = literalOf();
     if (literal == null || COMMENTS.contains(pair.type1()) || COMMENTS.contains(pair.type2())) return null;
-    Decision decision = HaxeArrayLiteralRules.decide(literal, common, haxe);
+    Decision decision = HaxeLiteralItemRules.decide(literal, common, haxe);
     if (decision == Decision.NONE) return null;
     // a comma stays with the item before it under every decision
     if (pair.type2() == OCOMMA) return forcedGap(common.SPACE_BEFORE_COMMA);
     boolean bracket = pair.type1() == PLBRACK || pair.type2() == PRBRACK;
+    boolean brace = pair.type1() == PLCURLY || pair.type2() == PRCURLY;
     return switch (decision) {
       case ONE_PER_LINE -> lineBreak();
-      case FILL_AFTER_LEADING_BREAK -> bracket ? lineBreak() : forcedGap(common.SPACE_AFTER_COMMA);
-      case KEEP -> bracket ? forcedGap(common.SPACE_WITHIN_BRACKETS) : forcedGap(common.SPACE_AFTER_COMMA);
+      case FILL_AFTER_LEADING_BREAK -> bracket || brace ? lineBreak() : forcedGap(common.SPACE_AFTER_COMMA);
+      case KEEP -> bracket ? forcedGap(common.SPACE_WITHIN_BRACKETS) : forcedGap(!brace && common.SPACE_AFTER_COMMA);
       case NONE -> null;
     };
   }
 
-  /** The array literal whose brackets or items the pair sits between; null elsewhere. */
+  /** The array, map or object literal whose brackets or items the pair sits between; null elsewhere. */
   @Nullable
-  private ASTNode arrayLiteralOf() {
-    if (elementType == ARRAY_LITERAL) return node;
+  private ASTNode literalOf() {
+    if (elementType == ARRAY_LITERAL || elementType == MAP_LITERAL || elementType == OBJECT_LITERAL) return node;
     ASTNode parent = node.getTreeParent();
-    boolean itemList = elementType == EXPRESSION_LIST && parent != null && parent.getElementType() == ARRAY_LITERAL;
-    return itemList ? parent : null;
+    IElementType parentType = parent == null ? null : parent.getElementType();
+    boolean arrayItems = elementType == EXPRESSION_LIST && parentType == ARRAY_LITERAL;
+    boolean mapItems = elementType == MAP_INITIALIZER_EXPRESSION_LIST && parentType == MAP_LITERAL;
+    return arrayItems || mapItems ? parent : null;
   }
 
   private static Spacing forcedGap(boolean space) {

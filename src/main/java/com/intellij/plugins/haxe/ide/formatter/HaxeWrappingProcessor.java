@@ -27,8 +27,8 @@ import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.Nullable;
 
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeArrayLiteralRules;
-import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeArrayLiteralRules.Decision;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeLiteralItemRules;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeLiteralItemRules.Decision;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.isChainLink;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
@@ -111,14 +111,12 @@ public class HaxeWrappingProcessor {
   }
 
   /**
-   * The wrap setting a literal's items and closer share: an array literal
-   * the item rules fill after a leading break wraps as needed, so the fill
-   * breaks where the margin says; any other literal follows the array wrap setting.
+   * The wrap setting a literal's items and closer share: a literal the item
+   * rules fill after a leading break wraps as needed, so the fill breaks
+   * where the margin says; any other literal follows the array wrap setting.
    */
   private int literalItemWrap(@Nullable ASTNode literal) {
-    boolean fills = literal != null
-                    && literal.getElementType() == ARRAY_LITERAL
-                    && HaxeArrayLiteralRules.decide(literal, mySettings, myHaxe) == Decision.FILL_AFTER_LEADING_BREAK;
+    boolean fills = literal != null && HaxeLiteralItemRules.decide(literal, mySettings, myHaxe) == Decision.FILL_AFTER_LEADING_BREAK;
     return fills ? CommonCodeStyleSettings.WRAP_AS_NEEDED : mySettings.ARRAY_INITIALIZER_WRAP;
   }
 

@@ -476,6 +476,15 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     }
 
     @Test
+    @DisplayName("map object item rules")
+    public void testMapObjectItemRules() throws Exception {
+      // wrapping.mapWrap follows the array list on a map's entries;
+      // wrapping.objectLiteral keeps up to three fields written on one line
+      // however long, chops from four, and any object written over lines
+      doParityTest("map-object-item-rules");
+    }
+
+    @Test
     @DisplayName("array wrap checks allman")
     public void testArrayWrapChecksAllman() throws Exception {
       doParityTest("array-wrap-checks-allman", HaxeCodeStyleTweaks::allmanBraces);

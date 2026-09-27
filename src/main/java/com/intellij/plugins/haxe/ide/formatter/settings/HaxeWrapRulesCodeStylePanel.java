@@ -16,10 +16,10 @@ import java.util.function.ToIntFunction;
 
 /**
  * The Wrap Rules tab of the Haxe code style: the numeric thresholds of the
- * operator chain, multi-var and array literal rules (hxformat's
- * wrapping.opBoolChain, opAddSubChain, multiVar and arrayWrap). They are
- * integers, which the Wrapping tab's option table cannot host - it renders
- * booleans and choices only.
+ * operator chain, multi-var and literal item rules (hxformat's
+ * wrapping.opBoolChain, opAddSubChain, multiVar, arrayWrap, mapWrap and
+ * objectLiteral). They are integers, which the Wrapping tab's option table
+ * cannot host - it renders booleans and choices only.
  */
 public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
@@ -49,12 +49,26 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
   private final Option arrayFillEqualItemCount = new Option(h -> h.ARRAY_FILL_EQUAL_ITEM_COUNT, (h, v) -> h.ARRAY_FILL_EQUAL_ITEM_COUNT = v);
   private final Option arrayFillItemLength = new Option(h -> h.ARRAY_FILL_ITEM_LENGTH, (h, v) -> h.ARRAY_FILL_ITEM_LENGTH = v);
   private final Option arrayFillItemCount = new Option(h -> h.ARRAY_FILL_ITEM_COUNT, (h, v) -> h.ARRAY_FILL_ITEM_COUNT = v);
+  private final Option mapKeepTotal = new Option(h -> h.MAP_KEEP_TOTAL_LENGTH, (h, v) -> h.MAP_KEEP_TOTAL_LENGTH = v);
+  private final Option mapChopItemLength = new Option(h -> h.MAP_CHOP_ITEM_LENGTH, (h, v) -> h.MAP_CHOP_ITEM_LENGTH = v);
+  private final Option mapChopItemCount = new Option(h -> h.MAP_CHOP_ITEM_COUNT, (h, v) -> h.MAP_CHOP_ITEM_COUNT = v);
+  private final Option mapFillEqualItemLength = new Option(h -> h.MAP_FILL_EQUAL_ITEM_LENGTH, (h, v) -> h.MAP_FILL_EQUAL_ITEM_LENGTH = v);
+  private final Option mapFillEqualItemCount = new Option(h -> h.MAP_FILL_EQUAL_ITEM_COUNT, (h, v) -> h.MAP_FILL_EQUAL_ITEM_COUNT = v);
+  private final Option mapFillItemLength = new Option(h -> h.MAP_FILL_ITEM_LENGTH, (h, v) -> h.MAP_FILL_ITEM_LENGTH = v);
+  private final Option mapFillItemCount = new Option(h -> h.MAP_FILL_ITEM_COUNT, (h, v) -> h.MAP_FILL_ITEM_COUNT = v);
+  private final Option objectKeepItemCount = new Option(h -> h.OBJECT_KEEP_ITEM_COUNT, (h, v) -> h.OBJECT_KEEP_ITEM_COUNT = v);
+  private final Option objectChopItemLength = new Option(h -> h.OBJECT_CHOP_ITEM_LENGTH, (h, v) -> h.OBJECT_CHOP_ITEM_LENGTH = v);
+  private final Option objectChopTotalLength = new Option(h -> h.OBJECT_CHOP_TOTAL_LENGTH, (h, v) -> h.OBJECT_CHOP_TOTAL_LENGTH = v);
+  private final Option objectChopItemCount = new Option(h -> h.OBJECT_CHOP_ITEM_COUNT, (h, v) -> h.OBJECT_CHOP_ITEM_COUNT = v);
   private final List<Option> options = List.of(
     boolLineLength, boolItemLength, boolItemCount, boolTotalLength,
     addLineLength, addItemLength, addItemCount, addTotalLength,
     multiVarSplitWidth, multiVarFillItem,
     arrayKeepTotal, arrayChopItemLength, arrayChopItemCount,
-    arrayFillEqualItemLength, arrayFillEqualItemCount, arrayFillItemLength, arrayFillItemCount);
+    arrayFillEqualItemLength, arrayFillEqualItemCount, arrayFillItemLength, arrayFillItemCount,
+    mapKeepTotal, mapChopItemLength, mapChopItemCount,
+    mapFillEqualItemLength, mapFillEqualItemCount, mapFillItemLength, mapFillItemCount,
+    objectKeepItemCount, objectChopItemLength, objectChopTotalLength, objectChopItemCount);
 
   protected HaxeWrapRulesCodeStylePanel(CodeStyleSettings settings) {
     super(settings);
@@ -80,6 +94,19 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.equal.item.count"), arrayFillEqualItemCount.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.length"), arrayFillItemLength.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.count"), arrayFillItemCount.field())
+      .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.map.title")))
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.keep.total"), mapKeepTotal.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.length"), mapChopItemLength.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.count"), mapChopItemCount.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.equal.item.length"), mapFillEqualItemLength.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.equal.item.count"), mapFillEqualItemCount.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.length"), mapFillItemLength.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.count"), mapFillItemCount.field())
+      .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.object.title")))
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.object.keep.item.count"), objectKeepItemCount.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.object.chop.item.length"), objectChopItemLength.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.object.chop.total.length"), objectChopTotalLength.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.object.chop.item.count"), objectChopItemCount.field())
       .getPanel();
     initPanel(form);
     options.forEach(option -> watch(option.field()));
@@ -142,6 +169,14 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
             var longItem = [isLongOperandOnALongLine(longDeclaratorOne, longDeclaratorTwo), fewOperands, manyOperands];
             var tinyItems = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40];
             var equalItems = ["item number 01", "item number 02", "item number 03", "item number 04", "item number 05", "item number 06", "item number 07", "item number 08", "item number 09", "item number 10"];
+
+            // map literals follow the array rules on their entries
+            var shortMap = [1 => short1, 2 => short2];
+            var manyEntries = ["alpha" => longDeclaratorOne, "bravo" => longDeclaratorTwo, "charlie" => longDeclaratorThree, "delta" => longDeclaratorFour];
+
+            // object literals: up to three fields on a fitting line stay, four or more go one per line
+            var point = {x: short1, y: short2};
+            var box = {x: short1, y: short2, width: short3, height: short4};
         }
 
         static function isLongOperandOnALongLine(width:Int, height:Int):Bool {

@@ -167,14 +167,14 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   // preceding anyItemLength rule)
   public int MULTI_VAR_SPLIT_WIDTH = 0;
   public int MULTI_VAR_FILL_ITEM_LENGTH = 0;
-  // array literals follow hxformat's wrapping.arrayWrap rules (see
-  // HaxeArrayLiteralRules): items totalling at most KEEP_TOTAL_LENGTH stay
-  // on one line; FILL_EQUAL_ITEM_COUNT items or more of one length up to
-  // FILL_EQUAL_ITEM_LENGTH, or FILL_ITEM_COUNT items or more each at most
-  // FILL_ITEM_LENGTH, fill the line after a leading break; an item reaching
-  // CHOP_ITEM_LENGTH, or CHOP_ITEM_COUNT items or more, go one per line. A
-  // threshold of 0 takes its rule out; all seven at 0 leave the literal to
-  // the array wrap setting alone
+  // array and map literals follow hxformat's wrapping.arrayWrap / mapWrap
+  // rules (see HaxeLiteralItemRules): items totalling at most
+  // KEEP_TOTAL_LENGTH stay on one line; FILL_EQUAL_ITEM_COUNT items or more
+  // of one length up to FILL_EQUAL_ITEM_LENGTH, or FILL_ITEM_COUNT items or
+  // more each at most FILL_ITEM_LENGTH, fill the line after a leading
+  // break; an item reaching CHOP_ITEM_LENGTH, or CHOP_ITEM_COUNT items or
+  // more, go one per line. A threshold of 0 takes its rule out; a kind with
+  // all seven at 0 leaves its literals to the array wrap setting alone
   public int ARRAY_KEEP_TOTAL_LENGTH = 0;
   public int ARRAY_FILL_EQUAL_ITEM_LENGTH = 0;
   public int ARRAY_FILL_EQUAL_ITEM_COUNT = 0;
@@ -182,6 +182,23 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   public int ARRAY_FILL_ITEM_COUNT = 0;
   public int ARRAY_CHOP_ITEM_LENGTH = 0;
   public int ARRAY_CHOP_ITEM_COUNT = 0;
+  public int MAP_KEEP_TOTAL_LENGTH = 0;
+  public int MAP_FILL_EQUAL_ITEM_LENGTH = 0;
+  public int MAP_FILL_EQUAL_ITEM_COUNT = 0;
+  public int MAP_FILL_ITEM_LENGTH = 0;
+  public int MAP_FILL_ITEM_COUNT = 0;
+  public int MAP_CHOP_ITEM_LENGTH = 0;
+  public int MAP_CHOP_ITEM_COUNT = 0;
+  // object literals follow hxformat's wrapping.objectLiteral rules: one
+  // written over lines goes one per line; up to KEEP_ITEM_COUNT fields on a
+  // line within the margin stay; a field reaching CHOP_ITEM_LENGTH, fields
+  // totalling CHOP_TOTAL_LENGTH or more, or CHOP_ITEM_COUNT fields or more,
+  // go one per line. 0 takes a rule out; all four at 0 leave the literal
+  // to the array wrap setting alone
+  public int OBJECT_KEEP_ITEM_COUNT = 0;
+  public int OBJECT_CHOP_ITEM_LENGTH = 0;
+  public int OBJECT_CHOP_TOTAL_LENGTH = 0;
+  public int OBJECT_CHOP_ITEM_COUNT = 0;
   // 0 = no grouping (the keep cap above applies); above 0, imports whose
   // first IMPORT_GROUP_PACKAGE_DEPTH package segments differ get exactly
   // this many blank lines between them and same-group imports stay snug

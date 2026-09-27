@@ -114,6 +114,19 @@ public final class HxformatDefaultProfile {
     haxe.ARRAY_FILL_ITEM_COUNT = HxformatDefaults.ARRAY_FILL_ITEM_COUNT;
     haxe.ARRAY_CHOP_ITEM_LENGTH = HxformatDefaults.ARRAY_CHOP_ITEM_LENGTH;
     haxe.ARRAY_CHOP_ITEM_COUNT = HxformatDefaults.ARRAY_CHOP_ITEM_COUNT;
+    // wrapping.mapWrap rule thresholds
+    haxe.MAP_KEEP_TOTAL_LENGTH = HxformatDefaults.MAP_KEEP_TOTAL_LENGTH;
+    haxe.MAP_FILL_EQUAL_ITEM_LENGTH = HxformatDefaults.MAP_FILL_EQUAL_ITEM_LENGTH;
+    haxe.MAP_FILL_EQUAL_ITEM_COUNT = HxformatDefaults.MAP_FILL_EQUAL_ITEM_COUNT;
+    haxe.MAP_FILL_ITEM_LENGTH = HxformatDefaults.MAP_FILL_ITEM_LENGTH;
+    haxe.MAP_FILL_ITEM_COUNT = HxformatDefaults.MAP_FILL_ITEM_COUNT;
+    haxe.MAP_CHOP_ITEM_LENGTH = HxformatDefaults.MAP_CHOP_ITEM_LENGTH;
+    haxe.MAP_CHOP_ITEM_COUNT = HxformatDefaults.MAP_CHOP_ITEM_COUNT;
+    // wrapping.objectLiteral rule thresholds
+    haxe.OBJECT_KEEP_ITEM_COUNT = HxformatDefaults.OBJECT_KEEP_ITEM_COUNT;
+    haxe.OBJECT_CHOP_ITEM_LENGTH = HxformatDefaults.OBJECT_CHOP_ITEM_LENGTH;
+    haxe.OBJECT_CHOP_TOTAL_LENGTH = HxformatDefaults.OBJECT_CHOP_TOTAL_LENGTH;
+    haxe.OBJECT_CHOP_ITEM_COUNT = HxformatDefaults.OBJECT_CHOP_ITEM_COUNT;
   }
 
   private static void applyLineEnds(CommonCodeStyleSettings common) {

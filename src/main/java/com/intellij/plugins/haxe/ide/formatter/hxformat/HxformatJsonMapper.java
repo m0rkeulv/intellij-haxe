@@ -179,9 +179,9 @@ public final class HxformatJsonMapper {
     if (margin != null) {
       settings.setRightMargin(HaxeLanguage.INSTANCE, margin);
     }
-    applyArrayRules("wrapping.arrayWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
-    wrapConstruct("wrapping.mapWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
-    wrapConstruct("wrapping.objectLiteral", value -> common.ARRAY_INITIALIZER_WRAP = value);
+    applyLiteralRules("wrapping.arrayWrap", value -> common.ARRAY_INITIALIZER_WRAP = value, arraySetters());
+    applyLiteralRules("wrapping.mapWrap", value -> common.ARRAY_INITIALIZER_WRAP = value, mapSetters());
+    applyLiteralRules("wrapping.objectLiteral", value -> common.ARRAY_INITIALIZER_WRAP = value, objectSetters());
     wrapConstruct("wrapping.methodChain", value -> common.METHOD_CALL_CHAIN_WRAP = value);
     wrapConstruct("wrapping.implementsExtends", value -> common.EXTENDS_LIST_WRAP = value);
     wrapConstruct("wrapping.functionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
@@ -246,20 +246,21 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * wrapping.arrayWrap: the overflow rule (or defaultWrap) sets the array
-   * wrap policy as for any construct, and the item rules the engine
-   * reproduces (HaxeArrayLiteralRules) are lifted from their shapes; a rule
-   * shape without a counterpart is reported.
+   * wrapping.arrayWrap / mapWrap / objectLiteral: the overflow rule (or
+   * defaultWrap) sets the array wrap policy as for any construct, and the
+   * item rules the engine reproduces (HaxeLiteralItemRules) are lifted from
+   * their shapes into the kind's thresholds; a rule shape the kind has no
+   * threshold for is reported.
    */
-  private void applyArrayRules(String path, IntConsumer setter) {
+  private void applyLiteralRules(String path, IntConsumer wrapSetter, LiteralSetters setters) {
     JsonNode construct = node(path);
     if (construct == null) return;
     markConsumedSubtree(path);
-    applyWrapType(construct, setter);
+    applyWrapType(construct, wrapSetter);
     if (!hasRules(construct)) return;
     boolean allLifted = true;
     for (JsonNode rule : construct.get("rules")) {
-      allLifted &= liftArrayRule(rule);
+      allLifted &= liftLiteralRule(rule, setters);
     }
     if (!allLifted) {
       unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.array.rules", path));
@@ -267,47 +268,70 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * One array rule into its thresholds: a noWrap rule's totalItemLength, an
-   * onePerLine rule's anyItemLength or itemCount (its hasMultilineItems and
-   * exceedsMaxLineLength forms are built in), a fillLineWithLeadingBreak
-   * rule's allItemLengths with itemCount, with or without equalItemLengths.
-   * False for any other shape.
+   * One literal rule into its threshold: a noWrap rule's totalItemLength or
+   * itemCount (the latter's exceedsMaxLineLength guard is built in), an
+   * onePerLine rule's anyItemLength, totalItemLength or itemCount (its
+   * hasMultilineItems and exceedsMaxLineLength forms are built in), a
+   * fillLineWithLeadingBreak rule's allItemLengths with itemCount, with or
+   * without equalItemLengths. False for any other shape, and for a knob the
+   * kind lacks.
    */
-  private boolean liftArrayRule(JsonNode rule) {
+  private static boolean liftLiteralRule(JsonNode rule, LiteralSetters setters) {
     String type = rule.path("type").asText("");
-    Integer total = conditionValue(rule, "totalItemLength <= n");
-    Integer anyLength = conditionValue(rule, "anyItemLength >= n");
-    Integer count = conditionValue(rule, "itemCount >= n");
-    Integer allLength = conditionValue(rule, "allItemLengths <= n");
     boolean builtIn = conditionValue(rule, "hasMultilineItems") != null || conditionValue(rule, "exceedsMaxLineLength") != null;
     boolean equalLengths = conditionValue(rule, "equalItemLengths") != null;
-    switch (type) {
-      case "noWrap" -> {
-        if (total == null) return false;
-        haxe.ARRAY_KEEP_TOTAL_LENGTH = total;
-      }
-      case "onePerLine" -> {
-        if (builtIn) return true;
-        if (anyLength != null) haxe.ARRAY_CHOP_ITEM_LENGTH = anyLength;
-        if (count != null) haxe.ARRAY_CHOP_ITEM_COUNT = count;
-        return anyLength != null || count != null;
-      }
-      case "fillLineWithLeadingBreak" -> {
-        if (allLength == null || count == null) return false;
-        if (equalLengths) {
-          haxe.ARRAY_FILL_EQUAL_ITEM_LENGTH = allLength;
-          haxe.ARRAY_FILL_EQUAL_ITEM_COUNT = count;
-        }
-        else {
-          haxe.ARRAY_FILL_ITEM_LENGTH = allLength;
-          haxe.ARRAY_FILL_ITEM_COUNT = count;
-        }
-      }
-      default -> {
-        return false;
-      }
-    }
+    return switch (type) {
+      case "noWrap" -> lift(rule, "totalItemLength <= n", setters.keepTotalLength())
+                       | lift(rule, "itemCount <= n", setters.keepItemCount());
+      case "onePerLine" -> builtIn
+                           || lift(rule, "anyItemLength >= n", setters.chopItemLength())
+                              | lift(rule, "totalItemLength >= n", setters.chopTotalLength())
+                              | lift(rule, "itemCount >= n", setters.chopItemCount());
+      case "fillLineWithLeadingBreak" -> equalLengths
+                                         ? lift(rule, "allItemLengths <= n", setters.fillEqualItemLength())
+                                           & lift(rule, "itemCount >= n", setters.fillEqualItemCount())
+                                         : lift(rule, "allItemLengths <= n", setters.fillItemLength())
+                                           & lift(rule, "itemCount >= n", setters.fillItemCount());
+      default -> false;
+    };
+  }
+
+  /** Sets the knob from the rule's condition; false when the condition is absent or the kind lacks the knob. */
+  private static boolean lift(JsonNode rule, String cond, @Nullable IntConsumer knob) {
+    Integer value = conditionValue(rule, cond);
+    if (value == null || knob == null) return false;
+    knob.accept(value);
     return true;
+  }
+
+  /** The thresholds one literal kind's rules lift into; null for a knob the kind lacks. */
+  private record LiteralSetters(@Nullable IntConsumer keepItemCount, @Nullable IntConsumer keepTotalLength,
+                                @Nullable IntConsumer fillEqualItemLength, @Nullable IntConsumer fillEqualItemCount,
+                                @Nullable IntConsumer fillItemLength, @Nullable IntConsumer fillItemCount,
+                                @Nullable IntConsumer chopItemLength, @Nullable IntConsumer chopTotalLength,
+                                @Nullable IntConsumer chopItemCount) {
+  }
+
+  private LiteralSetters arraySetters() {
+    return new LiteralSetters(null, v -> haxe.ARRAY_KEEP_TOTAL_LENGTH = v,
+                              v -> haxe.ARRAY_FILL_EQUAL_ITEM_LENGTH = v, v -> haxe.ARRAY_FILL_EQUAL_ITEM_COUNT = v,
+                              v -> haxe.ARRAY_FILL_ITEM_LENGTH = v, v -> haxe.ARRAY_FILL_ITEM_COUNT = v,
+                              v -> haxe.ARRAY_CHOP_ITEM_LENGTH = v, null, v -> haxe.ARRAY_CHOP_ITEM_COUNT = v);
+  }
+
+  private LiteralSetters mapSetters() {
+    return new LiteralSetters(null, v -> haxe.MAP_KEEP_TOTAL_LENGTH = v,
+                              v -> haxe.MAP_FILL_EQUAL_ITEM_LENGTH = v, v -> haxe.MAP_FILL_EQUAL_ITEM_COUNT = v,
+                              v -> haxe.MAP_FILL_ITEM_LENGTH = v, v -> haxe.MAP_FILL_ITEM_COUNT = v,
+                              v -> haxe.MAP_CHOP_ITEM_LENGTH = v, null, v -> haxe.MAP_CHOP_ITEM_COUNT = v);
+  }
+
+  private LiteralSetters objectSetters() {
+    return new LiteralSetters(v -> haxe.OBJECT_KEEP_ITEM_COUNT = v, null,
+                              null, null,
+                              null, null,
+                              v -> haxe.OBJECT_CHOP_ITEM_LENGTH = v, v -> haxe.OBJECT_CHOP_TOTAL_LENGTH = v,
+                              v -> haxe.OBJECT_CHOP_ITEM_COUNT = v);
   }
 
   private static boolean hasRules(JsonNode construct) {

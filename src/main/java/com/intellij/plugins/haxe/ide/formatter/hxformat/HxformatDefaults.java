@@ -49,6 +49,22 @@ public final class HxformatDefaults {
   public static final int ARRAY_CHOP_ITEM_LENGTH = 30;
   public static final int ARRAY_CHOP_ITEM_COUNT = 4;
 
+  // wrapping.mapWrap rules: the same list as arrayWrap
+  public static final int MAP_KEEP_TOTAL_LENGTH = 80;
+  public static final int MAP_FILL_EQUAL_ITEM_LENGTH = 30;
+  public static final int MAP_FILL_EQUAL_ITEM_COUNT = 10;
+  public static final int MAP_FILL_ITEM_LENGTH = 10;
+  public static final int MAP_FILL_ITEM_COUNT = 10;
+  public static final int MAP_CHOP_ITEM_LENGTH = 30;
+  public static final int MAP_CHOP_ITEM_COUNT = 4;
+
+  // wrapping.objectLiteral rules: itemCount <= 3 within the margin -> no wrap; anyItemLength >= 30,
+  // totalItemLength >= 60 or itemCount >= 4 -> one per line
+  public static final int OBJECT_KEEP_ITEM_COUNT = 3;
+  public static final int OBJECT_CHOP_ITEM_LENGTH = 30;
+  public static final int OBJECT_CHOP_TOTAL_LENGTH = 60;
+  public static final int OBJECT_CHOP_ITEM_COUNT = 4;
+
   // emptyLines: maxAnywhereInFile, afterPackage, importAndUsing.beforeType, betweenTypes,
   // betweenSingleLineTypes, importAndUsing.betweenImports, afterFileHeaderComment
   public static final int MAX_BLANK_LINES = 1;
