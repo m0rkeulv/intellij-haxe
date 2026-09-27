@@ -219,6 +219,34 @@ public class LiveDisplayServerTest {
     assertFalse(references.isEmpty(), "the call in main() must be found");
   }
 
+  /**
+   * The compiler completes at the end of a PARTIAL identifier (what an
+   * editor sends, with the buffer as contents) and after a dot; a request
+   * placed on an identifier that already resolves is refused as
+   * "Unsupported method".
+   */
+  @Test
+  @DisplayName("completion answers fields after a dot and keywords at a partial identifier")
+  public void completionAnswersFieldsAfterADotAndKeywordsAtAPartialIdentifier() throws Exception {
+    int afterDot = FIXTURE.indexOf("label.toUpperCase") + "label.".length();
+    CompletionList fields = client.completion(baseArgs, fixtureFile, afterDot, null, false);
+    List<String> fieldNames = fields.items().stream().map(CompletionItem::name).toList();
+    assertEquals(0, fields.modeKind(), "field mode after the dot");
+    assertTrue(fieldNames.contains("toUpperCase"), "String members must be offered: " + fieldNames);
+
+    String partial = FIXTURE.replace("static function main() trace(new Live().shout());", "static function main() {\n\t\ttr\n\t}");
+    int partialEnd = partial.indexOf("\t\ttr") + "\t\ttr".length();
+    client.invalidate(baseArgs, fixtureFile);
+    CompletionList toplevel = client.completion(baseArgs, fixtureFile, partialEnd, partial, true);
+    List<String> keywords = toplevel.items().stream().filter(CompletionItem::isKeyword).map(CompletionItem::name).toList();
+    List<String> names = toplevel.items().stream().map(CompletionItem::name).toList();
+    assertEquals(2, toplevel.modeKind(), "toplevel mode at a statement");
+    assertTrue(keywords.contains("var"), "statement keywords must be offered: " + keywords);
+    assertTrue(names.contains("trace"), "the toplevel list must include trace: " + names.size() + " items");
+    // the range covers the typed prefix `tr` on the (0-based) fixture line 5
+    assertEquals(new Range(new Position(5, 2), new Position(5, 4)), toplevel.replaceRange());
+  }
+
   @Test
   @Timeout(60)
   @DisplayName("type blueprint hydrates after a compile through the server")

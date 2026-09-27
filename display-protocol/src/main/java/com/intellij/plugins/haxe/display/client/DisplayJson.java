@@ -117,6 +117,80 @@ public final class DisplayJson {
     return new HoverInfo(Range.fromJson(data.path("range")), item.path("kind").asString(""), JsonTypeRef.of(item.path("type")));
   }
 
+  /** Null when the compiler has nothing to complete at the position (completion result is nullable). */
+  public static CompletionList decodeCompletion(JsonNode data) {
+    if (data.isNull() || data.isMissingNode()) return null;
+    List<CompletionItem> items = new ArrayList<>();
+    int position = 0;
+    for (JsonNode entry : data.path("items")) {
+      // the resolve request names an item by its position in this list, which
+      // the wire's own index key repeats when present
+      CompletionItem item = decodeCompletionItem(entry, position++);
+      if (item != null) items.add(item);
+    }
+    JsonNode replaceRange = data.path("replaceRange");
+    return new CompletionList(List.copyOf(items),
+                              data.path("mode").path("kind").asInt(-1),
+                              replaceRange.isMissingNode() || replaceRange.isNull() ? null : Range.fromJson(replaceRange),
+                              data.path("isIncomplete").asBoolean(false));
+  }
+
+  /** The resolved item of a {@code display/completionItem/resolve} result: the same shape, its doc filled in. */
+  public static CompletionItem decodeResolvedCompletionItem(JsonNode data, int index) {
+    if (data.isNull() || data.isMissingNode()) return null;
+    return decodeCompletionItem(data.path("item"), index);
+  }
+
+  /** The item's insert text and detail per kind; null for the kinds without a name (an anonymous structure, an expression). */
+  private static CompletionItem decodeCompletionItem(JsonNode entry, int position) {
+    String kind = entry.path("kind").asString("");
+    JsonNode args = entry.path("args");
+    JsonTypeRef type = completionItemType(entry, args);
+    String doc = completionItemDoc(args);
+    int index = entry.path("index").asInt(position);
+    return switch (kind) {
+      case "Local", "Literal", "Keyword", "Metadata", "Define", "TypeParameter" ->
+        new CompletionItem(kind, args.path("name").asString(""), null, null, type, doc, index);
+      case "ClassField", "EnumAbstractField", "EnumField" ->
+        new CompletionItem(kind, args.path("field").path("name").asString(""), null, null, type, doc, index);
+      case "Type" -> new CompletionItem(kind, args.path("path").path("typeName").asString(""),
+                                        JsonTypeRef.qualifiedNameOf(args.path("path")), args.path("kind").asString(""), type, doc, index);
+      case "Package" -> new CompletionItem(kind, lastSegment(args.path("path").path("pack")), dotPath(args.path("path").path("pack")),
+                                           null, type, doc, index);
+      case "Module" -> new CompletionItem(kind, args.path("path").path("moduleName").asString(""),
+                                          dotPath(args.path("path").path("pack")), null, type, doc, index);
+      default -> null;
+    };
+  }
+
+  /** The item's type: the item-level one, else the type a local or a field carries in its own args. */
+  private static JsonTypeRef completionItemType(JsonNode entry, JsonNode args) {
+    for (JsonNode candidate : List.of(entry.path("type"), args.path("type"), args.path("field").path("type"))) {
+      if (!candidate.isMissingNode() && !candidate.isNull()) return JsonTypeRef.of(candidate);
+    }
+    return null;
+  }
+
+  /** The doc comment a field carries under its field, or a type, metadata or define directly; null without one. */
+  private static String completionItemDoc(JsonNode args) {
+    for (JsonNode candidate : List.of(args.path("field").path("doc"), args.path("doc"))) {
+      if (candidate.isString() && !candidate.asString("").isBlank()) return candidate.asString("");
+    }
+    return null;
+  }
+
+  private static String lastSegment(JsonNode pack) {
+    String last = "";
+    for (JsonNode segment : pack) last = segment.asString("");
+    return last;
+  }
+
+  private static String dotPath(JsonNode pack) {
+    List<String> segments = new ArrayList<>();
+    for (JsonNode segment : pack) segments.add(segment.asString(""));
+    return String.join(".", segments);
+  }
+
   public static List<HaxeServerContext> decodeContexts(JsonNode data) {
     List<HaxeServerContext> contexts = new ArrayList<>();
     for (JsonNode entry : data) {

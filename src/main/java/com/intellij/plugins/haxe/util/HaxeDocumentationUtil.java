@@ -28,6 +28,20 @@ public class HaxeDocumentationUtil {
 
 
 
+  /**
+   * A doc comment's body (the text between its delimiters, as the PSI or
+   * the compiler hand it out) made renderable as markdown: the blank lines
+   * around it and the source indentation stripped, a javadoc-style leading
+   * {@code *} per line removed, and a blank line between two indented lines
+   * kept at their depth so it does not open a code block.
+   */
+  @NotNull
+  public static String stripForRendering(@NotNull String docBody) {
+    String trimmed = removeExcessLines(docBody);
+    String stripped = stripIndents(trimmed, docIsJavadocStyle(trimmed));
+    return tryFixIndents(stripped);
+  }
+
   public static String removeExcessLines(String docs) {
     String[] split = docs.split("\n");
     if (split.length == 1)  return docs;

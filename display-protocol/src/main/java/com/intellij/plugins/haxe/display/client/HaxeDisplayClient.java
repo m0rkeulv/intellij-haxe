@@ -95,6 +95,30 @@ public class HaxeDisplayClient {
     return DisplayJson.decodeLocations(rpc(baseArgs, DisplayMethods.FIND_REFERENCES, params));
   }
 
+  /**
+   * The compiler's completion at the offset: locals, fields, types, packages,
+   * keywords, literals, metadata, defines - whatever its mode for the
+   * position allows. {@code contents} carries an unsaved buffer (invalidate
+   * the file first when its module was ever cached); {@code autoTriggered}
+   * tells the compiler the popup was not asked for explicitly.
+   */
+  public CompletionList completion(List<String> baseArgs, String file, int offset, String contents, boolean autoTriggered)
+    throws DisplayRequestException {
+    Map<String, Object> params = positionParams(file, offset, contents);
+    params.put("wasAutoTriggered", autoTriggered);
+    return DisplayJson.decodeCompletion(rpc(baseArgs, DisplayMethods.COMPLETION, params));
+  }
+
+  /**
+   * The item at the index of the LAST completion answered by this server,
+   * with its doc comment filled in (a completion lists a cached module's
+   * fields with a null doc; the resolve re-reads the declaration). Null when
+   * the server has no completion to resolve against.
+   */
+  public CompletionItem resolveCompletionItem(List<String> baseArgs, int index) throws DisplayRequestException {
+    return DisplayJson.decodeResolvedCompletionItem(rpc(baseArgs, DisplayMethods.COMPLETION_ITEM_RESOLVE, Map.of("index", index)), index);
+  }
+
   /** The compiler's metadata registry: built-ins plus library-registered custom metadata. */
   public List<MetadataEntry> metadata(List<String> baseArgs) throws DisplayRequestException {
     return DisplayJson.decodeMetadataList(rpc(baseArgs, DisplayMethods.METADATA, Map.of(

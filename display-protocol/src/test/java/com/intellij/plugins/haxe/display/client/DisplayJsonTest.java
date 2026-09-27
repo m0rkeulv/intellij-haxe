@@ -37,6 +37,50 @@ public class DisplayJsonTest {
   }
 
   @Test
+  @DisplayName("completion decodes every named item kind with its detail and type")
+  public void completionDecodesEveryNamedItemKindWithItsDetailAndType() throws Exception {
+    // trimmed from a live Toplevel-mode response: one item per kind the lookup shows, plus an
+    // anonymous structure the decoder drops (no insert text)
+    String payload = """
+      {"jsonrpc":"2.0","id":1,"result":{"result":{"mode":{"kind":2},"isIncomplete":true,
+        "replaceRange":{"start":{"line":3,"character":8},"end":{"line":3,"character":10}},
+        "items":[
+          {"kind":"Local","args":{"id":1,"name":"count","type":{"kind":"TAbstract","args":{"path":{"pack":[],"moduleName":"StdTypes","typeName":"Int","importStatus":0},"params":[]}}},"index":0},
+          {"kind":"ClassField","args":{"field":{"name":"shout","doc":"\\n\\t\\tShouts the label.\\n\\t","kind":{"kind":"FMethod","args":"MethNormal"}}},"type":{"kind":"TFun","args":{"args":[],"ret":{"kind":"TInst","args":{"path":{"pack":[],"moduleName":"String","typeName":"String","importStatus":0},"params":[]}}}},"index":1},
+          {"kind":"EnumField","args":{"field":{"name":"Red"}},"index":2},
+          {"kind":"Type","args":{"path":{"pack":["haxe","ds"],"moduleName":"StringMap","typeName":"StringMap","importStatus":1},"kind":"class"},"index":3},
+          {"kind":"Package","args":{"path":{"pack":["haxe","ds"]}},"index":4},
+          {"kind":"Module","args":{"path":{"pack":["haxe"],"moduleName":"Json"}},"index":5},
+          {"kind":"Keyword","args":{"name":"var"},"index":6},
+          {"kind":"Literal","args":{"name":"null"},"index":7},
+          {"kind":"Metadata","args":{"name":":keep"},"index":8},
+          {"kind":"Define","args":{"name":"debug"},"index":9},
+          {"kind":"AnonymousStructure","args":{"fields":[]},"index":10}
+        ]},"timestamp":1785367994.26}}""";
+
+    CompletionList completion = DisplayJson.decodeCompletion(DisplayJson.unwrap(payload));
+
+    assertEquals(2, completion.modeKind());
+    assertTrue(completion.incomplete());
+    assertEquals(new Range(new Position(3, 8), new Position(3, 10)), completion.replaceRange());
+    List<String> names = completion.items().stream().map(CompletionItem::name).toList();
+    assertEquals(List.of("count", "shout", "Red", "StringMap", "ds", "Json", "var", "null", ":keep", "debug"), names);
+    CompletionItem local = completion.items().get(0);
+    assertTrue(local.isLocal());
+    assertEquals("Int", local.type().presentable());
+    CompletionItem method = completion.items().get(1);
+    assertTrue(method.isField());
+    assertTrue(method.type().isFunction());
+    assertEquals("\n\t\tShouts the label.\n\t", method.doc());
+    assertNull(local.doc(), "a local carries no doc");
+    CompletionItem type = completion.items().get(3);
+    assertEquals("haxe.ds.StringMap", type.detail());
+    assertEquals("class", type.moduleTypeKind());
+    assertEquals("haxe.ds", completion.items().get(4).detail());
+    assertTrue(completion.items().get(6).isKeyword());
+  }
+
+  @Test
   @DisplayName("diagnostics decode with zero based ranges and typed args")
   public void diagnosticsDecodeWithZeroBasedRangesAndTypedArgs() throws Exception {
     // captured: unused import on file line 1, unresolved identifier on file line 7

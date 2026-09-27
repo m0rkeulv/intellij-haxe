@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.lang;
 
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.parser.HaxePsiDocCommentImpl;
+import com.intellij.plugins.haxe.util.HaxeDocumentationUtil;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.junit.jupiter.api.DisplayName;
@@ -87,6 +88,17 @@ public class HaxeDocRenderingIndentTest extends HaxeLightFixtureTestCase {
       }""");
 
     assertEquals("A list:\n- item\n\t- nested", docs, "author-chosen depth is markdown meaning");
+  }
+
+  @Test
+  @DisplayName("compiler doc body strips like a comment's")
+  public void testCompilerDocBodyStripsLikeAComments() {
+    // display/completion sends the text between the delimiters, indentation and all
+    String body = "\n\t\tReturns the absolute value of `v`.\n\n\t\t- If `v` is positive, the result is unchanged.\n\t";
+
+    String docs = HaxeDocumentationUtil.stripForRendering(body);
+
+    assertEquals("Returns the absolute value of `v`.\n\n- If `v` is positive, the result is unchanged.", docs);
   }
 
   private String docsOf(String source) {

@@ -6,15 +6,16 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Where completion and resolve get their symbols: the IDE's static analysis
- * alone, or enriched with compiler-known symbols (macro-generated types and
- * members the source never declares). Gates the compiler-backed resolve and
+ * alone, enriched with compiler-known symbols (macro-generated types and
+ * members the source never declares), or the compilation server alone -
+ * every completion answered by a {@code display/completion} request, the
+ * IDE's contributors silent. Gates the compiler-backed resolve and
  * completion paths; diagnostics highlighting has its own toggle.
  */
-// TODO: a COMPILER_ONLY mode (every completion answered by the compilation server),
-//  which needs per-request display wiring with unsaved-buffer sync
 public enum HaxeCompletionMode {
   IDE_ONLY("ide", "haxe.compiler.completion.mode.ide"),
-  IDE_AND_COMPILER("ide+compiler", "haxe.compiler.completion.mode.ide.and.compiler");
+  IDE_AND_COMPILER("ide+compiler", "haxe.compiler.completion.mode.ide.and.compiler"),
+  COMPILER_ONLY("compiler", "haxe.compiler.completion.mode.compiler");
 
   private final String id;
   private final String presentableKey;

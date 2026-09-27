@@ -67,6 +67,39 @@ Facts that shape the client:
 - Gate features on the method list returned by `initialize`
   (`display/diagnostics` is haxe 4.3+).
 
+## Completion (`display/completion`, verified against 4.3.7)
+
+Params `{file, offset, wasAutoTriggered, ?contents}`. The compiler picks the
+mode from the position (`mode.kind`: 0 Field, 2 Toplevel, 4 TypeHint, 8
+Import, 11 Pattern, 12 Override, ...). It completes at the END of a partial
+identifier and after a dot; a request placed on an identifier that already
+resolves (inside or at the end of `trace` in `trace(...)`) is refused with a
+JSON-RPC "Compiler error" whose data reads "Unsupported method". So send the
+editor's buffer as `contents` (after `server/invalidate` for a file the
+server has cached) with the caret offset, never a copy with a dummy
+identifier. Toplevel mode returns every visible type (over a thousand with
+the std), packages, literals (`null`, `true`, `false`, `this`), the keywords
+valid at the position, locals and fields. A position between class members
+(an empty line or a partial identifier in a class body, where `public`,
+`function` or `var` would go) answers `result: null` - 4.3.7 has no
+class-field completion mode (the parser only error-recovers past the
+position), so field keywords cannot come from the server; the reference
+client (haxe-language-server, `createFieldKeywordItems`) adds the modifier
+keywords itself on a null answer and offers `function`/`var` as snippets; `replaceRange` (0-based) covers the
+typed prefix, `filterString` repeats it, `isIncomplete` flags a cut list.
+An item is `{kind, args, ?type, index}`: a Local carries its type in
+`args.type`, a field in `args.field.type`, and the item-level `type` may be
+absent - `DisplayJson.decodeCompletion` falls back through both. Doc
+comments come inline: `args.field.doc` for a field, `args.doc` for a type,
+metadata or define - the comment's raw body between the delimiters, source
+indentation included, so a markdown renderer needs the indentation stripped
+first or every paragraph becomes a code block. A saved file, an unsaved
+`contents` buffer and a cached module all carry it; only a declaration
+without a comment arrives with `doc: null`, and
+`display/completionItem/resolve {index}` (the item's position in the list,
+repeated in its `index` key) answers `{item}` in the same shape with the
+same doc.
+
 ## Haxe 5 differences (verified against 5.0.0-preview.1)
 
 The JSON-RPC surface is unchanged — same methods, framing and envelopes —

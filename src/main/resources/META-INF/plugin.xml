@@ -338,6 +338,8 @@
 
     <completion.contributor id="DocFenceBlocker" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeDocFenceCompletionBlocker" order="FIRST"/>
     <completion.contributor id="DocTagCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeDocTagCompletionContributor" order="FIRST, after DocFenceBlocker"/>
+    <!-- compiler-only mode: answers from the compilation server and stops the chain before the IDE's contributors -->
+    <completion.contributor id="CompilerCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerCompletionContributor" order="FIRST, after DocTagCompletion, before ControllingCompletion"/>
     <completion.contributor id="ControllingCompletion" language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeControllingCompletionContributor" order="FIRST, after DocTagCompletion"/>
     <!-- early so the expected values are in the lookup's first shown frame; late arrivals sort below frozen items -->
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeExpectedEnumValueCompletionContributor"/>
@@ -929,6 +931,7 @@
 
     <notificationGroup id="haxe.haxelib.warning" displayType="BALLOON" bundle="messages.HaxeBundle" key="haxe.haxelib.library.dependencies"/>
     <notificationGroup id="haxe.command" displayType="BALLOON" bundle="messages.HaxeBundle" key="haxe.command.notification.group"/>
+    <notificationGroup id="haxe.compiler" displayType="BALLOON" bundle="messages.HaxeBundle" key="haxe.compiler.notification.group"/>
     <notificationGroup id="haxe.debugger.legacy" displayType="BALLOON" bundle="messages.HaxeDebuggerBundle" key="legacy.hxcpp.notification.group"/>
     <notificationGroup id="haxe.v1.migration" displayType="STICKY_BALLOON" bundle="messages.HaxeProjectBundle" key="haxe.v1.migration.group"/>
     <notificationGroup id="haxe.profiler" displayType="BALLOON" bundle="messages.HaxeProfilerBundle" key="haxe.profiler.notification.group"/>

@@ -78,13 +78,7 @@ public class HaxePsiDocCommentImpl extends LazyParseablePsiElement
         if(extractedDocs == null) {
             String rawText = this.getText();
             String unwrapped = HaxeDocumentationUtil.unwrapCommentDelimiters(rawText);
-            String trimmed = HaxeDocumentationUtil.removeExcessLines(unwrapped);
-
-            boolean javaDocStyle = HaxeDocumentationUtil.docIsJavadocStyle(trimmed);
-            extractedDocs = HaxeDocumentationUtil.stripIndents(trimmed, javaDocStyle);
-            // hack for rendering tags (@param, @event) as empty lines will cause content to be parsed as indented code
-            extractedDocs = HaxeDocumentationUtil.tryFixIndents(extractedDocs);
-
+            extractedDocs = HaxeDocumentationUtil.stripForRendering(unwrapped);
         }
         return extractedDocs;
     }
