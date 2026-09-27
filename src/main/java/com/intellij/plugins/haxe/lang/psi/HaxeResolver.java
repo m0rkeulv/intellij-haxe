@@ -35,6 +35,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -203,11 +204,14 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
   }
 
 
-  private List<? extends PsiElement> doResolveInner(@NotNull HaxeReference reference, boolean incompleteCode, String referenceText, boolean reentrant) {
+  /** Pipeline runs so far, for tests bounding the fan-out of a resolve. */
+  @TestOnly
+  public int pipelineRuns() {
+    return resolves.get();
+  }
 
-    if (reportCacheMetrics) {
-      resolves.incrementAndGet();
-    }
+  private List<? extends PsiElement> doResolveInner(@NotNull HaxeReference reference, boolean incompleteCode, String referenceText, boolean reentrant) {
+    resolves.incrementAndGet();
 
     if (reference instanceof HaxeLiteralExpression || reference instanceof HaxeConstantExpression) {
       if (!(reference instanceof HaxeRegularExpression || reference instanceof HaxeStringLiteralExpression)) {
@@ -263,7 +267,10 @@ public final class HaxeResolver implements ResolveCache.AbstractResolver<HaxeRef
     if (result == null) result = checkCaptureVar(reference);
     if (result == null) result = checkSwitchOnEnum(reference);
     if (result == null) result = checkIsFakeReference(reference, referenceText);
-    if (result == null) result = checkMemberReference(reference); // must be after resolvers that can find identifier inside a method
+    // a type position never names an inherited member; the member walk would
+    // resolve the enclosing class's supertypes, which are type positions
+    // themselves, and recurse once per unresolvable supertype
+    if (result == null && !isType) result = checkMemberReference(reference); // must be after resolvers that can find identifier inside a method
     if (result == null) result = checkImports(reference, fileModel, isType);
     if (result == null) result = checkIsForwardedName(reference);
     if (result == null) result = checkGlobalAlias(reference, referenceText);

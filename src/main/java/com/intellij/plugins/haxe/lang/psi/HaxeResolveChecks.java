@@ -2985,24 +2985,38 @@ public final class HaxeResolveChecks {
         return resolveByClassAndSymbol(leftClass.getModel().getInstanceType().getType(), resolver, reference);
       }
     }
-    else {
 
-      Set<HaxeType> superclasses = new ArrayListSet<>();
-      superclasses.addAll(leftClass.getHaxeExtendsList());
-      superclasses.addAll(leftClass.getHaxeImplementsList());
+    // a prevented walk (the class is already being walked up the stack)
+    // yields empty and taints: the outer walk answers, the inner empty is a
+    // truncation, not a fact
+    List<? extends PsiElement> inSupertypes =
+      HaxeEvaluationTaint.computeOrTaint(supertypeWalkGuard, leftClass, false, () -> resolveInSupertypes(leftClass, resolver, reference));
+    return inSupertypes == null ? EMPTY_LIST : inSupertypes;
+  }
 
-      List<? extends PsiElement> result = EMPTY_LIST;
-      for (HaxeType sup : superclasses) {
-        HaxeReference superReference = sup.getReferenceExpression();
-        HaxeResolveResult superClassResult = superReference.resolveHaxeClass();
-        SpecificHaxeClassReference superClass = superClassResult.getSpecificClassReference(leftClass, resolver);
-        result = resolveByClassAndSymbol(superClass,null, reference);
-        if (null != result && !result.isEmpty()) {
-          break;
-        }
+  // a class whose supertype walk is already running on this thread is not
+  // walked again: with several unresolvable supertypes the nested walks
+  // would otherwise run once per permutation of the list
+  private static final RecursionGuard<HaxeClass> supertypeWalkGuard = RecursionManager.createGuard("haxeSupertypeWalk");
+
+  private static List<? extends PsiElement> resolveInSupertypes(@NotNull HaxeClass leftClass,
+                                                                @Nullable HaxeGenericResolver resolver,
+                                                                @NotNull HaxeReference reference) {
+    Set<HaxeType> superclasses = new ArrayListSet<>();
+    superclasses.addAll(leftClass.getHaxeExtendsList());
+    superclasses.addAll(leftClass.getHaxeImplementsList());
+
+    List<? extends PsiElement> result = EMPTY_LIST;
+    for (HaxeType sup : superclasses) {
+      HaxeReference superReference = sup.getReferenceExpression();
+      HaxeResolveResult superClassResult = superReference.resolveHaxeClass();
+      SpecificHaxeClassReference superClass = superClassResult.getSpecificClassReference(leftClass, resolver);
+      result = resolveByClassAndSymbol(superClass, null, reference);
+      if (null != result && !result.isEmpty()) {
+        break;
       }
-      return result;
     }
+    return result;
   }
 
 
