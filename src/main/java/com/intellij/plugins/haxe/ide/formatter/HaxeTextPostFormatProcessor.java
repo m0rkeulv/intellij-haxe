@@ -9,6 +9,8 @@ import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.SmartPointerManager;
+import com.intellij.psi.SmartPsiElementPointer;
 import com.intellij.psi.SyntaxTraverser;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -23,11 +25,9 @@ import java.util.List;
  * branch's lines) is out of the block formatter's reach. A subclass names
  * its setting, its tokens and the edits it wants; the base gates on the file
  * type and the setting, collects the tokens in file order and applies the
- * edits to the document.
- *
- * TODO: a non-file element (CodeStyleManager.reformat(element), as the
- *       introduce-member intentions call it) is skipped: its tokens keep
- *       their written text.
+ * edits to the document. A file is passed whole; any other element (a
+ * declaration an intention just inserted) is passed as its range in the
+ * containing file and comes back re-found after the edits.
  */
 public abstract class HaxeTextPostFormatProcessor implements PostFormatProcessor {
 
@@ -35,8 +35,14 @@ public abstract class HaxeTextPostFormatProcessor implements PostFormatProcessor
   public final @NotNull PsiElement processElement(@NotNull PsiElement source, @NotNull CodeStyleSettings settings) {
     if (source instanceof HaxeFile file) {
       processText(file, file.getTextRange(), settings);
+      return source;
     }
-    return source;
+    if (!(source.getContainingFile() instanceof HaxeFile file)) return source;
+
+    SmartPsiElementPointer<PsiElement> pointer = SmartPointerManager.createPointer(source);
+    processText(file, source.getTextRange(), settings);
+    PsiElement edited = pointer.getElement();
+    return edited != null ? edited : source;
   }
 
   @Override

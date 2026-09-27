@@ -19,13 +19,22 @@ package com.intellij.plugins.haxe.lang;
 
 import static com.intellij.plugins.haxe.lang.HaxeCodeStyleTweaks.haxeSettings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.ThrowableComputable;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
+import com.intellij.psi.util.PsiTreeUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -362,6 +371,39 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
           var c:Int;
       }
       """, formatted);
+  }
+
+  @Test
+  @DisplayName("reformat element covers its range with the text passes")
+  public void testReformatElementCoversItsRangeWithTheTextPasses() {
+    // the introduce-member intentions reformat the ELEMENT they inserted;
+    // a comment pass must reach inside that element and nothing outside it
+    Consumer<HaxeCodeStyleSettings> spacedLineComments = haxe -> haxe.ADD_LINE_COMMENT_SPACE = true;
+    installTemporarySettings(haxeSettings(spacedLineComments));
+    myFixture.configureByText("Main.hx", """
+      class Main {
+          //outside
+          static function main() {
+              //inside
+          }
+      }
+      """);
+    HaxeMethodDeclaration method = PsiTreeUtil.findChildOfType(myFixture.getFile(), HaxeMethodDeclaration.class);
+
+    PsiElement reformatted = reformatElement(method);
+
+    String text = myFixture.getFile().getText();
+    assertTrue(text.contains("// inside"), "the comment inside the element normalizes:\n" + text);
+    assertTrue(text.contains("//outside"), "the comment outside the element stays as written:\n" + text);
+    assertTrue(reformatted.isValid(), "the returned element is valid");
+    HaxeMethodDeclaration returned = assertInstanceOf(HaxeMethodDeclaration.class, reformatted, "the returned element is the method");
+    assertEquals("main", returned.getName());
+  }
+
+  private PsiElement reformatElement(PsiElement element) {
+    Project project = myFixture.getProject();
+    ThrowableComputable<PsiElement, RuntimeException> reformat = () -> CodeStyleManager.getInstance(project).reformat(element);
+    return WriteCommandAction.writeCommandAction(project).compute(reformat);
   }
 
   /** Formats the test-named fixture under the settings setUp installed and the test mutated; a missing expectation is written out to be reviewed. */

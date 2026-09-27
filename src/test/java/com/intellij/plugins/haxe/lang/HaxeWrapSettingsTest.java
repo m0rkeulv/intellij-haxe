@@ -220,6 +220,44 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
       """, reformat(commonSettings(common -> common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS), source));
   }
 
+  /**
+   * Metadata sits beside its declaration in the PSI; a declaration opened
+   * by same-line metadata still anchors its wrapped parts at its own indent:
+   * the extends list two steps in, a member's parameters two steps from the
+   * member, the next-line body brace at the member's level.
+   */
+  @Test
+  @DisplayName("same line metadata keeps wrap anchors")
+  public void testSameLineMetadataKeepsWrapAnchors() {
+    Consumer<CommonCodeStyleSettings> configure = common -> {
+      common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS;
+      common.METHOD_PARAMETERS_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS;
+      common.ALIGN_MULTILINE_PARAMETERS = false;
+      common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+      common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+    };
+    String source = """
+      @:keep class Foo extends Base implements Drawable implements Resizable {
+      	@:keep public function new(first:Int, second:Int) {
+      		trace(first);
+      	}
+      }
+      """;
+
+    assertEquals("""
+      @:keep class Foo extends Base
+              implements Drawable
+              implements Resizable
+      {
+          @:keep public function new(first:Int,
+                  second:Int)
+          {
+              trace(first);
+          }
+      }
+      """, reformat(commonSettings(configure), source));
+  }
+
   @Test
   @DisplayName("spaces within parentheses survive binary wrapping")
   public void testSpacesWithinParenthesesSurviveBinaryWrapping() {

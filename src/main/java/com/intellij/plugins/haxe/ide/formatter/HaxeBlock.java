@@ -23,6 +23,7 @@ import com.intellij.formatting.templateLanguages.BlockWithParent;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.MetadataRun;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
@@ -36,8 +37,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.sameLineMetadataRun;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
@@ -59,21 +61,38 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   private Wrap myAssignmentSignWrap = null;
   private final Indent myIndent;
   private final CodeStyleSettings mySettings;
+  // the metadata written on the node's line before it, which this block
+  // spans: the engine anchors a block's continuations at the block that
+  // starts the line, and metadata sits BESIDE its declaration in the PSI -
+  // as a sibling block it would own the line and the declaration's
+  // wrapped parts would anchor at the enclosing body instead
+  private final List<ASTNode> myLeadingMetadata;
   private BlockWithParent myParent;
 
   protected HaxeBlock(ASTNode node,
                       Wrap wrap,
                       Alignment alignment,
                       CodeStyleSettings settings) {
+    this(node, List.of(), wrap, alignment, settings, null);
+  }
+
+  /** {@code indent} overrides the indent processor's answer; null takes it. */
+  private HaxeBlock(ASTNode node,
+                    List<ASTNode> leadingMetadata,
+                    Wrap wrap,
+                    Alignment alignment,
+                    CodeStyleSettings settings,
+                    @Nullable Indent indent) {
     super(node, wrap, alignment);
     mySettings = settings;
+    myLeadingMetadata = leadingMetadata;
     CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     myIndentProcessor = new HaxeIndentProcessor(common, haxe);
     mySpacingProcessor = new HaxeSpacingProcessor(node, common, haxe);
     myWrappingProcessor = new HaxeWrappingProcessor(node, common);
     myAlignmentProcessor = new HaxeAlignmentProcessor(node, common);
-    myIndent = myIndentProcessor.getChildIndent(myNode);
+    myIndent = indent != null ? indent : myIndentProcessor.getChildIndent(myNode);
   }
 
   @Nullable
@@ -83,14 +102,18 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   }
 
   /**
-   * A PPBODY chameleon spans the WHOLE region between directives - the lexer
-   * remaps every token there, edge whitespace included. Reported as-is that
-   * whitespace would sit inside the block, out of the engine's reach, and
-   * blank lines around an inactive branch would survive every spacing rule -
-   * so the range is trimmed to the branch's real content.
+   * A metadata span reaches back to its first metadata. A PPBODY chameleon
+   * spans the WHOLE region between directives - the lexer remaps every
+   * token there, edge whitespace included. Reported as-is that whitespace
+   * would sit inside the block, out of the engine's reach, and blank lines
+   * around an inactive branch would survive every spacing rule - so the
+   * range is trimmed to the branch's real content.
    */
   @Override
   public @NotNull TextRange getTextRange() {
+    if (!myLeadingMetadata.isEmpty()) {
+      return new TextRange(myLeadingMetadata.getFirst().getStartOffset(), myNode.getTextRange().getEndOffset());
+    }
     if (myNode.getElementType() != PPBODY) return super.getTextRange();
     // trim by the same child-node walk that builds the sub-blocks, so every
     // child block stays inside the reported range
@@ -109,15 +132,27 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
 
   @Override
   public Spacing getSpacing(Block child1, @NotNull Block child2) {
-    return mySpacingProcessor.getSpacing(child1, child2);
+    // the pairs inside a metadata span - metadata to metadata, metadata to
+    // declaration - are the enclosing body's pairs and follow its rules
+    HaxeBlock owner = myLeadingMetadata.isEmpty() ? this : (HaxeBlock)myParent;
+    return owner.mySpacingProcessor.getSpacing(child1, child2);
   }
 
   @Override
   protected List<Block> buildChildren() {
+    if (!myLeadingMetadata.isEmpty()) return buildMetadataSpanChildren();
     IElementType type = getNode().getElementType();
     if (type == DOC_COMMENT) return buildDocCommentChildren();
     if (type == PPBODY) return buildInactiveBranchChildren();
-    return childBlocks(child -> childBlock(child, createChildWrap(child), createChildAlignment(child), true));
+    return childBlocks((child, metadata) -> childBlock(child, metadata, createChildWrap(child), createChildAlignment(child), true));
+  }
+
+  /** The metadata blocks, then the node's own: all at the span's indent, since the span starts the line. */
+  private List<Block> buildMetadataSpanChildren() {
+    List<Block> children = new ArrayList<>();
+    for (ASTNode metadata : myLeadingMetadata) children.add(spanMemberBlock(metadata));
+    children.add(spanMemberBlock(myNode));
+    return children;
   }
 
   /**
@@ -130,7 +165,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_DOC_COMMENTS) {
       return EMPTY;
     }
-    return childBlocks(child -> childBlock(child, Wrap.createWrap(WrapType.NONE, false), null, false));
+    return childBlocks((child, metadata) -> childBlock(child, metadata, Wrap.createWrap(WrapType.NONE, false), null, false));
   }
 
   /**
@@ -144,20 +179,41 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || HaxeInactiveBranches.preservedVerbatim(body, haxe)) {
       return EMPTY;
     }
-    return childBlocks(child -> childBlock(child, createChildWrap(child), null, true));
+    return childBlocks((child, metadata) -> childBlock(child, metadata, createChildWrap(child), null, true));
   }
 
-  /** One block per non-whitespace child, in order. */
-  private List<Block> childBlocks(Function<ASTNode, HaxeBlock> blockOf) {
+  /**
+   * One block per non-whitespace child, in order; a child opened by
+   * same-line metadata takes that metadata into its block (the factory's
+   * second argument, empty for every other child).
+   */
+  private List<Block> childBlocks(BiFunction<ASTNode, List<ASTNode>, HaxeBlock> blockOf) {
     List<Block> children = new ArrayList<>();
     for (ASTNode child = getNode().getFirstChildNode(); child != null; child = child.getTreeNext()) {
-      if (!FormatterUtil.containsWhiteSpacesOnly(child)) children.add(blockOf.apply(child));
+      if (FormatterUtil.containsWhiteSpacesOnly(child)) continue;
+      MetadataRun run = sameLineMetadataRun(child);
+      if (run == null) {
+        children.add(blockOf.apply(child, List.of()));
+        continue;
+      }
+      children.add(blockOf.apply(run.decorated(), run.metadata()));
+      child = run.decorated();
     }
     return children;
   }
 
-  private HaxeBlock childBlock(ASTNode child, Wrap wrap, @Nullable Alignment alignment, boolean linkWrapping) {
-    HaxeBlock block = new HaxeBlock(child, wrap, alignment, mySettings);
+  private HaxeBlock childBlock(ASTNode child, List<ASTNode> leadingMetadata, Wrap wrap, @Nullable Alignment alignment, boolean linkWrapping) {
+    HaxeBlock block = new HaxeBlock(child, leadingMetadata, wrap, alignment, mySettings, null);
+    return linked(block, linkWrapping);
+  }
+
+  /** A block inside a metadata span: at the span's indent, without wrap or alignment of its own (the span carries the node's). */
+  private HaxeBlock spanMemberBlock(ASTNode node) {
+    HaxeBlock block = new HaxeBlock(node, List.of(), Wrap.createWrap(WrapType.NONE, false), null, mySettings, Indent.getNoneIndent());
+    return linked(block, true);
+  }
+
+  private HaxeBlock linked(HaxeBlock block, boolean linkWrapping) {
     block.setParent(this);
     // wrap groups can span levels (a literal's items chop with its closing
     // bracket, a call chain's dots chop together) - the child's processor

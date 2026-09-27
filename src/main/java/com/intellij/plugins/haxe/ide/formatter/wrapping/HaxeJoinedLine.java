@@ -39,17 +39,25 @@ final class HaxeJoinedLine {
   private final int start;
   private final int end;
   private final int indent;
+  // the line stops where a block body opens: its brace still prints on the line
+  private final boolean bodyFollows;
 
-  private HaxeJoinedLine(CharSequence text, int start, int end, int indent) {
+  private HaxeJoinedLine(CharSequence text, int start, int end, int indent, boolean bodyFollows) {
     this.text = text;
     this.start = start;
     this.end = end;
     this.indent = indent;
+    this.bodyFollows = bodyFollows;
   }
 
   /** The line's width when printed. */
   int width() {
     return indent + oneLineWidth(text, start, end);
+  }
+
+  /** The width printed past the node's last character: the rest of the line, the opening brace of a body the line stops at included. */
+  int widthAfter(@NotNull ASTNode node) {
+    return width() - columnAfter(node) + (bodyFollows ? 1 : 0);
   }
 
   /** The column the node's first character lands on. */
@@ -116,7 +124,9 @@ final class HaxeJoinedLine {
 
     /** The statement's first line: up to its first block body, else its end. */
     HaxeJoinedLine statementLine() {
-      return new HaxeJoinedLine(text, lineStart, firstBodyStart(statement), indent);
+      int statementEnd = statement.getTextRange().getEndOffset();
+      int end = firstBodyStart(statement);
+      return new HaxeJoinedLine(text, lineStart, end, indent, end < statementEnd);
     }
 
     /** A declarator's line once its multi-var splits one per line: the first keeps the statement's start, later ones step in. */
@@ -124,14 +134,14 @@ final class HaxeJoinedLine {
       boolean first = declarator.getTreePrev() == null || findPrevious(declarator, LOCAL_VAR_DECLARATION) == null;
       int declaratorStart = first ? lineStart : declarator.getStartOffset();
       int declaratorEnd = declarator.getTextRange().getEndOffset();
-      return new HaxeJoinedLine(text, declaratorStart, declaratorEnd, first ? indent : indent + tabSize);
+      return new HaxeJoinedLine(text, declaratorStart, declaratorEnd, first ? indent : indent + tabSize, false);
     }
 
     /** An exploded chain operand's line: its leading operator first, one step in from the chain's indent. */
     HaxeJoinedLine operandLine(@NotNull ASTNode operand, int chainIndent) {
       ASTNode leadingOperator = UsefulPsiTreeUtil.getPrevSiblingSkipWhiteSpacesAndComments(operand);
       int operandStart = leadingOperator == null ? operand.getStartOffset() : leadingOperator.getStartOffset();
-      return new HaxeJoinedLine(text, operandStart, operand.getTextRange().getEndOffset(), chainIndent + tabSize);
+      return new HaxeJoinedLine(text, operandStart, operand.getTextRange().getEndOffset(), chainIndent + tabSize, false);
     }
 
     /**
@@ -143,7 +153,7 @@ final class HaxeJoinedLine {
       if (link == null) return line;
       ASTNode dot = link.getFirstChildNode().findChildByType(ODOT);
       int linkStart = dot == null ? link.getStartOffset() : dot.getStartOffset();
-      return new HaxeJoinedLine(text, linkStart, link.getTextRange().getEndOffset(), line.indent + tabSize);
+      return new HaxeJoinedLine(text, linkStart, link.getTextRange().getEndOffset(), line.indent + tabSize, false);
     }
   }
 

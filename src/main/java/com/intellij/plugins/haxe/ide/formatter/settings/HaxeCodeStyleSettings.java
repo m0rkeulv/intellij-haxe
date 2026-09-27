@@ -154,10 +154,11 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   public int ADD_CHAIN_SPLIT_ITEM_LENGTH = 0;
   public int ADD_CHAIN_SPLIT_ITEM_COUNT = 0;
   public int ADD_CHAIN_SPLIT_TOTAL_LENGTH = 0;
-  // call arguments fill the JOINED line the way hxformat's callParameter
-  // fillLine does: an argument reaching the margin on that line starts a
-  // new line even where the other breaks would have made it fit; off
-  // leaves the margin wrap to the layout as formatted
+  // call arguments and declared parameters fill the JOINED line the way
+  // hxformat's callParameter/functionSignature fillLine does: the written
+  // breaks in the list and around its parens go, and an argument reaching
+  // the margin on the joined line starts a new line; off keeps written
+  // breaks and leaves the margin wrap to the layout as formatted
   public boolean FILL_CALL_ARGUMENTS_ON_JOINED_LINE = false;
   // a multi-var declaration whose JOINED line would pass this many columns
   // splits one declarator per line (hxformat's wrapping.multiVar

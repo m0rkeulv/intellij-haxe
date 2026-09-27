@@ -23,7 +23,6 @@ import com.intellij.lang.ASTNode;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.TokenSet;
@@ -218,19 +217,13 @@ public class HaxeIndentProcessor {
    * A wrapped list item continues in from the line that opened the list:
    * call arguments and enum constructor parameters one step, a function
    * signature's parameters two - the signature stands off from the body
-   * that follows at one.
+   * that follows at one - unless there is no such body (a bodiless
+   * declaration, an empty {}), which leaves them at one.
    */
-  private Indent argumentListItemIndent(Site site) {
+  private static Indent argumentListItemIndent(Site site) {
     if (LIST_PUNCTUATION.contains(site.type())) return Indent.getNoneIndent();
     boolean signature = site.parentType() == PARAMETER_LIST && FUNCTION_LIKE_OWNERS.contains(site.superParentType());
-    if (!signature) return Indent.getNormalIndent();
-    // same-line metadata robs the declaration of its line start; with
-    // the class body's '{' on its OWN line the engine then anchors a
-    // wrapped parameter at that brace's column and the member step is
-    // lost - spelled back in explicitly. With end-of-line braces the
-    // anchor stays on the metadata's line and needs nothing.
-    if (nextLineBraces(settings) && startsWithSameLineMetadata(site.superParent())) return memberStepPlusContinuation();
-    return Indent.getContinuationIndent();
+    return signature && hasStatementBody(site.superParent()) ? Indent.getContinuationIndent() : Indent.getNormalIndent();
   }
 
   /** A statement's non-block body on its own line, and a value block under next-line braces. */
@@ -265,7 +258,7 @@ public class HaxeIndentProcessor {
     return null;
   }
 
-  /** A wrapped continuation of a declaration or expression: type hint, body after metadata, chain link, inherit clause or ternary part. */
+  /** A wrapped continuation of a declaration or expression: type hint, chain link, inherit clause or ternary part. */
   @Nullable
   private static Indent wrappedTailIndent(Site site) {
     IElementType type = site.type();
@@ -273,13 +266,6 @@ public class HaxeIndentProcessor {
     // an anonymous type opened on the line after its type hint's colon
     // (next-line braces) sits one step in; on the hint's line the step is moot
     if (parentType == TYPE_TAG && type == TYPE_OR_ANONYMOUS) return Indent.getNormalIndent();
-    // metadata sits BESIDE its declaration in the PSI, so a declaration
-    // opened by same-line metadata never starts its own line - the engine
-    // then anchors the body's next-line '{' past the declaration's indent,
-    // at the class body's column. One explicit step restores the level.
-    boolean bodyAfterMetadata = type == BLOCK_STATEMENT && FUNCTION_LIKE_OWNERS.contains(parentType)
-                                && startsWithSameLineMetadata(site.parent());
-    if (bodyAfterMetadata) return Indent.getNormalIndent();
     // a wrapped chain link (.map(...) on its own line) indents ONE step from
     // the chain's base line - continuation indent would be a declaration-style
     // double step
@@ -325,31 +311,6 @@ public class HaxeIndentProcessor {
       if (!WHITESPACES.contains(type) && !COMMENTS.contains(type)) return false;
     }
     return true;
-  }
-
-  /** One member step plus the continuation, in columns - for anchors that lost the member step to same-line metadata. */
-  private Indent memberStepPlusContinuation() {
-    CommonCodeStyleSettings.IndentOptions options = HaxeIndentText.indentOptions(settings);
-    return Indent.getSpaceIndent(options.INDENT_SIZE + options.CONTINUATION_INDENT_SIZE);
-  }
-
-  /**
-   * The declaration's line is opened by an EMBEDDED_META sibling - no line
-   * break between the meta and the declaration.
-   * TODO: metadata living BESIDE its declaration breaks the engine's indent
-   *       anchor for every continuation under it; the body block and the
-   *       signature parameters are compensated here, other wrapped parts
-   *       (an extends list, a wrapped return type) still anchor short.
-   *       Absorbing metadata into the declaration's block would fix all.
-   */
-  private static boolean startsWithSameLineMetadata(ASTNode declaration) {
-    ASTNode sibling = declaration.getTreePrev();
-    while (sibling != null && sibling.getElementType() != EMBEDDED_META) {
-      boolean whitespace = sibling.getPsi() instanceof PsiWhiteSpace;
-      if (!whitespace || sibling.textContains('\n')) return false;
-      sibling = sibling.getTreePrev();
-    }
-    return sibling != null;
   }
 
   /** The node starts at column 0 of its line. */

@@ -9,6 +9,12 @@ import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.WHITESPACES;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /** AST predicates, tree walks and settings queries shared by the formatter's processors. */
@@ -32,6 +38,37 @@ public final class HaxeFormatterNodes {
       root = root.getTreeParent();
     }
     return root;
+  }
+
+  /** A run of metadata siblings and the code node written on their line after them. */
+  public record MetadataRun(List<ASTNode> metadata, ASTNode decorated) {
+  }
+
+  /**
+   * The run of EMBEDDED_META siblings {@code node} opens, separated by
+   * line-less whitespace only, closed by the code node on the same line.
+   * Metadata sits BESIDE the declaration it decorates in the PSI, so this
+   * run is the only tie between a declaration and the metadata opening
+   * its line. Null when {@code node} is no metadata, the run ends its line,
+   * or a comment or directive closes it.
+   */
+  @Nullable
+  public static MetadataRun sameLineMetadataRun(@NotNull ASTNode node) {
+    if (node.getElementType() != EMBEDDED_META) return null;
+    List<ASTNode> metadata = new ArrayList<>();
+    for (ASTNode sibling = node; sibling != null; sibling = sibling.getTreeNext()) {
+      IElementType type = sibling.getElementType();
+      if (type == EMBEDDED_META) {
+        metadata.add(sibling);
+      }
+      else if (WHITESPACES.contains(type)) {
+        if (sibling.textContains('\n')) return null;
+      }
+      else {
+        return COMMENTS.contains(type) ? null : new MetadataRun(metadata, sibling);
+      }
+    }
+    return null;
   }
 
   /** A region's #if or #end reached from a leaf (null when unterminated that way) and whether a newline was crossed on the way. */
@@ -69,6 +106,35 @@ public final class HaxeFormatterNodes {
   @Nullable
   private static PsiElement neighbourLeaf(PsiElement leaf, boolean forward) {
     return forward ? PsiTreeUtil.nextLeaf(leaf) : PsiTreeUtil.prevLeaf(leaf);
+  }
+
+  /** A BLOCK_STATEMENT holding nothing but its braces and whitespace. */
+  public static boolean isEmptyBlock(@Nullable ASTNode block) {
+    if (block == null || block.getElementType() != BLOCK_STATEMENT) return false;
+    for (ASTNode child = block.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      IElementType type = child.getElementType();
+      if (type != PLCURLY && type != PRCURLY && !WHITESPACES.contains(type)) return false;
+    }
+    return true;
+  }
+
+  /** A function's body: what follows its header after the parameters; null for a bodiless declaration. */
+  @Nullable
+  public static ASTNode functionBody(@NotNull ASTNode function) {
+    ASTNode parameters = function.findChildByType(PARAMETER_LIST);
+    if (parameters == null) return null;
+    for (ASTNode child = parameters.getTreeNext(); child != null; child = child.getTreeNext()) {
+      IElementType type = child.getElementType();
+      boolean header = FUNCTION_HEADER_END.contains(type) || type == OSEMI || WHITESPACES.contains(type) || COMMENTS.contains(type);
+      if (!header) return child;
+    }
+    return null;
+  }
+
+  /** The function has statements to stand off from: a body that is neither absent nor an empty block. */
+  public static boolean hasStatementBody(@NotNull ASTNode function) {
+    ASTNode body = functionBody(function);
+    return body != null && !isEmptyBlock(body);
   }
 
   /** The brace style puts a '{' on its own line: NEXT_LINE, NEXT_LINE_SHIFTED or NEXT_LINE_SHIFTED2. */

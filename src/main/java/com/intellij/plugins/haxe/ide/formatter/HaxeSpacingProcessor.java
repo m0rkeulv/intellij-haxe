@@ -49,6 +49,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiFunction;
 
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.isEmptyBlock;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.nextLineBraces;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.regionCloser;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.regionOpener;
@@ -595,6 +596,8 @@ public class HaxeSpacingProcessor {
   private Spacing parenWithinSpacing(Pair pair) {
     IElementType type1 = pair.type1();
     if (type1 != PLPAREN && pair.type2() != PRPAREN) return null;
+    Spacing filled = filledListParenSpacing(pair);
+    if (filled != null) return filled;
     if (elementType == GUARD) return spaceIf(common.SPACE_WITHIN_IF_PARENTHESES);
     if (elementType == WHILE_STATEMENT || elementType == DO_WHILE_STATEMENT) return spaceIf(common.SPACE_WITHIN_WHILE_PARENTHESES);
     if (elementType == FOR_STATEMENT) return spaceIf(common.SPACE_WITHIN_FOR_PARENTHESES);
@@ -769,10 +772,13 @@ public class HaxeSpacingProcessor {
     // kept (the tool's length-based joins are not reproduced)
     boolean multiVarItem = elementType == LOCAL_VAR_DECLARATION_LIST && type1 == OCOMMA && pair.type2() == LOCAL_VAR_DECLARATION;
     if (multiVarItem && HaxeMultiVarSplit.splits(node, common, haxe)) return lineBreak();
-    // wrapping.callParameter fillLine judged on the JOINED line: an argument
-    // the tool moves down starts its line here too, whatever fits after the
-    // other breaks (HaxeCallArgumentFill)
-    if (haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE && callFillBreaksBefore(pair.node2(), type1)) return lineBreak();
+    // wrapping.callParameter/functionSignature fillLine judged on the JOINED
+    // line: a written break between arguments goes, and the arguments the
+    // tool moves down start their line (HaxeCallArgumentFill)
+    if (haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE) {
+      Spacing fill = callFillSpacing(pair);
+      if (fill != null) return fill;
+    }
     if (type1 == OCOMMA) return spaceIf(isArgumentList() ? common.SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS : common.SPACE_AFTER_COMMA);
     if (pair.type2() == OCOMMA) return spaceIf(common.SPACE_BEFORE_COMMA);
     return null;
@@ -1043,11 +1049,37 @@ public class HaxeSpacingProcessor {
     return Spacing.createSpacing(0, 0, 1 + blanks, keepBreaks, keepBlanks);
   }
 
-  /** The pair's second node is a call argument (after a comma) that the joined-line fill moves down. */
-  private boolean callFillBreaksBefore(ASTNode argument, IElementType type1) {
-    if (type1 != OCOMMA) return false;
+  /**
+   * A comma pair in a filled list: the argument after the comma joins the
+   * line, or starts its own when the fill moves it down. A pair beside a
+   * comment keeps the general rules.
+   */
+  @Nullable
+  private Spacing callFillSpacing(Pair pair) {
+    ASTNode argument = pair.node2();
+    if (pair.type1() != OCOMMA || LIST_PUNCTUATION.contains(pair.type2()) || COMMENTS.contains(pair.type2())) return null;
     ASTNode list = HaxeCallArgumentFill.filledListOf(argument);
-    return list != null && HaxeCallArgumentFill.brokenArguments(list, common, haxe).contains(argument);
+    if (list == null) return null;
+    return HaxeCallArgumentFill.brokenArguments(list, common, haxe).contains(argument) ? lineBreak() : joined();
+  }
+
+  /**
+   * The gap between a filled list and its parens under the joined-line fill:
+   * the tool re-joins it, so a written break before the first argument or
+   * the closing paren goes. Nothing written after the opening paren stays
+   * read-only, so the margin wrap cannot move the first argument down - the
+   * tool never does, however long it is.
+   */
+  @Nullable
+  private Spacing filledListParenSpacing(Pair pair) {
+    if (!haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE) return null;
+    boolean opening = pair.type1() == PLPAREN;
+    ASTNode inner = opening ? pair.node2() : pair.node1();
+    IElementType innerType = inner.getElementType();
+    if (LIST_PUNCTUATION.contains(innerType) || COMMENTS.contains(innerType)) return null;
+    if (HaxeCallArgumentFill.filledListOf(inner) == null) return null;
+    boolean gapWritten = pair.node1().getTextRange().getEndOffset() < pair.node2().getStartOffset();
+    return opening && !gapWritten ? Spacing.getReadOnlySpacing() : glued();
   }
 
   /** The node is a typedef's body (or its field list) under a next-line brace style. */
@@ -1225,16 +1257,6 @@ public class HaxeSpacingProcessor {
   }
 
   /** Only braces and whitespace inside - the {}-collapse owns its interior. */
-  private static boolean isEmptyBlock(@Nullable ASTNode block) {
-    if (block == null || block.getElementType() != BLOCK_STATEMENT) return false;
-    for (ASTNode child = block.getFirstChildNode(); child != null; child = child.getTreeNext()) {
-      IElementType type = child.getElementType();
-      if (type == PLCURLY || type == PRCURLY || WHITESPACES.contains(type)) continue;
-      return false;
-    }
-    return true;
-  }
-
   /** The BLOCK_STATEMENT the pair's second node is, or wraps as a guarded/do-while body; null for any other node. */
   @Nullable
   private static ASTNode bodyBlockOf(Pair pair) {

@@ -387,6 +387,56 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
       // the call's line, and the written break points are kept
       doParityTest("additive-arg-wrap");
     }
+
+    @Test
+    @DisplayName("meta same line wraps")
+    public void testMetaSameLineWraps() throws Exception {
+      // metadata opening a declaration's line: the wrapped extends list,
+      // parameters, return type and array initializer under it continue
+      // from the DECLARATION's indent, not the metadata-less column
+      doParityTest("meta-same-line-wraps");
+    }
+
+    @Test
+    @DisplayName("meta same line wraps allman")
+    public void testMetaSameLineWrapsAllman() throws Exception {
+      // lineEnds.leftCurly/rightCurly=both (fixture hxformat.json): the same
+      // continuations keep the member step when the class body's '{' owns
+      // its line, and the next-line body brace sits at the member's indent
+      doParityTest("meta-same-line-wraps-allman", HaxeCodeStyleTweaks::allmanBraces);
+    }
+
+    @Test
+    @DisplayName("signature fill repack")
+    public void testSignatureFillRepack() throws Exception {
+      // wrapping.functionSignature/anonFunctionSignature fillLine on JOINED
+      // input: hand-broken parameters re-pack up to the margin (breaks after
+      // the opening and before the closing paren go too); a parameter whose
+      // ", " would reach column 160 moves down two steps, the last one also
+      // when the paren, the return hint and the brace after it pass 160
+      doParityTest("signature-fill-repack");
+    }
+
+    @Test
+    @DisplayName("call fill repack")
+    public void testCallFillRepack() throws Exception {
+      // wrapping.callParameter fillLine on JOINED input: hand-broken call,
+      // new and lambda arguments re-pack; what follows the closing paren on
+      // the line (`;`, `) {`) counts for the last argument; a first argument
+      // reaching the margin restarts the count at the continuation, and the
+      // line still past the margin then moves the next argument down alone
+      doParityTest("call-fill-repack");
+    }
+
+    @Test
+    @DisplayName("signature wrap indent")
+    public void testSignatureWrapIndent() throws Exception {
+      // a wrapped parameter continues two steps under a function with
+      // statements (an expression body included) and one step under a
+      // bodiless declaration or an empty {} - named and anonymous alike; a
+      // first parameter reaching the margin moves the second at the same depth
+      doParityTest("signature-wrap-indent");
+    }
   }
 
   @Nested
@@ -433,6 +483,15 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
       // non-block else/for bodies still break, and a conditional holding only
       // an INACTIVE import stays snug in the import section
       doParityTest("inactive-branch-bodies");
+    }
+
+    @Test
+    @DisplayName("conditional nested inactive")
+    public void testConditionalNestedInactive() throws Exception {
+      // a region nested inside an inactive branch splits it into fragments
+      // (a '{' in one, its '}' in another); the branch aligns as one group,
+      // each line's depth following the braces the fragments before it opened
+      doParityTest("conditional-nested-inactive");
     }
   }
 

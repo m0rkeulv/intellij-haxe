@@ -26,13 +26,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @DisplayName("Formatting: second reformat")
 public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
-  private static final String WRAPPED_CALL_SOURCE = """
+  // a short array literal keeps its written layout on the first pass; call
+  // arguments do not - the profile's fill re-packs them on either pass
+  private static final String WRAPPED_ARRAY_SOURCE = """
     class Main {
     	function draw(s:Style) {
-    		shape.strokeGradient(s.kind,
-    			s.colors,
-    			s.opacities,
-    			s.stops);
+    		var stops = [
+    			s.first,
+    			s.second,
+    			s.third
+    		];
     	}
     }
     """;
@@ -53,20 +56,20 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("first pass keeps custom line breaks")
   public void testFirstPassKeepsCustomLineBreaks() {
-    String formatted = reformat(HxformatDefaultProfile::apply, WRAPPED_CALL_SOURCE);
+    String formatted = reformat(HxformatDefaultProfile::apply, WRAPPED_ARRAY_SOURCE);
 
-    assertEquals(WRAPPED_CALL_SOURCE, formatted);
+    assertEquals(WRAPPED_ARRAY_SOURCE, formatted);
   }
 
   @Test
   @DisplayName("second pass joins custom line breaks")
   public void testSecondPassJoinsCustomLineBreaks() {
-    String formatted = reformat(HaxeSecondReformatTest::secondPass, WRAPPED_CALL_SOURCE);
+    String formatted = reformat(HaxeSecondReformatTest::secondPass, WRAPPED_ARRAY_SOURCE);
 
     assertEquals("""
       class Main {
       	function draw(s:Style) {
-      		shape.strokeGradient(s.kind, s.colors, s.opacities, s.stops);
+      		var stops = [s.first, s.second, s.third];
       	}
       }
       """, formatted);

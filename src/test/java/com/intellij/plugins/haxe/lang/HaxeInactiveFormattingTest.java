@@ -28,6 +28,8 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
         }
     }
     """;
+  private static final Consumer<CodeStyleSettings> ALIGN_INACTIVE =
+    settings -> settings.getCustomSettings(HaxeCodeStyleSettings.class).ALIGN_INACTIVE_CONDITIONAL_BRANCHES = true;
 
   @Override
   protected String getBasePath() {
@@ -116,8 +118,6 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("token soup lines align as a group to the directive")
   public void testTokenSoupLinesAlignAsAGroupToTheDirective() {
-    Consumer<CodeStyleSettings> alignInactive =
-      settings -> settings.getCustomSettings(HaxeCodeStyleSettings.class).ALIGN_INACTIVE_CONDITIONAL_BRANCHES = true;
     // "1 +" followed by ";" parses nowhere, so the branch is preserved
     // verbatim and only the alignment pass may touch its lines
     String source = """
@@ -132,9 +132,82 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
       }
       """;
 
-    String result = reformat(alignInactive, source);
+    String result = reformat(ALIGN_INACTIVE, source);
 
     assertTrue(result.contains("\n        #if js\n        var x = 1 +\n            ;\n        #end\n"),
                "the blob shifts as a whole to the directive's indent, its own nesting kept:\n" + result);
+  }
+
+  @Test
+  @DisplayName("nested region in a member branch follows its braces")
+  public void testNestedRegionInAMemberBranchFollowsItsBraces() {
+    // the function's '{' and '}' land in different fragments, so no fragment
+    // parses at its true depth; the group's brace count restores it, for the
+    // inner directives and the clean-parsing statements alike
+    String source = """
+      class Main {
+          #if native
+          function blend():Void {
+          #if debug
+          trace("debug");
+          #else
+          trace("release");
+          #end
+          }
+          #end
+      }
+      """;
+
+    assertEquals("""
+      class Main {
+          #if native
+          function blend():Void {
+              #if debug
+              trace("debug");
+              #else
+              trace("release");
+              #end
+          }
+          #end
+      }
+      """, reformat(ALIGN_INACTIVE, source));
+  }
+
+  @Test
+  @DisplayName("nested region fragments keep their written nesting")
+  public void testNestedRegionFragmentsKeepTheirWrittenNesting() {
+    Consumer<CodeStyleSettings> alignVerbatim = ALIGN_INACTIVE.andThen(
+      settings -> settings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES = false);
+    // toggled off, every fragment is verbatim: the lines move as a group to
+    // the brace depth, their text and relative nesting untouched
+    String source = """
+      class Main {
+          #if native
+          function blend():Void {
+          #if debug
+      var x = 1 +
+          ;
+          #else
+          trace(   "release"  );
+          #end
+          }
+          #end
+      }
+      """;
+
+    assertEquals("""
+      class Main {
+          #if native
+          function blend():Void {
+              #if debug
+              var x = 1 +
+                  ;
+              #else
+              trace(   "release"  );
+              #end
+          }
+          #end
+      }
+      """, reformat(alignVerbatim, source));
   }
 }

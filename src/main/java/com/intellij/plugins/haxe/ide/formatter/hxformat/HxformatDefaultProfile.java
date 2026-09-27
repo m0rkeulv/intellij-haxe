@@ -71,12 +71,9 @@ public final class HxformatDefaultProfile {
     common.METHOD_CALL_CHAIN_WRAP = UI_CHOP_DOWN;
     // wrapping.implementsExtends: FillLine - break only past maxLineLength
     common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
-    // wrapping.functionSignature: FillLine - a line past the margin breaks;
-    // written breaks are kept.
-    // TODO: fillLine also RE-PACKS hand-broken parameters up to the margin;
-    //       reproducing that needs the tool's exact line-length accounting
-    //       (the plugin packs one item more at the boundary), so written
-    //       break points are preserved instead.
+    // wrapping.functionSignature: FillLine - the parameters re-pack up to
+    // the margin whatever breaks were written (the fill below), a line past
+    // the margin breaks where the tool's accounting puts it
     common.METHOD_PARAMETERS_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
     // wrapping.callParameter: NoWrap below its item-count and length
     // thresholds, FillLine past the margin - so a line that a second reformat
@@ -100,7 +97,9 @@ public final class HxformatDefaultProfile {
     haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH = HxformatDefaults.ADD_CHAIN_ITEM_LENGTH;
     haxe.ADD_CHAIN_SPLIT_ITEM_COUNT = HxformatDefaults.ADD_CHAIN_ITEM_COUNT;
     haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = HxformatDefaults.ADD_CHAIN_TOTAL_LENGTH;
-    // wrapping.callParameter fillLine fills the line as written on one line
+    // wrapping.callParameter/functionSignature/anonFunctionSignature fillLine
+    // re-packs parameters and arguments on the JOINED line: written breaks
+    // in a list and around its parens go, the fill's own breaks stay
     haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE = true;
     // wrapping.multiVar: lineLength -> onePerLineAfterFirst, preceded by
     // anyItemLength -> fillLine (the length-based JOIN of short multi-vars
