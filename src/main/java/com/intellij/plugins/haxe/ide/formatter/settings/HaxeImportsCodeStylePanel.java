@@ -72,7 +72,7 @@ public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
   }
 
   @Language("Haxe")
-  private static final String IMPORTS_CODE_SAMPLE = """
+  public static final String IMPORTS_CODE_SAMPLE = """
     package;
     import haxe.ds.StringMap;
     import haxe.io.Bytes;

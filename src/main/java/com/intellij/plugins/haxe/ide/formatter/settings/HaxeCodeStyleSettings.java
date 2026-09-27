@@ -144,7 +144,8 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   // reaching SPLIT_LINE_LENGTH breaks before every operator when an operand
   // reaches SPLIT_ITEM_LENGTH, else only where it overflows; a fitting line
   // breaks before every operator once SPLIT_ITEM_COUNT operands total more
-  // than SPLIT_TOTAL_LENGTH. 0 line length keeps the written shape
+  // than SPLIT_TOTAL_LENGTH. A threshold of 0 takes its rule out; all four
+  // at 0 keep the written shape
   public int BOOL_CHAIN_SPLIT_LINE_LENGTH = 0;
   public int BOOL_CHAIN_SPLIT_ITEM_LENGTH = 0;
   public int BOOL_CHAIN_SPLIT_ITEM_COUNT = 0;

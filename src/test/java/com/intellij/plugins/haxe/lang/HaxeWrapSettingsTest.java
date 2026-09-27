@@ -245,6 +245,40 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("chain item count rule alone")
+  public void testChainItemCountRuleAlone() {
+    // every threshold stands on its own: with the line-length rules at 0
+    // (never), the operand count alone splits a chain one per line, a
+    // three-operand chain stays
+    Consumer<HaxeCodeStyleSettings> countOnly = haxe -> {
+      haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = 4;
+      haxe.INDENT_WRAPPED_OPERATOR_CHAINS = true;
+    };
+    String source = """
+      class Main {
+      	static function main() {
+      		var few = a > b && b > c;
+      		var many = a > b && b > c && c > d && d > e;
+      	}
+      }
+      """;
+
+    String formatted = reformat(haxeSettings(countOnly), source);
+
+    assertEquals("""
+      class Main {
+          static function main() {
+              var few = a > b && b > c;
+              var many = a > b
+                  && b > c
+                  && c > d
+                  && d > e;
+          }
+      }
+      """, formatted);
+  }
+
+  @Test
   @DisplayName("value if placement")
   public void testValueIfPlacement() {
     // KEEP (the plain default) re-breaks a value if exactly where the source

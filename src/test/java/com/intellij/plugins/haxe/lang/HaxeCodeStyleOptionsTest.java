@@ -1,9 +1,7 @@
 package com.intellij.plugins.haxe.lang;
 
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleConfigurable;
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeLanguageCodeStyleSettingsProvider;
+import com.intellij.plugins.haxe.ide.formatter.settings.*;
 import com.intellij.psi.PsiErrorElement;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable;
@@ -15,6 +13,7 @@ import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.FieldSource;
 
 import java.lang.reflect.Field;
@@ -25,6 +24,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
  * The custom code style options the settings UI shows: each names a real
@@ -102,6 +102,21 @@ public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
   public void testPreviewSamplesParseAndReformat(SettingsType tab) {
     String sample = new HaxeLanguageCodeStyleSettingsProvider().getCodeSample(tab);
 
+    reformat(sample);
+
+    assertNull(PsiTreeUtil.findChildOfType(myFixture.getFile(), PsiErrorElement.class), tab + " sample has a syntax error");
+  }
+
+  /** (tab title, its preview sample) for the tabs with a sample of their own. */
+  static final List<Arguments> PANEL_SAMPLES = List.of(
+    arguments("Wrap Rules", HaxeWrapRulesCodeStylePanel.WRAP_RULES_CODE_SAMPLE),
+    arguments("Imports", HaxeImportsCodeStylePanel.IMPORTS_CODE_SAMPLE),
+    arguments("Conditional Compilation", HaxeConditionalCompilationPanel.CONDITIONAL_CODE_SAMPLE));
+
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("PANEL_SAMPLES")
+  @DisplayName("panel samples parse and reformat")
+  public void testPanelSamplesParseAndReformat(String tab, String sample) {
     reformat(sample);
 
     assertNull(PsiTreeUtil.findChildOfType(myFixture.getFile(), PsiErrorElement.class), tab + " sample has a syntax error");

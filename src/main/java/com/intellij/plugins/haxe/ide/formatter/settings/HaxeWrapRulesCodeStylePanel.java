@@ -95,14 +95,37 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
     return WRAP_RULES_CODE_SAMPLE;
   }
 
+  // one chain per rule branch, each named for the rule it answers to
   @Language("Haxe")
-  private static final String WRAP_RULES_CODE_SAMPLE = """
+  public static final String WRAP_RULES_CODE_SAMPLE = """
     class Main {
-         static function main() {
-              var first = 1, second = 2, third = 3, fourth = 4, fifth = 5, sixth = 6, seventh = 7;
-              var ready = first > second && second > third && third > fourth && fourth > fifth && fifth > sixth;
-              var total = first + second + third + fourth + fifth + sixth + seventh + first + second;
-         }
+        static function main() {
+            // multi-var: short declarators fill the line, long ones split one per line
+            var short1 = 1, short2 = 2, short3 = 3, short4 = 4, short5 = 5, short6 = 6, short7 = 7, short8 = 8;
+            var longDeclaratorOne = 640, longDeclaratorTwo = 480, longDeclaratorThree = 32, longDeclaratorFour = 60;
+
+            // boolean chains: up to three operands stay; many operands split by count or total
+            var fewOperands = short1 > short2 && short2 > short3;
+            var manyOperands = short1 > short2 && short2 > short3 && short3 > short4 && short4 > short5 && short5 > short6 && short6 > short7;
+
+            // a long line splits one operand per line when an operand is long, else fills
+            var longOperand = isLongOperandOnALongLine(longDeclaratorOne, longDeclaratorTwo) && fewOperands && manyOperands;
+            var longLine = isLongOperandOnALongLine(longDeclaratorOne, longDeclaratorTwo) && isLongOperandOnALongLine(longDeclaratorThree, longDeclaratorFour) && fewOperands;
+
+            // additive chains follow the same rules with their own thresholds
+            var fewTerms = short1 + short2 + short3;
+            var manyTerms = short1 + short2 + short3 + short4 + short5 + short6 + short7 + short8 + longDeclaratorOne;
+            var longTerm = longTermOnALongLine(longDeclaratorOne, longDeclaratorTwo) + fewTerms + manyTerms;
+            var longLineOfTerms = longTermOnALongLine(longDeclaratorOne, longDeclaratorTwo) + longTermOnALongLine(longDeclaratorThree, longDeclaratorFour) + fewTerms;
+        }
+
+        static function isLongOperandOnALongLine(width:Int, height:Int):Bool {
+            return width > height;
+        }
+
+        static function longTermOnALongLine(width:Int, height:Int):Int {
+            return width + height;
+        }
     }
     """;
 }

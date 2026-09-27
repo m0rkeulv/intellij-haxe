@@ -38,7 +38,8 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * otherwise                                                     -> NONE
  * </pre>
  *
- * Lengths come from the joined line ({@link HaxeJoinedLine}); in the total
+ * A threshold of 0 takes its rule out of the list; all four at 0 leave the
+ * chain as written. Lengths come from the joined line ({@link HaxeJoinedLine}); in the total
  * every operand counts two more, the separator that follows it. A chain's
  * decision is memoized on its root ({@link HaxeWrapMemo}).
  */
@@ -86,8 +87,11 @@ public final class HaxeOperatorChainRules {
     }
   }
 
-  /** The kind's thresholds as configured; a line length of 0 turns the rules off. */
+  /** The kind's thresholds as configured; a threshold of 0 takes its rule out. */
   record Thresholds(int lineLength, int itemLength, int itemCount, int totalLength) {
+    boolean allOff() {
+      return lineLength <= 0 && itemLength <= 0 && itemCount <= 0 && totalLength <= 0;
+    }
   }
 
   private enum Split { NONE, FILL, EXPLODE }
@@ -145,7 +149,7 @@ public final class HaxeOperatorChainRules {
 
   private static Split splitOf(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
     Thresholds thresholds = kind.thresholds(haxe);
-    if (thresholds.lineLength() <= 0) return Split.NONE;
+    if (thresholds.allOff()) return Split.NONE;
     ASTNode holder = holderOf(chain);
     List<ASTNode> operands = new ArrayList<>();
     for (ASTNode item : holderItems(kind, holder, chain)) {
@@ -166,11 +170,16 @@ public final class HaxeOperatorChainRules {
     ASTNode measured = HaxeJoinedLine.STATEMENT_CONTAINERS.contains(holder.getElementType()) ? chain : holder;
     int lineLength = measuredLineLength(measured, common, haxe);
     boolean exceeds = lineLength > margin;
-    if (lineLength >= thresholds.lineLength() && longest >= thresholds.itemLength()) return Split.EXPLODE;
-    if (lineLength >= thresholds.lineLength()) return Split.FILL;
+    // a threshold of 0 takes its rule out; the others still apply
+    boolean longLine = thresholds.lineLength() > 0 && lineLength >= thresholds.lineLength();
+    boolean longOperand = thresholds.itemLength() > 0 && longest >= thresholds.itemLength();
+    boolean smallTotal = thresholds.totalLength() > 0 && total <= thresholds.totalLength();
+    boolean manyOperands = thresholds.itemCount() > 0 && operands.size() >= thresholds.itemCount();
+    if (longLine && longOperand) return Split.EXPLODE;
+    if (longLine) return Split.FILL;
     if (operands.size() <= KEEP_ITEM_COUNT && !exceeds) return Split.NONE;
-    if (total <= thresholds.totalLength() && !exceeds) return Split.NONE;
-    if (operands.size() >= thresholds.itemCount()) return Split.EXPLODE;
+    if (smallTotal && !exceeds) return Split.NONE;
+    if (manyOperands) return Split.EXPLODE;
     return Split.NONE;
   }
 

@@ -70,7 +70,7 @@ public class HaxeConditionalCompilationPanel extends HaxeOptionsPreviewPanelBase
   // deliberately messy inactive branches: with formatting ON the preview
   // cleans them up, with it OFF they stay exactly like this
   @Language("Haxe")
-  private static final String CONDITIONAL_CODE_SAMPLE = """
+  public static final String CONDITIONAL_CODE_SAMPLE = """
     class Main {
          #if my_flag
         static   function helper( value:Int ):Void {
