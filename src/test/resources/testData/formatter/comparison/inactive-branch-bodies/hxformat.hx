@@ -1,12 +1,12 @@
 package;
 
 import haxe.io.Bytes;
-#if lime
-import lime.graphics.Image;
+#if native
+import app.render.Image;
 #end
 
 class Main {
-	#if lime
+	#if native
 	function blend(alpha:Float):Void {
 		if (alpha >= 1)
 			paint();

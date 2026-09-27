@@ -17,14 +17,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * leaving interiors alone. Exact parity is pinned by the multiline-comments
  * comparison fixture.
  */
-@DisplayName("Formatting: multi-line comment reindenting")
+@DisplayName("Formatting: multiline comment")
 public class HaxeMultilineCommentFormattingTest extends HaxeLightFixtureTestCase {
-
-  @Override
-  protected String getBasePath() {
-    return "/formatter/";
-  }
-
   // the comment sits OFF column 0 - a first-column comment is pinned by
   // KEEP_FIRST_COLUMN_COMMENT under default settings and would not move
   private static final String MISALIGNED_COMMENT_SOURCE = """
@@ -37,10 +31,15 @@ public class HaxeMultilineCommentFormattingTest extends HaxeLightFixtureTestCase
     }
     """;
 
+  @Override
+  protected String getBasePath() {
+    return "/formatter/";
+  }
+
   @Test
   @DisplayName("comment interiors reindent by default")
   public void testCommentInteriorsReindentByDefault() {
-    String result = reformat(settings -> { }, MISALIGNED_COMMENT_SOURCE);
+    String result = reformat(MISALIGNED_COMMENT_SOURCE);
 
     // the comment moved to scope indent (8) and its interior sits one level
     // deeper with the common margin stripped
@@ -74,13 +73,9 @@ public class HaxeMultilineCommentFormattingTest extends HaxeLightFixtureTestCase
       }
       """;
 
-    String result = reformat(settings -> { }, source);
+    String result = reformat(source);
 
     assertTrue(result.contains("\n/* step one\n   step two */\n"),
                "a pinned margin comment keeps opener AND interior:\n" + result);
-  }
-
-  private String reformat(Consumer<CodeStyleSettings> configure, String source) {
-    return reformat("Comments.hx", configure, source);
   }
 }

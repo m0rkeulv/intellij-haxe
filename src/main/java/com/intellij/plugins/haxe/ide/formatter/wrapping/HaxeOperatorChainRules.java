@@ -1,16 +1,20 @@
 package com.intellij.plugins.haxe.ide.formatter.wrapping;
 
 import com.intellij.lang.ASTNode;
+import com.intellij.openapi.util.Key;
 import com.intellij.plugins.haxe.HaxeLanguage;
+import com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
@@ -19,10 +23,10 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 /**
  * haxe-formatter's operator chain rules - wrapping.opAddSubChain for +/-
  * chains, wrapping.opBoolChain for &&/|| chains - decided the way the tool
- * decides them: every chain of the kind sitting directly in one scope (the
+ * decides them: every chain of the kind sitting directly in one holder (the
  * arguments of a call, the items of a literal, a parenthesized expression,
  * a value) is judged together, its items being all their operands, against
- * the line the scope's opener sits on once the tool's own argument fill has
+ * the line the holder's opener sits on once the tool's own argument fill has
  * broken it. Rules, first match wins (the kind's thresholds):
  *
  * <pre>
@@ -35,7 +39,8 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * </pre>
  *
  * Lengths come from the joined line ({@link HaxeJoinedLine}); in the total
- * every operand counts two more, the separator that follows it.
+ * every operand counts two more, the separator that follows it. A chain's
+ * decision is memoized on its root ({@link HaxeWrapMemo}).
  */
 public final class HaxeOperatorChainRules {
 
@@ -51,6 +56,7 @@ public final class HaxeOperatorChainRules {
     final TokenSet operators;
     // the operator's own width: "+" one column, "&&" two
     final int operatorWidth;
+    private final Key<HaxeWrapMemo.Entry<Decision>> decisionMemo = Key.create("HaxeOperatorChainRules." + name());
 
     Kind(TokenSet chainTypes, TokenSet operators, int operatorWidth) {
       this.chainTypes = chainTypes;
@@ -65,20 +71,33 @@ public final class HaxeOperatorChainRules {
     }
 
     Thresholds thresholds(HaxeCodeStyleSettings haxe) {
-      return this == ADDITIVE
-             ? new Thresholds(haxe.ADD_CHAIN_SPLIT_LINE_LENGTH, haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH, haxe.ADD_CHAIN_SPLIT_ITEM_COUNT, haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH)
-             : new Thresholds(haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH, haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH, haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT, haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH);
+      return switch (this) {
+        case ADDITIVE -> new Thresholds(
+          haxe.ADD_CHAIN_SPLIT_LINE_LENGTH,
+          haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH,
+          haxe.ADD_CHAIN_SPLIT_ITEM_COUNT,
+          haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH);
+        case LOGIC -> new Thresholds(
+          haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH,
+          haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH,
+          haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT,
+          haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH);
+      };
     }
   }
 
   /** The kind's thresholds as configured; a line length of 0 turns the rules off. */
-  private record Thresholds(int lineLength, int itemLength, int itemCount, int totalLength) {
+  record Thresholds(int lineLength, int itemLength, int itemCount, int totalLength) {
   }
 
   private enum Split { NONE, FILL, EXPLODE }
 
-  // a chain's scope: the innermost list, parens or value holding it, else its statement's container
-  private static final TokenSet SCOPES = TokenSet.orSet(
+  /** A chain's split and, when it fills, the operands the fill moves to a new line. */
+  private record Decision(Split split, Set<ASTNode> fillBreaks) {
+  }
+
+  // a chain's holder: the innermost list, parens or value holding it, else its statement's container
+  private static final TokenSet HOLDERS = TokenSet.orSet(
     ARGUMENT_LISTS,
     HaxeJoinedLine.STATEMENT_CONTAINERS,
     TokenSet.create(NEW_EXPRESSION, PARENTHESIZED_EXPRESSION, ARRAY_LITERAL, MAP_INITIALIZER_EXPRESSION_LIST, OBJECT_LITERAL_ELEMENT,
@@ -95,60 +114,41 @@ public final class HaxeOperatorChainRules {
    */
   public static boolean breaksBefore(@NotNull Kind kind, @NotNull ASTNode operator,
                                      @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
-    Split split = decide(kind, operator, common, haxe);
-    if (split == Split.NONE) return false;
-    if (split == Split.EXPLODE) return true;
-    HaxeJoinedLine line = HaxeJoinedLine.of(operator, common, haxe);
-    if (line == null) return false;
-    int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
-    int tabSize = HaxeJoinedLine.tabSize(common);
-    List<ASTNode> operands = new ArrayList<>();
-    collectOperands(kind, chainRoot(kind, operator), operands);
-    ASTNode following = nextCode(operator);
-    int shift = 0;
-    for (int i = 1; i < operands.size(); i++) {
-      ASTNode operand = operands.get(i);
-      int trailing = i < operands.size() - 1 ? kind.operatorWidth + HaxeJoinedLine.SEPARATOR_WIDTH : 0;
-      boolean breaks = line.columnAfter(operand) + shift + trailing >= margin;
-      if (breaks) {
-        // the operand now starts after the leading operator on its own line
-        shift = line.indent() + tabSize + kind.operatorWidth + 1 - line.columnBefore(operand);
-      }
-      if (operand == following) return breaks;
-    }
-    return false;
-  }
-
-  @Nullable
-  private static ASTNode nextCode(ASTNode node) {
-    ASTNode next = node.getTreeNext();
-    while (next != null && (WHITESPACES.contains(next.getElementType()) || COMMENTS.contains(next.getElementType()))) {
-      next = next.getTreeNext();
-    }
-    return next;
+    Decision decision = decide(kind, chainRootOf(kind, operator), common, haxe);
+    if (decision.split() == Split.NONE) return false;
+    if (decision.split() == Split.EXPLODE) return true;
+    ASTNode following = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(operator);
+    return following != null && decision.fillBreaks().contains(following);
   }
 
   /** Whether the chain this level belongs to explodes - every operand then starts its own line. */
   static boolean explodes(@NotNull Kind kind, @NotNull ASTNode chainLevel,
                           @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
-    ASTNode root = chainLevel;
-    while (root.getTreeParent() != null && kind.chainTypes.contains(root.getTreeParent().getElementType())) {
-      root = root.getTreeParent();
-    }
-    return decideRoot(kind, root, common, haxe) == Split.EXPLODE;
+    ASTNode root = HaxeFormatterNodes.outermostOfKind(chainLevel, kind.chainTypes);
+    return decide(kind, root, common, haxe).split() == Split.EXPLODE;
   }
 
-  /** The split for the chain holding this operator node. */
-  private static Split decide(Kind kind, ASTNode operator, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
-    return decideRoot(kind, chainRoot(kind, operator), common, haxe);
+  /** The outermost level of the kind the operator's chain belongs to. */
+  private static ASTNode chainRootOf(Kind kind, ASTNode operator) {
+    return HaxeFormatterNodes.outermostOfKind(operator.getTreeParent(), kind.chainTypes);
   }
 
-  private static Split decideRoot(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
+  private static Decision decide(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
+    return HaxeWrapMemo.cached(chain, kind.decisionMemo, common, haxe, () -> decideRoot(kind, chain, common, haxe));
+  }
+
+  private static Decision decideRoot(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
+    Split split = splitOf(kind, chain, common, haxe);
+    Set<ASTNode> fillBreaks = split == Split.FILL ? fillBreaksOf(kind, chain, common, haxe) : Set.of();
+    return new Decision(split, fillBreaks);
+  }
+
+  private static Split splitOf(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
     Thresholds thresholds = kind.thresholds(haxe);
     if (thresholds.lineLength() <= 0) return Split.NONE;
-    ASTNode scope = scopeOf(chain);
+    ASTNode holder = holderOf(chain);
     List<ASTNode> operands = new ArrayList<>();
-    for (ASTNode item : scopeItems(kind, scope, chain)) {
+    for (ASTNode item : holderItems(kind, holder, chain)) {
       collectOperands(kind, item, operands);
     }
     int total = 0;
@@ -163,8 +163,8 @@ public final class HaxeOperatorChainRules {
     int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
     // a chain held by nothing closer than its statement's container is
     // judged on the statement's line - the chain's own
-    ASTNode judged = HaxeJoinedLine.STATEMENT_CONTAINERS.contains(scope.getElementType()) ? chain : scope;
-    int lineLength = judgedLineLength(judged, common, haxe);
+    ASTNode measured = HaxeJoinedLine.STATEMENT_CONTAINERS.contains(holder.getElementType()) ? chain : holder;
+    int lineLength = measuredLineLength(measured, common, haxe);
     boolean exceeds = lineLength > margin;
     if (lineLength >= thresholds.lineLength() && longest >= thresholds.itemLength()) return Split.EXPLODE;
     if (lineLength >= thresholds.lineLength()) return Split.FILL;
@@ -174,31 +174,47 @@ public final class HaxeOperatorChainRules {
     return Split.NONE;
   }
 
-  /** The outermost level of the kind the operator's chain belongs to. */
-  private static ASTNode chainRoot(Kind kind, ASTNode operator) {
-    ASTNode root = operator.getTreeParent();
-    while (root.getTreeParent() != null && kind.chainTypes.contains(root.getTreeParent().getElementType())) {
-      root = root.getTreeParent();
+  /**
+   * The operands a filling chain moves to a new line: each that, with the
+   * operator and space trailing it, would reach the margin on the chain's
+   * joined line; the fill then continues one step in, operator leading.
+   */
+  private static Set<ASTNode> fillBreaksOf(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
+    HaxeJoinedLine line = HaxeWrapLines.lineOf(chain, common, haxe);
+    if (line == null) return Set.of();
+    int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
+    int tabSize = HaxeJoinedLine.tabSize(common);
+    List<ASTNode> operands = new ArrayList<>();
+    collectOperands(kind, chain, operands);
+    Set<ASTNode> breaks = new HashSet<>();
+    int shift = 0;
+    for (int i = 1; i < operands.size(); i++) {
+      ASTNode operand = operands.get(i);
+      int trailing = i < operands.size() - 1 ? kind.operatorWidth + HaxeJoinedLine.SEPARATOR_WIDTH : 0;
+      if (line.columnAfter(operand) + shift + trailing < margin) continue;
+      breaks.add(operand);
+      // the operand now starts after the leading operator on its own line
+      shift = line.indent() + tabSize + kind.operatorWidth + 1 - line.columnBefore(operand);
     }
-    return root;
+    return breaks;
   }
 
-  private static ASTNode scopeOf(ASTNode chain) {
-    ASTNode scope = chain.getTreeParent();
-    while (scope != null && !SCOPES.contains(scope.getElementType())) {
-      scope = scope.getTreeParent();
+  private static ASTNode holderOf(ASTNode chain) {
+    ASTNode holder = chain.getTreeParent();
+    while (holder != null && !HOLDERS.contains(holder.getElementType())) {
+      holder = holder.getTreeParent();
     }
-    return scope == null ? chain : scope;
+    return holder == null ? chain : holder;
   }
 
-  /** The chains judged together: every chain of the kind sitting directly in a list scope, else just this one. */
-  private static List<ASTNode> scopeItems(Kind kind, ASTNode scope, ASTNode chain) {
-    boolean list = ARGUMENT_LISTS.contains(scope.getElementType())
-                   || scope.getElementType() == NEW_EXPRESSION
-                   || scope.getElementType() == MAP_INITIALIZER_EXPRESSION_LIST;
+  /** The chains judged together: every chain of the kind sitting directly in a list holder, else just this one. */
+  private static List<ASTNode> holderItems(Kind kind, ASTNode holder, ASTNode chain) {
+    boolean list = ARGUMENT_LISTS.contains(holder.getElementType())
+                   || holder.getElementType() == NEW_EXPRESSION
+                   || holder.getElementType() == MAP_INITIALIZER_EXPRESSION_LIST;
     if (!list) return List.of(chain);
     List<ASTNode> items = new ArrayList<>();
-    for (ASTNode child = scope.getFirstChildNode(); child != null; child = child.getTreeNext()) {
+    for (ASTNode child = holder.getFirstChildNode(); child != null; child = child.getTreeNext()) {
       if (kind.chainTypes.contains(child.getElementType())) items.add(child);
     }
     return items;
@@ -218,15 +234,16 @@ public final class HaxeOperatorChainRules {
   }
 
   /**
-   * The joined line of the scope, cut where the tool's argument fill breaks
-   * it first: at the comma before the first argument the fill moves down.
+   * The joined line of the holder (or the chain judged on its own line), cut
+   * where the tool's argument fill breaks it first: at the comma before the
+   * first argument the fill moves down.
    */
-  private static int judgedLineLength(ASTNode scope, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
-    HaxeJoinedLine line = HaxeJoinedLine.of(scope, common, haxe);
+  private static int measuredLineLength(ASTNode measured, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
+    HaxeJoinedLine line = HaxeWrapLines.lineOf(measured, common, haxe);
     if (line == null) return 0;
-    boolean callArguments = ARGUMENT_LISTS.contains(scope.getElementType()) || scope.getElementType() == NEW_EXPRESSION;
+    boolean callArguments = ARGUMENT_LISTS.contains(measured.getElementType()) || measured.getElementType() == NEW_EXPRESSION;
     if (!callArguments) return line.width();
-    List<ASTNode> broken = HaxeCallArgumentFill.brokenArguments(scope, common, haxe);
+    List<ASTNode> broken = HaxeCallArgumentFill.brokenArguments(measured, common, haxe);
     if (broken.isEmpty()) return line.width();
     return line.columnBefore(broken.getFirst()) - 1;
   }

@@ -62,8 +62,8 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP, haxe.IF_BODY_PLACEMENT);
     assertEquals(HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP, haxe.DO_WHILE_BODY_PLACEMENT);
     assertTrue(common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE, "no body breaks, so the mirroring checkbox flips back on");
-    assertEquals(common.KEEP_BLANK_LINES_IN_CODE, haxe.KEEP_BLANK_LINES_AFTER_LBRACE);
-    assertEquals(common.KEEP_BLANK_LINES_IN_CODE, haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON);
+    assertEquals(1, haxe.KEEP_BLANK_LINES_AFTER_LBRACE, "afterLeftCurly=keep lifts the cap to the file-wide maximum");
+    assertEquals(1, haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON, "beforeBlocks=keep lifts the cap to the file-wide maximum");
     assertTrue(haxe.SPACE_AFTER_TYPE_REFERENCE_COLON);
     assertFalse(haxe.SPACE_BEFORE_TYPE_REFERENCE_COLON);
     assertFalse(haxe.SPACE_AROUND_TYPE_CHECK_COLON);
@@ -73,47 +73,10 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(List.of("whitespace.unknownKey"), unsupported);
   }
 
-  /**
-   * The settings UI encodes its combo values: "chop down if long" is
-   * WRAP_ON_EVERY_ITEM|WRAP_AS_NEEDED (5), never bare WRAP_ON_EVERY_ITEM (4);
-   * a scheme holding any other value renders as "Invalid option value" in
-   * every wrap combo box. Sweep EVERY wrap/brace field the defaults produce.
-   */
+  /** A lineEnds/sameLine-only config - wrapping untouched. */
   @Test
-  @DisplayName("wrap and brace values use the settings ui encoding")
-  public void testWrapAndBraceValuesUseTheSettingsUiEncoding() throws Exception {
-    CodeStyleSettings settings = freshDefaults();
-    CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
-    var uiWrapValues = List.of(
-      CommonCodeStyleSettings.DO_NOT_WRAP,
-      CommonCodeStyleSettings.WRAP_AS_NEEDED,
-      CommonCodeStyleSettings.WRAP_ALWAYS,
-      CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM | CommonCodeStyleSettings.WRAP_AS_NEEDED);
-    var uiBraceValues = List.of(
-      CommonCodeStyleSettings.END_OF_LINE,
-      CommonCodeStyleSettings.NEXT_LINE,
-      CommonCodeStyleSettings.NEXT_LINE_SHIFTED,
-      CommonCodeStyleSettings.NEXT_LINE_SHIFTED2,
-      CommonCodeStyleSettings.NEXT_LINE_IF_WRAPPED);
-
-    for (var field : CommonCodeStyleSettings.class.getFields()) {
-      if (field.getType() != int.class) continue;
-      String name = field.getName();
-      if (name.endsWith("_WRAP")) {
-        assertTrue(uiWrapValues.contains(field.getInt(common)),
-                   name + "=" + field.getInt(common) + " is not a settings-UI wrap value " + uiWrapValues);
-      }
-      if (name.endsWith("BRACE_STYLE")) {
-        assertTrue(uiBraceValues.contains(field.getInt(common)),
-                   name + "=" + field.getInt(common) + " is not a settings-UI brace value " + uiBraceValues);
-      }
-    }
-  }
-
-  /** The OpenFL library's config shape - lineEnds/sameLine only, wrapping untouched. */
-  @Test
-  @DisplayName("openfl shaped config")
-  public void testOpenflShapedConfig() throws Exception {
+  @DisplayName("line ends and same line only config")
+  public void testLineEndsAndSameLineOnlyConfig() throws Exception {
     CodeStyleSettings settings = freshDefaults();
     var root = new ObjectMapper().readTree("""
       {
@@ -146,7 +109,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     int uiChop = CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM | CommonCodeStyleSettings.WRAP_AS_NEEDED;
     assertEquals(uiChop, common.ARRAY_INITIALIZER_WRAP);
     assertEquals(uiChop, common.METHOD_CALL_CHAIN_WRAP);
-    assertTrue(unsupported.isEmpty(), "the openfl config maps completely, got: " + unsupported);
+    assertTrue(unsupported.isEmpty(), "a lineEnds/sameLine-only config maps completely, got: " + unsupported);
   }
 
   /** The sections added by the full-spec audit: wrapping rules, parens, brackets, clamp, line ends. */

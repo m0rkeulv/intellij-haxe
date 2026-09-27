@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.formatter.wrapping;
 
 import com.intellij.lang.ASTNode;
+import com.intellij.openapi.util.Key;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -9,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
@@ -20,9 +22,12 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * haxe-formatter's callParameter fillLine, decided on the joined line: the
  * arguments fill from the opening paren, and an argument (its trailing
  * comma and space included) that would reach the margin starts a new line
- * one step in; the first argument stays on the paren's line.
+ * one step in; the first argument stays on the paren's line. A list's
+ * broken arguments are memoized on it ({@link HaxeWrapMemo}).
  */
 public final class HaxeCallArgumentFill {
+
+  private static final Key<HaxeWrapMemo.Entry<List<ASTNode>>> BROKEN_ARGUMENTS_MEMO = Key.create("HaxeCallArgumentFill.brokenArguments");
 
   private HaxeCallArgumentFill() {
   }
@@ -30,8 +35,12 @@ public final class HaxeCallArgumentFill {
   /** The arguments of the list that start a new line; empty when the joined line fits the margin. */
   @NotNull
   public static List<ASTNode> brokenArguments(@NotNull ASTNode list, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
+    return HaxeWrapMemo.cached(list, BROKEN_ARGUMENTS_MEMO, common, haxe, () -> computeBrokenArguments(list, common, haxe));
+  }
+
+  private static List<ASTNode> computeBrokenArguments(ASTNode list, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
     List<ASTNode> broken = new ArrayList<>();
-    HaxeJoinedLine line = HaxeJoinedLine.of(list, common, haxe);
+    HaxeJoinedLine line = HaxeWrapLines.lineOf(list, common, haxe);
     if (line == null) return broken;
     int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
     if (line.width() < margin) return broken;
@@ -52,7 +61,7 @@ public final class HaxeCallArgumentFill {
         column += width;
       }
     }
-    return broken;
+    return Collections.unmodifiableList(broken);
   }
 
   /** The list's arguments: its expression children ({@code new T(a, b)} keeps them as direct children of the expression). */
@@ -72,12 +81,13 @@ public final class HaxeCallArgumentFill {
   }
 
   /**
-   * The list a call argument or a declared parameter belongs to: an
-   * argument-list node under a call, a signature or an enum constructor, or
-   * the new-expression holding it (functionSignature fills the same way).
+   * The list a call argument or a declared parameter belongs to when that
+   * list fills: an argument-list node under a call, a signature or an enum
+   * constructor, or the new-expression holding it (functionSignature fills
+   * the same way); null for a list that does not fill.
    */
   @Nullable
-  public static ASTNode listOf(@NotNull ASTNode argument) {
+  public static ASTNode filledListOf(@NotNull ASTNode argument) {
     ASTNode parent = argument.getTreeParent();
     if (parent == null) return null;
     if (parent.getElementType() == NEW_EXPRESSION) return parent;

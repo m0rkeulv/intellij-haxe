@@ -102,7 +102,7 @@ public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
   public void testPreviewSamplesParseAndReformat(SettingsType tab) {
     String sample = new HaxeLanguageCodeStyleSettingsProvider().getCodeSample(tab);
 
-    reformat("Sample.hx", settings -> {}, sample);
+    reformat(sample);
 
     assertNull(PsiTreeUtil.findChildOfType(myFixture.getFile(), PsiErrorElement.class), tab + " sample has a syntax error");
   }

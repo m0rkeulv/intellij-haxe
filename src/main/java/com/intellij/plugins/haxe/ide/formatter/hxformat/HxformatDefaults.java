@@ -1,8 +1,7 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 /**
- * haxe-formatter's built-in defaults (formatter 1.18.0, its
- * {@code src/formatter/config/*.hx} {@code @:default} values): the profile
+ * haxe-formatter's built-in defaults (formatter 1.18.0): the profile
  * {@link HxformatDefaultProfile#apply} installs, and the baseline an
  * imported hxformat.json overrides. They apply only under that profile; the
  * plain scheme keeps the plugin's own defaults in {@link HaxeCodeStyleSettings}.

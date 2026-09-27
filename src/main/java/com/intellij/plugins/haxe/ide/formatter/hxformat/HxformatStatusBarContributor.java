@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
-import com.intellij.application.options.CodeStyle;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.DumbAwareAction;
@@ -9,7 +8,6 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.modifier.CodeStyleStatusBarUIContributor;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;
@@ -60,11 +58,7 @@ class HxformatStatusBarContributor implements CodeStyleStatusBarUIContributor {
 
   @Override
   public @Nullable AnAction createDisableAction(@NotNull Project project) {
-    return DumbAwareAction.create(HaxeCodeStyleBundle.message("hxformat.status.bar.disable"), e -> disable(project));
-  }
-
-  private static void disable(@NotNull Project project) {
-    CodeStyle.getSettings(project).getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT = false;
-    CodeStyleSettingsManager.getInstance(project).notifyCodeStyleSettingsChanged();
+    String text = HaxeCodeStyleBundle.message("hxformat.status.bar.disable");
+    return DumbAwareAction.create(text, e -> HxformatConfigs.getInstance(project).setIntegrationEnabled(false));
   }
 }

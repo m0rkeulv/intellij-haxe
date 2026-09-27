@@ -17,17 +17,14 @@
  */
 package com.intellij.plugins.haxe.lang;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static com.intellij.plugins.haxe.lang.HaxeCodeStyleTweaks.haxeSettings;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import com.intellij.openapi.command.WriteCommandAction;
-import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
-import com.intellij.psi.codeStyle.CodeStyleManager;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +33,7 @@ import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /**
  * @author: Fedor.Korotkov
@@ -52,19 +50,7 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    setTestStyleSettings();
-  }
-
-  @Override
-  public void setTestStyleSettings() {
-    Project project = getProject();
-    CodeStyleSettings currSettings = CodeStyleSettingsManager.getSettings(project);
-    assertNotNull(currSettings);
-    CodeStyleSettings tempSettings = currSettings.clone();
-    CodeStyleSettings.IndentOptions indentOptions = tempSettings.getIndentOptions(HaxeFileType.INSTANCE);
-    assertNotNull(indentOptions);
-    defineStyleSettings(tempSettings);
-    CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
+    installTemporarySettings(this::defineStyleSettings);
   }
 
   protected void defineStyleSettings(CodeStyleSettings tempSettings) {
@@ -75,24 +61,6 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
     myTestStyleSettings.ALIGN_MULTILINE_PARAMETERS = false;
     myTestStyleSettings.ALIGN_MULTILINE_PARAMETERS_IN_CALLS = false;
     myTestStyleSettings.KEEP_FIRST_COLUMN_COMMENT = false;
-  }
-
-  private void doTest() throws Exception {
-    myFixture.configureByFile(getTestName(false) + ".hx");
-    Runnable reformat = () -> CodeStyleManager.getInstance(myFixture.getProject()).reformat(myFixture.getFile());
-    WriteCommandAction.runWriteCommandAction(getProject(), reformat);
-    try {
-      myFixture.checkResultByFile(getTestName(false) + ".txt");
-    }
-    catch (RuntimeException e) {
-      // the platform reads expected files with nio nowadays
-      if (!(e.getCause() instanceof FileNotFoundException || e.getCause() instanceof NoSuchFileException)) {
-        throw e;
-      }
-      Path path = Path.of(getTestDataPath(), getTestName(false) + ".txt");
-      Files.writeString(path, myFixture.getFile().getText().trim());
-      fail("No output text found. File " + path + " created.");
-    }
   }
 
   @Test
@@ -138,6 +106,39 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
     myTestStyleSettings.SPACE_AROUND_ADDITIVE_OPERATORS = false;
     myTestStyleSettings.SPACE_AROUND_MULTIPLICATIVE_OPERATORS = false;
     doTest();
+  }
+
+  @Test
+  @DisplayName("space around arrows")
+  public void testSpaceAroundArrows() {
+    // the three arrow kinds space separately: arrow functions, Haxe 4
+    // function types and Haxe 3 function types
+    Consumer<HaxeCodeStyleSettings> unspacedArrows = haxe -> {
+      haxe.SPACE_AROUND_ARROW = false;
+      haxe.SPACE_AROUND_FUNCTION_TYPE_ARROW = false;
+      haxe.SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW = false;
+    };
+    String source = """
+      class Main {
+      	static function main() {
+      		var twice = x -> x * 2;
+      		var apply:(Int) -> Int = twice;
+      		var legacy:Int -> Int = twice;
+      	}
+      }
+      """;
+
+    String formatted = reformat(haxeSettings(unspacedArrows), source);
+
+    assertEquals("""
+      class Main {
+          static function main() {
+              var twice = x->x * 2;
+              var apply:(Int)->Int = twice;
+              var legacy:Int->Int = twice;
+          }
+      }
+      """, formatted);
   }
 
   @Test
@@ -187,6 +188,7 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
     myTestStyleSettings.SPACE_AFTER_SEMICOLON = false;
     doTest();
   }
+
   @Test
   @DisplayName("indent typedef")
   public void testIndentTypedef() throws Exception {
@@ -231,8 +233,9 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("brace placement 1 - next line shifted braces")
+  @DisplayName("brace placement 1")
   public void testBracePlacement1() throws Exception {
+    // next-line shifted braces
     myTestStyleSettings.KEEP_LINE_BREAKS = false;
     myTestStyleSettings.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE_SHIFTED2;
     myTestStyleSettings.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
@@ -240,8 +243,9 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("brace placement 2 - end of line class braces next line methods")
+  @DisplayName("brace placement 2")
   public void testBracePlacement2() throws Exception {
+    // end-of-line class braces, next-line methods
     myTestStyleSettings.KEEP_LINE_BREAKS = false;
     myTestStyleSettings.BRACE_STYLE = CommonCodeStyleSettings.END_OF_LINE;
     myTestStyleSettings.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE_SHIFTED;
@@ -263,6 +267,7 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
     myTestStyleSettings.KEEP_FIRST_COLUMN_COMMENT = true;
     doTest();
   }
+
   @Test
   @DisplayName("indent tabs")
   public void testIndentTabs() throws Exception {
@@ -271,6 +276,7 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
     myTestStyleSettings.getIndentOptions().TAB_SIZE = 1;
     doTest();
   }
+
   @Test
   @DisplayName("indent spaces")
   public void testIndentSpaces() throws Exception {
@@ -283,5 +289,51 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
   @DisplayName("line feeds with comments")
   public void testLineFeedsWithComments() throws Exception {
     doTest();
+  }
+
+  @Test
+  @DisplayName("blank lines between field groups")
+  public void testBlankLinesBetweenFieldGroups() {
+    // a staticness change splits the var block by the configured count;
+    // same-group fields keep the plain around-field gap (none)
+    Consumer<HaxeCodeStyleSettings> twoBlankLines = haxe -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = 2;
+    String source = """
+      class Main {
+      	static var first:Int = 1;
+      	static var second:Int = 2;
+      	var third:Int = 3;
+      	var fourth:Int = 4;
+      }
+      """;
+
+    String formatted = reformat(haxeSettings(twoBlankLines), source);
+
+    assertEquals("""
+      class Main {
+          static var first:Int = 1;
+          static var second:Int = 2;
+
+
+          var third:Int = 3;
+          var fourth:Int = 4;
+      }
+      """, formatted);
+  }
+
+  /** Formats the test-named fixture under the settings setUp installed and the test mutated; a missing expectation is written out to be reviewed. */
+  private void doTest() throws Exception {
+    reformatFile(getTestName(false) + ".hx");
+    try {
+      myFixture.checkResultByFile(getTestName(false) + ".txt");
+    }
+    catch (RuntimeException e) {
+      // the platform reads expected files with nio nowadays
+      if (!(e.getCause() instanceof FileNotFoundException || e.getCause() instanceof NoSuchFileException)) {
+        throw e;
+      }
+      Path path = Path.of(getTestDataPath(), getTestName(false) + ".txt");
+      Files.writeString(path, myFixture.getFile().getText().trim());
+      fail("No output text found. File " + path + " created.");
+    }
   }
 }

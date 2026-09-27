@@ -1,13 +1,16 @@
 package com.intellij.plugins.haxe.lang;
 
-import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.function.Consumer;
 
+import static com.intellij.plugins.haxe.lang.HaxeCodeStyleTweaks.commonSettings;
+import static com.intellij.plugins.haxe.lang.HaxeCodeStyleTweaks.haxeSettings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -48,7 +51,7 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               trace(label);
           }
       }
-      """, reformat(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = false), source));
+      """, reformat(commonSettings(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = false)), source));
 
     assertEquals("""
       class Main {
@@ -60,7 +63,7 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               trace(label);
           }
       }
-      """, reformat(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = true), source));
+      """, reformat(commonSettings(wrapAlways.andThen(common -> common.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE = true)), source));
   }
 
   @Test
@@ -85,7 +88,7 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               trace(total);
           }
       }
-      """, reformat(wrapAlways.andThen(common -> common.BINARY_OPERATION_SIGN_ON_NEXT_LINE = false), source));
+      """, reformat(commonSettings(wrapAlways.andThen(common -> common.BINARY_OPERATION_SIGN_ON_NEXT_LINE = false)), source));
 
     assertEquals("""
       class Main {
@@ -96,7 +99,7 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               trace(total);
           }
       }
-      """, reformat(wrapAlways.andThen(common -> common.BINARY_OPERATION_SIGN_ON_NEXT_LINE = true), source));
+      """, reformat(commonSettings(wrapAlways.andThen(common -> common.BINARY_OPERATION_SIGN_ON_NEXT_LINE = true)), source));
   }
 
   /**
@@ -145,7 +148,57 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
                      + b;
           }
       }
-      """, reformat(configure, source));
+      """, reformat(commonSettings(configure), source));
+  }
+
+  @Test
+  @DisplayName("wrapped operator chain indent")
+  public void testWrappedOperatorChainIndent() {
+    // off (the plugin default), a written &&-chain wrap follows the classic
+    // alignment-driven continuation: operands align under the first one
+    // when binary alignment is on; on, every wrapped operand steps ONE
+    // level in from the chain's line instead
+    Consumer<CodeStyleSettings> alignedOperands = commonSettings(common -> common.ALIGN_MULTILINE_BINARY_OPERATION = true)
+      .andThen(haxeSettings(haxe -> haxe.INDENT_WRAPPED_OPERATOR_CHAINS = false));
+    Consumer<CodeStyleSettings> steppedOperands = haxeSettings(haxe -> haxe.INDENT_WRAPPED_OPERATOR_CHAINS = true);
+    String source = """
+      class Main {
+      	static function main() {
+      		var ready = true;
+      		var armed = false;
+      		var go = ready
+      			&& armed
+      			&& !paused;
+      		trace(go);
+      	}
+      }
+      """;
+
+    assertEquals("""
+      class Main {
+          static function main() {
+              var ready = true;
+              var armed = false;
+              var go = ready
+                       && armed
+                       && !paused;
+              trace(go);
+          }
+      }
+      """, reformat(alignedOperands, source));
+
+    assertEquals("""
+      class Main {
+          static function main() {
+              var ready = true;
+              var armed = false;
+              var go = ready
+                  && armed
+                  && !paused;
+              trace(go);
+          }
+      }
+      """, reformat(steppedOperands, source));
   }
 
   /** ALWAYS must break EVERY implements clause; only fill mode leaves the first one inline. */
@@ -164,7 +217,7 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               implements Resizable {
           public function new() {}
       }
-      """, reformat(common -> common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS, source));
+      """, reformat(commonSettings(common -> common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS), source));
   }
 
   @Test
@@ -188,11 +241,43 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
               var total = ( 1 + 2 ) * 3;
           }
       }
-      """, reformat(wrapAndSpace, source));
+      """, reformat(commonSettings(wrapAndSpace), source));
   }
 
-  /** Binds the common-settings view and the fixture file name onto the base reformat. */
-  private String reformat(Consumer<CommonCodeStyleSettings> configure, String source) {
-    return reformat("Wrap.hx", settings -> configure.accept(settings.getCommonSettings(HaxeLanguage.INSTANCE)), source);
+  @Test
+  @DisplayName("body placement per construct")
+  public void testBodyPlacementPerConstruct() {
+    // each construct's non-block body follows its own placement: SAME_LINE
+    // joins a broken for-body onto the header, NEXT_LINE breaks an inline
+    // catch-body off it
+    Consumer<HaxeCodeStyleSettings> placements = haxe -> {
+      haxe.FOR_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE;
+      haxe.CATCH_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    };
+    String source = """
+      class Main {
+      	static function main() {
+      		for (i in 0...3)
+      			trace(i);
+      		try {
+      			trace("x");
+      		} catch (e:Dynamic) trace(e);
+      	}
+      }
+      """;
+
+    String formatted = reformat(haxeSettings(placements), source);
+
+    assertEquals("""
+      class Main {
+          static function main() {
+              for (i in 0...3) trace(i);
+              try {
+                  trace("x");
+              } catch (e:Dynamic)
+                  trace(e);
+          }
+      }
+      """, formatted);
   }
 }

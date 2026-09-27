@@ -1,5 +1,5 @@
 class Main {
-	public function getSurface():#if lime CairoImageSurface #else Dynamic #end {
+	public function getSurface():#if native NativeSurface #else Dynamic #end {
 		return null;
 	}
 

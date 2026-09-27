@@ -16,14 +16,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * soup and toggled-off branches are preserved verbatim. Byte parity with the
  * reference is pinned separately by the conditional-inactive fixture.
  */
-@DisplayName("Formatting: inactive conditional branches")
+@DisplayName("Formatting: inactive")
 public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
-
-  @Override
-  protected String getBasePath() {
-    return "/formatter/";
-  }
-
   private static final String MESSY_BRANCH_SOURCE = """
     class Main {
         static function main() {
@@ -34,6 +28,11 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
         }
     }
     """;
+
+  @Override
+  protected String getBasePath() {
+    return "/formatter/";
+  }
 
   @Test
   @DisplayName("dead statements format with the normal rules")
@@ -47,7 +46,7 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
               trace("live");
           }
       }
-      """, reformat(settings -> { }, MESSY_BRANCH_SOURCE));
+      """, reformat(MESSY_BRANCH_SOURCE));
   }
 
   @Test
@@ -75,6 +74,7 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
       """;
 
     String result = reformat(toggleOff, source);
+
     assertTrue(result.contains("trace(   \"js\"  ,1+2 );"), "the branch text must stay untouched:\n" + result);
     assertTrue(result.contains("\n//js only\n"), "a line comment in the branch keeps its shape:\n" + result);
     assertTrue(result.contains("\n    /* first\n     second */\n"), "a block comment in the branch keeps its shape:\n" + result);
@@ -94,7 +94,8 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
       }
       """;
 
-    String result = reformat(settings -> { }, source);
+    String result = reformat(source);
+
     assertTrue(result.contains("if (true) {"), "dead if statements take the same brace spacing as live ones:\n" + result);
   }
 
@@ -109,7 +110,7 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
       }
       """;
 
-    assertEquals(source, reformat(settings -> { }, source), "unstructurable branches stay byte-identical");
+    assertEquals(source, reformat(source), "unstructurable branches stay byte-identical");
   }
 
   @Test
@@ -135,9 +136,5 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
 
     assertTrue(result.contains("\n        #if js\n        var x = 1 +\n            ;\n        #end\n"),
                "the blob shifts as a whole to the directive's indent, its own nesting kept:\n" + result);
-  }
-
-  private String reformat(Consumer<CodeStyleSettings> configure, String source) {
-    return reformat("Inactive.hx", configure, source);
   }
 }

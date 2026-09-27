@@ -4,23 +4,23 @@ class Main {
 		var offsetY = 2.0;
 		switch (kind) {
 			case CUBIC:
-				var c = readCubicCurve();
-				surface.curveTo(c.controlX1
-					- offsetX, c.controlY1
-					- offsetY, c.controlX2
-					- offsetX, c.controlY2
-					- offsetY, c.anchorX
+				var c = readCurve();
+				surface.curveTo(c.firstHandleX
+					- offsetX, c.firstHandleY
+					- offsetY, c.secondHandleX
+					- offsetX, c.secondHandleY
+					- offsetY, c.targetX
 					- offsetX,
-					c.anchorY
+					c.targetY
 					- offsetY);
 			case SCALED:
-				surface.curveTo(scaledControlX1
-					- offsetX, scaledControlY1
-					- offsetY, scaledControlX2
-					- offsetX, scaledControlY2
+				surface.curveTo(scaledFirstHandleX
+					- offsetX, scaledFirstHandleY
+					- offsetY, scaledSecondHandleX
+					- offsetX, scaledSecondHandleY
 					- offsetY,
-					scaledAnchorX
-					- offsetX, scaledAnchorY
+					scaledTargetX
+					- offsetX, scaledTargetY
 					- offsetY);
 			default:
 		}

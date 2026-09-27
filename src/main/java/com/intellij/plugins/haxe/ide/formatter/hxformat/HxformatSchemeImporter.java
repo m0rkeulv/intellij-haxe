@@ -67,7 +67,7 @@ public class HxformatSchemeImporter implements SchemeImporter<CodeStyleScheme> {
   @NotNull
   private static JsonNode readJson(@NotNull VirtualFile file) throws SchemeImportException {
     try {
-      return HxformatConfigCache.readJsonTree(file);
+      return HxformatConfigs.readJsonTree(file);
     }
     catch (IOException e) {
       throw new SchemeImportException(HaxeCodeStyleBundle.message("hxformat.import.parse.error", e.getMessage()));

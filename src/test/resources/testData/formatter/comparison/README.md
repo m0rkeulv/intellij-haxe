@@ -17,16 +17,22 @@ end-of-line braces, spaced keywords/operators, ...) via
 equals `hxformat.hx` byte-for-byte (modulo the trailing newline, which the
 IDE manages at save time).
 
+An `input.hx` must actually VIOLATE its rule: one the tool leaves unchanged
+(`input.hx` equal to `hxformat.hx`) proves only idempotence, which
+`HaxeSecondReformatTest` already sweeps over every fixture. Fixture code
+uses neutral names and no third-party library identifiers.
+
 Regenerating `hxformat.hx` after editing an `input.hx` (needs
 `haxelib install formatter`; run PER FILE — running on the directory would
-reformat the inputs too):
+reformat the inputs too; a rule's own `hxformat.json` is picked up from the
+directory):
 
 ```
 copy <rule>\input.hx <rule>\hxformat.hx
 haxelib run formatter -s <rule>\hxformat.hx
 ```
 
-Generated with formatter 1.18.0.
+Then confirm the two files differ. Generated with formatter 1.18.0.
 
 `default-hxformat.json` is the tool's complete built-in configuration, the
 word `HxformatDefaults` is checked against (`HxformatDefaultsTest`).

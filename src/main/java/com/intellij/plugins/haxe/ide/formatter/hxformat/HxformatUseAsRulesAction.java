@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
-import com.intellij.application.options.CodeStyle;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -8,7 +7,6 @@ import com.intellij.openapi.actionSystem.ToggleAction;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -39,7 +37,7 @@ public final class HxformatUseAsRulesAction extends ToggleAction implements Dumb
     Project project = e.getProject();
     VirtualFile file = configFile(e);
     if (project == null || file == null) return false;
-    return file.getUrl().equals(HxformatConfigCache.getInstance(project).overrideConfigUrl());
+    return file.getUrl().equals(HxformatConfigs.getInstance(project).overrideConfigUrl());
   }
 
   @Override
@@ -47,11 +45,11 @@ public final class HxformatUseAsRulesAction extends ToggleAction implements Dumb
     Project project = e.getProject();
     VirtualFile file = configFile(e);
     if (project == null || file == null) return;
+    HxformatConfigs configs = HxformatConfigs.getInstance(project);
     if (state) {
-      CodeStyle.getSettings(project).getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT = true;
+      configs.setIntegrationEnabled(true);
     }
-    // setOverrideConfigUrl re-triggers code style recalculation either way
-    HxformatConfigCache.getInstance(project).setOverrideConfigUrl(state ? file.getUrl() : null);
+    configs.setOverrideConfigUrl(state ? file.getUrl() : null);
   }
 
   @Nullable
@@ -59,7 +57,7 @@ public final class HxformatUseAsRulesAction extends ToggleAction implements Dumb
     if (e.getProject() == null) return null;
     VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
     boolean isConfig = file != null && !file.isDirectory()
-                       && HxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName());
+                       && HxformatConfigs.HXFORMAT_FILE_NAME.equals(file.getName());
     return isConfig ? file : null;
   }
 }

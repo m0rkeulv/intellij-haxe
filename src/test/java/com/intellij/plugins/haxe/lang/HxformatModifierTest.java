@@ -3,7 +3,7 @@ package com.intellij.plugins.haxe.lang;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatConfigCache;
+import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatConfigs;
 import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatSettingsModifier;
 import com.intellij.psi.PsiFile;
 import com.intellij.application.options.CodeStyle;
@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * file, EditorConfig-style: nearest config wins, the toggle opts out, and
  * disableFormatting falls back to the scheme.
  */
-@DisplayName("Formatting: project hxformat.json override")
+@DisplayName("Formatting: hxformat modifier")
 public class HxformatModifierTest extends HaxeLightFixtureTestCase {
 
   private static final String MAIN_HX_SOURCE = "class Main {}";
@@ -52,7 +52,7 @@ public class HxformatModifierTest extends HaxeLightFixtureTestCase {
     PsiFile override = myFixture.addFileToProject("configs/hxformat.json", """
       { "wrapping": { "maxLineLength": 91 } }""");
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
-    HxformatConfigCache.getInstance(getProject())
+    HxformatConfigs.getInstance(getProject())
       .setOverrideConfigUrl(override.getVirtualFile().getUrl());
 
     TransientCodeStyleSettings settings = transientFor(file);
@@ -68,7 +68,7 @@ public class HxformatModifierTest extends HaxeLightFixtureTestCase {
     myFixture.addFileToProject("hxformat.json", """
       { "wrapping": { "maxLineLength": 101 } }""");
     PsiFile file = myFixture.addFileToProject("src/Main.hx", MAIN_HX_SOURCE);
-    HxformatConfigCache.getInstance(getProject())
+    HxformatConfigs.getInstance(getProject())
       .setOverrideConfigUrl(override.getVirtualFile().getUrl());
 
     TransientCodeStyleSettings settings = transientFor(file);

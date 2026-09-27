@@ -15,7 +15,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** The bundled hxformat.json schema resolves from the plugin classpath and targets only that file. */
-@DisplayName("Formatting: hxformat.json schema")
+@DisplayName("Formatting: hxformat json schema provider")
 public class HxformatJsonSchemaProviderTest extends HaxeLightFixtureTestCase {
 
   private static final List<String> CONFIG_SECTIONS =

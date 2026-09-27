@@ -1,7 +1,7 @@
 package;
 
 import haxe.ds.StringMap;
-#if lime
+#if native
 import haxe.io.Bytes;
 import haxe.Timer;
 #end

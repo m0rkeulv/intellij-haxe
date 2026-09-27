@@ -20,9 +20,7 @@ package com.intellij.plugins.haxe.actions;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.actions.HaxeTypeAddImportIntentionAction;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponent;
@@ -31,9 +29,7 @@ import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIn
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
-import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -68,19 +64,7 @@ public class HaxeTypeAddImportIntentionActionTest extends HaxeLightFixtureTestCa
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    setTestStyleSettings();
-  }
-
-  @Override
-  public void setTestStyleSettings() {
-    Project project = getProject();
-    CodeStyleSettings currSettings = CodeStyle.getSettings(project);
-    assertNotNull(currSettings);
-    CodeStyleSettings tempSettings = CodeStyleSettingsManager.getInstance(project).cloneSettings(currSettings);
-    CodeStyleSettings.IndentOptions indentOptions = tempSettings.getIndentOptions(HaxeFileType.INSTANCE);
-    assertNotNull(indentOptions);
-    defineStyleSettings(tempSettings);
-    CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
+    installTemporarySettings(this::defineStyleSettings);
   }
 
   protected void defineStyleSettings(CodeStyleSettings tempSettings) {

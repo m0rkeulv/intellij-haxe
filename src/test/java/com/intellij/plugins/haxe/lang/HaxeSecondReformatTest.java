@@ -4,7 +4,6 @@ import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.hxformat.HxformatDefaultProfile;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,11 +28,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
   private static final String WRAPPED_CALL_SOURCE = """
     class Main {
-    	function draw(c:Style) {
-    		strokeCommands.lineGradientStyle(c.type,
-    			c.colors,
-    			c.alphas,
-    			c.ratios);
+    	function draw(s:Style) {
+    		shape.strokeGradient(s.kind,
+    			s.colors,
+    			s.opacities,
+    			s.stops);
     	}
     }
     """;
@@ -54,7 +53,7 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("first pass keeps custom line breaks")
   public void testFirstPassKeepsCustomLineBreaks() {
-    String formatted = reformat("Main.hx", HxformatDefaultProfile::apply, WRAPPED_CALL_SOURCE);
+    String formatted = reformat(HxformatDefaultProfile::apply, WRAPPED_CALL_SOURCE);
 
     assertEquals(WRAPPED_CALL_SOURCE, formatted);
   }
@@ -62,12 +61,12 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("second pass joins custom line breaks")
   public void testSecondPassJoinsCustomLineBreaks() {
-    String formatted = reformat("Main.hx", HaxeSecondReformatTest::secondPass, WRAPPED_CALL_SOURCE);
+    String formatted = reformat(HaxeSecondReformatTest::secondPass, WRAPPED_CALL_SOURCE);
 
     assertEquals("""
       class Main {
-      	function draw(c:Style) {
-      		strokeCommands.lineGradientStyle(c.type, c.colors, c.alphas, c.ratios);
+      	function draw(s:Style) {
+      		shape.strokeGradient(s.kind, s.colors, s.opacities, s.stops);
       	}
       }
       """, formatted);
@@ -88,7 +87,7 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
       }
       """;
 
-    String formatted = reformat("Main.hx", HaxeSecondReformatTest::secondPass, source);
+    String formatted = reformat(HaxeSecondReformatTest::secondPass, source);
 
     assertEquals("""
       class Main {
@@ -123,7 +122,7 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
       }
       """;
 
-    String formatted = reformat("Main.hx", HaxeSecondReformatTest::secondPass, source);
+    String formatted = reformat(HaxeSecondReformatTest::secondPass, source);
 
     assertEquals("""
       typedef Base = {
@@ -158,7 +157,7 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
       }
       """;
 
-    String formatted = reformat("Main.hx", HaxeSecondReformatTest::allmanSecondPass, source);
+    String formatted = reformat(HaxeSecondReformatTest::allmanSecondPass, source);
 
     assertEquals("""
       class Main
@@ -182,13 +181,17 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
     // one its rules produce, so dropping ours must reproduce it exactly
     List<Path> rules;
     try (Stream<Path> directories = Files.list(Path.of(getTestDataPath()))) {
-      rules = directories.filter(Files::isDirectory).filter(HaxeSecondReformatTest::usesDefaultConfig).sorted().toList();
+      rules = directories
+        .filter(Files::isDirectory)
+        .filter(HaxeSecondReformatTest::usesDefaultConfig)
+        .sorted()
+        .toList();
     }
 
     List<String> changed = new ArrayList<>();
     for (Path rule : rules) {
       String formatted = Files.readString(rule.resolve("hxformat.hx")).replace("\r\n", "\n");
-      String secondPass = reformat("Main.hx", HaxeSecondReformatTest::secondPass, formatted);
+      String secondPass = reformat(HaxeSecondReformatTest::secondPass, formatted);
       if (!secondPass.strip().equals(formatted.strip())) changed.add(rule.getFileName().toString());
     }
 
@@ -206,11 +209,9 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
     settings.getCommonSettings(HaxeLanguage.INSTANCE).KEEP_LINE_BREAKS = false;
   }
 
-  /** The second pass under openfl's brace config (lineEnds.leftCurly=both). */
+  /** The second pass under the openfl-braces fixture config (lineEnds.leftCurly=both). */
   private static void allmanSecondPass(CodeStyleSettings settings) {
     secondPass(settings);
-    CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
-    common.BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
-    common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+    HaxeCodeStyleTweaks.allmanBraces(settings);
   }
 }

@@ -1,21 +1,21 @@
-package openfl.display._internal;
+package app.render;
 
 #if !flash
-import openfl.display.BitmapData;
-import openfl.filters.BitmapFilterShader;
+import app.render.Surface;
+import app.render.BaseShader;
 
-#if !openfl_debug
+#if !app_debug
 @:fileXml('tags="haxe,release"')
 @:noDebug
 #end
-@:access(openfl.display.BitmapData)
+@:access(app.render.Surface)
 @SuppressWarnings("checkstyle:FieldDocComment")
-class BlendModeShader extends BitmapFilterShader
+class TintShader extends BaseShader
 {
-	@:glFragmentSource("varying vec2 openfl_TextureCoordv;
-		uniform sampler2D openfl_Texture;
+	@:glFragmentSource("varying vec2 uv;
+		uniform sampler2D source;
 		void main(void) {
-			gl_FragColor = texture2D(openfl_Texture, openfl_TextureCoordv);
+			gl_FragColor = texture2D(source, uv);
 		}")
 	public function new()
 	{

@@ -9,8 +9,10 @@ import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.PropertyKey;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,94 @@ public final class HxformatJsonMapper {
     "fourthLevelPackage", 4,
     "fifthLevelPackage", 5);
 
+  private static final List<String> UNWRAPPABLE_CONSTRUCTS = List.of(
+    "wrapping.typeParameter", "wrapping.metadataCallParameter", "wrapping.casePattern", "wrapping.anonType");
+  private static final List<String> SHARP_PARENS = List.of("whitespace.parenConfig.sharpConditionParens");
+  private static final List<String> MEMBER_BLANK_SECTIONS = List.of(
+    "emptyLines.macroClassEmptyLines", "emptyLines.abstractEmptyLines", "emptyLines.externClassEmptyLines",
+    "emptyLines.interfaceEmptyLines", "emptyLines.enumEmptyLines", "emptyLines.typedefEmptyLines",
+    "emptyLines.enumAbstractEmptyLines");
+  private static final List<String> BRACKET_CONSTRUCTS = List.of(
+    "accessBrackets", "comprehensionBrackets", "arrayLiteralBrackets", "mapLiteralBrackets", "unknownBrackets");
+
+  /**
+   * Keys with ONE honored value: the formatter has no other setting for
+   * them, so any other value is reported. In the config's section order,
+   * which is the order violations are reported in. (The per-construct curly
+   * overrides are not here: their honored value follows the global keys.)
+   */
+  private static final Map<String, String> FIXED_VALUES = inSectionOrder(
+    "disableFormatting", "false",
+    // indentation
+    "indentation.conditionalPolicy", "aligned",
+    "indentation.indentCaseLabels", "true",
+    "indentation.indentObjectLiteral", "true",
+    "indentation.indentComplexValueExpressions", "false",
+    "indentation.trailingWhitespace", "false",
+    // wrapping: array matrices are never column-aligned
+    "wrapping.arrayMatrixWrap", "noMatrixWrap",
+    // lineEnds
+    "lineEnds.rightCurly", "both",
+    "lineEnds.sharp", "after",
+    "lineEnds.caseColon", "after",
+    "lineEnds.metadataType", "none",
+    "lineEnds.metadataVar", "none",
+    "lineEnds.metadataFunction", "none",
+    "lineEnds.metadataOther", "none",
+    // sameLine
+    "sameLine.anonFunctionBody", "same",
+    "sameLine.expressionIf", "same",
+    "sameLine.expressionTry", "same",
+    "sameLine.expressionCase", "keep",
+    "sameLine.comprehensionFor", "same",
+    "sameLine.untypedBody", "same",
+    "sameLine.returnBody", "same",
+    "sameLine.ifElseSemicolonNextLine", "true",
+    "sameLine.expressionIfWithBlocks", "false",
+    // whitespace
+    "whitespace.dotPolicy", "none",
+    "whitespace.colonPolicy", "none",
+    "whitespace.caseColonPolicy", "onlyAfter",
+    "whitespace.semicolonPolicy", "onlyAfter",
+    "whitespace.intervalPolicy", "none",
+    "whitespace.compressSuccessiveParenthesis", "true",
+    "whitespace.bracesConfig.typedefBraces.openingPolicy", "before",
+    "whitespace.bracesConfig.typedefBraces.closingPolicy", "onlyAfter",
+    "whitespace.bracesConfig.typedefBraces.removeInnerWhenEmpty", "true",
+    "whitespace.bracesConfig.anonTypeBraces.openingPolicy", "before",
+    "whitespace.bracesConfig.anonTypeBraces.closingPolicy", "onlyAfter",
+    "whitespace.bracesConfig.anonTypeBraces.removeInnerWhenEmpty", "true",
+    "whitespace.bracesConfig.objectLiteralBraces.openingPolicy", "before",
+    "whitespace.bracesConfig.objectLiteralBraces.closingPolicy", "onlyAfter",
+    "whitespace.bracesConfig.objectLiteralBraces.removeInnerWhenEmpty", "true",
+    "whitespace.bracesConfig.unknownBraces.openingPolicy", "before",
+    "whitespace.bracesConfig.unknownBraces.closingPolicy", "onlyAfter",
+    "whitespace.bracesConfig.unknownBraces.removeInnerWhenEmpty", "true",
+    // emptyLines: the flat-set boundaries the single member-blank model
+    // covers at the tool's defaults only; afterReturn/afterBlocks at their
+    // Remove default are covered by the beforeRightCurly cap and the
+    // keyword-joining rules
+    "emptyLines.classEmptyLines.betweenStaticVars", "0",
+    "emptyLines.classEmptyLines.afterVars", "1",
+    "emptyLines.classEmptyLines.afterStaticFunctions", "1",
+    "emptyLines.classEmptyLines.betweenStaticFunctions", "1",
+    "emptyLines.classEmptyLines.afterPrivateFunctions", "1",
+    "emptyLines.classEmptyLines.existingBetweenFields", "keep",
+    "emptyLines.conditionalsEmptyLines.afterIf", "0",
+    "emptyLines.conditionalsEmptyLines.beforeElse", "0",
+    "emptyLines.conditionalsEmptyLines.afterElse", "0",
+    "emptyLines.conditionalsEmptyLines.beforeEnd", "0",
+    "emptyLines.conditionalsEmptyLines.beforeError", "0",
+    "emptyLines.conditionalsEmptyLines.afterError", "0",
+    "emptyLines.afterReturn", "remove",
+    "emptyLines.afterBlocks", "remove",
+    "emptyLines.finalNewline", "true",
+    "emptyLines.beforePackage", "0",
+    "emptyLines.betweenMultilineComments", "0",
+    "emptyLines.lineCommentsBetweenTypes", "keep",
+    "emptyLines.lineCommentsBetweenFunctions", "keep",
+    "emptyLines.importAndUsing.beforeUsing", "1");
+
   private final CodeStyleSettings settings;
   private final CommonCodeStyleSettings common;
   private final HaxeCodeStyleSettings haxe;
@@ -60,11 +150,11 @@ public final class HxformatJsonMapper {
   }
 
   private void applyAll() {
-    // file-exclusion globs for their CLI - no code-style meaning in the IDE
+    // `excludes` holds CLI file globs - no code-style meaning in the IDE
     consumed.add("excludes");
     // editor metadata naming a JSON schema, not a formatter setting
     consumed.add("$schema");
-    acceptOnly("disableFormatting", "false");
+    FIXED_VALUES.forEach(this::acceptOnly);
     applyIndentation();
     applyWrapping();
     applyLineEnds();
@@ -86,11 +176,6 @@ public final class HxformatJsonMapper {
       indent.INDENT_SIZE = tabWidth;
       indent.CONTINUATION_INDENT_SIZE = tabWidth * 2;
     }
-    acceptOnly("indentation.conditionalPolicy", "aligned");
-    acceptOnly("indentation.indentCaseLabels", "true");
-    acceptOnly("indentation.indentObjectLiteral", "true");
-    acceptOnly("indentation.indentComplexValueExpressions", "false");
-    acceptOnly("indentation.trailingWhitespace", "false");
   }
 
   private void applyWrapping() {
@@ -98,8 +183,6 @@ public final class HxformatJsonMapper {
     if (margin != null) {
       settings.setRightMargin(HaxeLanguage.INSTANCE, margin);
     }
-    // array matrices are never column-aligned
-    acceptOnly("wrapping.arrayMatrixWrap", "noMatrixWrap");
     wrapConstruct("wrapping.arrayWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
     wrapConstruct("wrapping.mapWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
     wrapConstruct("wrapping.objectLiteral", value -> common.ARRAY_INITIALIZER_WRAP = value);
@@ -108,10 +191,10 @@ public final class HxformatJsonMapper {
     wrapConstruct("wrapping.functionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
     wrapConstruct("wrapping.anonFunctionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
     wrapConstruct("wrapping.callParameter", value -> common.CALL_PARAMETERS_WRAP = value);
-    // the &&/|| and +/- chains follow their own rule engine fed from the
-    // rule thresholds (HaxeOperatorChainRules); no single wrap policy stands
-    // in for them, and BINARY_OPERATION_WRAP stays off so a margin wrap
-    // never competes with a chopped method chain
+    // the &&/|| and +/- chains follow a rule engine of their own fed from
+    // the rule thresholds (HaxeOperatorChainRules); no single wrap policy
+    // stands in for them, and BINARY_OPERATION_WRAP stays off so a margin
+    // wrap never competes with a chopped method chain
     ChainSetters boolChain = new ChainSetters(
       value -> haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = value,
       value -> haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = value,
@@ -124,33 +207,29 @@ public final class HxformatJsonMapper {
       value -> haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = value);
     applyChainRules("wrapping.opBoolChain", boolChain);
     applyChainRules("wrapping.opAddSubChain", addChain);
-    for (String construct : List.of("typeParameter", "metadataCallParameter", "casePattern", "anonType")) {
-      String path = "wrapping." + construct;
-      if (node(path) != null) {
-        markConsumedSubtree(path);
-        unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.no.wrap.target", path));
-      }
-    }
-    if (node("wrapping.multiVar") != null) {
-      markConsumedSubtree("wrapping.multiVar");
-      // the split width lifts from a matching rule; the length-based JOIN
-      // of short multi-vars stays unreproduced
-      JsonNode multiVarRules = node("wrapping.multiVar.rules");
-      if (multiVarRules != null && multiVarRules.isArray()) {
-        for (JsonNode rule : multiVarRules) {
-          String type = rule.path("type").asText("");
-          Integer line = conditionValue(rule, "lineLength >= n");
-          if ("onePerLineAfterFirst".equals(type) && line != null) {
-            haxe.MULTI_VAR_SPLIT_WIDTH = line;
-          }
-          Integer shortItem = conditionValue(rule, "anyItemLength <= n");
-          if ("fillLine".equals(type) && shortItem != null) {
-            haxe.MULTI_VAR_FILL_ITEM_LENGTH = shortItem;
-          }
+    reportUnsupportedSubtrees(UNWRAPPABLE_CONSTRUCTS, "hxformat.unsupported.no.wrap.target");
+    applyMultiVar();
+  }
+
+  /** The split width lifts from a matching rule; the length-based JOIN of short multi-vars stays unreproduced. */
+  private void applyMultiVar() {
+    if (node("wrapping.multiVar") == null) return;
+    markConsumedSubtree("wrapping.multiVar");
+    JsonNode rules = node("wrapping.multiVar.rules");
+    if (rules != null && rules.isArray()) {
+      for (JsonNode rule : rules) {
+        String type = rule.path("type").asText("");
+        Integer line = conditionValue(rule, "lineLength >= n");
+        if ("onePerLineAfterFirst".equals(type) && line != null) {
+          haxe.MULTI_VAR_SPLIT_WIDTH = line;
+        }
+        Integer shortItem = conditionValue(rule, "anyItemLength <= n");
+        if ("fillLine".equals(type) && shortItem != null) {
+          haxe.MULTI_VAR_FILL_ITEM_LENGTH = shortItem;
         }
       }
-      unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.multi.var"));
     }
+    unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.multi.var"));
   }
 
   /**
@@ -228,13 +307,6 @@ public final class HxformatJsonMapper {
         default -> null; // auto - detect per file
       };
     }
-    acceptOnly("lineEnds.rightCurly", "both");
-    acceptOnly("lineEnds.sharp", "after");
-    acceptOnly("lineEnds.caseColon", "after");
-    acceptOnly("lineEnds.metadataType", "none");
-    acceptOnly("lineEnds.metadataVar", "none");
-    acceptOnly("lineEnds.metadataFunction", "none");
-    acceptOnly("lineEnds.metadataOther", "none");
     // per-construct curly overrides: acceptable only when they restate what
     // the global import already produces (object literals are inherently
     // After-style here, whatever BRACE_STYLE says)
@@ -257,10 +329,7 @@ public final class HxformatJsonMapper {
     onNewLine("sameLine.ifElse", value -> common.ELSE_ON_NEW_LINE = value);
     onNewLine("sameLine.doWhile", value -> common.WHILE_ON_NEW_LINE = value);
     onNewLine("sameLine.tryCatch", value -> common.CATCH_ON_NEW_LINE = value);
-    String elseIf = str("sameLine.elseIf");
-    if (elseIf != null) {
-      common.SPECIAL_ELSE_IF_TREATMENT = "same".equals(elseIf);
-    }
+    applyEquals("sameLine.elseIf", "same", value -> common.SPECIAL_ELSE_IF_TREATMENT = value);
     bodyPlacement("sameLine.ifBody", value -> haxe.IF_BODY_PLACEMENT = value);
     bodyPlacement("sameLine.elseBody", value -> haxe.ELSE_BODY_PLACEMENT = value);
     bodyPlacement("sameLine.forBody", value -> haxe.FOR_BODY_PLACEMENT = value);
@@ -276,27 +345,25 @@ public final class HxformatJsonMapper {
                                            haxe.CATCH_BODY_PLACEMENT);
     common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE =
       !bodyPlacements.contains(HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE);
-    String functionBody = str("sameLine.functionBody");
-    if (functionBody != null) {
-      haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = "next".equals(functionBody);
-    }
-    String returnSingle = str("sameLine.returnBodySingleLine");
-    if (returnSingle != null) {
-      haxe.RETURN_VALUE_ON_SAME_LINE = "same".equals(returnSingle);
-    }
-    acceptOnly("sameLine.anonFunctionBody", "same");
-    acceptOnly("sameLine.expressionIf", "same");
-    acceptOnly("sameLine.expressionTry", "same");
-    acceptOnly("sameLine.expressionCase", "keep");
-    acceptOnly("sameLine.comprehensionFor", "same");
-    acceptOnly("sameLine.untypedBody", "same");
-    acceptOnly("sameLine.returnBody", "same");
+    applyEquals("sameLine.functionBody", "next", value -> haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = value);
+    applyEquals("sameLine.returnBodySingleLine", "same", value -> haxe.RETURN_VALUE_ON_SAME_LINE = value);
     bodyPlacement("sameLine.caseBody", value -> haxe.CASE_BODY_PLACEMENT = value);
-    acceptOnly("sameLine.ifElseSemicolonNextLine", "true");
-    acceptOnly("sameLine.expressionIfWithBlocks", "false");
   }
 
   private void applyWhitespace() {
+    applyKeywordAndOperatorSpacing();
+    applyTypeAndArrowSpacing();
+    String interpolation = str("whitespace.formatStringInterpolation");
+    if (interpolation != null && !"true".equals(interpolation)) {
+      unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.string.interpolation"));
+    }
+    applyEquals("whitespace.addLineCommentSpace", "true", value -> haxe.ADD_LINE_COMMENT_SPACE = value);
+    applyParenConfig();
+    applyBracesConfig();
+    applyBracketConfig();
+  }
+
+  private void applyKeywordAndOperatorSpacing() {
     spaceBefore("whitespace.ifPolicy", value -> common.SPACE_BEFORE_IF_PARENTHESES = value);
     spaceBefore("whitespace.whilePolicy", value -> common.SPACE_BEFORE_WHILE_PARENTHESES = value);
     spaceBefore("whitespace.doPolicy", value -> common.SPACE_BEFORE_WHILE_PARENTHESES = value);
@@ -304,9 +371,7 @@ public final class HxformatJsonMapper {
     spaceBefore("whitespace.switchPolicy", value -> common.SPACE_BEFORE_SWITCH_PARENTHESES = value);
     spaceBefore("whitespace.catchPolicy", value -> common.SPACE_BEFORE_CATCH_PARENTHESES = value);
     spaceBefore("whitespace.tryPolicy", value -> common.SPACE_BEFORE_TRY_LBRACE = value);
-    String binop = str("whitespace.binopPolicy");
-    if (binop != null) {
-      boolean around = "around".equals(binop);
+    applyEquals("whitespace.binopPolicy", "around", around -> {
       common.SPACE_AROUND_ASSIGNMENT_OPERATORS = around;
       common.SPACE_AROUND_LOGICAL_OPERATORS = around;
       common.SPACE_AROUND_EQUALITY_OPERATORS = around;
@@ -315,15 +380,13 @@ public final class HxformatJsonMapper {
       common.SPACE_AROUND_MULTIPLICATIVE_OPERATORS = around;
       common.SPACE_AROUND_BITWISE_OPERATORS = around;
       common.SPACE_AROUND_SHIFT_OPERATORS = around;
-    }
-    String ternary = str("whitespace.ternaryPolicy");
-    if (ternary != null) {
-      boolean around = "around".equals(ternary);
+    });
+    applyEquals("whitespace.ternaryPolicy", "around", around -> {
       common.SPACE_BEFORE_QUEST = around;
       common.SPACE_AFTER_QUEST = around;
       common.SPACE_BEFORE_COLON = around;
       common.SPACE_AFTER_COLON = around;
-    }
+    });
     String comma = str("whitespace.commaPolicy");
     if (comma != null) {
       common.SPACE_BEFORE_COMMA = SPACE_BEFORE_POLICIES.contains(comma);
@@ -331,58 +394,29 @@ public final class HxformatJsonMapper {
       common.SPACE_AFTER_COMMA = after;
       common.SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS = after;
     }
+  }
+
+  private void applyTypeAndArrowSpacing() {
     String typeHint = str("whitespace.typeHintColonPolicy");
     if (typeHint != null) {
       haxe.SPACE_BEFORE_TYPE_REFERENCE_COLON = SPACE_BEFORE_POLICIES.contains(typeHint);
       haxe.SPACE_AFTER_TYPE_REFERENCE_COLON = SPACE_AFTER_POLICIES.contains(typeHint);
     }
-    String typeCheck = str("whitespace.typeCheckColonPolicy");
-    if (typeCheck != null) {
-      haxe.SPACE_AROUND_TYPE_CHECK_COLON = "around".equals(typeCheck);
-    }
+    applyEquals("whitespace.typeCheckColonPolicy", "around", value -> haxe.SPACE_AROUND_TYPE_CHECK_COLON = value);
     String paramOpen = str("whitespace.typeParamOpenPolicy");
     String paramClose = str("whitespace.typeParamClosePolicy");
     if (paramOpen != null || paramClose != null) {
       haxe.SPACE_WITHIN_TYPE_PARAMETERS = "around".equals(paramOpen) || "around".equals(paramClose);
     }
-    String extension = str("whitespace.typeExtensionPolicy");
-    if (extension != null) {
-      haxe.STRUCTURE_EXTENSION_ON_OWN_LINE = "after".equals(extension);
-    }
-    String addCommentSpace = str("whitespace.addLineCommentSpace");
-    if (addCommentSpace != null) {
-      haxe.ADD_LINE_COMMENT_SPACE = "true".equals(addCommentSpace);
-    }
-    String interpolation = str("whitespace.formatStringInterpolation");
-    if (interpolation != null && !"true".equals(interpolation)) {
-      unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.string.interpolation"));
-    }
-    String arrow = str("whitespace.arrowFunctionsPolicy");
-    if (arrow != null) {
-      haxe.SPACE_AROUND_ARROW = "around".equals(arrow);
-    }
-    String functionTypeArrow = str("whitespace.functionTypeHaxe4Policy");
-    if (functionTypeArrow != null) {
-      haxe.SPACE_AROUND_FUNCTION_TYPE_ARROW = "around".equals(functionTypeArrow);
-    }
-    String oldFunctionTypeArrow = str("whitespace.functionTypeHaxe3Policy");
-    if (oldFunctionTypeArrow != null) {
-      haxe.SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW = "around".equals(oldFunctionTypeArrow);
-    }
-    acceptOnly("whitespace.dotPolicy", "none");
-    acceptOnly("whitespace.colonPolicy", "none");
-    acceptOnly("whitespace.caseColonPolicy", "onlyAfter");
+    applyEquals("whitespace.typeExtensionPolicy", "after", value -> haxe.STRUCTURE_EXTENSION_ON_OWN_LINE = value);
+    applyEquals("whitespace.arrowFunctionsPolicy", "around", value -> haxe.SPACE_AROUND_ARROW = value);
+    applyEquals("whitespace.functionTypeHaxe4Policy", "around", value -> haxe.SPACE_AROUND_FUNCTION_TYPE_ARROW = value);
+    applyEquals("whitespace.functionTypeHaxe3Policy", "around", value -> haxe.SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW = value);
     String objectFieldColon = str("whitespace.objectFieldColonPolicy");
     if (objectFieldColon != null) {
       haxe.SPACE_BEFORE_OBJECT_FIELD_COLON = SPACE_BEFORE_POLICIES.contains(objectFieldColon);
       haxe.SPACE_AFTER_OBJECT_FIELD_COLON = SPACE_AFTER_POLICIES.contains(objectFieldColon);
     }
-    acceptOnly("whitespace.semicolonPolicy", "onlyAfter");
-    acceptOnly("whitespace.intervalPolicy", "none");
-    acceptOnly("whitespace.compressSuccessiveParenthesis", "true");
-    applyParenConfig();
-    applyBracesConfig();
-    applyBracketConfig();
   }
 
   private void applyParenConfig() {
@@ -415,11 +449,7 @@ public final class HxformatJsonMapper {
               within -> common.SPACE_WITHIN_CATCH_PARENTHESES = within, null);
     openClose("whitespace.parenConfig.forLoopParens",
               within -> common.SPACE_WITHIN_FOR_PARENTHESES = within, null);
-    String sharpParens = "whitespace.parenConfig.sharpConditionParens";
-    if (node(sharpParens) != null) {
-      markConsumedSubtree(sharpParens);
-      unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.sharp.parens", sharpParens));
-    }
+    reportUnsupportedSubtrees(SHARP_PARENS, "hxformat.unsupported.sharp.parens");
   }
 
   private void applyBracesConfig() {
@@ -434,27 +464,19 @@ public final class HxformatJsonMapper {
       common.SPACE_BEFORE_TRY_LBRACE = before;
       common.SPACE_BEFORE_CATCH_LBRACE = before;
     });
-    for (String construct : List.of("typedefBraces", "anonTypeBraces", "objectLiteralBraces", "unknownBraces")) {
-      String path = "whitespace.bracesConfig." + construct;
-      if (node(path) == null) continue;
-      acceptOnly(path + ".openingPolicy", "before");
-      acceptOnly(path + ".closingPolicy", "onlyAfter");
-      acceptOnly(path + ".removeInnerWhenEmpty", "true");
-    }
   }
 
+  /** One flag stands for every bracket construct: a space within any of them puts it within all. */
   private void applyBracketConfig() {
     Boolean within = null;
-    for (String construct : List.of("accessBrackets", "comprehensionBrackets", "arrayLiteralBrackets",
-                                    "mapLiteralBrackets", "unknownBrackets")) {
+    for (String construct : BRACKET_CONSTRUCTS) {
       String path = "whitespace.bracketConfig." + construct;
       if (node(path) == null) continue;
       String opening = str(path + ".openingPolicy");
       String closing = str(path + ".closingPolicy");
       acceptOnly(path + ".removeInnerWhenEmpty", "true");
       if (opening != null || closing != null) {
-        boolean constructWithin = (opening != null && SPACE_AFTER_POLICIES.contains(opening))
-                                  || (closing != null && SPACE_BEFORE_POLICIES.contains(closing));
+        boolean constructWithin = spaceWithin(opening, closing);
         within = within == null ? constructWithin : within | constructWithin;
       }
     }
@@ -478,6 +500,18 @@ public final class HxformatJsonMapper {
     applyInt("emptyLines.classEmptyLines.betweenFunctions", value -> common.BLANK_LINES_AROUND_METHOD = value);
     applyInt("emptyLines.classEmptyLines.beginType", value -> common.BLANK_LINES_AFTER_CLASS_HEADER = value);
     applyInt("emptyLines.classEmptyLines.endType", value -> common.BLANK_LINES_BEFORE_CLASS_END = value);
+    applyBlockEdgeBlankLines();
+    applyImportBlankLines();
+    applyInt("emptyLines.classEmptyLines.afterStaticVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
+    applyInt("emptyLines.classEmptyLines.afterPrivateVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
+    reportUnsupportedSubtrees(MEMBER_BLANK_SECTIONS, "hxformat.unsupported.member.blanks");
+    // "ignore" keeps the written shape, which 0 also does here
+    applyCommentPolicy("emptyLines.beforeDocCommentEmptyLines", value -> haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = value);
+    applyCommentPolicy("emptyLines.afterFieldsWithDocComments", value -> haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = value);
+  }
+
+  /** The blank-line caps at a block's edges: a "remove" policy caps at 0, anything else at the file-wide maximum. */
+  private void applyBlockEdgeBlankLines() {
     String beforeRCurly = str("emptyLines.beforeRightCurly");
     if (beforeRCurly != null) {
       common.KEEP_BLANK_LINES_BEFORE_RBRACE = "remove".equals(beforeRCurly) ? 0 : common.KEEP_BLANK_LINES_IN_DECLARATIONS;
@@ -492,6 +526,9 @@ public final class HxformatJsonMapper {
     if (beforeBlocks != null) {
       haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = "remove".equals(beforeBlocks) ? 0 : common.KEEP_BLANK_LINES_IN_CODE;
     }
+  }
+
+  private void applyImportBlankLines() {
     applyInt("emptyLines.importAndUsing.beforeType", value -> {
       common.BLANK_LINES_AFTER_IMPORTS = value;
       haxe.MINIMUM_BLANK_LINES_AFTER_USING = value;
@@ -502,41 +539,6 @@ public final class HxformatJsonMapper {
       applyImportGrouping(betweenImports == null ? 1 : betweenImports,
                           importsLevel == null ? "all" : importsLevel);
     }
-    // the remaining flat-set boundaries the single member-blank model covers
-    // at THEIR defaults only
-    acceptOnly("emptyLines.classEmptyLines.betweenStaticVars", "0");
-    applyInt("emptyLines.classEmptyLines.afterStaticVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
-    applyInt("emptyLines.classEmptyLines.afterPrivateVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
-    acceptOnly("emptyLines.classEmptyLines.afterVars", "1");
-    acceptOnly("emptyLines.classEmptyLines.afterStaticFunctions", "1");
-    acceptOnly("emptyLines.classEmptyLines.betweenStaticFunctions", "1");
-    acceptOnly("emptyLines.classEmptyLines.afterPrivateFunctions", "1");
-    acceptOnly("emptyLines.classEmptyLines.existingBetweenFields", "keep");
-    for (String kind : List.of("macroClassEmptyLines", "abstractEmptyLines", "externClassEmptyLines",
-                               "interfaceEmptyLines", "enumEmptyLines", "typedefEmptyLines",
-                               "enumAbstractEmptyLines")) {
-      String path = "emptyLines." + kind;
-      if (node(path) != null) {
-        markConsumedSubtree(path);
-        unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.member.blanks", path));
-      }
-    }
-    for (String key : List.of("afterIf", "beforeElse", "afterElse", "beforeEnd", "beforeError", "afterError")) {
-      acceptOnly("emptyLines.conditionalsEmptyLines." + key, "0");
-    }
-    // afterReturn/afterBlocks at their Remove default are covered by the
-    // beforeRightCurly cap and the keyword-joining rules
-    acceptOnly("emptyLines.afterReturn", "remove");
-    acceptOnly("emptyLines.afterBlocks", "remove");
-    acceptOnly("emptyLines.finalNewline", "true");
-    acceptOnly("emptyLines.beforePackage", "0");
-    // "ignore" keeps the written shape, which 0 also does here
-    applyCommentPolicy("emptyLines.beforeDocCommentEmptyLines", value -> haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = value);
-    applyCommentPolicy("emptyLines.afterFieldsWithDocComments", value -> haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = value);
-    acceptOnly("emptyLines.betweenMultilineComments", "0");
-    acceptOnly("emptyLines.lineCommentsBetweenTypes", "keep");
-    acceptOnly("emptyLines.lineCommentsBetweenFunctions", "keep");
-    acceptOnly("emptyLines.importAndUsing.beforeUsing", "1");
   }
 
   private void applyImportGrouping(int betweenImports, String level) {
@@ -566,13 +568,17 @@ public final class HxformatJsonMapper {
     String closing = str(path + ".closingPolicy");
     acceptOnly(path + ".removeInnerWhenEmpty", "true");
     if (withinSetter != null && (opening != null || closing != null)) {
-      boolean within = (opening != null && SPACE_AFTER_POLICIES.contains(opening))
-                       || (closing != null && SPACE_BEFORE_POLICIES.contains(closing));
-      withinSetter.accept(within);
+      withinSetter.accept(spaceWithin(opening, closing));
     }
     if (beforeSetter != null && opening != null) {
       beforeSetter.accept(SPACE_BEFORE_POLICIES.contains(opening));
     }
+  }
+
+  /** An OpenClosePolicy pair puts a space just inside: the opening one after the opener, or the closing one before the closer. */
+  private static boolean spaceWithin(@Nullable String opening, @Nullable String closing) {
+    return (opening != null && SPACE_AFTER_POLICIES.contains(opening))
+           || (closing != null && SPACE_BEFORE_POLICIES.contains(closing));
   }
 
   private void onNewLine(String path, Consumer<Boolean> setter) {
@@ -589,6 +595,13 @@ public final class HxformatJsonMapper {
     String value = str(path);
     if (value == null) return;
     setter.accept(SPACE_AFTER_POLICIES.contains(value));
+  }
+
+  /** Sets the flag to whether the key holds the value; an absent key leaves the profile's flag. */
+  private void applyEquals(String path, String flagValue, Consumer<Boolean> setter) {
+    String value = str(path);
+    if (value == null) return;
+    setter.accept(flagValue.equals(value));
   }
 
   /** A doc-comment blank policy (one / none / ignore) into a minimum blank-line count. */
@@ -677,6 +690,15 @@ public final class HxformatJsonMapper {
     }
   }
 
+  /** Consumes each present subtree whole and reports it under the bundle message taking the path. */
+  private void reportUnsupportedSubtrees(List<String> paths, @PropertyKey(resourceBundle = "messages.HaxeCodeStyleBundle") String bundleKey) {
+    for (String path : paths) {
+      if (node(path) == null) continue;
+      markConsumedSubtree(path);
+      unsupported.add(HaxeCodeStyleBundle.message(bundleKey, path));
+    }
+  }
+
   private void markConsumedSubtree(String path) {
     JsonNode subtree = node(path);
     if (subtree != null) {
@@ -732,5 +754,14 @@ public final class HxformatJsonMapper {
       if (current == null || current.isNull()) return null;
     }
     return current;
+  }
+
+  /** The pairs as an insertion-ordered map (Map.of iterates in a per-run random order). */
+  private static Map<String, String> inSectionOrder(String... pathsAndValues) {
+    Map<String, String> map = new LinkedHashMap<>();
+    for (int i = 0; i < pathsAndValues.length; i += 2) {
+      map.put(pathsAndValues[i], pathsAndValues[i + 1]);
+    }
+    return map;
   }
 }

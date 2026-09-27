@@ -28,6 +28,8 @@ import java.util.function.Consumer;
  * extends {@link HaxeToolkitLightFixtureTestCase}.
  */
 public abstract class HaxeLightFixtureTestCase extends HaxeCodeInsightFixtureTestCase {
+  /** The file name an inline source reformats under when the test names none. */
+  private static final String DEFAULT_SOURCE_NAME = "Main.hx";
 
   /** Must return a SHARED instance from {@link HaxeLightProjectDescriptors} - project reuse is keyed on descriptor equality. */
   protected LightProjectDescriptor lightProjectDescriptor() {
@@ -71,22 +73,63 @@ public abstract class HaxeLightFixtureTestCase extends HaxeCodeInsightFixtureTes
     CodeStyleSettingsManager.getInstance(myFixture.getProject()).dropTemporarySettings();
   }
 
-  /** A detached copy of the project code style, to mutate and install as temporary settings. */
+  /**
+   * A detached copy of the project code style, to mutate and install as
+   * temporary settings. The current settings are the temporary ones while
+   * any are installed, so those are dropped first: every copy starts from
+   * the project's own style, never from an earlier install's mutations.
+   */
   protected CodeStyleSettings projectSettingsCopy() {
-    CodeStyleSettings projectSettings = CodeStyle.getSettings(myFixture.getProject());
-    return CodeStyleSettingsManager.getInstance(myFixture.getProject()).cloneSettings(projectSettings);
+    CodeStyleSettingsManager manager = CodeStyleSettingsManager.getInstance(myFixture.getProject());
+    manager.dropTemporarySettings();
+    return manager.cloneSettings(CodeStyle.getSettings(myFixture.getProject()));
+  }
+
+  /**
+   * Installs a temporary copy of the project code style mutated by
+   * {@code configure}; the shared teardown drops it again. Installing twice
+   * in one test replaces the first copy.
+   */
+  protected void installTemporarySettings(Consumer<CodeStyleSettings> configure) {
+    CodeStyleSettings settings = projectSettingsCopy();
+    configure.accept(settings);
+    CodeStyleSettingsManager.getInstance(myFixture.getProject()).setTemporarySettings(settings);
   }
 
   /**
    * Reformats {@code source} under a temporary copy of the project code
-   * style mutated by {@code configure}; the shared teardown drops the
-   * temporary settings. Returns the file text after the reformat.
+   * style mutated by {@code configure}. Returns the file text after the
+   * reformat.
    */
   protected String reformat(String fileName, Consumer<CodeStyleSettings> configure, String source) {
-    CodeStyleSettings settings = projectSettingsCopy();
-    configure.accept(settings);
-    CodeStyleSettingsManager.getInstance(myFixture.getProject()).setTemporarySettings(settings);
+    installTemporarySettings(configure);
     myFixture.configureByText(fileName, source);
+    return reformatConfiguredFile();
+  }
+
+  protected String reformat(Consumer<CodeStyleSettings> configure, String source) {
+    return reformat(DEFAULT_SOURCE_NAME, configure, source);
+  }
+
+  /** Reformats {@code source} under the settings in force - the project's, or whatever the test installed. */
+  protected String reformat(String source) {
+    myFixture.configureByText(DEFAULT_SOURCE_NAME, source);
+    return reformatConfiguredFile();
+  }
+
+  /** Reformats the fixture file at {@code relativePath} under a temporary copy of the project code style mutated by {@code configure}. */
+  protected String reformatFile(String relativePath, Consumer<CodeStyleSettings> configure) {
+    installTemporarySettings(configure);
+    return reformatFile(relativePath);
+  }
+
+  /** Reformats the fixture file at {@code relativePath} under the settings in force. */
+  protected String reformatFile(String relativePath) {
+    myFixture.configureByFile(relativePath);
+    return reformatConfiguredFile();
+  }
+
+  private String reformatConfiguredFile() {
     Runnable reformat = () -> CodeStyleManager.getInstance(myFixture.getProject()).reformat(myFixture.getFile());
     WriteCommandAction.runWriteCommandAction(myFixture.getProject(), reformat);
     return myFixture.getFile().getText();

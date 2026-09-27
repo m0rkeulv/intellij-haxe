@@ -29,7 +29,7 @@ public class HxformatJsonSchemaProviderFactory implements JsonSchemaProviderFact
   private static class HxformatSchemaProvider implements JsonSchemaFileProvider {
     @Override
     public boolean isAvailable(@NotNull VirtualFile file) {
-      return HxformatConfigCache.HXFORMAT_FILE_NAME.equals(file.getName());
+      return HxformatConfigs.HXFORMAT_FILE_NAME.equals(file.getName());
     }
 
     @Override

@@ -16,14 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * whole treatment off. Byte parity with haxe-formatter is pinned separately
  * by the comparison suite's doc-comment-indent fixture.
  */
-@DisplayName("Formatting: doc comment interior")
+@DisplayName("Formatting: doc comment")
 public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
-
-  @Override
-  protected String getBasePath() {
-    return "/formatter/";
-  }
-
   private static final String COLUMN_ZERO_SOURCE = """
     class Main {
         /**
@@ -37,6 +31,11 @@ public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
         }
     }
     """;
+
+  @Override
+  protected String getBasePath() {
+    return "/formatter/";
+  }
 
   @Test
   @DisplayName("interior lines rise to the body indent")
@@ -53,7 +52,7 @@ public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
               trace(1);
           }
       }
-      """, reformat(settings -> { }, COLUMN_ZERO_SOURCE));
+      """, reformat(COLUMN_ZERO_SOURCE));
   }
 
   @Test
@@ -90,7 +89,7 @@ public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
               trace(x);
           }
       }
-      """, reformat(settings -> { }, source));
+      """, reformat(source));
   }
 
   @Test
@@ -122,10 +121,6 @@ public class HaxeDocCommentFormatTest extends HaxeLightFixtureTestCase {
       // disabled-code comment stays (keep-first-column default)
           static var x:Int = 1;
       }
-      """, reformat(settings -> { }, source));
-  }
-
-  private String reformat(Consumer<CodeStyleSettings> configure, String source) {
-    return reformat("Doc.hx", configure, source);
+      """, reformat(source));
   }
 }
