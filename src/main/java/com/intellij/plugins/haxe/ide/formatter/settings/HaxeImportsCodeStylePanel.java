@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.components.fields.IntegerField;
 import com.intellij.util.ui.FormBuilder;
@@ -11,7 +10,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JPanel;
-import javax.swing.event.DocumentEvent;
 
 /**
  * The Imports tab of the Haxe code style: import grouping and the blank-line
@@ -34,18 +32,9 @@ public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.imports.keep.between"), keepBetweenImports)
       .getPanel();
     initPanel(form);
-    installPreviewUpdater(keepBetweenImports);
-    installPreviewUpdater(blanksBetweenGroups);
-    installPreviewUpdater(groupPackageDepth);
-  }
-
-  private void installPreviewUpdater(IntegerField field) {
-    field.getDocument().addDocumentListener(new DocumentAdapter() {
-      @Override
-      protected void textChanged(@NotNull DocumentEvent event) {
-        previewChanged();
-      }
-    });
+    watch(keepBetweenImports);
+    watch(blanksBetweenGroups);
+    watch(groupPackageDepth);
   }
 
   @Override
@@ -55,7 +44,7 @@ public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   @Override
   public void apply(@NotNull CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS = keepBetweenImports.getValue();
     haxe.BLANK_LINES_BETWEEN_IMPORT_GROUPS = blanksBetweenGroups.getValue();
     haxe.IMPORT_GROUP_PACKAGE_DEPTH = groupPackageDepth.getValue();
@@ -63,7 +52,7 @@ public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   @Override
   public boolean isModified(CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     return haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS != keepBetweenImports.getValue()
            || haxe.BLANK_LINES_BETWEEN_IMPORT_GROUPS != blanksBetweenGroups.getValue()
            || haxe.IMPORT_GROUP_PACKAGE_DEPTH != groupPackageDepth.getValue();
@@ -71,7 +60,7 @@ public class HaxeImportsCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   @Override
   protected void resetImpl(@NotNull CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     keepBetweenImports.setValue(haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
     blanksBetweenGroups.setValue(haxe.BLANK_LINES_BETWEEN_IMPORT_GROUPS);
     groupPackageDepth.setValue(haxe.IMPORT_GROUP_PACKAGE_DEPTH);

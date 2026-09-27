@@ -1,18 +1,10 @@
 package com.intellij.plugins.haxe.ide.formatter;
 
 import com.intellij.lang.ASTNode;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.lang.psi.HaxeFile;
-import com.intellij.psi.PsiDocumentManager;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.SyntaxTraverser;
-import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.psi.impl.source.codeStyle.PostFormatProcessor;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.MSL_COMMENT;
@@ -25,47 +17,30 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.MSL_COMMENT
  * comment's text is INSIDE its token, out of block formatting's reach -
  * hence a text pass.
  */
-public class HaxeLineCommentPostFormatProcessor implements PostFormatProcessor {
+public class HaxeLineCommentPostFormatProcessor extends HaxeTextPostFormatProcessor {
 
   @Override
-  public @NotNull PsiElement processElement(@NotNull PsiElement source, @NotNull CodeStyleSettings settings) {
-    if (source instanceof HaxeFile file) {
-      processText(file, file.getTextRange(), settings);
-    }
-    return source;
+  protected boolean enabled(@NotNull HaxeCodeStyleSettings settings) {
+    return settings.ADD_LINE_COMMENT_SPACE;
   }
 
   @Override
-  public @NotNull TextRange processText(@NotNull PsiFile source, @NotNull TextRange rangeToReformat, @NotNull CodeStyleSettings settings) {
-    if (!(source instanceof HaxeFile)) return rangeToReformat;
-    HaxeCodeStyleSettings haxeSettings = settings.getCustomSettings(HaxeCodeStyleSettings.class);
-    if (!haxeSettings.ADD_LINE_COMMENT_SPACE) return rangeToReformat;
-    Document document = source.getViewProvider().getDocument();
-    if (document == null) return rangeToReformat;
+  protected boolean handles(@NotNull ASTNode node) {
+    return node.getElementType() == MSL_COMMENT;
+  }
 
-    List<ASTNode> comments = SyntaxTraverser.astTraverser(source.getNode())
-      .filter(node -> node.getElementType() == MSL_COMMENT)
-      .toList();
-    if (comments.isEmpty()) return rangeToReformat;
-
-    // replace LAST first: earlier offsets stay valid, and range markers,
-    // folding and undo outside the touched comments survive the reformat
-    int shift = 0;
-    for (ASTNode comment : comments.reversed()) {
-      TextRange range = comment.getTextRange();
-      if (!rangeToReformat.intersects(range)) continue;
-      if (HaxeInactiveBranches.insidePreservedBranch(comment, haxeSettings)) continue;
+  @Override
+  protected @NotNull List<Replacement> replacements(@NotNull List<ASTNode> comments, @NotNull Pass pass) {
+    List<Replacement> replacements = new ArrayList<>();
+    for (ASTNode comment : comments) {
+      if (!pass.editable(comment)) continue;
       String text = comment.getText();
       String normalized = normalizedLineComment(text);
-      if (normalized.equals(text)) continue;
-      document.replaceString(range.getStartOffset(), range.getEndOffset(), normalized);
-      shift += normalized.length() - text.length();
+      if (!normalized.equals(text)) {
+        replacements.add(new Replacement(comment, normalized));
+      }
     }
-
-    if (shift == 0) return rangeToReformat;
-    PsiDocumentManager.getInstance(source.getProject()).commitDocument(document);
-    int end = Math.min(rangeToReformat.getEndOffset() + shift, document.getTextLength());
-    return new TextRange(rangeToReformat.getStartOffset(), Math.max(rangeToReformat.getStartOffset(), end));
+    return replacements;
   }
 
   @NotNull
@@ -75,7 +50,7 @@ public class HaxeLineCommentPostFormatProcessor implements PostFormatProcessor {
     if (keepsShape(content)) {
       return "//" + content.stripTrailing();
     }
-    // the tool right-trims line ends afterwards, so a bare "//" stays bare
+    // haxe-formatter right-trims line ends afterwards, so a bare "//" stays bare
     String stripped = content.strip();
     return stripped.isEmpty() ? "//" : "// " + stripped;
   }

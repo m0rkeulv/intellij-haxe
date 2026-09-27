@@ -26,6 +26,9 @@ import com.intellij.psi.formatter.WrappingUtil;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.Nullable;
 
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.isChainLink;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.BRACKET_LITERALS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
@@ -52,170 +55,177 @@ public class HaxeWrappingProcessor {
     parentProcessor = parent;
   }
 
-  Wrap createChildWrap(ASTNode child, Wrap defaultWrap, Wrap childWrap) {
-    final IElementType childType = child.getElementType();
-    final IElementType elementType = myNode.getElementType();
-    if (childType == OCOMMA || childType == OSEMI) return defaultWrap;
+  /**
+   * The wrap for a child of this processor's node, the rules in precedence
+   * order; {@code assignmentSignWrap} is the wrap of the enclosing
+   * assignment's sign, which call arguments under it wrap as children of.
+   */
+  Wrap createChildWrap(ASTNode child, @Nullable Wrap assignmentSignWrap) {
+    IElementType childType = child.getElementType();
+    if (childType == OCOMMA || childType == OSEMI) return noWrap();
 
-    //
-    // Array/map/object literals: the items AND the closing bracket share ONE
-    // chop wrap (owned by the literal's processor), so a margin-busting
-    // literal breaks one item per line with the bracket on its own line.
-    // The item list itself stays unwrapped - breaks come from the items.
-    //
-    if (mySettings.ARRAY_INITIALIZER_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
-      final ASTNode listParent = myNode.getTreeParent();
-      final IElementType listParentType = listParent == null ? null : listParent.getElementType();
-      boolean literalItems = (elementType == EXPRESSION_LIST && listParentType == ARRAY_LITERAL)
-                             || elementType == MAP_INITIALIZER_EXPRESSION_LIST;
-      if (literalItems) {
-        HaxeWrappingProcessor literalProcessor = parentProcessor != null ? parentProcessor : this;
-        return literalProcessor.sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
-      }
-      if (elementType == OBJECT_LITERAL && childType == OBJECT_LITERAL_ELEMENT) {
-        return sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
-      }
-      boolean literalCloser = ((elementType == ARRAY_LITERAL || elementType == MAP_LITERAL) && childType == PRBRACK)
-                              || (elementType == OBJECT_LITERAL && childType == PRCURLY);
-      if (literalCloser) {
-        return sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
-      }
-      if ((elementType == ARRAY_LITERAL || elementType == MAP_LITERAL)
-          && (childType == EXPRESSION_LIST || childType == MAP_INITIALIZER_EXPRESSION_LIST)) {
-        return Wrap.createWrap(WrapType.NONE, true);
-      }
-    }
+    Wrap wrap = literalWrap(child);
+    if (wrap == null) wrap = chainLinkWrap(child);
+    if (wrap == null) wrap = inheritClauseWrap(child);
+    if (wrap == null) wrap = argumentListWrap(child, assignmentSignWrap);
+    if (wrap == null) wrap = newArgumentWrap(child);
+    if (wrap == null) wrap = elseKeywordWrap(child);
+    if (wrap == null) wrap = binaryOperandWrap(child);
+    if (wrap == null) wrap = assignmentWrap(child);
+    if (wrap == null) wrap = ternaryWrap(child);
+    return wrap != null ? wrap : noWrap();
+  }
 
-    //
-    // Method chains: every link whose receiver is a CALL breaks before its
-    // dot, all links sharing the chain's ONE wrap group so chopping folds
-    // the whole chain. The first link's receiver is a plain reference, so it
-    // stays with the receiver (haxe-formatter's OnePerLineAfterFirst).
-    //
-    if (elementType == REFERENCE_EXPRESSION && childType == ODOT
-        && mySettings.METHOD_CALL_CHAIN_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
-        && myNode.getFirstChildNode() != null
-        && myNode.getFirstChildNode().getElementType() == CALL_EXPRESSION) {
-      return chainItemWrap(mySettings.METHOD_CALL_CHAIN_WRAP);
+  /**
+   * Array/map/object literals: the items AND the closing bracket share ONE
+   * chop wrap (owned by the literal's processor), so a margin-busting
+   * literal breaks one item per line with the bracket on its own line.
+   * The item list itself stays unwrapped - breaks come from the items.
+   */
+  @Nullable
+  private Wrap literalWrap(ASTNode child) {
+    if (mySettings.ARRAY_INITIALIZER_WRAP == CommonCodeStyleSettings.DO_NOT_WRAP) return null;
+    IElementType elementType = myNode.getElementType();
+    IElementType childType = child.getElementType();
+    ASTNode listParent = myNode.getTreeParent();
+    IElementType listParentType = listParent == null ? null : listParent.getElementType();
+    boolean literalItems = (elementType == EXPRESSION_LIST && listParentType == ARRAY_LITERAL)
+                           || elementType == MAP_INITIALIZER_EXPRESSION_LIST;
+    if (literalItems) {
+      HaxeWrappingProcessor literalProcessor = parentProcessor != null ? parentProcessor : this;
+      return literalProcessor.sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
     }
+    boolean bracketLiteral = BRACKET_LITERALS.contains(elementType);
+    boolean objectItem = elementType == OBJECT_LITERAL && childType == OBJECT_LITERAL_ELEMENT;
+    boolean literalCloser = (bracketLiteral && childType == PRBRACK) || (elementType == OBJECT_LITERAL && childType == PRCURLY);
+    if (objectItem || literalCloser) return sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
+    boolean itemList = childType == EXPRESSION_LIST || childType == MAP_INITIALIZER_EXPRESSION_LIST;
+    if (bracketLiteral && itemList) return Wrap.createWrap(WrapType.NONE, true);
+    return null;
+  }
 
-    //
-    // extends/implements clauses share the list's ONE wrap group. Chop mode
-    // wraps the first element too (folds every clause); the fill modes must
-    // NOT (wrap-first-element pulls the break back to the first clause when
-    // a later one overflows).
-    //
-    if (elementType == INHERIT_LIST
-        && (childType == EXTENDS_DECLARATION || childType == IMPLEMENTS_DECLARATION)
-        && mySettings.EXTENDS_LIST_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
-        && child != myNode.getFirstChildNode()) {
-      // chop ("chop down if long" is stored as EVERY_ITEM|AS_NEEDED) and
-      // always must wrap the first participating clause too; only fill
-      // ("wrap if long") leaves it, so the break lands at the overflow
-      // instead of being pulled back to the first clause
-      boolean wrapFirst = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0
-                          || mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ALWAYS;
-      return sharedItemWrap(mySettings.EXTENDS_LIST_WRAP, wrapFirst);
-    }
+  /**
+   * Method chains: every link whose receiver is a CALL breaks before its
+   * dot, all links sharing the chain's ONE wrap group so chopping folds
+   * the whole chain. The first link's receiver is a plain reference, so it
+   * stays with the receiver (haxe-formatter's OnePerLineAfterFirst).
+   */
+  @Nullable
+  private Wrap chainLinkWrap(ASTNode child) {
+    if (mySettings.METHOD_CALL_CHAIN_WRAP == CommonCodeStyleSettings.DO_NOT_WRAP) return null;
+    boolean linkDot = child.getElementType() == ODOT && isChainLink(myNode);
+    return linkDot ? chainItemWrap(mySettings.METHOD_CALL_CHAIN_WRAP) : null;
+  }
 
-    //
-    // Function definition/call
-    //
-    if (elementType == PARAMETER_LIST || elementType == EXPRESSION_LIST || elementType == CALL_EXPRESSION_LIST) {
-      final ASTNode parent = myNode.getTreeParent();
-      if (parent == null) {
-        return defaultWrap;
-      }
-      final IElementType parentType = parent.getElementType();
-      if (parentType == CALL_EXPRESSION &&
-          mySettings.CALL_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
-        if (myNode.getFirstChildNode() == child) {
-          return createWrap(mySettings.CALL_PARAMETERS_LPAREN_ON_NEXT_LINE);
-        }
-        if (!mySettings.PREFER_PARAMETERS_WRAP && childWrap != null) {
-          return Wrap.createChildWrap(childWrap, WrappingUtil.getWrapType(mySettings.CALL_PARAMETERS_WRAP), true);
-        }
-        return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.CALL_PARAMETERS_WRAP), true);
-      }
-      // an enum constructor's parameters wrap like a signature's
-      boolean signature = FUNCTION_DEFINITION.contains(parentType) || parentType == ENUM_VALUE_DECLARATION_CONSTRUCTOR;
-      if (signature && mySettings.METHOD_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
-        if (myNode.getFirstChildNode() == child) {
-          return createWrap(mySettings.METHOD_PARAMETERS_LPAREN_ON_NEXT_LINE);
-        }
-        if (childType == PRPAREN) {
-          return createWrap(mySettings.METHOD_PARAMETERS_RPAREN_ON_NEXT_LINE);
-        }
-        return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.METHOD_PARAMETERS_WRAP), true);
-      }
-    }
+  /** An extends/implements clause after the first: the clauses share the list's ONE wrap group. */
+  @Nullable
+  private Wrap inheritClauseWrap(ASTNode child) {
+    if (mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.DO_NOT_WRAP) return null;
+    IElementType childType = child.getElementType();
+    boolean clause = myNode.getElementType() == INHERIT_LIST
+                     && (childType == EXTENDS_DECLARATION || childType == IMPLEMENTS_DECLARATION);
+    if (!clause || child == myNode.getFirstChildNode()) return null;
+    // chop ("chop down if long" is stored as EVERY_ITEM|AS_NEEDED) and
+    // always must wrap the first participating clause too; only fill
+    // ("wrap if long") leaves it, so the break lands at the overflow
+    // instead of being pulled back to the first clause
+    boolean wrapFirst = (mySettings.EXTENDS_LIST_WRAP & CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM) != 0
+                        || mySettings.EXTENDS_LIST_WRAP == CommonCodeStyleSettings.WRAP_ALWAYS;
+    return sharedItemWrap(mySettings.EXTENDS_LIST_WRAP, wrapFirst);
+  }
 
-    if (elementType == CALL_EXPRESSION) {
-      if (mySettings.CALL_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
-        if (childType == PRPAREN) {
-          return createWrap(mySettings.CALL_PARAMETERS_RPAREN_ON_NEXT_LINE);
-        }
-      }
-    }
-    // `new T(a, b)` keeps its arguments as direct children (no list node);
-    // they wrap like call arguments
-    if (elementType == NEW_EXPRESSION
-        && mySettings.CALL_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP
-        && isNewArgument(child)) {
-      return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.CALL_PARAMETERS_WRAP), true);
-    }
+  /** A parameter/argument list's parens and items, and a call's closing paren. */
+  @Nullable
+  private Wrap argumentListWrap(ASTNode child, @Nullable Wrap assignmentSignWrap) {
+    IElementType elementType = myNode.getElementType();
+    boolean callsWrap = mySettings.CALL_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP;
+    boolean callCloser = elementType == CALL_EXPRESSION && child.getElementType() == PRPAREN;
+    if (callCloser && callsWrap) return createWrap(mySettings.CALL_PARAMETERS_RPAREN_ON_NEXT_LINE);
+    if (!ARGUMENT_LISTS.contains(elementType)) return null;
+    ASTNode parent = myNode.getTreeParent();
+    IElementType parentType = parent == null ? null : parent.getElementType();
+    if (parentType == CALL_EXPRESSION && callsWrap) return callArgumentWrap(child, assignmentSignWrap);
+    // an enum constructor's parameters wrap like a signature's
+    boolean signature = FUNCTION_DEFINITION.contains(parentType) || parentType == ENUM_VALUE_DECLARATION_CONSTRUCTOR;
+    boolean signaturesWrap = mySettings.METHOD_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP;
+    return signature && signaturesWrap ? parameterWrap(child) : null;
+  }
 
-    //
-    // If
-    //
-    if (elementType == IF_STATEMENT && childType == KELSE) {
-      return createWrap(mySettings.ELSE_ON_NEW_LINE);
-    }
+  /**
+   * A call's argument list child: the opening paren per its own setting; an
+   * argument under an assignment wraps as a child of the sign's wrap unless
+   * the parameters take precedence.
+   */
+  private Wrap callArgumentWrap(ASTNode child, @Nullable Wrap assignmentSignWrap) {
+    if (myNode.getFirstChildNode() == child) return createWrap(mySettings.CALL_PARAMETERS_LPAREN_ON_NEXT_LINE);
+    WrapType wrapType = WrappingUtil.getWrapType(mySettings.CALL_PARAMETERS_WRAP);
+    boolean underAssignment = !mySettings.PREFER_PARAMETERS_WRAP && assignmentSignWrap != null;
+    return underAssignment ? Wrap.createChildWrap(assignmentSignWrap, wrapType, true) : Wrap.createWrap(wrapType, true);
+  }
 
-    //
-    //Binary expressions
-    //
-    if (BINARY_EXPRESSIONS.contains(elementType) && mySettings.BINARY_OPERATION_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
-      if ((mySettings.BINARY_OPERATION_SIGN_ON_NEXT_LINE && BINARY_OPERATORS.contains(childType)) ||
-          (!mySettings.BINARY_OPERATION_SIGN_ON_NEXT_LINE && isRightOperand(child))) {
-        return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.BINARY_OPERATION_WRAP), true);
-      }
-    }
+  /** A signature's parameter list child: the parens per their settings, a parameter per METHOD_PARAMETERS_WRAP. */
+  private Wrap parameterWrap(ASTNode child) {
+    if (myNode.getFirstChildNode() == child) return createWrap(mySettings.METHOD_PARAMETERS_LPAREN_ON_NEXT_LINE);
+    if (child.getElementType() == PRPAREN) return createWrap(mySettings.METHOD_PARAMETERS_RPAREN_ON_NEXT_LINE);
+    return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.METHOD_PARAMETERS_WRAP), true);
+  }
 
-    //
-    // Assignment
-    //
-    if (elementType == ASSIGN_EXPRESSION && mySettings.ASSIGNMENT_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP) {
-      if (childType != ASSIGN_OPERATION) {
-        if (FormatterUtil.isPrecededBy(child, ASSIGN_OPERATION) &&
-            mySettings.PLACE_ASSIGNMENT_SIGN_ON_NEXT_LINE) {
-          return Wrap.createWrap(WrapType.NONE, true);
-        }
-        return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.ASSIGNMENT_WRAP), true);
-      }
-      else if (mySettings.PLACE_ASSIGNMENT_SIGN_ON_NEXT_LINE) {
-        return Wrap.createWrap(WrapType.NORMAL, true);
-      }
-    }
+  /** An argument of {@code new T(a, b)}: the arguments are direct children (no list node) and wrap like call arguments. */
+  @Nullable
+  private Wrap newArgumentWrap(ASTNode child) {
+    if (mySettings.CALL_PARAMETERS_WRAP == CommonCodeStyleSettings.DO_NOT_WRAP) return null;
+    boolean newArgument = myNode.getElementType() == NEW_EXPRESSION && isNewArgument(child);
+    return newArgument ? Wrap.createWrap(WrappingUtil.getWrapType(mySettings.CALL_PARAMETERS_WRAP), true) : null;
+  }
 
-    //
-    // Ternary expressions. The grammar wraps the signs into composite
-    // QUESTION_OPERATOR/COLON_OPERATOR elements - the bare tokens never
-    // appear as children here. Signs-on-next-line wraps the SIGNS (the
-    // branch then follows its sign on the same line); otherwise the
-    // BRANCHES wrap and the signs trail the previous line.
-    //
-    if (elementType == TERNARY_EXPRESSION) {
-      boolean sign = childType == QUESTION_OPERATOR || childType == COLON_OPERATOR;
-      if (myNode.getFirstChildNode() != child) {
-        boolean wraps = mySettings.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE == sign;
-        if (wraps) {
-          return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.TERNARY_OPERATION_WRAP), true);
-        }
-      }
-      return Wrap.createWrap(WrapType.NONE, true);
-    }
-    return defaultWrap;
+  /** The {@code else} keyword per ELSE_ON_NEW_LINE. */
+  @Nullable
+  private Wrap elseKeywordWrap(ASTNode child) {
+    boolean elseKeyword = myNode.getElementType() == IF_STATEMENT && child.getElementType() == KELSE;
+    return elseKeyword ? createWrap(mySettings.ELSE_ON_NEW_LINE) : null;
+  }
+
+  /** A binary expression's wrapping part: the operator with the sign on the next line, else the right operand. */
+  @Nullable
+  private Wrap binaryOperandWrap(ASTNode child) {
+    if (mySettings.BINARY_OPERATION_WRAP == CommonCodeStyleSettings.DO_NOT_WRAP) return null;
+    if (!BINARY_EXPRESSIONS.contains(myNode.getElementType())) return null;
+    boolean wraps = mySettings.BINARY_OPERATION_SIGN_ON_NEXT_LINE
+                    ? BINARY_OPERATORS.contains(child.getElementType())
+                    : isRightOperand(child);
+    return wraps ? Wrap.createWrap(WrappingUtil.getWrapType(mySettings.BINARY_OPERATION_WRAP), true) : null;
+  }
+
+  /**
+   * An assignment's parts: the value per ASSIGNMENT_WRAP (none right after
+   * a sign that wraps itself), the sign per PLACE_ASSIGNMENT_SIGN_ON_NEXT_LINE.
+   */
+  @Nullable
+  private Wrap assignmentWrap(ASTNode child) {
+    if (mySettings.ASSIGNMENT_WRAP == CommonCodeStyleSettings.DO_NOT_WRAP) return null;
+    if (myNode.getElementType() != ASSIGN_EXPRESSION) return null;
+    boolean signOnNextLine = mySettings.PLACE_ASSIGNMENT_SIGN_ON_NEXT_LINE;
+    if (child.getElementType() == ASSIGN_OPERATION) return signOnNextLine ? Wrap.createWrap(WrapType.NORMAL, true) : null;
+    if (signOnNextLine && FormatterUtil.isPrecededBy(child, ASSIGN_OPERATION)) return Wrap.createWrap(WrapType.NONE, true);
+    return Wrap.createWrap(WrappingUtil.getWrapType(mySettings.ASSIGNMENT_WRAP), true);
+  }
+
+  /**
+   * Ternary parts. The grammar wraps the signs into composite
+   * QUESTION_OPERATOR/COLON_OPERATOR elements - the bare tokens never
+   * appear as children here. Signs-on-next-line wraps the SIGNS (the
+   * branch then follows its sign on the same line); otherwise the
+   * BRANCHES wrap and the signs trail the previous line.
+   */
+  @Nullable
+  private Wrap ternaryWrap(ASTNode child) {
+    if (myNode.getElementType() != TERNARY_EXPRESSION) return null;
+    IElementType childType = child.getElementType();
+    boolean sign = childType == QUESTION_OPERATOR || childType == COLON_OPERATOR;
+    boolean wraps = myNode.getFirstChildNode() != child && mySettings.TERNARY_OPERATION_SIGNS_ON_NEXT_LINE == sign;
+    return wraps
+           ? Wrap.createWrap(WrappingUtil.getWrapType(mySettings.TERNARY_OPERATION_WRAP), true)
+           : Wrap.createWrap(WrapType.NONE, true);
   }
 
   private Wrap sharedItemWrap(int wrapSetting) {
@@ -231,8 +241,8 @@ public class HaxeWrappingProcessor {
 
   /** The chain's wrap group, owned by the OUTERMOST link: nested links delegate up while the parent is still chain. */
   private Wrap chainItemWrap(int wrapSetting) {
-    final ASTNode parent = myNode.getTreeParent();
-    final IElementType parentType = parent == null ? null : parent.getElementType();
+    ASTNode parent = myNode.getTreeParent();
+    IElementType parentType = parent == null ? null : parent.getElementType();
     boolean parentIsChain = parentProcessor != null
                             && (parentType == CALL_EXPRESSION || parentType == REFERENCE_EXPRESSION);
     if (parentIsChain) {
@@ -254,6 +264,11 @@ public class HaxeWrappingProcessor {
     ASTNode previous = FormatterUtil.getPreviousNonWhitespaceSibling(child);
     IElementType previousType = previous == null ? null : previous.getElementType();
     return previousType == PLPAREN || previousType == OCOMMA;
+  }
+
+  /** The wrap a child takes when no rule claims it: none, and the first element never wraps. */
+  private static Wrap noWrap() {
+    return Wrap.createWrap(WrapType.NONE, false);
   }
 
   private static Wrap createWrap(boolean isNormal) {

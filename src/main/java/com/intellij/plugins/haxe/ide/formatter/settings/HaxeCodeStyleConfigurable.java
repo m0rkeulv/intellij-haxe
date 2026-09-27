@@ -32,12 +32,7 @@ public class HaxeCodeStyleConfigurable extends CodeStyleAbstractConfigurable {
   }
 
   @Override
-  protected CodeStyleAbstractPanel createPanel(CodeStyleSettings settings) {
+  protected @NotNull CodeStyleAbstractPanel createPanel(@NotNull CodeStyleSettings settings) {
     return new HaxeCodeStyleMainPanel(getCurrentSettings(), settings);
-  }
-
-  @Override
-  public String getHelpTopic() {
-    return null;
   }
 }

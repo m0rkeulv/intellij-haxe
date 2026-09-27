@@ -112,6 +112,31 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
     assertEquals(source, reformat(settings -> { }, source), "unstructurable branches stay byte-identical");
   }
 
+  @Test
+  @DisplayName("token soup lines align as a group to the directive")
+  public void testTokenSoupLinesAlignAsAGroupToTheDirective() {
+    Consumer<CodeStyleSettings> alignInactive =
+      settings -> settings.getCustomSettings(HaxeCodeStyleSettings.class).ALIGN_INACTIVE_CONDITIONAL_BRANCHES = true;
+    // "1 +" followed by ";" parses nowhere, so the branch is preserved
+    // verbatim and only the alignment pass may touch its lines
+    String source = """
+      class Main {
+          static function main() {
+              #if js
+        var x = 1 +
+            ;
+              #end
+              trace("live");
+          }
+      }
+      """;
+
+    String result = reformat(alignInactive, source);
+
+    assertTrue(result.contains("\n        #if js\n        var x = 1 +\n            ;\n        #end\n"),
+               "the blob shifts as a whole to the directive's indent, its own nesting kept:\n" + result);
+  }
+
   private String reformat(Consumer<CodeStyleSettings> configure, String source) {
     return reformat("Inactive.hx", configure, source);
   }

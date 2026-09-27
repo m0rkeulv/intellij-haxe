@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
-import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeOptionsPreviewPanelBase;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.ui.components.JBCheckBox;
@@ -16,7 +15,7 @@ import javax.swing.JPanel;
 /**
  * The hxformat tab: whether a project's own hxformat.json overrides the
  * scheme's Haxe formatting per file (see HxformatSettingsModifier).
- * No preview - the tab only hosts the toggle.
+ * No preview - the tab only hosts the toggle, so nothing watches it.
  */
 public class HxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
@@ -42,17 +41,17 @@ public class HxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   @Override
   public void apply(@NotNull CodeStyleSettings settings) {
-    settings.getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT = useProjectConfig.isSelected();
+    haxeSettings(settings).USE_PROJECT_HXFORMAT = useProjectConfig.isSelected();
   }
 
   @Override
   public boolean isModified(CodeStyleSettings settings) {
-    return settings.getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT != useProjectConfig.isSelected();
+    return haxeSettings(settings).USE_PROJECT_HXFORMAT != useProjectConfig.isSelected();
   }
 
   @Override
   protected void resetImpl(@NotNull CodeStyleSettings settings) {
-    useProjectConfig.setSelected(settings.getCustomSettings(HaxeCodeStyleSettings.class).USE_PROJECT_HXFORMAT);
+    useProjectConfig.setSelected(haxeSettings(settings).USE_PROJECT_HXFORMAT);
   }
 
   @Override

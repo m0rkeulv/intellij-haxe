@@ -1,10 +1,13 @@
 package com.intellij.plugins.haxe.ide.formatter;
 
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
+import com.intellij.util.text.CharArrayUtil;
 import org.jetbrains.annotations.NotNull;
 
 /** Line-oriented text helpers shared by the formatter processors. */
 public final class HaxeIndentText {
+
+  private static final String INDENT_CHARS = " \t";
 
   private HaxeIndentText() {
   }
@@ -18,23 +21,18 @@ public final class HaxeIndentText {
 
   /** The whitespace prefix of the line containing {@code offset}. */
   public static String lineIndentAt(CharSequence text, int offset) {
-    int lineStart = lineStartOffset(text, offset);
-    int indentEnd = lineStart;
-    while (indentEnd < text.length() && (text.charAt(indentEnd) == ' ' || text.charAt(indentEnd) == '\t')) indentEnd++;
-    return text.subSequence(lineStart, indentEnd).toString();
+    return leadingWhitespace(text, lineStartOffset(text, offset));
   }
 
-  static String leadingWhitespace(String line) {
-    int end = 0;
-    while (end < line.length() && (line.charAt(end) == ' ' || line.charAt(end) == '\t')) end++;
-    return line.substring(0, end);
+  /** The run of spaces and tabs starting at {@code from}. */
+  static String leadingWhitespace(CharSequence text, int from) {
+    int end = CharArrayUtil.shiftForward(text, from, INDENT_CHARS);
+    return text.subSequence(from, end).toString();
   }
 
   /** The offset where {@code offset}'s line begins. */
   public static int lineStartOffset(CharSequence text, int offset) {
-    int lineStart = offset;
-    while (lineStart > 0 && text.charAt(lineStart - 1) != '\n') lineStart--;
-    return lineStart;
+    return CharArrayUtil.shiftBackwardUntil(text, offset - 1, "\n") + 1;
   }
 
   /** The column the whitespace reaches, tabs advancing to the next tab stop. */

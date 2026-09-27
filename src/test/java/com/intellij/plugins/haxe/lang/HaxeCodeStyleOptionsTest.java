@@ -4,14 +4,18 @@ import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleConfigurable;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeLanguageCodeStyleSettingsProvider;
+import com.intellij.psi.PsiErrorElement;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable;
 import com.intellij.psi.codeStyle.CustomCodeStyleSettings;
 import com.intellij.psi.codeStyle.DocCommentSettings;
 import com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider.SettingsType;
+import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.FieldSource;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -49,14 +53,10 @@ public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("custom options name settings and resolve their titles")
   public void testCustomOptionsNameSettingsAndResolveTheirTitles() {
-    RecordingCustomizable recorder = new RecordingCustomizable();
-    HaxeLanguageCodeStyleSettingsProvider provider = new HaxeLanguageCodeStyleSettingsProvider();
-    for (SettingsType tab : TABS) {
-      provider.customizeSettings(recorder, tab);
-    }
+    List<CustomOption> options = recordedOptions();
 
     List<String> problems = new ArrayList<>();
-    for (CustomOption option : recorder.options) {
+    for (CustomOption option : options) {
       if (option.settingsClass != HaxeCodeStyleSettings.class) problems.add(option.field + ": not a Haxe setting");
       else if (settingField(option.field) == null) problems.add(option.field + ": no such setting");
       if (option.title.isBlank() || option.title.startsWith("!")) problems.add(option.field + ": unresolved title " + option.title);
@@ -68,14 +68,10 @@ public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("every custom setting is exposed")
   public void testEveryCustomSettingIsExposed() {
-    RecordingCustomizable recorder = new RecordingCustomizable();
-    HaxeLanguageCodeStyleSettingsProvider provider = new HaxeLanguageCodeStyleSettingsProvider();
-    for (SettingsType tab : TABS) {
-      provider.customizeSettings(recorder, tab);
-    }
+    List<CustomOption> options = recordedOptions();
 
     Set<String> exposed = new TreeSet<>(DEDICATED_TAB_SETTINGS);
-    recorder.options.forEach(option -> exposed.add(option.field));
+    options.forEach(option -> exposed.add(option.field));
     Set<String> settings = new TreeSet<>();
     for (Field field : HaxeCodeStyleSettings.class.getFields()) {
       boolean setting = !Modifier.isStatic(field.getModifiers()) && field.getDeclaringClass() == HaxeCodeStyleSettings.class;
@@ -99,6 +95,18 @@ public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
     }
   }
 
+  /** A sample the preview cannot parse renders as error text instead of demonstrating its options. */
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("TABS")
+  @DisplayName("preview samples parse and reformat")
+  public void testPreviewSamplesParseAndReformat(SettingsType tab) {
+    String sample = new HaxeLanguageCodeStyleSettingsProvider().getCodeSample(tab);
+
+    reformat("Sample.hx", settings -> {}, sample);
+
+    assertNull(PsiTreeUtil.findChildOfType(myFixture.getFile(), PsiErrorElement.class), tab + " sample has a syntax error");
+  }
+
   @Test
   @DisplayName("doc comment settings back the haxe toggle")
   public void testDocCommentSettingsBackTheHaxeToggle() {
@@ -109,6 +117,16 @@ public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
 
     assertFalse(settings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_DOC_COMMENTS);
     assertFalse(docSettings.isDocFormattingEnabled());
+  }
+
+  /** The custom options the provider shows across every option-table tab. */
+  private static List<CustomOption> recordedOptions() {
+    RecordingCustomizable recorder = new RecordingCustomizable();
+    HaxeLanguageCodeStyleSettingsProvider provider = new HaxeLanguageCodeStyleSettingsProvider();
+    for (SettingsType tab : TABS) {
+      provider.customizeSettings(recorder, tab);
+    }
+    return recorder.options;
   }
 
   private static Field settingField(String name) {

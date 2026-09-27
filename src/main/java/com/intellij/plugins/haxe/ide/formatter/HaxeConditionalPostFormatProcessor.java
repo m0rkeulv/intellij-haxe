@@ -1,20 +1,10 @@
 package com.intellij.plugins.haxe.ide.formatter;
 
+import com.intellij.formatting.IndentInfo;
 import com.intellij.lang.ASTNode;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.util.TextRange;
-import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
-import com.intellij.psi.PsiDocumentManager;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.SyntaxTraverser;
-import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
-import com.intellij.psi.impl.source.codeStyle.PostFormatProcessor;
-import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
 
@@ -40,74 +30,57 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  *       fragments then align to that wrong depth. Needs region-level
  *       grouping from the inactive-CC redesign to keep the written depth.
  */
-public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
+public class HaxeConditionalPostFormatProcessor extends HaxeTextPostFormatProcessor {
 
   private static final TokenSet PP_DIRECTIVES = TokenSet.create(PPIF, PPELSEIF, PPELSE);
   private static final TokenSet PP_LEAVES = TokenSet.create(PPIF, PPELSEIF, PPELSE, PPBODY);
 
   @Override
-  public @NotNull PsiElement processElement(@NotNull PsiElement source, @NotNull CodeStyleSettings settings) {
-    if (source instanceof HaxeFile file) {
-      processText(file, file.getTextRange(), settings);
-    }
-    return source;
+  protected boolean enabled(@NotNull HaxeCodeStyleSettings settings) {
+    return settings.ALIGN_INACTIVE_CONDITIONAL_BRANCHES;
   }
 
   @Override
-  public @NotNull TextRange processText(@NotNull PsiFile source, @NotNull TextRange rangeToReformat, @NotNull CodeStyleSettings settings) {
-    if (!(source instanceof HaxeFile)) return rangeToReformat;
-    HaxeCodeStyleSettings haxeSettings = settings.getCustomSettings(HaxeCodeStyleSettings.class);
-    if (!haxeSettings.ALIGN_INACTIVE_CONDITIONAL_BRANCHES) return rangeToReformat;
-    Document document = source.getViewProvider().getDocument();
-    if (document == null) return rangeToReformat;
+  protected boolean handles(@NotNull ASTNode node) {
+    return PP_LEAVES.contains(node.getElementType());
+  }
 
-    List<ASTNode> ppLeaves = SyntaxTraverser.astTraverser(source.getNode())
-      .filter(node -> PP_LEAVES.contains(node.getElementType()))
-      .toList();
-    if (ppLeaves.isEmpty()) return rangeToReformat;
-
-    CommonCodeStyleSettings.IndentOptions indent = settings.getIndentOptions(HaxeFileType.INSTANCE);
-    String original = document.getText();
-    StringBuilder working = new StringBuilder(original);
+  @Override
+  protected @NotNull List<Replacement> replacements(@NotNull List<ASTNode> ppLeaves, @NotNull Pass pass) {
+    CommonCodeStyleSettings.IndentOptions options = pass.indentOptions();
+    StringBuilder working = new StringBuilder(pass.text());
 
     // leaves are visited in file order, so a blob's rewrite fixes the line
     // indent of the directive AFTER it before that directive is read as the
     // next blob's alignment target
     int shift = 0;
-    String target = null;
+    String targetIndent = null;
     List<Replacement> replacements = new ArrayList<>();
     for (ASTNode leaf : ppLeaves) {
-      IElementType type = leaf.getElementType();
       int start = leaf.getStartOffset() + shift;
-      if (PP_DIRECTIVES.contains(type)) {
-        target = HaxeIndentText.lineIndentAt(working, start);
+      if (PP_DIRECTIVES.contains(leaf.getElementType())) {
+        targetIndent = HaxeIndentText.lineIndentAt(working, start);
         continue;
       }
-      boolean inRange = rangeToReformat.intersects(leaf.getStartOffset(), leaf.getStartOffset() + leaf.getTextLength());
-      if (target == null || !inRange) continue;
-      // block formatting owns branches with parsed structure; alignment only
-      // serves the token-soup blobs the formatter preserves verbatim
-      boolean blockFormatted = leaf.getPsi() instanceof HaxeInactiveBody body
-                               && !HaxeInactiveBranches.preservedVerbatim(body, haxeSettings);
-      if (blockFormatted) continue;
+      boolean alignable = targetIndent != null && pass.covers(leaf) && !blockFormatted(leaf, pass.haxeSettings());
+      if (!alignable) continue;
       String blob = working.substring(start, start + leaf.getTextLength());
-      String reindented = reindentBlob(blob, target, indent);
+      String reindented = reindentBlob(blob, targetIndent, options);
       working.replace(start, start + blob.length(), reindented);
       shift += reindented.length() - blob.length();
       if (!reindented.equals(blob)) {
-        replacements.add(new Replacement(leaf.getStartOffset(), leaf.getTextLength(), reindented));
+        replacements.add(new Replacement(leaf, reindented));
       }
     }
+    return replacements;
+  }
 
-    if (replacements.isEmpty()) return rangeToReformat;
-    // applied LAST first so the original-coordinate offsets stay valid; the
-    // localized edits keep range markers/folding/undo outside the blobs alive
-    for (Replacement replacement : replacements.reversed()) {
-      document.replaceString(replacement.start, replacement.start + replacement.length, replacement.text);
-    }
-    PsiDocumentManager.getInstance(source.getProject()).commitDocument(document);
-    int end = Math.min(rangeToReformat.getEndOffset() + shift, document.getTextLength());
-    return new TextRange(rangeToReformat.getStartOffset(), Math.max(rangeToReformat.getStartOffset(), end));
+  /**
+   * Block formatting owns branches with parsed structure; alignment only
+   * serves the token-soup blobs the formatter preserves verbatim.
+   */
+  private static boolean blockFormatted(@NotNull ASTNode leaf, @NotNull HaxeCodeStyleSettings settings) {
+    return leaf.getPsi() instanceof HaxeInactiveBody body && !HaxeInactiveBranches.preservedVerbatim(body, settings);
   }
 
   /**
@@ -115,21 +88,13 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
    * indent; the trailing whitespace-only line (the NEXT directive's indent)
    * becomes exactly the target.
    */
-  private static String reindentBlob(String blob, String target, CommonCodeStyleSettings.IndentOptions indent) {
+  private static String reindentBlob(String blob, String targetIndent, CommonCodeStyleSettings.IndentOptions options) {
     if (blob.indexOf('\n') < 0) return blob;
     // every line, trailing empty ones kept
     String[] lines = blob.split("\n", -1);
-
-    int targetColumns = HaxeIndentText.indentWidth(target, indent.TAB_SIZE);
-    int referenceColumns = -1;
-    for (int i = 1; i < lines.length; i++) {
-      if (!lines[i].isBlank()) {
-        referenceColumns = HaxeIndentText.indentWidth(HaxeIndentText.leadingWhitespace(lines[i]), indent.TAB_SIZE);
-        break;
-      }
-    }
-    if (referenceColumns < 0) referenceColumns = targetColumns;
-    int delta = targetColumns - referenceColumns;
+    int targetColumns = HaxeIndentText.indentWidth(targetIndent, options.TAB_SIZE);
+    int referenceColumns = firstInteriorIndentColumns(lines, options.TAB_SIZE);
+    int delta = referenceColumns < 0 ? 0 : targetColumns - referenceColumns;
 
     StringBuilder result = new StringBuilder(blob.length());
     result.append(lines[0]);
@@ -138,24 +103,29 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
       String line = lines[i];
       boolean trailingIndentLine = i == lines.length - 1 && line.isBlank();
       if (trailingIndentLine) {
-        result.append(target);
+        result.append(targetIndent);
       }
       else if (!line.isBlank()) {
-        String lead = HaxeIndentText.leadingWhitespace(line);
-        int columns = Math.max(0, HaxeIndentText.indentWidth(lead, indent.TAB_SIZE) + delta);
-        result.append(renderIndent(columns, indent));
+        String lead = HaxeIndentText.leadingWhitespace(line, 0);
+        int columns = Math.max(0, HaxeIndentText.indentWidth(lead, options.TAB_SIZE) + delta);
+        result.append(renderIndent(columns, options));
         result.append(line, lead.length(), line.length());
       }
     }
     return result.toString();
   }
 
-  private static String renderIndent(int columns, CommonCodeStyleSettings.IndentOptions indent) {
-    if (!indent.USE_TAB_CHARACTER) return " ".repeat(columns);
-    return "\t".repeat(columns / indent.TAB_SIZE) + " ".repeat(columns % indent.TAB_SIZE);
+  /** The indent column of the first non-blank line after the opening one; -1 when there is none. */
+  private static int firstInteriorIndentColumns(String[] lines, int tabSize) {
+    for (int i = 1; i < lines.length; i++) {
+      if (lines[i].isBlank()) continue;
+      return HaxeIndentText.indentWidth(HaxeIndentText.leadingWhitespace(lines[i], 0), tabSize);
+    }
+    return -1;
   }
 
-  /** A pending document edit in ORIGINAL (pre-edit) coordinates. */
-  private record Replacement(int start, int length, String text) {
+  /** The whitespace reaching the column: tabs by TAB_SIZE plus a space remainder, or spaces only. */
+  private static String renderIndent(int columns, CommonCodeStyleSettings.IndentOptions options) {
+    return new IndentInfo(0, columns, 0).generateNewWhiteSpace(options);
   }
 }

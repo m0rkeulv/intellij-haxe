@@ -24,29 +24,39 @@ import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
-import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
-import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
+import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.formatter.FormatterUtil;
 import com.intellij.psi.formatter.common.AbstractBlock;
 import com.intellij.psi.tree.IElementType;
+import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
+
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
+import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
  * @author: Fedor.Korotkov
  */
 public class HaxeBlock extends AbstractBlock implements BlockWithParent {
+  // after one of these, a new line sits one step in: an opening bracket, a
+  // type body, a directive or a comment
+  private static final TokenSet INDENT_OPENERS = TokenSet.orSet(
+    TokenSet.create(PLPAREN, PLCURLY, CONDITIONAL_STATEMENT_ID, PPELSE, PPEND, PPELSEIF), CLASS_BODY_TYPES, ONLY_COMMENTS);
+
   private final HaxeIndentProcessor myIndentProcessor;
   private final HaxeSpacingProcessor mySpacingProcessor;
   private final HaxeWrappingProcessor myWrappingProcessor;
   private final HaxeAlignmentProcessor myAlignmentProcessor;
-  private Wrap myChildWrap = null;
+  // the wrap of this assignment's sign, once built: the call arguments
+  // after it wrap as its children
+  private Wrap myAssignmentSignWrap = null;
   private final Indent myIndent;
   private final CodeStyleSettings mySettings;
   private BlockWithParent myParent;
@@ -57,11 +67,12 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
                       CodeStyleSettings settings) {
     super(node, wrap, alignment);
     mySettings = settings;
-    final HaxeCodeStyleSettings haxeCodeStyleSettings = mySettings.getCustomSettings(HaxeCodeStyleSettings.class);
-    myIndentProcessor = new HaxeIndentProcessor(mySettings.getCommonSettings(HaxeLanguage.INSTANCE), haxeCodeStyleSettings);
-    mySpacingProcessor = new HaxeSpacingProcessor(node, mySettings.getCommonSettings(HaxeLanguage.INSTANCE), haxeCodeStyleSettings);
-    myWrappingProcessor = new HaxeWrappingProcessor(node, mySettings.getCommonSettings(HaxeLanguage.INSTANCE));
-    myAlignmentProcessor = new HaxeAlignmentProcessor(node, mySettings.getCommonSettings(HaxeLanguage.INSTANCE));
+    CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    myIndentProcessor = new HaxeIndentProcessor(common, haxe);
+    mySpacingProcessor = new HaxeSpacingProcessor(node, common, haxe);
+    myWrappingProcessor = new HaxeWrappingProcessor(node, common);
+    myAlignmentProcessor = new HaxeAlignmentProcessor(node, common);
     myIndent = myIndentProcessor.getChildIndent(myNode);
   }
 
@@ -80,7 +91,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
    */
   @Override
   public @NotNull TextRange getTextRange() {
-    if (myNode.getElementType() != HaxeTokenTypeSets.PPBODY) return super.getTextRange();
+    if (myNode.getElementType() != PPBODY) return super.getTextRange();
     // trim by the same child-node walk that builds the sub-blocks, so every
     // child block stays inside the reported range
     ASTNode first = myNode.getFirstChildNode();
@@ -103,24 +114,10 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
 
   @Override
   protected List<Block> buildChildren() {
-    if (getNode().getElementType() == HaxeTokenTypeSets.DOC_COMMENT) {
-      return buildDocCommentChildren();
-    }
-    if (getNode().getElementType() == HaxeTokenTypeSets.PPBODY) {
-      return buildInactiveBranchChildren();
-    }
-    final ArrayList<Block> tlChildren = new ArrayList<>();
-    for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
-      if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
-      final HaxeBlock childBlock = new HaxeBlock(childNode, createChildWrap(childNode), createChildAlignment(childNode), mySettings);
-      childBlock.setParent(this);
-      // wrap groups can span levels (a literal's items chop with its closing
-      // bracket, a call chain's dots chop together) - the child's processor
-      // reaches the enclosing ones through this link
-      childBlock.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
-      tlChildren.add(childBlock);
-    }
-    return tlChildren;
+    IElementType type = getNode().getElementType();
+    if (type == DOC_COMMENT) return buildDocCommentChildren();
+    if (type == PPBODY) return buildInactiveBranchChildren();
+    return childBlocks(child -> childBlock(child, createChildWrap(child), createChildAlignment(child), true));
   }
 
   /**
@@ -133,14 +130,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_DOC_COMMENTS) {
       return EMPTY;
     }
-    final ArrayList<Block> children = new ArrayList<>();
-    for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
-      if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
-      HaxeBlock childBlock = new HaxeBlock(childNode, Wrap.createWrap(WrapType.NONE, false), null, mySettings);
-      childBlock.setParent(this);
-      children.add(childBlock);
-    }
-    return children;
+    return childBlocks(child -> childBlock(child, Wrap.createWrap(WrapType.NONE, false), null, false));
   }
 
   /**
@@ -154,30 +144,39 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || HaxeInactiveBranches.preservedVerbatim(body, haxe)) {
       return EMPTY;
     }
-    final ArrayList<Block> children = new ArrayList<>();
-    for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
-      if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
-      HaxeBlock childBlock = new HaxeBlock(childNode, createChildWrap(childNode), null, mySettings);
-      childBlock.setParent(this);
-      childBlock.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
-      children.add(childBlock);
+    return childBlocks(child -> childBlock(child, createChildWrap(child), null, true));
+  }
+
+  /** One block per non-whitespace child, in order. */
+  private List<Block> childBlocks(Function<ASTNode, HaxeBlock> blockOf) {
+    List<Block> children = new ArrayList<>();
+    for (ASTNode child = getNode().getFirstChildNode(); child != null; child = child.getTreeNext()) {
+      if (!FormatterUtil.containsWhiteSpacesOnly(child)) children.add(blockOf.apply(child));
     }
     return children;
   }
 
-  public Wrap createChildWrap(ASTNode child) {
-    final IElementType childType = child.getElementType();
-    final Wrap wrap = myWrappingProcessor.createChildWrap(child, Wrap.createWrap(WrapType.NONE, false), myChildWrap);
+  private HaxeBlock childBlock(ASTNode child, Wrap wrap, @Nullable Alignment alignment, boolean linkWrapping) {
+    HaxeBlock block = new HaxeBlock(child, wrap, alignment, mySettings);
+    block.setParent(this);
+    // wrap groups can span levels (a literal's items chop with its closing
+    // bracket, a call chain's dots chop together) - the child's processor
+    // reaches the enclosing ones through this link
+    if (linkWrapping) block.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
+    return block;
+  }
 
-    if (childType == HaxeTokenTypes.ASSIGN_OPERATION) {
-      myChildWrap = wrap;
+  private Wrap createChildWrap(ASTNode child) {
+    Wrap wrap = myWrappingProcessor.createChildWrap(child, myAssignmentSignWrap);
+    if (child.getElementType() == ASSIGN_OPERATION) {
+      myAssignmentSignWrap = wrap;
     }
     return wrap;
   }
 
   @Nullable
   protected Alignment createChildAlignment(ASTNode child) {
-    if (child.getElementType() != HaxeTokenTypes.PLPAREN && child.getElementType() != HaxeTokenTypes.BLOCK_STATEMENT) {
+    if (child.getElementType() != PLPAREN && child.getElementType() != BLOCK_STATEMENT) {
       return myAlignmentProcessor.createChildAlignment();
     }
     return null;
@@ -188,37 +187,20 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   public ChildAttributes getChildAttributes(final int newIndex) {
     int index = newIndex;
     ASTBlock prev = null;
-    do {
-      if (index == 0) {
-        break;
-      }
-      prev = (ASTBlock)getSubBlocks().get(index - 1);
+    while (index > 0) {
       index--;
+      prev = (ASTBlock)getSubBlocks().get(index);
+      IElementType type = prev.getNode().getElementType();
+      if (type != OSEMI && !WHITESPACES.contains(type)) break;
     }
-    while (prev.getNode().getElementType() == HaxeTokenTypes.OSEMI || prev.getNode() instanceof PsiWhiteSpace);
 
-    final IElementType elementType = myNode.getElementType();
-    final IElementType prevType = prev == null ? null : prev.getNode().getElementType();
-    if (prevType == HaxeTokenTypes.PLPAREN) {
-      return new ChildAttributes(Indent.getNormalIndent(), null);
-    }
-    if (prevType == HaxeTokenTypes.PLCURLY) {
-      return new ChildAttributes(Indent.getNormalIndent(), null);
-    }
-    if (isTypeBody(prevType)) {
-      return new ChildAttributes(Indent.getNormalIndent(), null);
-    }
-    if (isEndsWithRPAREN(elementType, prevType)) {
+    IElementType elementType = myNode.getElementType();
+    IElementType prevType = prev == null ? null : prev.getNode().getElementType();
+    if (opensIndentedRegion(elementType, prevType)) {
       return new ChildAttributes(Indent.getNormalIndent(), null);
     }
     if (index == 0) {
       return new ChildAttributes(Indent.getNoneIndent(), null);
-    }
-    if (prevType == HaxeTokenTypes.CONDITIONAL_STATEMENT_ID || prevType == HaxeTokenTypes.PPELSE || prevType == HaxeTokenTypes.PPEND || prevType == HaxeTokenTypes.PPELSEIF) {
-      return new ChildAttributes(Indent.getNormalIndent(), null);
-    }
-    if (prevType.toString().equals("MSL_COMMENT") || prevType.toString().equals("MML_COMMENT") || prevType.toString().equals("DOC_COMMENT")) {
-      return new ChildAttributes(Indent.getNormalIndent(), null);
     }
     return new ChildAttributes(prev.getIndent(), prev.getAlignment());
   }
@@ -238,19 +220,15 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     myParent = newParent;
   }
 
-  private static boolean isEndsWithRPAREN(IElementType elementType, IElementType prevType) {
-    return prevType == HaxeTokenTypes.PRPAREN &&
-           (elementType == HaxeTokenTypes.IF_STATEMENT ||
-            elementType == HaxeTokenTypes.FOR_STATEMENT ||
-            elementType == HaxeTokenTypes.WHILE_STATEMENT);
+  /** A new line after the previous child sits one step in: after an indent opener, or a statement head's closing paren. */
+  private static boolean opensIndentedRegion(IElementType elementType, @Nullable IElementType prevType) {
+    return INDENT_OPENERS.contains(prevType) || isEndsWithRPAREN(elementType, prevType);
   }
 
-  private static boolean isTypeBody(IElementType elementType) {
-    return elementType == HaxeTokenTypes.CLASS_BODY ||
-           elementType == HaxeTokenTypes.ABSTRACT_BODY ||
-           elementType == HaxeTokenTypes.INTERFACE_BODY ||
-           elementType == HaxeTokenTypes.ENUM_BODY ||
-           elementType == HaxeTokenTypes.EXTERN_CLASS_DECLARATION_BODY ||
-           elementType == HaxeTokenTypes.ANONYMOUS_TYPE_BODY;
+  private static boolean isEndsWithRPAREN(IElementType elementType, @Nullable IElementType prevType) {
+    return prevType == PRPAREN &&
+           (elementType == IF_STATEMENT ||
+            elementType == FOR_STATEMENT ||
+            elementType == WHILE_STATEMENT);
   }
 }

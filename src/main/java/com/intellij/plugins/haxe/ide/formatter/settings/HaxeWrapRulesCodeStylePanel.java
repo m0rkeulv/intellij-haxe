@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
-import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.components.fields.IntegerField;
 import com.intellij.util.ui.FormBuilder;
@@ -11,7 +10,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JPanel;
-import javax.swing.event.DocumentEvent;
 import java.util.List;
 import java.util.function.ObjIntConsumer;
 import java.util.function.ToIntFunction;
@@ -66,16 +64,7 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.fill.item"), multiVarFillItem.field())
       .getPanel();
     initPanel(form);
-    options.forEach(option -> installPreviewUpdater(option.field()));
-  }
-
-  private void installPreviewUpdater(IntegerField field) {
-    field.getDocument().addDocumentListener(new DocumentAdapter() {
-      @Override
-      protected void textChanged(@NotNull DocumentEvent event) {
-        previewChanged();
-      }
-    });
+    options.forEach(option -> watch(option.field()));
   }
 
   @Override
@@ -85,19 +74,19 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
   @Override
   public void apply(@NotNull CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     options.forEach(option -> option.set().accept(haxe, option.field().getValue()));
   }
 
   @Override
   public boolean isModified(CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     return options.stream().anyMatch(option -> option.get().applyAsInt(haxe) != option.field().getValue());
   }
 
   @Override
   protected void resetImpl(@NotNull CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     options.forEach(option -> option.field().setValue(option.get().applyAsInt(haxe)));
   }
 

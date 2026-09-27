@@ -32,12 +32,8 @@ public class HaxeConditionalCompilationPanel extends HaxeOptionsPreviewPanelBase
       .addComponent(alignInactive)
       .getPanel();
     initPanel(form);
-    installPreviewUpdater(formatInactive);
-    installPreviewUpdater(alignInactive);
-  }
-
-  private void installPreviewUpdater(JBCheckBox checkBox) {
-    checkBox.addActionListener(event -> previewChanged());
+    watch(formatInactive);
+    watch(alignInactive);
   }
 
   @Override
@@ -47,21 +43,21 @@ public class HaxeConditionalCompilationPanel extends HaxeOptionsPreviewPanelBase
 
   @Override
   public void apply(@NotNull CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     haxe.FORMAT_INACTIVE_BRANCHES = formatInactive.isSelected();
     haxe.ALIGN_INACTIVE_CONDITIONAL_BRANCHES = alignInactive.isSelected();
   }
 
   @Override
   public boolean isModified(CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     return haxe.FORMAT_INACTIVE_BRANCHES != formatInactive.isSelected()
            || haxe.ALIGN_INACTIVE_CONDITIONAL_BRANCHES != alignInactive.isSelected();
   }
 
   @Override
   protected void resetImpl(@NotNull CodeStyleSettings settings) {
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    HaxeCodeStyleSettings haxe = haxeSettings(settings);
     formatInactive.setSelected(haxe.FORMAT_INACTIVE_BRANCHES);
     alignInactive.setSelected(haxe.ALIGN_INACTIVE_CONDITIONAL_BRANCHES);
   }

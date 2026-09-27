@@ -8,20 +8,25 @@ import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
+import com.intellij.ui.DocumentAdapter;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.AbstractButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.event.DocumentEvent;
+import javax.swing.text.JTextComponent;
 import java.awt.BorderLayout;
 
 /**
  * Base for the Haxe code style tabs: an options form on the left, the shared
  * preview editor on the right (absent when the tab has no preview text).
- * A subclass builds its form in its constructor and hands it to
- * {@link #initPanel}; option listeners call {@link #previewChanged} so the
- * preview reformats from the edited values immediately.
+ * A subclass builds its form in its constructor, hands it to
+ * {@link #initPanel} and {@link #watch}es its widgets, so every edit reaches
+ * {@link #previewChanged} and the preview reformats from the edited values
+ * immediately.
  */
 public abstract class HaxeOptionsPreviewPanelBase extends CodeStyleAbstractPanel {
 
@@ -29,6 +34,10 @@ public abstract class HaxeOptionsPreviewPanelBase extends CodeStyleAbstractPanel
 
   protected HaxeOptionsPreviewPanelBase(CodeStyleSettings settings) {
     super(settings);
+  }
+
+  protected static HaxeCodeStyleSettings haxeSettings(CodeStyleSettings settings) {
+    return settings.getCustomSettings(HaxeCodeStyleSettings.class);
   }
 
   /** Lays the options form out beside the preview editor. Call once, after the form's fields exist. */
@@ -41,6 +50,21 @@ public abstract class HaxeOptionsPreviewPanelBase extends CodeStyleAbstractPanel
     if (getEditor() != null) {
       panel.add(getEditor().getComponent(), BorderLayout.CENTER);
     }
+  }
+
+  /** A toggle whose every click reformats the preview. */
+  protected final void watch(AbstractButton button) {
+    button.addActionListener(event -> previewChanged());
+  }
+
+  /** A text field whose every keystroke reformats the preview. */
+  protected final void watch(JTextComponent field) {
+    field.getDocument().addDocumentListener(new DocumentAdapter() {
+      @Override
+      protected void textChanged(@NotNull DocumentEvent event) {
+        previewChanged();
+      }
+    });
   }
 
   /** The preview reformats from the panel's settings clone - push edits into it live. */
