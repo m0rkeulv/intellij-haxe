@@ -179,7 +179,7 @@ public final class HxformatJsonMapper {
     if (margin != null) {
       settings.setRightMargin(HaxeLanguage.INSTANCE, margin);
     }
-    wrapConstruct("wrapping.arrayWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
+    applyArrayRules("wrapping.arrayWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
     wrapConstruct("wrapping.mapWrap", value -> common.ARRAY_INITIALIZER_WRAP = value);
     wrapConstruct("wrapping.objectLiteral", value -> common.ARRAY_INITIALIZER_WRAP = value);
     wrapConstruct("wrapping.methodChain", value -> common.METHOD_CALL_CHAIN_WRAP = value);
@@ -239,10 +239,80 @@ public final class HxformatJsonMapper {
     JsonNode construct = node(path);
     if (construct == null) return;
     markConsumedSubtree(path);
-    String type = null;
+    if (hasRules(construct)) {
+      unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.rules", path));
+    }
+    applyWrapType(construct, setter);
+  }
+
+  /**
+   * wrapping.arrayWrap: the overflow rule (or defaultWrap) sets the array
+   * wrap policy as for any construct, and the item rules the engine
+   * reproduces (HaxeArrayLiteralRules) are lifted from their shapes; a rule
+   * shape without a counterpart is reported.
+   */
+  private void applyArrayRules(String path, IntConsumer setter) {
+    JsonNode construct = node(path);
+    if (construct == null) return;
+    markConsumedSubtree(path);
+    applyWrapType(construct, setter);
+    if (!hasRules(construct)) return;
+    boolean allLifted = true;
+    for (JsonNode rule : construct.get("rules")) {
+      allLifted &= liftArrayRule(rule);
+    }
+    if (!allLifted) {
+      unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.array.rules", path));
+    }
+  }
+
+  /**
+   * One array rule into its threshold: a noWrap rule's totalItemLength, an
+   * onePerLine rule's anyItemLength or itemCount (its hasMultilineItems and
+   * exceedsMaxLineLength forms are built in), a fillLineWithLeadingBreak
+   * rule's allItemLengths with itemCount. False for any other shape.
+   */
+  private boolean liftArrayRule(JsonNode rule) {
+    String type = rule.path("type").asText("");
+    Integer total = conditionValue(rule, "totalItemLength <= n");
+    Integer anyLength = conditionValue(rule, "anyItemLength >= n");
+    Integer count = conditionValue(rule, "itemCount >= n");
+    Integer allLength = conditionValue(rule, "allItemLengths <= n");
+    boolean builtIn = conditionValue(rule, "hasMultilineItems") != null || conditionValue(rule, "exceedsMaxLineLength") != null;
+    boolean equalLengths = conditionValue(rule, "equalItemLengths") != null;
+    switch (type) {
+      case "noWrap" -> {
+        if (total == null) return false;
+        haxe.ARRAY_KEEP_TOTAL_LENGTH = total;
+      }
+      case "onePerLine" -> {
+        if (builtIn) return true;
+        if (anyLength != null) haxe.ARRAY_CHOP_ITEM_LENGTH = anyLength;
+        if (count != null) haxe.ARRAY_CHOP_ITEM_COUNT = count;
+        return anyLength != null || count != null;
+      }
+      case "fillLineWithLeadingBreak" -> {
+        if (equalLengths || allLength == null || count == null) return false;
+        haxe.ARRAY_FILL_ITEM_LENGTH = allLength;
+        haxe.ARRAY_FILL_ITEM_COUNT = count;
+      }
+      default -> {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean hasRules(JsonNode construct) {
     JsonNode rules = construct.get("rules");
-    if (rules != null && rules.isArray() && !rules.isEmpty()) {
-      for (JsonNode rule : rules) {
+    return rules != null && rules.isArray() && !rules.isEmpty();
+  }
+
+  /** The construct's wrap policy: its first rule firing on overflow, else its first rule, else defaultWrap. */
+  private static void applyWrapType(JsonNode construct, IntConsumer setter) {
+    String type = null;
+    if (hasRules(construct)) {
+      for (JsonNode rule : construct.get("rules")) {
         JsonNode ruleType = rule.get("type");
         if (ruleType == null) continue;
         if (type == null) type = ruleType.asText();
@@ -251,7 +321,6 @@ public final class HxformatJsonMapper {
           break;
         }
       }
-      unsupported.add(HaxeCodeStyleBundle.message("hxformat.unsupported.rules", path));
     }
     if (type == null && construct.get("defaultWrap") != null) {
       type = construct.get("defaultWrap").asText();

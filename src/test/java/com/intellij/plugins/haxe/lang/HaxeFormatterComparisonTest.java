@@ -437,6 +437,34 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
       // first parameter reaching the margin moves the second at the same depth
       doParityTest("signature-wrap-indent");
     }
+
+    @Test
+    @DisplayName("todo checks")
+    public void testTodoChecks() throws Exception {
+      // the sandbox sample covering the four continuation rules in one file:
+      // bodiless and empty-body signatures at one step, a full body at two,
+      // a same-line metadata declaration anchoring its chopped initializer,
+      // hand-broken signatures and calls re-packed, a nested inactive #if
+      doParityTest("todo-checks");
+    }
+
+    @Test
+    @DisplayName("todo checks allman")
+    public void testTodoChecksAllman() throws Exception {
+      // the same sample under lineEnds.leftCurly/rightCurly=both: a signature
+      // whose `{` moves to the next line no longer counts it, so it fits
+      doParityTest("todo-checks-allman", HaxeCodeStyleTweaks::allmanBraces);
+    }
+
+    @Test
+    @DisplayName("array item rules")
+    public void testArrayItemRules() throws Exception {
+      // wrapping.arrayWrap on the items (each with its ", "): up to 80 in
+      // total stay on one line whatever was written; 10+ items of up to 10
+      // fill after a leading break; an item of 30+, 4+ items, or an item
+      // written over several lines go one per line
+      doParityTest("array-item-rules");
+    }
   }
 
   @Nested

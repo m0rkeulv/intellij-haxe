@@ -25,9 +25,8 @@ import com.intellij.lang.ASTNode;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.RegionEnd;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
-import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeCallArgumentFill;
-import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeMultiVarSplit;
-import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeOperatorChainRules;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.*;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeArrayLiteralRules.Decision;
 import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeOperatorChainRules.Kind;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeTypeTag;
@@ -80,6 +79,7 @@ public class HaxeSpacingProcessor {
     HaxeSpacingProcessor::stackedCommentSpacing,
     HaxeSpacingProcessor::memberSpacing,
     HaxeSpacingProcessor::bodyPlacementSpacing,
+    HaxeSpacingProcessor::arrayItemSpacing,
     HaxeSpacingProcessor::bracketSpacing,
     HaxeSpacingProcessor::parenBeforeSpacing,
     HaxeSpacingProcessor::braceBeforeSpacing,
@@ -509,6 +509,43 @@ public class HaxeSpacingProcessor {
     if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE) return lineBreak();
     if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE) return joined();
     return null;
+  }
+
+  /**
+   * wrapping.arrayWrap on an array literal's items (HaxeArrayLiteralRules):
+   * one per line starts every item and the closing bracket on its own line,
+   * the leading-break fill only the first item and the bracket (the items
+   * then fill under their wrap), keep joins every written break. Comments
+   * keep their own spacing; null leaves the pair to the later phases.
+   */
+  @Nullable
+  private Spacing arrayItemSpacing(Pair pair) {
+    ASTNode literal = arrayLiteralOf();
+    if (literal == null || COMMENTS.contains(pair.type1()) || COMMENTS.contains(pair.type2())) return null;
+    Decision decision = HaxeArrayLiteralRules.decide(literal, common, haxe);
+    if (decision == Decision.NONE) return null;
+    // a comma stays with the item before it under every decision
+    if (pair.type2() == OCOMMA) return forcedGap(common.SPACE_BEFORE_COMMA);
+    boolean bracket = pair.type1() == PLBRACK || pair.type2() == PRBRACK;
+    return switch (decision) {
+      case ONE_PER_LINE -> lineBreak();
+      case FILL_AFTER_LEADING_BREAK -> bracket ? lineBreak() : null;
+      case KEEP -> bracket ? forcedGap(common.SPACE_WITHIN_BRACKETS) : forcedGap(common.SPACE_AFTER_COMMA);
+      case NONE -> null;
+    };
+  }
+
+  /** The array literal whose brackets or items the pair sits between; null elsewhere. */
+  @Nullable
+  private ASTNode arrayLiteralOf() {
+    if (elementType == ARRAY_LITERAL) return node;
+    ASTNode parent = node.getTreeParent();
+    boolean itemList = elementType == EXPRESSION_LIST && parent != null && parent.getElementType() == ARRAY_LITERAL;
+    return itemList ? parent : null;
+  }
+
+  private static Spacing forcedGap(boolean space) {
+    return space ? joined() : glued();
   }
 
   /** Square brackets, string interpolation braces and type-parameter angle brackets. */

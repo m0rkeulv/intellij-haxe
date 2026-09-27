@@ -31,14 +31,16 @@ final class HaxeWrapMemo {
   }
 
   /** Everything a wrap decision reads besides the node's subtree: the file's state and the rules' settings. */
-  record Inputs(long psiModificationCount, long fileStamp, int margin, int tabSize, int chainWrap,
-                Thresholds additive, Thresholds logic, int multiVarSplitWidth, int multiVarFillItemLength) {
+  record Inputs(long psiModificationCount, long fileStamp, int margin, int tabSize, int chainWrap, int arrayWrap,
+                Thresholds additive, Thresholds logic, HaxeArrayLiteralRules.Thresholds array,
+                int multiVarSplitWidth, int multiVarFillItemLength) {
 
     static Inputs of(@NotNull PsiFile file, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
       long psiModificationCount = PsiModificationTracker.getInstance(file.getProject()).getModificationCount();
       int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
       return new Inputs(psiModificationCount, file.getModificationStamp(), margin, HaxeJoinedLine.tabSize(common),
-                        common.METHOD_CALL_CHAIN_WRAP, Kind.ADDITIVE.thresholds(haxe), Kind.LOGIC.thresholds(haxe),
+                        common.METHOD_CALL_CHAIN_WRAP, common.ARRAY_INITIALIZER_WRAP,
+                        Kind.ADDITIVE.thresholds(haxe), Kind.LOGIC.thresholds(haxe), HaxeArrayLiteralRules.thresholds(haxe),
                         haxe.MULTI_VAR_SPLIT_WIDTH, haxe.MULTI_VAR_FILL_ITEM_LENGTH);
     }
   }

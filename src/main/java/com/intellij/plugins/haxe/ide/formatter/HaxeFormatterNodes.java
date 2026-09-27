@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_LIKE_OWNERS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.COMMENTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.WHITESPACES;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
@@ -137,10 +138,21 @@ public final class HaxeFormatterNodes {
     return body != null && !isEmptyBlock(body);
   }
 
-  /** The brace style puts a '{' on its own line: NEXT_LINE, NEXT_LINE_SHIFTED or NEXT_LINE_SHIFTED2. */
+  /** The statement brace style puts a '{' on its own line: NEXT_LINE, NEXT_LINE_SHIFTED or NEXT_LINE_SHIFTED2. */
   public static boolean nextLineBraces(@NotNull CommonCodeStyleSettings settings) {
-    return settings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE
-           || settings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE_SHIFTED
-           || settings.BRACE_STYLE == CommonCodeStyleSettings.NEXT_LINE_SHIFTED2;
+    return isNextLineStyle(settings.BRACE_STYLE);
+  }
+
+  /** The body's '{' goes on its own line under the style governing its owner: the method style for a function, the statement style otherwise. */
+  public static boolean nextLineBraces(@NotNull CommonCodeStyleSettings settings, @NotNull ASTNode body) {
+    ASTNode owner = body.getTreeParent();
+    boolean function = owner != null && FUNCTION_LIKE_OWNERS.contains(owner.getElementType());
+    return isNextLineStyle(function ? settings.METHOD_BRACE_STYLE : settings.BRACE_STYLE);
+  }
+
+  private static boolean isNextLineStyle(int braceStyle) {
+    return braceStyle == CommonCodeStyleSettings.NEXT_LINE
+           || braceStyle == CommonCodeStyleSettings.NEXT_LINE_SHIFTED
+           || braceStyle == CommonCodeStyleSettings.NEXT_LINE_SHIFTED2;
   }
 }

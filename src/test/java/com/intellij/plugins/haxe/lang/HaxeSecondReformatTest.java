@@ -26,8 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @DisplayName("Formatting: second reformat")
 public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
-  // a short array literal keeps its written layout on the first pass; call
-  // arguments do not - the profile's fill re-packs them on either pass
+  // a short array literal joins on either pass under the profile's item
+  // rules (the tool's noWrap for items totalling at most 80), as do call
+  // arguments under its fill; a kept break stays only where no rule decides
   private static final String WRAPPED_ARRAY_SOURCE = """
     class Main {
     	function draw(s:Style) {
@@ -54,25 +55,21 @@ public class HaxeSecondReformatTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("first pass keeps custom line breaks")
-  public void testFirstPassKeepsCustomLineBreaks() {
-    String formatted = reformat(HxformatDefaultProfile::apply, WRAPPED_ARRAY_SOURCE);
-
-    assertEquals(WRAPPED_ARRAY_SOURCE, formatted);
-  }
-
-  @Test
-  @DisplayName("second pass joins custom line breaks")
-  public void testSecondPassJoinsCustomLineBreaks() {
-    String formatted = reformat(HaxeSecondReformatTest::secondPass, WRAPPED_ARRAY_SOURCE);
-
-    assertEquals("""
+  @DisplayName("short array joins on either pass")
+  public void testShortArrayJoinsOnEitherPass() {
+    String joined = """
       class Main {
       	function draw(s:Style) {
       		var stops = [s.first, s.second, s.third];
       	}
       }
-      """, formatted);
+      """;
+
+    String firstPass = reformat(HxformatDefaultProfile::apply, WRAPPED_ARRAY_SOURCE);
+    String secondPass = reformat(HaxeSecondReformatTest::secondPass, WRAPPED_ARRAY_SOURCE);
+
+    assertEquals(joined, firstPass);
+    assertEquals(joined, secondPass);
   }
 
   @Test

@@ -26,6 +26,10 @@ import com.intellij.psi.formatter.WrappingUtil;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.Nullable;
 
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeArrayLiteralRules;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeArrayLiteralRules.Decision;
+
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.isChainLink;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.BRACKET_LITERALS;
@@ -42,13 +46,15 @@ public class HaxeWrappingProcessor {
   // chop-down wrapping only breaks EVERY element together when they share
   // the wrap object; these groups are owned by the construct's own processor
   // and reached from nested levels through the parent link
+  private final HaxeCodeStyleSettings myHaxe;
   private Wrap sharedItemWrap;
   private Wrap sharedChainWrap;
   private HaxeWrappingProcessor parentProcessor;
 
-  public HaxeWrappingProcessor(ASTNode node, CommonCodeStyleSettings settings) {
+  public HaxeWrappingProcessor(ASTNode node, CommonCodeStyleSettings settings, HaxeCodeStyleSettings haxe) {
     myNode = node;
     mySettings = settings;
+    myHaxe = haxe;
   }
 
   void setParentProcessor(@Nullable HaxeWrappingProcessor parent) {
@@ -93,15 +99,27 @@ public class HaxeWrappingProcessor {
                            || elementType == MAP_INITIALIZER_EXPRESSION_LIST;
     if (literalItems) {
       HaxeWrappingProcessor literalProcessor = parentProcessor != null ? parentProcessor : this;
-      return literalProcessor.sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
+      return literalProcessor.sharedItemWrap(literalItemWrap(listParent));
     }
     boolean bracketLiteral = BRACKET_LITERALS.contains(elementType);
     boolean objectItem = elementType == OBJECT_LITERAL && childType == OBJECT_LITERAL_ELEMENT;
     boolean literalCloser = (bracketLiteral && childType == PRBRACK) || (elementType == OBJECT_LITERAL && childType == PRCURLY);
-    if (objectItem || literalCloser) return sharedItemWrap(mySettings.ARRAY_INITIALIZER_WRAP);
+    if (objectItem || literalCloser) return sharedItemWrap(literalItemWrap(myNode));
     boolean itemList = childType == EXPRESSION_LIST || childType == MAP_INITIALIZER_EXPRESSION_LIST;
     if (bracketLiteral && itemList) return Wrap.createWrap(WrapType.NONE, true);
     return null;
+  }
+
+  /**
+   * The wrap setting a literal's items and closer share: an array literal
+   * the item rules fill after a leading break wraps as needed, so the fill
+   * breaks where the margin says; any other literal follows the array wrap setting.
+   */
+  private int literalItemWrap(@Nullable ASTNode literal) {
+    boolean fills = literal != null
+                    && literal.getElementType() == ARRAY_LITERAL
+                    && HaxeArrayLiteralRules.decide(literal, mySettings, myHaxe) == Decision.FILL_AFTER_LEADING_BREAK;
+    return fills ? CommonCodeStyleSettings.WRAP_AS_NEEDED : mySettings.ARRAY_INITIALIZER_WRAP;
   }
 
   /**

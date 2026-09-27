@@ -16,9 +16,10 @@ import java.util.function.ToIntFunction;
 
 /**
  * The Wrap Rules tab of the Haxe code style: the numeric thresholds of the
- * operator chain and multi-var rules (hxformat's wrapping.opBoolChain,
- * opAddSubChain and multiVar). They are integers, which the Wrapping tab's
- * option table cannot host - it renders booleans and choices only.
+ * operator chain, multi-var and array literal rules (hxformat's
+ * wrapping.opBoolChain, opAddSubChain, multiVar and arrayWrap). They are
+ * integers, which the Wrapping tab's option table cannot host - it renders
+ * booleans and choices only.
  */
 public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
@@ -41,10 +42,16 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
   private final Option addTotalLength = new Option(h -> h.ADD_CHAIN_SPLIT_TOTAL_LENGTH, (h, v) -> h.ADD_CHAIN_SPLIT_TOTAL_LENGTH = v);
   private final Option multiVarSplitWidth = new Option(h -> h.MULTI_VAR_SPLIT_WIDTH, (h, v) -> h.MULTI_VAR_SPLIT_WIDTH = v);
   private final Option multiVarFillItem = new Option(h -> h.MULTI_VAR_FILL_ITEM_LENGTH, (h, v) -> h.MULTI_VAR_FILL_ITEM_LENGTH = v);
+  private final Option arrayKeepTotal = new Option(h -> h.ARRAY_KEEP_TOTAL_LENGTH, (h, v) -> h.ARRAY_KEEP_TOTAL_LENGTH = v);
+  private final Option arrayChopItemLength = new Option(h -> h.ARRAY_CHOP_ITEM_LENGTH, (h, v) -> h.ARRAY_CHOP_ITEM_LENGTH = v);
+  private final Option arrayChopItemCount = new Option(h -> h.ARRAY_CHOP_ITEM_COUNT, (h, v) -> h.ARRAY_CHOP_ITEM_COUNT = v);
+  private final Option arrayFillItemLength = new Option(h -> h.ARRAY_FILL_ITEM_LENGTH, (h, v) -> h.ARRAY_FILL_ITEM_LENGTH = v);
+  private final Option arrayFillItemCount = new Option(h -> h.ARRAY_FILL_ITEM_COUNT, (h, v) -> h.ARRAY_FILL_ITEM_COUNT = v);
   private final List<Option> options = List.of(
     boolLineLength, boolItemLength, boolItemCount, boolTotalLength,
     addLineLength, addItemLength, addItemCount, addTotalLength,
-    multiVarSplitWidth, multiVarFillItem);
+    multiVarSplitWidth, multiVarFillItem,
+    arrayKeepTotal, arrayChopItemLength, arrayChopItemCount, arrayFillItemLength, arrayFillItemCount);
 
   protected HaxeWrapRulesCodeStylePanel(CodeStyleSettings settings) {
     super(settings);
@@ -62,6 +69,12 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
       .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.title")))
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.split.width"), multiVarSplitWidth.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.fill.item"), multiVarFillItem.field())
+      .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.title")))
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.keep.total"), arrayKeepTotal.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.length"), arrayChopItemLength.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.count"), arrayChopItemCount.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.length"), arrayFillItemLength.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.count"), arrayFillItemCount.field())
       .getPanel();
     initPanel(form);
     options.forEach(option -> watch(option.field()));
@@ -117,6 +130,12 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
             var manyTerms = short1 + short2 + short3 + short4 + short5 + short6 + short7 + short8 + longDeclaratorOne;
             var longTerm = longTermOnALongLine(longDeclaratorOne, longDeclaratorTwo) + fewTerms + manyTerms;
             var longLineOfTerms = longTermOnALongLine(longDeclaratorOne, longDeclaratorTwo) + longTermOnALongLine(longDeclaratorThree, longDeclaratorFour) + fewTerms;
+
+            // array literals: a short list stays, many or long items go one per line, tiny items fill after a leading break
+            var shortList = [short1, short2, short3, short4];
+            var manyItems = [longDeclaratorOne, longDeclaratorTwo, longDeclaratorThree, longDeclaratorFour, longDeclaratorOne, longDeclaratorTwo];
+            var longItem = [isLongOperandOnALongLine(longDeclaratorOne, longDeclaratorTwo), fewOperands, manyOperands];
+            var tinyItems = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40];
         }
 
         static function isLongOperandOnALongLine(width:Int, height:Int):Bool {

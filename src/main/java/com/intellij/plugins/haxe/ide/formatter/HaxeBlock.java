@@ -90,7 +90,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     myIndentProcessor = new HaxeIndentProcessor(common, haxe);
     mySpacingProcessor = new HaxeSpacingProcessor(node, common, haxe);
-    myWrappingProcessor = new HaxeWrappingProcessor(node, common);
+    myWrappingProcessor = new HaxeWrappingProcessor(node, common, haxe);
     myAlignmentProcessor = new HaxeAlignmentProcessor(node, common);
     myIndent = indent != null ? indent : myIndentProcessor.getChildIndent(myNode);
   }

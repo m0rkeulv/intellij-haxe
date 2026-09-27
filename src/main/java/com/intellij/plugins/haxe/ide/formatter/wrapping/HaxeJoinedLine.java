@@ -103,7 +103,7 @@ final class HaxeJoinedLine {
    * character, the margin and whether method chains chop.
    */
   record Context(CharSequence text, int tabSize, int margin, boolean chainsChop,
-                 ASTNode statement, int lineStart, int indent) {
+                 ASTNode statement, int lineStart, int indent, CommonCodeStyleSettings common) {
 
     @Nullable
     static Context of(@NotNull ASTNode node, @NotNull CommonCodeStyleSettings common) {
@@ -119,14 +119,26 @@ final class HaxeJoinedLine {
       String lineIndent = HaxeIndentText.lineIndentAt(text, statement.getStartOffset());
       int lineStart = HaxeIndentText.lineStartOffset(text, statement.getStartOffset()) + lineIndent.length();
       int indent = HaxeIndentText.indentWidth(lineIndent, tabSize);
-      return new Context(text, tabSize, margin, chainsChop, statement, lineStart, indent);
+      return new Context(text, tabSize, margin, chainsChop, statement, lineStart, indent, common);
     }
 
-    /** The statement's first line: up to its first block body, else its end. */
+    /**
+     * The statement's first line: up to its first block body, else its end.
+     * The body's brace prints on the line only under an end-of-line brace
+     * style; a next-line style ends the line at the last character before it.
+     */
     HaxeJoinedLine statementLine() {
-      int statementEnd = statement.getTextRange().getEndOffset();
-      int end = firstBodyStart(statement);
-      return new HaxeJoinedLine(text, lineStart, end, indent, end < statementEnd);
+      ASTNode body = firstDescendant(statement, BLOCK_STATEMENT);
+      if (body == null) return new HaxeJoinedLine(text, lineStart, statement.getTextRange().getEndOffset(), indent, false);
+      boolean braceOnLine = !HaxeFormatterNodes.nextLineBraces(common, body);
+      int end = braceOnLine ? body.getStartOffset() : endBeforeWhitespace(body.getStartOffset());
+      return new HaxeJoinedLine(text, lineStart, end, indent, braceOnLine);
+    }
+
+    private int endBeforeWhitespace(int offset) {
+      int end = offset;
+      while (end > lineStart && Character.isWhitespace(text.charAt(end - 1))) end--;
+      return end;
     }
 
     /** A declarator's line once its multi-var splits one per line: the first keeps the statement's start, later ones step in. */
@@ -163,12 +175,6 @@ final class HaxeJoinedLine {
       statement = statement.getTreeParent();
     }
     return statement;
-  }
-
-  /** Where the statement's first line ends when joined: at its first block body, else at its end. */
-  private static int firstBodyStart(ASTNode statement) {
-    ASTNode body = firstDescendant(statement, BLOCK_STATEMENT);
-    return body == null ? statement.getTextRange().getEndOffset() : body.getStartOffset();
   }
 
   @Nullable
