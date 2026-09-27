@@ -75,6 +75,7 @@ public class HxformatDefaultsTest extends HaxeLightFixtureTestCase {
     assertEquals(HxformatDefaults.BLANK_LINES_BETWEEN_TYPES, emptyLines.get("betweenTypes").asInt());
     assertEquals(HxformatDefaults.BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES, emptyLines.get("betweenSingleLineTypes").asInt());
     assertEquals(HxformatDefaults.BLANK_LINES_AFTER_FILE_HEADER, emptyLines.get("afterFileHeaderComment").asInt());
+    assertEquals(HxformatDefaults.BLANK_LINES_BETWEEN_MULTILINE_COMMENTS, emptyLines.get("betweenMultilineComments").asInt());
     assertEquals("remove", emptyLines.get("afterLeftCurly").asText());
     assertEquals("remove", emptyLines.get("beforeRightCurly").asText());
     assertEquals("one", emptyLines.get("beforeDocCommentEmptyLines").asText());

@@ -76,6 +76,7 @@ public class HaxeSpacingProcessor {
     HaxeSpacingProcessor::typeDeclarationSpacing,
     HaxeSpacingProcessor::typeBodyBraceSpacing,
     HaxeSpacingProcessor::caseBodySpacing,
+    HaxeSpacingProcessor::stackedCommentSpacing,
     HaxeSpacingProcessor::memberSpacing,
     HaxeSpacingProcessor::bodyPlacementSpacing,
     HaxeSpacingProcessor::bracketSpacing,
@@ -383,19 +384,29 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * A case's body: sameLine.caseBody=Next breaks an inline body onto its
-   * own line - except in an EXPRESSION switch (expressionCase=keep). The
-   * written shape otherwise keeps the case-colon blank cap
-   * (emptyLines.beforeBlocks); blanks BETWEEN cases keep the in-code cap.
+   * A case's body under sameLine.caseBody - or expressionCase in a switch
+   * used as a VALUE: Next breaks an inline body onto its own line, Same
+   * joins it, Keep leaves the written line but always spaces the colon
+   * (caseColonPolicy=onlyAfter); the case-colon blank cap
+   * (emptyLines.beforeBlocks) applies, blanks BETWEEN cases keep the
+   * in-code cap.
    */
   @Nullable
   private Spacing caseBodySpacing(Pair pair) {
     boolean caseBody = (elementType == SWITCH_CASE || elementType == DEFAULT_CASE) && pair.type2() == SWITCH_CASE_BLOCK;
     if (!caseBody) return null;
-    int placement = isExpressionSwitchCase(node) ? HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP : haxe.CASE_BODY_PLACEMENT;
+    int setting = isExpressionSwitchCase(node) ? haxe.VALUE_CASE_BODY_PLACEMENT : haxe.CASE_BODY_PLACEMENT;
+    int placement = resolvedBodyPlacement(setting);
     if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE) return blankLines(0, false, haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON);
     if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE) return joined();
-    return keepCappedBlanks(haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON);
+    return Spacing.createSpacing(1, 1, 0, true, haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON);
+  }
+
+  /** Two block comments stacked on their own lines: emptyLines.betweenMultilineComments caps the blanks between them. */
+  @Nullable
+  private Spacing stackedCommentSpacing(Pair pair) {
+    boolean stacked = pair.type1() == MML_COMMENT && pair.type2() == MML_COMMENT;
+    return stacked ? keepCappedBlanks(haxe.KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS) : null;
   }
 
   /** Blank lines between a type's members, a comment above a member resolved to that member. */
@@ -471,6 +482,8 @@ public class HaxeSpacingProcessor {
     // option allows it (class bodies excluded - smart enter owns their caret line)
     boolean emptyBody = pair.type1() == PLCURLY && pair.type2() == PRCURLY && !isClassBodyType(elementType);
     if (emptyBody && emptyBodyStaysInline(parentType)) return glued();
+    Spacing valueExpression = valueExpressionSpacing(pair);
+    if (valueExpression != null) return valueExpression;
     Spacing nonBlockBody = nonBlockBodySpacing(pair);
     if (nonBlockBody != null) return nonBlockBody;
     // a NAMED function's non-block body (function f() return x;) moves to
@@ -731,10 +744,6 @@ public class HaxeSpacingProcessor {
   private Spacing keywordSpacing(Pair pair) {
     IElementType type1 = pair.type1();
     IElementType type2 = pair.type2();
-    // a value-position if/try keeps its keywords as written
-    // (expressionIf/expressionTry=Same)
-    boolean keywordInValue = (type2 == ELSE_STATEMENT || type2 == CATCH_STATEMENT) && isExpressionPosition(node);
-    if (keywordInValue) return spaceIf(type2 == ELSE_STATEMENT ? common.SPACE_BEFORE_ELSE_KEYWORD : common.SPACE_BEFORE_CATCH_KEYWORD);
     if (type2 == ELSE_STATEMENT) {
       return keywordPlacement(common.SPACE_BEFORE_ELSE_KEYWORD, common.ELSE_ON_NEW_LINE, pair.node1(), haxe.IF_BODY_PLACEMENT);
     }
@@ -810,20 +819,89 @@ public class HaxeSpacingProcessor {
   }
 
   /**
+   * An if/try used as a VALUE ({@code var x = if (c) a else b;}) under its
+   * own placement: Same joins condition, bodies and keywords onto one line,
+   * Keep re-breaks exactly where the source broke (a forced break, so a
+   * pass that drops custom line breaks never pulls an else or catch up),
+   * Next hands the pieces to the statement rules. A block body keeps the
+   * brace rules, and a keyword after its closing brace follows the
+   * statement rules unless kept.
+   */
+  @Nullable
+  private Spacing valueExpressionSpacing(Pair pair) {
+    int placement = valueExpressionPlacement(pair);
+    if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE) return joined();
+    if (placement == HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP) return writtenBreakBefore(pair.node2()) ? lineBreak() : joined();
+    return null;
+  }
+
+  /**
+   * The placement of the pair as a piece of a value-position if/try -
+   * condition to body, body to else/catch, keyword to body; NEXT_LINE when
+   * the pair is no such piece or the policy leaves it to the statement rules.
+   */
+  private int valueExpressionPlacement(Pair pair) {
+    IElementType type1 = pair.type1();
+    IElementType type2 = pair.type2();
+    if (elementType == IF_STATEMENT) {
+      boolean conditionThenBody = type1 == GUARD && type2 == GUARDED_STATEMENT && pair.typeType2() != BLOCK_STATEMENT;
+      boolean bodyThenElse = type1 == GUARDED_STATEMENT && type2 == ELSE_STATEMENT;
+      if (conditionThenBody) return valuePlacement(node, haxe.VALUE_IF_BODY_PLACEMENT);
+      if (bodyThenElse) return keywordAfterBodyPlacement(pair.node1(), valuePlacement(node, haxe.VALUE_IF_BODY_PLACEMENT));
+    }
+    if (elementType == ELSE_STATEMENT && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT) {
+      return valuePlacement(node.getTreeParent(), haxe.VALUE_IF_BODY_PLACEMENT);
+    }
+    if (elementType == TRY_STATEMENT) {
+      boolean tryThenBody = type1 == KTRY && type2 != BLOCK_STATEMENT && type2 != CATCH_STATEMENT;
+      if (tryThenBody) return valuePlacement(node, haxe.VALUE_TRY_BODY_PLACEMENT);
+      if (type2 == CATCH_STATEMENT) return keywordAfterBodyPlacement(pair.node1(), valuePlacement(node, haxe.VALUE_TRY_BODY_PLACEMENT));
+    }
+    if (elementType == CATCH_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT) {
+      return valuePlacement(node.getTreeParent(), haxe.VALUE_TRY_BODY_PLACEMENT);
+    }
+    return HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+  }
+
+  /** The resolved value placement when the statement sits in value position, else NEXT_LINE (the statement rules). */
+  private int valuePlacement(ASTNode statement, int setting) {
+    return isExpressionPosition(statement) ? resolvedBodyPlacement(setting) : HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+  }
+
+  /** An else/catch after a block body joins only under Keep; the brace policies decide otherwise. */
+  private static int keywordAfterBodyPlacement(ASTNode body, int placement) {
+    boolean afterBlock = endsWithRightCurly(body);
+    return afterBlock && placement == HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE
+           ? HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE
+           : placement;
+  }
+
+  /** The statement is a value if/try whose pieces the value placement lays out itself. */
+  private boolean isValueExpression(ASTNode statement, int setting) {
+    return valuePlacement(statement, setting) != HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+  }
+
+  /** The whitespace before the node carries a line break in the source. */
+  private static boolean writtenBreakBefore(ASTNode node) {
+    ASTNode previous = node.getTreePrev();
+    return previous != null && WHITESPACES.contains(previous.getElementType()) && previous.textContains('\n');
+  }
+
+  /**
    * The configured placement for a (header, non-block body) pair - or KEEP
-   * when the pair is no such thing. Value-position ifs/tries are exempt
-   * (expressionIf/expressionTry=Same keeps them as written).
+   * when the pair is no such thing. The pieces of a value if/try laid out
+   * by the value placement are exempt.
    */
   private int nonBlockBodyPlacement(Pair pair) {
     IElementType type1 = pair.type1();
     IElementType type2 = pair.type2();
     IElementType typeType2 = pair.typeType2();
     if (elementType == IF_STATEMENT && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT
-        && !isExpressionPosition(node)) {
+        && !isValueExpression(node, haxe.VALUE_IF_BODY_PLACEMENT)) {
       return resolvedBodyPlacement(haxe.IF_BODY_PLACEMENT);
     }
     if (elementType == ELSE_STATEMENT && type1 == KELSE && type2 != BLOCK_STATEMENT && type2 != IF_STATEMENT
-        && !isExpressionPosition(node.getTreeParent())) {
+        && !isValueExpression(node.getTreeParent(), haxe.VALUE_IF_BODY_PLACEMENT)) {
       return resolvedBodyPlacement(haxe.ELSE_BODY_PLACEMENT);
     }
     if (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT) {
@@ -833,11 +911,11 @@ public class HaxeSpacingProcessor {
       return resolvedBodyPlacement(haxe.FOR_BODY_PLACEMENT);
     }
     if (elementType == TRY_STATEMENT && type1 == KTRY && type2 != BLOCK_STATEMENT && type2 != CATCH_STATEMENT
-        && !isExpressionPosition(node)) {
+        && !isValueExpression(node, haxe.VALUE_TRY_BODY_PLACEMENT)) {
       return resolvedBodyPlacement(haxe.TRY_BODY_PLACEMENT);
     }
     if (elementType == CATCH_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT
-        && !isExpressionPosition(node.getTreeParent())) {
+        && !isValueExpression(node.getTreeParent(), haxe.VALUE_TRY_BODY_PLACEMENT)) {
       return resolvedBodyPlacement(haxe.CATCH_BODY_PLACEMENT);
     }
     return HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP;
@@ -1114,9 +1192,9 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * An if/try used as a VALUE ({@code var x = if (c) 1 else 2;}) rather than
-   * as a statement - haxe-formatter's expressionIf/expressionTry=Same keeps
-   * those on one line regardless of the statement-body policies.
+   * An if/try/switch used as a VALUE ({@code var x = if (c) 1 else 2;})
+   * rather than as a statement - it follows the value placements, not the
+   * statement-body policies.
    */
   private static boolean isExpressionPosition(ASTNode statement) {
     ASTNode parent = statement.getTreeParent();

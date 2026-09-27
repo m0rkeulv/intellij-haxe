@@ -245,6 +245,50 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("value if placement")
+  public void testValueIfPlacement() {
+    // KEEP (the plain default) re-breaks a value if exactly where the source
+    // broke - a forced break, so even a pass that drops custom line breaks
+    // never pulls the else up - and spaces a snug body; SAME_LINE joins the
+    // whole value onto one line
+    String source = """
+      class Main {
+      	static function main() {
+      		var mode = if (true)
+      			"debug"
+      		else
+      			"release";
+      		var a = if (true)1 else 2;
+      	}
+      }
+      """;
+
+    String kept = reformat(commonSettings(common -> common.KEEP_LINE_BREAKS = false), source);
+    assertEquals("""
+      class Main {
+          static function main() {
+              var mode = if (true)
+                  "debug"
+              else
+                  "release";
+              var a = if (true) 1 else 2;
+          }
+      }
+      """, kept);
+
+    Consumer<HaxeCodeStyleSettings> sameLine = haxe -> haxe.VALUE_IF_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE;
+    String joined = reformat(haxeSettings(sameLine), source);
+    assertEquals("""
+      class Main {
+          static function main() {
+              var mode = if (true) "debug" else "release";
+              var a = if (true) 1 else 2;
+          }
+      }
+      """, joined);
+  }
+
+  @Test
   @DisplayName("body placement per construct")
   public void testBodyPlacementPerConstruct() {
     // each construct's non-block body follows its own placement: SAME_LINE

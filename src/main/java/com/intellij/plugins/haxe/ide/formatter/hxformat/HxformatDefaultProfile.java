@@ -137,8 +137,12 @@ public final class HxformatDefaultProfile {
     haxe.DO_WHILE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
     haxe.TRY_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
     haxe.CATCH_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
-    // sameLine.caseBody=Next (expression switches keep, per expressionCase)
+    // sameLine.caseBody=Next
     haxe.CASE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
+    // sameLine.expressionIf/expressionTry=Same, expressionCase=Keep
+    haxe.VALUE_IF_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE;
+    haxe.VALUE_TRY_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE;
+    haxe.VALUE_CASE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP;
     // sameLine.functionBody=Next (anonFunctionBody=Same has no flag - always inline)
     haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
     // sameLine.returnBodySingleLine - a broken return re-joins its value
@@ -242,6 +246,8 @@ public final class HxformatDefaultProfile {
     // emptyLines.afterLeftCurly=Remove, beforeBlocks=Remove (the case-body edge)
     haxe.KEEP_BLANK_LINES_AFTER_LBRACE = HxformatDefaults.BLANK_LINES_AT_BLOCK_EDGES;
     haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = HxformatDefaults.BLANK_LINES_AT_BLOCK_EDGES;
+    // emptyLines.betweenMultilineComments
+    haxe.KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS = HxformatDefaults.BLANK_LINES_BETWEEN_MULTILINE_COMMENTS;
     // emptyLines.importAndUsing.beforeType, betweenSingleLineTypes,
     // importAndUsing.betweenImports, afterFileHeaderComment
     haxe.MINIMUM_BLANK_LINES_AFTER_USING = HxformatDefaults.BLANK_LINES_AFTER_IMPORTS;

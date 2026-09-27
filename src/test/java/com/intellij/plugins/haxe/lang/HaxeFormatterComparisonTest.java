@@ -211,13 +211,10 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     @Test
     @DisplayName("expression same line")
     public void testExpressionSameLine() throws Exception {
-      // expressionIf/expressionTry=Same: a value-position if or try stays on
-      // its line whatever the statement-body policies say, spacing and
-      // indentation still normalized; an expression switch keeps its shape.
-      // TODO: the tool also re-JOINS a value-position if/try written across
-      //       lines (the engine keeps such written breaks) and inserts the
-      //       missing space between a value if/catch header and its body
-      //       (")1") and after an inline case colon (": 10")
+      // expressionIf/expressionTry=Same: a value-position if or try joins
+      // onto one line whatever the statement-body policies say - written
+      // breaks and missing spaces (")1", ")-1") included; an expression
+      // switch keeps its case lines (expressionCase=Keep) with the colon spaced
       doParityTest("expression-same-line");
     }
 
@@ -460,9 +457,8 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     public void testCommentBlanks() throws Exception {
       // comments stacked before a member stay snug and take the member's
       // indent; the blanks around them follow the member rules (a run caps
-      // at one, the function gap is inserted).
-      // TODO: emptyLines.betweenMultilineComments=0 also REMOVES a written
-      //       blank between two stacked comments; the engine keeps it
+      // at one, the function gap is inserted) and a blank BETWEEN two
+      // stacked block comments goes (betweenMultilineComments=0)
       doParityTest("comment-blanks");
     }
 

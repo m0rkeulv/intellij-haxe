@@ -60,6 +60,9 @@ public final class HxformatDefaults {
   // emptyLines.afterLeftCurly / beforeRightCurly / beforeBlocks = Remove
   public static final int BLANK_LINES_AT_BLOCK_EDGES = 0;
 
+  // emptyLines.betweenMultilineComments
+  public static final int BLANK_LINES_BETWEEN_MULTILINE_COMMENTS = 0;
+
   private HxformatDefaults() {
   }
 }

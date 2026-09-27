@@ -74,9 +74,6 @@ public final class HxformatJsonMapper {
     "lineEnds.metadataOther", "none",
     // sameLine
     "sameLine.anonFunctionBody", "same",
-    "sameLine.expressionIf", "same",
-    "sameLine.expressionTry", "same",
-    "sameLine.expressionCase", "keep",
     "sameLine.comprehensionFor", "same",
     "sameLine.untypedBody", "same",
     "sameLine.returnBody", "same",
@@ -121,7 +118,6 @@ public final class HxformatJsonMapper {
     "emptyLines.afterBlocks", "remove",
     "emptyLines.finalNewline", "true",
     "emptyLines.beforePackage", "0",
-    "emptyLines.betweenMultilineComments", "0",
     "emptyLines.lineCommentsBetweenTypes", "keep",
     "emptyLines.lineCommentsBetweenFunctions", "keep",
     "emptyLines.importAndUsing.beforeUsing", "1");
@@ -348,6 +344,9 @@ public final class HxformatJsonMapper {
     applyEquals("sameLine.functionBody", "next", value -> haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = value);
     applyEquals("sameLine.returnBodySingleLine", "same", value -> haxe.RETURN_VALUE_ON_SAME_LINE = value);
     bodyPlacement("sameLine.caseBody", value -> haxe.CASE_BODY_PLACEMENT = value);
+    bodyPlacement("sameLine.expressionIf", value -> haxe.VALUE_IF_BODY_PLACEMENT = value);
+    bodyPlacement("sameLine.expressionTry", value -> haxe.VALUE_TRY_BODY_PLACEMENT = value);
+    bodyPlacement("sameLine.expressionCase", value -> haxe.VALUE_CASE_BODY_PLACEMENT = value);
   }
 
   private void applyWhitespace() {
@@ -526,6 +525,8 @@ public final class HxformatJsonMapper {
     if (beforeBlocks != null) {
       haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = "remove".equals(beforeBlocks) ? 0 : common.KEEP_BLANK_LINES_IN_CODE;
     }
+    // the tool's exact count between stacked block comments maps onto a cap
+    applyInt("emptyLines.betweenMultilineComments", value -> haxe.KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS = value);
   }
 
   private void applyImportBlankLines() {

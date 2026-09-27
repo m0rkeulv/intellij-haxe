@@ -2,6 +2,7 @@ class Main {
 /*
  * First note.
  */
+
 			/*
 			 * Second note.
 			 */
@@ -14,6 +15,8 @@ class Main {
 	static var tally:Int = 1;
 	static function main() {
 	/* inline one */
+
+
 			/* inline two */
 		trace(counter + tally);
 	}

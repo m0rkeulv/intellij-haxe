@@ -80,6 +80,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     new CustomOption("KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES", "haxe.codestyle.blank.lines.between.single.line.types", BLANK_LINES_KEEP),
     new CustomOption("KEEP_BLANK_LINES_AFTER_LBRACE", "haxe.codestyle.blank.lines.keep.after.lbrace", BLANK_LINES_KEEP),
     new CustomOption("KEEP_BLANK_LINES_AFTER_CASE_COLON", "haxe.codestyle.blank.lines.keep.after.case.colon", BLANK_LINES_KEEP),
+    new CustomOption("KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS", "haxe.codestyle.blank.lines.keep.between.multiline.comments", BLANK_LINES_KEEP),
     new CustomOption("BLANK_LINES_BETWEEN_FIELD_GROUPS", "haxe.codestyle.blank.lines.between.field.groups", BLANK_LINES),
     new CustomOption("BLANK_LINES_BEFORE_FIELD_DOC_COMMENT", "haxe.codestyle.blank.lines.before.field.doc", BLANK_LINES),
     new CustomOption("BLANK_LINES_AFTER_DOCUMENTED_FIELD", "haxe.codestyle.blank.lines.after.documented.field", BLANK_LINES));
@@ -314,7 +315,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE,
       HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE,
       HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP};
-    for (String construct : List.of("IF", "ELSE", "FOR", "WHILE", "DO_WHILE", "TRY", "CATCH", "CASE")) {
+    List<String> constructs = List.of("IF", "ELSE", "FOR", "WHILE", "DO_WHILE", "TRY", "CATCH", "CASE", "VALUE_IF", "VALUE_TRY", "VALUE_CASE");
+    for (String construct : constructs) {
       String title = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.body." + construct.toLowerCase(Locale.ROOT));
       consumer.showCustomOption(HaxeCodeStyleSettings.class, construct + "_BODY_PLACEMENT", title, group, names, values);
     }

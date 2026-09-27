@@ -93,6 +93,15 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   // a case's body (hxformat's sameLine.caseBody) has no common-checkbox
   // equivalent: the plain default keeps the written shape
   public int CASE_BODY_PLACEMENT = BODY_PLACEMENT_KEEP;
+  // the pieces of an if/try used as a VALUE (var x = if (c) a else b;) and
+  // the case bodies of a value switch (hxformat's sameLine.expressionIf,
+  // expressionTry, expressionCase): SAME_LINE joins condition, bodies and
+  // keywords onto one line, KEEP breaks exactly where the source did (an
+  // else or catch written on its own line stays there), NEXT_LINE applies
+  // the statement placements above
+  public int VALUE_IF_BODY_PLACEMENT = BODY_PLACEMENT_KEEP;
+  public int VALUE_TRY_BODY_PLACEMENT = BODY_PLACEMENT_KEEP;
+  public int VALUE_CASE_BODY_PLACEMENT = BODY_PLACEMENT_KEEP;
 
   // counts BLANK LINES (like the platform's BLANK_LINES_* options)
   public int MINIMUM_BLANK_LINES_AFTER_USING = 1;
@@ -111,6 +120,9 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   // keep cap between a case's ':' and its first statement (hxformat's
   // emptyLines.beforeBlocks); blanks BETWEEN cases follow the in-code cap
   public int KEEP_BLANK_LINES_AFTER_CASE_COLON = 2;
+  // keep cap between two block comments stacked on their own lines
+  // (hxformat's emptyLines.betweenMultilineComments); 0 pulls them snug
+  public int KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS = 2;
   // blank lines where a var block's group changes - staticness or
   // visibility (hxformat's classEmptyLines.afterStaticVars and
   // afterPrivateVars); 0 keeps the plain BLANK_LINES_AROUND_FIELD gap
