@@ -38,9 +38,12 @@ public final class HxformatDefaults {
   public static final int MULTI_VAR_LINE_LENGTH = 80;
   public static final int MULTI_VAR_FILL_ITEM_LENGTH = 15;
 
-  // wrapping.arrayWrap rules: totalItemLength <= 80 -> no wrap; allItemLengths <= 10 + itemCount >= 10
-  // -> fill after a leading break; anyItemLength >= 30 or itemCount >= 4 -> one per line
+  // wrapping.arrayWrap rules: totalItemLength <= 80 -> no wrap; equalItemLengths + allItemLengths <= 30
+  // + itemCount >= 10, or allItemLengths <= 10 + itemCount >= 10 -> fill after a leading break;
+  // anyItemLength >= 30 or itemCount >= 4 -> one per line
   public static final int ARRAY_KEEP_TOTAL_LENGTH = 80;
+  public static final int ARRAY_FILL_EQUAL_ITEM_LENGTH = 30;
+  public static final int ARRAY_FILL_EQUAL_ITEM_COUNT = 10;
   public static final int ARRAY_FILL_ITEM_LENGTH = 10;
   public static final int ARRAY_FILL_ITEM_COUNT = 10;
   public static final int ARRAY_CHOP_ITEM_LENGTH = 30;

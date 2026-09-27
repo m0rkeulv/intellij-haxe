@@ -22,6 +22,9 @@ class Main {
 		// ten or more items of up to 10 columns each: a leading break, then the line fills
 		var tinyItems = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 250, 260, 270, 280, 290, 300, 310, 320, 330, 340, 350, 360, 370, 380, 390, 400];
 
+		// ten or more items of one length up to 30 columns each: a leading break, then the line fills
+		var equalItems = ["item number 01", "item number 02", "item number 03", "item number 04", "item number 05", "item number 06", "item number 07", "item number 08", "item number 09", "item number 10"];
+
 		// an item written over several lines: one per line
 		var withFunctions = [function() {
 			trace("one");

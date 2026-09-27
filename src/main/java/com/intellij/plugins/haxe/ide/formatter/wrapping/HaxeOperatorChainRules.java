@@ -10,6 +10,7 @@ import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -66,9 +67,18 @@ public final class HaxeOperatorChainRules {
     }
 
     /** The node is one of the kind's operator elements (the sign wrapped in its operator element, or bare). */
-    boolean isOperator(ASTNode node) {
+    public boolean isOperator(@NotNull ASTNode node) {
       ASTNode first = node.getFirstChildNode();
       return operators.contains(first == null ? node.getElementType() : first.getElementType());
+    }
+
+    /** The kind whose chain the node is a level of; null for any other node. */
+    @Nullable
+    public static Kind ofChainLevel(@NotNull ASTNode node) {
+      for (Kind kind : values()) {
+        if (kind.chainTypes.contains(node.getElementType())) return kind;
+      }
+      return null;
     }
 
     Thresholds thresholds(HaxeCodeStyleSettings haxe) {

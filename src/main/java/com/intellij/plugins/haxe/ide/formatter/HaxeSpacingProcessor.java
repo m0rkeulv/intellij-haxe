@@ -515,8 +515,9 @@ public class HaxeSpacingProcessor {
    * wrapping.arrayWrap on an array literal's items (HaxeArrayLiteralRules):
    * one per line starts every item and the closing bracket on its own line,
    * the leading-break fill only the first item and the bracket (the items
-   * then fill under their wrap), keep joins every written break. Comments
-   * keep their own spacing; null leaves the pair to the later phases.
+   * then re-pack under their wrap, written breaks gone), keep joins every
+   * written break. Comments keep their own spacing; null leaves the pair to
+   * the later phases.
    */
   @Nullable
   private Spacing arrayItemSpacing(Pair pair) {
@@ -529,7 +530,7 @@ public class HaxeSpacingProcessor {
     boolean bracket = pair.type1() == PLBRACK || pair.type2() == PRBRACK;
     return switch (decision) {
       case ONE_PER_LINE -> lineBreak();
-      case FILL_AFTER_LEADING_BREAK -> bracket ? lineBreak() : null;
+      case FILL_AFTER_LEADING_BREAK -> bracket ? lineBreak() : forcedGap(common.SPACE_AFTER_COMMA);
       case KEEP -> bracket ? forcedGap(common.SPACE_WITHIN_BRACKETS) : forcedGap(common.SPACE_AFTER_COMMA);
       case NONE -> null;
     };

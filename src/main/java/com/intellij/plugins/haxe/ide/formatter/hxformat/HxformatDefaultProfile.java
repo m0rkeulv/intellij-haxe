@@ -106,8 +106,10 @@ public final class HxformatDefaultProfile {
     // is not reproduced)
     haxe.MULTI_VAR_SPLIT_WIDTH = HxformatDefaults.MULTI_VAR_LINE_LENGTH;
     haxe.MULTI_VAR_FILL_ITEM_LENGTH = HxformatDefaults.MULTI_VAR_FILL_ITEM_LENGTH;
-    // wrapping.arrayWrap rule thresholds (the equal-length fill rule is not reproduced)
+    // wrapping.arrayWrap rule thresholds
     haxe.ARRAY_KEEP_TOTAL_LENGTH = HxformatDefaults.ARRAY_KEEP_TOTAL_LENGTH;
+    haxe.ARRAY_FILL_EQUAL_ITEM_LENGTH = HxformatDefaults.ARRAY_FILL_EQUAL_ITEM_LENGTH;
+    haxe.ARRAY_FILL_EQUAL_ITEM_COUNT = HxformatDefaults.ARRAY_FILL_EQUAL_ITEM_COUNT;
     haxe.ARRAY_FILL_ITEM_LENGTH = HxformatDefaults.ARRAY_FILL_ITEM_LENGTH;
     haxe.ARRAY_FILL_ITEM_COUNT = HxformatDefaults.ARRAY_FILL_ITEM_COUNT;
     haxe.ARRAY_CHOP_ITEM_LENGTH = HxformatDefaults.ARRAY_CHOP_ITEM_LENGTH;

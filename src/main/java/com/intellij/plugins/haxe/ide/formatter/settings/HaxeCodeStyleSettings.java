@@ -169,12 +169,15 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   public int MULTI_VAR_FILL_ITEM_LENGTH = 0;
   // array literals follow hxformat's wrapping.arrayWrap rules (see
   // HaxeArrayLiteralRules): items totalling at most KEEP_TOTAL_LENGTH stay
-  // on one line; FILL_ITEM_COUNT items or more, each at most
+  // on one line; FILL_EQUAL_ITEM_COUNT items or more of one length up to
+  // FILL_EQUAL_ITEM_LENGTH, or FILL_ITEM_COUNT items or more each at most
   // FILL_ITEM_LENGTH, fill the line after a leading break; an item reaching
   // CHOP_ITEM_LENGTH, or CHOP_ITEM_COUNT items or more, go one per line. A
-  // threshold of 0 takes its rule out; all five at 0 leave the literal to
+  // threshold of 0 takes its rule out; all seven at 0 leave the literal to
   // the array wrap setting alone
   public int ARRAY_KEEP_TOTAL_LENGTH = 0;
+  public int ARRAY_FILL_EQUAL_ITEM_LENGTH = 0;
+  public int ARRAY_FILL_EQUAL_ITEM_COUNT = 0;
   public int ARRAY_FILL_ITEM_LENGTH = 0;
   public int ARRAY_FILL_ITEM_COUNT = 0;
   public int ARRAY_CHOP_ITEM_LENGTH = 0;

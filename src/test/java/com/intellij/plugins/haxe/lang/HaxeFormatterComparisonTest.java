@@ -465,6 +465,21 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
       // written over several lines go one per line
       doParityTest("array-item-rules");
     }
+
+    @Test
+    @DisplayName("array wrap checks")
+    public void testArrayWrapChecks() throws Exception {
+      // the sandbox sample for wrapping.arrayWrap: every rule once, hand-broken
+      // twins re-joined or re-broken, the margin overflow, and a nested literal
+      // judged on its own
+      doParityTest("array-wrap-checks");
+    }
+
+    @Test
+    @DisplayName("array wrap checks allman")
+    public void testArrayWrapChecksAllman() throws Exception {
+      doParityTest("array-wrap-checks-allman", HaxeCodeStyleTweaks::allmanBraces);
+    }
   }
 
   @Nested

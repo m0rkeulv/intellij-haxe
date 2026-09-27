@@ -23,28 +23,31 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * after it, none after the last - and its joined line. First match wins:
  *
  * <pre>
- * an item written over several lines                            -> ONE_PER_LINE
- * items totalling at most KEEP_TOTAL_LENGTH                     -> KEEP
- * FILL_ITEM_COUNT items or more, each at most FILL_ITEM_LENGTH  -> FILL_AFTER_LEADING_BREAK
- * an item reaching CHOP_ITEM_LENGTH                             -> ONE_PER_LINE
- * CHOP_ITEM_COUNT items or more                                 -> ONE_PER_LINE
- * the line past the margin under a chopping array wrap setting  -> ONE_PER_LINE
- * otherwise                                                     -> KEEP
+ * an item written over several lines                                        -> ONE_PER_LINE
+ * items totalling at most KEEP_TOTAL_LENGTH                                 -> KEEP
+ * FILL_EQUAL_ITEM_COUNT items or more of one length, at most FILL_EQUAL_ITEM_LENGTH -> FILL_AFTER_LEADING_BREAK
+ * FILL_ITEM_COUNT items or more, each at most FILL_ITEM_LENGTH              -> FILL_AFTER_LEADING_BREAK
+ * an item reaching CHOP_ITEM_LENGTH                                         -> ONE_PER_LINE
+ * CHOP_ITEM_COUNT items or more                                             -> ONE_PER_LINE
+ * the line past the margin under a chopping array wrap setting              -> ONE_PER_LINE
+ * otherwise                                                                 -> KEEP
  * </pre>
  *
- * A threshold of 0 takes its rule out; all five at 0 leave the literal to
- * the array wrap setting alone ({@link Decision#NONE}). The tool's
- * equal-length fill rule (equalItemLengths, allItemLengths, itemCount) has
- * no counterpart. A literal's decision is memoized on it ({@link HaxeWrapMemo}).
+ * Items are of one length when every width matches, the last item allowed
+ * to be its separator short. A threshold of 0 takes its rule out; all seven
+ * at 0 leave the literal to the array wrap setting alone ({@link Decision#NONE}).
+ * A literal's decision is memoized on it ({@link HaxeWrapMemo}).
  */
 public final class HaxeArrayLiteralRules {
 
   public enum Decision { NONE, KEEP, ONE_PER_LINE, FILL_AFTER_LEADING_BREAK }
 
   /** The thresholds as configured; a threshold of 0 takes its rule out. */
-  record Thresholds(int keepTotalLength, int fillItemLength, int fillItemCount, int chopItemLength, int chopItemCount) {
+  record Thresholds(int keepTotalLength, int fillEqualItemLength, int fillEqualItemCount,
+                    int fillItemLength, int fillItemCount, int chopItemLength, int chopItemCount) {
     boolean allOff() {
-      return keepTotalLength <= 0 && fillItemLength <= 0 && fillItemCount <= 0 && chopItemLength <= 0 && chopItemCount <= 0;
+      return keepTotalLength <= 0 && fillEqualItemLength <= 0 && fillEqualItemCount <= 0
+             && fillItemLength <= 0 && fillItemCount <= 0 && chopItemLength <= 0 && chopItemCount <= 0;
     }
   }
 
@@ -54,8 +57,8 @@ public final class HaxeArrayLiteralRules {
   }
 
   static Thresholds thresholds(@NotNull HaxeCodeStyleSettings haxe) {
-    return new Thresholds(haxe.ARRAY_KEEP_TOTAL_LENGTH, haxe.ARRAY_FILL_ITEM_LENGTH, haxe.ARRAY_FILL_ITEM_COUNT,
-                          haxe.ARRAY_CHOP_ITEM_LENGTH, haxe.ARRAY_CHOP_ITEM_COUNT);
+    return new Thresholds(haxe.ARRAY_KEEP_TOTAL_LENGTH, haxe.ARRAY_FILL_EQUAL_ITEM_LENGTH, haxe.ARRAY_FILL_EQUAL_ITEM_COUNT,
+                          haxe.ARRAY_FILL_ITEM_LENGTH, haxe.ARRAY_FILL_ITEM_COUNT, haxe.ARRAY_CHOP_ITEM_LENGTH, haxe.ARRAY_CHOP_ITEM_COUNT);
   }
 
   /** The array literal's decision; NONE for a comprehension or an empty literal. */
@@ -73,24 +76,31 @@ public final class HaxeArrayLiteralRules {
     int total = 0;
     int longest = 0;
     boolean multilineItem = false;
+    boolean equalWidths = true;
+    int[] widths = new int[items.size()];
     for (int i = 0; i < items.size(); i++) {
       ASTNode item = items.get(i);
       int separator = i < items.size() - 1 ? HaxeJoinedLine.SEPARATOR_WIDTH : 0;
-      int width = HaxeJoinedLine.oneLineWidth(item) + separator;
-      total += width;
-      longest = Math.max(longest, width);
+      widths[i] = HaxeJoinedLine.oneLineWidth(item) + separator;
+      total += widths[i];
+      longest = Math.max(longest, widths[i]);
       multilineItem |= item.textContains('\n');
+      // the last item carries no separator, so it may be that much shorter
+      boolean lastShortBySeparator = i == items.size() - 1 && widths[i] + HaxeJoinedLine.SEPARATOR_WIDTH == widths[0];
+      equalWidths &= widths[i] == widths[0] || lastShortBySeparator;
     }
 
     // a threshold of 0 takes its rule out; the others still apply
     boolean smallTotal = thresholds.keepTotalLength() > 0 && total <= thresholds.keepTotalLength();
+    boolean equalItems = thresholds.fillEqualItemLength() > 0 && thresholds.fillEqualItemCount() > 0
+                         && equalWidths && longest <= thresholds.fillEqualItemLength() && items.size() >= thresholds.fillEqualItemCount();
     boolean tinyItems = thresholds.fillItemLength() > 0 && thresholds.fillItemCount() > 0
                         && longest <= thresholds.fillItemLength() && items.size() >= thresholds.fillItemCount();
     boolean longItem = thresholds.chopItemLength() > 0 && longest >= thresholds.chopItemLength();
     boolean manyItems = thresholds.chopItemCount() > 0 && items.size() >= thresholds.chopItemCount();
     if (multilineItem) return Decision.ONE_PER_LINE;
     if (smallTotal) return Decision.KEEP;
-    if (tinyItems) return Decision.FILL_AFTER_LEADING_BREAK;
+    if (equalItems || tinyItems) return Decision.FILL_AFTER_LEADING_BREAK;
     if (longItem || manyItems) return Decision.ONE_PER_LINE;
     if (exceedsMargin(literal, common, haxe) && chops(common)) return Decision.ONE_PER_LINE;
     return Decision.KEEP;

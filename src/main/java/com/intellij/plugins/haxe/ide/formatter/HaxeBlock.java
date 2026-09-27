@@ -25,6 +25,9 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.MetadataRun;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeCallArgumentFill;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeOperatorChainRules;
+import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeOperatorChainRules.Kind;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -40,6 +43,8 @@ import java.util.List;
 import java.util.function.BiFunction;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.sameLineMetadataRun;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.INDENTED_CONTAINERS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
@@ -61,6 +66,10 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   private Wrap myAssignmentSignWrap = null;
   private final Indent myIndent;
   private final CodeStyleSettings mySettings;
+  private final CommonCodeStyleSettings myCommon;
+  private final HaxeCodeStyleSettings myHaxe;
+  // the alignment a call's continuation lines share (see continuationAlignment), once asked for
+  private Alignment myContinuationAlignment;
   // the metadata written on the node's line before it, which this block
   // spans: the engine anchors a block's continuations at the block that
   // starts the line, and metadata sits BESIDE its declaration in the PSI -
@@ -86,12 +95,12 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     super(node, wrap, alignment);
     mySettings = settings;
     myLeadingMetadata = leadingMetadata;
-    CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
-    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
-    myIndentProcessor = new HaxeIndentProcessor(common, haxe);
-    mySpacingProcessor = new HaxeSpacingProcessor(node, common, haxe);
-    myWrappingProcessor = new HaxeWrappingProcessor(node, common, haxe);
-    myAlignmentProcessor = new HaxeAlignmentProcessor(node, common);
+    myCommon = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+    myHaxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    myIndentProcessor = new HaxeIndentProcessor(myCommon, myHaxe);
+    mySpacingProcessor = new HaxeSpacingProcessor(node, myCommon, myHaxe);
+    myWrappingProcessor = new HaxeWrappingProcessor(node, myCommon, myHaxe);
+    myAlignmentProcessor = new HaxeAlignmentProcessor(node, myCommon);
     myIndent = indent != null ? indent : myIndentProcessor.getChildIndent(myNode);
   }
 
@@ -232,8 +241,57 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
 
   @Nullable
   protected Alignment createChildAlignment(ASTNode child) {
+    Alignment continuation = continuationAlignmentFor(child);
+    if (continuation != null) return continuation;
     if (child.getElementType() != PLPAREN && child.getElementType() != BLOCK_STATEMENT) {
       return myAlignmentProcessor.createChildAlignment();
+    }
+    return null;
+  }
+
+  /**
+   * haxe-formatter keeps every continuation line of a call one step from
+   * the line the call sits on - an argument its fill moves down and the
+   * operator lines of an operator chain among the arguments alike, at ONE
+   * column however deep the chain nests. The engine indents a wrapped line
+   * from the first block on the line its parent starts on, which stacks a
+   * chain's step on a moved argument's, so those lines share the list's
+   * alignment instead: the first of them takes the step, the rest its column.
+   */
+  @Nullable
+  private Alignment continuationAlignmentFor(ASTNode child) {
+    if (!myHaxe.INDENT_WRAPPED_OPERATOR_CHAINS) return null;
+    if (isMovedArgument(child)) return continuationAlignment();
+    Kind kind = Kind.ofChainLevel(myNode);
+    boolean breakingOperator = kind != null && kind.isOperator(child) && HaxeOperatorChainRules.breaksBefore(kind, child, myCommon, myHaxe);
+    if (!breakingOperator) return null;
+    HaxeBlock list = enclosingArgumentList();
+    return list == null ? null : list.continuationAlignment();
+  }
+
+  /** The child is an argument of this call's list that the fill starts a new line with. */
+  private boolean isMovedArgument(ASTNode child) {
+    if (!ARGUMENT_LISTS.contains(myNode.getElementType()) || myNode.getTreeParent() == null) return false;
+    IElementType ownerType = myNode.getTreeParent().getElementType();
+    boolean call = ownerType == CALL_EXPRESSION || ownerType == NEW_EXPRESSION;
+    return call && HaxeCallArgumentFill.brokenArguments(myNode, myCommon, myHaxe).contains(child);
+  }
+
+  private Alignment continuationAlignment() {
+    if (myContinuationAlignment == null) myContinuationAlignment = Alignment.createAlignment();
+    return myContinuationAlignment;
+  }
+
+  /** The block of the call argument list this block's node sits in, below any body or literal; null outside one. */
+  @Nullable
+  private HaxeBlock enclosingArgumentList() {
+    for (BlockWithParent block = myParent; block instanceof HaxeBlock haxeBlock; block = haxeBlock.myParent) {
+      IElementType type = haxeBlock.myNode.getElementType();
+      if (INDENTED_CONTAINERS.contains(type)) return null;
+      ASTNode owner = haxeBlock.myNode.getTreeParent();
+      boolean callList = ARGUMENT_LISTS.contains(type) && owner != null
+                         && (owner.getElementType() == CALL_EXPRESSION || owner.getElementType() == NEW_EXPRESSION);
+      if (callList) return haxeBlock;
     }
     return null;
   }

@@ -267,10 +267,11 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * One array rule into its threshold: a noWrap rule's totalItemLength, an
+   * One array rule into its thresholds: a noWrap rule's totalItemLength, an
    * onePerLine rule's anyItemLength or itemCount (its hasMultilineItems and
    * exceedsMaxLineLength forms are built in), a fillLineWithLeadingBreak
-   * rule's allItemLengths with itemCount. False for any other shape.
+   * rule's allItemLengths with itemCount, with or without equalItemLengths.
+   * False for any other shape.
    */
   private boolean liftArrayRule(JsonNode rule) {
     String type = rule.path("type").asText("");
@@ -292,9 +293,15 @@ public final class HxformatJsonMapper {
         return anyLength != null || count != null;
       }
       case "fillLineWithLeadingBreak" -> {
-        if (equalLengths || allLength == null || count == null) return false;
-        haxe.ARRAY_FILL_ITEM_LENGTH = allLength;
-        haxe.ARRAY_FILL_ITEM_COUNT = count;
+        if (allLength == null || count == null) return false;
+        if (equalLengths) {
+          haxe.ARRAY_FILL_EQUAL_ITEM_LENGTH = allLength;
+          haxe.ARRAY_FILL_EQUAL_ITEM_COUNT = count;
+        }
+        else {
+          haxe.ARRAY_FILL_ITEM_LENGTH = allLength;
+          haxe.ARRAY_FILL_ITEM_COUNT = count;
+        }
       }
       default -> {
         return false;

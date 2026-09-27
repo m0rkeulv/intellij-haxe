@@ -168,11 +168,7 @@ public class HaxeIndentProcessor {
     // there and takes no step; a mid-line chain's continuation anchors past
     // it (the call or statement line) and needs the one step back
     if (parentType == ADDITIVE_EXPRESSION) {
-      // a mid-line chain that is a list's LAST item already rides the item
-      // step (the engine carries it into the closing line), so only there
-      // the extra step must not be added again
-      boolean levelAlready = additiveChainBeginsItsLine(site.parent()) || additiveChainClosesItsList(site.parent());
-      return levelAlready ? Indent.getNoneIndent() : Indent.getNormalIndent();
+      return additiveChainBeginsItsLine(site.parent()) ? Indent.getNoneIndent() : Indent.getNormalIndent();
     }
     return null;
   }
@@ -276,17 +272,6 @@ public class HaxeIndentProcessor {
     // the condition's line
     if (parentType == TERNARY_EXPRESSION && site.prevSibling() != null) return Indent.getContinuationIndent();
     return null;
-  }
-
-  /** The CHAIN ROOT is the last item of its expression list - nothing but the closing paren follows. */
-  private static boolean additiveChainClosesItsList(ASTNode additive) {
-    ASTNode root = outermostOfKind(additive, ADDITIVE_CHAIN_LEVELS);
-    ASTNode parent = root.getTreeParent();
-    if (parent == null || !ARGUMENT_LISTS.contains(parent.getElementType())) return false;
-    for (ASTNode next = root.getTreeNext(); next != null; next = next.getTreeNext()) {
-      if (!WHITESPACES.contains(next.getElementType())) return false;
-    }
-    return true;
   }
 
   /** The CHAIN ROOT (outermost additive level) sits at its line's start - only whitespace before it. */

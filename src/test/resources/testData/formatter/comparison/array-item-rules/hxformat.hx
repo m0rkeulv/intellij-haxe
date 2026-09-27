@@ -48,6 +48,12 @@ class Main {
 			320, 330, 340, 350, 360, 370, 380, 390, 400
 		];
 
+		// ten or more items of one length up to 30 columns each: a leading break, then the line fills
+		var equalItems = [
+			"item number 01", "item number 02", "item number 03", "item number 04", "item number 05", "item number 06", "item number 07", "item number 08",
+			"item number 09", "item number 10"
+		];
+
 		// an item written over several lines: one per line
 		var withFunctions = [
 			function() {
