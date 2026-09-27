@@ -6,11 +6,9 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeConsoleCommandRunner;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -23,6 +21,8 @@ import java.util.List;
  * whose ancestor directories (up to the project base) hold the tool's config.
  * The config's directory becomes the working directory, so the tool resolves
  * its config and relative excludes the same way a terminal run there would.
+ * The update answers from {@link HaxeToolConfigDetector}'s memo so the menu
+ * never waits on a search; the action's run searches afresh.
  */
 abstract class HaxeFileToolAction extends DumbAwareAction {
 
@@ -33,7 +33,7 @@ abstract class HaxeFileToolAction extends DumbAwareAction {
 
   @Override
   public void update(@NotNull AnActionEvent e) {
-    e.getPresentation().setEnabledAndVisible(configDirectory(e) != null);
+    e.getPresentation().setEnabledAndVisible(knownConfigDirectory(e) != null);
   }
 
   /** Which config file gates and anchors this action. */
@@ -51,6 +51,16 @@ abstract class HaxeFileToolAction extends DumbAwareAction {
     return "hx".equalsIgnoreCase(file.getExtension()) ? file : null;
   }
 
+  /** The config directory as already detected; null while unknown or when none exists. */
+  @Nullable
+  VirtualFile knownConfigDirectory(@NotNull AnActionEvent e) {
+    Project project = e.getProject();
+    VirtualFile file = haxeFile(e);
+    if (project == null || file == null) return null;
+    return HaxeToolConfigDetector.getInstance(project).knownConfigDirectory(file, configName());
+  }
+
+  /** The config directory searched now, for the action's run. */
   @Nullable
   VirtualFile configDirectory(@NotNull AnActionEvent e) {
     Project project = e.getProject();
