@@ -19,6 +19,7 @@ package com.intellij.plugins.haxe.ide.formatter.settings;
 
 import com.intellij.application.options.CodeStyleAbstractConfigurable;
 import com.intellij.application.options.CodeStyleAbstractPanel;
+import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import org.jetbrains.annotations.NotNull;
 
@@ -27,7 +28,7 @@ import org.jetbrains.annotations.NotNull;
  */
 public class HaxeCodeStyleConfigurable extends CodeStyleAbstractConfigurable {
   public HaxeCodeStyleConfigurable(@NotNull CodeStyleSettings settings, CodeStyleSettings cloneSettings) {
-    super(settings, cloneSettings, "Haxe");
+    super(settings, cloneSettings, HaxeLanguage.INSTANCE.getDisplayName());
   }
 
   @Override

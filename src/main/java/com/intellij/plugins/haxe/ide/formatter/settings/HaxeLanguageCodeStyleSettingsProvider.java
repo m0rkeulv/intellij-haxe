@@ -24,6 +24,7 @@ import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.psi.codeStyle.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Locale;
@@ -31,7 +32,6 @@ import java.util.Locale;
 import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.WrappingOrBraceOption.*;
 import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.BlankLinesOption.*;
 import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.SpacingOption.*;
-import static com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.OptionAnchor;
 
 /**
  * @author: Fedor.Korotkov
@@ -66,40 +66,51 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
   }
 
   @Override
+  public @NotNull CodeStyleConfigurable createConfigurable(@NotNull CodeStyleSettings baseSettings, @NotNull CodeStyleSettings modelSettings) {
+    return new HaxeCodeStyleConfigurable(baseSettings, modelSettings);
+  }
+
+  @Override
+  public @Nullable CustomCodeStyleSettings createCustomSettings(@NotNull CodeStyleSettings settings) {
+    return new HaxeCodeStyleSettings(settings);
+  }
+
+  /**
+   * The platform's doc-formatting switch (a reformat may run with it off)
+   * is the Haxe toggle; Haxe docs are markdown, so no leading asterisks and
+   * no tags to drop.
+   */
+  @Override
   public DocCommentSettings getDocCommentSettings(@NotNull CodeStyleSettings rootSettings) {
     return new DocCommentSettings() {
-      private final JavaCodeStyleSettings mySettings = rootSettings.getCustomSettings(JavaCodeStyleSettings.class);
-
+      private final HaxeCodeStyleSettings haxe = rootSettings.getCustomSettings(HaxeCodeStyleSettings.class);
 
       @Override
       public boolean isDocFormattingEnabled() {
-        return mySettings.ENABLE_JAVADOC_FORMATTING;
+        return haxe.FORMAT_DOC_COMMENTS;
       }
 
       @Override
       public void setDocFormattingEnabled(boolean formattingEnabled) {
-        mySettings.ENABLE_JAVADOC_FORMATTING = formattingEnabled;
+        haxe.FORMAT_DOC_COMMENTS = formattingEnabled;
       }
-
 
       @Override
       public boolean isLeadingAsteriskEnabled() {
-        return false; // haxe docs are markdown - no leading asterisks
+        return false;
       }
 
       @Override
       public boolean isRemoveEmptyTags() {
-        return mySettings.JD_KEEP_EMPTY_EXCEPTION || mySettings.JD_KEEP_EMPTY_PARAMETER || mySettings.JD_KEEP_EMPTY_RETURN;
+        return false;
       }
 
       @Override
       public void setRemoveEmptyTags(boolean removeEmptyTags) {
-        mySettings.JD_KEEP_EMPTY_RETURN = !removeEmptyTags;
-        mySettings.JD_KEEP_EMPTY_PARAMETER = !removeEmptyTags;
-        mySettings.JD_KEEP_EMPTY_EXCEPTION = !removeEmptyTags;
       }
     };
   }
+
   @Override
   public void customizeSettings(@NotNull CodeStyleSettingsCustomizable consumer, @NotNull SettingsType settingsType) {
     if (settingsType == SettingsType.SPACING_SETTINGS) {
@@ -151,29 +162,29 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
       // placements and names mirror Java/Kotlin/Groovy: arrow spacing sits
       // with the operators, colon options use Kotlin's phrasing
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.arrow"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_FUNCTION_TYPE_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.function.type.arrow"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.old.function.type.arrow"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_AROUND_OPERATORS);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.type.colon"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_TYPE_REFERENCE_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.after.type.colon"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_TYPE_PARAMETERS", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.type.parameters"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_STRING_INTERPOLATION", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.string.interpolation"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AROUND_TYPE_CHECK_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.type.check.colon"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_WITHIN_METADATA_PARENTHESES", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.metadata.parentheses"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_WITHIN);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_BEFORE_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.before.object.field.colon"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "ADD_LINE_COMMENT_SPACE", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.line.comment"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "SPACE_AFTER_OBJECT_FIELD_COLON", HaxeCodeStyleBundle.message("haxe.codestyle.spacing.after.object.field.colon"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER);
     }
     else if (settingsType == SettingsType.BLANK_LINES_SETTINGS) {
       consumer.showStandardOptions(
@@ -189,27 +200,27 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
         BLANK_LINES_BEFORE_CLASS_END.name()
       );
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_USING", HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.using"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "MINIMUM_BLANK_LINES_AFTER_FILE_HEADER", HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.file.header"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.between.single.line.types"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_AFTER_LBRACE",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.keep.after.lbrace"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "KEEP_BLANK_LINES_AFTER_CASE_COLON",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.keep.after.case.colon"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES_KEEP);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_BETWEEN_FIELD_GROUPS",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.between.field.groups"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_BEFORE_FIELD_DOC_COMMENT",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.before.field.doc"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES);
       consumer.showCustomOption(HaxeCodeStyleSettings.class, "BLANK_LINES_AFTER_DOCUMENTED_FIELD",
                                 HaxeCodeStyleBundle.message("haxe.codestyle.blank.lines.after.documented.field"),
-                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES, OptionAnchor.NONE);
+                                CodeStyleSettingsCustomizableOptions.getInstance().BLANK_LINES);
     }
     else if (settingsType == SettingsType.WRAPPING_AND_BRACES_SETTINGS) {
       consumer.showStandardOptions(
@@ -289,26 +300,18 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     }
   }
 
-  /** The operator chain, call argument and multi-var rules (hxformat's wrapping.* rule thresholds). */
+  /**
+   * The chain and call-argument switches; the numeric rule thresholds live
+   * in the Wrap Rules tab (this tab's option table hosts booleans and
+   * choices only).
+   */
   private static void showChainOptions(@NotNull CodeStyleSettingsCustomizable consumer) {
     String chains = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.chains.group");
     consumer.showCustomOption(HaxeCodeStyleSettings.class, "INDENT_WRAPPED_OPERATOR_CHAINS",
                               HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.chains.indent"), chains);
-    for (String kind : List.of("BOOL", "ADD")) {
-      String prefix = "haxe.codestyle.wrapping.chains." + kind.toLowerCase(Locale.ROOT) + ".";
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_LINE_LENGTH", HaxeCodeStyleBundle.message(prefix + "line.length"), chains);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_ITEM_LENGTH", HaxeCodeStyleBundle.message(prefix + "item.length"), chains);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_ITEM_COUNT", HaxeCodeStyleBundle.message(prefix + "item.count"), chains);
-      consumer.showCustomOption(HaxeCodeStyleSettings.class, kind + "_CHAIN_SPLIT_TOTAL_LENGTH", HaxeCodeStyleBundle.message(prefix + "total.length"), chains);
-    }
     String arguments = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.arguments.group");
     consumer.showCustomOption(HaxeCodeStyleSettings.class, "FILL_CALL_ARGUMENTS_ON_JOINED_LINE",
                               HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.arguments.fill.joined"), arguments);
-    String multiVar = HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.multi.var.group");
-    consumer.showCustomOption(HaxeCodeStyleSettings.class, "MULTI_VAR_SPLIT_WIDTH",
-                              HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.multi.var.split.width"), multiVar);
-    consumer.showCustomOption(HaxeCodeStyleSettings.class, "MULTI_VAR_FILL_ITEM_LENGTH",
-                              HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.multi.var.fill.item"), multiVar);
   }
 
   @Override

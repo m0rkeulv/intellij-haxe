@@ -20,15 +20,13 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Three-way comparison against HaxeCheckstyle's haxe-formatter (the vshaxe
- * formatter): each rule fixture holds a deliberately misformatted input.hx
- * and the real tool's output hxformat.hx (see the fixture README for
- * regeneration). Our settings are configured to the haxe-formatter DEFAULTS;
- * parity rules assert byte equality with the tool, the rest pin plugin.hx as
- * the divergence-documenting baseline.
+ * Parity with HaxeCheckstyle's haxe-formatter (the vshaxe formatter): each
+ * rule fixture holds a deliberately misformatted input.hx and the real
+ * tool's output hxformat.hx (see the fixture README for regeneration). The
+ * settings are the haxe-formatter DEFAULTS profile, and every rule asserts
+ * byte equality with the tool.
  */
 @DisplayName("Formatting: haxe-formatter comparison")
 public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
@@ -202,6 +200,14 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @DisplayName("single line types")
   public void testSingleLineTypes() throws Exception {
     doParityTest("single-line-types");
+  }
+
+  @Test
+  @DisplayName("type blank lines")
+  public void testTypeBlankLines() throws Exception {
+    // emptyLines.betweenTypes=1 inserts the blank between multi-line types
+    // (typedefs included) and caps a run of blanks; single-line types stay snug
+    doParityTest("type-blank-lines");
   }
 
   @Test
@@ -532,23 +538,6 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     tweak.accept(tempSettings);
     CodeStyleSettingsManager.getInstance(project).setTemporarySettings(tempSettings);
     doParityTest(rule);
-  }
-
-  /**
-   * Formats input.hx and compares against the pinned plugin.hx — for rules
-   * NOT yet at parity; the plugin.hx/hxformat.hx diff documents the gap.
-   * A missing plugin.hx is created from the actual output and the test fails
-   * once, like the classic formatter tests.
-   */
-  @SuppressWarnings("unused") // the parity workflow flips rules here while a gap is open
-  private void doPinnedTest(String rule) throws Exception {
-    String actual = formatInput(rule);
-    Path pinned = Path.of(getTestDataPath(), rule, "plugin.hx");
-    if (!Files.exists(pinned)) {
-      Files.writeString(pinned, actual + "\n");
-      fail("No pinned output found. File " + pinned + " created.");
-    }
-    assertEquals(fixture(rule, "plugin.hx"), actual, "pinned plugin output changed for " + rule);
   }
 
   @NotNull

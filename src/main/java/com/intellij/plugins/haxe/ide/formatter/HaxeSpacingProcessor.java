@@ -44,7 +44,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
-import java.util.List;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_HEADER_END;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.HUGS_CLOSING_DIRECTIVE;
@@ -95,9 +94,9 @@ public class HaxeSpacingProcessor {
     final IElementType type1 = node1.getElementType();
     final ASTNode node2 = ((AbstractBlock)child2).getNode();
     IElementType type2 = node2.getElementType();
-    final ASTNode nodeNode1 = node1 == null ? null : node1.getFirstChildNode();
+    final ASTNode nodeNode1 = node1.getFirstChildNode();
     final IElementType typeType1 = nodeNode1 == null ? null : nodeNode1.getElementType();
-    final ASTNode nodeNode2 = node2 == null ? null : node2.getFirstChildNode();
+    final ASTNode nodeNode2 = node2.getFirstChildNode();
     final IElementType typeType2 = nodeNode2 == null ? null : nodeNode2.getElementType();
 
     StringBuilder b = new StringBuilder();
@@ -158,20 +157,15 @@ public class HaxeSpacingProcessor {
     final IElementType elementType = myNode.getElementType();
     keepLineBreaks = mySettings.KEEP_LINE_BREAKS || keepsWrittenLayout(elementType);
     final IElementType parentType = myNode.getTreeParent() == null ? null : myNode.getTreeParent().getElementType();
-    final IElementType typeNext = getNextElementType();
     final ASTNode node1 = ((AbstractBlock)child1).getNode();
     final IElementType type1 = node1.getElementType();
     final ASTNode node2 = ((AbstractBlock)child2).getNode();
     IElementType type2 = node2.getElementType();
-    final ASTNode nodeNode1 = node1 == null ? null : node1.getFirstChildNode();
+    final ASTNode nodeNode1 = node1.getFirstChildNode();
     final IElementType typeType1 = nodeNode1 == null ? null : nodeNode1.getElementType();
-    final ASTNode nodeNode2 = node2 == null ? null : node2.getFirstChildNode();
+    final ASTNode nodeNode2 = node2.getFirstChildNode();
     final IElementType typeType2 = nodeNode2 == null ? null : nodeNode2.getElementType();
 
-    // TODO: Add Metadata spacing rules AND associated UI.
-    //  (When looking for examples, Java code uses the word "Annotations".)
-
-    // TODO: Do this for comments, too??
     // If type2 is metadata, then camouflage it as the type that follows it.
     // memberNode2 carries the REAL member behind the camouflage for rules
     // that inspect the declaration (field grouping).
@@ -183,13 +177,6 @@ public class HaxeSpacingProcessor {
         type2 = memberNode2.getElementType();
       }
     }
-
-    //if (
-    //  type1 == IMPORT_STATEMENT ||
-    //    //type1 == PACKAGE_STATEMENT ||
-    //    type1 == USING_STATEMENT) {
-    //  return addSingleSpaceIf(false, true);
-    //}
 
     // a block comment OPENING the file is a license header - it keeps a
     // minimum gap to whatever follows (doc comments attach to their member
@@ -261,7 +248,16 @@ public class HaxeSpacingProcessor {
       return Spacing.createSpacing(0, 0, 1, true, myHaxeCodeStyleSettings.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES);
     }
 
-    if (isClassDeclaration(type1)) {
+    // the gap between two types holds whatever introduces the next one - a
+    // comment, metadata, a #if - and closes a region between them (#end);
+    // a type followed by anything else only keeps its written gap
+    // TODO: the cap is the general in-code keep count; a dedicated
+    //       KEEP_BLANK_LINES_BETWEEN_TYPES would let the minimum and the
+    //       maximum between types be set apart from statement blanks
+    if (betweenTypeDeclarations(node1, node2)) {
+      return Spacing.createSpacing(0, 0, 1 + mySettings.BLANK_LINES_AROUND_CLASS, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
+    }
+    if (isTypeDeclaration(type1)) {
       return Spacing.createSpacing(0, 0, mySettings.BLANK_LINES_AROUND_CLASS, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
     }
 
@@ -449,7 +445,7 @@ public class HaxeSpacingProcessor {
     }
 
     if (type2 == PLPAREN) {
-      if (elementType == GUARD) { // IF_STATEMENT) {
+      if (elementType == GUARD) {
         return addSingleSpaceIf(mySettings.SPACE_BEFORE_IF_PARENTHESES);
       }
       else if (elementType == WHILE_STATEMENT || elementType == DO_WHILE_STATEMENT) {
@@ -514,7 +510,7 @@ public class HaxeSpacingProcessor {
       }
     }
     if (type2 == BLOCK_STATEMENT) {
-      if (elementType == ELSE_STATEMENT) { // else if (elementType == IF_STATEMENT && type1 == KELSE) {
+      if (elementType == ELSE_STATEMENT) {
         return setBraceSpace(mySettings.SPACE_BEFORE_ELSE_LBRACE, mySettings.BRACE_STYLE, child1.getTextRange());
       }
       else if (elementType == FOR_STATEMENT) {
@@ -532,7 +528,7 @@ public class HaxeSpacingProcessor {
     }
 
     if (type1 == PLPAREN || type2 == PRPAREN) {
-      if (elementType == GUARD) { // if (elementType == IF_STATEMENT) {
+      if (elementType == GUARD) {
         return addSingleSpaceIf(mySettings.SPACE_WITHIN_IF_PARENTHESES);
       }
       else if (elementType == WHILE_STATEMENT || elementType == DO_WHILE_STATEMENT) {
@@ -562,11 +558,14 @@ public class HaxeSpacingProcessor {
                                       mySettings.CALL_PARAMETERS_RPAREN_ON_NEXT_LINE;
         return addSingleSpaceIf(mySettings.SPACE_WITHIN_METHOD_CALL_PARENTHESES, newLineNeeded);
       }
-      else if (mySettings.BINARY_OPERATION_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP && elementType == PARENTHESIZED_EXPRESSION) {
-        final boolean newLineNeeded = type1 == PLPAREN ?
-                                      mySettings.PARENTHESES_EXPRESSION_LPAREN_WRAP :
-                                      mySettings.PARENTHESES_EXPRESSION_RPAREN_WRAP;
-        return addSingleSpaceIf(false, newLineNeeded);
+      else if (elementType == PARENTHESIZED_EXPRESSION) {
+        // plain grouping parens; their own line breaks apply only under
+        // binary-operation wrapping
+        boolean wraps = mySettings.BINARY_OPERATION_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP;
+        boolean newLineNeeded = wraps && (type1 == PLPAREN
+                                          ? mySettings.PARENTHESES_EXPRESSION_LPAREN_WRAP
+                                          : mySettings.PARENTHESES_EXPRESSION_RPAREN_WRAP);
+        return addSingleSpaceIf(mySettings.SPACE_WITHIN_PARENTHESES, newLineNeeded);
       }
     }
 
@@ -622,7 +621,7 @@ public class HaxeSpacingProcessor {
         || ASSIGN_OPERATORS.contains(typeType1)
         || ASSIGN_OPERATORS.contains(typeType2)
         || type2 == VAR_INIT) {
-      if (typeType2 != null && !isInXmlTag(typeType2, elementType, parentType)) {
+      if (typeType2 != null && !isInXmlTag(elementType, parentType)) {
         return addSingleSpaceIf(mySettings.SPACE_AROUND_ASSIGNMENT_OPERATORS);
       }
     }
@@ -678,7 +677,6 @@ public class HaxeSpacingProcessor {
     if (additiveChain && ADDITIVE_OPERATORS.contains(typeType1) && chainBreaksBefore(HaxeOperatorChainRules.Kind.ADDITIVE, node1)) {
       return Spacing.createSpacing(1, 1, 0, false, 0);
     }
-    //ADDITIVE_OPERATOR == type2
     if ((ADDITIVE_OPERATORS.contains(typeType1) || ADDITIVE_OPERATORS.contains(typeType2)) &&
         elementType != PREFIX_EXPRESSION) {
       return addSingleSpaceIf(mySettings.SPACE_AROUND_ADDITIVE_OPERATORS);
@@ -791,12 +789,6 @@ public class HaxeSpacingProcessor {
       }
     }
 
-    // plain grouping parens - the keyword/call paren kinds have their own
-    // rules above
-    if (elementType == PARENTHESIZED_EXPRESSION && (type1 == PLPAREN || type2 == PRPAREN)) {
-      return addSingleSpaceIf(mySettings.SPACE_WITHIN_PARENTHESES);
-    }
-
     // a return's value joins the keyword's line; the value's own internals
     // may still break
     if (myHaxeCodeStyleSettings.RETURN_VALUE_ON_SAME_LINE
@@ -819,29 +811,8 @@ public class HaxeSpacingProcessor {
     return Spacing.createSpacing(0, 1, 0, true, mySettings.KEEP_BLANK_LINES_IN_CODE);
   }
 
-    private boolean isInXmlTag(IElementType typeType2, IElementType elementType, IElementType parentType) {
-      if(elementType == XML_MARKUP_ATTRIBUTE) return true;
-      if(parentType == XML_LITERAL_EXPRESSION) return true;
-      return false;
-    }
-
-  @Nullable
-  private IElementType getNextElementType() {
-    if (myNode.getTreeParent() == null) return null;
-
-    ASTNode parent = myNode.getTreeParent();
-    ASTNode[] parentChildren = parent.getChildren(null);
-    List<ASTNode> list = Arrays.asList(parentChildren);
-    int myNodeIndex = list.indexOf(myNode);
-    for (int i = myNodeIndex+1; i < list.size(); i++) {
-      ASTNode node = list.get(i);
-      IElementType type = node.getElementType();
-      if (!WHITESPACES.contains(type)) {
-        return type;
-      }
-    }
-
-      return null;
+  private static boolean isInXmlTag(IElementType elementType, IElementType parentType) {
+    return elementType == XML_MARKUP_ATTRIBUTE || parentType == XML_LITERAL_EXPRESSION;
   }
 
   /**
@@ -1319,11 +1290,6 @@ public class HaxeSpacingProcessor {
     }
   }
 
-  private Spacing setStatementSpacing(int minSpaces, int maxSpaces, int minLineFeeds, boolean keepLineBreaks, int keepBlankLines) {
-    int lineFeeds = 1 +  minLineFeeds;
-    return Spacing.createSpacing(minSpaces, maxSpaces, lineFeeds, keepLineBreaks, keepBlankLines);
-  }
-
   private boolean isClassBodyType(IElementType type) {
     return CLASS_BODY_TYPES.contains(type);
   }
@@ -1335,6 +1301,27 @@ public class HaxeSpacingProcessor {
   /** Any top-level type declaration; CLASS_TYPES lacks the body-less typedef kind. */
   private static boolean isTypeDeclaration(IElementType type) {
     return CLASS_TYPES.contains(type) || type == TYPEDEF_DECLARATION;
+  }
+
+  /**
+   * The pair separates two type declarations: the first ends one (or is the
+   * #end closing a region that does), the second starts the next (or
+   * introduces it: a comment, metadata, the #if opening its region).
+   */
+  private static boolean betweenTypeDeclarations(ASTNode node1, ASTNode node2) {
+    ASTNode before = node1.getElementType() == PPEND ? realNeighbor(node1, false) : node1;
+    if (before == null || !isTypeDeclaration(before.getElementType())) return false;
+    ASTNode after = typeIntroducedBy(node2);
+    return after != null && isTypeDeclaration(after.getElementType());
+  }
+
+  /** The declaration a node opens: itself, or the member a comment, metadata or #if leads into. */
+  @Nullable
+  private static ASTNode typeIntroducedBy(ASTNode node) {
+    IElementType type = node.getElementType();
+    if (type == PPIF) return realNeighbor(node, true);
+    if (ONLY_COMMENTS.contains(type) || type == EMBEDDED_META) return followingMember(node);
+    return node;
   }
 
   /**
@@ -1354,17 +1341,6 @@ public class HaxeSpacingProcessor {
     int depth = Math.max(1, myHaxeCodeStyleSettings.IMPORT_GROUP_PACKAGE_DEPTH);
     int keep = Math.min(depth, segments.length);
     return String.join(".", Arrays.asList(segments).subList(0, keep));
-  }
-
-  private boolean blockBeginsWith(Block block, IElementType type) {
-    if (null == block && null == type) return false;
-    List<Block> subBlocks = block.getSubBlocks();
-    if (!subBlocks.isEmpty()) {
-      Block first = subBlocks.getFirst();
-      final ASTNode node = ((AbstractBlock)first).getNode();
-      return node.getElementType() == type;
-    }
-    return false;
   }
 
   private boolean isFirstChild(Block block) {

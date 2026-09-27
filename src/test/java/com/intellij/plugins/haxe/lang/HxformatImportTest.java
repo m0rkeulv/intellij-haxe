@@ -12,7 +12,12 @@ import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -217,6 +222,39 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(90, haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH);
   }
 
+  /**
+   * The tool's own complete default configuration must land exactly on the
+   * profile: every guard rule preceding the overflow rule in its wrap rule
+   * lists ("itemCount <= 3 and not exceeding -> noWrap") must lose to it.
+   */
+  @Test
+  @DisplayName("tool default config round trips onto the profile")
+  public void testToolDefaultConfigRoundTripsOntoTheProfile() throws Exception {
+    CodeStyleSettings settings = freshDefaults();
+    Map<String, Object> profile = settingsImage(settings);
+    var root = new ObjectMapper().readTree(Path.of(getTestDataPath(), "default-hxformat.json").toFile());
+
+    List<String> unsupported = HxformatJsonMapper.apply(settings, root);
+
+    assertEquals(profile, settingsImage(settings));
+    // an explained note ("... (approximated)", "key=value") is a known limit; a bare path is a key the mapper never read
+    List<String> unreadKeys = unsupported.stream().filter(note -> !note.contains("(") && !note.contains("=")).toList();
+    assertEquals(List.of(), unreadKeys, "every key of the default config is read by the mapper");
+  }
+
+  @Test
+  @DisplayName("add line comment space off is honoured")
+  public void testAddLineCommentSpaceOffIsHonoured() throws Exception {
+    CodeStyleSettings settings = freshDefaults();
+    var root = new ObjectMapper().readTree("""
+      { "whitespace": { "addLineCommentSpace": false } }""");
+
+    List<String> unsupported = HxformatJsonMapper.apply(settings, root);
+
+    assertFalse(settings.getCustomSettings(HaxeCodeStyleSettings.class).ADD_LINE_COMMENT_SPACE);
+    assertTrue(unsupported.isEmpty(), "a mapped key is not reported, got: " + unsupported);
+  }
+
   @Test
   @DisplayName("empty file imports completely")
   public void testEmptyFileImportsCompletely() throws Exception {
@@ -253,5 +291,26 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     CodeStyleSettings settings = projectSettingsCopy();
     HxformatDefaultProfile.apply(settings);
     return settings;
+  }
+
+  /** Every Haxe-relevant value by name: the common and custom option fields, the indent options and the margin. */
+  private static Map<String, Object> settingsImage(CodeStyleSettings settings) throws IllegalAccessException {
+    Map<String, Object> image = new TreeMap<>();
+    CommonCodeStyleSettings common = settings.getCommonSettings(HaxeLanguage.INSTANCE);
+    for (Field field : CommonCodeStyleSettings.class.getFields()) {
+      if (!Modifier.isStatic(field.getModifiers())) image.put("common." + field.getName(), field.get(common));
+    }
+    HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    for (Field field : HaxeCodeStyleSettings.class.getFields()) {
+      if (!Modifier.isStatic(field.getModifiers())) image.put("haxe." + field.getName(), field.get(haxe));
+    }
+    CommonCodeStyleSettings.IndentOptions indent = settings.getIndentOptions(HaxeFileType.INSTANCE);
+    image.put("indent.USE_TAB_CHARACTER", indent.USE_TAB_CHARACTER);
+    image.put("indent.TAB_SIZE", indent.TAB_SIZE);
+    image.put("indent.INDENT_SIZE", indent.INDENT_SIZE);
+    image.put("indent.CONTINUATION_INDENT_SIZE", indent.CONTINUATION_INDENT_SIZE);
+    image.put("rightMargin", settings.getRightMargin(HaxeLanguage.INSTANCE));
+    image.put("lineSeparator", settings.LINE_SEPARATOR);
+    return image;
   }
 }

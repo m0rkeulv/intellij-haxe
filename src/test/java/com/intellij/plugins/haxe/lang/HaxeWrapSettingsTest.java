@@ -167,6 +167,30 @@ public class HaxeWrapSettingsTest extends HaxeLightFixtureTestCase {
       """, reformat(common -> common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_ALWAYS, source));
   }
 
+  @Test
+  @DisplayName("spaces within parentheses survive binary wrapping")
+  public void testSpacesWithinParenthesesSurviveBinaryWrapping() {
+    Consumer<CommonCodeStyleSettings> wrapAndSpace = common -> {
+      common.BINARY_OPERATION_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
+      common.SPACE_WITHIN_PARENTHESES = true;
+    };
+    String source = """
+      class Main {
+      	static function main() {
+      		var total = (1 + 2) * 3;
+      	}
+      }
+      """;
+
+    assertEquals("""
+      class Main {
+          static function main() {
+              var total = ( 1 + 2 ) * 3;
+          }
+      }
+      """, reformat(wrapAndSpace, source));
+  }
+
   /** Binds the common-settings view and the fixture file name onto the base reformat. */
   private String reformat(Consumer<CommonCodeStyleSettings> configure, String source) {
     return reformat("Wrap.hx", settings -> configure.accept(settings.getCommonSettings(HaxeLanguage.INSTANCE)), source);

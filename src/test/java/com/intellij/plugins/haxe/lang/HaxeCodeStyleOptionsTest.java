@@ -1,10 +1,13 @@
 package com.intellij.plugins.haxe.lang;
 
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleConfigurable;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeLanguageCodeStyleSettingsProvider;
+import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable;
 import com.intellij.psi.codeStyle.CustomCodeStyleSettings;
+import com.intellij.psi.codeStyle.DocCommentSettings;
 import com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider.SettingsType;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.DisplayName;
@@ -17,8 +20,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * The custom code style options the settings UI shows: each names a real
@@ -27,10 +29,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @DisplayName("Code style: options")
 public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
-  // settings the Imports, Conditional Compilation and hxformat tabs own
+  // settings the Wrap Rules, Imports, Conditional Compilation and hxformat tabs own
   private static final Set<String> DEDICATED_TAB_SETTINGS = Set.of(
     "USE_PROJECT_HXFORMAT", "FORMAT_INACTIVE_BRANCHES", "ALIGN_INACTIVE_CONDITIONAL_BRANCHES",
-    "BLANK_LINES_BETWEEN_IMPORT_GROUPS", "IMPORT_GROUP_PACKAGE_DEPTH", "KEEP_BLANK_LINES_BETWEEN_IMPORTS");
+    "BLANK_LINES_BETWEEN_IMPORT_GROUPS", "IMPORT_GROUP_PACKAGE_DEPTH", "KEEP_BLANK_LINES_BETWEEN_IMPORTS",
+    "BOOL_CHAIN_SPLIT_LINE_LENGTH", "BOOL_CHAIN_SPLIT_ITEM_LENGTH", "BOOL_CHAIN_SPLIT_ITEM_COUNT", "BOOL_CHAIN_SPLIT_TOTAL_LENGTH",
+    "ADD_CHAIN_SPLIT_LINE_LENGTH", "ADD_CHAIN_SPLIT_ITEM_LENGTH", "ADD_CHAIN_SPLIT_ITEM_COUNT", "ADD_CHAIN_SPLIT_TOTAL_LENGTH",
+    "MULTI_VAR_SPLIT_WIDTH", "MULTI_VAR_FILL_ITEM_LENGTH");
 
   private static final List<SettingsType> TABS = List.of(
     SettingsType.SPACING_SETTINGS, SettingsType.BLANK_LINES_SETTINGS, SettingsType.WRAPPING_AND_BRACES_SETTINGS,
@@ -77,6 +82,33 @@ public class HaxeCodeStyleOptionsTest extends HaxeLightFixtureTestCase {
       if (setting) settings.add(field.getName());
     }
     assertEquals(settings, exposed, "custom settings without a UI option");
+  }
+
+  /** The option tables render per field type: a mismatch (an int under a boolean table) throws while the tab builds. */
+  @Test
+  @DisplayName("every tab builds")
+  public void testEveryTabBuilds() {
+    CodeStyleSettings settings = projectSettingsCopy();
+    HaxeCodeStyleConfigurable configurable = new HaxeCodeStyleConfigurable(settings, settings.clone());
+
+    try {
+      assertNotNull(configurable.createComponent());
+    }
+    finally {
+      configurable.disposeUIResources();
+    }
+  }
+
+  @Test
+  @DisplayName("doc comment settings back the haxe toggle")
+  public void testDocCommentSettingsBackTheHaxeToggle() {
+    CodeStyleSettings settings = projectSettingsCopy();
+    DocCommentSettings docSettings = new HaxeLanguageCodeStyleSettingsProvider().getDocCommentSettings(settings);
+
+    docSettings.setDocFormattingEnabled(false);
+
+    assertFalse(settings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_DOC_COMMENTS);
+    assertFalse(docSettings.isDocFormattingEnabled());
   }
 
   private static Field settingField(String name) {

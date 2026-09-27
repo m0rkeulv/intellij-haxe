@@ -7,7 +7,6 @@ import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
-import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -15,7 +14,6 @@ import com.intellij.psi.SyntaxTraverser;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.impl.source.codeStyle.PostFormatProcessor;
-import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -82,7 +80,7 @@ public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProces
     for (ASTNode comment : comments.reversed()) {
       boolean inRange = rangeToReformat.intersects(comment.getStartOffset(), comment.getStartOffset() + comment.getTextLength());
       if (!inRange) continue;
-      if (inPreservedInactiveBranch(comment, haxeSettings)) continue;
+      if (HaxeInactiveBranches.insidePreservedBranch(comment, haxeSettings)) continue;
       int start = comment.getStartOffset();
       // block formatting left this opener pinned at the first column - the
       // comment is intentionally at the margin, so its interior stays put too
@@ -101,16 +99,6 @@ public class HaxeMultilineCommentPostFormatProcessor implements PostFormatProces
     PsiDocumentManager.getInstance(source.getProject()).commitDocument(document);
     int end = Math.min(rangeToReformat.getEndOffset() + totalShift, document.getTextLength());
     return new TextRange(rangeToReformat.getStartOffset(), Math.max(rangeToReformat.getStartOffset(), end));
-  }
-
-  /**
-   * Comments inside an inactive branch reindent only when the branch itself
-   * is block-formatted; preserved-verbatim branches stay byte-identical.
-   */
-  private static boolean inPreservedInactiveBranch(ASTNode comment, HaxeCodeStyleSettings settings) {
-    HaxeInactiveBody body = PsiTreeUtil.getParentOfType(comment.getPsi(), HaxeInactiveBody.class);
-    if (body == null) return false;
-    return !settings.FORMAT_INACTIVE_BRANCHES || !body.hasCleanParse();
   }
 
   private static String reindent(String text, String baseIndent, CommonCodeStyleSettings.IndentOptions options) {

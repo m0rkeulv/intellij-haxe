@@ -9,14 +9,13 @@ Each rule directory holds:
 |---|---|
 | `input.hx` | deliberately misformatted source, violating the rule under test |
 | `hxformat.hx` | `input.hx` as formatted by haxe-formatter (default config) — the ground truth |
-| `plugin.hx` | our formatter's output — present ONLY for rules that do not yet reach parity; its diff against `hxformat.hx` documents the gap |
 | `hxformat.json` | present ONLY for rules testing a NON-default option: the config `hxformat.hx` was generated with (the tool finds it beside the file); the test applies the equivalent settings tweak |
 
 The test configures our code style to the haxe-formatter DEFAULTS (tabs,
 end-of-line braces, spaced keywords/operators, ...) via
-`HxformatDefaultProfile.apply` in its setUp. Rules claiming parity assert our output
+`HxformatDefaultProfile.apply` in its setUp. Every rule asserts our output
 equals `hxformat.hx` byte-for-byte (modulo the trailing newline, which the
-IDE manages at save time); the rest pin `plugin.hx` as a regression baseline.
+IDE manages at save time).
 
 Regenerating `hxformat.hx` after editing an `input.hx` (needs
 `haxelib install formatter`; run PER FILE — running on the directory would

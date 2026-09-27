@@ -49,7 +49,6 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   private Wrap myChildWrap = null;
   private final Indent myIndent;
   private final CodeStyleSettings mySettings;
-  private boolean myChildrenBuilt = false;
   private BlockWithParent myParent;
 
   protected HaxeBlock(ASTNode node,
@@ -67,7 +66,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   }
 
   @Nullable
-  // @Override // - Doesn't override until 2018.3.
+  @Override
   public String getDebugName() {
     return getClass().getSimpleName() + "(" + myNode.getElementType() + ")";
   }
@@ -104,17 +103,13 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
 
   @Override
   protected List<Block> buildChildren() {
-    myChildrenBuilt = true;
     if (getNode().getElementType() == HaxeTokenTypeSets.DOC_COMMENT) {
       return buildDocCommentChildren();
     }
     if (getNode().getElementType() == HaxeTokenTypeSets.PPBODY) {
       return buildInactiveBranchChildren();
     }
-    if (isLeaf()) {
-      return EMPTY;
-    }
-    final ArrayList<Block> tlChildren = new ArrayList<Block>();
+    final ArrayList<Block> tlChildren = new ArrayList<>();
     for (ASTNode childNode = getNode().getFirstChildNode(); childNode != null; childNode = childNode.getTreeNext()) {
       if (FormatterUtil.containsWhiteSpacesOnly(childNode)) continue;
       final HaxeBlock childBlock = new HaxeBlock(childNode, createChildWrap(childNode), createChildAlignment(childNode), mySettings);
@@ -155,10 +150,8 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
    * preserved verbatim like the reference formatter's own fallback.
    */
   private List<Block> buildInactiveBranchChildren() {
-    if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES) {
-      return EMPTY;
-    }
-    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || !body.hasCleanParse()) {
+    HaxeCodeStyleSettings haxe = mySettings.getCustomSettings(HaxeCodeStyleSettings.class);
+    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || HaxeInactiveBranches.preservedVerbatim(body, haxe)) {
       return EMPTY;
     }
     final ArrayList<Block> children = new ArrayList<>();

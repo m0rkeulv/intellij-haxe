@@ -37,16 +37,6 @@ public final class HaxeIndentText {
     return lineStart;
   }
 
-  /** The column at {@code offset} on its line, tabs advancing to the next tab stop. */
-  static int columnAt(CharSequence text, int offset, int tabSize) {
-    int lineStart = lineStartOffset(text, offset);
-    int column = 0;
-    for (int i = lineStart; i < offset; i++) {
-      column = text.charAt(i) == '\t' ? (column / tabSize + 1) * tabSize : column + 1;
-    }
-    return column;
-  }
-
   /** The column the whitespace reaches, tabs advancing to the next tab stop. */
   public static int indentWidth(String whitespace, int tabSize) {
     int columns = 0;

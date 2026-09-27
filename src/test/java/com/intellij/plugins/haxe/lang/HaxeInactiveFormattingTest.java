@@ -53,11 +53,32 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("toggle off preserves the branch verbatim")
   public void testToggleOffPreservesTheBranchVerbatim() {
-    Consumer<CodeStyleSettings> toggleOff =
-      settings -> settings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES = false;
+    Consumer<CodeStyleSettings> toggleOff = settings -> {
+      HaxeCodeStyleSettings haxe = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+      haxe.FORMAT_INACTIVE_BRANCHES = false;
+      // the comment passes rewrite comment text; a preserved branch is off limits to them too
+      haxe.ADD_LINE_COMMENT_SPACE = true;
+      haxe.REINDENT_MULTILINE_COMMENTS = true;
+    };
+    String source = """
+      class Main {
+          static function main() {
+              #if js
+      trace(   "js"  ,1+2 );
+      //js only
+          /* first
+           second */
+              #end
+              //live
+          }
+      }
+      """;
 
-    String result = reformat(toggleOff, MESSY_BRANCH_SOURCE);
+    String result = reformat(toggleOff, source);
     assertTrue(result.contains("trace(   \"js\"  ,1+2 );"), "the branch text must stay untouched:\n" + result);
+    assertTrue(result.contains("\n//js only\n"), "a line comment in the branch keeps its shape:\n" + result);
+    assertTrue(result.contains("\n    /* first\n     second */\n"), "a block comment in the branch keeps its shape:\n" + result);
+    assertTrue(result.contains("// live"), "comments outside the branch still normalize:\n" + result);
   }
 
   @Test

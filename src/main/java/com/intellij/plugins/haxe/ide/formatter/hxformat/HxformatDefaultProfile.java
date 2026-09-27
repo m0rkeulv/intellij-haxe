@@ -156,6 +156,9 @@ public final class HxformatDefaultProfile {
     haxe.SPACE_AROUND_TYPE_CHECK_COLON = true;
     // whitespace.parenConfig.metadataParens=NoSpace
     haxe.SPACE_WITHIN_METADATA_PARENTHESES = false;
+    // whitespace.objectFieldColonPolicy=After
+    haxe.SPACE_BEFORE_OBJECT_FIELD_COLON = false;
+    haxe.SPACE_AFTER_OBJECT_FIELD_COLON = true;
     // whitespace.formatStringInterpolation=true
     haxe.SPACE_WITHIN_STRING_INTERPOLATION = false;
     // typeExtensionPolicy=After

@@ -38,7 +38,8 @@ public class HaxeLineCommentPostFormatProcessor implements PostFormatProcessor {
   @Override
   public @NotNull TextRange processText(@NotNull PsiFile source, @NotNull TextRange rangeToReformat, @NotNull CodeStyleSettings settings) {
     if (!(source instanceof HaxeFile)) return rangeToReformat;
-    if (!settings.getCustomSettings(HaxeCodeStyleSettings.class).ADD_LINE_COMMENT_SPACE) return rangeToReformat;
+    HaxeCodeStyleSettings haxeSettings = settings.getCustomSettings(HaxeCodeStyleSettings.class);
+    if (!haxeSettings.ADD_LINE_COMMENT_SPACE) return rangeToReformat;
     Document document = source.getViewProvider().getDocument();
     if (document == null) return rangeToReformat;
 
@@ -53,6 +54,7 @@ public class HaxeLineCommentPostFormatProcessor implements PostFormatProcessor {
     for (ASTNode comment : comments.reversed()) {
       TextRange range = comment.getTextRange();
       if (!rangeToReformat.intersects(range)) continue;
+      if (HaxeInactiveBranches.insidePreservedBranch(comment, haxeSettings)) continue;
       String text = comment.getText();
       String normalized = normalizedLineComment(text);
       if (normalized.equals(text)) continue;

@@ -108,10 +108,22 @@ public final class HxformatJsonMapper {
     wrapConstruct("wrapping.functionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
     wrapConstruct("wrapping.anonFunctionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
     wrapConstruct("wrapping.callParameter", value -> common.CALL_PARAMETERS_WRAP = value);
-    wrapConstruct("wrapping.opBoolChain", value -> common.BINARY_OPERATION_WRAP = value);
-    applyBoolChainRules();
-    applyAddChainRules();
-    wrapConstruct("wrapping.opAddSubChain", value -> common.BINARY_OPERATION_WRAP = value);
+    // the &&/|| and +/- chains follow their own rule engine fed from the
+    // rule thresholds (HaxeOperatorChainRules); no single wrap policy stands
+    // in for them, and BINARY_OPERATION_WRAP stays off so a margin wrap
+    // never competes with a chopped method chain
+    ChainSetters boolChain = new ChainSetters(
+      value -> haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = value,
+      value -> haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = value,
+      value -> haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = value,
+      value -> haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = value);
+    ChainSetters addChain = new ChainSetters(
+      value -> haxe.ADD_CHAIN_SPLIT_LINE_LENGTH = value,
+      value -> haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH = value,
+      value -> haxe.ADD_CHAIN_SPLIT_ITEM_COUNT = value,
+      value -> haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = value);
+    applyChainRules("wrapping.opBoolChain", boolChain);
+    applyChainRules("wrapping.opAddSubChain", addChain);
     for (String construct : List.of("typeParameter", "metadataCallParameter", "casePattern", "anonType")) {
       String path = "wrapping." + construct;
       if (node(path) != null) {
@@ -142,10 +154,11 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * Their wrap engine picks the FIRST rule whose conditions all hold; ours
-   * is one policy per construct. The exceedsMaxLineLength rule is the
-   * margin behavior, so its type approximates the intent best; without one
-   * the first rule, then defaultWrap, decides.
+   * The tool picks the FIRST rule whose conditions all hold; a construct
+   * here has one wrap policy. The rule that fires on a margin overflow is
+   * that policy - the guard rules preceding it in the tool's defaults
+   * ("itemCount <= 3 and NOT exceeding -> noWrap") must not win; without an
+   * overflow rule the first rule, then defaultWrap, decides.
    */
   private void wrapConstruct(String path, IntConsumer setter) {
     JsonNode construct = node(path);
@@ -158,7 +171,7 @@ public final class HxformatJsonMapper {
         JsonNode ruleType = rule.get("type");
         if (ruleType == null) continue;
         if (type == null) type = ruleType.asText();
-        if (hasMarginCondition(rule)) {
+        if (firesOnOverflow(rule)) {
           type = ruleType.asText();
           break;
         }
@@ -176,12 +189,18 @@ public final class HxformatJsonMapper {
     });
   }
 
-  private static boolean hasMarginCondition(JsonNode rule) {
+  /**
+   * The rule carries an exceedsMaxLineLength condition asking for an
+   * overflow: value 1, or no value (the tool reads any other value as "not
+   * exceeding", the guard form).
+   */
+  private static boolean firesOnOverflow(JsonNode rule) {
     JsonNode conditions = rule.get("conditions");
     if (conditions == null || !conditions.isArray()) return false;
     for (JsonNode condition : conditions) {
-      JsonNode kind = condition.get("cond");
-      if (kind != null && "exceedsMaxLineLength".equals(kind.asText())) return true;
+      boolean overflow = "exceedsMaxLineLength".equals(condition.path("cond").asText(""))
+                         && condition.path("value").asInt(1) == 1;
+      if (overflow) return true;
     }
     return false;
   }
@@ -355,15 +374,12 @@ public final class HxformatJsonMapper {
     acceptOnly("whitespace.caseColonPolicy", "onlyAfter");
     String objectFieldColon = str("whitespace.objectFieldColonPolicy");
     if (objectFieldColon != null) {
-      haxe.SPACE_BEFORE_OBJECT_FIELD_COLON = "before".equals(objectFieldColon) || "around".equals(objectFieldColon)
-                                             || "onlyBefore".equals(objectFieldColon);
-      haxe.SPACE_AFTER_OBJECT_FIELD_COLON = "after".equals(objectFieldColon) || "around".equals(objectFieldColon)
-                                            || "onlyAfter".equals(objectFieldColon);
+      haxe.SPACE_BEFORE_OBJECT_FIELD_COLON = SPACE_BEFORE_POLICIES.contains(objectFieldColon);
+      haxe.SPACE_AFTER_OBJECT_FIELD_COLON = SPACE_AFTER_POLICIES.contains(objectFieldColon);
     }
     acceptOnly("whitespace.semicolonPolicy", "onlyAfter");
     acceptOnly("whitespace.intervalPolicy", "none");
     acceptOnly("whitespace.compressSuccessiveParenthesis", "true");
-    acceptOnly("whitespace.addLineCommentSpace", "true");
     applyParenConfig();
     applyBracesConfig();
     applyBracketConfig();
@@ -583,67 +599,41 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * Custom opBoolChain rules: the one-per-line thresholds the splitter
-   * reproduces are lifted from matching rule shapes (an onePerLineAfterFirst
-   * rule's itemCount / lineLength+anyItemLength conditions, a noWrap rule's
-   * totalItemLength guard); everything else stays with wrapConstruct's
-   * one-policy approximation.
+   * A chain construct's rules: the thresholds the rule engine reproduces are
+   * lifted from matching rule shapes - an onePerLineAfterFirst rule's
+   * itemCount / lineLength+anyItemLength conditions, a noWrap rule's
+   * totalItemLength guard; other rule shapes have no counterpart.
    */
-  private void applyBoolChainRules() {
-    JsonNode rules = node("wrapping.opBoolChain.rules");
+  private void applyChainRules(String path, ChainSetters setters) {
+    if (node(path) == null) return;
+    markConsumedSubtree(path);
+    JsonNode rules = node(path + ".rules");
     if (rules == null || !rules.isArray()) return;
     for (JsonNode rule : rules) {
       String type = rule.path("type").asText("");
       if ("onePerLineAfterFirst".equals(type)) {
         Integer count = conditionValue(rule, "itemCount >= n");
         if (count != null) {
-          haxe.BOOL_CHAIN_SPLIT_ITEM_COUNT = count;
+          setters.itemCount().accept(count);
         }
         Integer line = conditionValue(rule, "lineLength >= n");
         Integer item = conditionValue(rule, "anyItemLength >= n");
         if (line != null && item != null) {
-          haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = line;
-          haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = item;
+          setters.lineLength().accept(line);
+          setters.itemLength().accept(item);
         }
       }
       if ("noWrap".equals(type)) {
         Integer total = conditionValue(rule, "totalItemLength <= n");
         if (total != null) {
-          haxe.BOOL_CHAIN_SPLIT_TOTAL_LENGTH = total;
+          setters.totalLength().accept(total);
         }
       }
     }
   }
 
-  /**
-   * Custom opAddSubChain rules, read the same way: an onePerLineAfterFirst
-   * rule's itemCount / lineLength+anyItemLength conditions, a noWrap rule's
-   * totalItemLength guard.
-   */
-  private void applyAddChainRules() {
-    JsonNode rules = node("wrapping.opAddSubChain.rules");
-    if (rules == null || !rules.isArray()) return;
-    for (JsonNode rule : rules) {
-      String type = rule.path("type").asText("");
-      if ("onePerLineAfterFirst".equals(type)) {
-        Integer count = conditionValue(rule, "itemCount >= n");
-        if (count != null) {
-          haxe.ADD_CHAIN_SPLIT_ITEM_COUNT = count;
-        }
-        Integer line = conditionValue(rule, "lineLength >= n");
-        Integer item = conditionValue(rule, "anyItemLength >= n");
-        if (line != null && item != null) {
-          haxe.ADD_CHAIN_SPLIT_LINE_LENGTH = line;
-          haxe.ADD_CHAIN_SPLIT_ITEM_LENGTH = item;
-        }
-      }
-      if ("noWrap".equals(type)) {
-        Integer total = conditionValue(rule, "totalItemLength <= n");
-        if (total != null) {
-          haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = total;
-        }
-      }
-    }
+  /** The four split thresholds of one operator chain kind. */
+  private record ChainSetters(IntConsumer lineLength, IntConsumer itemLength, IntConsumer itemCount, IntConsumer totalLength) {
   }
 
   @Nullable
@@ -702,6 +692,7 @@ public final class HxformatJsonMapper {
   }
 
   private void collectLeftovers(JsonNode subtree, String path) {
+    if (subtree.isNull()) return;
     if (!subtree.isObject()) {
       if (!consumed.contains(path)) {
         unsupported.add(path);
@@ -731,13 +722,14 @@ public final class HxformatJsonMapper {
     return value.asInt();
   }
 
+  /** The value at the dotted path; a JSON null (the tool's "unset" for per-construct overrides) counts as absent. */
   @Nullable
   private JsonNode node(String path) {
     JsonNode current = root;
     // the dotted config path's segments
     for (String part : path.split("\\.")) {
       current = current.get(part);
-      if (current == null) return null;
+      if (current == null || current.isNull()) return null;
     }
     return current;
   }

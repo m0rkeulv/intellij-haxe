@@ -58,7 +58,6 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
     if (!(source instanceof HaxeFile)) return rangeToReformat;
     HaxeCodeStyleSettings haxeSettings = settings.getCustomSettings(HaxeCodeStyleSettings.class);
     if (!haxeSettings.ALIGN_INACTIVE_CONDITIONAL_BRANCHES) return rangeToReformat;
-    boolean formatInactive = haxeSettings.FORMAT_INACTIVE_BRANCHES;
     Document document = source.getViewProvider().getDocument();
     if (document == null) return rangeToReformat;
 
@@ -88,7 +87,9 @@ public class HaxeConditionalPostFormatProcessor implements PostFormatProcessor {
       if (target == null || !inRange) continue;
       // block formatting owns branches with parsed structure; alignment only
       // serves the token-soup blobs the formatter preserves verbatim
-      if (formatInactive && leaf.getPsi() instanceof HaxeInactiveBody body && body.hasCleanParse()) continue;
+      boolean blockFormatted = leaf.getPsi() instanceof HaxeInactiveBody body
+                               && !HaxeInactiveBranches.preservedVerbatim(body, haxeSettings);
+      if (blockFormatted) continue;
       String blob = working.substring(start, start + leaf.getTextLength());
       String reindented = reindentBlob(blob, target, indent);
       working.replace(start, start + blob.length(), reindented);

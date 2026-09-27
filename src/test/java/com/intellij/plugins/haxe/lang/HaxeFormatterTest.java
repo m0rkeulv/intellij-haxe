@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
@@ -34,8 +33,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 
 /**
  * @author: Fedor.Korotkov
@@ -79,19 +79,8 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
 
   private void doTest() throws Exception {
     myFixture.configureByFile(getTestName(false) + ".hx");
-      /*CommandProcessor.getInstance().executeCommand(getProject(), new Runnable() {
-          @Override
-          public void run() {
-              CodeStyleManager.getInstance(myFixture.getProject()).reformat(myFixture.getFile());
-
-          }
-      }, null, null);*/
-    WriteCommandAction.runWriteCommandAction(getProject(), new Runnable() {
-      @Override
-      public void run() {
-        CodeStyleManager.getInstance(myFixture.getProject()).reformat(myFixture.getFile());
-      }
-    });
+    Runnable reformat = () -> CodeStyleManager.getInstance(myFixture.getProject()).reformat(myFixture.getFile());
+    WriteCommandAction.runWriteCommandAction(getProject(), reformat);
     try {
       myFixture.checkResultByFile(getTestName(false) + ".txt");
     }
@@ -100,14 +89,8 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
       if (!(e.getCause() instanceof FileNotFoundException || e.getCause() instanceof NoSuchFileException)) {
         throw e;
       }
-      final String path = getTestDataPath() + getTestName(false) + ".txt";
-      FileWriter writer = new FileWriter(FileUtil.toSystemDependentName(path));
-      try {
-        writer.write(myFixture.getFile().getText().trim());
-      }
-      finally {
-        writer.close();
-      }
+      Path path = Path.of(getTestDataPath(), getTestName(false) + ".txt");
+      Files.writeString(path, myFixture.getFile().getText().trim());
       fail("No output text found. File " + path + " created.");
     }
   }
@@ -244,7 +227,6 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
     myTestStyleSettings.ALIGN_MULTILINE_PARAMETERS = true;
     myTestStyleSettings.ALIGN_MULTILINE_BINARY_OPERATION = true;
     myTestStyleSettings.ALIGN_MULTILINE_TERNARY_OPERATION = true;
-    myTestStyleSettings.ALIGN_MULTILINE_BINARY_OPERATION = true;
     doTest();
   }
 
