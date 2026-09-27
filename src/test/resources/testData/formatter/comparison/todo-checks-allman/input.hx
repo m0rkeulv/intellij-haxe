@@ -44,9 +44,15 @@ interface Renderer {
 		checks.breaksAtTheMargin(1000000,
 			"a rather long second argument string that pushes the whole joined line well past the 160 column margin", 3.0000001, true, 5000000, 600000000);
 
-		// an inactive branch: its statements keep the member indent
+		// nested #if inside an inactive branch: fragments and inner directives move as one unit
 		#if neverdefined
-		trace(checks);
+		if (checks != null) {
+	#if debug
+	trace("debug");
+	#else
+	trace("release");
+	#end
+		}
 		#end
 
 		// a comment inside a reformatted element gets the line-comment space

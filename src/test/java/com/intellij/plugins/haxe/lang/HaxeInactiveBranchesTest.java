@@ -86,6 +86,39 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("nested region lexes into the enclosing blob")
+  public void testNestedRegionLexesIntoTheEnclosingBlob() {
+    List<String> bodies = ppBodyTokens(NESTED_REGION_SOURCE);
+
+    assertEquals(1, bodies.size(), "the nested region must not split the branch: " + bodies);
+    assertTrue(bodies.get(0).contains("#if debug"), "the inner directives lie inside the blob");
+    assertTrue(bodies.get(0).contains("#end\n\t}"), "the inner #end and the closing brace lie inside the blob");
+  }
+
+  @Test
+  @DisplayName("branch holding a nested region parses as code")
+  public void testBranchHoldingANestedRegionParsesAsCode() {
+    HaxeInactiveBody body = inactiveBody(NESTED_REGION_SOURCE);
+
+    HaxeMethodDeclaration dead = PsiTreeUtil.findChildOfType(body, HaxeMethodDeclaration.class);
+    assertNotNull(dead, "the dead method with a nested region must parse into real member PSI");
+    assertNotNull(PsiTreeUtil.findChildOfType(dead, HaxeInactiveBody.class), "the inner branch not taken nests as a blob of its own");
+  }
+
+  private static final String NESTED_REGION_SOURCE = """
+    class Foo {
+    \t#if never
+    \tfunction dead():Void {
+    \t\t#if debug
+    \t\ttrace("debug");
+    \t\t#else
+    \t\ttrace("release");
+    \t\t#end
+    \t}
+    \t#end
+    }""";
+
+  @Test
   @DisplayName("dead branch is one comment leaf in the tree")
   public void testDeadBranchIsOneCommentLeafInTheTree() {
     PsiFile file = myFixture.configureByText("Foo.hx", """

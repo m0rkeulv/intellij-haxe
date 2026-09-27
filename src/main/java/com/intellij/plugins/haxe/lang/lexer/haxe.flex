@@ -181,6 +181,7 @@ import com.intellij.openapi.diagnostic.LogLevel;
 
         /** Deal with compiler conditional block constructs (e.g. #if...#end). */
         private IElementType processConditional(IElementType type) {
+            boolean swallowed = ccsupport.directiveIsSwallowed(type);
             ccsupport.processConditional(yytext(), type);
 
             if (PPIF.equals(type)) {
@@ -197,7 +198,8 @@ import com.intellij.openapi.diagnostic.LogLevel;
             if (PPIF.equals(type) || PPELSEIF.equals(type)) {
                 conditionStart();
             }
-            return type;
+            // a region nested in an inactive branch lexes into that branch's blob
+            return remapInactiveToPpbody && swallowed ? PPBODY : type;
         }
 
         // These deal with the state of lexing the *condition* for compiler conditionals
@@ -208,7 +210,7 @@ import com.intellij.openapi.diagnostic.LogLevel;
             if (ccsupport.conditionIsComplete()) {
                 conditionEnd();
             }
-            return PPEXPRESSION;
+            return remapInactiveToPpbody && ccsupport.currentSectionIsSwallowed() ? PPBODY : PPEXPRESSION;
         }
         private void conditionEnd() {
             ccsupport.conditionEnd();

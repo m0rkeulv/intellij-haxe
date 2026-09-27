@@ -174,23 +174,24 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("nested region fragments keep their written nesting")
-  public void testNestedRegionFragmentsKeepTheirWrittenNesting() {
+  @DisplayName("nested region moves with its verbatim branch")
+  public void testNestedRegionMovesWithItsVerbatimBranch() {
     Consumer<CodeStyleSettings> alignVerbatim = ALIGN_INACTIVE.andThen(
       settings -> settings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_INACTIVE_BRANCHES = false);
-    // toggled off, every fragment is verbatim: the lines move as a group to
-    // the brace depth, their text and relative nesting untouched
+    // toggled off, the branch is verbatim: the nested region lies inside its
+    // blob, so its lines move with the branch as one group to the directive's
+    // indent, their text and relative nesting untouched
     String source = """
       class Main {
           #if native
-          function blend():Void {
-          #if debug
+      function blend():Void {
+      #if debug
       var x = 1 +
           ;
-          #else
-          trace(   "release"  );
-          #end
-          }
+      #else
+      trace(   "release"  );
+      #end
+      }
           #end
       }
       """;
@@ -199,12 +200,12 @@ public class HaxeInactiveFormattingTest extends HaxeLightFixtureTestCase {
       class Main {
           #if native
           function blend():Void {
-              #if debug
-              var x = 1 +
-                  ;
-              #else
-              trace(   "release"  );
-              #end
+          #if debug
+          var x = 1 +
+              ;
+          #else
+          trace(   "release"  );
+          #end
           }
           #end
       }
