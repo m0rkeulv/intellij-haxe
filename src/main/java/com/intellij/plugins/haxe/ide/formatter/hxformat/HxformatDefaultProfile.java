@@ -231,7 +231,9 @@ public final class HxformatDefaultProfile {
     common.KEEP_BLANK_LINES_BEFORE_RBRACE = HxformatDefaults.BLANK_LINES_AT_BLOCK_EDGES;
     common.BLANK_LINES_AFTER_PACKAGE = HxformatDefaults.BLANK_LINES_AFTER_PACKAGE;
     common.BLANK_LINES_AFTER_IMPORTS = HxformatDefaults.BLANK_LINES_AFTER_IMPORTS;
+    // betweenTypes is an exact count: the same value bounds the gap both ways
     common.BLANK_LINES_AROUND_CLASS = HxformatDefaults.BLANK_LINES_BETWEEN_TYPES;
+    haxe.KEEP_BLANK_LINES_BETWEEN_TYPES = HxformatDefaults.BLANK_LINES_BETWEEN_TYPES;
     common.BLANK_LINES_AFTER_CLASS_HEADER = HxformatDefaults.BLANK_LINES_BEGIN_TYPE;
     common.BLANK_LINES_AROUND_FIELD = HxformatDefaults.BLANK_LINES_BETWEEN_VARS;
     common.BLANK_LINES_AROUND_METHOD = HxformatDefaults.BLANK_LINES_BETWEEN_FUNCTIONS;

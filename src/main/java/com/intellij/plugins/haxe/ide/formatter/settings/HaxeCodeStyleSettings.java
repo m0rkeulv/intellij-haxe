@@ -108,6 +108,9 @@ public class HaxeCodeStyleSettings extends CustomCodeStyleSettings {
   // gap after a block comment that OPENS the file (a license header);
   // 0 keeps whatever was written
   public int MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = 0;
+  // keep cap between two type declarations, the common BLANK_LINES_AROUND_CLASS
+  // being the minimum; the platform's in-code cap otherwise governs both
+  public int KEEP_BLANK_LINES_BETWEEN_TYPES = 2;
   // keep cap between ADJACENT one-line type declarations (interface One {});
   // 0 pulls them snug, hxformat-style
   public int KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = 2;

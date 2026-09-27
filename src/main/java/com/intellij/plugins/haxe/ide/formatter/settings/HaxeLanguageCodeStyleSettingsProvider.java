@@ -77,6 +77,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
   private static final List<CustomOption> BLANK_LINES_OPTIONS = List.of(
     new CustomOption("MINIMUM_BLANK_LINES_AFTER_USING", "haxe.codestyle.blank.lines.after.using", BLANK_LINES),
     new CustomOption("MINIMUM_BLANK_LINES_AFTER_FILE_HEADER", "haxe.codestyle.blank.lines.after.file.header", BLANK_LINES),
+    new CustomOption("KEEP_BLANK_LINES_BETWEEN_TYPES", "haxe.codestyle.blank.lines.keep.between.types", BLANK_LINES_KEEP),
     new CustomOption("KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES", "haxe.codestyle.blank.lines.between.single.line.types", BLANK_LINES_KEEP),
     new CustomOption("KEEP_BLANK_LINES_AFTER_LBRACE", "haxe.codestyle.blank.lines.keep.after.lbrace", BLANK_LINES_KEEP),
     new CustomOption("KEEP_BLANK_LINES_AFTER_CASE_COLON", "haxe.codestyle.blank.lines.keep.after.case.colon", BLANK_LINES_KEEP),

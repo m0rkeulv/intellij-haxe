@@ -317,13 +317,11 @@ public class HaxeSpacingProcessor {
                                  && !pair.node1().textContains('\n') && !pair.node2().textContains('\n');
     if (singleLineTypePair) return blankLines(0, true, haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES);
     // the gap between two types holds whatever introduces the next one - a
-    // comment, metadata, a #if - and closes a region between them (#end);
-    // a type followed by anything else only keeps its written gap
-    // TODO: the cap is the general in-code keep count; a dedicated
-    //       KEEP_BLANK_LINES_BETWEEN_TYPES would let the minimum and the
-    //       maximum between types be set apart from statement blanks
+    // comment, metadata, a #if - and closes a region between them (#end):
+    // at least the around-class count, at most the between-types cap; a
+    // type followed by anything else only keeps its written gap
     if (betweenTypeDeclarations(pair.node1(), pair.node2())) {
-      return blankLines(common.BLANK_LINES_AROUND_CLASS, true, common.KEEP_BLANK_LINES_IN_CODE);
+      return blankLines(common.BLANK_LINES_AROUND_CLASS, true, haxe.KEEP_BLANK_LINES_BETWEEN_TYPES);
     }
     if (isTypeDeclaration(type1)) {
       return Spacing.createSpacing(0, 0, common.BLANK_LINES_AROUND_CLASS, true, common.KEEP_BLANK_LINES_IN_CODE);

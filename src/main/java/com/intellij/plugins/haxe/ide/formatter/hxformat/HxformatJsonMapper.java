@@ -492,7 +492,11 @@ public final class HxformatJsonMapper {
       common.KEEP_BLANK_LINES_IN_DECLARATIONS = maxAnywhere;
     }
     applyInt("emptyLines.afterPackage", value -> common.BLANK_LINES_AFTER_PACKAGE = value);
-    applyInt("emptyLines.betweenTypes", value -> common.BLANK_LINES_AROUND_CLASS = value);
+    // an exact count: minimum and cap alike
+    applyInt("emptyLines.betweenTypes", value -> {
+      common.BLANK_LINES_AROUND_CLASS = value;
+      haxe.KEEP_BLANK_LINES_BETWEEN_TYPES = value;
+    });
     applyInt("emptyLines.betweenSingleLineTypes", value -> haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = value);
     applyInt("emptyLines.afterFileHeaderComment", value -> haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = value);
     applyInt("emptyLines.classEmptyLines.betweenVars", value -> common.BLANK_LINES_AROUND_FIELD = value);

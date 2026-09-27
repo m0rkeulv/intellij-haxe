@@ -320,6 +320,50 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
       """, formatted);
   }
 
+  @Test
+  @DisplayName("blank lines between types")
+  public void testBlankLinesBetweenTypes() {
+    // the around-class count is the minimum between two types and the
+    // between-types cap the maximum, independent of the in-code cap
+    Consumer<CodeStyleSettings> oneToThree = settings -> {
+      settings.getCommonSettings(HaxeLanguage.INSTANCE).BLANK_LINES_AROUND_CLASS = 1;
+      settings.getCommonSettings(HaxeLanguage.INSTANCE).KEEP_BLANK_LINES_IN_CODE = 1;
+      settings.getCustomSettings(HaxeCodeStyleSettings.class).KEEP_BLANK_LINES_BETWEEN_TYPES = 3;
+    };
+    String source = """
+      class First {
+      	var a:Int;
+      }
+      class Second {
+      	var b:Int;
+      }
+
+
+
+      class Third {
+      	var c:Int;
+      }
+      """;
+
+    String formatted = reformat(oneToThree, source);
+
+    assertEquals("""
+      class First {
+          var a:Int;
+      }
+
+      class Second {
+          var b:Int;
+      }
+
+
+
+      class Third {
+          var c:Int;
+      }
+      """, formatted);
+  }
+
   /** Formats the test-named fixture under the settings setUp installed and the test mutated; a missing expectation is written out to be reviewed. */
   private void doTest() throws Exception {
     reformatFile(getTestName(false) + ".hx");
