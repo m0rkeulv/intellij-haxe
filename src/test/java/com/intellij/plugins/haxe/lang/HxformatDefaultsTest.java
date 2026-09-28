@@ -15,9 +15,10 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * {@link HxformatDefaults} against the tool's own word: the fixture is
- * what {@code haxelib run formatter --default-config <file>} writes (the file
- * must exist beforehand; regenerate it on a formatter upgrade).
+ * Checks {@link HxformatDefaults} against the tool's own defaults. The
+ * fixture is what {@code haxelib run formatter --default-config <file>}
+ * writes; the file must exist before the command runs. Regenerate it when
+ * upgrading the formatter.
  */
 @DisplayName("Formatting: haxe-formatter defaults")
 public class HxformatDefaultsTest extends HaxeLightFixtureTestCase {

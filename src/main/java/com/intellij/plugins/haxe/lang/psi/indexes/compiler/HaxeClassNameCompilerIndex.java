@@ -41,7 +41,7 @@ public class HaxeClassNameCompilerIndex {
             if (!LookupUtil.isActiveTargetPackage(qualifiedInfo.getPackageName(), project)) continue;
             // the blueprint knows the real kind; until it hydrates, CLASS is the display default
             HaxeClassLookupData lookupData =
-              new HaxeClassLookupData(qualifiedInfo, entry.name(), HaxeComponentType.CLASS, () -> catalog.materialize(entry));
+              new HaxeClassLookupData(qualifiedInfo, entry.name(), HaxeComponentType.CLASS, () -> catalog.renderedClass(entry));
             result.add(lookupData);
         }
         return result;
@@ -53,7 +53,7 @@ public class HaxeClassNameCompilerIndex {
         HaxeCompilerTypeCatalogService catalog = HaxeCompilerTypeCatalogService.getInstance(project);
         List<HaxeClass> result = new ArrayList<>();
         for (HaxeCompilerTypeCatalogService.GeneratedType entry : catalog.byName(name)) {
-            HaxeClassModel model = catalog.materialize(entry);
+            HaxeClassModel model = catalog.renderedClass(entry);
             if (model != null) {
                 result.add(model.haxeClass);
             }

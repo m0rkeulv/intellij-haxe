@@ -5,11 +5,12 @@ import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListe
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Every compiler-derived cache dies with the server: a restarted server has
- * an EMPTY module cache, so blueprints, usage verdicts, warm-up bookkeeping
- * and the metadata registry all describe a process that no longer exists.
- * The PSI-cache drop clears resolve results computed while the old server
- * (or a broken compile) made members look unresolved.
+ * Clears every compiler-derived cache when the compilation server's state
+ * changes. A restarted server has an EMPTY module cache, so blueprints, usage
+ * verdicts, the record of compiled contexts and the metadata registry all
+ * describe a process that no longer exists. Dropping the PSI caches also
+ * discards resolve results computed while the old server, or a broken
+ * compile, made members look unresolved.
  */
 public class HaxeDisplayCacheInvalidator implements HaxeCompilationServerListener {
 

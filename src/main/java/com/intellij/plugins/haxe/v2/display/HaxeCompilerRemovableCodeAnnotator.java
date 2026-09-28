@@ -13,18 +13,18 @@ import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Removable code straight from the compiler's {@code display/diagnostics}:
- * unused local variables and functions (the compiler reports no unused
- * fields or methods). The quick fix removes the args' removal range, which
- * may be wider than the highlighted span; when haxe 5 supplies
- * {@code newCode}, it replaces instead. While its toggle is on it REPLACES
- * the plugin's unused local-variable and local-function inspections (they
- * gate themselves off).
+ * Unused code reported by the compiler's {@code display/diagnostics}: unused
+ * local variables and local functions. The compiler reports no unused fields
+ * or methods. The quick fix removes the range given in the diagnostic's
+ * arguments, which may be wider than the highlighted range. When haxe 5
+ * supplies {@code newCode}, the fix replaces the range with it instead.
+ * While its toggle is on, this annotator REPLACES the plugin's unused
+ * local-variable and local-function inspections, which switch themselves off.
  */
 public class HaxeCompilerRemovableCodeAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
   @Override
-  protected boolean featureEnabled(@NotNull HaxeCompilerSettings settings) {
+  protected boolean isFeatureEnabled(@NotNull HaxeCompilerSettings settings) {
     return settings.isDiagnosticsRemovableCodeEnabled();
   }
 
@@ -65,7 +65,7 @@ public class HaxeCompilerRemovableCodeAnnotator extends HaxeCompilerDiagnosticsA
     return description.isBlank() ? HaxeBundle.message("haxe.diagnostics.generic") : description;
   }
 
-  /** The args' removal span when the compiler supplies one that still fits the document, else the highlighted span. */
+  /** The removal range from the diagnostic's arguments when it still fits the document, else the highlighted range. */
   @NotNull
   private static TextRange removalRange(@NotNull Document document, @NotNull Diagnostic diagnostic,
                                         @NotNull TextRange highlighted) {

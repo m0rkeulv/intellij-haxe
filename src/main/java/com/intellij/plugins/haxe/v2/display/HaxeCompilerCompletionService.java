@@ -31,19 +31,22 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
- * The compilation server's completion for a caret, one {@code display/completion}
- * request per popup: the file's build context, an invalidate for an unsaved
- * buffer (a cached module ignores {@code contents} otherwise), the request
- * itself. Availability is decided up front and cheaply: a file without a
- * build context, or a project whose compilation server is switched off,
- * gets no request at all and, once per project, the notification naming
- * the two ways out (enable the server, or switch the source to the IDE).
- * Completion runs under a read action where the services do no network,
- * so the request runs on a pooled thread and the caller waits with the
- * cancellable await, bounded by {@link #ANSWER_TIMEOUT_MS}: a keystroke
- * cancels the wait, a slow first answer (a server still starting, a lime
- * display run) is given up on while the request finishes on its own and
- * warms the next popup.
+ * The compilation server's completion at a caret, one
+ * {@code display/completion} request per popup. For an unsaved buffer the
+ * file is invalidated on the server first, because a cached module ignores
+ * {@code contents} otherwise.
+ *
+ * Availability is decided up front and cheaply. A file without a build
+ * context, or a project whose compilation server is switched off, gets no
+ * request at all. Once per project, a notification then names the two ways
+ * out: enable the server, or switch completion to the IDE.
+ *
+ * Completion runs under a read action, which must not wait on the network.
+ * The request therefore runs on a pooled thread, and the caller waits for at
+ * most {@link #ANSWER_TIMEOUT_MS}. Typing cancels the wait. A slow answer,
+ * such as from a server that is still starting or from a {@code lime display} run,
+ * is abandoned. The request still completes, so the next popup gets a faster
+ * answer.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -64,12 +67,13 @@ public final class HaxeCompilerCompletionService {
   }
 
   /**
-   * Whether the file can be completed by the compiler at all: the project's
-   * compilation server is switched on, the file's container has a build
-   * command (the display context falls back to a lone known build file,
-   * which answers nothing useful without the command's setup), and a build
-   * context derives from it. False raises the notification, once per
-   * project. Read action; no network.
+   * Whether the compiler can complete in this file at all. That requires the
+   * project's compilation server to be switched on, a build command for the
+   * file's container, and a display context for the file. The build command
+   * is required because the display context otherwise falls back to a lone
+   * known build file, which answers nothing useful without the command's
+   * setup. A false answer shows the notification, once per project. Call in
+   * a read action; no network.
    */
   public boolean ensureAvailable(@NotNull VirtualFile file) {
     boolean serverEnabled = HaxeBuildToolSettings.getInstance(project).isCompilationServerEnabled();
@@ -84,9 +88,9 @@ public final class HaxeCompilerCompletionService {
   }
 
   /**
-   * The compiler's items at the offset, or null when the server does not
-   * answer within the timeout or at all, or completion was cancelled (the
-   * platform's cancellation propagates). Read action, after
+   * The compiler's items at the offset, or null when the server gives no
+   * answer within the timeout. A cancelled completion ends in the platform's
+   * cancellation exception. Call in a read action, after
    * {@link #ensureAvailable}.
    */
   @Nullable
@@ -100,7 +104,7 @@ public final class HaxeCompilerCompletionService {
     return awaitAnswer(request, path);
   }
 
-  /** Waits for the answer under cancellation checks, giving up after the timeout with nothing. */
+  /** Waits for the answer while checking for cancellation; null after the timeout. */
   @Nullable
   private static CompletionList awaitAnswer(Future<CompletionList> request, String path) {
     long deadline = System.currentTimeMillis() + ANSWER_TIMEOUT_MS;
@@ -121,11 +125,11 @@ public final class HaxeCompilerCompletionService {
   }
 
   /**
-   * The doc comment of the item at the index of the popup's completion, from
-   * a {@code display/completionItem/resolve} request against the same
-   * server, for an item the completion listed without its doc. Background
-   * thread, no read lock held by the caller; null when there is nothing to
-   * resolve against or the declaration has no doc.
+   * The doc comment of a completion item that arrived without one, fetched
+   * with {@code display/completionItem/resolve}. {@code index} is the item's
+   * position in the popup's completion list. Null when there is no server to
+   * ask or the declaration has no doc. Call on a background thread without
+   * holding the read lock.
    */
   @Nullable
   public String resolveDoc(@NotNull VirtualFile file, int index) {

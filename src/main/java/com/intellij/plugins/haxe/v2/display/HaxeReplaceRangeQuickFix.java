@@ -15,18 +15,17 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Replaces the span a compiler diagnostic marked as removable with the
- * compiler's replacement text — empty replacement means plain removal
- * (haxe 4 sends no replacement; haxe 5 may supply {@code newCode}).
- * Diagnostics are a background snapshot, so the fix re-validates that the
- * document still carries the captured text at the captured offsets and
- * quietly does nothing when the code moved. A line left blank by a removal
- * is removed whole.
+ * Replaces a range a compiler diagnostic points at with new text, or removes
+ * it when the replacement is empty. Backs the unused-import and
+ * removable-code fixes (haxe 5 may supply {@code newCode}) and the spelling
+ * corrections. Diagnostics are a background snapshot, so the fix first
+ * checks that the document still holds the captured text at the captured
+ * offsets, and does nothing when the code moved. A line left blank by a
+ * removal is removed whole.
  *
- * Implements BOTH fix interfaces: the batch conversion keeps an annotation
- * fix only when it is a {@link LocalQuickFix}, so Inspect Code results
- * would silently lose an IntentionAction-only fix. The document comes from
- * the file, never the editor — the batch path has no editor at all.
+ * Implements both fix interfaces, because Inspect Code keeps an annotation's
+ * fix only when it is a {@link LocalQuickFix}. The document comes from the
+ * file, never the editor, since the batch path has no editor.
  */
 final class HaxeReplaceRangeQuickFix implements IntentionAction, LocalQuickFix {
   private final String text;

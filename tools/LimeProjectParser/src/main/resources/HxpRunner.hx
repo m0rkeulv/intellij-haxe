@@ -5,16 +5,16 @@ import lime.tools.Platform;
 import hxp.Haxelib;
 
 /**
-	Executed by the USER's haxe with -lib lime -lib hxp (never compiled into
-	the tool's jar - lime.tools is only available in that context). Mirrors
-	lime.tools.HXProject.main: seeds the HXProject statics, instantiates the
-	.hxp script class and prints the build configuration as JSON instead of a
-	serialized HXProject.
+	Runs under the USER's haxe with -lib lime -lib hxp. It is never compiled
+	into the tool's jar, because lime.tools is available only in that
+	context. It mirrors lime.tools.HXProject.main: it sets the HXProject
+	statics, instantiates the .hxp script class, and prints the build
+	configuration as JSON instead of a serialized HXProject.
 
 	Usage (spawned by HxpEvaluator):
 	  haxe <ScriptClass> -cp <temp> -lib lime -lib hxp --run HxpRunner <ScriptClass> --target <id> [-D name[=value]]...
 
-	Compiled by whatever haxe the user has - keep to the 4.1 syntax floor.
+	Whatever haxe the user has compiles it, so it keeps to the 4.1 syntax floor.
 **/
 class HxpRunner {
 	public static function main():Void {
@@ -69,7 +69,7 @@ class HxpRunner {
 		var haxelibs = [];
 		for (haxelib in project.haxelibs) {
 			haxelibs.push({name: haxelib.name, version: haxelib.version == null ? "" : haxelib.version});
-			// lime defines each haxelib's name (see ProjectXMLParser) - mirror it
+			// lime's project.xml parser defines each haxelib's name; do the same
 			if (!Reflect.hasField(defines, haxelib.name)) {
 				Reflect.setField(defines, haxelib.name, haxelib.version == null ? "" : haxelib.version);
 			}
@@ -88,10 +88,10 @@ class HxpRunner {
 	}
 
 	/**
-		Maps a lime CLI target id to the Platform the script sees. The compile
-		targets that are not platforms of their own (hl, neko, cppia, java, cs,
-		nodejs) run on the HOST platform with a target flag set - the same
-		mapping lime's CommandLineTools applies.
+		Maps a lime command-line target id to the Platform the script sees. The
+		compile targets that are not platforms of their own (hl, neko, cppia,
+		java, cs, nodejs) run on the HOST platform with a target flag set, as
+		lime's CommandLineTools maps them.
 	**/
 	static function resolvePlatform(targetId:String, targetFlags:Map<String, String>):Platform {
 		switch (targetId) {

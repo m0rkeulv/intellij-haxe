@@ -20,14 +20,17 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 
 /**
- * A post-format pass that rewrites the TEXT of selected tokens after block
- * formatting - what lies inside a token (a comment's interior, an inactive
- * branch's lines) is out of the block formatter's reach. A subclass names
- * its setting, its tokens and the edits it wants; the base gates on the file
- * type and the setting, collects the tokens in file order and applies the
- * edits to the document. A file is passed whole; any other element (a
- * declaration an intention just inserted) is passed as its range in the
- * containing file and comes back re-found after the edits.
+ * A post-format pass that rewrites the text of selected tokens after block
+ * formatting. The block formatter only manages the whitespace between
+ * tokens, so the text inside a token (a comment's interior, an inactive
+ * branch's lines) needs a pass of its own.
+ * <p>
+ * A subclass names its setting, the tokens it handles and the edits it
+ * wants. The base class checks the file type and the setting, collects the
+ * tokens in file order and applies the edits to the document. A whole file
+ * is processed as it is. Any other element, such as a declaration an
+ * intention just inserted, is processed as its range in the containing file
+ * and is looked up again after the edits.
  */
 public abstract class HaxeTextPostFormatProcessor implements PostFormatProcessor {
 
@@ -62,9 +65,9 @@ public abstract class HaxeTextPostFormatProcessor implements PostFormatProcessor
     List<Replacement> replacements = replacements(nodes, pass);
     if (replacements.isEmpty()) return rangeToReformat;
 
-    // applied LAST first so the original-coordinate offsets stay valid; the
-    // localized edits keep range markers, folding and undo outside the
-    // touched tokens alive
+    // The edits apply from the last to the first, so the offsets of the edits
+    // still to come stay valid. Replacing only the touched tokens, rather than
+    // the whole text, keeps range markers, folding and undo intact elsewhere.
     int shift = 0;
     for (Replacement replacement : replacements.reversed()) {
       document.replaceString(replacement.start(), replacement.start() + replacement.length(), replacement.text());
@@ -83,14 +86,14 @@ public abstract class HaxeTextPostFormatProcessor implements PostFormatProcessor
   protected abstract boolean handles(@NotNull ASTNode node);
 
   /**
-   * The edits that bring the handled nodes (given in file order) into
-   * shape, in file order and ORIGINAL document coordinates; empty when the
-   * file already is in shape.
+   * The edits that bring the handled nodes into shape. The nodes arrive in
+   * file order; the edits must be in file order too, with offsets in the
+   * original document. Empty when nothing needs to change.
    */
   @NotNull
   protected abstract List<Replacement> replacements(@NotNull List<ASTNode> nodes, @NotNull Pass pass);
 
-  /** The inputs of one run: the document text before any edit, the range and the settings in force. */
+  /** The inputs of one run: the document text before any edit, the range being reformatted and the settings in force. */
   protected record Pass(@NotNull String text,
                         @NotNull TextRange range,
                         @NotNull CodeStyleSettings settings,
@@ -100,18 +103,18 @@ public abstract class HaxeTextPostFormatProcessor implements PostFormatProcessor
       return settings.getIndentOptions(HaxeFileType.INSTANCE);
     }
 
-    /** The node lies (at least partly) inside the range being reformatted. */
+    /** Whether the node lies at least partly inside the range being reformatted. */
     boolean covers(@NotNull ASTNode node) {
       return range.intersects(node.getTextRange());
     }
 
-    /** The node lies in the range and outside every inactive branch that stays as written. */
+    /** Whether the node lies in the range and outside every inactive branch that stays as written. */
     boolean editable(@NotNull ASTNode node) {
-      return covers(node) && !HaxeInactiveBranches.insidePreservedBranch(node, haxeSettings);
+      return covers(node) && !HaxeInactiveBranches.isInsidePreservedBranch(node, haxeSettings);
     }
   }
 
-  /** A document edit in ORIGINAL (pre-edit) coordinates. */
+  /** A document edit, with its offset in the original (pre-edit) document. */
   protected record Replacement(int start, int length, @NotNull String text) {
 
     /** The edit that swaps the node's whole text for {@code text}. */

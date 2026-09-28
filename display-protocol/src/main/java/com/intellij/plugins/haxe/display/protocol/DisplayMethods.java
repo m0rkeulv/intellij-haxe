@@ -1,9 +1,10 @@
 package com.intellij.plugins.haxe.display.protocol;
 
 /**
- * JSON-RPC method names of the haxe display protocol (std haxe.display
- * DisplayMethods/ServerMethods/Methods). Support varies by compiler version —
- * gate on the method list returned by {@link #INITIALIZE}.
+ * JSON-RPC method names of the haxe display protocol, as the std
+ * {@code haxe.display} classes DisplayMethods, ServerMethods and Methods
+ * define them. Support varies by compiler version, so check a method against
+ * the list {@link #INITIALIZE} returns before using it.
  */
 public final class DisplayMethods {
 

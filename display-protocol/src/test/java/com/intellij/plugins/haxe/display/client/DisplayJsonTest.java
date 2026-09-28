@@ -14,8 +14,8 @@ import tools.jackson.databind.JsonNode;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Fixtures are captured responses of a live haxe 4.3.7 server (trimmed).
- * Ranges on the wire are 0-BASED — the assertions pin that down.
+ * Decodes trimmed responses captured from a haxe 4.3.7 server. Wire ranges
+ * are 0-BASED, and the assertions pin that down.
  */
 @DisplayName("Display protocol: json decoding")
 public class DisplayJsonTest {
@@ -39,8 +39,8 @@ public class DisplayJsonTest {
   @Test
   @DisplayName("completion decodes every named item kind with its detail and type")
   public void completionDecodesEveryNamedItemKindWithItsDetailAndType() throws Exception {
-    // trimmed from a live Toplevel-mode response: one item per kind the lookup shows, plus an
-    // anonymous structure the decoder drops (no insert text)
+    // trimmed from a Toplevel-mode response: one item per kind the lookup shows, plus an
+    // anonymous structure, which the decoder drops because it has no insert text
     String payload = """
       {"jsonrpc":"2.0","id":1,"result":{"result":{"mode":{"kind":2},"isIncomplete":true,
         "replaceRange":{"start":{"line":3,"character":8},"end":{"line":3,"character":10}},
@@ -66,7 +66,7 @@ public class DisplayJsonTest {
     List<String> names = completion.items().stream().map(CompletionItem::name).toList();
     assertEquals(List.of("count", "shout", "Red", "StringMap", "ds", "Json", "var", "null", ":keep", "debug"), names);
     CompletionItem local = completion.items().get(0);
-    assertTrue(local.isLocal());
+    assertTrue(local.isLocalOrTypeParameter());
     assertEquals("Int", local.type().presentable());
     CompletionItem method = completion.items().get(1);
     assertTrue(method.isField());
@@ -77,7 +77,7 @@ public class DisplayJsonTest {
     assertEquals("haxe.ds.StringMap", type.detail());
     assertEquals("class", type.moduleTypeKind());
     assertEquals("haxe.ds", completion.items().get(4).detail());
-    assertTrue(completion.items().get(6).isKeyword());
+    assertTrue(completion.items().get(6).isKeywordOrLiteral());
   }
 
   @Test
@@ -157,7 +157,7 @@ public class DisplayJsonTest {
     assertTrue(finals.fields().isEmpty(), "the fields sit in the cause for final fields");
     List<String> finalNames = finals.causeFields().stream().map(MissingFields.MissingField::name).toList();
     assertEquals(List.of("label", "x"), finalNames);
-    assertEquals(191, finals.causeFields().get(0).position());
+    assertEquals(191, finals.causeFields().get(0).declarationOffset());
     assertNull(diagnostics.get(0).removableRangeArg(), "no removable range on a missing-fields entry");
   }
 
@@ -220,7 +220,7 @@ public class DisplayJsonTest {
 
     assertEquals(1, contexts.size());
     HaxeServerContext context = contexts.get(0);
-    assertEquals("after_init_macros", context.desc());
+    assertEquals("after_init_macros", context.description());
     assertEquals("js", context.platform());
     assertEquals("c5da38c653f9", context.signature());
     assertEquals("1", context.defines().get("js"));

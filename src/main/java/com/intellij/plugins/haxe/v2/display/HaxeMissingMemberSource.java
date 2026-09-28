@@ -8,13 +8,14 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * The source text of the members a MISSING_FIELDS entry asks for, as the
- * compiler typed them: method stubs that throw until implemented (an empty
- * body for Void), properties with their access pair, plain variables, and
- * for a class whose final fields go uninitialized a constructor taking and
- * assigning each of them in declaration order. An abstract parent's methods
- * are implemented without {@code override} - the compiler rejects it on an
- * abstract parent field.
+ * Source text for the members a MISSING_FIELDS entry asks for, with the
+ * types the compiler reported. It writes method stubs that throw until
+ * implemented (an empty body for Void), properties with their access pair,
+ * and plain variables. For a class whose final fields are never initialized,
+ * it writes a constructor that takes and assigns each of them in declaration
+ * order. An abstract parent's methods are implemented without
+ * {@code override}, because the compiler rejects it on an abstract parent
+ * field.
  */
 final class HaxeMissingMemberSource {
 
@@ -52,7 +53,7 @@ final class HaxeMissingMemberSource {
   @NotNull
   private static String constructorText(@NotNull List<MissingFields.MissingField> finalFields) {
     List<MissingFields.MissingField> ordered = new ArrayList<>(finalFields);
-    ordered.sort(Comparator.comparingInt(MissingFields.MissingField::position));
+    ordered.sort(Comparator.comparingInt(MissingFields.MissingField::declarationOffset));
     List<String> parameters = new ArrayList<>();
     StringBuilder assignments = new StringBuilder();
     for (MissingFields.MissingField field : ordered) {
@@ -76,7 +77,7 @@ final class HaxeMissingMemberSource {
     return "(" + (read != null ? read : "default") + ", " + (write != null ? write : "default") + ")";
   }
 
-  /** The source spelling of a wire access kind; null for the plain access that needs no pair. */
+  /** The source spelling of an access kind the compiler reported; null for the plain access that needs no pair. */
   private static String accessText(@NotNull String wireKind, @NotNull String accessor) {
     return switch (wireKind) {
       case "AccCall" -> accessor;

@@ -17,18 +17,20 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.PARAMETER_AND_ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
- * haxe-formatter's operator chain rules - wrapping.opAddSubChain for +/-
- * chains, wrapping.opBoolChain for &&/|| chains - decided the way the tool
- * decides them: every chain of the kind sitting directly in one holder (the
- * arguments of a call, the items of a literal, a parenthesized expression,
- * a value) is judged together, its items being all their operands, against
- * the line the holder's opener sits on once the tool's own argument fill has
- * broken it. Rules, first match wins (the kind's thresholds):
+ * Reproduces haxe-formatter's operator chain rules: wrapping.opAddSubChain
+ * for +/- chains and wrapping.opBoolChain for &&/|| chains.
+ * <p>
+ * As in the tool, all chains of one kind that sit directly in the same
+ * holder are judged together, and every operand of those chains counts as
+ * an item. A holder is a call's arguments, a literal's items, a
+ * parenthesized expression or a value. The rules measure the line the
+ * holder opens on, after the tool's argument fill has broken it. The first
+ * matching rule wins, with the kind's thresholds:
  *
  * <pre>
  * line reaching LINE_LENGTH and an operand reaching ITEM_LENGTH -> EXPLODE (a break before every operator)
@@ -39,15 +41,16 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * otherwise                                                     -> NONE
  * </pre>
  *
- * A threshold of 0 takes its rule out of the list; all four at 0 leave the
- * chain as written. Lengths come from the joined line ({@link HaxeJoinedLine}); in the total
- * every operand counts two more, the separator that follows it. A chain's
- * decision is memoized on its root ({@link HaxeWrapMemo}).
+ * A threshold of 0 removes its rule; with all four at 0 the chain stays as
+ * written. Widths are measured on the joined line ({@link HaxeJoinedLine}).
+ * In the total, every operand also counts the two-column separator after
+ * it. Each chain's decision is cached on its root ({@link HaxeWrapMemo}).
  */
 public final class HaxeOperatorChainRules {
 
-  // the noWrap rule both kinds share: a chain of this many operands or fewer
-  // on a line within the margin is left alone (not configurable in the tool)
+  // A chain of this many operands or fewer, on a line within the margin, is
+  // left alone. Both kinds share this noWrap rule, and the hxformat.json
+  // mapping does not read it, so it stays fixed.
   public static final int KEEP_ITEM_COUNT = 3;
 
   public enum Kind {
@@ -66,13 +69,17 @@ public final class HaxeOperatorChainRules {
       this.operatorWidth = operatorWidth;
     }
 
-    /** The node is one of the kind's operator elements (the sign wrapped in its operator element, or bare). */
+    /** Whether the node is one of the kind's operators, bare or wrapped in its operator element. */
     public boolean isOperator(@NotNull ASTNode node) {
       ASTNode first = node.getFirstChildNode();
       return operators.contains(first == null ? node.getElementType() : first.getElementType());
     }
 
-    /** The kind whose chain the node is a level of; null for any other node. */
+    /**
+     * The kind of chain the node is one level of; null for any other node.
+     * A chain nests one binary expression per operator, so
+     * {@code a + b + c} has two levels.
+     */
     @Nullable
     public static Kind ofChainLevel(@NotNull ASTNode node) {
       for (Kind kind : values()) {
@@ -97,7 +104,7 @@ public final class HaxeOperatorChainRules {
     }
   }
 
-  /** The kind's thresholds as configured; a threshold of 0 takes its rule out. */
+  /** The kind's thresholds as configured; a threshold of 0 removes its rule. */
   record Thresholds(int lineLength, int itemLength, int itemCount, int totalLength) {
     boolean allOff() {
       return lineLength <= 0 && itemLength <= 0 && itemCount <= 0 && totalLength <= 0;
@@ -110,9 +117,9 @@ public final class HaxeOperatorChainRules {
   private record Decision(Split split, Set<ASTNode> fillBreaks) {
   }
 
-  // a chain's holder: the innermost list, parens or value holding it, else its statement's container
+  // a chain's holder: the innermost list, parentheses or value around it, else its statement's container
   private static final TokenSet HOLDERS = TokenSet.orSet(
-    ARGUMENT_LISTS,
+    PARAMETER_AND_ARGUMENT_LISTS,
     HaxeJoinedLine.STATEMENT_CONTAINERS,
     TokenSet.create(NEW_EXPRESSION, PARENTHESIZED_EXPRESSION, ARRAY_LITERAL, MAP_INITIALIZER_EXPRESSION_LIST, OBJECT_LITERAL_ELEMENT,
                     VAR_INIT, ASSIGN_EXPRESSION, RETURN_STATEMENT));
@@ -121,10 +128,9 @@ public final class HaxeOperatorChainRules {
   }
 
   /**
-   * Whether the chain breaks before this operator: always when it explodes;
-   * when it fills, where the operand after the operator, with the operator
-   * and space that trail it, would reach the margin on the joined line (the
-   * fill then continues one step in, operator leading).
+   * Whether the chain breaks before this operator. An exploding chain breaks
+   * before every operator. A filling chain breaks only before an operator
+   * whose following operand the fill moves to a new line.
    */
   public static boolean breaksBefore(@NotNull Kind kind, @NotNull ASTNode operator,
                                      @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
@@ -135,7 +141,7 @@ public final class HaxeOperatorChainRules {
     return following != null && decision.fillBreaks().contains(following);
   }
 
-  /** Whether the chain this level belongs to explodes - every operand then starts its own line. */
+  /** Whether the chain this level belongs to explodes, which starts every operand on its own line. */
   static boolean explodes(@NotNull Kind kind, @NotNull ASTNode chainLevel,
                           @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     ASTNode root = HaxeFormatterNodes.outermostOfKind(chainLevel, kind.chainTypes);
@@ -175,28 +181,28 @@ public final class HaxeOperatorChainRules {
     }
 
     int margin = common.getRootSettings().getRightMargin(HaxeLanguage.INSTANCE);
-    // a chain held by nothing closer than its statement's container is
-    // judged on the statement's line - the chain's own
+    // a chain with no holder closer than its statement's container is judged on its own line
     ASTNode measured = HaxeJoinedLine.STATEMENT_CONTAINERS.contains(holder.getElementType()) ? chain : holder;
     int lineLength = measuredLineLength(measured, common, haxe);
-    boolean exceeds = lineLength > margin;
-    // a threshold of 0 takes its rule out; the others still apply
+    boolean exceedsMargin = lineLength > margin;
+    // a threshold of 0 removes its rule; the others still apply
     boolean longLine = thresholds.lineLength() > 0 && lineLength >= thresholds.lineLength();
     boolean longOperand = thresholds.itemLength() > 0 && longest >= thresholds.itemLength();
     boolean smallTotal = thresholds.totalLength() > 0 && total <= thresholds.totalLength();
     boolean manyOperands = thresholds.itemCount() > 0 && operands.size() >= thresholds.itemCount();
     if (longLine && longOperand) return Split.EXPLODE;
     if (longLine) return Split.FILL;
-    if (operands.size() <= KEEP_ITEM_COUNT && !exceeds) return Split.NONE;
-    if (smallTotal && !exceeds) return Split.NONE;
+    if (operands.size() <= KEEP_ITEM_COUNT && !exceedsMargin) return Split.NONE;
+    if (smallTotal && !exceedsMargin) return Split.NONE;
     if (manyOperands) return Split.EXPLODE;
     return Split.NONE;
   }
 
   /**
-   * The operands a filling chain moves to a new line: each that, with the
-   * operator and space trailing it, would reach the margin on the chain's
-   * joined line; the fill then continues one step in, operator leading.
+   * The operands a filling chain moves to a new line. An operand moves when
+   * it would reach the margin on the chain's joined line, counting the
+   * operator and space after it. Its new line is indented one step from the
+   * chain's line and starts with the operator before it.
    */
   private static Set<ASTNode> fillBreaksOf(Kind kind, ASTNode chain, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
     HaxeJoinedLine line = HaxeWrapLines.lineOf(chain, common, haxe);
@@ -226,12 +232,12 @@ public final class HaxeOperatorChainRules {
     return holder == null ? chain : holder;
   }
 
-  /** The chains judged together: every chain of the kind sitting directly in a list holder, else just this one. */
+  /** The chains judged together: every chain of the kind directly in a list holder, else just this one. */
   private static List<ASTNode> holderItems(Kind kind, ASTNode holder, ASTNode chain) {
-    boolean list = ARGUMENT_LISTS.contains(holder.getElementType())
-                   || holder.getElementType() == NEW_EXPRESSION
-                   || holder.getElementType() == MAP_INITIALIZER_EXPRESSION_LIST;
-    if (!list) return List.of(chain);
+    boolean listHolder = PARAMETER_AND_ARGUMENT_LISTS.contains(holder.getElementType())
+                         || holder.getElementType() == NEW_EXPRESSION
+                         || holder.getElementType() == MAP_INITIALIZER_EXPRESSION_LIST;
+    if (!listHolder) return List.of(chain);
     List<ASTNode> items = new ArrayList<>();
     for (ASTNode child = holder.getFirstChildNode(); child != null; child = child.getTreeNext()) {
       if (kind.chainTypes.contains(child.getElementType())) items.add(child);
@@ -253,16 +259,16 @@ public final class HaxeOperatorChainRules {
   }
 
   /**
-   * The joined line of the holder (or the chain judged on its own line), cut
-   * where the tool's argument fill breaks it first: at the comma before the
-   * first argument the fill moves down.
+   * The width of the measured node's joined line. For an argument list the
+   * line ends where the tool's argument fill first breaks it, at the comma
+   * before the first moved argument.
    */
   private static int measuredLineLength(ASTNode measured, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
     HaxeJoinedLine line = HaxeWrapLines.lineOf(measured, common, haxe);
     if (line == null) return 0;
-    boolean callArguments = ARGUMENT_LISTS.contains(measured.getElementType()) || measured.getElementType() == NEW_EXPRESSION;
+    boolean callArguments = PARAMETER_AND_ARGUMENT_LISTS.contains(measured.getElementType()) || measured.getElementType() == NEW_EXPRESSION;
     if (!callArguments) return line.width();
-    List<ASTNode> broken = HaxeCallArgumentFill.brokenArguments(measured, common, haxe);
+    List<ASTNode> broken = HaxeCallArgumentFill.movedArguments(measured, common, haxe);
     if (broken.isEmpty()) return line.width();
     return line.columnBefore(broken.getFirst()) - 1;
   }

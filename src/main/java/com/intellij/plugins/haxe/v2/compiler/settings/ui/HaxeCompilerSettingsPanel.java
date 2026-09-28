@@ -25,9 +25,11 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Swing panel for the Haxe compiler settings page: a project default language level
- * and a per-module override table. Holds no reference to project services so it can
- * be exercised in tests; the configurable feeds it data and reads it back.
+ * Swing panel for the Haxe compiler settings page: the default language
+ * level, the completion source, the compiler-diagnostics toggles and a
+ * per-module level override table. It holds no reference to project
+ * services, so tests can exercise it; the configurable feeds it data and
+ * reads it back.
  */
 public final class HaxeCompilerSettingsPanel {
 

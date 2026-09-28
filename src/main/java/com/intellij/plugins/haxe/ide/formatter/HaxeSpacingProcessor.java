@@ -49,7 +49,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.isEmptyBlock;
-import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.nextLineBraces;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.isBraceOnNextLine;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.regionCloser;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.regionOpener;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.*;
@@ -58,23 +58,26 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
  * The spacing between two adjacent child blocks of one node. The rules are
- * consulted phase by phase in precedence order: the first rule that answers
- * a pair decides it, so a rule's position IS part of its meaning.
+ * grouped into phases and tried in precedence order. The first rule that
+ * answers for a pair decides it, so a rule's position is part of its meaning.
+ * <p>
+ * Many rules reproduce an option of haxe-formatter's hxformat.json; the
+ * option's name appears in the rule's doc (sameLine.caseBody, for example).
  *
  * @author: Fedor.Korotkov
  */
 @CustomLog
 public class HaxeSpacingProcessor {
-  // a spacing bound the engine never reaches (it adds one to keepBlankLines, so MAX_VALUE would overflow)
+  // a bound the engine never reaches; MAX_VALUE would overflow, since the engine adds one to keepBlankLines
   private static final int UNBOUNDED = 9999;
   // the functions whose non-block body may move to its own line: every
-  // function-like owner but the anonymous literal
+  // function-like owner except the anonymous function literal
   private static final TokenSet NAMED_FUNCTIONS = TokenSet.andNot(FUNCTION_LIKE_OWNERS, TokenSet.create(FUNCTION_LITERAL));
-  // the rule phases in precedence order; each returns null to fall through
+  // the rule phases in precedence order; a phase returns null to pass the pair on
   private static final List<BiFunction<HaxeSpacingProcessor, Pair, Spacing>> PHASES = List.of(
     HaxeSpacingProcessor::fileSectionSpacing,
     HaxeSpacingProcessor::typeDeclarationSpacing,
-    // before the brace rules: an object literal's braces follow its item decision
+    // before the brace rules, because an object literal's braces follow its item decision
     HaxeSpacingProcessor::literalItemSpacing,
     HaxeSpacingProcessor::typeBodyBraceSpacing,
     HaxeSpacingProcessor::caseBodySpacing,
@@ -97,17 +100,18 @@ public class HaxeSpacingProcessor {
   private final HaxeCodeStyleSettings haxe;
   private final IElementType elementType;
   @Nullable private final IElementType parentType;
-  // whether a pair keeps a written line break: the KEEP_LINE_BREAKS setting
-  // (off during the platform's second reformat, which drops custom breaks),
-  // or a construct whose written layout stands
+  // Whether the node's pairs keep line breaks as written. The KEEP_LINE_BREAKS
+  // setting decides, except for constructs that always keep their written
+  // layout. The platform's second reformat turns the setting off to drop
+  // custom breaks.
   private final boolean keepLineBreaks;
-  // the node sits in a type position (an anonymous structure, a type hint),
-  // whose multi-line bodies keep their written shape
+  // whether the node sits in a type position (an anonymous structure, a type
+  // hint), where multi-line bodies keep their written shape
   private final boolean inTypePosition;
-  // a typedef body under next-line braces lists one field per line, its
-  // braces on their own lines (rightCurly=both); other type bodies keep
-  // their written shape
-  private final boolean typedefLines;
+  // Whether the node is a typedef body under next-line braces. Such a body
+  // lists one field per line with its braces on their own lines
+  // (rightCurly=both); other type bodies keep their written shape.
+  private final boolean expandedTypedefBody;
 
   public HaxeSpacingProcessor(ASTNode node, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
     this.node = node;
@@ -118,17 +122,19 @@ public class HaxeSpacingProcessor {
     parentType = parent == null ? null : parent.getElementType();
     keepLineBreaks = common.KEEP_LINE_BREAKS || keepsWrittenLayout(elementType);
     inTypePosition = parentType == ANONYMOUS_TYPE || PsiTreeUtil.getParentOfType(node.getPsi(), HaxeTypeTag.class) != null;
-    typedefLines = typedefBodyExpands(node, common);
+    expandedTypedefBody = isExpandedTypedefBody(node, common);
   }
 
   /**
-   * The two adjacent child blocks being spaced and the facts every rule
-   * reads off them. Metadata before a member is camouflaged as that
-   * member's type; memberNode2 carries the REAL member behind the
-   * camouflage for the rules that inspect the declaration (field grouping).
+   * The two adjacent child blocks being spaced and the facts the rules read
+   * from them. When the second node is metadata before a member, type2 is
+   * the member's type, so the member rules treat the metadata as the start
+   * of the member. memberNode2 is that member itself, for the rules that
+   * inspect the declaration (field grouping). firstChildType1 and
+   * firstChildType2 are the types of each node's first child.
    */
   private record Pair(Block child1, Block child2, ASTNode node1, ASTNode node2, IElementType type1, IElementType type2,
-                      @Nullable IElementType typeType1, @Nullable IElementType typeType2, ASTNode memberNode2) {
+                      @Nullable IElementType firstChildType1, @Nullable IElementType firstChildType2, ASTNode memberNode2) {
 
     static Pair of(AbstractBlock child1, AbstractBlock child2) {
       ASTNode node1 = child1.getNode();
@@ -164,8 +170,8 @@ public class HaxeSpacingProcessor {
   @Nullable
   private Spacing spacingBetween(Block child1, Block child2) {
     if (!(child1 instanceof AbstractBlock block1) || !(child2 instanceof AbstractBlock block2)) return null;
-    // inside a doc comment only line-leading indentation is managed: line
-    // breaks and blank lines are markdown content (paragraphs) and are all kept
+    // Inside a doc comment only the indentation at line starts is managed.
+    // Line breaks and blank lines are markdown content (paragraphs) and are all kept.
     if (elementType == DOC_COMMENT) return Spacing.createSpacing(0, UNBOUNDED, 0, true, UNBOUNDED);
 
     Pair pair = Pair.of(block1, block2);
@@ -179,12 +185,12 @@ public class HaxeSpacingProcessor {
     return Spacing.createSpacing(0, 1, 0, true, common.KEEP_BLANK_LINES_IN_CODE);
   }
 
-  /** The file's top: license header, package, the import/using section and the directives around it. */
+  /** The top of the file: the license header, the package, the import and using section and the directives around it. */
   @Nullable
   private Spacing fileSectionSpacing(Pair pair) {
-    // a block comment OPENING the file is a license header - it keeps a
-    // minimum gap to whatever follows (doc comments attach to their member
-    // and are not headers)
+    // A block comment that opens the file is a license header and keeps a
+    // minimum gap to whatever follows. Doc comments belong to their member
+    // and are never headers.
     boolean fileHeaderComment = pair.type1() == MML_COMMENT && pair.node1().getTreePrev() == null && node.getTreeParent() == null;
     if (fileHeaderComment && haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER > 0) {
       return blankLines(haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER, true, common.KEEP_BLANK_LINES_IN_CODE);
@@ -202,9 +208,11 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * Grouping on: imports from different package groups get an exact gap,
-   * same-group imports stay snug. Grouping off: the keep cap applies. Either
-   * way the section-end rules own the blank after the section.
+   * Two adjacent imports or usings. With import grouping on, imports from
+   * different package groups get an exact number of blank lines and imports
+   * of one group get none. With grouping off, written blank lines are kept
+   * up to a limit. The blank lines after the section belong to the
+   * section-end rules.
    */
   @Nullable
   private Spacing importPairSpacing(Pair pair) {
@@ -220,27 +228,27 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * Blank-line handling for pairs touching a conditional-compilation token
-   * near the import section: a directive whose conditional wraps imports is
-   * covered by the section's keep cap (haxe-formatter's markImports), and
-   * the closing #end of such a conditional takes over the section-end gap.
-   * Null when the pair is not part of an import section (an inline #if in
-   * an expression, a conditional around a type declaration).
+   * Blank lines for a pair touching a conditional-compilation token in the
+   * import section. A directive whose region contains imports keeps blank
+   * lines up to the section's limit, like haxe-formatter's markImports. The
+   * #end closing such a region carries the gap after the section. Null when
+   * the pair is not part of the import section, such as an inline #if in an
+   * expression or a region around a type declaration.
    */
   @Nullable
   private Spacing importSectionDirectiveSpacing(Pair pair) {
-    boolean cc1 = CONDITIONALLY_NOT_COMPILED.contains(pair.type1());
-    boolean cc2 = CONDITIONALLY_NOT_COMPILED.contains(pair.type2());
-    if (!cc1 && !cc2) return null;
-    Spacing sectionClose = importSectionCloseSpacing(pair, cc2);
+    boolean directive1 = CONDITIONALLY_NOT_COMPILED.contains(pair.type1());
+    boolean directive2 = CONDITIONALLY_NOT_COMPILED.contains(pair.type2());
+    if (!directive1 && !directive2) return null;
+    Spacing sectionClose = importSectionCloseSpacing(pair, directive2);
     if (sectionClose != null) return sectionClose;
-    if (isImportOrUsing(pair.type1()) && cc2) {
-      // an OPENING directive joins the section only when its conditional
-      // holds imports; #else/#elseif/#end already belong to the section
+    if (isImportOrUsing(pair.type1()) && directive2) {
+      // An opening #if joins the section only when its region holds imports.
+      // A #else, #elseif or #end already belongs to the section.
       return continuesImportSection(pair.node2(), pair.type2()) ? importSectionKeepSpacing() : null;
     }
-    if (cc1 && isImportOrUsing(pair.type2())) return importSectionKeepSpacing();
-    if (cc1 && cc2) {
+    if (directive1 && isImportOrUsing(pair.type2())) return importSectionKeepSpacing();
+    if (directive1 && directive2) {
       boolean inSection = isImportSectionEdge(realNeighborType(pair.node1(), false))
                           || isImportOrUsing(realNeighborType(pair.node2(), true));
       return inSection ? importSectionKeepSpacing() : null;
@@ -248,28 +256,29 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** The closing #end of the LAST import conditional carries the section-end gap - unless more section content follows it. */
+  /** The #end closing the last import region carries the gap after the section, unless more section content follows it. */
   @Nullable
-  private Spacing importSectionCloseSpacing(Pair pair, boolean cc2) {
+  private Spacing importSectionCloseSpacing(Pair pair, boolean directive2) {
     if (pair.type1() != PPEND || ONLY_COMMENTS.contains(pair.type2())) return null;
     IElementType lastSectionStatement = realNeighborType(pair.node1(), false);
     boolean sectionCloses = isImportOrUsing(lastSectionStatement)
                             && !isImportOrUsing(pair.type2())
-                            && !(cc2 && continuesImportSection(pair.node2(), pair.type2()));
+                            && !(directive2 && continuesImportSection(pair.node2(), pair.type2()));
     if (!sectionCloses) return null;
     int blanks = lastSectionStatement == USING_STATEMENT ? haxe.MINIMUM_BLANK_LINES_AFTER_USING : common.BLANK_LINES_AFTER_IMPORTS;
     return blankLines(blanks, true, common.KEEP_BLANK_LINES_IN_CODE);
   }
 
   /**
-   * Spacing for a pair whose edge token belongs to a conditional-compilation
-   * region written on ONE line (haxe-formatter's inline sharp; the rule is
-   * fixed, hxformat.json has no key for it): the pair stays on the line with
-   * a space after #if/#elseif and after its condition, around #else, before
-   * #end unless an opening bracket precedes it, and after #end unless a
-   * closing bracket, comma, semicolon or dot follows. Inside the condition
-   * the written spacing stays. Null for a multi-line region, a pair with no
-   * directive at its edge, or a { body (the brace style places that).
+   * A pair next to a directive of a conditional-compilation region written
+   * on one line (haxe-formatter's inline sharp, a fixed rule without an
+   * hxformat.json option). The pair stays on the line. There is one space
+   * after #if and #elseif and after the condition, and around #else. There is
+   * one space before #end unless an opening bracket precedes it, and after
+   * #end unless a closing bracket, comma, semicolon or dot follows. Inside the
+   * condition the written spacing stays. Null for a multi-line region, for a
+   * pair without a directive at the touching edges, and for a { body, which
+   * the brace style places.
    */
   @Nullable
   private Spacing inlineDirectiveSpacing(Pair pair) {
@@ -283,16 +292,21 @@ public class HaxeSpacingProcessor {
     boolean directive2 = CONDITIONALLY_NOT_COMPILED.contains(edgeType2);
     if (!directive1 && !directive2) return null;
     if (!isInlineConditional(directive1 ? edge1 : edge2)) return null;
-    // the lexer keeps a condition's own blanks as PPEXPRESSION tokens, which
-    // the engine cannot rewrite (an in-place replacement is reported as growth
-    // and skews every later edit): the empty gaps beside one stay empty
+    // The lexer keeps the spaces inside a condition as PPEXPRESSION tokens,
+    // which the engine cannot rewrite: it reports an in-place replacement as
+    // growth, which shifts every later edit. The empty gaps beside such a
+    // token therefore stay empty.
     if (isBlankConditionToken(edge1) || isBlankConditionToken(edge2)) return glued();
     int spaces = inlineDirectiveSpaces(edgeType1, edgeType2);
     if (spaces < 0) return Spacing.createSpacing(0, 1, 0, false, 0);
     return Spacing.createSpacing(spaces, spaces, 0, false, 0);
   }
 
-  /** A comment inside the import section belongs to the import BELOW it - the section-end blank must not push it away from its import. */
+  /**
+   * The blank lines after the last import or using. A comment in the import
+   * section belongs to the import below it, so the gap never goes between
+   * the comment and that import.
+   */
   @Nullable
   private Spacing importSectionEndSpacing(Pair pair) {
     if (ONLY_COMMENTS.contains(pair.type2())) return null;
@@ -313,15 +327,16 @@ public class HaxeSpacingProcessor {
     if (isClassDeclaration(elementType) && isClassBodyType(type2)) {
       return braceSpacing(common.SPACE_BEFORE_CLASS_LBRACE, common.BRACE_STYLE, pair);
     }
-    // adjacent ONE-LINE type declarations keep their own blank-line cap
-    // (0 = snug); a multi-line neighbour follows the around-class rules
+    // Two adjacent one-line type declarations have their own blank-line
+    // limit, where 0 puts them on consecutive lines. A multi-line neighbour
+    // follows the around-class rules.
     boolean singleLineTypePair = isTypeDeclaration(type1) && isTypeDeclaration(type2)
                                  && !pair.node1().textContains('\n') && !pair.node2().textContains('\n');
     if (singleLineTypePair) return blankLines(0, true, haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES);
-    // the gap between two types holds whatever introduces the next one - a
-    // comment, metadata, a #if - and closes a region between them (#end):
-    // at least the around-class count, at most the between-types cap; a
-    // type followed by anything else only keeps its written gap
+    // The gap between two types may contain what introduces the next one
+    // (a comment, metadata, a #if) or the #end of a region between them. It
+    // gets at least the around-class count and at most the between-types
+    // limit. A type followed by anything else keeps its written gap.
     if (betweenTypeDeclarations(pair.node1(), pair.node2())) {
       return blankLines(common.BLANK_LINES_AROUND_CLASS, true, haxe.KEEP_BLANK_LINES_BETWEEN_TYPES);
     }
@@ -333,12 +348,13 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** Inside a type body: the structure-extension line, the gaps at a body's braces, a typedef's one-field-per-line commas. */
+  /** Inside a type body: the structure extension's line, the gaps at the braces, and a typedef's one field per line. */
   @Nullable
   private Spacing typeBodyBraceSpacing(Pair pair) {
-    // a structure extension hugs a one-line body ({ > Base, ... }) and takes
-    // its own line in a multi-line one; must precede the class-body { rule,
-    // whose type-position arm keeps the pair as written (the OFF behavior)
+    // A structure extension stays inside a one-line body ({ > Base, ... }) and
+    // takes its own line in a multi-line one. This must run before the '{'
+    // rule, which keeps the pair as written in a type position; that is the
+    // behaviour with the setting off.
     boolean structureExtension = elementType == ANONYMOUS_TYPE_BODY && pair.type1() == PLCURLY && pair.type2() == TYPE_EXTENDS_LIST;
     if (haxe.STRUCTURE_EXTENSION_ON_OWN_LINE && structureExtension) {
       return Spacing.createDependentLFSpacing(1, 1, node.getTextRange(), keepLineBreaks, common.KEEP_BLANK_LINES_IN_CODE);
@@ -347,49 +363,50 @@ public class HaxeSpacingProcessor {
     if (afterBrace != null) return afterBrace;
     Spacing beforeBrace = beforeClosingBraceSpacing(pair);
     if (beforeBrace != null) return beforeBrace;
-    boolean typedefFieldComma = typedefLines && elementType == ANONYMOUS_TYPE_FIELD_LIST && pair.type1() == OCOMMA;
+    boolean typedefFieldComma = expandedTypedefBody && elementType == ANONYMOUS_TYPE_FIELD_LIST && pair.type1() == OCOMMA;
     return typedefFieldComma ? lineBreak() : null;
   }
 
   /**
-   * After a body's '{' (type2 == PRCURLY is the EMPTY body - the before-}
-   * rule keeps its caret line, which smart enter and live templates rely
-   * on). A class body takes the exact after-header count (kept blanks would
-   * defeat "0 after the header") unless it sits in a type position; a blank
-   * hugging a plain block's brace has its own keep cap
-   * (emptyLines.afterLeftCurly) and the pair otherwise behaves like the
-   * fallback rule.
+   * The gap after a body's '{'. An empty body is left to the rules for '}',
+   * which keep its caret line for smart enter and live templates. A class
+   * body gets exactly the after-header count, since kept blank lines would
+   * defeat a setting of 0. In a type position it has no minimum and keeps
+   * its written line break. In a plain block, blank lines after the '{' have
+   * their own limit (emptyLines.afterLeftCurly), and the pair otherwise
+   * behaves like the fallback rule.
    */
   @Nullable
   private Spacing afterOpeningBraceSpacing(Pair pair) {
     if (pair.type1() != PLCURLY || pair.type2() == PRCURLY || !isFirstChild(pair.node1())) return null;
     if (!isClassBodyType(elementType)) return keepCappedBlanks(haxe.KEEP_BLANK_LINES_AFTER_LBRACE);
-    int lineFeeds = inTypePosition && !typedefLines ? 0 : 1 + common.BLANK_LINES_AFTER_CLASS_HEADER;
+    int lineFeeds = inTypePosition && !expandedTypedefBody ? 0 : 1 + common.BLANK_LINES_AFTER_CLASS_HEADER;
     return Spacing.createSpacing(0, 0, lineFeeds, keepLineBreaks, common.BLANK_LINES_AFTER_CLASS_HEADER);
   }
 
   /**
-   * Before a body's '}' (type1 == PLCURLY is the EMPTY body - kept as
-   * written: {} stays inline, a caret line stays for smart enter). A class
-   * body takes the exact before-end count unless it sits in a type
-   * position; a plain block's blank has its own keep cap
+   * The gap before a body's '}'. An empty body is kept as written: {} stays
+   * inline, and a caret line stays for smart enter. A class body gets
+   * exactly the before-end count unless it sits in a type position. In a
+   * plain block, blank lines before the '}' have their own limit
    * (emptyLines.beforeRightCurly).
    */
   @Nullable
   private Spacing beforeClosingBraceSpacing(Pair pair) {
     if (pair.type2() != PRCURLY || pair.type1() == PLCURLY || !isLastChild(pair.node2())) return null;
     if (!isClassBodyType(elementType)) return keepCappedBlanks(common.KEEP_BLANK_LINES_BEFORE_RBRACE);
-    int lineFeeds = inTypePosition && !typedefLines ? 0 : 1 + common.BLANK_LINES_BEFORE_CLASS_END;
+    int lineFeeds = inTypePosition && !expandedTypedefBody ? 0 : 1 + common.BLANK_LINES_BEFORE_CLASS_END;
     return Spacing.createSpacing(0, 0, lineFeeds, keepLineBreaks, common.KEEP_BLANK_LINES_BEFORE_RBRACE);
   }
 
   /**
-   * A case's body under sameLine.caseBody - or expressionCase in a switch
-   * used as a VALUE: Next breaks an inline body onto its own line, Same
-   * joins it, Keep leaves the written line but always spaces the colon
-   * (caseColonPolicy=onlyAfter); the case-colon blank cap
-   * (emptyLines.beforeBlocks) applies, blanks BETWEEN cases keep the
-   * in-code cap.
+   * A case's body, placed per sameLine.caseBody, or per expressionCase in a
+   * switch used as a value. Next moves a body on the case line to its own
+   * line, and Same joins it onto the case line. Keep leaves the line break as
+   * written but always puts one space after the colon
+   * (caseColonPolicy=onlyAfter). Blank lines after the colon have their own
+   * limit (emptyLines.beforeBlocks); blank lines between cases follow the
+   * in-code limit.
    */
   @Nullable
   private Spacing caseBodySpacing(Pair pair) {
@@ -402,14 +419,14 @@ public class HaxeSpacingProcessor {
     return Spacing.createSpacing(1, 1, 0, true, haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON);
   }
 
-  /** Two block comments stacked on their own lines: emptyLines.betweenMultilineComments caps the blanks between them. */
+  /** Two adjacent block comments: emptyLines.betweenMultilineComments limits the blank lines between them. */
   @Nullable
   private Spacing stackedCommentSpacing(Pair pair) {
     boolean stacked = pair.type1() == MML_COMMENT && pair.type2() == MML_COMMENT;
     return stacked ? keepCappedBlanks(haxe.KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS) : null;
   }
 
-  /** Blank lines between a type's members, a comment above a member resolved to that member. */
+  /** Blank lines between a type's members. A comment above a member counts as part of that member. */
   @Nullable
   private Spacing memberSpacing(Pair pair) {
     Spacing documented = memberThenDocSpacing(pair);
@@ -419,13 +436,13 @@ public class HaxeSpacingProcessor {
     Spacing members = memberGap(pair);
     if (members != null) return members;
     if (pair.type1() == DOC_COMMENT) return blankLines(0, false, common.KEEP_BLANK_LINES_IN_CODE);
-    // a plain (MML/MSL) comment directly above a member stays directly
-    // above it: one line break, written blanks within the in-code cap
+    // A plain block or line comment directly above a member stays directly
+    // above it: one line break, and written blank lines up to the in-code limit.
     boolean commentThenMember = ONLY_COMMENTS.contains(pair.type1()) && isMemberDeclaration(pair.type2());
     return commentThenMember ? blankLines(0, true, common.KEEP_BLANK_LINES_IN_CODE) : null;
   }
 
-  /** A blank line before a member belongs BEFORE its doc comment - the pair resolves as if the comment were the member's first line. */
+  /** A member followed by the next member's doc comment. The gap goes before the comment, as if it were the member's first line. */
   @Nullable
   private Spacing memberThenDocSpacing(Pair pair) {
     if (pair.type2() != DOC_COMMENT || !isMemberDeclaration(pair.type1())) return null;
@@ -433,8 +450,7 @@ public class HaxeSpacingProcessor {
     IElementType documentedType = documented == null ? null : documented.getElementType();
     if (isMethodOrConstructorDeclaration(documentedType)) return methodGap();
     if (!isFieldDeclaration(documentedType)) return null;
-    // a FIELD's doc comment also stands off from the previous field
-    // (beforeDocCommentEmptyLines)
+    // a field's doc comment also keeps a distance from the previous field (beforeDocCommentEmptyLines)
     int neighborGap = isMethodOrConstructorDeclaration(pair.type1())
                       ? common.BLANK_LINES_AROUND_METHOD
                       : fieldDocGap(pair.node1(), documented);
@@ -442,9 +458,10 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * A plain comment travels with the field BELOW it too - a field-group or
-   * documented-field blank must land before the comment, not between
-   * comment and field. Without one the pair keeps its written shape.
+   * A field followed by a plain comment above the next field. The comment
+   * belongs to the field below it, so an extra gap for a field-group change
+   * or a documented field goes before the comment, not between comment and
+   * field. Without such a gap the pair keeps its written shape.
    */
   @Nullable
   private Spacing fieldThenCommentSpacing(Pair pair) {
@@ -469,27 +486,31 @@ public class HaxeSpacingProcessor {
     return blankLines(common.BLANK_LINES_AROUND_METHOD, keepLineBreaks, common.KEEP_BLANK_LINES_IN_DECLARATIONS);
   }
 
-  /** The around-field count, raised to whatever extra the pair demands (a group boundary, a documented field). */
+  /** The around-field count, raised to the extra gap the pair needs (a field-group change, a documented field). */
   private Spacing fieldGap(int extraGap) {
     int blanks = Math.max(common.BLANK_LINES_AROUND_FIELD, extraGap);
     return blankLines(blanks, keepLineBreaks, common.KEEP_BLANK_LINES_IN_DECLARATIONS);
   }
 
-  /** Where a statement's body goes: an empty {} collapses, a non-block body follows the sameLine policies, a named function's expression body its own. */
+  /**
+   * Where a body goes. An empty {} collapses, a value if/try follows its
+   * value placement, a non-block body follows the sameLine policies, and a
+   * named function's expression body follows its own setting.
+   */
   @Nullable
   private Spacing bodyPlacementSpacing(Pair pair) {
-    // an EMPTY body's braces collapse to {} when the matching keep-in-one-line
-    // option allows it (class bodies excluded - smart enter owns their caret line)
+    // An empty body's braces collapse to {} when the matching keep-in-one-line
+    // option allows it. Class bodies are excluded, because smart enter needs their caret line.
     boolean emptyBody = pair.type1() == PLCURLY && pair.type2() == PRCURLY && !isClassBodyType(elementType);
     if (emptyBody && emptyBodyStaysInline(parentType)) return glued();
     Spacing valueExpression = valueExpressionSpacing(pair);
     if (valueExpression != null) return valueExpression;
     Spacing nonBlockBody = nonBlockBodySpacing(pair);
     if (nonBlockBody != null) return nonBlockBody;
-    // a NAMED function's non-block body (function f() return x;) moves to
-    // its own line; anonymous/arrow function bodies always stay inline. The
-    // header's own trailing parts also follow a header end - only what
-    // comes after the LAST of them is the body
+    // A named function's non-block body (function f() return x;) moves to its
+    // own line; anonymous and arrow function bodies always stay inline. The
+    // header's own trailing parts can also follow a header end, and only what
+    // comes after the last of them is the body.
     boolean expressionBody = NAMED_FUNCTIONS.contains(elementType)
                              && FUNCTION_HEADER_END.contains(pair.type1())
                              && !FUNCTION_HEADER_TRAILERS.contains(pair.type2());
@@ -497,11 +518,11 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * haxe-formatter's sameLine.*Body policies for a NON-BLOCK body: Next
-   * forces it onto its own line, Same joins it onto the header's line, Keep
-   * leaves it as written; block bodies follow the brace rules instead. A
-   * for/while inside a literal is a COMPREHENSION, not a control statement
-   * - its body always stays on the line.
+   * haxe-formatter's sameLine.*Body policies for a non-block body. Next
+   * moves the body to its own line, Same joins it onto the header's line,
+   * and Keep leaves it as written. Block bodies follow the brace rules
+   * instead. A for or while inside a literal is a comprehension, not a
+   * control statement, so its body always stays on the line.
    */
   @Nullable
   private Spacing nonBlockBodySpacing(Pair pair) {
@@ -513,13 +534,14 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * wrapping.arrayWrap / mapWrap / objectLiteral on a literal's items
-   * (HaxeLiteralItemRules): one per line starts every item and the closing
-   * bracket on its own line, the leading-break fill only the first item and
-   * the bracket (the items then re-pack under their wrap, written breaks
-   * gone), keep joins every written break - an object's braces hug their
-   * fields, as the tool prints them. Comments keep their own spacing; null
-   * leaves the pair to the later phases.
+   * The items of an array, map or object literal under wrapping.arrayWrap,
+   * mapWrap and objectLiteral (see HaxeLiteralItemRules). ONE_PER_LINE puts
+   * every item and the closing bracket on its own line.
+   * FILL_AFTER_LEADING_BREAK does so only for the first item and the closing
+   * bracket; the other items join the line and the wrap then breaks them
+   * where the margin demands. ONE_LINE joins every written break, and an
+   * object's braces sit directly beside its fields, as the tool prints them.
+   * Comments keep their own spacing. Null leaves the pair to the later phases.
    */
   @Nullable
   private Spacing literalItemSpacing(Pair pair) {
@@ -527,14 +549,14 @@ public class HaxeSpacingProcessor {
     if (literal == null || COMMENTS.contains(pair.type1()) || COMMENTS.contains(pair.type2())) return null;
     Decision decision = HaxeLiteralItemRules.decide(literal, common, haxe);
     if (decision == Decision.NONE) return null;
-    // a comma stays with the item before it under every decision
+    // a comma stays on the line of the item before it under every decision
     if (pair.type2() == OCOMMA) return forcedGap(common.SPACE_BEFORE_COMMA);
     boolean bracket = pair.type1() == PLBRACK || pair.type2() == PRBRACK;
     boolean brace = pair.type1() == PLCURLY || pair.type2() == PRCURLY;
     return switch (decision) {
       case ONE_PER_LINE -> lineBreak();
       case FILL_AFTER_LEADING_BREAK -> bracket || brace ? lineBreak() : forcedGap(common.SPACE_AFTER_COMMA);
-      case KEEP -> bracket ? forcedGap(common.SPACE_WITHIN_BRACKETS) : forcedGap(!brace && common.SPACE_AFTER_COMMA);
+      case ONE_LINE -> bracket ? forcedGap(common.SPACE_WITHIN_BRACKETS) : forcedGap(!brace && common.SPACE_AFTER_COMMA);
       case NONE -> null;
     };
   }
@@ -559,23 +581,22 @@ public class HaxeSpacingProcessor {
   private Spacing bracketSpacing(Pair pair) {
     IElementType type1 = pair.type1();
     IElementType type2 = pair.type2();
-    // bracketConfig NoSpace: an access target keeps its '[' snug
+    // bracketConfig NoSpace: no space between an array access target and its '['
     if (elementType == ARRAY_ACCESS_EXPRESSION && type2 == PLBRACK) return spaceIf(false);
     boolean bracketed = elementType == ARRAY_ACCESS_EXPRESSION || BRACKET_LITERALS.contains(elementType);
     if (bracketed && (type1 == PLBRACK || type2 == PRBRACK)) return spaceIf(common.SPACE_WITHIN_BRACKETS);
-    // inside a string's ${ } interpolation braces; the embedded expression
-    // itself formats under the normal rules
+    // inside the ${ } braces of a string interpolation; the embedded expression follows the normal rules
     boolean interpolationBrace = elementType == LONG_TEMPLATE_ENTRY && (type1 == LONG_TEMPLATE_ENTRY_START || type2 == LONG_TEMPLATE_ENTRY_END);
     if (interpolationBrace) return spaceIf(haxe.SPACE_WITHIN_STRING_INTERPOLATION);
-    // type parameter/argument angle brackets: never a space between the name
-    // and its '<'; inside the brackets per the Haxe spacing option
+    // Type parameter and type argument brackets: never a space between the
+    // name and its '<', and inside the brackets per SPACE_WITHIN_TYPE_PARAMETERS.
     if (type2 == TYPE_PARAM || type2 == GENERIC_PARAM) return spaceIf(false);
     boolean typeParams = elementType == TYPE_PARAM || elementType == GENERIC_PARAM;
     if (typeParams && (type1 == OLESS || type2 == OGREATER)) return spaceIf(haxe.SPACE_WITHIN_TYPE_PARAMETERS);
     return null;
   }
 
-  /** The space before a '(' per statement kind, a switch's parens and brace, and the '> =' of a type parameter default. */
+  /** The space before a '(' for each kind, before a switch's parens and brace, and none between the '>' and '=' of a type parameter default. */
   @Nullable
   private Spacing parenBeforeSpacing(Pair pair) {
     if (pair.type2() == PLPAREN) {
@@ -604,26 +625,25 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * The '{' of a statement's block body. BLOCK_STATEMENTs that are the
-   * single sub-element of an enclosing block, such as GUARDED_STATEMENT or
-   * DO_WHILE_BODY, are presented as the enclosing statement type and NOT as
-   * a separate BLOCK_STATEMENT sub-element.
+   * The '{' of a statement's block body. A block that is the only child of a
+   * wrapper such as GUARDED_STATEMENT or DO_WHILE_BODY arrives here as that
+   * wrapper, not as a BLOCK_STATEMENT.
    */
   @Nullable
   private Spacing braceBeforeSpacing(Pair pair) {
-    // lineEnds.emptyCurly=NoBreak: an EMPTY body's {} stays on the header's
-    // line even under next-line brace styles - the collapse rule above folds
-    // the braces themselves, this pair keeps them from moving down
+    // lineEnds.emptyCurly=NoBreak: an empty body's {} stays on the header's
+    // line even under next-line brace styles. The collapse rule in
+    // bodyPlacementSpacing joins the braces; this pair keeps them from moving down.
     if (isEmptyBlock(bodyBlockOf(pair)) && emptyBodyStaysInline(elementType)) return joined();
-    boolean guardedBlock = pair.type2() == GUARDED_STATEMENT && pair.typeType2() == BLOCK_STATEMENT;
+    boolean guardedBlock = pair.type2() == GUARDED_STATEMENT && pair.firstChildType2() == BLOCK_STATEMENT;
     if (elementType == IF_STATEMENT && guardedBlock) return braceSpacing(common.SPACE_BEFORE_IF_LBRACE, common.BRACE_STYLE, pair);
-    boolean loopBlock = pair.type2() == DO_WHILE_BODY && pair.typeType2() == BLOCK_STATEMENT;
+    boolean loopBlock = pair.type2() == DO_WHILE_BODY && pair.firstChildType2() == BLOCK_STATEMENT;
     if (loopBlock && elementType == WHILE_STATEMENT) return braceSpacing(common.SPACE_BEFORE_WHILE_LBRACE, common.BRACE_STYLE, pair);
     if (loopBlock && elementType == DO_WHILE_STATEMENT) return braceSpacing(common.SPACE_BEFORE_DO_LBRACE, common.BRACE_STYLE, pair);
     return pair.type2() == BLOCK_STATEMENT ? blockBraceSpacing(pair) : null;
   }
 
-  /** The brace style before the node's own BLOCK_STATEMENT child; null for a node without a brace setting. */
+  /** The '{' of the node's own BLOCK_STATEMENT child under the node's brace settings; null for a node without them. */
   @Nullable
   private Spacing blockBraceSpacing(Pair pair) {
     if (elementType == ELSE_STATEMENT) return braceSpacing(common.SPACE_BEFORE_ELSE_LBRACE, common.BRACE_STYLE, pair);
@@ -634,7 +654,7 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** The space inside '(...)' per kind; parameter and call parens may also open/close on their own line. */
+  /** The space inside '(...)' for each kind. Parameter, call and grouping parens may also go on their own line. */
   @Nullable
   private Spacing parenWithinSpacing(Pair pair) {
     IElementType type1 = pair.type1();
@@ -656,8 +676,7 @@ public class HaxeSpacingProcessor {
       return spaceAndBreakIf(common.SPACE_WITHIN_METHOD_CALL_PARENTHESES, ownLine);
     }
     if (elementType == PARENTHESIZED_EXPRESSION) {
-      // plain grouping parens; their own line breaks apply only under
-      // binary-operation wrapping
+      // plain grouping parens, whose line break settings apply only when binary operations wrap
       boolean wraps = common.BINARY_OPERATION_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP;
       boolean ownLine = wraps && parenOnNextLine(type1, common.PARENTHESES_EXPRESSION_LPAREN_WRAP, common.PARENTHESES_EXPRESSION_RPAREN_WRAP);
       return spaceAndBreakIf(common.SPACE_WITHIN_PARENTHESES, ownLine);
@@ -665,7 +684,7 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** The setting for the pair's paren: the '(' setting when the pair opens with one, else the ')' setting. */
+  /** The on-next-line setting for the pair's paren: the '(' setting when the pair starts with one, else the ')' setting. */
   private static boolean parenOnNextLine(IElementType type1, boolean lparenOnNextLine, boolean rparenOnNextLine) {
     return type1 == PLPAREN ? lparenOnNextLine : rparenOnNextLine;
   }
@@ -673,33 +692,33 @@ public class HaxeSpacingProcessor {
   /** Object-literal colons, the ternary's sides, and the braces of a value block, a typedef body or a hinted anonymous type. */
   @Nullable
   private Spacing literalAndValueBlockSpacing(Pair pair) {
-    // object literal field colon ({a: 1}) - hxformat's objectFieldColonPolicy
+    // the colon of an object literal field ({a: 1}), per hxformat's objectFieldColonPolicy
     if (elementType == OBJECT_LITERAL_ELEMENT && pair.type2() == OCOLON) return spaceIf(haxe.SPACE_BEFORE_OBJECT_FIELD_COLON);
     if (elementType == OBJECT_LITERAL_ELEMENT && pair.type1() == OCOLON) return spaceIf(haxe.SPACE_AFTER_OBJECT_FIELD_COLON);
     Spacing ternary = elementType == TERNARY_EXPRESSION ? ternarySpacing(pair) : null;
     if (ternary != null) return ternary;
-    // a block used as a VALUE (x = { ... }) opens under the brace style like
-    // any other block - haxe-formatter's leftCurly covers every { but an
-    // object literal's; a typedef's body brace too (lineEnds.typedefCurly
-    // follows leftCurly)
+    // A block used as a value (x = { ... }) opens under the brace style like
+    // any other block: haxe-formatter's leftCurly covers every { except an
+    // object literal's. A typedef's body brace does too, since
+    // lineEnds.typedefCurly follows leftCurly.
     boolean valueBlock = pair.type2() == VALUE_INIT_BLOCK && (elementType == VAR_INIT || elementType == ASSIGN_EXPRESSION);
-    boolean typedefBody = elementType == TYPEDEF_DECLARATION && pair.type1() == OASSIGN && pair.typeType2() == ANONYMOUS_TYPE;
+    boolean typedefBody = elementType == TYPEDEF_DECLARATION && pair.type1() == OASSIGN && pair.firstChildType2() == ANONYMOUS_TYPE;
     if (valueBlock || typedefBody) return braceSpacing(common.SPACE_AROUND_ASSIGNMENT_OPERATORS, common.BRACE_STYLE, pair);
-    // a multi-line anonymous type in a type hint opens on the next line, one
-    // step in (lineEnds.anonTypeCurly follows leftCurly); a one-line one
-    // stays on the hint's line
-    boolean hintedAnonymousType = elementType == TYPE_TAG && pair.type1() == OCOLON && pair.typeType2() == ANONYMOUS_TYPE;
-    if (hintedAnonymousType && nextLineBraces(common) && pair.node2().textContains('\n')) return lineBreak();
+    // A multi-line anonymous type in a type hint opens on the next line, one
+    // step in, since lineEnds.anonTypeCurly follows leftCurly. A one-line
+    // anonymous type stays on the hint's line.
+    boolean hintedAnonymousType = elementType == TYPE_TAG && pair.type1() == OCOLON && pair.firstChildType2() == ANONYMOUS_TYPE;
+    if (hintedAnonymousType && isBraceOnNextLine(common) && pair.node2().textContains('\n')) return lineBreak();
     return null;
   }
 
   /** The four sides of a ?: operator, each per its own setting. */
   @Nullable
   private Spacing ternarySpacing(Pair pair) {
-    if (pair.typeType2() == OQUEST) return spaceIf(common.SPACE_BEFORE_QUEST);
-    if (pair.typeType2() == OCOLON) return spaceIf(common.SPACE_BEFORE_COLON);
-    if (pair.typeType1() == OQUEST) return spaceIf(common.SPACE_AFTER_QUEST);
-    if (pair.typeType1() == OCOLON) return spaceIf(common.SPACE_AFTER_COLON);
+    if (pair.firstChildType2() == OQUEST) return spaceIf(common.SPACE_BEFORE_QUEST);
+    if (pair.firstChildType2() == OCOLON) return spaceIf(common.SPACE_BEFORE_COLON);
+    if (pair.firstChildType1() == OQUEST) return spaceIf(common.SPACE_AFTER_QUEST);
+    if (pair.firstChildType1() == OCOLON) return spaceIf(common.SPACE_AFTER_COLON);
     return null;
   }
 
@@ -712,16 +731,17 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * An assignment sign on either side of the pair - the sign itself or
-   * wrapped in its operator element - meeting a COMPOSITE right-hand node:
-   * a bare token there (the ';' of an empty initializer, a directive) keeps
-   * its own rule, and an XML attribute's '=' is markup, not an assignment.
+   * Whether the pair is an assignment sign and its neighbour, with the sign
+   * either bare or inside its operator element. The right-hand node must be
+   * composite: a bare token there, such as the ';' of an empty initializer or
+   * a directive, keeps its own rule. An XML attribute's '=' is markup, not
+   * an assignment.
    */
   private boolean isSpacedAssignment(Pair pair) {
     boolean assignment = ASSIGN_OPERATORS.contains(pair.type1())
-                         || ASSIGN_OPERATORS.contains(pair.typeType1())
-                         || ASSIGN_OPERATORS.contains(pair.typeType2());
-    return assignment && pair.typeType2() != null && !inXmlTag();
+                         || ASSIGN_OPERATORS.contains(pair.firstChildType1())
+                         || ASSIGN_OPERATORS.contains(pair.firstChildType2());
+    return assignment && pair.firstChildType2() != null && !inXmlTag();
   }
 
   private boolean inXmlTag() {
@@ -743,29 +763,30 @@ public class HaxeSpacingProcessor {
     if (wrapsOperator(pair, ADDITIVE_OPERATORS) && elementType != PREFIX_EXPRESSION) return spaceIf(common.SPACE_AROUND_ADDITIVE_OPERATORS);
     if (wrapsOperator(pair, MULTIPLICATIVE_OPERATORS)) return spaceIf(common.SPACE_AROUND_MULTIPLICATIVE_OPERATORS);
     if (wrapsOperator(pair, UNARY_OPERATORS) && elementType == PREFIX_EXPRESSION) return spaceIf(common.SPACE_AROUND_UNARY_OPERATOR);
-    // >> and >>> arrive as composite operator elements over split '>' tokens
-    // (generics-friendly lexing), so the ELEMENT types match too, not only
-    // the wrapped token of a one-token operator
+    // The lexer splits >> and >>> into single '>' tokens so that generics
+    // parse, and the parser groups them into an operator element. The element
+    // types therefore match too, not only the token inside a one-token operator.
     boolean shift = SHIFT_OPERATORS.contains(pair.type1()) || SHIFT_OPERATORS.contains(pair.type2()) || wrapsOperator(pair, SHIFT_OPERATORS);
     if (shift) return spaceIf(common.SPACE_AROUND_SHIFT_OPERATORS);
-    // the split '>' tokens INSIDE such an operator must stay glued
+    // the '>' tokens inside such an operator element stay together
     if (SHIFT_OPERATORS.contains(elementType)) return glued();
     return null;
   }
 
   /**
-   * wrapping.opBoolChain / opAddSubChain: a chain that explodes, or fills
-   * past the margin, breaks before the operator with the operator LEADING
-   * (HaxeOperatorChainRules). Null when the chain rules leave the pair alone.
+   * wrapping.opBoolChain and opAddSubChain (see HaxeOperatorChainRules). When
+   * the chain rules break before an operator, the operator starts the new
+   * line and the operand after it stays on its line. Null when the chain
+   * rules leave the pair alone.
    */
   @Nullable
   private Spacing chainBreakSpacing(Kind kind, TokenSet operators, Pair pair) {
-    if (operators.contains(pair.typeType2()) && chainBreaksBefore(kind, pair.node2())) return lineBreak();
-    if (operators.contains(pair.typeType1()) && chainBreaksBefore(kind, pair.node1())) return joined();
+    if (operators.contains(pair.firstChildType2()) && chainBreaksBefore(kind, pair.node2())) return lineBreak();
+    if (operators.contains(pair.firstChildType1()) && chainBreaksBefore(kind, pair.node1())) return joined();
     return null;
   }
 
-  /** Equality (==, !=) and relational (<, <=, ...) operators, each per its own setting; both arrive wrapped in a COMPARE_OPERATION. */
+  /** Equality (==, !=) and relational (&lt;, &lt;=, ...) operators, each per its own setting; both arrive inside a COMPARE_OPERATION. */
   @Nullable
   private Spacing compareSpacing(Pair pair) {
     if (wrapsCompareOperator(pair, EQUALITY_OPERATORS)) return spaceIf(common.SPACE_AROUND_EQUALITY_OPERATORS);
@@ -774,13 +795,13 @@ public class HaxeSpacingProcessor {
   }
 
   private static boolean wrapsCompareOperator(Pair pair, TokenSet operators) {
-    return (pair.type1() == COMPARE_OPERATION && operators.contains(pair.typeType1()))
-           || (pair.type2() == COMPARE_OPERATION && operators.contains(pair.typeType2()));
+    return (pair.type1() == COMPARE_OPERATION && operators.contains(pair.firstChildType1()))
+           || (pair.type2() == COMPARE_OPERATION && operators.contains(pair.firstChildType2()));
   }
 
-  /** Either node of the pair is an operator element wrapping one of the operators. */
+  /** Whether either node of the pair is an operator element holding one of the operators. */
   private static boolean wrapsOperator(Pair pair, TokenSet operators) {
-    return operators.contains(pair.typeType1()) || operators.contains(pair.typeType2());
+    return operators.contains(pair.firstChildType1()) || operators.contains(pair.firstChildType2());
   }
 
   /** The else/while/catch keywords after their bodies, and "else if". */
@@ -798,7 +819,7 @@ public class HaxeSpacingProcessor {
       int precedingBody = type1 == CATCH_STATEMENT ? haxe.CATCH_BODY_PLACEMENT : haxe.TRY_BODY_PLACEMENT;
       return keywordPlacement(common.SPACE_BEFORE_CATCH_KEYWORD, common.CATCH_ON_NEW_LINE, pair.node1(), precedingBody);
     }
-    // "else if" - the if inside the ELSE_STATEMENT
+    // "else if": the if inside the ELSE_STATEMENT
     if (type1 == KELSE && type2 == IF_STATEMENT) {
       int lineFeeds = common.SPECIAL_ELSE_IF_TREATMENT ? 0 : 1;
       return Spacing.createSpacing(1, 1, lineFeeds, false, common.KEEP_BLANK_LINES_IN_CODE);
@@ -806,18 +827,18 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** A multi-var's split, the call-argument fill, and commas. */
+  /** The split of a multi-var declaration, the call argument fill, and commas. */
   @Nullable
   private Spacing listSpacing(Pair pair) {
     IElementType type1 = pair.type1();
-    // wrapping.multiVar: a multi-var whose JOINED line would pass the split
-    // width breaks after every comma; under the width the written shape is
-    // kept (the tool's length-based joins are not reproduced)
+    // wrapping.multiVar: a multi-var declaration whose joined line would pass
+    // the split width breaks after every comma. Below the width the written
+    // shape is kept; the tool's length-based joins are not reproduced.
     boolean multiVarItem = elementType == LOCAL_VAR_DECLARATION_LIST && type1 == OCOMMA && pair.type2() == LOCAL_VAR_DECLARATION;
     if (multiVarItem && HaxeMultiVarSplit.splits(node, common, haxe)) return lineBreak();
-    // wrapping.callParameter/functionSignature fillLine judged on the JOINED
-    // line: a written break between arguments goes, and the arguments the
-    // tool moves down start their line (HaxeCallArgumentFill)
+    // wrapping.callParameter and functionSignature fillLine, judged on the
+    // joined line (see HaxeCallArgumentFill). A written break between
+    // arguments is removed, and each argument the tool moves down starts its line.
     if (haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE) {
       Spacing fill = callFillSpacing(pair);
       if (fill != null) return fill;
@@ -827,9 +848,9 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** The node is the argument list of a call, a new or a function. */
+  /** Whether the node is the argument list of a call or a new, or a function's parameter list. */
   private boolean isArgumentList() {
-    return ARGUMENT_LISTS.contains(elementType)
+    return PARAMETER_AND_ARGUMENT_LISTS.contains(elementType)
            && (parentType == CALL_EXPRESSION || parentType == NEW_EXPRESSION || FUNCTION_DEFINITION.contains(parentType));
   }
 
@@ -838,12 +859,11 @@ public class HaxeSpacingProcessor {
   private Spacing colonAndMiscSpacing(Pair pair) {
     IElementType type1 = pair.type1();
     IElementType type2 = pair.type2();
-    // the (expr : Type) type-check colon, spaced UNLIKE type-hint colons
+    // the colon of a type check (expr : Type), which has its own setting apart from type hints
     if (elementType == TYPE_CHECK_EXPR && (type1 == OCOLON || type2 == OCOLON)) return spaceIf(haxe.SPACE_AROUND_TYPE_CHECK_COLON);
     Spacing metadata = metadataParenSpacing(pair);
     if (metadata != null) return metadata;
-    // a return's value joins the keyword's line; the value's own internals
-    // may still break
+    // a return's value joins the keyword's line; line breaks inside the value may remain
     boolean returnValue = elementType == RETURN_STATEMENT && type1 == KRETURN && type2 != OSEMI;
     if (haxe.RETURN_VALUE_ON_SAME_LINE && returnValue) return joined();
     if (type1 == OCOLON && elementType == TYPE_TAG) return spaceIf(haxe.SPACE_AFTER_TYPE_REFERENCE_COLON);
@@ -853,7 +873,11 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** Metadata parens - metadata has its own token set, hence the qualified names. The @:name-to-( gap is always snug; inside per the option. */
+  /**
+   * Metadata parens: never a space between @:name and its '(', and inside the
+   * parens per SPACE_WITHIN_METADATA_PARENTHESES. The metadata grammar has its
+   * own token types, hence the qualified names.
+   */
   @Nullable
   private Spacing metadataParenSpacing(Pair pair) {
     boolean insideMeta = elementType == HaxeMetadataTokenTypes.COMPILE_TIME_META || elementType == HaxeMetadataTokenTypes.RUN_TIME_META;
@@ -866,13 +890,13 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * An if/try used as a VALUE ({@code var x = if (c) a else b;}) under its
-   * own placement: Same joins condition, bodies and keywords onto one line,
-   * Keep re-breaks exactly where the source broke (a forced break, so a
-   * pass that drops custom line breaks never pulls an else or catch up),
-   * Next hands the pieces to the statement rules. A block body keeps the
-   * brace rules, and a keyword after its closing brace follows the
-   * statement rules unless kept.
+   * An if or try used as a value ({@code var x = if (c) a else b;}), under
+   * its own placement setting. Same joins condition, bodies and keywords
+   * onto one line. Keep breaks exactly where the source breaks, with a forced
+   * break, so a reformat that drops custom line breaks never pulls an else
+   * or catch up. Next leaves the pieces to the statement rules. A block body
+   * follows the brace rules, and so does a keyword after its closing brace,
+   * unless the placement is Keep.
    */
   @Nullable
   private Spacing valueExpressionSpacing(Pair pair) {
@@ -883,15 +907,16 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * The placement of the pair as a piece of a value-position if/try -
-   * condition to body, body to else/catch, keyword to body; NEXT_LINE when
-   * the pair is no such piece or the policy leaves it to the statement rules.
+   * The placement of the pair as a piece of an if or try used as a value:
+   * condition to body, body to else or catch, or keyword to body. NEXT_LINE
+   * when the pair is no such piece, or when the setting leaves it to the
+   * statement rules.
    */
   private int valueExpressionPlacement(Pair pair) {
     IElementType type1 = pair.type1();
     IElementType type2 = pair.type2();
     if (elementType == IF_STATEMENT) {
-      boolean conditionThenBody = type1 == GUARD && type2 == GUARDED_STATEMENT && pair.typeType2() != BLOCK_STATEMENT;
+      boolean conditionThenBody = type1 == GUARD && type2 == GUARDED_STATEMENT && pair.firstChildType2() != BLOCK_STATEMENT;
       boolean bodyThenElse = type1 == GUARDED_STATEMENT && type2 == ELSE_STATEMENT;
       if (conditionThenBody) return valuePlacement(node, haxe.VALUE_IF_BODY_PLACEMENT);
       if (bodyThenElse) return keywordAfterBodyPlacement(pair.node1(), valuePlacement(node, haxe.VALUE_IF_BODY_PLACEMENT));
@@ -910,12 +935,12 @@ public class HaxeSpacingProcessor {
     return HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
   }
 
-  /** The resolved value placement when the statement sits in value position, else NEXT_LINE (the statement rules). */
+  /** The resolved value placement when the statement is used as a value, else NEXT_LINE, which leaves it to the statement rules. */
   private int valuePlacement(ASTNode statement, int setting) {
     return isExpressionPosition(statement) ? resolvedBodyPlacement(setting) : HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
   }
 
-  /** An else/catch after a block body joins only under Keep; the brace policies decide otherwise. */
+  /** The placement of an else or catch after the body. After a block body Same does not apply, and the statement rules place the keyword instead. */
   private static int keywordAfterBodyPlacement(ASTNode body, int placement) {
     boolean afterBlock = endsWithRightCurly(body);
     return afterBlock && placement == HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE
@@ -923,27 +948,27 @@ public class HaxeSpacingProcessor {
            : placement;
   }
 
-  /** The statement is a value if/try whose pieces the value placement lays out itself. */
+  /** Whether the statement is an if or try used as a value, whose pieces the value placement lays out. */
   private boolean isValueExpression(ASTNode statement, int setting) {
     return valuePlacement(statement, setting) != HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
   }
 
-  /** The whitespace before the node carries a line break in the source. */
+  /** Whether the whitespace before the node contains a line break in the source. */
   private static boolean writtenBreakBefore(ASTNode node) {
     ASTNode previous = node.getTreePrev();
     return previous != null && WHITESPACES.contains(previous.getElementType()) && previous.textContains('\n');
   }
 
   /**
-   * The configured placement for a (header, non-block body) pair - or KEEP
-   * when the pair is no such thing. The pieces of a value if/try laid out
-   * by the value placement are exempt.
+   * The configured placement for a pair of a statement header and its
+   * non-block body; KEEP for any other pair. The pieces of an if or try used
+   * as a value are left to the value placement.
    */
   private int nonBlockBodyPlacement(Pair pair) {
     IElementType type1 = pair.type1();
     IElementType type2 = pair.type2();
-    IElementType typeType2 = pair.typeType2();
-    if (elementType == IF_STATEMENT && type2 == GUARDED_STATEMENT && typeType2 != BLOCK_STATEMENT
+    IElementType firstChildType2 = pair.firstChildType2();
+    if (elementType == IF_STATEMENT && type2 == GUARDED_STATEMENT && firstChildType2 != BLOCK_STATEMENT
         && !isValueExpression(node, haxe.VALUE_IF_BODY_PLACEMENT)) {
       return resolvedBodyPlacement(haxe.IF_BODY_PLACEMENT);
     }
@@ -951,7 +976,7 @@ public class HaxeSpacingProcessor {
         && !isValueExpression(node.getTreeParent(), haxe.VALUE_IF_BODY_PLACEMENT)) {
       return resolvedBodyPlacement(haxe.ELSE_BODY_PLACEMENT);
     }
-    if (type2 == DO_WHILE_BODY && typeType2 != BLOCK_STATEMENT) {
+    if (type2 == DO_WHILE_BODY && firstChildType2 != BLOCK_STATEMENT) {
       return resolvedBodyPlacement(elementType == DO_WHILE_STATEMENT ? haxe.DO_WHILE_BODY_PLACEMENT : haxe.WHILE_BODY_PLACEMENT);
     }
     if (elementType == FOR_STATEMENT && type1 == PRPAREN && type2 != BLOCK_STATEMENT) {
@@ -968,7 +993,7 @@ public class HaxeSpacingProcessor {
     return HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP;
   }
 
-  /** DEFAULT defers to the IDE's own "keep control statement in one line" checkbox. */
+  /** The placement with DEFAULT resolved through the IDE's own "keep control statement in one line" checkbox. */
   private int resolvedBodyPlacement(int placement) {
     if (placement != HaxeCodeStyleSettings.BODY_PLACEMENT_DEFAULT) return placement;
     return common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE
@@ -980,7 +1005,7 @@ public class HaxeSpacingProcessor {
     return leaf.getElementType() == PPEXPRESSION && leaf.getText().isBlank();
   }
 
-  /** Spaces between an inline region's edge tokens; -1 keeps the written 0..1. */
+  /** The spaces between two edge tokens of an inline region; -1 keeps the written zero or one space. */
   private int inlineDirectiveSpaces(IElementType edge1, IElementType edge2) {
     if (edge2 == PPIF) {
       if (OPENING_BRACKETS.contains(edge1)) return 0;
@@ -990,11 +1015,11 @@ public class HaxeSpacingProcessor {
     }
     if (edge1 == PPEXPRESSION && edge2 == PPEXPRESSION) return -1;
     if (edge2 == PPEND) return OPENING_BRACKETS.contains(edge1) ? 0 : 1;
-    if (edge1 == PPEND) return HUGS_CLOSING_DIRECTIVE.contains(edge2) ? 0 : 1;
+    if (edge1 == PPEND) return UNSPACED_AFTER_INLINE_END.contains(edge2) ? 0 : 1;
     return 1;
   }
 
-  /** The #if..#end region holding the directive token is written on one line. */
+  /** Whether the #if..#end region holding the token is written on one line. */
   private static boolean isInlineConditional(ASTNode token) {
     if (token.textContains('\n')) return false;
     IElementType type = token.getElementType();
@@ -1003,12 +1028,12 @@ public class HaxeSpacingProcessor {
     return !newlineBefore && !newlineAfter;
   }
 
-  /** A newline lies between the token and its region's end, or the region is unterminated that way. */
+  /** Whether a newline lies between the token and the region's end, or the region has no end in that direction. */
   private static boolean breaksBeforeRegionEnd(RegionEnd end) {
     return end.directive() == null || end.crossedNewline();
   }
 
-  /** The node's first leaf that is not whitespace-only (a chameleon body's edge whitespace is skipped, as the block builder does). */
+  /** The node's first leaf that is not only whitespace. Like the block builder, this skips the edge whitespace of an inactive branch. */
   @Nullable
   private static ASTNode firstCodeLeaf(ASTNode node) {
     int end = node.getStartOffset() + node.getTextLength();
@@ -1020,7 +1045,7 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** The node's last leaf that is not whitespace-only. */
+  /** The node's last leaf that is not only whitespace. */
   @Nullable
   private static ASTNode lastCodeLeaf(ASTNode node) {
     int start = node.getStartOffset();
@@ -1032,23 +1057,24 @@ public class HaxeSpacingProcessor {
     return null;
   }
 
-  /** The setting for an arrow's kind: arrow function, Haxe 4 function type or Haxe 3 function type. */
+  /** The spacing setting for the arrow's kind: arrow function, Haxe 4 function type or Haxe 3 function type. */
   private boolean arrowSpaced(ASTNode arrow) {
     ASTNode parent = arrow.getTreeParent();
     if (parent == null || parent.getElementType() != FUNCTION_TYPE) return haxe.SPACE_AROUND_ARROW;
-    return isNewFunctionTypeArrow(arrow)
+    return isHaxe4FunctionTypeArrow(arrow)
            ? haxe.SPACE_AROUND_FUNCTION_TYPE_ARROW
            : haxe.SPACE_AROUND_OLD_FUNCTION_TYPE_ARROW;
   }
 
   /**
-   * A Haxe 4 function-type arrow follows a parenthesized argument list
-   * (() -> Void, (Int) -> Void, (a:Int, b:Int) -> Int); parens that merely
-   * group a function type ((Int->Int)->Int) keep the Haxe 3 kind, as
-   * haxe-formatter classifies them. The parser hands a single parenthesized
-   * argument out as a FUNCTION_ARGUMENT, a list as bare parens.
+   * Whether the arrow belongs to a Haxe 4 function type, which follows a
+   * parenthesized argument list: {@code () -> Void}, {@code (Int) -> Void},
+   * {@code (a:Int, b:Int) -> Int}. Parens that only group a function type,
+   * as in {@code (Int->Int)->Int}, keep the Haxe 3 kind, as haxe-formatter
+   * classifies them. The parser produces a single parenthesized argument as a
+   * FUNCTION_ARGUMENT and a list as bare parens.
    */
-  private static boolean isNewFunctionTypeArrow(ASTNode arrow) {
+  private static boolean isHaxe4FunctionTypeArrow(ASTNode arrow) {
     ASTNode before = realNeighbor(arrow, false);
     if (before == null) return false;
     if (before.getElementType() == PRPAREN) return true;
@@ -1057,9 +1083,9 @@ public class HaxeSpacingProcessor {
     return first != null && first.getElementType() == PLPAREN && before.findChildByType(FUNCTION_TYPE) == null;
   }
 
-  /** More import-section content behind the directive: an import conditional opening, or a continuation of one. */
+  /** Whether the directive continues the import section: a #if whose region holds imports, or any #else, #elseif or #end. */
   private static boolean continuesImportSection(@NotNull ASTNode node, @NotNull IElementType type) {
-    // #else/#elseif/#end belong to the enclosing conditional either way
+    // a #else, #elseif or #end belongs to the enclosing region either way
     return type != PPIF || conditionalWrapsImports(node);
   }
 
@@ -1067,17 +1093,17 @@ public class HaxeSpacingProcessor {
     return keepCappedBlanks(haxe.KEEP_BLANK_LINES_BETWEEN_IMPORTS);
   }
 
-  /** The fallback pair shape with a tighter blank-line cap: single space at most, written breaks kept. */
+  /** The fallback spacing with its own blank-line limit: at most one space, written line breaks kept. */
   private static Spacing keepCappedBlanks(int keepBlankLines) {
     return Spacing.createSpacing(0, 1, 0, true, keepBlankLines);
   }
 
-  /** A forced line break, nothing kept: the second node starts its own line. */
+  /** A forced line break with no blank lines: the second node starts its own line. */
   private static Spacing lineBreak() {
     return Spacing.createSpacing(0, 0, 1, false, 0);
   }
 
-  /** A forced join with one space, nothing kept: the pair stays on one line. */
+  /** Exactly one space and no line break: the pair stays on one line. */
   private static Spacing joined() {
     return Spacing.createSpacing(1, 1, 0, false, 0);
   }
@@ -1087,15 +1113,15 @@ public class HaxeSpacingProcessor {
     return Spacing.createSpacing(0, 0, 0, false, 0);
   }
 
-  /** A gap of blank lines - BLANK_LINES_* count blank lines, Spacing counts LINE FEEDS (one more). */
+  /** A gap of blank lines. The BLANK_LINES_* settings count blank lines, while Spacing counts line feeds, which is one more. */
   private static Spacing blankLines(int blanks, boolean keepBreaks, int keepBlanks) {
     return Spacing.createSpacing(0, 0, 1 + blanks, keepBreaks, keepBlanks);
   }
 
   /**
-   * A comma pair in a filled list: the argument after the comma joins the
-   * line, or starts its own when the fill moves it down. A pair beside a
-   * comment keeps the general rules.
+   * A comma and the argument after it in a filled list. The argument joins
+   * the line, or starts a new one when the fill moves it down. A pair next
+   * to a comment keeps the general rules.
    */
   @Nullable
   private Spacing callFillSpacing(Pair pair) {
@@ -1103,15 +1129,15 @@ public class HaxeSpacingProcessor {
     if (pair.type1() != OCOMMA || LIST_PUNCTUATION.contains(pair.type2()) || COMMENTS.contains(pair.type2())) return null;
     ASTNode list = HaxeCallArgumentFill.filledListOf(argument);
     if (list == null) return null;
-    return HaxeCallArgumentFill.brokenArguments(list, common, haxe).contains(argument) ? lineBreak() : joined();
+    return HaxeCallArgumentFill.movedArguments(list, common, haxe).contains(argument) ? lineBreak() : joined();
   }
 
   /**
-   * The gap between a filled list and its parens under the joined-line fill:
-   * the tool re-joins it, so a written break before the first argument or
-   * the closing paren goes. Nothing written after the opening paren stays
-   * read-only, so the margin wrap cannot move the first argument down - the
-   * tool never does, however long it is.
+   * The gap between a filled list and its parens under the joined-line fill.
+   * The tool joins the list to its parens, so a written break after the '('
+   * or before the ')' is removed. When nothing is written after the '(', the
+   * gap is read-only, so the margin wrap cannot move the first argument down;
+   * the tool never does, however long the argument is.
    */
   @Nullable
   private Spacing filledListParenSpacing(Pair pair) {
@@ -1125,9 +1151,9 @@ public class HaxeSpacingProcessor {
     return opening && !gapWritten ? Spacing.getReadOnlySpacing() : glued();
   }
 
-  /** The node is a typedef's body (or its field list) under a next-line brace style. */
-  private static boolean typedefBodyExpands(ASTNode node, CommonCodeStyleSettings common) {
-    if (!nextLineBraces(common)) return false;
+  /** Whether the node is a typedef's body, or its field list, under a next-line brace style. */
+  private static boolean isExpandedTypedefBody(ASTNode node, CommonCodeStyleSettings common) {
+    if (!isBraceOnNextLine(common)) return false;
     IElementType type = node.getElementType();
     if (type == ANONYMOUS_TYPE_BODY) return isTypedefBody(node);
     if (type != ANONYMOUS_TYPE_FIELD_LIST) return false;
@@ -1135,7 +1161,7 @@ public class HaxeSpacingProcessor {
     return body != null && isTypedefBody(body);
   }
 
-  /** The anonymous type body of a typedef declaration (body - type - wrapper - typedef). */
+  /** Whether the anonymous type body belongs to a typedef declaration, three levels up: body, type, wrapper, typedef. */
   private static boolean isTypedefBody(ASTNode body) {
     ASTNode type = body.getTreeParent();
     ASTNode wrapper = type == null ? null : type.getTreeParent();
@@ -1156,10 +1182,10 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * The first real content after an opening directive is an import/using -
-   * parsed (active branch), or as an INACTIVE branch's text, which the
-   * neighbor scan cannot see into. PPBODY is a PsiComment, so the
-   * whitespace-and-comment skips would step over the very branch inspected.
+   * Whether the first real content after an opening directive is an import
+   * or using. In an active branch that is a parsed statement; in an inactive
+   * branch it is the start of the branch's text. PPBODY is a PsiComment, so
+   * the platform's sibling skips would step over the very branch to inspect.
    */
   private static boolean conditionalWrapsImports(ASTNode directive) {
     for (ASTNode n = directive.getTreeNext(); n != null; n = n.getTreeNext()) {
@@ -1175,7 +1201,7 @@ public class HaxeSpacingProcessor {
     return false;
   }
 
-  /** The case belongs to a switch used as a VALUE - its bodies keep their written line per expressionCase=keep. */
+  /** Whether the case belongs to a switch used as a value, whose case bodies follow VALUE_CASE_BODY_PLACEMENT (expressionCase). */
   private static boolean isExpressionSwitchCase(ASTNode switchCase) {
     ASTNode switchBlock = switchCase.getTreeParent();
     ASTNode switchStatement = switchBlock == null ? null : switchBlock.getTreeParent();
@@ -1184,7 +1210,7 @@ public class HaxeSpacingProcessor {
            && isExpressionPosition(switchStatement);
   }
 
-  /** The member a comment introduces: the next real sibling, metadata resolved to the declaration it decorates. */
+  /** The member a comment introduces: the next sibling that is not whitespace or a comment, with metadata resolved to the declaration it decorates. */
   @Nullable
   private static ASTNode followingMember(ASTNode node) {
     ASTNode next = UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(node);
@@ -1196,11 +1222,11 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * The blank lines a field-group boundary demands between two field
-   * declarations (haxe-formatter's classEmptyLines.afterStaticVars and
-   * afterPrivateVars): a change of staticness or visibility splits the var
-   * block. Zero within a group, for non-field nodes, and while the setting
-   * is off.
+   * The blank lines between two fields of different groups, like
+   * haxe-formatter's classEmptyLines.afterStaticVars and afterPrivateVars. A
+   * change from static to instance, or between public and private, starts a
+   * new group. Zero within a group, for nodes that are not named
+   * declarations, and while the setting is off.
    */
   private int fieldGroupGap(@NotNull ASTNode first, @NotNull ASTNode second) {
     int gap = haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS;
@@ -1214,9 +1240,9 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * The blanks a field pair demands beyond the plain around-field count: a
-   * group boundary, and the stand-off after a DOCUMENTED field
-   * (afterFieldsWithDocComments).
+   * The blank lines two fields need beyond the plain around-field count:
+   * the larger of the field-group gap and the gap after a field with a doc
+   * comment (afterFieldsWithDocComments).
    */
   private int fieldExtraGap(@NotNull ASTNode first, @NotNull ASTNode second) {
     int gap = fieldGroupGap(first, second);
@@ -1226,12 +1252,12 @@ public class HaxeSpacingProcessor {
     return gap;
   }
 
-  /** The blanks a field's doc comment demands from the field above it: the field pair's extra gap or the before-doc-comment count, whichever is larger. */
+  /** The blank lines between a field and the doc comment of the next field: the larger of the pair's extra gap and the before-doc-comment count. */
   private int fieldDocGap(@NotNull ASTNode previousField, @NotNull ASTNode documentedField) {
     return Math.max(fieldExtraGap(previousField, documentedField), haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT);
   }
 
-  /** The declaration's own doc comment: the previous real sibling, metadata skipped (doc sits above the meta). */
+  /** Whether a doc comment directly precedes the declaration. Metadata between them is skipped, since a doc comment sits above the metadata. */
   private static boolean hasDocComment(@NotNull ASTNode declaration) {
     ASTNode prev = UsefulPsiTreeUtil.getPrevSiblingSkipWhiteSpaces(declaration);
     while (prev != null && prev.getElementType() == EMBEDDED_META) {
@@ -1240,7 +1266,7 @@ public class HaxeSpacingProcessor {
     return prev != null && prev.getElementType() == DOC_COMMENT;
   }
 
-  /** The element type of the nearest sibling that is real code - not whitespace, comment or conditional-compilation token. */
+  /** The element type of {@link #realNeighbor}. */
   @Nullable
   private static IElementType realNeighborType(ASTNode node, boolean forward) {
     ASTNode neighbor = realNeighbor(node, forward);
@@ -1248,9 +1274,10 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * The nearest sibling that is real code - not whitespace, comment or
-   * conditional-compilation token. Not the PsiComment-based sibling skips:
-   * a #error line is a PsiComment they would step over, but real code here.
+   * The nearest sibling that is real code: not whitespace, a comment or a
+   * conditional-compilation token. The platform's sibling skips do not fit,
+   * because they step over every PsiComment, and a #error line is a
+   * PsiComment that counts as real code here.
    */
   @Nullable
   private static ASTNode realNeighbor(ASTNode node, boolean forward) {
@@ -1265,9 +1292,9 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * An if/try/switch used as a VALUE ({@code var x = if (c) 1 else 2;})
-   * rather than as a statement - it follows the value placements, not the
-   * statement-body policies.
+   * Whether an if, try or switch is used as a value ({@code var x = if (c) 1 else 2;})
+   * rather than as a statement. It then follows the value placements, not
+   * the statement body policies.
    */
   private static boolean isExpressionPosition(ASTNode statement) {
     ASTNode parent = statement.getTreeParent();
@@ -1280,15 +1307,15 @@ public class HaxeSpacingProcessor {
                                 || parentType == DO_WHILE_BODY
                                 || parentType == FOR_STATEMENT
                                 || parentType == MODULE_METHOD_DECLARATION
-                                // an inactive branch's statements sit under the chameleon's
-                                // list wrappers and format like active statements
+                                // an inactive branch's statements sit under its node or
+                                // statement list and format like active statements
                                 || parentType == PPBODY
                                 || parentType == INACTIVE_STATEMENT_LIST
                                 || FUNCTION_DEFINITION.contains(parentType);
     return !statementPosition;
   }
 
-  /** A for/while whose enclosing construct is an array/map literal: {@code [for (x in y) v]}. */
+  /** Whether the statement is a for or while inside an array or map literal: {@code [for (x in y) v]}. */
   private static boolean isComprehension(ASTNode statement) {
     ASTNode parent = statement.getTreeParent();
     IElementType parentType = parent == null ? null : parent.getElementType();
@@ -1299,16 +1326,15 @@ public class HaxeSpacingProcessor {
     return BRACKET_LITERALS.contains(parentType);
   }
 
-  /** Only braces and whitespace inside - the {}-collapse owns its interior. */
-  /** The BLOCK_STATEMENT the pair's second node is, or wraps as a guarded/do-while body; null for any other node. */
+  /** The pair's second node when it is a BLOCK_STATEMENT, or the block it wraps as an if or loop body; null otherwise. */
   @Nullable
   private static ASTNode bodyBlockOf(Pair pair) {
     if (pair.type2() == BLOCK_STATEMENT) return pair.node2();
-    boolean wrapsBlock = (pair.type2() == GUARDED_STATEMENT || pair.type2() == DO_WHILE_BODY) && pair.typeType2() == BLOCK_STATEMENT;
+    boolean wrapsBlock = (pair.type2() == GUARDED_STATEMENT || pair.type2() == DO_WHILE_BODY) && pair.firstChildType2() == BLOCK_STATEMENT;
     return wrapsBlock ? pair.node2().getFirstChildNode() : null;
   }
 
-  /** Which keep-in-one-line option keeps an empty body's {} on the header's line. */
+  /** Whether the keep-in-one-line option for the header's kind keeps an empty body's {} on the header's line. */
   private boolean emptyBodyStaysInline(@Nullable IElementType headerType) {
     // FUNCTION_LITERAL first: FUNCTION_DEFINITION contains it too
     if (headerType == FUNCTION_LITERAL) return common.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE;
@@ -1317,11 +1343,12 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * A placement option decides the keyword's line after a BLOCK, overriding
-   * kept line breaks: false must JOIN "} else", not merely allow it. After a
-   * non-block body ("trace(x); else") the written break stays - joining onto
-   * the statement reads wrong and haxe-formatter keeps it on its own line too
-   * (any body placement other than KEEP forces that break).
+   * The line of an else, while or catch keyword after its body. After a
+   * block, the on-new-line option decides and overrides kept line breaks, so
+   * false joins "} else" rather than merely allowing it. After a non-block
+   * body ("trace(x); else") a written break stays, because joining the
+   * keyword onto the statement reads wrong; haxe-formatter keeps it on its
+   * own line too. Any body placement other than KEEP forces that break.
    */
   private Spacing keywordPlacement(boolean spaceBefore, boolean onNewLine, ASTNode before, int precedingBodySetting) {
     if (!endsWithRightCurly(before)) {
@@ -1332,7 +1359,7 @@ public class HaxeSpacingProcessor {
     return Spacing.createSpacing(spaces, spaces, onNewLine ? 1 : 0, false, 0);
   }
 
-  /** The node's last token, trailing whitespace and comments skipped at every level, is a '}'. */
+  /** Whether the node's last token is a '}', skipping trailing whitespace and comments at every level. */
   private static boolean endsWithRightCurly(ASTNode node) {
     ASTNode last = node;
     for (ASTNode child = lastCodeChild(last); child != null; child = lastCodeChild(last)) {
@@ -1351,12 +1378,12 @@ public class HaxeSpacingProcessor {
     return child;
   }
 
-  /** One space or none; written breaks kept per the node's policy. */
+  /** One space or none; written line breaks stay when the node keeps them. */
   private Spacing spaceIf(boolean space) {
     return spaceAndBreakIf(space, false);
   }
 
-  /** One space or none, and a forced line break when asked; written breaks kept per the node's policy. */
+  /** One space or none, and a forced line break when asked; written line breaks stay when the node keeps them. */
   private Spacing spaceAndBreakIf(boolean space, boolean lineBreak) {
     int spaces = space ? 1 : 0;
     int lineFeeds = lineBreak ? 1 : 0;
@@ -1382,15 +1409,16 @@ public class HaxeSpacingProcessor {
     return CLASS_TYPES.contains(type);
   }
 
-  /** Any top-level type declaration; CLASS_TYPES lacks the body-less typedef kind. */
+  /** Whether the type is a top-level type declaration. CLASS_TYPES lacks the typedef, which has no body of its own. */
   private static boolean isTypeDeclaration(IElementType type) {
     return CLASS_TYPES.contains(type) || type == TYPEDEF_DECLARATION;
   }
 
   /**
-   * The pair separates two type declarations: the first ends one (or is the
-   * #end closing a region that does), the second starts the next (or
-   * introduces it: a comment, metadata, the #if opening its region).
+   * Whether the pair separates two type declarations. The first node ends a
+   * type, or is the #end of a region that ends with one. The second node
+   * starts the next type, or introduces it as a comment, metadata or the #if
+   * opening its region.
    */
   private static boolean betweenTypeDeclarations(ASTNode node1, ASTNode node2) {
     ASTNode before = node1.getElementType() == PPEND ? realNeighbor(node1, false) : node1;
@@ -1399,7 +1427,7 @@ public class HaxeSpacingProcessor {
     return after != null && isTypeDeclaration(after.getElementType());
   }
 
-  /** The declaration a node opens: itself, or the member a comment, metadata or #if leads into. */
+  /** The declaration the node starts: the node itself, or the declaration after a comment, metadata or #if. */
   @Nullable
   private static ASTNode typeIntroducedBy(ASTNode node) {
     IElementType type = node.getElementType();
@@ -1409,13 +1437,14 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * The first IMPORT_GROUP_PACKAGE_DEPTH package segments of an import - the
-   * grouping key. A bare {@code import Std;} groups by its own name, like
-   * haxe-formatter's firstLevelPackage.
+   * The grouping key of an import: the first IMPORT_GROUP_PACKAGE_DEPTH
+   * segments of its path. A bare {@code import Std;} groups by its own
+   * name, like haxe-formatter's firstLevelPackage.
    */
   private String importGroupKey(ASTNode importStatement) {
-    // the qualified path between the "import" keyword and ';'/"as"/"in" -
-    // wildcard tails included ("a.b.*")
+    // Strips the "import" keyword and its spaces, then everything from the
+    // next whitespace on (an "as" or "in" alias), then a trailing ';'. What
+    // remains is the qualified path, wildcard included ("a.b.*").
     String text = importStatement.getText()
       .replaceFirst("^import\\s+", "")
       .replaceFirst("\\s.*$", "")
@@ -1436,9 +1465,9 @@ public class HaxeSpacingProcessor {
   }
 
   /**
-   * A multi-line object literal or anonymous type body keeps its one-per-line
-   * shape even when custom line breaks are being removed - haxe-formatter
-   * keeps those as written while it joins arrays, arguments and chains.
+   * Whether the node keeps its written line breaks even while custom line
+   * breaks are removed. haxe-formatter keeps object literals and anonymous
+   * type bodies as written, while it joins arrays, arguments and chains.
    */
   private static boolean keepsWrittenLayout(IElementType elementType) {
     return elementType == OBJECT_LITERAL
@@ -1447,8 +1476,8 @@ public class HaxeSpacingProcessor {
   }
 
   private static boolean isFieldDeclaration(@Nullable IElementType type) {
-    // an incremental reparse can hand a field out as a LOCAL_VAR_DECLARATION_LIST
-    // (its minimal form): the parser lacks the class-vs-method context then
+    // An incremental reparse can produce a field as a LOCAL_VAR_DECLARATION_LIST,
+    // because the parser then lacks the context that tells class from method body.
     return type == FIELD_DECLARATION || type == LOCAL_VAR_DECLARATION_LIST;
   }
 
@@ -1460,15 +1489,15 @@ public class HaxeSpacingProcessor {
     return isFieldDeclaration(type) || isMethodOrConstructorDeclaration(type);
   }
 
-  // Use this for debugging.  Beware: It is incredibly slow to log all of this.
+  // trace output for debugging; logging every pair in this detail is very slow
   private String composeSpacingBlockData(Pair pair) {
     return """
       MyNode:%s ElementType:%s ParentType:%s
        Child1: Node1:%s Type1:%s FirstChildNode:%s FirstChildType:%s
        Child2: Node2:%s Type2:%s FirstChildNode:%s FirstChildType:%s\
       """.formatted(node, elementType, parentType,
-                    pair.node1(), pair.type1(), pair.node1().getFirstChildNode(), pair.typeType1(),
-                    pair.node2(), pair.type2(), pair.node2().getFirstChildNode(), pair.typeType2());
+                    pair.node1(), pair.type1(), pair.node1().getFirstChildNode(), pair.firstChildType1(),
+                    pair.node2(), pair.type2(), pair.node2().getFirstChildNode(), pair.firstChildType2());
   }
 
   private static String nodeText(@Nullable Block child) {

@@ -30,13 +30,13 @@ import org.jetbrains.annotations.Nullable;
  * usages that exist only in generated code (a handler a macro wires up)
  * count.
  *
- * Inspections run under the read lock, so queries are strictly cache-only: a
- * miss schedules background hydration and answers UNKNOWN this once, and the
- * daemon restart after the verdict lands runs the inspection again against
- * the cache. Verdicts belong to one file revision: any edit in the file drops
- * them, since offsets move. Usages appearing in OTHER files leave a stale
- * verdict until then, which the consumers tolerate because a stale USED only
- * keeps suppressing a hint.
+ * Inspections run under the read lock, so queries only read the cache. A
+ * miss schedules background hydration and answers UNKNOWN. When the verdict
+ * arrives, highlighting restarts and the inspection reads it from the cache.
+ * A verdict belongs to one revision of its file: any edit in the file
+ * discards it, since offsets move. Edits in OTHER files leave a verdict stale
+ * until then. The consumers tolerate a stale USED, because it only keeps
+ * suppressing a hint.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -97,8 +97,8 @@ public final class HaxeCompilerUsageService {
       return verdict.state();
     }
 
-    // no request while the text does not parse; cached verdicts above are
-    // still served, only new server work waits for valid syntax
+    // no request while the text does not parse; cached verdicts are still
+    // served above, only new server work waits for valid syntax
     if (!HaxeCompilerDisplayService.isSyntaxClean(project, virtualFile)) return UsageState.UNKNOWN;
 
     // overriding methods can be reached through a base-typed call

@@ -1,16 +1,8 @@
 package ijhaxe.debug.values;
 
 /**
-	Parses the variable-path subset the evaluator supports:
-
-	```
-	path     = ident accessor*
-	accessor = "." ident | "[" digits "]"
-	ident    = [A-Za-z_$][A-Za-z0-9_]*
-	```
-
-	Anything else (operators, calls, string literals, ...) is NOT an evaluable
-	path and parses to null — the caller reports a friendly "paths only" error.
+	A variable path such as `obj.items[3].name`: a root name followed by field
+	and index accessors. The evaluator resolves it to a slot in debuggee memory.
 **/
 class ValuePath {
 	public final root:String;
@@ -22,7 +14,7 @@ class ValuePath {
 	}
 
 	/**
-		The path rendered for display/error messages (`obj.field[3]`).
+		The path as text for display and error messages (`obj.field[3]`).
 	**/
 	public function display():String {
 		var s = root;
@@ -42,6 +34,18 @@ class ValuePath {
 		return new ValuePath(root, accessors.concat([Field(field)]));
 	}
 
+	/**
+		Parses a path of this grammar, or returns null for any other text
+		(operators, calls, literals):
+
+		```
+		path     = ident accessor*
+		accessor = "." ident | "[" digits "]"
+		ident    = [A-Za-z_$][A-Za-z0-9_$]*
+		```
+
+		TODO: only tests call this; evaluate requests parse through ExprParser. Remove it with its test.
+	**/
 	public static function parse(expression:Null<String>):Null<ValuePath> {
 		if (expression == null) {
 			return null;
@@ -99,7 +103,7 @@ class ValuePath {
 					accessors.push(Index(Std.parseInt(s.substring(start, pos))));
 					pos++;
 				default:
-					return null; // operators, whitespace inside the path, calls, ...
+					return null; // an operator, a call, whitespace inside the path, ...
 			}
 		}
 		return new ValuePath(root, accessors);

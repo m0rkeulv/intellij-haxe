@@ -16,11 +16,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The language level editor features assume for a PSI element: the element's
- * module's effective level (Settings | Compiler | Haxe Compiler, mirrored by
- * the tool window's Language level row). Library/SDK elements use the active
- * build container's level; project files outside any module use the project
- * default. Call in a read action.
+ * The language level editor features assume for a PSI element. An element
+ * gets the effective level of its container, usually its module, as set in
+ * Settings | Compiler | Haxe Compiler or in the tool window's Language level
+ * row. Library and SDK elements use the level of the active build container.
+ * Project files outside every module use the project-root container, which
+ * follows the project default unless it has an override. Call in a read
+ * action.
  */
 public final class HaxeLanguageLevelUtil {
 
@@ -52,8 +54,8 @@ public final class HaxeLanguageLevelUtil {
    * The version conditional compilation sees as {@code haxe_ver}/{@code haxe}
    * for a container: the effective LANGUAGE LEVEL when the compiler settings
    * say to use it, otherwise the container's actual compiler version. The
-   * level is also the fallback when no SDK is registered. Null containerId =
-   * the project default.
+   * level is also the fallback when no SDK is registered. A null containerId
+   * means the project default.
    */
   @NotNull
   public static String getHaxeVersion(@NotNull Project project, @Nullable String containerId) {
@@ -77,13 +79,13 @@ public final class HaxeLanguageLevelUtil {
   }
 
   /**
-   * The element's container id — the KEY the tool window's Language level row
-   * stores overrides under (module name, or the project-root container for
-   * project files outside every module). A library/SDK file is analyzed as
-   * part of whatever the ACTIVE build context pulls in, so it resolves to the
-   * active build file's container — the same source the define context uses,
-   * keeping level checks in sync with which {@code #if haxe_ver} block is
-   * active. Null only for non-physical elements.
+   * The element's container id, which is the key level overrides are stored
+   * under: a module name, or the project-root container for project files
+   * outside every module. A library or SDK file is analyzed as part of
+   * whatever the ACTIVE build context pulls in, so it gets the active build
+   * file's container. The define context uses the same source, which keeps
+   * level checks consistent with the active {@code #if haxe_ver} block. Null
+   * only for non-physical elements.
    */
   @Nullable
   private static String containerIdOf(@NotNull PsiElement element) {
@@ -123,9 +125,10 @@ public final class HaxeLanguageLevelUtil {
   }
 
   /**
-   * The one home for the after-a-level-change refresh: the tool window's
-   * Language level rows re-read (build config topic) and highlighting
-   * re-runs. Every path that mutates a level setting calls this.
+   * Refreshes everything that depends on language levels: the tool window's
+   * Language level rows read the settings again (through the build
+   * configuration topic), and highlighting restarts. Every path that changes
+   * a level setting calls this.
    */
   public static void notifyLanguageLevelChanged(@NotNull Project project) {
     project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();

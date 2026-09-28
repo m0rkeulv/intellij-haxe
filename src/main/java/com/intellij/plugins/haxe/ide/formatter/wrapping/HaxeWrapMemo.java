@@ -15,22 +15,24 @@ import org.jetbrains.annotations.NotNull;
 import java.util.function.Supplier;
 
 /**
- * Per-node memo of the wrap decisions the spacing processor asks for once
- * per block pair (an argument list's broken arguments, an operator chain's
- * split), stored on the node's PSI. An entry is valid while nothing the
- * decision reads has changed: the file's tree and text (the PSI
- * modification count and the file's modification stamp) and the settings
- * the wrapping rules read, compared by VALUE - a transient per-file
- * settings copy carries no identity to key on, and a scheme's fields change
- * without notice.
+ * Caches wrap decisions, such as an argument list's moved arguments or an
+ * operator chain's split, as user data on the node's PSI. The formatter asks
+ * for the same decision once per pair of adjacent blocks, so it is computed
+ * once per node.
+ * <p>
+ * An entry stays valid while nothing the decision reads has changed: the
+ * file's tree and text (the PSI modification count and the file's
+ * modification stamp) and the settings the wrap rules read. Settings are
+ * compared by VALUE, because a transient per-file settings copy has no
+ * stable identity and a scheme's fields change without notice.
  */
 final class HaxeWrapMemo {
 
-  /** A memoized value with the inputs it was computed from. */
+  /** A cached value with the inputs it was computed from. */
   record Entry<T>(Inputs inputs, T value) {
   }
 
-  /** Everything a wrap decision reads besides the node's subtree: the file's state and the rules' settings. */
+  /** Everything a wrap decision reads besides the node's subtree: the file's state and the wrap rules' settings. */
   record Inputs(long psiModificationCount, long fileStamp, int margin, int tabSize, int chainWrap, int arrayWrap,
                 Thresholds additive, Thresholds logic, HaxeLiteralItemRules.AllThresholds literals,
                 int multiVarSplitWidth, int multiVarFillItemLength) {
@@ -48,7 +50,7 @@ final class HaxeWrapMemo {
   private HaxeWrapMemo() {
   }
 
-  /** The node's memoized value under the key, recomputed when its inputs changed. */
+  /** The node's cached value under the key, recomputed when its inputs have changed. */
   static <T> T cached(@NotNull ASTNode node, @NotNull Key<Entry<T>> key,
                       @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe, @NotNull Supplier<T> compute) {
     PsiElement psi = node.getPsi();

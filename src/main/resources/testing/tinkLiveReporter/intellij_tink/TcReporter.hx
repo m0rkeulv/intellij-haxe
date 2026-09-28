@@ -51,8 +51,8 @@ class TcReporter implements Reporter {
 					rootOpen = false;
 				}
 				announceHostedRunFinished(result.summary().failures.length > 0);
-				// nothing on flash ends the process by itself; every line
-				// above is already flushed
+				// On flash nothing ends the process by itself. Every line
+				// above is already flushed.
 				#if flash
 				FlashSupport.exit(0);
 				#end
@@ -63,17 +63,17 @@ class TcReporter implements Reporter {
 	function reportCase(result:CaseResult):Void {
 		switch (result.result) {
 			case Excluded:
-				// a case outside the run (the include-mode skip of single-test
-				// runs, or @:exclude): kept out of the tree entirely instead of
-				// shown as ignored noise
+				// A case outside the run (skipped by a single-test run's
+				// include mode, or marked @:exclude) is left out of the tree
+				// entirely rather than shown as ignored.
 				return;
 			default:
 		}
 		var name = result.info.name;
-		// the case's PosInfos carries the real method name plus the source
-		// FILE - tink's builder loses the class's package (a known FIXME in
-		// its transformPos), so the file rides along for the IDE to pin the
-		// class down when the bare name is ambiguous or packaged
+		// The case's PosInfos has the real method name and the source FILE.
+		// tink's builder drops the class's package, so the file is sent along;
+		// the IDE uses it to find the class when the bare name is ambiguous or
+		// the class is in a package.
 		var location = result.info.pos != null ? " locationHint='haxe:tink://"
 			+ escape(result.info.pos.fileName + "::" + result.info.pos.className + "." + result.info.pos.methodName)
 			+ "'" : "";

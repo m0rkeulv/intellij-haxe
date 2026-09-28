@@ -22,26 +22,29 @@ import java.util.Set;
  */
 public final class HaxeDisplayConfiguration {
 
-  /** A container's define overrides in argument form. */
-  public record DefineOverrides(@NotNull Set<String> removedNames, @NotNull List<String> setArgs) {
+  /**
+   * A container's define overrides in argument form: the names of the
+   * defines to remove, and the {@code -D} arguments of the defines to set.
+   */
+  public record DefineOverrides(@NotNull Set<String> removedNames, @NotNull List<String> defineArgs) {
 
     public static final DefineOverrides EMPTY = new DefineOverrides(Set.of(), List.of());
 
     public boolean isEmpty() {
-      return removedNames.isEmpty() && setArgs.isEmpty();
+      return removedNames.isEmpty() && defineArgs.isEmpty();
     }
 
-    /** Cache-key material: contexts with different overrides are different server contexts. */
+    /** Part of the context's cache key, since different overrides make different server contexts. */
     @NotNull
     public String signature() {
-      return isEmpty() ? "" : "-" + String.join(",", removedNames) + "+" + String.join(",", setArgs);
+      return isEmpty() ? "" : "-" + String.join(",", removedNames) + "+" + String.join(",", defineArgs);
     }
   }
 
   private HaxeDisplayConfiguration() {
   }
 
-  /// The container's overrides as arguments: SETs become `-D name[=value]`, REMOVEs name the defines to strip.
+  /// The container's overrides as arguments: a SET becomes `-D name[=value]`, a REMOVE lists the define to strip.
   @NotNull
   public static DefineOverrides overridesFor(@NotNull Project project, @NotNull String containerId) {
     // TODO: the container's Custom target setting is not forwarded as
@@ -49,29 +52,29 @@ public final class HaxeDisplayConfiguration {
     //  on the container's compiler version first (an hxml-declared custom
     //  target reaches the display server through the hxml itself).
     Set<String> removed = new LinkedHashSet<>();
-    List<String> set = new ArrayList<>();
+    List<String> defineArgs = new ArrayList<>();
     for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
       if (override.effect() == DefineEffect.REMOVE) {
         removed.add(override.name());
       }
       else {
-        set.add("-D");
-        set.add(override.value().isEmpty() ? override.name() : override.name() + "=" + override.value());
+        defineArgs.add("-D");
+        defineArgs.add(override.value().isEmpty() ? override.name() : override.name() + "=" + override.value());
       }
     }
-    return removed.isEmpty() && set.isEmpty() ? DefineOverrides.EMPTY : new DefineOverrides(removed, set);
+    return removed.isEmpty() && defineArgs.isEmpty() ? DefineOverrides.EMPTY : new DefineOverrides(removed, defineArgs);
   }
 
-  /// Applies the overrides to the build's base arguments. SETs simply
-  /// append: a later `-D` wins over an earlier value of the same define. A
-  /// REMOVE has no command-line form, so it expands hxml references one level
-  /// (a reference hides the `-D` lines to strip) and drops the matching
-  /// define pairs.
+  /// Applies the overrides to the build's base arguments. SETs are simply
+  /// appended, because a later `-D` wins over an earlier value of the same
+  /// define. A REMOVE has no command-line form. The hxml references are
+  /// therefore expanded one level, since a reference can hide the `-D` lines
+  /// to strip, and the matching define pairs are dropped.
   @NotNull
   public static List<String> applyOverrides(@NotNull List<String> baseArgs, @NotNull DefineOverrides overrides) {
     if (overrides.isEmpty()) return baseArgs;
     List<String> args = baseWithRemovals(baseArgs, overrides);
-    args.addAll(overrides.setArgs());
+    args.addAll(overrides.defineArgs());
     return args;
   }
 

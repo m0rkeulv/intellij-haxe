@@ -30,13 +30,16 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The project's hxformat.json configs for {@link HxformatSettingsModifier}:
- * finds the config governing a file, parses it (cached per path), keeps the
- * user's explicitly chosen fallback config ("Use as Haxe Formatting Rules")
- * persisted per project, and switches the integration itself. Any VFS
- * change to a file named hxformat.json - and any override change - bumps the
- * tracker (invalidating the per-file transient settings that depend on it),
- * clears the parse cache and re-triggers code style recalculation.
+ * Manages the project's hxformat.json configs for
+ * {@link HxformatSettingsModifier}. It finds the config that governs a file,
+ * parses it (cached per path), persists the fallback config the user chose
+ * with "Use as Haxe Formatting Rules", and switches the integration on or
+ * off.
+ * <p>
+ * Any VFS change to a file named hxformat.json, and any change of the
+ * fallback, clears the parse cache, increments the modification tracker and
+ * asks the platform to recompute code style. The tracker invalidates the
+ * per-file transient settings built from a config.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeHxformatConfig", storages = @Storage("haxeFormatter.xml"))
@@ -48,7 +51,7 @@ public final class HxformatConfigs implements PersistentStateComponent<HxformatC
 
   public static final String HXFORMAT_FILE_NAME = "hxformat.json";
   private static final Logger LOG = Logger.getInstance(HxformatConfigs.class);
-  // jackson mappers are thread-safe once configured; one per parse is waste
+  // a configured ObjectMapper is thread-safe, so one instance serves every parse
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final Map<String, CachedConfig> parsedByPath = new ConcurrentHashMap<>();
@@ -88,10 +91,10 @@ public final class HxformatConfigs implements PersistentStateComponent<HxformatC
   }
 
   /**
-   * The nearest hxformat.json from the file's directory up to the project base
-   * directory (the CLI's upward search, bounded to the project - a content
-   * root is no boundary, so a root-level config reaches nested modules), else
-   * the explicitly chosen fallback config, else null.
+   * The nearest hxformat.json in the file's directory or above it, up to the
+   * project base directory; else the chosen fallback config; else null. This
+   * is the CLI's upward search, bounded by the project. Content roots are no
+   * boundary, so a config at the project root also governs nested modules.
    */
   @Nullable
   public static VirtualFile findConfig(@NotNull Project project, @NotNull VirtualFile file) {
@@ -108,7 +111,7 @@ public final class HxformatConfigs implements PersistentStateComponent<HxformatC
     return getInstance(project).overrideConfig();
   }
 
-  /** The explicitly chosen fallback config, or null when unset or gone from disk. */
+  /** The chosen fallback config, or null when unset or gone from disk. */
   @Nullable
   public VirtualFile overrideConfig() {
     String url = state.overrideConfigUrl;
@@ -137,7 +140,7 @@ public final class HxformatConfigs implements PersistentStateComponent<HxformatC
     CodeStyleSettingsManager.getInstance(project).notifyCodeStyleSettingsChanged();
   }
 
-  /** Bumped whenever any hxformat.json changes - the transient settings' dependency. */
+  /** Incremented whenever an hxformat.json or the fallback choice changes; the transient settings depend on it. */
   public ModificationTracker tracker() {
     return tracker;
   }

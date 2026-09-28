@@ -8,11 +8,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Generated-code previews run at the "Syntax" highlighting level: annotators
- * still run (the color annotators paint the preview; the semantic ones
- * self-skip preview files, see {@code AnnotatorUtil.isInGeneratedPreview}),
- * while inspections and external annotators — analysis that could only
- * report noise on a reconstruction — are skipped wholesale.
+ * Runs generated-code previews at the "Syntax" highlighting level. Annotators
+ * still run: the color annotators paint the preview, and the semantic ones
+ * skip preview files themselves (see {@code AnnotatorUtil.isInGeneratedPreview}).
+ * Inspections and external annotators are skipped entirely, because on a
+ * reconstruction they could only report noise.
  */
 public class HaxeGeneratedPreviewHighlightingSetting extends DefaultHighlightingSettingProvider {
 

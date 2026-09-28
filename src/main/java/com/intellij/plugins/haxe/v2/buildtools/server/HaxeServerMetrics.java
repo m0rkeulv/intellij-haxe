@@ -8,10 +8,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Rolling request statistics per compilation-server instance, measured on the
- * IDE side (the server reports no timings over the protocol). The display
- * client's request observer feeds it; the server console's status view shows
- * it.
+ * Cumulative request statistics per compilation-server instance. The IDE
+ * measures them itself, because the server reports no timings over the
+ * protocol. The display client's request observer feeds them, and the
+ * server console's status view shows them.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeServerMetrics {
@@ -45,7 +45,7 @@ public final class HaxeServerMetrics {
     }
   }
 
-  /** Forgets one server's counters — a stopped or restarted server starts a fresh statistic. */
+  /** Forgets one server's counters, so a stopped or restarted server starts from zero. */
   public void clear(@NotNull String serverId) {
     byServer.remove(serverId);
   }

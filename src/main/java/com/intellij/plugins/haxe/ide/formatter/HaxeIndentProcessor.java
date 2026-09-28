@@ -48,7 +48,7 @@ public class HaxeIndentProcessor {
     this.haxeSettings = haxeSettings;
   }
 
-  /** The rules in precedence order: the first one claiming the node decides. */
+  /** The node's indent relative to its parent. The rules run in precedence order, and the first that answers decides. */
   public Indent getChildIndent(ASTNode node) {
     ASTNode parent = node.getTreeParent();
     if (parent == null || parent.getTreeParent() == null) return Indent.getNoneIndent();
@@ -63,49 +63,49 @@ public class HaxeIndentProcessor {
     if (indent == null) indent = containerContentIndent(site);
     if (indent == null) indent = listItemIndent(site);
     if (indent == null) indent = statementBodyIndent(site);
-    if (indent == null) indent = wrappedTailIndent(site);
+    if (indent == null) indent = wrappedContinuationIndent(site);
     return indent != null ? indent : Indent.getNoneIndent();
   }
 
   /**
-   * Inside an inactive branch: the block already sits at the right indent
-   * (it is a comment-shaped sibling) and the chameleon wrapper layers are
-   * transparent, so the content aligns with the directives and inner
-   * elements use the normal rules relative to their own parents.
+   * A direct child of an inactive branch or of the lists wrapping its content.
+   * The branch node is a comment in the PSI and already sits at its scope's
+   * indent. The layers below it add no indent, so the content aligns with the
+   * directives, and deeper elements follow the normal rules.
    */
   @Nullable
   private static Indent inactiveBranchIndent(Site site) {
     return INACTIVE_BRANCH_LAYERS.contains(site.parentType()) ? Indent.getNoneIndent() : null;
   }
 
-  /** A line of a doc comment: its stars, its closer, or a body line. */
+  /** A part of a doc comment: its opener, a leading star, its closer, or a body line. */
   @Nullable
   private static Indent docCommentLineIndent(Site site) {
     if (site.parentType() != DOC_COMMENT) return null;
     IElementType type = site.type();
     if (type == DOC_LEADING_ASTERISK) {
-      // javadoc-style stars align under the /**'s first star
+      // javadoc-style stars align under the first star of the opening /**
       return Indent.getSpaceIndent(1);
     }
     if (type == DOC_END) {
-      // the starred style aligns its closer under the stars too; haxedoc
-      // puts **/ back at the comment's own indent
+      // With leading stars the closer aligns under them too. Haxedoc style,
+      // without stars, puts **/ back at the comment's own indent.
       boolean starredStyle = site.parent().findChildByType(DOC_LEADING_ASTERISK) != null;
       return starredStyle ? Indent.getSpaceIndent(1) : Indent.getNoneIndent();
     }
     if (type == DOC_START) return Indent.getNoneIndent();
-    // body lines sit one level inside the comment; author depth beyond the
-    // common prefix rides inside the token text (markdown) and stays untouched
+    // Body lines sit one level inside the comment. Any deeper indent the author
+    // wrote (markdown nesting, for example) is part of the token text and stays.
     return Indent.getNormalIndent();
   }
 
-  /** A comment or directive: at its scope's level, except where preserved at the first column. */
+  /** A comment or directive: at its scope's level, except where it is kept at the first column. */
   @Nullable
   private Indent commentIndent(Site site) {
     IElementType type = site.type();
     if (!COMMENTS.contains(type)) return null;
-    // first-column preservation protects //-disabled code; a doc comment
-    // belongs to its member and always follows its scope (as javadoc does)
+    // Keeping comments at the first column protects code disabled with //.
+    // A doc comment belongs to its member and always follows its scope, as javadoc does.
     if (type != DOC_COMMENT && settings.KEEP_FIRST_COLUMN_COMMENT && isAtFirstColumn(site.node())) {
       return Indent.getAbsoluteNoneIndent();
     }
@@ -116,28 +116,28 @@ public class HaxeIndentProcessor {
   }
 
   /**
-   * A comment hanging directly off the switch block: after a case WITHOUT
-   * statements it reads as that case's BODY (a lone "// TODO" body, two
-   * steps in - continuation depth matches at the standard 2x ratio); after
-   * a case with a body, or at the block's start, it reads as a heading for
-   * the NEXT case and sits at case level.
+   * A comment that is a direct child of the switch block. After a case
+   * without statements it reads as that case's body (a lone "// TODO") and
+   * sits two steps in, which is the continuation indent at the standard
+   * ratio of two. After a case with a body, or at the start of the block,
+   * it reads as a heading for the next case and sits at case level.
    */
   private static Indent switchBlockCommentIndent(Site site) {
     IElementType prevSiblingType = site.prevSiblingType();
     boolean emptyCaseBody = (prevSiblingType == SWITCH_CASE || prevSiblingType == DEFAULT_CASE)
                             && caseBodyIsEmpty(site.prevSibling());
-    // a directive past a case body's last statement lands here too (the
-    // parser closes the body before it); one closing a region OPENED in
-    // that body still aligns with the body, like its #if does
+    // A directive after the last statement of a case body also lands here,
+    // because the parser closes the body before it. One that closes a region
+    // opened inside that body still aligns with the body, like its #if.
     boolean bodyLevel = emptyCaseBody || closesRegionOpenedInCaseBody(site.node());
     return bodyLevel ? Indent.getContinuationIndent() : Indent.getNormalIndent();
   }
 
-  /** A '{' or '}': the shifted brace styles step it in, the others keep it at its owner's level. */
+  /** A '{' or '}': one step in under the shifted brace styles, otherwise at its owner's level. */
   @Nullable
   private Indent braceIndent(Site site) {
     if (site.type() != PLCURLY && site.type() != PRCURLY) return null;
-    int braceStyle = FUNCTION_LIKE_OWNERS.contains(site.superParentType()) ? settings.METHOD_BRACE_STYLE : settings.BRACE_STYLE;
+    int braceStyle = FUNCTION_LIKE_OWNERS.contains(site.grandparentType()) ? settings.METHOD_BRACE_STYLE : settings.BRACE_STYLE;
     return switch (braceStyle) {
       case CommonCodeStyleSettings.NEXT_LINE_SHIFTED, CommonCodeStyleSettings.NEXT_LINE_SHIFTED2 -> Indent.getNormalIndent();
       default -> Indent.getNoneIndent();
@@ -152,21 +152,21 @@ public class HaxeIndentProcessor {
     return paren ? Indent.getNoneIndent() : Indent.getNormalIndent();
   }
 
-  /** A wrapped line of a bool or additive chain, when INDENT_WRAPPED_OPERATOR_CHAINS is on. */
+  /** A wrapped line of a boolean ({@code &&}, {@code ||}) or additive (+, -) chain, when INDENT_WRAPPED_OPERATOR_CHAINS is on. */
   @Nullable
   private Indent wrappedOperatorChainIndent(Site site) {
     if (!haxeSettings.INDENT_WRAPPED_OPERATOR_CHAINS) return null;
     IElementType parentType = site.parentType();
-    // a bool chain's wrapped lines continue ONE step from the line the
-    // chain starts on. One step per level cannot stack: left-nested levels
-    // of one chain all START on the chain's first line, so every operator
-    // line lands exactly one step in; a parenthesized inner chain starts on
-    // its opener's (wrapped) line and steps once from there
+    // A boolean chain's wrapped lines sit one step in from the line the chain
+    // starts on. The steps of nested levels do not add up: the left-nested
+    // levels of one chain all start on the chain's first line, so every
+    // operator line lands exactly one step in. A parenthesized inner chain
+    // starts on the line of its '(' and steps once from there.
     if (parentType == LOGIC_AND_EXPRESSION || parentType == LOGIC_OR_EXPRESSION) return Indent.getNormalIndent();
-    // an additive chain's wrapped lines stay at the surrounding wrap step
-    // (haxe-formatter never stacks them): a chain STARTING a line anchors
-    // there and takes no step; a mid-line chain's continuation anchors past
-    // it (the call or statement line) and needs the one step back
+    // An additive chain's wrapped lines stay at the surrounding wrap step,
+    // since haxe-formatter never adds a step for them. A chain that starts its
+    // line is itself the indent base, so it takes no step. A chain that starts
+    // mid-line has the call or statement line as its base and needs one step.
     if (parentType == ADDITIVE_EXPRESSION) {
       return additiveChainBeginsItsLine(site.parent()) ? Indent.getNoneIndent() : Indent.getNormalIndent();
     }
@@ -180,46 +180,46 @@ public class HaxeIndentProcessor {
     return site.node().getPsi().getParent() instanceof PsiFile ? Indent.getNoneIndent() : Indent.getNormalIndent();
   }
 
-  /** The parent indents its children: an indented container, or a bracket literal for all but its brackets. */
+  /** Whether the parent indents this child: an indented container indents all children, a bracket literal all but its brackets. */
   private static boolean indentsChildren(IElementType parentType, IElementType childType) {
     if (INDENTED_CONTAINERS.contains(parentType)) return true;
     return BRACKET_LITERALS.contains(parentType) && childType != PLBRACK && childType != PRBRACK;
   }
 
-  /** A wrapped item of a parameter/argument list, a multi-var declarator or a {@code new} argument. */
+  /** A wrapped item of a parameter or argument list, a multi-var declarator or a {@code new} argument. */
   @Nullable
   private Indent listItemIndent(Site site) {
     IElementType type = site.type();
     IElementType parentType = site.parentType();
-    // a parameter/argument list carries no indent of its own: its ITEMS do
-    // (below), so a chopped-down list (the break right after the paren) and
-    // a mid-list wrap land at the same depth instead of stacking
+    // A parameter or argument list has no indent of its own; only its items
+    // do (below). A chopped-down list, which breaks right after the paren,
+    // and a wrap in the middle of the list then land at the same depth.
     boolean listOwner = FUNCTION_LIKE_OWNERS.contains(parentType) || parentType == CALL_EXPRESSION;
-    if (listOwner && ARGUMENT_LISTS.contains(type)) return Indent.getNoneIndent();
-    // an array literal's list is indented as a block of its own
-    // (containerContentIndent); its items sit at the list's level
-    if (ARGUMENT_LISTS.contains(parentType) && site.superParentType() != ARRAY_LITERAL) return argumentListItemIndent(site);
-    // a multi-var declarator wrapped onto its own line continues one step in
-    // from the "var" line (the first declarator shares that line)
+    if (listOwner && PARAMETER_AND_ARGUMENT_LISTS.contains(type)) return Indent.getNoneIndent();
+    // An array literal's list is indented like a block (containerContentIndent),
+    // and its items sit at the list's level.
+    if (PARAMETER_AND_ARGUMENT_LISTS.contains(parentType) && site.grandparentType() != ARRAY_LITERAL) return argumentListItemIndent(site);
+    // A multi-var declarator wrapped onto its own line sits one step in from
+    // the "var" line, which the first declarator shares.
     if (type == LOCAL_VAR_DECLARATION && parentType == LOCAL_VAR_DECLARATION_LIST) return Indent.getNormalIndent();
-    // `new T(a, b)` keeps its arguments as direct children (no list node);
-    // an argument follows the paren or a comma
+    // `new T(a, b)` has its arguments as direct children, with no list node.
+    // An argument follows the paren or a comma.
     boolean afterListOpener = site.prevSiblingType() == PLPAREN || site.prevSiblingType() == OCOMMA;
     if (parentType == NEW_EXPRESSION && afterListOpener && type != PRPAREN) return Indent.getNormalIndent();
     return null;
   }
 
   /**
-   * A wrapped list item continues in from the line that opened the list:
-   * call arguments and enum constructor parameters one step, a function
-   * signature's parameters two - the signature stands off from the body
-   * that follows at one - unless there is no such body (a bodiless
-   * declaration, an empty {}), which leaves them at one.
+   * A wrapped list item, indented from the line that opened the list. Call
+   * arguments and enum constructor parameters take one step. A function
+   * signature's parameters take two, so they stand apart from the body,
+   * which sits one step in. A function without a body, or with an empty {},
+   * leaves its parameters at one step.
    */
   private static Indent argumentListItemIndent(Site site) {
     if (LIST_PUNCTUATION.contains(site.type())) return Indent.getNoneIndent();
-    boolean signature = site.parentType() == PARAMETER_LIST && FUNCTION_LIKE_OWNERS.contains(site.superParentType());
-    return signature && hasStatementBody(site.superParent()) ? Indent.getContinuationIndent() : Indent.getNormalIndent();
+    boolean signature = site.parentType() == PARAMETER_LIST && FUNCTION_LIKE_OWNERS.contains(site.grandparentType());
+    return signature && hasStatementBody(site.grandparent()) ? Indent.getContinuationIndent() : Indent.getNormalIndent();
   }
 
   /** A statement's non-block body on its own line, and a value block under next-line braces. */
@@ -228,8 +228,8 @@ public class HaxeIndentProcessor {
     IElementType type = site.type();
     IElementType parentType = site.parentType();
     IElementType prevSiblingType = site.prevSiblingType();
-    // a named function's non-block body on its own line indents one step;
-    // the header's own trailing parts also follow a header end and stay unindented
+    // A function's non-block body on its own line sits one step in. The
+    // header's own trailing parts can also follow a header end; they stay unindented.
     boolean functionBody = FUNCTION_LIKE_OWNERS.contains(parentType)
                            && FUNCTION_HEADER_END.contains(prevSiblingType)
                            && !FUNCTION_HEADER_TRAILERS.contains(type);
@@ -242,44 +242,44 @@ public class HaxeIndentProcessor {
     if (parentType == WHILE_STATEMENT && prevSiblingType == PRPAREN && loopBody) return Indent.getNormalIndent();
     if (parentType == DO_WHILE_STATEMENT && prevSiblingType == KDO && loopBody) return Indent.getNormalIndent();
     if (parentType == RETURN_STATEMENT && prevSiblingType == KRETURN && type != BLOCK_STATEMENT) return Indent.getNormalIndent();
-    // a block used as a VALUE steps in from its declaration once the brace
-    // style puts its { on the next line (haxe-formatter indents such a brace
-    // one level; the contents then step from it). On the = line the step is
-    // moot: a block's own indent counts only when it starts a line.
+    // A block used as a value sits one step in from its declaration when the
+    // brace style puts its { on the next line; haxe-formatter indents such a
+    // brace one level, and the contents step from it. When the { stays on the
+    // = line the step has no effect, because a block's indent only counts
+    // where the block starts a line.
     if (type == VALUE_INIT_BLOCK && (parentType == VAR_INIT || parentType == ASSIGN_EXPRESSION)) return Indent.getNormalIndent();
-    // IF_STATEMENT statement components
+    // the non-block body of an if or else
     boolean guardedBody = (parentType == GUARDED_STATEMENT || parentType == ELSE_STATEMENT)
                           && type != BLOCK_STATEMENT && type != KELSE && type != IF_STATEMENT;
     if (guardedBody) return Indent.getNormalIndent();
     return null;
   }
 
-  /** A wrapped continuation of a declaration or expression: type hint, chain link, inherit clause or ternary part. */
+  /** A wrapped continuation of a declaration or expression: a type hint, a chain link, an inherit clause or a ternary part. */
   @Nullable
-  private static Indent wrappedTailIndent(Site site) {
+  private static Indent wrappedContinuationIndent(Site site) {
     IElementType type = site.type();
     IElementType parentType = site.parentType();
-    // an anonymous type opened on the line after its type hint's colon
-    // (next-line braces) sits one step in; on the hint's line the step is moot
+    // An anonymous type that opens on the line after its type hint's colon
+    // (next-line braces) sits one step in. On the hint's line the step has no effect.
     if (parentType == TYPE_TAG && type == TYPE_OR_ANONYMOUS) return Indent.getNormalIndent();
-    // a wrapped chain link (.map(...) on its own line) indents ONE step from
-    // the chain's base line - continuation indent would be a declaration-style
-    // double step
+    // A wrapped chain link (.map(...) on its own line) sits one step in from
+    // the chain's first line. The continuation indent would be the double
+    // step used for declarations.
     if (type != CALL_EXPRESSION && isChainLink(site.parent())) return Indent.getNormalIndent();
     // a wrapped extends/implements clause continues the declaration header
     if (parentType == INHERIT_LIST) return Indent.getContinuationIndent();
-    // wrapped ternary parts (branches, or the signs leading them) continue
-    // the condition's line
+    // wrapped ternary parts (the branches, or the signs before them) continue the condition's line
     if (parentType == TERNARY_EXPRESSION && site.prevSibling() != null) return Indent.getContinuationIndent();
     return null;
   }
 
-  /** The CHAIN ROOT (outermost additive level) sits at its line's start - only whitespace before it. */
+  /** Whether the whole chain, from its outermost additive level, starts its line with only whitespace before it. */
   private static boolean additiveChainBeginsItsLine(ASTNode additive) {
     return beginsItsLine(outermostOfKind(additive, ADDITIVE_CHAIN_LEVELS));
   }
 
-  /** A #else/#elseif/#end at switch-block level whose #if sits inside a case body. */
+  /** Whether the node is a #else, #elseif or #end at switch-block level whose #if sits inside a case body. */
   private static boolean closesRegionOpenedInCaseBody(ASTNode directive) {
     IElementType type = directive.getElementType();
     if (type != PPEND && type != PPELSE && type != PPELSEIF) return false;
@@ -287,7 +287,7 @@ public class HaxeIndentProcessor {
     return opener != null && opener.getTreeParent() != directive.getTreeParent();
   }
 
-  /** The case carries no body statements - a comment following it then reads as its body. */
+  /** Whether the case has no statements in its body; a comment after it then reads as its body. */
   private static boolean caseBodyIsEmpty(ASTNode switchCase) {
     ASTNode block = switchCase.findChildByType(SWITCH_CASE_BLOCK);
     if (block == null) return true;
@@ -298,13 +298,13 @@ public class HaxeIndentProcessor {
     return true;
   }
 
-  /** The node starts at column 0 of its line. */
+  /** Whether the node starts at column 0 of its line. */
   private static boolean isAtFirstColumn(ASTNode node) {
     CharSequence text = fileText(node);
     return text != null && HaxeIndentText.lineStartOffset(text, node.getStartOffset()) == node.getStartOffset();
   }
 
-  /** Only whitespace precedes the node on its line. */
+  /** Whether only whitespace precedes the node on its line. */
   private static boolean beginsItsLine(ASTNode node) {
     CharSequence text = fileText(node);
     if (text == null) return false;
@@ -320,8 +320,8 @@ public class HaxeIndentProcessor {
     return file == null ? null : file.getViewProvider().getContents();
   }
 
-  /** The node under judgment with the neighbours the rules consult; built once the node is known to sit below the file's root. */
-  private record Site(ASTNode node, @Nullable ASTNode prevSibling, ASTNode parent, ASTNode superParent) {
+  /** The node being indented and the neighbours the rules look at. Only built for a node that has a grandparent. */
+  private record Site(ASTNode node, @Nullable ASTNode prevSibling, ASTNode parent, ASTNode grandparent) {
 
     static Site of(ASTNode node) {
       ASTNode prevSibling = UsefulPsiTreeUtil.getPrevSiblingSkipWhiteSpacesAndComments(node);
@@ -342,8 +342,8 @@ public class HaxeIndentProcessor {
       return parent.getElementType();
     }
 
-    IElementType superParentType() {
-      return superParent.getElementType();
+    IElementType grandparentType() {
+      return grandparent.getElementType();
     }
 
     @Nullable

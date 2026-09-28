@@ -21,14 +21,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * A navigation target whose navigate() runs the generated-preview dump flow.
- * A POM target rather than a PSI element: the navigation pipelines turn a
- * plain PSI element into a file/offset descriptor built from its containing
- * file without ever calling navigate(), but route a PomTargetPsiElement to
- * its target's own navigation. The navigation element is the previewed
- * declaration - it satisfies the pipelines' navigability checks and supplies
- * the popup presentation's icon and location. Create the element navigation
- * surfaces expect with {@link #createElement}.
+ * A navigation target whose navigate() builds the module dump and opens the
+ * generated-code preview. It is a POM target rather than a PSI element: the
+ * platform's navigation code turns a plain PSI element into a file and
+ * offset in its containing file without ever calling navigate(), but hands a
+ * PomTargetPsiElement to its target's own navigation. The navigation element
+ * is the previewed declaration. It passes the navigability checks and
+ * supplies the icon and location shown in popups. {@link #createElement}
+ * wraps a target as the PSI element that navigation code expects.
  */
 @CustomLog
 public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarget {
@@ -100,9 +100,9 @@ public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarg
       public void run(@NotNull ProgressIndicator indicator) {
         indicator.setIndeterminate(true);
         // the dump compile blocks in socket IO and cannot observe the
-        // indicator, so it runs on its own thread: Cancel closes the dialog
-        // immediately while an abandoned build still finishes and lands in
-        // the cache for the next attempt
+        // indicator, so it runs on its own thread. Cancel closes the dialog
+        // immediately, while an abandoned build still finishes and lands in
+        // the cache for the next attempt.
         Future<HaxeGeneratedCodePreview.PreparedPreview> preparing =
           ApplicationManager.getApplication().executeOnPooledThread(() -> preparePreview(project));
         prepared = awaitCancelable(preparing, indicator);
@@ -129,8 +129,8 @@ public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarg
       log.info("generated-code preview: no module dump for " + dotPath);
       return null;
     }
-    // rendering + offset lookup parse the (library-sized) dump and must stay
-    // off the EDT
+    // rendering and the offset lookup parse the dump, which can be
+    // library-sized, so they stay off the EDT
     return HaxeGeneratedCodePreview.prepare(project, moduleDump, dotPath, memberName);
   }
 

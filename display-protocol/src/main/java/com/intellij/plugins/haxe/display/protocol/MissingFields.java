@@ -5,14 +5,18 @@ import java.util.List;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The args of a MISSING_FIELDS diagnostic: the type the fields are missing
- * from, its file, and one entry per cause. A cause is one of
- * {@code ImplementedInterface}, {@code AbstractParent} (members the parent
- * declares and the type lacks), {@code PropertyAccessor} (an accessor a
- * property names), {@code FieldAccess} (a call or access on a member the
- * type does not have) and {@code FinalFields} (final fields no constructor
- * initializes - the entry's own field list is then empty and the fields sit
- * in the cause).
+ * The args of a MISSING_FIELDS diagnostic: the type that lacks the fields,
+ * its file, and one entry per cause. The cause kinds are:
+ * <ul>
+ *   <li>{@code ImplementedInterface} and {@code AbstractParent}: members the
+ *   interface or parent declares and the type lacks.</li>
+ *   <li>{@code PropertyAccessor}: an accessor that a property names.</li>
+ *   <li>{@code FieldAccess}: a member the code calls or accesses that the
+ *   type does not have.</li>
+ *   <li>{@code FinalFields}: final fields that no constructor initializes.
+ *   The entry's own field list is then empty, and the fields sit in the
+ *   cause.</li>
+ * </ul>
  */
 public record MissingFields(String typeName, String moduleFile, List<Entry> entries) {
 
@@ -27,13 +31,14 @@ public record MissingFields(String typeName, String moduleFile, List<Entry> entr
   }
 
   /**
-   * One missing class field as the compiler typed it: {@code fieldKind} is
-   * FMethod, FVar or FProp; a variable's read and write access are the wire
-   * kinds (AccNormal, AccCall, AccNever, AccNo, ...); {@code position} is the
-   * declaration's start offset in its own file, -1 when unknown.
+   * One missing class field, as the compiler typed it. {@code fieldKind} is
+   * FMethod, FVar or FProp. A variable's {@code readAccess} and
+   * {@code writeAccess} hold the wire access kinds (AccNormal, AccCall,
+   * AccNever, AccNo, ...). {@code declarationOffset} is the start offset of
+   * the declaration in its own file, or -1 when unknown.
    */
   public record MissingField(String name, JsonTypeRef type, String fieldKind, boolean isPublic, boolean isStatic,
-                             boolean unique, String readAccess, String writeAccess, int position) {
+                             boolean unique, String readAccess, String writeAccess, int declarationOffset) {
     public boolean isMethod() {
       return "FMethod".equals(fieldKind);
     }

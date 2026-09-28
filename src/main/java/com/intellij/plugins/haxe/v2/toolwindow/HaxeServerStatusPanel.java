@@ -142,12 +142,12 @@ final class HaxeServerStatusPanel extends JPanel {
 
   @NotNull
   private static String renderMemory(@NotNull ServerMemory memory) {
-    String totalCache = StringUtil.formatFileSize(memory.totalCache());
+    String totalCache = StringUtil.formatFileSize(memory.totalCacheBytes());
     StringBuilder text = new StringBuilder(HaxeBundle.message("haxe.server.console.stats.memory", totalCache, memory.contexts().size()));
     for (ServerMemory.ContextSize context : memory.contexts()) {
       // the signature prefix identifies the context in server logs; platform + size are the useful glance
       String signature = StringUtil.first(context.context().signature(), 8, false);
-      String size = StringUtil.formatFileSize(context.size());
+      String size = StringUtil.formatFileSize(context.bytes());
       text.append("\n  %s [%s] %s".formatted(context.context().platform(), signature, size));
     }
     return text.toString();

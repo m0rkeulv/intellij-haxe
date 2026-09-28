@@ -3,11 +3,10 @@ package ijhaxe.debug.values;
 import haxe.Int64;
 
 /**
-	A concrete value handed to `ValueWriter`: a literal for every primitive,
-	`null`, a string literal (materialized in the debuggee via the eval-call
-	machinery), or a variable path whose existing value is copied (a
-	pointer copy for reference types). Produced from evaluated expression values
-	by `VariableInspector.writeValue`.
+	A value for `ValueWriter.write`: a primitive literal or `null`.
+	`VariableMutator.writeValue` produces it from an evaluated expression.
+
+	TODO: nothing produces LString or LPath and ValueWriter rejects both; remove them.
 **/
 enum ValueLiteral {
 	LInt(value:Int64);

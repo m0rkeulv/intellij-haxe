@@ -39,13 +39,17 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Keeps the project's haxe compilation servers (`haxe --wait <port>`) alive.
- * The server's cache is per haxe BINARY, and per-module SDKs mean one project
- * can need several haxe versions at once — so instances are keyed by the
- * resolved executable path, one process each, started lazily by the first
- * connected compile against that SDK. A dead instance keeps its entry (and
- * output backlog) so console tabs survive restarts; everything dies with the
- * project.
+ * Runs the project's haxe compilation servers ({@code haxe --wait <port>}).
+ * A server's cache belongs to one haxe BINARY, and a project whose modules
+ * use different SDKs can need several haxe versions at once. The manager
+ * therefore runs one server process per resolved haxe executable and keys
+ * the instance by that path. The first compile that connects through an SDK
+ * starts its server.
+ *
+ * A stopped or crashed instance keeps its entry and its output backlog, so
+ * its console tab survives a restart. All servers stop with the project.
+ * Methods whose names end in {@code Locked} expect the caller to hold this
+ * manager's lock.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -54,9 +58,10 @@ public final class HaxeCompilationServerManager implements Disposable {
   /** The managed server always runs on the local machine; every client connects to loopback. */
   public static final String SERVER_HOST = "127.0.0.1";
 
+  /** Output chunks kept per instance, replayed into a console that opens later. */
   private static final int BACKLOG_LIMIT = 2000;
 
-  /** Receives one server's process output (and lifecycle lines) for the server console window. */
+  /** Receives one server's process output, plus lifecycle lines such as its termination, for the server console. */
   public interface ServerOutputListener {
     void onOutput(@NotNull String text, @NotNull Key<?> outputType);
   }
@@ -69,15 +74,15 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   private static final class ServerInstance {
-    final String exePath;
+    final String executablePath;
     final String displayName;
     final List<ServerOutputListener> listeners = new CopyOnWriteArrayList<>();
     final Deque<OutputChunk> backlog = new ArrayDeque<>();
     OSProcessHandler handler;
     int port = -1;
 
-    ServerInstance(String exePath, String displayName) {
-      this.exePath = exePath;
+    ServerInstance(String executablePath, String displayName) {
+      this.executablePath = executablePath;
       this.displayName = displayName;
     }
 
@@ -106,25 +111,25 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   /**
-   * Ensures a server runs for the haxe binary the given SDK resolves to and
-   * returns its port, or -1 when the server is disabled or failed to start
-   * (callers then compile without --connect).
+   * Starts the server for the haxe binary the given SDK resolves to, unless
+   * it already runs, and returns its port. Returns -1 when the server is
+   * disabled or failed to start; callers then compile without --connect.
    */
   public synchronized int ensureRunning(@Nullable String preferredSdkName) {
     HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
     if (!settings.isCompilationServerEnabled()) {
       return -1;
     }
-    // every compile against the server runs project macros; an untrusted
-    // project gets no server (clients then behave as if it were disabled)
+    // Every compile through the server runs project macros, so an untrusted
+    // project gets no server. Clients then behave as if it were disabled.
     if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
       return -1;
     }
-    String exePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
-    ServerInstance instance = servers.get(exePath);
+    String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
+    ServerInstance instance = servers.get(executablePath);
     if (instance == null) {
-      instance = new ServerInstance(exePath, displayNameFor(preferredSdkName, exePath));
-      servers.put(exePath, instance);
+      instance = new ServerInstance(executablePath, displayNameFor(preferredSdkName, executablePath));
+      servers.put(executablePath, instance);
     }
     if (instance.isAlive()) {
       return instance.port;
@@ -152,19 +157,19 @@ public final class HaxeCompilationServerManager implements Disposable {
     return instance != null && instance.isAlive() ? instance.port : -1;
   }
 
-  /** Known instances (running or stopped-with-history), in start order. */
+  /** Every known instance, running or stopped, in the order they were first requested. */
   @NotNull
   public synchronized List<ServerInfo> getServers() {
     List<ServerInfo> result = new ArrayList<>();
     for (ServerInstance instance : servers.values()) {
       boolean running = instance.isAlive();
       int port = running ? instance.port : -1;
-      result.add(new ServerInfo(instance.exePath, instance.displayName, port, running));
+      result.add(new ServerInfo(instance.executablePath, instance.displayName, port, running));
     }
     return result;
   }
 
-  /** Stops every instance (settings changes invalidate all of them). Entries and backlogs remain. */
+  /** Stops every instance, as a settings change requires. The entries and their backlogs remain. */
   public synchronized void stop() {
     boolean anyStopped = false;
     for (ServerInstance instance : servers.values()) {
@@ -184,29 +189,30 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   /**
-   * Stops the instance AND forgets it (backlog included) — closing its console
-   * tab means this SDK's server is no longer wanted; the entry reappears when a
-   * compile against that SDK next asks for it.
+   * Stops the instance and FORGETS it, backlog included. Closing a console tab
+   * calls this, because the user no longer wants that SDK's server. The entry
+   * comes back when a compile against that SDK next asks for a server.
    */
   public synchronized void removeServer(@NotNull String id) {
     ServerInstance instance = servers.remove(id);
     if (instance != null) {
       stopInstanceLocked(instance);
       clearServerDerivedState(id);
-      // fire even for a dead instance - the console mirrors the entry list
+      // fires even for a dead instance, because the console shows one tab per entry
       fireStateChanged();
     }
   }
 
-  /** (Re)starts the given instance's binary; also serves as plain start for a dead instance. Call off the EDT. */
+  /** Restarts the instance, or starts it when it is not running. Call off the EDT. */
   public synchronized void restartServer(@NotNull String id) {
     ServerInstance instance = servers.get(id);
     if (instance == null) {
       return;
     }
-    // backstop for callers bypassing ensureRunning (the console actions ask
-    // for trust on the EDT first) - checked BEFORE the teardown, so a refusal
-    // leaves the running server and every state listener untouched
+    // This path skips the trust check in ensureRunning. The console actions
+    // ask for trust on the EDT first; this check covers any other caller. It
+    // runs BEFORE the teardown, so a refusal leaves the running server and
+    // every state listener untouched.
     if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
       return;
     }
@@ -215,13 +221,13 @@ public final class HaxeCompilationServerManager implements Disposable {
     startLocked(instance);
   }
 
-  /** Failures and request statistics describe the stopped process — a fresh server starts clean. */
+  /** Drops the stopped server's failures and request statistics, so a fresh server starts clean. */
   private void clearServerDerivedState(@NotNull String id) {
     HaxeContextFailures.getInstance(project).clearForServer(id);
     HaxeServerMetrics.getInstance(project).clear(id);
   }
 
-  /** Registers a console sink for one instance and replays its buffered output. */
+  /** Registers a console listener for one instance and replays its buffered output to it. */
   public synchronized void addOutputListener(@NotNull String id, @NotNull ServerOutputListener listener) {
     ServerInstance instance = servers.get(id);
     if (instance == null) {
@@ -248,7 +254,7 @@ public final class HaxeCompilationServerManager implements Disposable {
       handler.startNotify();
       instance.handler = handler;
       instance.port = chosenPort;
-      log.info("Started haxe compilation server on port " + chosenPort + " (" + instance.exePath + ")");
+      log.info("Started haxe compilation server on port " + chosenPort + " (" + instance.executablePath + ")");
       fireStateChanged();
       return chosenPort;
     }
@@ -262,15 +268,15 @@ public final class HaxeCompilationServerManager implements Disposable {
   @NotNull
   private GeneralCommandLine serverCommandLine(HaxeBuildToolSettings settings, ServerInstance instance, int port) {
     List<String> command = new ArrayList<>();
-    command.add(instance.exePath);
+    command.add(instance.executablePath);
     command.addAll(ParametersListUtil.parse(settings.getCompilationServerArguments()));
     command.add("--wait");
     command.add(String.valueOf(port));
 
     GeneralCommandLine commandLine = new GeneralCommandLine(command);
-    // every request carries its own --cwd, so the server's working directory
-    // is irrelevant - and a missing project directory (fixture projects,
-    // freshly moved projects) must not fail the start
+    // Every request carries its own --cwd, so the server's working directory
+    // does not matter. A missing project directory, as in a test fixture or a
+    // freshly moved project, must not fail the start.
     String basePath = project.getBasePath();
     if (basePath != null && new File(basePath).isDirectory()) {
       commandLine.withWorkDirectory(basePath);
@@ -278,11 +284,11 @@ public final class HaxeCompilationServerManager implements Disposable {
     return commandLine;
   }
 
-  /** The process handler announces the command line as its first output. */
+  /** A handler for the server process. It prints the command line as its first output. */
   @NotNull
   private static OSProcessHandler newServerHandler(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
     return new OSProcessHandler(commandLine) {
-      // long-running, mostly idle daemon - the default reader busy-polls and wastes CPU
+      // The server is a long-running, mostly idle daemon, and the default reader busy-polls and wastes CPU.
       @Override
       protected @NotNull BaseOutputReader.Options readerOptions() {
         return BaseOutputReader.Options.forMostlySilentProcess();
@@ -290,7 +296,7 @@ public final class HaxeCompilationServerManager implements Disposable {
     };
   }
 
-  /** Feeds one server process's output to its console sinks and reports its termination. */
+  /** Forwards one server process's output to its console listeners and reports when the process ends. */
   private final class ServerOutputForwarder implements ProcessListener {
     private final ServerInstance instance;
     private final OSProcessHandler handler;
@@ -313,7 +319,7 @@ public final class HaxeCompilationServerManager implements Disposable {
     }
   }
 
-  /** The configured fixed port serves the first instance; concurrent instances get auto-allocated ports. */
+  /** The configured fixed port when one is set and no other running instance uses it, otherwise a free port. */
   private int choosePortLocked(HaxeBuildToolSettings settings, ServerInstance starting) throws IOException {
     int configured = settings.getCompilationServerPort();
     if (configured > 0) {
@@ -326,8 +332,9 @@ public final class HaxeCompilationServerManager implements Disposable {
     return NetUtils.findAvailableSocketPort();
   }
 
+  /** Stops the instance's process and returns whether it was running. */
   private boolean stopInstanceLocked(ServerInstance instance) {
-    // clear state before destroying so the termination listener sees a deliberate stop
+    // clears the handler before destroying, so the termination listener recognizes a deliberate stop
     OSProcessHandler handler = instance.handler;
     boolean wasAlive = instance.isAlive();
     instance.handler = null;
@@ -338,14 +345,15 @@ public final class HaxeCompilationServerManager implements Disposable {
     return wasAlive;
   }
 
-  private String displayNameFor(@Nullable String preferredSdkName, String exePath) {
+  private String displayNameFor(@Nullable String preferredSdkName, String executablePath) {
     if (preferredSdkName != null) {
       return preferredSdkName;
     }
     Sdk configured = HaxeToolPathResolver.findConfiguredSdk(project);
-    return configured != null ? configured.getName() : Path.of(exePath).getFileName().toString();
+    return configured != null ? configured.getName() : Path.of(executablePath).getFileName().toString();
   }
 
+  /** Adds the output to the instance's backlog and passes it to the current listeners. */
   private synchronized void broadcast(ServerInstance instance, @NotNull String text, @NotNull Key<?> outputType) {
     instance.backlog.addLast(new OutputChunk(text, outputType));
     while (instance.backlog.size() > BACKLOG_LIMIT) {
@@ -357,9 +365,9 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   private synchronized void onServerTerminated(ServerInstance instance, OSProcessHandler handler, int exitCode) {
-    // deliberate stops null the handler first - anything else is the server dying on its own
+    // A deliberate stop clears the handler first, so a matching handler means the server died on its own.
     if (instance.handler == handler) {
-      log.info("haxe compilation server terminated with exit code " + exitCode + " (" + instance.exePath + ")");
+      log.info("haxe compilation server terminated with exit code " + exitCode + " (" + instance.executablePath + ")");
       instance.handler = null;
       instance.port = -1;
       fireStateChanged();
@@ -367,9 +375,9 @@ public final class HaxeCompilationServerManager implements Disposable {
   }
 
   /**
-   * Publishes on the EDT, outside the manager's lock, so listeners can freely query state or refresh UI.
-   * The explicit non-modal state matters: listeners drop PSI caches, and a runnable submitted from a
-   * pooled thread without one runs write-unsafe.
+   * Publishes the state change on the EDT, outside the manager's lock, so listeners may query the manager
+   * or refresh UI. The explicit non-modal state matters: listeners drop PSI caches, and a runnable that a
+   * pooled thread submits without a modality state runs write-unsafe.
    */
   private void fireStateChanged() {
     ApplicationManager.getApplication().invokeLater(() -> {

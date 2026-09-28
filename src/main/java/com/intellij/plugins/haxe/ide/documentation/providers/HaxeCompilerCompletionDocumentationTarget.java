@@ -17,15 +17,15 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Quick documentation for a completion item the compilation server offered:
- * the item's signature line (its name, the qualified path of a type, the
- * type the compiler reports) and its doc comment rendered like the plugin's
- * own. The doc arrives as the comment's raw body, source indentation
- * included, and goes through the same stripping as a PSI comment before the
- * markdown renderer sees it. An item that came without a doc is resolved
- * from the server asynchronously ({@code display/completionItem/resolve}),
- * off the read lock. The item is a plain value, so the pointer is the
- * target itself.
+ * Quick documentation for a completion item from the compilation server. It
+ * shows a signature line (the name, a type's qualified path, the type the
+ * compiler reports) and the doc comment, rendered like the plugin's own
+ * documentation. The doc arrives as the comment's raw body with its source
+ * indentation, so it is stripped like a PSI comment before the markdown
+ * renderer sees it. For an item that arrived without a doc, the doc is
+ * requested asynchronously ({@code display/completionItem/resolve}) without
+ * holding the read lock. The item is a plain value, so the target serves as
+ * its own pointer.
  */
 final class HaxeCompilerCompletionDocumentationTarget implements DocumentationTarget {
 
@@ -58,8 +58,8 @@ final class HaxeCompilerCompletionDocumentationTarget implements DocumentationTa
   }
 
   /**
-   * Off the read lock for the server round trip; the renderer's code-fence
-   * highlighting lexes through the editor machinery and needs the lock back.
+   * Fetches the doc without the read lock, then renders under a read action,
+   * because the renderer highlights code fences through the editor's lexers.
    */
   private DocumentationResult.Documentation resolveAndRender() {
     String doc = HaxeCompilerCompletionService.getInstance(project).resolveDoc(file, item.index());

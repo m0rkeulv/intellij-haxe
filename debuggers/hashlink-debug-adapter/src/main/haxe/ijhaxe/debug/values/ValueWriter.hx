@@ -11,18 +11,19 @@ import format.hl.Data.HLType;
 import haxe.Int64;
 
 /**
-	Writes a value into a resolved target slot `{address, type}` from a parsed
-	ValueLiteral. The envelope is deliberately allocation-free — creating new
-	heap values (strings, objects) needs the debuggee's allocator (the eval-call
-	machinery, a later milestone). Supported:
-	 - a literal into a matching primitive slot (Int/Float/Bool/Int64/sub-int);
+	Writes values into resolved target slots (`{address, type}`) while the
+	debuggee is stopped. It never allocates: only the debuggee's own allocator
+	can create heap values, which the eval-call machinery does before handing
+	over the result. Supported writes:
+	 - a literal into a matching primitive slot (Int, Float, Bool, Int64 and
+	   the smaller integer types);
 	 - `null` into any pointer slot;
-	 - a variable path whose EXISTING value is copied — a raw pointer copy for
-	   reference types, a numeric coercion for primitives;
-	 - an in-place primitive update of a Dynamic that already boxes that kind.
+	 - a call result or another slot's value: a pointer copy for reference
+	   types, a numeric conversion for primitives;
+	 - a primitive into an existing Null<T> box, or into a Dynamic box that
+	   already holds that kind, updated in place.
 
-	Only runs while the debuggee is stopped. Any unsupported combination throws
-	a DebugError with a message aimed at the user.
+	Any other combination throws a DebugError whose message is meant for the user.
 **/
 class ValueWriter {
 	final mem:MemoryReader;
@@ -38,12 +39,11 @@ class ValueWriter {
 	}
 
 	/**
-		A resolved write source: the value read from a variable path.
+		Writes a literal into the target.
 	**/
 	public function write(target:WriteTarget, literal:ValueLiteral):Void {
-		// setting a nullable slot to null is a plain pointer write; any other
-		// value updates the box it points at (allocating a fresh box is not
-		// possible from the adapter)
+		// null into a Null<T> slot is a plain pointer write; any other value
+		// updates the existing box in place
 		if (literal.match(LNull) || !target.type.match(HNull(_))) {
 			writeDirect(target, literal);
 			return;
@@ -68,8 +68,8 @@ class ValueWriter {
 		}
 	}
 
-	// A Null<T> slot holds a pointer to a box [type @ 0][value @ +ptr]. Returns
-	// a target on the box's payload; a null box can't be updated in place.
+	// A Null<T> slot points to a box: type @ +0, value @ Align.dynPayload.
+	// Returns the box's value as the target; a null box cannot be updated.
 	function unwrapNullBox(target:WriteTarget):WriteTarget {
 		var inner = switch (target.type) {
 			case HNull(t): t;
@@ -84,10 +84,10 @@ class ValueWriter {
 	}
 
 	/**
-		Writes an in-hand computed value (a call's raw result — RAX, or the double
-		bits for a float return) into the target, type-checked against the result
-		type. Pointer results are written directly (the callee returned a live
-		heap object, so no allocation/rooting concern); primitives are coerced.
+		Writes a call's raw result (RAX, or the double's bits for a float return)
+		into the target, checked against the result type `sourceType`. A pointer
+		result is written as is, since the callee returned a live heap object.
+		A primitive is converted to the target type.
 	**/
 	public function assignRaw(target:WriteTarget, raw:Int64, sourceType:HLType):Void {
 		if (target.type.match(HNull(_))) {
@@ -117,7 +117,7 @@ class ValueWriter {
 		writeInt(target, rawAsInt(raw, sourceType));
 	}
 
-	// A call result arrives as raw RAX bits; interpret per the return type.
+	// A call result's raw RAX bits, interpreted by the return type.
 	static function rawAsInt(raw:Int64, sourceType:HLType):Int64 {
 		return switch (sourceType) {
 			case HUi8: Int64.ofInt(raw.low & 0xFF);
@@ -139,11 +139,13 @@ class ValueWriter {
 	}
 
 	/**
-		Copies an already-resolved source slot into the target (variable = variable).
+		Copies the value of the `source` slot into the target (variable = variable).
+
+		TODO: nothing calls this; assignments go through assignRaw. Remove it.
 	**/
 	public function copy(target:WriteTarget, source:WriteTarget):Void {
 		if (target.type.match(HNull(_))) {
-			// null source into a nullable slot clears it; otherwise update the box
+			// a null source clears the slot; any other value updates the box
 			if (isPointer(source.type) && Int64.compare(mem.readPointer(source.address), Int64.ofInt(0)) == 0) {
 				out.writePointer(target.address, Int64.ofInt(0));
 				return;
@@ -221,9 +223,9 @@ class ValueWriter {
 		}
 	}
 
-	// A Dynamic slot holds a pointer to a vdynamic (runtime type @ +0, payload
-	// @ +ptr). A box can be updated IN PLACE only when it already holds the same
-	// primitive kind — anything else would need a fresh allocation.
+	// A Dynamic slot points to a vdynamic: runtime type @ +0, payload @
+	// Align.dynPayload. The box can only be updated in place when it already
+	// holds the same primitive kind; anything else needs a new allocation.
 	function mutateBox(target:WriteTarget, wantKind:HLType, writePayload:Pointer->Void):Void {
 		var box = mem.readPointer(target.address);
 		if (Int64.compare(box, Int64.ofInt(0)) == 0) {
@@ -276,16 +278,16 @@ class ValueWriter {
 	}
 
 	/**
-		An Int64 as a Float: `high * 2^32 + low`, with low taken UNSIGNED.
+		An Int64 as a Float: `high * 2^32 + low`, with `low` read as unsigned.
 
-		4294967296.0 is 2^32, in both of its roles here - the positional weight
-		of the high word, and the offset that reinterprets a negative
-		(two's-complement) low word as unsigned.
+		4294967296.0 is 2^32. It is both the weight of the high word and the
+		offset that turns a negative (two's-complement) low word into its
+		unsigned value.
 
-		A Float carries a 53-bit mantissa against Int64's 64, so magnitudes
-		above 2^53 round to the nearest representable Double. The multiply is
-		exact (scaling by a power of two only shifts the exponent), leaving the
-		addition as the single rounding step.
+		A Float has a 53-bit mantissa, so magnitudes above 2^53 round to the
+		nearest representable value. The multiplication is exact, because
+		scaling by a power of two only changes the exponent; the addition is
+		the only rounding step.
 	**/
 	static function int64ToFloat(v:Int64):Float {
 		var low = v.low;

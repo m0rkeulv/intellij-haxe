@@ -42,6 +42,11 @@ public class HaxeAlignmentProcessor {
     myBaseAlignment = Alignment.createAlignment();
   }
 
+  /**
+   * The one alignment all children of the node share when its kind aligns
+   * under the ALIGN_MULTILINE_* settings: binary operands, ternary parts, and
+   * parameter or call argument lists. Null when the children do not align.
+   */
   @Nullable
   public Alignment createChildAlignment() {
     IElementType elementType = myNode.getElementType();
@@ -74,10 +79,11 @@ public class HaxeAlignmentProcessor {
   }
 
   /**
-   * A binary expression used as a call/constructor ARGUMENT starts mid-line,
-   * so aligning its operands anchors at that arbitrary column and each
-   * argument staircases deeper than the last - operand alignment only makes
-   * sense where the expression owns its line.
+   * Whether the node sits inside a parameter or argument list, with no block
+   * or class body in between. A binary expression used as an argument starts
+   * mid-line, so aligning its operands to that arbitrary column indents each
+   * argument deeper than the last. Operand alignment only makes sense where
+   * the expression starts its line.
    */
   private static boolean insideArgumentList(ASTNode node) {
     for (ASTNode parent = node.getTreeParent(); parent != null; parent = parent.getTreeParent()) {

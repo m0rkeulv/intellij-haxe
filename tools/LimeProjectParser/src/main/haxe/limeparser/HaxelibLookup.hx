@@ -7,12 +7,13 @@ import sys.io.File;
 import sys.io.Process;
 
 /**
-	Resolves a haxelib and its transitive dependency chain by parsing
-	`haxelib path <name[:version]>` output. Per library, in dependency order,
-	haxelib prints: -L ndll lines, the library's extraParams.hxml content
-	INLINE, one or more bare classpath lines, then a `-D name=version` marker
-	closing that library. A -D seen before any classpath therefore belongs to
-	extraParams, not the marker. Each library root is probed for an include.xml.
+	Resolves a haxelib and its transitive dependencies by parsing the output
+	of `haxelib path <name[:version]>`. haxelib prints the libraries in
+	dependency order. For each one it prints any `-L` ndll lines, the content
+	of its extraParams.hxml INLINE, one or more bare classpath lines, and
+	finally a `-D name=version` line that closes the library. A -D line seen
+	before any classpath therefore comes from extraParams, not from that
+	closing line. Each library root is also checked for an include.xml.
 **/
 class HaxelibLookup {
 	public static function resolver(haxelibExecutable:String):(String, String) -> Null<Array<ResolvedHaxelib>> {
@@ -41,7 +42,7 @@ class HaxelibLookup {
 		return parseOutput(output);
 	}
 
-	/** Pure parse of `haxelib path` output, separated from process spawning for testability. **/
+	/** Parses `haxelib path` output; kept apart from the process call so tests can feed it text. **/
 	public static function parseOutput(output:String):Array<ResolvedHaxelib> {
 		var libraries:Array<ResolvedHaxelib> = [];
 		var pendingClasspaths:Array<String> = [];
@@ -53,7 +54,7 @@ class HaxelibLookup {
 
 			if (StringTools.startsWith(line, "-D ")) {
 				if (pendingClasspaths.length > 0) {
-					// the version marker (-D name=1.2.3) closes the library
+					// the version line (-D name=1.2.3) closes the library
 					var pair = line.substr(3).split("=");
 					libraries.push(makeLibrary(pair[0], pair.length > 1 ? pair[1] : "",
 						pendingClasspaths, pendingExtraDefines, pendingExtraArgs));
@@ -61,7 +62,7 @@ class HaxelibLookup {
 					pendingExtraDefines = [];
 					pendingExtraArgs = [];
 				} else {
-					// before any classpath = a define from the library's extraParams.hxml
+					// before any classpath: a define from the library's extraParams.hxml
 					pendingExtraDefines.push(StringTools.trim(line.substr(3)));
 				}
 			} else if (StringTools.startsWith(line, "-")) {

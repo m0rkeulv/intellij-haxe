@@ -1,8 +1,9 @@
-// Entry point the IDE generates for a gutter-started run: one utest case
-// class from the tests build, compiled with that build's classpaths, defines
-// and libraries. A single-test run rides on top via -D UTEST_PATTERN. The
-// ${NEW_SUITES} token (one `new Suite()` per selected class) is substituted before the compile; this file is a
-// template, never compiled as-is.
+// A template for the entry point the IDE generates for a gutter-started
+// run: the selected utest case classes of the tests build, compiled with
+// that build's classpaths, defines and libraries. A single-test run adds
+// -D UTEST_PATTERN on top. The IDE substitutes the NEW_SUITES token (one
+// `new Suite()` per selected class) before the compile; this file is never
+// compiled as it is.
 class IjSingleRun {
 	static function main() {
 		utest.UTest.run([${NEW_SUITES}]);

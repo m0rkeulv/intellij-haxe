@@ -5,12 +5,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Where completion and resolve get their symbols: the IDE's static analysis
- * alone, enriched with compiler-known symbols (macro-generated types and
- * members the source never declares), or the compilation server alone -
- * every completion answered by a {@code display/completion} request, the
- * IDE's contributors silent. Gates the compiler-backed resolve and
- * completion paths; diagnostics highlighting has its own toggle.
+ * Where completion and resolve get their symbols: from the IDE's static
+ * analysis alone, from static analysis enriched with compiler-known symbols
+ * (macro-generated types and members the source never declares), or from the
+ * compilation server alone. In the compiler-only mode every completion is a
+ * {@code display/completion} request, and the IDE's contributors stay
+ * silent. The mode switches the compiler-backed resolve and completion on or
+ * off; diagnostics highlighting has its own toggle.
  */
 public enum HaxeCompletionMode {
   IDE_ONLY("ide", "haxe.compiler.completion.mode.ide"),

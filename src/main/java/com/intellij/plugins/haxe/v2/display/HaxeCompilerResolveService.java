@@ -39,23 +39,24 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
 /**
- * The compiler-backed last resort of {@code HaxeResolver}: when static
- * resolution fails, the member is looked up in the post-macro blueprint
- * ({@code server/type}) of its class, where macro-generated members exist
- * with their real types. The class is the enclosing one for an unqualified
- * reference and the receiver's for a qualified one.
+ * The compiler-backed last resort of {@code HaxeResolver}. When static
+ * resolution fails, the member is looked up in the blueprint of its class.
+ * A blueprint is the compiler's description of one type after all macros
+ * ran ({@code server/type}): every member with its type, macro-generated
+ * members included. The class is the enclosing one for an unqualified
+ * reference and the receiver's class for a qualified one.
  *
- * Resolve runs under the read lock, so this path is strictly cache-only: a
- * miss schedules background hydration and fails this once, and the daemon
+ * Resolve runs under the read lock, so this path only reads the cache. A
+ * miss schedules background hydration and fails this once; the highlighting
  * restart after hydration resolves again from the cache. A resolved member
  * is a declaration in a synthetic extern class rendered from the blueprint.
  * That is real PSI, so type inference, completion and chained member access
- * all work off it: a generated {@code panel:ui.Panel} field makes
+ * all work on it: a generated {@code panel:ui.Panel} field makes
  * {@code panel.title} resolve statically against the real {@code Panel}.
  *
- * Gated on the completion mode (Settings | Compiler | Haxe Compiler): in
- * "IDE only" this service answers nothing. The compiler-diagnostics toggle
- * only governs problem highlighting.
+ * Active only when the completion mode uses the compiler (Settings |
+ * Compiler | Haxe Compiler); in "IDE only" this service answers nothing. The
+ * compiler-diagnostics toggle governs only problem highlighting.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -73,10 +74,10 @@ public final class HaxeCompilerResolveService {
 
   private static final long FAILURE_COOLDOWN_MS = 30_000;
   /**
-   * The types StdTypes.hx declares: no module of their own, so
-   * {@code server/type} answers "No such module" - and an unresolved
-   * receiver evaluates to Dynamic, which would otherwise be hydrated on
-   * every unresolved member access.
+   * The types declared in StdTypes.hx. They have no module of their own, so
+   * {@code server/type} answers "No such module" for them. An unresolved
+   * receiver evaluates to Dynamic, so without this list every unresolved
+   * member access would request a blueprint of Dynamic.
    */
   private static final Set<String> STD_TYPES_DECLARATIONS = Set.of(
     "Void", "Bool", "Int", "Float", "Single", "Dynamic", "Null",
@@ -113,8 +114,8 @@ public final class HaxeCompilerResolveService {
    * either. Never touches the network; safe under the read lock.
    *
    * Unqualified identifiers look up the enclosing class; qualified ones look
-   * up the RECEIVER's statically-resolved class ({@code this.x},
-   * {@code ClassName.x}, {@code view.x}) — the receiver itself usually
+   * up the RECEIVER's statically resolved class ({@code this.x},
+   * {@code ClassName.x}, {@code view.x}). The receiver itself usually
    * resolves statically even when the member is generated.
    */
   @Nullable
@@ -125,9 +126,9 @@ public final class HaxeCompilerResolveService {
     String name = expression.getReferenceName();
     if (name == null || name.isEmpty()) return null;
 
-    // context check BEFORE resolving the receiver: targetClassOf recurses into
-    // resolve, and without a build context (fixture tests, non-v2 projects)
-    // this path can never answer - the recursion would be pure overhead
+    // check the context BEFORE resolving the receiver: targetClassOf recurses
+    // into resolve, which is wasted work when there is no build context
+    // (fixture tests, non-v2 projects) and this path cannot answer anyway
     VirtualFile contextFile = HaxeCompilerDisplayService.physicalFileOf(expression);
     if (contextFile == null) return null;
     if (HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile) == null) return null;
@@ -205,8 +206,8 @@ public final class HaxeCompilerResolveService {
     BlueprintKey key = new BlueprintKey(HaxeCompilerDisplayService.contextKey(context), dotPath);
     TypeBlueprint blueprint = blueprints.get(key);
     if (blueprint == null) {
-      // hydration compiles the context - pointless while the edited file
-      // does not even parse; cache hits above stay served regardless
+      // hydration compiles the context, which is pointless while the edited
+      // file does not parse; cached blueprints are served regardless
       if (HaxeCompilerDisplayService.isSyntaxClean(project, contextFile)) {
         scheduleHydration(key, context);
       }
@@ -228,9 +229,9 @@ public final class HaxeCompilerResolveService {
 
   /**
    * The member's declaration in the extern class rendered from the
-   * blueprint: non-physical PSI with real type tags, the same mechanism
-   * {@code HaxeSyntheticDeclarations} uses for {@code trace}. Navigation lands
-   * on a readable declaration.
+   * blueprint. It is non-physical PSI with real type tags, built the way
+   * {@code HaxeSyntheticDeclarations} builds {@code trace}, so navigation
+   * lands on a readable declaration.
    */
   @Nullable
   private PsiElement blueprintMember(@NotNull BlueprintKey key, @NotNull TypeBlueprint blueprint, @NotNull String name) {
@@ -334,8 +335,8 @@ public final class HaxeCompilerResolveService {
     HaxeCompilerDisplayService.Connected connected = displayService.connectFor(context, DisplayMethods.SERVER_TYPE);
     if (connected == null) return null;
 
-    // best effort: a failed warm-up still tries the lookup - the module may
-    // already sit in the server's cache from an earlier compile
+    // a failed warm-up compile does not stop the lookup: the module may
+    // already be in the server's cache from an earlier compile
     displayService.ensureContextCompiled(connected, key.contextKey());
 
     try {
@@ -362,11 +363,11 @@ public final class HaxeCompilerResolveService {
   }
 
   /**
-   * server/type against the context holding the module. A source module's
-   * context is found through the module listing. A module created by
-   * {@code Context.defineType} is listed nowhere (see the display-protocol
-   * README), so every typed context is tried blind: server/type itself tells
-   * whether the type lives there.
+   * The type's blueprint, requested from the server context that holds its
+   * module. A source module's context is found through the module listing. A
+   * module created by {@code Context.defineType} is listed nowhere (see the
+   * display-protocol README), so every typed context is tried in turn, and
+   * server/type itself tells whether the type lives there.
    */
   @Nullable
   private TypeBlueprint blueprintFromAnyContext(@NotNull HaxeCompilerDisplayService.Connected connected,
@@ -376,7 +377,7 @@ public final class HaxeCompilerResolveService {
     for (HaxeServerContext context : connected.client().contexts(connected.args())) {
       try {
         if (connected.client().modules(connected.args(), context.signature()).contains(modulePath)) {
-          // listed = certain; try before the blind candidates
+          // a context that lists the module certainly holds it; try it first
           candidates.add(0, context.signature());
           continue;
         }
@@ -398,13 +399,13 @@ public final class HaxeCompilerResolveService {
   }
 
   /**
-   * A landed blueprint changes what DEPENDENT references resolve to:
-   * {@code panel.title} was computed, and cached as unresolved, while
-   * {@code panel} was still unknown. The fallback only covers the root
-   * reference, so the chain's stale results must go before highlighting
+   * A new blueprint changes what DEPENDENT references resolve to.
+   * {@code panel.title} was resolved, and cached as unresolved, while
+   * {@code panel} was still unknown. The fallback covers only the root
+   * reference, so such stale results must be dropped before highlighting
    * restarts. Dropping the resolve caches is not enough, because
-   * type-evaluation CachedValues key on the PSI modification count and
-   * survive it; hence the full PSI cache drop, which happens about once per
+   * type-evaluation CachedValues depend on the PSI modification count and
+   * survive it. Hence the full PSI cache drop, which happens about once per
    * hydrated class per session.
    */
   private void restartHighlighting() {

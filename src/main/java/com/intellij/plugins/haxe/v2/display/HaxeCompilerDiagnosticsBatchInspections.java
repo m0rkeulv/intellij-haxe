@@ -5,13 +5,13 @@ import com.intellij.codeInspection.ex.ExternalAnnotatorBatchInspection;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Batch identities for the compiler-diagnostics external annotators. Pairing
- * an annotator with one ({@code ExternalAnnotator.getPairedBatchInspectionShortName})
- * does two things: Inspect Code runs the annotator at all (unpaired external
- * annotators are skipped in batch mode), and its findings land under the Haxe
- * inspection group instead of the catch-all "General &gt; Annotator" node.
- * The compiler-settings toggles stay the primary gate: a disabled feature
- * collects nothing in batch, just as on the fly.
+ * The batch inspections paired with the compiler-diagnostics external
+ * annotators ({@code ExternalAnnotator.getPairedBatchInspectionShortName}).
+ * The pairing does two things. Inspect Code runs the annotator at all, since
+ * it skips unpaired external annotators. And the findings appear under the
+ * Haxe inspection group instead of the catch-all "General &gt; Annotator"
+ * node. The compiler-settings toggles still decide first: a disabled feature
+ * collects nothing in batch mode, just as in the editor.
  */
 public final class HaxeCompilerDiagnosticsBatchInspections {
 

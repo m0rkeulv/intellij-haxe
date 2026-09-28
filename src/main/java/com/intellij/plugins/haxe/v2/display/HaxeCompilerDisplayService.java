@@ -35,25 +35,31 @@ import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/// IDE glue for the display protocol: resolves a haxe source file's build
-/// context into display base args, keeps the compilation server running and
-/// capability-gated, and exposes the requests the editor features need.
+/// Connects editor features to the compilation server's display protocol.
+/// It derives the build context of a haxe source file, turns it into the
+/// compiler arguments every display request starts with, keeps the server
+/// running and checks which methods the server supports.
 ///
-/// HXML build files supply their args directly. Lime-family files (openfl,
-/// lime, hxp) go through `haxelib run <tool> display <file> <target>`:
-/// its hxml output IS the evaluated compiler argument set (macros, libs and
-/// conditional sources included), cached per build-file stamp. NMML files use
-/// the last landed `nme prepare` evaluation, whose generated hxml references
-/// the evaluation's retained prepared directory.
+/// HXML build files supply their arguments directly. Lime-family files
+/// (openfl, lime, hxp) run `haxelib run <tool> display <file> <target>`, whose
+/// hxml output is the fully evaluated argument set (macros, libraries and
+/// conditional sources included); the result is cached per build-file stamp.
+/// NMML files use the hxml of the most recent `nme prepare` evaluation, which
+/// references that evaluation's retained prepared directory.
+///
+/// The other compiler services build on this one. Their callers hold the read
+/// lock, so they answer from their caches only. A cache miss schedules a
+/// background request that fills the cache ("hydration"), and highlighting
+/// restarts when the result arrives.
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeCompilerDisplayService {
 
   /**
-   * The read-action half of a request. Either {@code args} is known already
-   * (HXML, NMML) or {@code lime} still needs resolving on a background thread.
-   * The container's define overrides are applied to whichever argument list
-   * results.
+   * The part of a display request computed under the read lock. Either
+   * {@code args} is known already (HXML, NMML), or {@code lime} still has to
+   * run on a background thread. The container's define overrides are applied
+   * to whichever argument list results.
    */
   public record DisplayContext(@Nullable List<String> args,
                                @Nullable LimeDisplaySpec lime,
@@ -62,7 +68,7 @@ public final class HaxeCompilerDisplayService {
                                @NotNull String containerId) {
   }
 
-  /** A pending lime-display resolution, captured under the read lock. */
+  /** The inputs of a {@code lime display} run, captured under the read lock and run later in the background. */
   public record LimeDisplaySpec(@NotNull String directory,
                                 @NotNull String fileName,
                                 @NotNull String tool,
@@ -70,12 +76,12 @@ public final class HaxeCompilerDisplayService {
                                 long fileStamp) {
   }
 
-  /** Capability of the currently running server; re-checked when the port changes. */
+  /** The methods and haxe version the running server reported; asked again when the port changes. */
   private record Capability(int port, @NotNull Set<String> methods,
                             @Nullable InitializeResult.SemVer haxeVersion) {
   }
 
-  /** A connected, capability-checked client with its resolved args. */
+  /** A client for a running server that supports the requested method, with the resolved arguments. */
   record Connected(@NotNull HaxeDisplayClient client, @NotNull List<String> args, int port) {
   }
 
@@ -87,7 +93,7 @@ public final class HaxeCompilerDisplayService {
 
   private final Project project;
   private final Map<String, CachedLimeArgs> limeArgsCache = new ConcurrentHashMap<>();
-  /** Contexts already warmed with a compile this session (the server's module cache needs one). */
+  /** Keys of the contexts compiled this session; the server's module cache fills only from a compile. */
   private final Set<String> compiledContexts = ConcurrentHashMap.newKeySet();
   private volatile Capability capability;
 
@@ -124,9 +130,9 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * The display context of a module's current build file — for callers that
-   * have no source file in hand (the type catalog enumerates per module).
-   * Same contract as {@link #contextFor(VirtualFile)}.
+   * The display context of a module's current build file, for callers
+   * without a source file (the type catalog works per module). Same contract
+   * as {@link #contextFor(VirtualFile)}.
    */
   @Nullable
   public DisplayContext contextFor(@NotNull Module module) {
@@ -138,8 +144,8 @@ public final class HaxeCompilerDisplayService {
 
     String containerId = HaxeContainers.containerIdFor(project, buildFile);
     HaxeEnvironmentStore environment = HaxeEnvironmentStore.getInstance(project);
-    // the per-container server opt-out covers display requests too - compiler
-    // diagnostics ride the same server the module's builds would use
+    // display requests use the server the module's builds use, so the
+    // per-container opt-out applies to them too
     if (!environment.isUsingCompilationServer(containerId)) return null;
     String sdkName = environment.getSdkName(containerId);
     String directory = buildFile.getParent().getPath();
@@ -162,15 +168,15 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * HXML context args. A single-section file is passed as a file reference,
-   * which the server expands itself. A {@code --next} chain is narrowed to the
-   * SELECTED section, spelled out as compiler arguments.
+   * The context arguments of an HXML file. A file with a single section is
+   * passed by reference, and the server expands it. A {@code --next} chain is
+   * narrowed to the SELECTED section, spelled out as compiler arguments.
    *
-   * Passing a chained file would make every server request carry ALL
-   * sections: each context compile (cache warm-up, failure probes, every
-   * request) would then build every target in turn and stall later
-   * {@code --connect} builds behind it, and diagnostics would answer for the
-   * first section instead of the one the tool window follows.
+   * A chained file passed whole would make every server request carry ALL
+   * sections. Every context compile (cache warm-up, failure explanation, each
+   * request) would then build every target in turn and delay later
+   * {@code --connect} builds. Diagnostics would also answer for the first
+   * section instead of the one selected in the tool window.
    */
   @NotNull
   private List<String> hxmlContextArgs(@NotNull VirtualFile buildFile, @NotNull String directory) {
@@ -184,11 +190,10 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * NMML context from the last landed `nme prepare` evaluation: its generated
-   * hxml (referencing the evaluation's retained prepared directory) becomes
-   * the argument list. Null until an evaluation lands — the tool window
-   * schedules one on every scan, so the context appears shortly after a
-   * project opens.
+   * The NMML context. The generated hxml of the most recent {@code nme prepare}
+   * evaluation becomes the argument list. Null until an evaluation has
+   * finished; the tool window schedules one on every scan, so the context
+   * appears shortly after the project opens.
    */
   @Nullable
   private DisplayContext nmeContext(@NotNull VirtualFile buildFile,
@@ -207,10 +212,11 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * Diagnostics for one file. {@code contents} carries the (diverged) editor
-   * buffer — the file is invalidated on the server first, since a cached
-   * module otherwise shadows the supplied contents. Null when the server is
-   * unavailable or lacks the diagnostics method. Call on a background thread.
+   * Diagnostics for one file. {@code contents} carries the editor buffer when
+   * it differs from disk. The file is then invalidated on the server first,
+   * because a cached module would otherwise hide the supplied contents. Null
+   * when the server is unavailable or lacks the diagnostics method. Call on a
+   * background thread.
    */
   @Nullable
   public List<FileDiagnostics> diagnostics(@NotNull DisplayContext context,
@@ -234,11 +240,11 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * An empty display response usually means the build context itself does
-   * not compile, and the JSON-RPC channel then carries no reason at all. A
-   * plain compile of the same arguments does report the errors, so one is run
-   * to explain the failure (for example a define override that makes a
-   * library uncompilable).
+   * The reason a display request failed. An empty response usually means the
+   * build context itself does not compile, and the JSON-RPC channel then
+   * gives no reason. A plain compile of the same arguments does report the
+   * errors, so this runs one (a define override can, for example, make a
+   * library fail to compile).
    */
   @NotNull
   private static String explainRequestFailure(@NotNull Connected connected, @NotNull DisplayRequestException failure) {
@@ -257,10 +263,10 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * Whole-project diagnostics: the sweep that surfaces parse errors in OTHER
-   * files, which the per-file request stays silent about. Uses the disk state
-   * of every file. Null when the server is unavailable. Call on a background
-   * thread.
+   * Diagnostics for the whole project. Only this request reports parse errors
+   * in OTHER files; the per-file request stays silent about them. Uses the
+   * saved state of every file. Null when the server is unavailable. Call on a
+   * background thread.
    */
   @Nullable
   public List<FileDiagnostics> projectDiagnostics(@NotNull DisplayContext context) {
@@ -275,17 +281,17 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * Whether the file parses cleanly (no {@code PsiErrorElement}). New server
-   * work is pointless while it does not: the compiler fails on the same text,
-   * and the parser's own error highlighting already marks it. Reading cached
-   * compiler results stays fine. Cached per PSI modification; call in a read
-   * action.
+   * Whether the file parses without errors (no {@code PsiErrorElement}). New
+   * server requests are pointless while it does not: the compiler fails on
+   * the same text, and the parser's own error highlighting already marks it.
+   * Reading cached compiler results is still fine. Cached per PSI
+   * modification; call in a read action.
    */
   public static boolean isSyntaxClean(@NotNull Project project, @NotNull VirtualFile file) {
     return !PsiErrorElementUtil.hasErrors(project, file);
   }
 
-  /** A stable identity of a context's argument source, used as a cache key by the sibling services. */
+  /** A stable string identifying a context's argument source; the other compiler services use it as a cache key. */
   @NotNull
   static String contextKey(@NotNull DisplayContext context) {
     String base;
@@ -315,8 +321,8 @@ public final class HaxeCompilerDisplayService {
     return base == null ? null : HaxeDisplayConfiguration.applyOverrides(base, context.overrides());
   }
 
-  // TODO: keyed on the project file's stamp only - an edited lib
-  //  include.xml does not bust this cache.
+  // TODO: keyed on the project file's stamp only - an edited library
+  //  include.xml does not invalidate this cache.
   @Nullable
   private List<String> limeArgsFor(@NotNull LimeDisplaySpec spec, @Nullable String sdkName) {
     String cacheKey = spec.directory() + "/" + spec.fileName();
@@ -356,9 +362,10 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * Resolves the context's args, ensures the server runs and checks (once per
-   * server) that it supports {@code method}; null when any of that fails.
-   * Background threads only.
+   * A client for the context's server, starting the server when needed. Null
+   * when the arguments cannot be resolved, the server does not start, or it
+   * does not support {@code method}. The supported methods are asked once
+   * per server. Background threads only.
    */
   @Nullable
   Connected connectFor(@NotNull DisplayContext context, @NotNull String method) {
@@ -409,11 +416,11 @@ public final class HaxeCompilerDisplayService {
   // --- context warm-up ---
 
   /**
-   * The server's module cache only fills from an actual compile, so each
-   * context is compiled once per session. A FAILED compile (broken code) does
-   * not count: marking it warm would leave module lookups broken until a
-   * purge, even after the code is fixed. The next call retries instead.
-   * Background threads only.
+   * Compiles the context once per session, because the server's module cache
+   * fills only from a real compile. Returns whether the context compiled. A
+   * FAILED compile (broken code) is not remembered: remembering it would keep
+   * module lookups broken until the caches are purged, even after the code is
+   * fixed. The next call retries instead. Background threads only.
    */
   boolean ensureContextCompiled(@NotNull Connected connected, @NotNull String contextKey) {
     if (compiledContexts.contains(contextKey)) return true;
@@ -440,7 +447,7 @@ public final class HaxeCompilerDisplayService {
                                         CONTEXT_COMPILE_TIMEOUT_MS);
   }
 
-  /** Forget which contexts were warmed; the next module lookup re-compiles. */
+  /** Forgets which contexts were compiled, so the next module lookup compiles again. */
   public void resetCompiledContexts() {
     compiledContexts.clear();
   }

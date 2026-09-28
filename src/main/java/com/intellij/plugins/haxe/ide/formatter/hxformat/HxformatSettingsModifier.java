@@ -16,11 +16,11 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Formats a file by the project's OWN hxformat.json (haxe-formatter config)
- * when one exists, the way EditorConfig support overrides settings per file:
- * the nearest config above the file wins (matching the CLI's upward search),
- * applied as the full hxformat defaults image plus the file's overrides onto
- * TRANSIENT settings - no scheme is created or changed. Opt-out per scheme
- * via {@link HaxeCodeStyleSettings#USE_PROJECT_HXFORMAT}.
+ * when one exists, the way EditorConfig support overrides settings per file.
+ * The nearest config above the file wins, matching the CLI's upward search.
+ * The modifier applies the hxformat default profile and then the config's
+ * keys onto TRANSIENT settings, so no scheme is created or changed. A scheme
+ * opts out through {@link HaxeCodeStyleSettings#USE_PROJECT_HXFORMAT}.
  */
 public class HxformatSettingsModifier implements CodeStyleSettingsModifier {
 

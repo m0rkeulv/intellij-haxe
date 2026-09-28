@@ -2,10 +2,10 @@ package ijhaxe;
 
 #if (cpp && HXCPP_TELEMETRY && !HXCPP_TRACY)
 /**
-	Native glue over hxcpp's telemetry C API (hx/Telemetry.h, included by
-	hxcpp.h under HXCPP_TELEMETRY). The dump copies the frame's raw vectors
-	into haxe arrays and nothing more — all serialization happens in
-	TelemetryRun, keeping the injected C++ trivial.
+	Haxe access to hxcpp's telemetry C API (hx/Telemetry.h, which hxcpp.h
+	includes under HXCPP_TELEMETRY). `dumpInto` only copies a frame's raw
+	vectors into Haxe arrays; TelemetryRun does all the serialization, which
+	keeps the injected C++ trivial.
 **/
 class CppTelemetry {
 	public static function start():Int {

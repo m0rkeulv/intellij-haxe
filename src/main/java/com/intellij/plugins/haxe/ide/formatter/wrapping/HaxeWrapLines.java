@@ -11,21 +11,23 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.LOCAL_VAR_DECL
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.LOCAL_VAR_DECLARATION_LIST;
 
 /**
- * The joined line of a node once the rules' earlier wraps are applied: a
- * multi-var split puts the node's declarator on its own line, an exploding
- * operator chain its operand (one step in from the chain's own line), and
- * a chopped method chain then cuts the line down to the node's link.
+ * Computes a node's joined line after the wraps the tool applies before it
+ * judges the node. A split multi-var declaration puts the node's declarator
+ * on its own line. An exploding operator chain puts the node's operand on its
+ * own line, one step in from the chain's line. A chopped method chain then
+ * cuts the line down to the node's link.
  * <p>
- * The resolution recurses - an exploded operand's line needs its chain's,
- * and a chain's split is judged on the line of the list or value holding
- * it - but every nested call is on a STRICT ancestor of the node it came
- * from, so the recursion is bounded by the tree depth.
+ * The computation recurses: an operand's line depends on its chain's line,
+ * and a chain's split is judged on the line of the list or value holding it.
+ * Every recursive call is on a STRICT ancestor of the node it started from,
+ * so the depth of the tree bounds the recursion.
  */
 final class HaxeWrapLines {
 
   private HaxeWrapLines() {
   }
 
+  /** The node's joined line; null when the node is not in a file. */
   @Nullable
   static HaxeJoinedLine lineOf(@NotNull ASTNode node, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     HaxeJoinedLine.Context context = HaxeJoinedLine.Context.of(node, common);
@@ -62,8 +64,9 @@ final class HaxeWrapLines {
   }
 
   /**
-   * The innermost operand holding the node whose operator chain (of either
-   * kind) explodes, below the statement; null when no enclosing chain does.
+   * The innermost operand below the statement that holds the node and
+   * belongs to an exploding operator chain of either kind; null when no
+   * enclosing chain explodes.
    */
   @Nullable
   private static ASTNode explodedChainOperandOf(ASTNode node, ASTNode statement, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {

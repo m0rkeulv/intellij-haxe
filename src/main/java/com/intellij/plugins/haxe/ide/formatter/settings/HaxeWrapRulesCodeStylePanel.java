@@ -18,8 +18,8 @@ import java.util.function.ToIntFunction;
  * The Wrap Rules tab of the Haxe code style: the numeric thresholds of the
  * operator chain, multi-var and literal item rules (hxformat's
  * wrapping.opBoolChain, opAddSubChain, multiVar, arrayWrap, mapWrap and
- * objectLiteral). They are integers, which the Wrapping tab's option table
- * cannot host - it renders booleans and choices only.
+ * objectLiteral). They are integers, and the Wrapping tab's option table
+ * shows only booleans and choices.
  */
 public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 
@@ -41,15 +41,15 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
   private final Option addItemCount = new Option(h -> h.ADD_CHAIN_SPLIT_ITEM_COUNT, (h, v) -> h.ADD_CHAIN_SPLIT_ITEM_COUNT = v);
   private final Option addTotalLength = new Option(h -> h.ADD_CHAIN_SPLIT_TOTAL_LENGTH, (h, v) -> h.ADD_CHAIN_SPLIT_TOTAL_LENGTH = v);
   private final Option multiVarSplitWidth = new Option(h -> h.MULTI_VAR_SPLIT_WIDTH, (h, v) -> h.MULTI_VAR_SPLIT_WIDTH = v);
-  private final Option multiVarFillItem = new Option(h -> h.MULTI_VAR_FILL_ITEM_LENGTH, (h, v) -> h.MULTI_VAR_FILL_ITEM_LENGTH = v);
-  private final Option arrayKeepTotal = new Option(h -> h.ARRAY_KEEP_TOTAL_LENGTH, (h, v) -> h.ARRAY_KEEP_TOTAL_LENGTH = v);
+  private final Option multiVarFillItemLength = new Option(h -> h.MULTI_VAR_FILL_ITEM_LENGTH, (h, v) -> h.MULTI_VAR_FILL_ITEM_LENGTH = v);
+  private final Option arrayKeepTotalLength = new Option(h -> h.ARRAY_KEEP_TOTAL_LENGTH, (h, v) -> h.ARRAY_KEEP_TOTAL_LENGTH = v);
   private final Option arrayChopItemLength = new Option(h -> h.ARRAY_CHOP_ITEM_LENGTH, (h, v) -> h.ARRAY_CHOP_ITEM_LENGTH = v);
   private final Option arrayChopItemCount = new Option(h -> h.ARRAY_CHOP_ITEM_COUNT, (h, v) -> h.ARRAY_CHOP_ITEM_COUNT = v);
   private final Option arrayFillEqualItemLength = new Option(h -> h.ARRAY_FILL_EQUAL_ITEM_LENGTH, (h, v) -> h.ARRAY_FILL_EQUAL_ITEM_LENGTH = v);
   private final Option arrayFillEqualItemCount = new Option(h -> h.ARRAY_FILL_EQUAL_ITEM_COUNT, (h, v) -> h.ARRAY_FILL_EQUAL_ITEM_COUNT = v);
   private final Option arrayFillItemLength = new Option(h -> h.ARRAY_FILL_ITEM_LENGTH, (h, v) -> h.ARRAY_FILL_ITEM_LENGTH = v);
   private final Option arrayFillItemCount = new Option(h -> h.ARRAY_FILL_ITEM_COUNT, (h, v) -> h.ARRAY_FILL_ITEM_COUNT = v);
-  private final Option mapKeepTotal = new Option(h -> h.MAP_KEEP_TOTAL_LENGTH, (h, v) -> h.MAP_KEEP_TOTAL_LENGTH = v);
+  private final Option mapKeepTotalLength = new Option(h -> h.MAP_KEEP_TOTAL_LENGTH, (h, v) -> h.MAP_KEEP_TOTAL_LENGTH = v);
   private final Option mapChopItemLength = new Option(h -> h.MAP_CHOP_ITEM_LENGTH, (h, v) -> h.MAP_CHOP_ITEM_LENGTH = v);
   private final Option mapChopItemCount = new Option(h -> h.MAP_CHOP_ITEM_COUNT, (h, v) -> h.MAP_CHOP_ITEM_COUNT = v);
   private final Option mapFillEqualItemLength = new Option(h -> h.MAP_FILL_EQUAL_ITEM_LENGTH, (h, v) -> h.MAP_FILL_EQUAL_ITEM_LENGTH = v);
@@ -63,10 +63,10 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
   private final List<Option> options = List.of(
     boolLineLength, boolItemLength, boolItemCount, boolTotalLength,
     addLineLength, addItemLength, addItemCount, addTotalLength,
-    multiVarSplitWidth, multiVarFillItem,
-    arrayKeepTotal, arrayChopItemLength, arrayChopItemCount,
+    multiVarSplitWidth, multiVarFillItemLength,
+    arrayKeepTotalLength, arrayChopItemLength, arrayChopItemCount,
     arrayFillEqualItemLength, arrayFillEqualItemCount, arrayFillItemLength, arrayFillItemCount,
-    mapKeepTotal, mapChopItemLength, mapChopItemCount,
+    mapKeepTotalLength, mapChopItemLength, mapChopItemCount,
     mapFillEqualItemLength, mapFillEqualItemCount, mapFillItemLength, mapFillItemCount,
     objectKeepItemCount, objectChopItemLength, objectChopTotalLength, objectChopItemCount);
 
@@ -85,9 +85,9 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.chain.total.length"), addTotalLength.field())
       .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.title")))
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.split.width"), multiVarSplitWidth.field())
-      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.fill.item"), multiVarFillItem.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.multi.var.fill.item"), multiVarFillItemLength.field())
       .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.title")))
-      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.keep.total"), arrayKeepTotal.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.keep.total"), arrayKeepTotalLength.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.length"), arrayChopItemLength.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.count"), arrayChopItemCount.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.equal.item.length"), arrayFillEqualItemLength.field())
@@ -95,7 +95,7 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.length"), arrayFillItemLength.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.item.count"), arrayFillItemCount.field())
       .addComponent(new TitledSeparator(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.map.title")))
-      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.keep.total"), mapKeepTotal.field())
+      .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.keep.total"), mapKeepTotalLength.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.length"), mapChopItemLength.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.chop.item.count"), mapChopItemCount.field())
       .addLabeledComponent(HaxeCodeStyleBundle.message("haxe.codestyle.wraprules.array.fill.equal.item.length"), mapFillEqualItemLength.field())
@@ -140,7 +140,7 @@ public class HaxeWrapRulesCodeStylePanel extends HaxeOptionsPreviewPanelBase {
     return WRAP_RULES_CODE_SAMPLE;
   }
 
-  // one chain per rule branch, each named for the rule it answers to
+  // one example per rule, each variable named for the rule it demonstrates
   @Language("Haxe")
   public static final String WRAP_RULES_CODE_SAMPLE = """
     class Main {

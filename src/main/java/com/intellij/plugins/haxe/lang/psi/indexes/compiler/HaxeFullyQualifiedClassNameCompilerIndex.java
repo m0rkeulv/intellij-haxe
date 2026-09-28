@@ -27,7 +27,7 @@ public class HaxeFullyQualifiedClassNameCompilerIndex {
         HaxeCompilerTypeCatalogService catalog = HaxeCompilerTypeCatalogService.getInstance(project);
         List<HaxeClass> result = new ArrayList<>();
         for (HaxeCompilerTypeCatalogService.GeneratedType entry : catalog.byFqn(fqn)) {
-            HaxeClassModel model = catalog.materialize(entry);
+            HaxeClassModel model = catalog.renderedClass(entry);
             if (model != null) {
                 result.add(model.haxeClass);
             }

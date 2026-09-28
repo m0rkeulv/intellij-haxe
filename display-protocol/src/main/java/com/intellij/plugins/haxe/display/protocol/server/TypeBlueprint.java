@@ -4,10 +4,11 @@ import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
 import java.util.List;
 
 /**
- * The post-macro shape of one type ({@code server/type}): every member with
- * its type, including macro-generated members that exist in no source file.
- * Member lookups that static resolution cannot answer resolve against it.
- * Haxe 5 sends the member types unresolved (see the README).
+ * The blueprint of one type: its shape after macros ran, as
+ * {@code server/type} reports it. It lists every member with its type,
+ * including macro-generated members that exist in no source file. Member
+ * lookups that static resolution cannot answer fall back to it. Haxe 5 sends
+ * the member types unresolved (see the README).
  */
 public record TypeBlueprint(String name,
                             String kind,

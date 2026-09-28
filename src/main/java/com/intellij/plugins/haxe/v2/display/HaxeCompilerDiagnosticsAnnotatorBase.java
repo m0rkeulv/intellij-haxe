@@ -14,19 +14,20 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Shared shape of the compiler-diagnostics external annotators: gate on the
- * master switch plus the subclass's feature toggle, collect a request under
- * the read lock, fetch on the unlocked pass, then annotate every diagnostic
- * the subclass handles whose range still fits the document. Subclasses
- * contribute their toggle, their paired batch inspection, the diagnostics
- * they handle and the annotation itself.
+ * Base class of the compiler-diagnostics external annotators. An annotator
+ * runs only while both the master compiler-diagnostics switch and its own
+ * toggle are on. It collects the request under the read lock, fetches the
+ * diagnostics without the lock, and then annotates every diagnostic it
+ * handles whose range still fits the document. Subclasses supply their
+ * toggle, their paired batch inspection, the diagnostics they handle and the
+ * annotation itself.
  */
 @CustomLog
 abstract class HaxeCompilerDiagnosticsAnnotatorBase
   extends ExternalAnnotator<HaxeDiagnosticsFetcher.Request, List<Diagnostic>> {
 
-  /** The per-feature toggle under the master compiler-diagnostics switch. */
-  protected abstract boolean featureEnabled(@NotNull HaxeCompilerSettings settings);
+  /** Whether this annotator's own toggle is on; it counts only under the master switch. */
+  protected abstract boolean isFeatureEnabled(@NotNull HaxeCompilerSettings settings);
 
   /** Whether this annotator renders the diagnostic in {@code file}. */
   protected abstract boolean handles(@NotNull PsiFile file, @NotNull Diagnostic diagnostic);
@@ -38,7 +39,7 @@ abstract class HaxeCompilerDiagnosticsAnnotatorBase
   @Override
   @Nullable
   public final HaxeDiagnosticsFetcher.Request collectInformation(@NotNull PsiFile file, @NotNull Editor editor, boolean hasErrors) {
-    boolean enabled = enabled(file);
+    boolean enabled = isEnabled(file);
     log.debug(getClass().getSimpleName() + " pass for " + file.getName() + ": enabled=" + enabled);
     return enabled ? HaxeDiagnosticsFetcher.collect(file, editor) : null;
   }
@@ -47,7 +48,7 @@ abstract class HaxeCompilerDiagnosticsAnnotatorBase
   @Override
   @Nullable
   public final HaxeDiagnosticsFetcher.Request collectInformation(@NotNull PsiFile file) {
-    return enabled(file) ? HaxeDiagnosticsFetcher.collect(file) : null;
+    return isEnabled(file) ? HaxeDiagnosticsFetcher.collect(file) : null;
   }
 
   @Override
@@ -73,8 +74,8 @@ abstract class HaxeCompilerDiagnosticsAnnotatorBase
               + " diagnostics in " + file.getName());
   }
 
-  private boolean enabled(@NotNull PsiFile file) {
+  private boolean isEnabled(@NotNull PsiFile file) {
     HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(file.getProject());
-    return settings.isCompilerDiagnosticsEnabled() && featureEnabled(settings);
+    return settings.isCompilerDiagnosticsEnabled() && isFeatureEnabled(settings);
   }
 }

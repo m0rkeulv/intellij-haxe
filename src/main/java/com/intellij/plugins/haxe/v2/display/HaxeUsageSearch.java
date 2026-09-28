@@ -14,31 +14,32 @@ import java.util.Set;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Unified "is this declaration used?" over static reference search and the
- * compiler's post-macro knowledge. Static search runs first and stops at the
- * FIRST hit; only a statically unreferenced member falls through to the
- * compiler side ({@link HaxeCompilerUsageService}), which sees usages that
- * exist only in generated code.
+ * Answers "is this declaration used?" from static reference search and the
+ * compiler's post-macro knowledge together. Static search runs first and
+ * stops at the FIRST hit. Only a member without a static reference goes on
+ * to the compiler ({@link HaxeCompilerUsageService}), which also sees usages
+ * that exist only in generated code.
  *
- * The answer is tri-state because the compiler half is cache-only under the
- * read lock: "no reference found" splits into UNUSED (the compiler confirmed
- * it) and UNKNOWN (its verdict is still being fetched; the caller's static
- * conclusion stands for this pass and is corrected on the next).
+ * The answer has three states because the compiler side answers only from
+ * its cache under the read lock. "No reference found" splits into UNUSED
+ * (the compiler confirmed it) and UNKNOWN (the verdict is still being
+ * fetched; the caller's static conclusion stands for this pass and is
+ * corrected on the next).
  */
 public final class HaxeUsageSearch {
 
   public enum UsageState {
-    /** A reference exists — found statically or by the compiler. */
+    /** A reference exists, found statically or by the compiler. */
     USED,
     /** The compiler confirmed there are no references, generated code included. */
     UNUSED,
-    /** No static reference, and no compiler verdict (yet) — treat per the caller's static conclusion. */
+    /** No static reference and no compiler verdict yet; the caller's static conclusion applies. */
     UNKNOWN
   }
 
-  // TODO: processReferences(declaration, processor) - full merged enumeration
-  //  (static + compiler locations, deduped) for Find Usages / safe delete;
-  //  may block on the network, so it belongs on a progress thread.
+  // TODO: processReferences(declaration, processor) - enumerate static and
+  //  compiler locations merged and deduplicated, for Find Usages and Safe
+  //  Delete; it may block on the network, so it belongs on a progress thread.
 
   private HaxeUsageSearch() {
   }
@@ -59,10 +60,10 @@ public final class HaxeUsageSearch {
   }
 
   /**
-   * Whether "unused" reporting must stay quiet about the declaration.
-   * USED covers compiler-known usages too (generated code); UNKNOWN keeps the
-   * static verdict until the compiler answer lands, so it does NOT count as
-   * used and the caller's static conclusion stands for this pass.
+   * Whether "unused" reporting must stay quiet about the declaration: true
+   * only for USED, which includes usages the compiler found in generated
+   * code. UNKNOWN does NOT count as used, so the caller's static conclusion
+   * stands until the compiler's verdict arrives.
    */
   public static boolean isConsideredUsed(@NotNull HaxeNamedComponent declaration) {
     return usageState(declaration) == UsageState.USED;

@@ -12,16 +12,16 @@ import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Unused imports straight from the compiler's {@code display/diagnostics},
- * with a quick fix removing the reported range. While its toggle is on it
- * REPLACES the plugin's own unused-import inspection (which gates itself
- * off), so the compiler's post-macro view alone decides whether an import is
- * used.
+ * Unused imports reported by the compiler's {@code display/diagnostics},
+ * with a quick fix removing the reported range. While its toggle is on, this
+ * annotator REPLACES the plugin's own unused-import inspection, which
+ * switches itself off. The compiler's post-macro view alone then decides
+ * whether an import is used.
  */
 public class HaxeCompilerUnusedImportAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
   @Override
-  protected boolean featureEnabled(@NotNull HaxeCompilerSettings settings) {
+  protected boolean isFeatureEnabled(@NotNull HaxeCompilerSettings settings) {
     return settings.isDiagnosticsUnusedImportsEnabled();
   }
 

@@ -1,8 +1,9 @@
 package com.intellij.plugins.haxe.display.transport;
 
 /**
- * A display request failed: transport trouble, the compiler rejected the
- * arguments (0x02 marker), or the JSON-RPC envelope carried an error.
+ * A display request failed. The connection failed, the compiler rejected the
+ * arguments (the response carried the 0x02 error marker), or the JSON-RPC
+ * envelope carried an error.
  */
 public class DisplayRequestException extends Exception {
 

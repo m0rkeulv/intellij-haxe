@@ -8,23 +8,23 @@ import sys.io.Process;
 import sys.thread.Thread;
 
 /**
-	Evaluates a .hxp project script - arbitrary Haxe code extending
-	lime.tools.HXProject, so it must RUN, not parse. Mirrors lime's
-	HXProject.fromFile mechanics: the script is copied to a temp directory as
-	<Name>.hx (class name = capitalized file name), its @:compiler( lines
-	become extra compiler args, and the user's haxe executes it with
-	-lib lime -lib hxp. The shipped HxpRunner (extracted beside the script)
-	replaces lime's serialize/unserialize round trip by printing the JSON
-	directly from inside that context.
+	Evaluates a .hxp project script. The script is arbitrary Haxe code
+	extending lime.tools.HXProject, so it has to RUN; parsing is not enough.
+	The steps mirror lime's HXProject.fromFile: the script is copied to a
+	temp directory as <Name>.hx (the class name is the capitalized file
+	name), its @:compiler( lines become extra compiler arguments, and the
+	user's haxe runs it with -lib lime -lib hxp. lime serializes the project
+	and reads it back; instead, the bundled HxpRunner, extracted beside the
+	script, prints the configuration as JSON from inside that run.
 
-	Requires haxe plus the lime and hxp haxelibs; returns null (with a message
-	on stderr) when evaluation fails.
+	Requires haxe and the lime and hxp haxelibs. Returns null, with a message
+	on stderr, when evaluation fails.
 **/
 class HxpEvaluator {
 	public static function evaluate(hxpPath:String, target:String, defines:Map<String, String>,
 			haxeExecutable:String = "haxe"):Null<String> {
-		// Haxe has no finally: the temp directory holds copies of the user's
-		// script, so catch, delete it on both paths, then return.
+		// Haxe has no finally. The temp directory holds a copy of the user's
+		// script, so errors are caught and the directory is deleted either way.
 		var tempDirectory = createTempDirectory();
 
 		var result = try {
@@ -59,10 +59,10 @@ class HxpEvaluator {
 
 		var process = new Process(haxeExecutable, args);
 
-		// Draining stdout to EOF before touching stderr deadlocks when the child
-		// fills the stderr pipe buffer and blocks writing while this process blocks
-		// reading stdout. A helper thread drains stderr concurrently; the blocking
-		// readMessage joins it before exitCode().
+		// Reading stdout to EOF before stderr deadlocks when the child fills the
+		// stderr pipe buffer: the child blocks writing while this process blocks
+		// reading stdout. A helper thread therefore drains stderr concurrently,
+		// and the blocking readMessage waits for it before exitCode().
 		var main = Thread.current();
 		Thread.create(() -> {
 			var text = try process.stderr.readAll().toString() catch (e:Dynamic) "";
@@ -78,7 +78,7 @@ class HxpEvaluator {
 			Sys.stderr().writeString("hxp evaluation failed (exit " + exitCode + "):\n" + stderr);
 			return null;
 		}
-		// compiler chatter may precede the runner's output - the JSON is the last line
+		// compiler output may precede the runner's; the JSON is the last line
 		var lines = StringTools.trim(stdout).split("\n");
 		return StringTools.trim(lines[lines.length - 1]);
 	}
@@ -96,7 +96,7 @@ class HxpEvaluator {
 		for (line in File.getContent(path).split("\n")) {
 			var trimmed = StringTools.trim(line);
 			if (StringTools.startsWith(trimmed, tag)) {
-				// strip @:compiler(" and ") - the payload is a quoted argument string
+				// strips @:compiler(" and "); the payload is a quoted argument string
 				var payload = trimmed.substring(tag.length + 1, trimmed.length - 2);
 				result.push(payload.split(" "));
 			}

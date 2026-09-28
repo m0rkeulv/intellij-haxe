@@ -413,7 +413,7 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
       myFixture.checkResultByFile(getTestName(false) + ".txt");
     }
     catch (RuntimeException e) {
-      // the platform reads expected files with nio nowadays
+      // a missing expectation surfaces as FileNotFoundException or, when read through nio, NoSuchFileException
       if (!(e.getCause() instanceof FileNotFoundException || e.getCause() instanceof NoSuchFileException)) {
         throw e;
       }

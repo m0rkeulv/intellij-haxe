@@ -15,33 +15,36 @@ import java.util.List;
 import java.util.Set;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.hasStatementBody;
-import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.PARAMETER_AND_ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_LIKE_OWNERS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
- * haxe-formatter's fillLine for a signature (functionSignature,
- * anonFunctionSignature), a call, a new and an enum constructor
- * (callParameter), decided on the joined line - written breaks between the
- * items do not count. The tool's accounting:
+ * Reproduces haxe-formatter's fillLine for parameter and argument lists:
+ * signatures (functionSignature, anonFunctionSignature) and calls,
+ * {@code new} expressions and enum constructors (callParameter). The fill is
+ * judged on the joined line, so breaks written between the items do not
+ * count. The tool counts like this:
  * <ul>
- * <li>an item counts its printed text (type hint, {@code ?} marker and
- * default value included) plus the {@code ", "} after it; the last item
- * counts no separator;</li>
- * <li>an item that would REACH the margin (column + width >= margin) starts a
- * continuation line: one step in for a call, a new, an enum constructor or a
- * function without a body (none, or an empty {@code {}}), two for a
- * function with a body;</li>
- * <li>the last item also moves when what follows it on the line - the
- * closing paren, a return hint, {@code {}, {@code ;}, a chained call - PASSES
- * the margin (column + width + rest > margin);</li>
- * <li>the first item never moves, but when it reaches the margin the count
- * restarts at the continuation column as if it had; a line still past the
- * margin after that re-packs greedily (an item that reaches the margin with
- * its comma but without the trailing space moves down).</li>
+ * <li>An item counts its printed text, including a type hint, a {@code ?}
+ * marker and a default value, plus the {@code ", "} after it. The last item
+ * has no separator.</li>
+ * <li>An item that would REACH the margin (column + width >= margin) starts a
+ * continuation line. The continuation is one step in for a call, a
+ * {@code new}, an enum constructor or a function without a body (none, or
+ * an empty {@code {}}), and two steps for a function with a body.</li>
+ * <li>The last item also moves when the text after it on the line PASSES the
+ * margin (column + width + rest > margin). That text may be the closing
+ * paren, a return type hint, an opening brace, a semicolon or a chained
+ * call.</li>
+ * <li>The first item never moves. When it reaches the margin, counting
+ * restarts at the continuation column as if it had moved. If the opening
+ * paren's line still passes the margin after that, it is re-packed
+ * greedily: an item moves down when it reaches the margin with its comma,
+ * not counting the space after it.</li>
  * </ul>
- * A list's moved items are memoized on it ({@link HaxeWrapMemo}).
+ * Each list's moved items are cached on it ({@link HaxeWrapMemo}).
  * <p>
  * TODO: an argument the tool prints over several lines (a lambda with a block
  *       body) counts here as one line; the tool counts its first line and
@@ -49,14 +52,14 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  */
 public final class HaxeCallArgumentFill {
 
-  private static final Key<HaxeWrapMemo.Entry<List<ASTNode>>> BROKEN_ARGUMENTS_MEMO = Key.create("HaxeCallArgumentFill.brokenArguments");
+  private static final Key<HaxeWrapMemo.Entry<List<ASTNode>>> BROKEN_ARGUMENTS_MEMO = Key.create("HaxeCallArgumentFill.movedArguments");
 
   private HaxeCallArgumentFill() {
   }
 
-  /** The arguments of the list that start a new line; empty when the joined line fits the margin. */
+  /** The arguments of the list that the fill moves to a new line; empty when the joined line fits the margin. */
   @NotNull
-  public static List<ASTNode> brokenArguments(@NotNull ASTNode list, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
+  public static List<ASTNode> movedArguments(@NotNull ASTNode list, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     return HaxeWrapMemo.cached(list, BROKEN_ARGUMENTS_MEMO, common, haxe, () -> computeBrokenArguments(list, common, haxe));
   }
 
@@ -87,14 +90,18 @@ public final class HaxeCallArgumentFill {
     return widths;
   }
 
-  /** The tool's continuation for a moved item: two steps under a function with statements, else one. */
+  /** How many indent steps a moved item continues by: two under a function with a statement body, otherwise one. */
   private static int continuationSteps(ASTNode list) {
     ASTNode owner = list.getElementType() == NEW_EXPRESSION ? list : list.getTreeParent();
     boolean function = owner != null && FUNCTION_LIKE_OWNERS.contains(owner.getElementType());
     return function && hasStatementBody(owner) ? 2 : 1;
   }
 
-  /** The list's arguments: its expression children ({@code new T(a, b)} keeps them as direct children of the expression). */
+  /**
+   * The list's arguments: its children other than whitespace, comments and
+   * commas. A {@code new T(a, b)} holds its arguments as direct children, so
+   * only the children between its parens count there.
+   */
   private static List<ASTNode> arguments(ASTNode list) {
     List<ASTNode> arguments = new ArrayList<>();
     boolean inParens = false;
@@ -111,17 +118,17 @@ public final class HaxeCallArgumentFill {
   }
 
   /**
-   * The list the node is or belongs to when that list fills: an argument
-   * list under a call, a signature or an enum constructor, or the
-   * new-expression holding its arguments directly (functionSignature fills
-   * the same way); null for a list that does not fill.
+   * The list the node is, or belongs to, when that list fills: the argument
+   * or parameter list of a call, a function or an enum constructor, or a
+   * {@code new} expression, which holds its arguments directly. Null for any
+   * other list.
    */
   @Nullable
   public static ASTNode filledListOf(@NotNull ASTNode node) {
-    ASTNode list = ARGUMENT_LISTS.contains(node.getElementType()) ? node : node.getTreeParent();
+    ASTNode list = PARAMETER_AND_ARGUMENT_LISTS.contains(node.getElementType()) ? node : node.getTreeParent();
     if (list == null) return null;
     if (list.getElementType() == NEW_EXPRESSION) return list;
-    if (!ARGUMENT_LISTS.contains(list.getElementType())) return null;
+    if (!PARAMETER_AND_ARGUMENT_LISTS.contains(list.getElementType())) return null;
     ASTNode owner = list.getTreeParent();
     if (owner == null) return null;
     IElementType ownerType = owner.getElementType();
@@ -139,7 +146,11 @@ public final class HaxeCallArgumentFill {
    */
   private record Fill(List<ASTNode> arguments, int[] widths, int parenColumn, int continuation, int trailing, int margin) {
 
-    /** The fill pass; returns how many items stay on the paren's line. */
+    /**
+     * Moves each item that reaches the margin to a continuation line, and the
+     * last item when the text after it passes the margin. Returns how many
+     * items stay on the opening paren's line.
+     */
     int fillPass(Set<ASTNode> broken) {
       int last = arguments.size() - 1;
       int parenLineItems = arguments.size();
@@ -162,7 +173,7 @@ public final class HaxeCallArgumentFill {
       return parenLineItems;
     }
 
-    /** The re-pack of a paren line still past the margin (its first item alone reached it). */
+    /** Re-packs the opening paren's line when it still passes the margin, which happens when its first item alone reached the margin. */
     void longLinePass(Set<ASTNode> broken, int parenLineItems) {
       int last = arguments.size() - 1;
       boolean listEnds = parenLineItems == arguments.size();

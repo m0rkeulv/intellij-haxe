@@ -4,10 +4,10 @@ import java.util.stream.Collectors;
 import tools.jackson.databind.JsonNode;
 
 /**
- * A {@code haxe.display.JsonModuleTypes.JsonType} kept as raw JSON, with
- * accessors for what the plugin reads: dot paths and readable signatures.
- * The full typedef family is large and recursive; anything else is read from
- * {@link #args()} directly.
+ * A {@code haxe.display.JsonModuleTypes.JsonType}, kept as raw JSON. The
+ * accessors cover what the plugin reads: dot paths and readable signatures.
+ * The full typedef family is large and recursive, so anything else is read
+ * from {@link #args()} directly.
  */
 public record JsonTypeRef(String kind, JsonNode args) {
 
@@ -21,8 +21,9 @@ public record JsonTypeRef(String kind, JsonNode args) {
   }
 
   /**
-   * The dot path of a TInst/TEnum/TType/TAbstract as Haxe prints it, package
-   * and type name ({@code haxe.ds.StringMap}, {@code Void}); null for other kinds.
+   * The dot path of a TInst, TEnum, TType or TAbstract as Haxe prints it: the
+   * package plus the type name ({@code haxe.ds.StringMap}, {@code Void}).
+   * Null for other kinds.
    */
   public String dotPath() {
     JsonNode path = args.path("path");
@@ -34,11 +35,11 @@ public record JsonTypeRef(String kind, JsonNode args) {
 
   /**
    * The qualified name of a wire {@code JsonTypePath} ({@code pack},
-   * {@code moduleName}, {@code typeName}) in the form the plugin's class-name
-   * indexes use: {@code pack.Module} for a module's main type, and
-   * {@code pack.Module.SubType} for any other type it declares ({@code Void},
-   * declared in {@code StdTypes}, is {@code StdTypes.Void}). Empty when the
-   * type name is missing.
+   * {@code moduleName}, {@code typeName}), in the form the plugin's
+   * class-name indexes use. A module's main type is {@code pack.Module}, and
+   * any other type the module declares is {@code pack.Module.SubType}. For
+   * example, {@code Void} is declared in {@code StdTypes}, so its name is
+   * {@code StdTypes.Void}. Empty when the type name is missing.
    */
   public static String qualifiedNameOf(JsonNode typePath) {
     String typeName = typePath.path("typeName").asString("");

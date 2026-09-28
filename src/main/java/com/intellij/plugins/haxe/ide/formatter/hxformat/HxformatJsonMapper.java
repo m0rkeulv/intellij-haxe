@@ -21,15 +21,20 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
 /**
- * Applies an hxformat.json's keys on top of {@link HxformatDefaultProfile}:
- * walks the known key paths, consuming what it maps; the rest is reported
- * as the config paths that could not be honored.
+ * Applies the keys of an hxformat.json on top of
+ * {@link HxformatDefaultProfile}. It reads every key path it knows and marks
+ * each one it maps as consumed. Every key it cannot honor is reported,
+ * either as a note naming the limit or as the bare config path.
+ * <p>
+ * Where the formatter reproduces one of the tool's wrap rules, the mapper
+ * "lifts" the rule: it copies the value of the rule's matching condition
+ * into the corresponding threshold setting.
  */
 public final class HxformatJsonMapper {
   // WhitespacePolicy values that put a space AFTER the token / BEFORE it
   private static final Set<String> SPACE_AFTER_POLICIES = Set.of("after", "onlyAfter", "around");
   private static final Set<String> SPACE_BEFORE_POLICIES = Set.of("before", "onlyBefore", "around");
-  /** betweenImportsLevel value -> the grouping depth; "all" separates every import, which a full-path key reproduces. */
+  /** betweenImportsLevel value -> the grouping depth; "all" separates every import, which a depth past any real package reproduces. */
   private static final Map<String, Integer> IMPORT_LEVEL_DEPTHS = Map.of(
     "all", 99,
     "firstLevelPackage", 1,
@@ -38,7 +43,7 @@ public final class HxformatJsonMapper {
     "fourthLevelPackage", 4,
     "fifthLevelPackage", 5);
 
-  private static final List<String> UNWRAPPABLE_CONSTRUCTS = List.of(
+  private static final List<String> CONSTRUCTS_WITHOUT_WRAP_SETTING = List.of(
     "wrapping.typeParameter", "wrapping.metadataCallParameter", "wrapping.casePattern", "wrapping.anonType");
   private static final List<String> SHARP_PARENS = List.of("whitespace.parenConfig.sharpConditionParens");
   private static final List<String> MEMBER_BLANK_SECTIONS = List.of(
@@ -49,10 +54,11 @@ public final class HxformatJsonMapper {
     "accessBrackets", "comprehensionBrackets", "arrayLiteralBrackets", "mapLiteralBrackets", "unknownBrackets");
 
   /**
-   * Keys with ONE honored value: the formatter has no other setting for
-   * them, so any other value is reported. In the config's section order,
-   * which is the order violations are reported in. (The per-construct curly
-   * overrides are not here: their honored value follows the global keys.)
+   * Keys with only ONE value the formatter can honor, because it has no
+   * setting for any other; any other value is reported. The keys are in the
+   * config's section order, which is also the order of the reports. The
+   * per-construct curly overrides are not listed, because the value they
+   * accept depends on the global keys.
    */
   private static final Map<String, String> FIXED_VALUES = inSectionOrder(
     "disableFormatting", "false",
@@ -98,10 +104,10 @@ public final class HxformatJsonMapper {
     "whitespace.bracesConfig.unknownBraces.openingPolicy", "before",
     "whitespace.bracesConfig.unknownBraces.closingPolicy", "onlyAfter",
     "whitespace.bracesConfig.unknownBraces.removeInnerWhenEmpty", "true",
-    // emptyLines: the flat-set boundaries the single member-blank model
-    // covers at the tool's defaults only; afterReturn/afterBlocks at their
-    // Remove default are covered by the beforeRightCurly cap and the
-    // keyword-joining rules
+    // emptyLines: boundaries finer than the formatter's one set of member
+    // blank-line settings, so only the tool's defaults can be honored.
+    // afterReturn and afterBlocks at their Remove default are covered by the
+    // beforeRightCurly maximum and the rules that join keywords
     "emptyLines.classEmptyLines.betweenStaticVars", "0",
     "emptyLines.classEmptyLines.afterVars", "1",
     "emptyLines.classEmptyLines.afterStaticFunctions", "1",
@@ -131,7 +137,7 @@ public final class HxformatJsonMapper {
   // emptyLines.maxAnywhereInFile clamps EVERY other blank-line count
   private int blankLinesClamp = Integer.MAX_VALUE;
 
-  /** Returns the config paths present in the file that could not be honored. */
+  /** Applies the config to the settings and returns what could not be honored: bare config paths and explained notes. */
   public static List<String> apply(@NotNull CodeStyleSettings settings, @NotNull JsonNode root) {
     HxformatJsonMapper mapper = new HxformatJsonMapper(settings, root);
     mapper.applyAll();
@@ -187,10 +193,10 @@ public final class HxformatJsonMapper {
     wrapConstruct("wrapping.functionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
     wrapConstruct("wrapping.anonFunctionSignature", value -> common.METHOD_PARAMETERS_WRAP = value);
     wrapConstruct("wrapping.callParameter", value -> common.CALL_PARAMETERS_WRAP = value);
-    // the &&/|| and +/- chains follow a rule engine of their own fed from
-    // the rule thresholds (HaxeOperatorChainRules); no single wrap policy
-    // stands in for them, and BINARY_OPERATION_WRAP stays off so a margin
-    // wrap never competes with a chopped method chain
+    // the &&/|| and +/- chains follow their own rules, fed from the
+    // thresholds (HaxeOperatorChainRules), not a single wrap policy.
+    // BINARY_OPERATION_WRAP stays off, so a margin wrap never competes with
+    // a chopped method chain
     ChainSetters boolChain = new ChainSetters(
       value -> haxe.BOOL_CHAIN_SPLIT_LINE_LENGTH = value,
       value -> haxe.BOOL_CHAIN_SPLIT_ITEM_LENGTH = value,
@@ -203,11 +209,15 @@ public final class HxformatJsonMapper {
       value -> haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = value);
     applyChainRules("wrapping.opBoolChain", boolChain);
     applyChainRules("wrapping.opAddSubChain", addChain);
-    reportUnsupportedSubtrees(UNWRAPPABLE_CONSTRUCTS, "hxformat.unsupported.no.wrap.target");
+    reportUnsupportedSubtrees(CONSTRUCTS_WITHOUT_WRAP_SETTING, "hxformat.unsupported.no.wrap.target");
     applyMultiVar();
   }
 
-  /** The split width lifts from a matching rule; the length-based JOIN of short multi-vars stays unreproduced. */
+  /**
+   * Lifts the split width and the fill item length from matching rules. The
+   * tool's joining of short multi-var declarations is not reproduced, so
+   * the section is always reported.
+   */
   private void applyMultiVar() {
     if (node("wrapping.multiVar") == null) return;
     markConsumedSubtree("wrapping.multiVar");
@@ -229,11 +239,13 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * The tool picks the FIRST rule whose conditions all hold; a construct
-   * here has one wrap policy. The rule that fires on a margin overflow is
-   * that policy - the guard rules preceding it in the tool's defaults
-   * ("itemCount <= 3 and NOT exceeding -> noWrap") must not win; without an
-   * overflow rule the first rule, then defaultWrap, decides.
+   * Maps a construct onto one wrap policy. The tool picks the FIRST rule
+   * whose conditions all hold, but a construct here has only one policy.
+   * That policy comes from the rule that fires on a margin overflow; the
+   * guard rules before it in the tool's defaults ("itemCount <= 3 and NOT
+   * exceeding -> noWrap") must not win. Without an overflow rule, the first
+   * rule decides, then defaultWrap. Rules are reported, since one policy only
+   * approximates them.
    */
   private void wrapConstruct(String path, IntConsumer setter) {
     JsonNode construct = node(path);
@@ -246,11 +258,10 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * wrapping.arrayWrap / mapWrap / objectLiteral: the overflow rule (or
-   * defaultWrap) sets the array wrap policy as for any construct, and the
-   * item rules the engine reproduces (HaxeLiteralItemRules) are lifted from
-   * their shapes into the kind's thresholds; a rule shape the kind has no
-   * threshold for is reported.
+   * Maps wrapping.arrayWrap, mapWrap or objectLiteral. The overflow rule, or
+   * defaultWrap, sets the array wrap policy as for any construct. The item
+   * rules that HaxeLiteralItemRules reproduces are lifted into the kind's
+   * thresholds. A rule of a shape the kind has no threshold for is reported.
    */
   private void applyLiteralRules(String path, IntConsumer wrapSetter, LiteralSetters setters) {
     JsonNode construct = node(path);
@@ -268,13 +279,17 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * One literal rule into its threshold: a noWrap rule's totalItemLength or
-   * itemCount (the latter's exceedsMaxLineLength guard is built in), an
-   * onePerLine rule's anyItemLength, totalItemLength or itemCount (its
-   * hasMultilineItems and exceedsMaxLineLength forms are built in), a
-   * fillLineWithLeadingBreak rule's allItemLengths with itemCount, with or
-   * without equalItemLengths. False for any other shape, and for a knob the
-   * kind lacks.
+   * Lifts one literal rule into its thresholds. These shapes are accepted:
+   * <ul>
+   * <li>noWrap with totalItemLength, or with itemCount (whose
+   * exceedsMaxLineLength guard HaxeLiteralItemRules applies itself);</li>
+   * <li>onePerLine with anyItemLength, totalItemLength or itemCount, and its
+   * hasMultilineItems and exceedsMaxLineLength forms, which
+   * HaxeLiteralItemRules applies itself;</li>
+   * <li>fillLineWithLeadingBreak with allItemLengths and itemCount, with or
+   * without equalItemLengths.</li>
+   * </ul>
+   * Returns false for any other shape, and for a threshold the kind lacks.
    */
   private static boolean liftLiteralRule(JsonNode rule, LiteralSetters setters) {
     String type = rule.path("type").asText("");
@@ -296,15 +311,15 @@ public final class HxformatJsonMapper {
     };
   }
 
-  /** Sets the knob from the rule's condition; false when the condition is absent or the kind lacks the knob. */
-  private static boolean lift(JsonNode rule, String cond, @Nullable IntConsumer knob) {
-    Integer value = conditionValue(rule, cond);
-    if (value == null || knob == null) return false;
-    knob.accept(value);
+  /** Sets the threshold from the rule's condition; false when the condition is absent or the kind lacks the threshold. */
+  private static boolean lift(JsonNode rule, String condition, @Nullable IntConsumer threshold) {
+    Integer value = conditionValue(rule, condition);
+    if (value == null || threshold == null) return false;
+    threshold.accept(value);
     return true;
   }
 
-  /** The thresholds one literal kind's rules lift into; null for a knob the kind lacks. */
+  /** The threshold setters of one literal kind; null for a threshold the kind lacks. */
   private record LiteralSetters(@Nullable IntConsumer keepItemCount, @Nullable IntConsumer keepTotalLength,
                                 @Nullable IntConsumer fillEqualItemLength, @Nullable IntConsumer fillEqualItemCount,
                                 @Nullable IntConsumer fillItemLength, @Nullable IntConsumer fillItemCount,
@@ -365,9 +380,9 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * The rule carries an exceedsMaxLineLength condition asking for an
-   * overflow: value 1, or no value (the tool reads any other value as "not
-   * exceeding", the guard form).
+   * Whether the rule has an exceedsMaxLineLength condition that asks for an
+   * overflow: value 1, or no value. The tool reads any other value as "not
+   * exceeding", the guard form.
    */
   private static boolean firesOnOverflow(JsonNode rule) {
     JsonNode conditions = rule.get("conditions");
@@ -403,9 +418,9 @@ public final class HxformatJsonMapper {
         default -> null; // auto - detect per file
       };
     }
-    // per-construct curly overrides: acceptable only when they restate what
-    // the global import already produces (object literals are inherently
-    // After-style here, whatever BRACE_STYLE says)
+    // per-construct curly overrides are honored only when they restate what
+    // the global keys already produce; object literals always use the After
+    // style here, whatever BRACE_STYLE says
     String effectiveLeft = leftCurly == null ? "after" : leftCurly;
     String effectiveEmpty = emptyCurly == null ? "noBreak" : emptyCurly;
     for (String construct : List.of("blockCurly", "anonFunctionCurly", "anonTypeCurly", "typedefCurly")) {
@@ -463,13 +478,13 @@ public final class HxformatJsonMapper {
   }
 
   private void applyKeywordAndOperatorSpacing() {
-    spaceBefore("whitespace.ifPolicy", value -> common.SPACE_BEFORE_IF_PARENTHESES = value);
-    spaceBefore("whitespace.whilePolicy", value -> common.SPACE_BEFORE_WHILE_PARENTHESES = value);
-    spaceBefore("whitespace.doPolicy", value -> common.SPACE_BEFORE_WHILE_PARENTHESES = value);
-    spaceBefore("whitespace.forPolicy", value -> common.SPACE_BEFORE_FOR_PARENTHESES = value);
-    spaceBefore("whitespace.switchPolicy", value -> common.SPACE_BEFORE_SWITCH_PARENTHESES = value);
-    spaceBefore("whitespace.catchPolicy", value -> common.SPACE_BEFORE_CATCH_PARENTHESES = value);
-    spaceBefore("whitespace.tryPolicy", value -> common.SPACE_BEFORE_TRY_LBRACE = value);
+    spaceAfterKeyword("whitespace.ifPolicy", value -> common.SPACE_BEFORE_IF_PARENTHESES = value);
+    spaceAfterKeyword("whitespace.whilePolicy", value -> common.SPACE_BEFORE_WHILE_PARENTHESES = value);
+    spaceAfterKeyword("whitespace.doPolicy", value -> common.SPACE_BEFORE_WHILE_PARENTHESES = value);
+    spaceAfterKeyword("whitespace.forPolicy", value -> common.SPACE_BEFORE_FOR_PARENTHESES = value);
+    spaceAfterKeyword("whitespace.switchPolicy", value -> common.SPACE_BEFORE_SWITCH_PARENTHESES = value);
+    spaceAfterKeyword("whitespace.catchPolicy", value -> common.SPACE_BEFORE_CATCH_PARENTHESES = value);
+    spaceAfterKeyword("whitespace.tryPolicy", value -> common.SPACE_BEFORE_TRY_LBRACE = value);
     applyEquals("whitespace.binopPolicy", "around", around -> {
       common.SPACE_AROUND_ASSIGNMENT_OPERATORS = around;
       common.SPACE_AROUND_LOGICAL_OPERATORS = around;
@@ -591,29 +606,29 @@ public final class HxformatJsonMapper {
       common.KEEP_BLANK_LINES_IN_CODE = maxAnywhere;
       common.KEEP_BLANK_LINES_IN_DECLARATIONS = maxAnywhere;
     }
-    applyInt("emptyLines.afterPackage", value -> common.BLANK_LINES_AFTER_PACKAGE = value);
-    // an exact count: minimum and cap alike
-    applyInt("emptyLines.betweenTypes", value -> {
+    applyBlankLineCount("emptyLines.afterPackage", value -> common.BLANK_LINES_AFTER_PACKAGE = value);
+    // an exact count, so it is both the minimum and the maximum
+    applyBlankLineCount("emptyLines.betweenTypes", value -> {
       common.BLANK_LINES_AROUND_CLASS = value;
       haxe.KEEP_BLANK_LINES_BETWEEN_TYPES = value;
     });
-    applyInt("emptyLines.betweenSingleLineTypes", value -> haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = value);
-    applyInt("emptyLines.afterFileHeaderComment", value -> haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = value);
-    applyInt("emptyLines.classEmptyLines.betweenVars", value -> common.BLANK_LINES_AROUND_FIELD = value);
-    applyInt("emptyLines.classEmptyLines.betweenFunctions", value -> common.BLANK_LINES_AROUND_METHOD = value);
-    applyInt("emptyLines.classEmptyLines.beginType", value -> common.BLANK_LINES_AFTER_CLASS_HEADER = value);
-    applyInt("emptyLines.classEmptyLines.endType", value -> common.BLANK_LINES_BEFORE_CLASS_END = value);
+    applyBlankLineCount("emptyLines.betweenSingleLineTypes", value -> haxe.KEEP_BLANK_LINES_BETWEEN_SINGLE_LINE_TYPES = value);
+    applyBlankLineCount("emptyLines.afterFileHeaderComment", value -> haxe.MINIMUM_BLANK_LINES_AFTER_FILE_HEADER = value);
+    applyBlankLineCount("emptyLines.classEmptyLines.betweenVars", value -> common.BLANK_LINES_AROUND_FIELD = value);
+    applyBlankLineCount("emptyLines.classEmptyLines.betweenFunctions", value -> common.BLANK_LINES_AROUND_METHOD = value);
+    applyBlankLineCount("emptyLines.classEmptyLines.beginType", value -> common.BLANK_LINES_AFTER_CLASS_HEADER = value);
+    applyBlankLineCount("emptyLines.classEmptyLines.endType", value -> common.BLANK_LINES_BEFORE_CLASS_END = value);
     applyBlockEdgeBlankLines();
     applyImportBlankLines();
-    applyInt("emptyLines.classEmptyLines.afterStaticVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
-    applyInt("emptyLines.classEmptyLines.afterPrivateVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
+    applyBlankLineCount("emptyLines.classEmptyLines.afterStaticVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
+    applyBlankLineCount("emptyLines.classEmptyLines.afterPrivateVars", value -> haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = value);
     reportUnsupportedSubtrees(MEMBER_BLANK_SECTIONS, "hxformat.unsupported.member.blanks");
     // "ignore" keeps the written shape, which 0 also does here
     applyCommentPolicy("emptyLines.beforeDocCommentEmptyLines", value -> haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = value);
     applyCommentPolicy("emptyLines.afterFieldsWithDocComments", value -> haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = value);
   }
 
-  /** The blank-line caps at a block's edges: a "remove" policy caps at 0, anything else at the file-wide maximum. */
+  /** The maximum blank lines at a block's edges: 0 for a "remove" policy, otherwise the file-wide maximum. */
   private void applyBlockEdgeBlankLines() {
     String beforeRCurly = str("emptyLines.beforeRightCurly");
     if (beforeRCurly != null) {
@@ -623,18 +638,18 @@ public final class HxformatJsonMapper {
     if (afterLCurly != null) {
       haxe.KEEP_BLANK_LINES_AFTER_LBRACE = "remove".equals(afterLCurly) ? 0 : common.KEEP_BLANK_LINES_IN_CODE;
     }
-    // beforeBlocks' visible effect beyond the brace rules is the blank
+    // beyond the brace rules, beforeBlocks affects only the blank line
     // between a case's ':' and its body
     String beforeBlocks = str("emptyLines.beforeBlocks");
     if (beforeBlocks != null) {
       haxe.KEEP_BLANK_LINES_AFTER_CASE_COLON = "remove".equals(beforeBlocks) ? 0 : common.KEEP_BLANK_LINES_IN_CODE;
     }
-    // the tool's exact count between stacked block comments maps onto a cap
-    applyInt("emptyLines.betweenMultilineComments", value -> haxe.KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS = value);
+    // the tool's exact count between stacked block comments becomes a maximum
+    applyBlankLineCount("emptyLines.betweenMultilineComments", value -> haxe.KEEP_BLANK_LINES_BETWEEN_MULTILINE_COMMENTS = value);
   }
 
   private void applyImportBlankLines() {
-    applyInt("emptyLines.importAndUsing.beforeType", value -> {
+    applyBlankLineCount("emptyLines.importAndUsing.beforeType", value -> {
       common.BLANK_LINES_AFTER_IMPORTS = value;
       haxe.MINIMUM_BLANK_LINES_AFTER_USING = value;
     });
@@ -654,8 +669,8 @@ public final class HxformatJsonMapper {
     }
     Integer depth = IMPORT_LEVEL_DEPTHS.get(level);
     if (depth == null) {
-      // fullPackage compares the package WITHOUT the class name - the import-order key
-      // includes it, so same-package imports would still separate
+      // fullPackage compares the package WITHOUT the class name, but the
+      // grouping key includes it, so imports of one package would still separate
       unsupported.add("emptyLines.importAndUsing.betweenImportsLevel=" + level);
       return;
     }
@@ -664,8 +679,9 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * Reads an OpenClosePolicy object: within = space just inside the pair
-   * (opening implies space AFTER '(' , closing implies space BEFORE ')').
+   * Reads an OpenClosePolicy object into two flags. "Within" is a space just
+   * inside the pair: the opening policy puts one after '(', or the closing
+   * policy one before ')'. "Before" is the opening policy's space before '('.
    */
   private void openClose(String path, @Nullable Consumer<Boolean> withinSetter, @Nullable Consumer<Boolean> beforeSetter) {
     if (node(path) == null) return;
@@ -686,6 +702,7 @@ public final class HxformatJsonMapper {
            || (closing != null && SPACE_BEFORE_POLICIES.contains(closing));
   }
 
+  /** A sameLine policy for a keyword after a block (next / same) into its on-new-line flag; keep is reported. */
   private void onNewLine(String path, Consumer<Boolean> setter) {
     String value = str(path);
     if (value == null) return;
@@ -696,7 +713,8 @@ public final class HxformatJsonMapper {
     setter.accept("next".equals(value));
   }
 
-  private void spaceBefore(String path, Consumer<Boolean> setter) {
+  /** A keyword's whitespace policy: a space after the keyword is the space before its parenthesis or brace. */
+  private void spaceAfterKeyword(String path, Consumer<Boolean> setter) {
     String value = str(path);
     if (value == null) return;
     setter.accept(SPACE_AFTER_POLICIES.contains(value));
@@ -717,10 +735,10 @@ public final class HxformatJsonMapper {
   }
 
   /**
-   * A chain construct's rules: the thresholds the rule engine reproduces are
-   * lifted from matching rule shapes - an onePerLineAfterFirst rule's
-   * itemCount / lineLength+anyItemLength conditions, a noWrap rule's
-   * totalItemLength guard; other rule shapes have no counterpart.
+   * Lifts an operator chain's thresholds from the matching rule shapes: an
+   * onePerLineAfterFirst rule's itemCount, or its lineLength together with
+   * anyItemLength, and a noWrap rule's totalItemLength guard. Other rule
+   * shapes have no counterpart and are ignored.
    */
   private void applyChainRules(String path, ChainSetters setters) {
     if (node(path) == null) return;
@@ -779,15 +797,15 @@ public final class HxformatJsonMapper {
     }
   }
 
-  /** Ints in the emptyLines section obey the maxAnywhereInFile clamp. */
-  private void applyInt(String path, IntConsumer setter) {
+  /** An emptyLines count, capped by maxAnywhereInFile. */
+  private void applyBlankLineCount(String path, IntConsumer setter) {
     Integer value = intVal(path);
     if (value != null) {
       setter.accept(Math.min(value, blankLinesClamp));
     }
   }
 
-  /** Consumes the key when it holds the only supported value; reports it otherwise. */
+  /** Reads the key and reports it when it holds anything but the supported value. */
   private void acceptOnly(String path, String supportedValue) {
     String value = str(path);
     if (value != null && !supportedValue.equals(value)) {
@@ -818,6 +836,7 @@ public final class HxformatJsonMapper {
     }
   }
 
+  /** Reports every value that no mapping step read. */
   private void collectLeftovers(JsonNode subtree, String path) {
     if (subtree.isNull()) return;
     if (!subtree.isObject()) {

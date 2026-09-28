@@ -1,5 +1,5 @@
 package com.intellij.plugins.haxe.display.protocol;
 
-/** A file plus range, as returned by definition/references/implementation. */
+/** A range in a file, as the definition, references and implementation requests return it. */
 public record Location(String file, Range range) {
 }

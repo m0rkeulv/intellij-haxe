@@ -43,7 +43,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.sameLineMetadataRun;
-import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.ARGUMENT_LISTS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.PARAMETER_AND_ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.INDENTED_CONTAINERS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
@@ -52,8 +52,8 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
  * @author: Fedor.Korotkov
  */
 public class HaxeBlock extends AbstractBlock implements BlockWithParent {
-  // after one of these, a new line sits one step in: an opening bracket, a
-  // type body, a directive or a comment
+  // A new line after one of these sits one step in: an opening bracket, a
+  // type body, a directive or a comment.
   private static final TokenSet INDENT_OPENERS = TokenSet.orSet(
     TokenSet.create(PLPAREN, PLCURLY, CONDITIONAL_STATEMENT_ID, PPELSE, PPEND, PPELSEIF), CLASS_BODY_TYPES, ONLY_COMMENTS);
 
@@ -61,20 +61,20 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   private final HaxeSpacingProcessor mySpacingProcessor;
   private final HaxeWrappingProcessor myWrappingProcessor;
   private final HaxeAlignmentProcessor myAlignmentProcessor;
-  // the wrap of this assignment's sign, once built: the call arguments
-  // after it wrap as its children
+  // the wrap of this assignment's sign once it is built; the call arguments after it become its child wraps
   private Wrap myAssignmentSignWrap = null;
   private final Indent myIndent;
   private final CodeStyleSettings mySettings;
   private final CommonCodeStyleSettings myCommon;
   private final HaxeCodeStyleSettings myHaxe;
-  // the alignment a call's continuation lines share (see continuationAlignment), once asked for
+  // the alignment a call's continuation lines share (see continuationAlignmentFor), created on first use
   private Alignment myContinuationAlignment;
-  // the metadata written on the node's line before it, which this block
-  // spans: the engine anchors a block's continuations at the block that
-  // starts the line, and metadata sits BESIDE its declaration in the PSI -
-  // as a sibling block it would own the line and the declaration's
-  // wrapped parts would anchor at the enclosing body instead
+  // The metadata written before the node on its line. When there is any, this
+  // block is a "metadata span" that covers the metadata too. The formatting
+  // engine indents a block's wrapped lines from the block that starts the
+  // line. In the PSI, metadata is a sibling of its declaration, so as a block
+  // of its own it would start the line, and the declaration's wrapped parts
+  // would indent from the enclosing body instead.
   private final List<ASTNode> myLeadingMetadata;
   private BlockWithParent myParent;
 
@@ -85,7 +85,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     this(node, List.of(), wrap, alignment, settings, null);
   }
 
-  /** {@code indent} overrides the indent processor's answer; null takes it. */
+  /** A non-null {@code indent} replaces the one the indent processor would compute. */
   private HaxeBlock(ASTNode node,
                     List<ASTNode> leadingMetadata,
                     Wrap wrap,
@@ -111,12 +111,12 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   }
 
   /**
-   * A metadata span reaches back to its first metadata. A PPBODY chameleon
-   * spans the WHOLE region between directives - the lexer remaps every
-   * token there, edge whitespace included. Reported as-is that whitespace
-   * would sit inside the block, out of the engine's reach, and blank lines
-   * around an inactive branch would survive every spacing rule - so the
-   * range is trimmed to the branch's real content.
+   * The node's range, with two exceptions. A metadata span starts at its
+   * first metadata. An inactive branch (PPBODY) spans the whole region
+   * between two directives, including the whitespace at both edges. That
+   * whitespace would lie inside the block, where spacing rules cannot reach
+   * it, so blank lines around the branch would never change. The range is
+   * therefore trimmed to the branch's content.
    */
   @Override
   public @NotNull TextRange getTextRange() {
@@ -124,7 +124,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
       return new TextRange(myLeadingMetadata.getFirst().getStartOffset(), myNode.getTextRange().getEndOffset());
     }
     if (myNode.getElementType() != PPBODY) return super.getTextRange();
-    // trim by the same child-node walk that builds the sub-blocks, so every
+    // trim by the same child walk that builds the sub-blocks, so every
     // child block stays inside the reported range
     ASTNode first = myNode.getFirstChildNode();
     while (first != null && FormatterUtil.containsWhiteSpacesOnly(first)) first = first.getTreeNext();
@@ -141,8 +141,8 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
 
   @Override
   public Spacing getSpacing(Block child1, @NotNull Block child2) {
-    // the pairs inside a metadata span - metadata to metadata, metadata to
-    // declaration - are the enclosing body's pairs and follow its rules
+    // The pairs inside a metadata span (metadata to metadata, metadata to
+    // declaration) belong to the enclosing body and follow its rules.
     HaxeBlock owner = myLeadingMetadata.isEmpty() ? this : (HaxeBlock)myParent;
     return owner.mySpacingProcessor.getSpacing(child1, child2);
   }
@@ -156,7 +156,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     return childBlocks((child, metadata) -> childBlock(child, metadata, createChildWrap(child), createChildAlignment(child), true));
   }
 
-  /** The metadata blocks, then the node's own: all at the span's indent, since the span starts the line. */
+  /** A block for each metadata, then one for the node, all without indent: the span starts the line and carries the indent. */
   private List<Block> buildMetadataSpanChildren() {
     List<Block> children = new ArrayList<>();
     for (ASTNode metadata : myLeadingMetadata) children.add(spanMemberBlock(metadata));
@@ -165,10 +165,10 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   }
 
   /**
-   * Line blocks over the lazily parsed doc sub-tree: only the managed
-   * line-leading whitespace between them is formatted (per the doc indent
-   * rules); wraps and alignments never apply inside a comment. The toggle
-   * keeps the comment one opaque block.
+   * Blocks over the lazily parsed doc comment tree. Only the whitespace at
+   * the start of each line is formatted, per the doc comment indent rules;
+   * wraps and alignments never apply inside a comment. With
+   * FORMAT_DOC_COMMENTS off the comment stays a single block.
    */
   private List<Block> buildDocCommentChildren() {
     if (!mySettings.getCustomSettings(HaxeCodeStyleSettings.class).FORMAT_DOC_COMMENTS) {
@@ -178,23 +178,24 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   }
 
   /**
-   * Blocks over an inactive conditional branch's lazily parsed sub-tree: the
+   * Blocks over the lazily parsed tree of an inactive conditional branch. The
    * children are ordinary Haxe PSI, so the normal indent and spacing rules
-   * apply inside. A branch without a clean parse stays one opaque block,
-   * preserved verbatim like the reference formatter's own fallback.
+   * apply inside. A branch without a clean parse stays a single block and is
+   * preserved verbatim, as haxe-formatter does in that case.
    */
   private List<Block> buildInactiveBranchChildren() {
     HaxeCodeStyleSettings haxe = mySettings.getCustomSettings(HaxeCodeStyleSettings.class);
-    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || HaxeInactiveBranches.preservedVerbatim(body, haxe)) {
+    if (!(getNode().getPsi() instanceof HaxeInactiveBody body) || HaxeInactiveBranches.isPreservedVerbatim(body, haxe)) {
       return EMPTY;
     }
     return childBlocks((child, metadata) -> childBlock(child, metadata, createChildWrap(child), null, true));
   }
 
   /**
-   * One block per non-whitespace child, in order; a child opened by
-   * same-line metadata takes that metadata into its block (the factory's
-   * second argument, empty for every other child).
+   * One block per non-whitespace child, in order. A child preceded by
+   * metadata on the same line takes that metadata into its block; the
+   * factory receives it as the second argument, which is empty for every
+   * other child.
    */
   private List<Block> childBlocks(BiFunction<ASTNode, List<ASTNode>, HaxeBlock> blockOf) {
     List<Block> children = new ArrayList<>();
@@ -216,7 +217,7 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     return linked(block, linkWrapping);
   }
 
-  /** A block inside a metadata span: at the span's indent, without wrap or alignment of its own (the span carries the node's). */
+  /** A child of a metadata span: no indent, wrap or alignment of its own, since the span carries the node's. */
   private HaxeBlock spanMemberBlock(ASTNode node) {
     HaxeBlock block = new HaxeBlock(node, List.of(), Wrap.createWrap(WrapType.NONE, false), null, mySettings, Indent.getNoneIndent());
     return linked(block, true);
@@ -224,9 +225,9 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
 
   private HaxeBlock linked(HaxeBlock block, boolean linkWrapping) {
     block.setParent(this);
-    // wrap groups can span levels (a literal's items chop with its closing
-    // bracket, a call chain's dots chop together) - the child's processor
-    // reaches the enclosing ones through this link
+    // A shared wrap can span tree levels: a literal's items chop together with
+    // its closing bracket, and a call chain's dots chop together. The child's
+    // processor reaches the enclosing processors through this link.
     if (linkWrapping) block.myWrappingProcessor.setParentProcessor(myWrappingProcessor);
     return block;
   }
@@ -250,13 +251,16 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
   }
 
   /**
-   * haxe-formatter keeps every continuation line of a call one step from
-   * the line the call sits on - an argument its fill moves down and the
-   * operator lines of an operator chain among the arguments alike, at ONE
-   * column however deep the chain nests. The engine indents a wrapped line
-   * from the first block on the line its parent starts on, which stacks a
-   * chain's step on a moved argument's, so those lines share the list's
-   * alignment instead: the first of them takes the step, the rest its column.
+   * The alignment for a continuation line of a call, or null.
+   * <p>
+   * haxe-formatter indents every continuation line of a call one step from
+   * the line the call starts on. This holds for an argument that the fill
+   * moves to a new line and for the lines of an operator chain among the
+   * arguments, however deeply the chain nests. The formatting engine indents
+   * a wrapped line from the first block on its parent's first line, which
+   * would add the chain's step on top of the moved argument's step. These
+   * lines therefore share one alignment on the argument list: the first of
+   * them takes the step, and the rest align to its column.
    */
   @Nullable
   private Alignment continuationAlignmentFor(ASTNode child) {
@@ -269,12 +273,12 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     return list == null ? null : list.continuationAlignment();
   }
 
-  /** The child is an argument of this call's list that the fill starts a new line with. */
+  /** Whether the child is an argument of this call's list that the fill moves to a new line. */
   private boolean isMovedArgument(ASTNode child) {
-    if (!ARGUMENT_LISTS.contains(myNode.getElementType()) || myNode.getTreeParent() == null) return false;
+    if (!PARAMETER_AND_ARGUMENT_LISTS.contains(myNode.getElementType()) || myNode.getTreeParent() == null) return false;
     IElementType ownerType = myNode.getTreeParent().getElementType();
     boolean call = ownerType == CALL_EXPRESSION || ownerType == NEW_EXPRESSION;
-    return call && HaxeCallArgumentFill.brokenArguments(myNode, myCommon, myHaxe).contains(child);
+    return call && HaxeCallArgumentFill.movedArguments(myNode, myCommon, myHaxe).contains(child);
   }
 
   private Alignment continuationAlignment() {
@@ -282,14 +286,14 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     return myContinuationAlignment;
   }
 
-  /** The block of the call argument list this block's node sits in, below any body or literal; null outside one. */
+  /** The nearest enclosing call argument list block, looking no further than the nearest body or literal; null when there is none. */
   @Nullable
   private HaxeBlock enclosingArgumentList() {
     for (BlockWithParent block = myParent; block instanceof HaxeBlock haxeBlock; block = haxeBlock.myParent) {
       IElementType type = haxeBlock.myNode.getElementType();
       if (INDENTED_CONTAINERS.contains(type)) return null;
       ASTNode owner = haxeBlock.myNode.getTreeParent();
-      boolean callList = ARGUMENT_LISTS.contains(type) && owner != null
+      boolean callList = PARAMETER_AND_ARGUMENT_LISTS.contains(type) && owner != null
                          && (owner.getElementType() == CALL_EXPRESSION || owner.getElementType() == NEW_EXPRESSION);
       if (callList) return haxeBlock;
     }
@@ -334,12 +338,12 @@ public class HaxeBlock extends AbstractBlock implements BlockWithParent {
     myParent = newParent;
   }
 
-  /** A new line after the previous child sits one step in: after an indent opener, or a statement head's closing paren. */
+  /** Whether a new line after the previous child sits one step in: after an indent opener, or after the ')' of an if, for or while head. */
   private static boolean opensIndentedRegion(IElementType elementType, @Nullable IElementType prevType) {
-    return INDENT_OPENERS.contains(prevType) || isEndsWithRPAREN(elementType, prevType);
+    return INDENT_OPENERS.contains(prevType) || followsStatementHeadParen(elementType, prevType);
   }
 
-  private static boolean isEndsWithRPAREN(IElementType elementType, @Nullable IElementType prevType) {
+  private static boolean followsStatementHeadParen(IElementType elementType, @Nullable IElementType prevType) {
     return prevType == PRPAREN &&
            (elementType == IF_STATEMENT ||
             elementType == FOR_STATEMENT ||

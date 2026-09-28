@@ -14,9 +14,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Encodes JSON-RPC display requests and decodes response envelopes into the
- * protocol DTOs. The envelope nests twice: the JSON-RPC {@code result} wraps
- * the std {@code Response<T>} whose own {@code result} holds the data.
+ * Encodes display requests as JSON-RPC and decodes the responses into the
+ * protocol DTOs. A response nests its data twice: the JSON-RPC
+ * {@code result} holds a std {@code Response<T>}, and that object's own
+ * {@code result} holds the data.
  */
 public final class DisplayJson {
 
@@ -36,6 +37,11 @@ public final class DisplayJson {
     return MAPPER.writeValueAsString(envelope);
   }
 
+  /**
+   * The data inside a response envelope. Throws {@link MalformedPayloadException}
+   * when the payload is not JSON, and a plain {@link DisplayRequestException}
+   * when the envelope carries a JSON-RPC error.
+   */
   public static JsonNode unwrap(String payload) throws DisplayRequestException {
     JsonNode root;
     try {
@@ -110,21 +116,21 @@ public final class DisplayJson {
     return new Location(node.path("file").asString(""), Range.fromJson(node.path("range")));
   }
 
-  /** Null when there is nothing under the cursor (hover result is nullable). */
+  /** Null when there is nothing under the cursor. */
   public static HoverInfo decodeHover(JsonNode data) {
     if (data.isNull() || data.isMissingNode()) return null;
     JsonNode item = data.path("item");
     return new HoverInfo(Range.fromJson(data.path("range")), item.path("kind").asString(""), JsonTypeRef.of(item.path("type")));
   }
 
-  /** Null when the compiler has nothing to complete at the position (completion result is nullable). */
+  /** Null when the compiler has nothing to complete at the position. */
   public static CompletionList decodeCompletion(JsonNode data) {
     if (data.isNull() || data.isMissingNode()) return null;
     List<CompletionItem> items = new ArrayList<>();
     int position = 0;
     for (JsonNode entry : data.path("items")) {
-      // the resolve request names an item by its position in this list, which
-      // the wire's own index key repeats when present
+      // A resolve request names an item by its position in this list. The
+      // item's own index key repeats that position when present.
       CompletionItem item = decodeCompletionItem(entry, position++);
       if (item != null) items.add(item);
     }
@@ -135,13 +141,16 @@ public final class DisplayJson {
                               data.path("isIncomplete").asBoolean(false));
   }
 
-  /** The resolved item of a {@code display/completionItem/resolve} result: the same shape, its doc filled in. */
+  /** The item of a {@code display/completionItem/resolve} result: a completion item with its doc comment. */
   public static CompletionItem decodeResolvedCompletionItem(JsonNode data, int index) {
     if (data.isNull() || data.isMissingNode()) return null;
     return decodeCompletionItem(data.path("item"), index);
   }
 
-  /** The item's insert text and detail per kind; null for the kinds without a name (an anonymous structure, an expression). */
+  /**
+   * Reads the item's name and detail from where its kind keeps them. Null for
+   * kinds without a name, such as an anonymous structure or an expression.
+   */
   private static CompletionItem decodeCompletionItem(JsonNode entry, int position) {
     String kind = entry.path("kind").asString("");
     JsonNode args = entry.path("args");
@@ -163,7 +172,7 @@ public final class DisplayJson {
     };
   }
 
-  /** The item's type: the item-level one, else the type a local or a field carries in its own args. */
+  /** The item-level type. When that is absent, a local carries its type in its args and a field in its field args. */
   private static JsonTypeRef completionItemType(JsonNode entry, JsonNode args) {
     for (JsonNode candidate : List.of(entry.path("type"), args.path("type"), args.path("field").path("type"))) {
       if (!candidate.isMissingNode() && !candidate.isNull()) return JsonTypeRef.of(candidate);
@@ -171,7 +180,10 @@ public final class DisplayJson {
     return null;
   }
 
-  /** The doc comment a field carries under its field, or a type, metadata or define directly; null without one. */
+  /**
+   * The item's doc comment, or null. A field keeps it in its field args; a
+   * type, metadata or define keeps it directly in its args.
+   */
   private static String completionItemDoc(JsonNode args) {
     for (JsonNode candidate : List.of(args.path("field").path("doc"), args.path("doc"))) {
       if (candidate.isString() && !candidate.asString("").isBlank()) return candidate.asString("");
@@ -204,10 +216,10 @@ public final class DisplayJson {
     for (JsonNode define : entry.path("defines")) {
       defines.put(define.path("key").asString(""), define.path("value").asString(""));
     }
-    String desc = entry.path("desc").asString("");
+    String description = entry.path("desc").asString("");
     String signature = entry.path("signature").asString("");
     String platform = entry.path("platform").asString("");
-    return new HaxeServerContext(desc, signature, platform, defines);
+    return new HaxeServerContext(description, signature, platform, defines);
   }
 
   public static ServerMemory decodeServerMemory(JsonNode data) {

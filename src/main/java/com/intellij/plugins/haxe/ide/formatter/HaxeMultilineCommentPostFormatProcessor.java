@@ -13,22 +13,27 @@ import java.util.regex.Pattern;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.MML_COMMENT;
 
 /**
- * Reindents the interior lines of plain multi-line comments the way
- * haxe-formatter does (its MarkTokenText.printComment): leading whitespace
- * normalizes to the indent character, the shortest common margin is removed,
- * middle lines sit one level deeper than the comment ("*"-railed lines align
- * under the opener), and the closing line returns to the comment's level.
- * A comment's interior is INSIDE its token, out of block formatting's reach -
- * hence a text pass. Doc comments have their own line-structured blocks;
- * single-line comments carry no interior. Disable to restore the IntelliJ
+ * Reindents the interior lines of plain multi-line comments, as
+ * haxe-formatter's MarkTokenText.printComment does:
+ * <ul>
+ * <li>leading whitespace is converted to the indent character;</li>
+ * <li>the shortest margin common to the lines is removed;</li>
+ * <li>middle lines sit one level deeper than the comment;</li>
+ * <li>the closing line returns to the comment's level.</li>
+ * </ul>
+ * A comment has a "star rail" when every middle line starts with a '*'.
+ * Those stars then align under the first star of the opening "/*".
+ * <p>
+ * Doc comments are formatted by their own line blocks, and single-line
+ * comments have no interior. Turning the setting off restores the IntelliJ
  * convention of leaving comment interiors alone.
  */
 public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatProcessor {
 
-  // a "*"-railed middle line: whitespace, a star, then a space or nothing
+  // a middle line on a star rail: whitespace, a star, then whitespace or the line end
   private static final Pattern STAR_RAIL_LINE = Pattern.compile("^\\s*\\*(\\s|$)");
-  // a closing line carrying nothing but stars, or opening with a brace -
-  // such lines stay out of the common-margin scan
+  // a closing line holding nothing but stars, or starting with a '}';
+  // such a line does not count toward the common margin
   private static final Pattern CLOSING_ONLY_LINE = Pattern.compile("^\\s*(\\**$|\\})");
   // a closing line that is only stars (the classic "**/" ending)
   private static final Pattern STARS_ONLY_LINE = Pattern.compile("^\\s*\\*\\**$");
@@ -53,8 +58,8 @@ public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatP
     for (ASTNode comment : comments) {
       if (!pass.editable(comment)) continue;
       int start = comment.getStartOffset();
-      // block formatting left this opener pinned at the first column - the
-      // comment is intentionally at the margin, so its interior stays put too
+      // Block formatting kept this comment at the first column on purpose,
+      // so its interior stays as written too.
       boolean pinnedAtFirstColumn = keepFirstColumn && HaxeIndentText.lineStartOffset(documentText, start) == start;
       if (pinnedAtFirstColumn) continue;
       String text = documentText.substring(start, start + comment.getTextLength());
@@ -73,7 +78,7 @@ public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatP
     // every line, trailing empty ones kept
     String[] lines = content.split("\n", -1);
     if (lines.length < 2) return text;
-    boolean starRailed = starRailed(lines);
+    boolean starRailed = hasStarRail(lines);
 
     for (int i = 0; i < lines.length; i++) {
       lines[i] = convertLeadingIndent(lines[i], options);
@@ -92,8 +97,8 @@ public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatP
     return out.append("*/").toString();
   }
 
-  /** Every middle line rides a "*" rail - the style whose stars align under the opener. */
-  private static boolean starRailed(String[] lines) {
+  /** Whether the comment has a star rail: at least one middle line, and every middle line starts with a '*'. */
+  private static boolean hasStarRail(String[] lines) {
     if (lines.length < 3) return false;
     for (int i = 1; i < lines.length - 1; i++) {
       if (!STAR_RAIL_LINE.matcher(lines[i]).find()) return false;
@@ -102,9 +107,9 @@ public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatP
   }
 
   /**
-   * A middle line, indent included: one level in from the comment, or - on
-   * a "*" rail - the space that puts the star under the opener's; an empty
-   * line carries no indent.
+   * A middle line with its indent. The line sits one level in from the
+   * comment; on a star rail it gets one space instead, which puts its star
+   * under the opener's. An empty line gets no indent.
    */
   private static String formatMiddleLine(String line, String baseIndent, String unit, boolean starRailed) {
     String text = starRailed ? " " + line : line;
@@ -114,16 +119,19 @@ public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatP
   }
 
   /**
-   * The closing line, indent included: railed text and braces keep the base
-   * indent, plain text sits one level in, and a "*"-less closer gets the
-   * space that separates it from the trailing star pair.
+   * The closing line with its indent. A line starting with '}' only moves to
+   * the comment's indent. Otherwise plain text sits one level in, and a line
+   * that is empty or starts with a '*' stays at the comment's indent. A '*'
+   * followed by text gets one extra space, which puts it under the opener's
+   * star. Unless the line then ends with a '*', a space separates it from
+   * the closing "*&#47;".
    */
   private static String formatClosingLine(String line, String baseIndent, String unit) {
     String body = line.stripLeading();
     if (body.startsWith("}")) return baseIndent + body.stripTrailing();
     boolean plainText = !body.isEmpty() && body.charAt(0) != '*';
     String lineIndent = plainText ? baseIndent + unit : baseIndent;
-    String text = railedText(body) ? " " + line : line;
+    String text = isStarThenText(body) ? " " + line : line;
     text = text.stripTrailing();
     if (!text.endsWith("*")) {
       text = text + " ";
@@ -131,17 +139,17 @@ public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatP
     return lineIndent + text;
   }
 
-  /** A star followed by text - a closer like "* done", not "**" or a lone star. */
-  private static boolean railedText(String body) {
+  /** Whether the line is a star followed by text, like "* done"; not "**" or a lone star. */
+  private static boolean isStarThenText(String body) {
     if (!body.startsWith("*")) return false;
     String afterStar = body.substring(1).stripLeading();
     return !afterStar.isEmpty() && afterStar.charAt(0) != '*';
   }
 
   /**
-   * Strips the shortest non-empty leading-whitespace margin found among the
-   * interior lines from every line; a "margin + space + star" rail loses the
-   * margin and the space but keeps its star.
+   * Finds the shortest non-empty leading whitespace among the interior lines
+   * and strips that margin from every line. A line starting with the margin,
+   * a space and a star loses the margin and the space but keeps its star.
    */
   private static void removeCommonMargin(String[] lines) {
     int endIndex = lines.length - 1;
@@ -176,19 +184,19 @@ public class HaxeMultilineCommentPostFormatProcessor extends HaxeTextPostFormatP
   }
 
   /**
-   * One indent level of comment interior. Inside a comment one tab counts
-   * as one level (never as TAB_SIZE columns), so a tab-indented level is a
-   * single tab; {@link #convertLeadingIndent} converts by the same rule.
+   * One indent level inside a comment. There one tab counts as one level,
+   * never as TAB_SIZE columns, so a tab-indented level is a single tab.
+   * {@link #convertLeadingIndent} converts by the same rule.
    */
   private static String indentUnit(CommonCodeStyleSettings.IndentOptions options) {
     return options.USE_TAB_CHARACTER ? "\t" : " ".repeat(options.INDENT_SIZE);
   }
 
   /**
-   * Normalizes a line's leading whitespace toward the indent character by
-   * the one-tab-per-level rule of {@link #indentUnit}: tab-indenting
-   * replaces each run of TAB_SIZE spaces with one tab, space-indenting
-   * replaces each tab with one indent unit (INDENT_SIZE spaces).
+   * Converts a line's leading whitespace to the indent character, by the
+   * one-tab-per-level rule of {@link #indentUnit}. With tabs, each run of
+   * TAB_SIZE spaces becomes one tab. With spaces, each tab becomes one
+   * indent level of INDENT_SIZE spaces.
    */
   private static String convertLeadingIndent(String line, CommonCodeStyleSettings.IndentOptions options) {
     String lead = HaxeIndentText.leadingWhitespace(line, 0);

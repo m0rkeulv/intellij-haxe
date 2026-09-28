@@ -29,15 +29,15 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-/// Produces `-D dump=pretty` typed-AST dumps of a build context — the
-/// post-macro source of truth the generated-code preview renders. The dump is
-/// a real generation pass through the compilation server (a `--no-output`
-/// compile writes no dumps), with the build's output redirected into the same
-/// IDE-owned directory so a preview build never touches the user's output or
-/// project tree.
+/// Produces `-D dump=pretty` typed-AST dumps of a build context, which the
+/// generated-code preview renders as the post-macro program. A dump needs a
+/// real generation pass through the compilation server, because a
+/// `--no-output` compile writes no dumps. The build's output is redirected
+/// into the same IDE-owned directory as the dumps, so a preview build never
+/// touches the user's output or project tree.
 ///
 /// One dump pass writes every module of the compilation, so the first
-/// navigation pays for all later ones: results are cached per context and
+/// navigation pays for all later ones. Results are cached per context and
 /// reused until the next code change. Background threads only.
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -71,7 +71,7 @@ public final class HaxeGeneratedDumpService {
    * The context's dump directory (the per-target root holding
    * {@code pack/Module.dump} files), running a dump build if the cached one
    * is stale. Null when the context cannot dump (no server, unsupported
-   * argument shape, failed compile). Blocking; background threads only —
+   * argument shape, failed compile). Blocking, so background threads only;
    * callers wrap this in a cancelable progress task.
    */
   @Nullable
@@ -132,12 +132,12 @@ public final class HaxeGeneratedDumpService {
 
   /**
    * The HashLink generator writes two extra dump files
-   * ({@code dump/hlopt.txt}, {@code dump/hlcode.txt}) RELATIVE to the compile
-   * cwd, ignoring dump-path, and the whole build fails when that directory is
-   * missing. For HL dump builds it is created up front and removed afterwards.
-   * Returns the created directory, or null when nothing was created; a
-   * PRE-EXISTING {@code dump/} belongs to the user and keeps whatever the
-   * compiler writes into it.
+   * ({@code dump/hlopt.txt}, {@code dump/hlcode.txt}) RELATIVE to the
+   * compile's working directory, ignoring dump-path. The whole build fails
+   * when that directory is missing, so for HL dump builds it is created up
+   * front and removed afterwards. Returns the created directory, or null when
+   * nothing was created. A PRE-EXISTING {@code dump/} belongs to the user and
+   * keeps whatever the compiler writes into it.
    */
   @Nullable
   private static Path prepareHlScratchDir(@NotNull DumpBuild dumpBuild) {
@@ -194,11 +194,12 @@ public final class HaxeGeneratedDumpService {
   }
 
   /**
-   * The dump root: under the IDE system dir, or under the OS temp dir when the
-   * system dir sits too deep for Windows' 260-char path limit (a development
-   * sandbox nests it inside the project). The compiler's dump writer fails
-   * mid-dump once root plus package tree cross the limit. A cleaned temp dir
-   * only means the next navigation regenerates.
+   * The dump root: under the IDE system directory, or under the OS temp
+   * directory when the system directory is too deep for the 260-character
+   * path limit of Windows (a development sandbox nests it inside the
+   * project). The compiler's dump writer fails midway once the root plus the
+   * package tree exceed the limit. If the temp directory gets cleaned, the
+   * next navigation simply dumps again.
    */
   @NotNull
   private Path dumpRootFor(@NotNull String contextKey) {
@@ -265,11 +266,12 @@ public final class HaxeGeneratedDumpService {
   }
 
   /**
-   * The target's dump directory. Dumps land under {@code <dump-path>/<target>/},
-   * and a build that runs macros ALSO writes a {@code macro/} sibling holding
-   * the macro interpreter's modules, so any directory will not do. The
-   * target's expected subdirectory name comes first; the newest non-macro
-   * directory covers a compiler that names it differently.
+   * The target's dump directory. Dumps land under
+   * {@code <dump-path>/<target>/}. A build that runs macros ALSO writes a
+   * {@code macro/} sibling with the macro interpreter's modules, so not just
+   * any directory will do. The target's expected subdirectory name is tried
+   * first; the newest non-macro directory covers a compiler that names it
+   * differently.
    */
   @Nullable
   private static Path targetDumpDir(@NotNull Path dumpParent, @NotNull HaxeTarget target) {

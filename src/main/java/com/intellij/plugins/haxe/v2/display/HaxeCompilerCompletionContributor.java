@@ -19,12 +19,12 @@ import org.jetbrains.annotations.NotNull;
 import javax.swing.Icon;
 
 /**
- * Completion in the compiler-only mode: the compilation server's items for
- * the caret, and nothing from the IDE's contributors - the chain stops here
- * whether the server answered or not. The buffer sent is the editor's real
- * document with the caret offset, never the completion copy with its dummy
- * identifier. The prefix is what the compiler's replace range covers, else
- * the platform's own.
+ * Completion in the compiler-only mode. It offers the compilation server's
+ * items for the caret and stops the contributor chain, so the IDE's own
+ * contributors add nothing, whether the server answered or not. The request
+ * carries the editor's real document and caret offset, never the completion
+ * copy with its dummy identifier. The prefix is the text the compiler's
+ * replace range covers, or the platform's prefix when there is no range.
  */
 public class HaxeCompilerCompletionContributor extends CompletionContributor {
 
@@ -35,8 +35,8 @@ public class HaxeCompilerCompletionContributor extends CompletionContributor {
     result.stopHere();
     VirtualFile file = parameters.getOriginalFile().getVirtualFile();
     if (file == null) return;
-    // decided before any request: no build context or no server means no
-    // work at all, only the one-time notification
+    // without a build context or a server there is no request at all, only
+    // the one-time notification
     HaxeCompilerCompletionService service = HaxeCompilerCompletionService.getInstance(project);
     if (!service.ensureAvailable(file)) return;
 
@@ -65,9 +65,9 @@ public class HaxeCompilerCompletionContributor extends CompletionContributor {
     return document.getText().substring(startOffset, offset);
   }
 
-  /** The item is the element's object: the documentation hook reads its doc and type from there. */
+  /** The item becomes the lookup element's object, where the documentation provider reads its doc and type. */
   private static LookupElementBuilder lookupElement(CompletionItem item) {
-    LookupElementBuilder element = LookupElementBuilder.create(item, item.name()).withBoldness(item.isKeyword());
+    LookupElementBuilder element = LookupElementBuilder.create(item, item.name()).withBoldness(item.isKeywordOrLiteral());
     Icon icon = iconOf(item);
     if (icon != null) element = element.withIcon(icon);
     if (item.type() != null) element = element.withTypeText(item.type().presentable());
@@ -81,7 +81,7 @@ public class HaxeCompilerCompletionContributor extends CompletionContributor {
     if (item.isType()) return typeIcon(item.moduleTypeKind());
     if (item.isField()) return item.type() != null && item.type().isFunction() ? HaxeIcons.Method : HaxeIcons.Field;
     if (item.isEnumField()) return HaxeIcons.Enum;
-    if (item.isLocal()) return HaxeIcons.Variable;
+    if (item.isLocalOrTypeParameter()) return HaxeIcons.Variable;
     if (item.isPackageOrModule()) return HaxeIcons.Module;
     return null;
   }

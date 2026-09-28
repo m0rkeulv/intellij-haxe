@@ -11,32 +11,33 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Best-effort visibility decision for compiler WARNING diagnostics: a module
- * pinned to an older language level is not nagged about deprecations whose
- * replacement does not exist at that level. Errors always show.
+ * Decides, on a best-effort basis, whether a compiler WARNING is shown. A
+ * module pinned to an older language level is not warned about deprecations
+ * whose replacement does not exist at that level. Errors always show.
  *
- * Identification is by the diagnostic's stable code when the compiler sends
- * one (haxe 5+ populates the LSP-style {@code code} field with the specific
- * {@code -w} warning identifiers, e.g. {@code WDeprecatedEnumAbstract});
- * older compilers are recognized by kind/message shape. The specific
- * deprecation is resolved code-first, then from a table of message
- * fragments — unknown diagnostics always show.
+ * A deprecation is recognized by the diagnostic's code when the compiler
+ * sends one: haxe 5 fills the LSP-style {@code code} field with the specific
+ * {@code -w} warning id, such as {@code WDeprecatedEnumAbstract}. Older
+ * compilers are recognized by the diagnostic's kind and message. The level
+ * of the replacement is looked up by code first, then in a table of message
+ * fragments. A deprecation neither lookup knows always shows.
  */
 public final class HaxeDiagnosticMessageFilter {
 
-  /** One recognizable deprecation: the fragment identifying its message and the level its REPLACEMENT arrived. */
+  /** A recognizable deprecation: a fragment of its message and the level that introduced its REPLACEMENT. */
   private record DeprecationRule(String messageFragment, HaxeLanguageLevel replacementLevel) {
   }
 
   /** haxe 5 deprecation codes share this prefix; specific ids extend it (WDeprecatedEnumAbstract). */
   private static final String DEPRECATION_CODE_PREFIX = "WDeprecated";
 
-  /// haxe 5 SPECIFIC deprecation codes -> the level the replacement arrived.
+  /// Specific haxe 5 deprecation codes, mapped to the level that introduced their replacement.
   private static final Map<String, HaxeLanguageLevel> CODE_RULES = Map.of(
     "WDeprecatedEnumAbstract", HaxeLanguageLevel.HAXE_4_0);
 
-  // Replacement-arrival levels per the language level reference (3.4 -> 5.0):
-  // hiding is only justified when the advised replacement cannot be used yet.
+  // The level that introduced each replacement, per the language level
+  // reference (3.4 to 5.0). A warning is hidden only while the advised
+  // replacement cannot be used yet.
   private static final List<DeprecationRule> DEPRECATION_RULES = List.of(
     new DeprecationRule("`@:enum abstract`", HaxeLanguageLevel.HAXE_4_0),  // -> enum abstract keyword form
     new DeprecationRule("@:final", HaxeLanguageLevel.HAXE_4_0),            // -> final keyword
@@ -62,7 +63,7 @@ public final class HaxeDiagnosticMessageFilter {
     return replacementLevel == null || level.isAtLeast(replacementLevel);
   }
 
-  /** The level the deprecation's replacement arrived: by specific code (haxe 5) first, message fragment second; null = unknown. */
+  /** The level that introduced the deprecation's replacement, by specific code (haxe 5) first and message fragment second; null when unknown. */
   @Nullable
   private static HaxeLanguageLevel replacementLevelOf(@NotNull Diagnostic diagnostic) {
     if (diagnostic.code() != null) {
@@ -79,12 +80,12 @@ public final class HaxeDiagnosticMessageFilter {
   }
 
   /**
-   * The one home for "is this diagnostic a deprecation" (the level filter
-   * and the modernize-fix offer both key on it). Code-based on compilers
-   * that send ids; on a 5+ compiler an ABSENT code on a warning means "not
-   * a warning-class diagnostic", so no message sniffing. 4.x compilers
-   * route syntax deprecations through the generic warning channel, hence
-   * the message-shape fallback.
+   * Whether the diagnostic is a deprecation warning. The level filter and the
+   * modernize fix both rely on this single definition. It uses the code when
+   * the compiler sends one. On haxe 5 or newer, a diagnostic without a code
+   * is not a warning-class diagnostic, so its message is not examined. Haxe
+   * 4 reports syntax deprecations as generic compiler warnings, so there the
+   * message decides.
    */
   public static boolean isDeprecationWarning(@NotNull Diagnostic diagnostic,
                                              @Nullable InitializeResult.SemVer haxeVersion) {

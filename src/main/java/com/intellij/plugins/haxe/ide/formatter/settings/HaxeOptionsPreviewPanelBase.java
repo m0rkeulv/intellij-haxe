@@ -67,7 +67,7 @@ public abstract class HaxeOptionsPreviewPanelBase extends CodeStyleAbstractPanel
     });
   }
 
-  /** The preview reformats from the panel's settings clone - push edits into it live. */
+  /** Pushes the form's values into the panel's settings copy, which the preview reformats from. */
   protected final void previewChanged() {
     try {
       apply(getSettings());

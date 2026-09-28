@@ -1,12 +1,13 @@
 package com.intellij.plugins.haxe.display.protocol;
 
 /**
- * Wire codes of std {@code haxe.display.DiagnosticKind}. The {@code args}
- * payload differs per kind (see the std typedef): UNRESOLVED_IDENTIFIER
+ * Wire codes of the std {@code haxe.display.DiagnosticKind}. The shape of a
+ * diagnostic's {@code args} depends on its kind. UNRESOLVED_IDENTIFIER
  * carries import and typo suggestions, COMPILER_ERROR and PARSER_ERROR a
- * message string, REMOVABLE_CODE a description and range, MISSING_FIELDS the
- * structured implement-members data. Haxe 5 renames REMOVABLE_CODE to
- * ReplaceableCode under the same code.
+ * message string, REMOVABLE_CODE a description and a range, and
+ * MISSING_FIELDS the missing members together with the reason they are
+ * missing. Haxe 5 renames REMOVABLE_CODE to ReplaceableCode under the same
+ * wire code.
  */
 public enum DiagnosticKind {
   UNUSED_IMPORT(0),

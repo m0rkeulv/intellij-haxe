@@ -12,16 +12,17 @@ import promhx.Deferred;
 import promhx.Promise;
 
 /**
-	Buddy reporter emitting TeamCity service messages, selected into the build
-	with buddy's own `-D reporter=intellij_buddy.TcReporter` override — no
-	macro patching involved. Events are emitted as one BATCH from `done`:
-	buddy's per-spec `progress` callback carries no suite context, and only
-	the finished tree has the describe-nesting, per-spec durations and the
-	captured traces (which attribute to their spec via testStdOut).
+	A buddy reporter that emits TeamCity service messages. buddy's own
+	`-D reporter=intellij_buddy.TcReporter` option selects it, so no macro
+	patching is involved. All events are emitted in one BATCH from `done`.
+	buddy's per-spec `progress` callback carries no suite context; only the
+	finished tree has the describe nesting, the per-spec durations and the
+	captured traces, which testStdOut attributes to their spec.
 
-	Spec descriptions are prose, not identifiers — names stay as written and
-	the IDE simply has no source navigation for them (closure-built specs have
-	no method PSI to map to; the VSCode adapter shares that ceiling).
+	Spec descriptions are prose, not identifiers. Names stay as written, and
+	the IDE offers no source navigation for them: specs are built from
+	closures, with no method PSI to map to. The VSCode adapter has the same
+	limit.
 **/
 class TcReporter implements buddy.reporting.Reporter {
 	public function new() {}
@@ -47,8 +48,8 @@ class TcReporter implements buddy.reporting.Reporter {
 		var named = suite.description.length > 0;
 		if (named) printLine("##teamcity[testSuiteStarted name='" + escape(suite.description) + "']");
 
-		// a crashed describe body (its error field) never ran its specs -
-		// surface it as one failed test so the run cannot look green
+		// A describe body that crashed (its error field is set) never ran its
+		// specs. It is reported as one failed test, so the run cannot look green.
 		if (suite.error != null) {
 			var name = suite.description + " (suite error)";
 			printLine("##teamcity[testStarted name='" + escape(name) + "']");
@@ -68,8 +69,9 @@ class TcReporter implements buddy.reporting.Reporter {
 	function reportSpec(spec:Spec):Void {
 		var name = spec.description;
 		var durationMs = Std.int(spec.time * 1000);
-		// the it() call site's file plus the description literal - buddy's
-		// Spec drops the call site's line, so the IDE locates the literal
+		// The location is the it() call site's file plus the description.
+		// buddy's Spec drops the call site's line, so the IDE searches the
+		// file for the description literal.
 		var location = spec.fileName != "" ? " locationHint='haxe:buddy://"
 			+ escape(spec.fileName + "::" + spec.description) + "'" : "";
 		printLine("##teamcity[testStarted name='" + escape(name) + "'" + location + "]");

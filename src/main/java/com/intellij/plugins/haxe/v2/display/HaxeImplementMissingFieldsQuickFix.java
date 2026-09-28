@@ -23,12 +23,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Adds the members a MISSING_FIELDS entry lists to the class the diagnostic
- * names, at the end of its body, as the compiler typed them
- * ({@link HaxeMissingMemberSource}). The class is found by name in the file
- * at fix time, so the fix survives edits above it and quietly does nothing
- * once the class is gone. Implements both fix interfaces: the batch
- * conversion keeps an annotation fix only when it is a {@link LocalQuickFix}.
+ * Adds the members a MISSING_FIELDS entry lists to the end of the class the
+ * diagnostic names, with the types the compiler reported
+ * ({@link HaxeMissingMemberSource}). The class is looked up by name when the
+ * fix runs, so the fix survives edits above it and does nothing once the
+ * class is gone. Implements both fix interfaces, because Inspect Code keeps
+ * an annotation's fix only when it is a {@link LocalQuickFix}.
  */
 final class HaxeImplementMissingFieldsQuickFix implements IntentionAction, LocalQuickFix {
   private final String text;

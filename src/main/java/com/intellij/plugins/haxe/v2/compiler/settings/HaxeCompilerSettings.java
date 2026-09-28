@@ -99,7 +99,7 @@ public interface HaxeCompilerSettings {
 
   void setCompilerDiagnosticsOnly(boolean enabled);
 
-  /** The effective verdict of {@link #isCompilerDiagnosticsOnly()}: only meaningful under the master toggle. */
+  /** Whether the plugin's own analysis is off: {@link #isCompilerDiagnosticsOnly()}, which counts only under the master toggle. */
   default boolean isStaticAnalysisSuppressed() {
     return isCompilerDiagnosticsEnabled() && isCompilerDiagnosticsOnly();
   }

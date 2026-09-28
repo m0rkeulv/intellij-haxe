@@ -1,15 +1,18 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
+import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
+
 /**
- * haxe-formatter's built-in defaults (formatter 1.18.0): the profile
- * {@link HxformatDefaultProfile#apply} installs, and the baseline an
- * imported hxformat.json overrides. They apply only under that profile; the
- * plain scheme keeps the plugin's own defaults in {@link HaxeCodeStyleSettings}.
+ * haxe-formatter's built-in defaults (formatter 1.18.0). They make up the
+ * profile that {@link HxformatDefaultProfile#apply} installs, which an
+ * imported hxformat.json then overrides. They apply only under that profile;
+ * the plain scheme keeps the plugin's own defaults in
+ * {@link HaxeCodeStyleSettings}.
  * <p>
  * The tool prints its complete default configuration with
- * {@code haxelib run formatter --default-config <file>} (the file must exist
- * beforehand); {@code testData/formatter/comparison/default-hxformat.json} is
- * that output and {@code HxformatDefaultsTest} checks these values against it.
+ * {@code haxelib run formatter --default-config <file>}, where the file must
+ * already exist. {@code HxformatDefaultsTest} checks these values against
+ * that output.
  */
 public final class HxformatDefaults {
 
@@ -21,8 +24,8 @@ public final class HxformatDefaults {
   public static final int MAX_LINE_LENGTH = 160;
 
   // wrapping.opBoolChain rules: lineLength >= 140 (+ anyItemLength >= 40 -> one per line, else fill);
-  // itemCount >= 4 -> one per line unless totalItemLength <= 120 (the fixed "up to 3 operands on a
-  // fitting line" rule lives with the rule engine, HaxeOperatorChainRules.KEEP_ITEM_COUNT)
+  // itemCount >= 4 -> one per line unless totalItemLength <= 120. The fixed "up to 3 operands on a
+  // fitting line" rule is HaxeOperatorChainRules.KEEP_ITEM_COUNT
   public static final int BOOL_CHAIN_LINE_LENGTH = 140;
   public static final int BOOL_CHAIN_ITEM_LENGTH = 40;
   public static final int BOOL_CHAIN_ITEM_COUNT = 4;

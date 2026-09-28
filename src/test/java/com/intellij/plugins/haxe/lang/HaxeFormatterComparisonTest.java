@@ -18,11 +18,12 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Parity with HaxeCheckstyle's haxe-formatter (the vshaxe formatter): each
- * rule fixture holds a deliberately misformatted input.hx and the real
- * tool's output hxformat.hx (see the fixture README for regeneration). The
- * settings are the haxe-formatter DEFAULTS profile, and every rule asserts
- * byte equality with the tool.
+ * Parity with HaxeCheckstyle's haxe-formatter (the vshaxe formatter). Each
+ * rule's fixture directory holds a deliberately misformatted input.hx and
+ * the real tool's output for it, hxformat.hx; the fixture README describes
+ * how to regenerate them. The tests run under the haxe-formatter DEFAULTS
+ * profile, and every rule asserts that the output equals the tool's, apart
+ * from line endings and trailing newlines.
  */
 @DisplayName("Formatting: haxe-formatter comparison")
 public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
@@ -35,8 +36,8 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    // the production defaults mapping IS the parity profile - the fixtures
-    // guard the hxformat.json importer's baseline
+    // the production default profile is the one under test, so the fixtures
+    // also guard the baseline of the hxformat.json import
     installTemporarySettings(HxformatDefaultProfile::apply);
   }
 
@@ -441,7 +442,7 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     @Test
     @DisplayName("todo checks")
     public void testTodoChecks() throws Exception {
-      // the sandbox sample covering the four continuation rules in one file:
+      // one sample covering the four continuation rules:
       // bodiless and empty-body signatures at one step, a full body at two,
       // a same-line metadata declaration anchoring its chopped initializer,
       // hand-broken signatures and calls re-packed, a nested inactive #if
@@ -469,7 +470,7 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     @Test
     @DisplayName("array wrap checks")
     public void testArrayWrapChecks() throws Exception {
-      // the sandbox sample for wrapping.arrayWrap: every rule once, hand-broken
+      // one sample for wrapping.arrayWrap: every rule once, hand-broken
       // twins re-joined or re-broken, the margin overflow, and a nested literal
       // judged on its own
       doParityTest("array-wrap-checks");
@@ -522,9 +523,9 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     @Test
     @DisplayName("conditional inactive branches")
     public void testConditionalInactiveBranches() throws Exception {
-      // inactive branches format with the SAME rules as active code (the
-      // reference never distinguishes them); token-soup branches like the
-      // lone-operator case are preserved verbatim - as the reference does
+      // inactive branches format with the SAME rules as active code, since
+      // the tool does not tell them apart; branches that do not parse, like
+      // the lone-operator case, stay verbatim, as in the tool's output
       doParityTest("conditional-inactive");
     }
 
@@ -576,17 +577,19 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     @Test
     @DisplayName("doc comment indent")
     public void testDocCommentIndent() throws Exception {
-      // interior doc lines: haxedoc body at comment+1 with markdown depth kept,
-      // column-0 wrap clamped to body, starred style aligned one space in
+      // inner doc comment lines: the body sits one level deeper than the
+      // comment and keeps its markdown indentation, a continuation written at
+      // column 0 moves to the body's indent, and a starred comment aligns its
+      // stars one space in
       doParityTest("doc-comment-indent");
     }
 
     @Test
     @DisplayName("multiline comments")
     public void testMultilineComments() throws Exception {
-      // interior lines of plain /*..*/ comments: common margin removed,
-      // middles one level deeper, star rails aligned under the opener,
-      // empty interior lines left empty
+      // inner lines of plain /*..*/ comments: common leading whitespace
+      // removed, middle lines one level deeper, leading stars aligned under
+      // the opener, empty inner lines left empty
       doParityTest("multiline-comments");
     }
 
@@ -646,7 +649,7 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     }
   }
 
-  /** Formats input.hx and compares against hxformat.hx — the parity claim for this rule. */
+  /** Formats the rule's input.hx and compares the result with the tool's hxformat.hx. */
   private void doParityTest(String rule) throws Exception {
     String actual = normalize(reformatFile(rule + "/input.hx"));
 
@@ -654,9 +657,9 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
   }
 
   /**
-   * Parity against a NON-default hxformat option: the fixture directory holds
-   * the hxformat.json used to regenerate hxformat.hx, and the tweak applies
-   * the equivalent change on top of our defaults profile.
+   * Parity under a NON-default hxformat option. The fixture directory holds
+   * the hxformat.json that produced hxformat.hx, and the tweak applies the
+   * equivalent settings on top of the default profile.
    */
   private void doParityTest(String rule, Consumer<CodeStyleSettings> tweak) throws Exception {
     Consumer<CodeStyleSettings> profile = HxformatDefaultProfile::apply;
@@ -669,7 +672,7 @@ public class HaxeFormatterComparisonTest extends HaxeLightFixtureTestCase {
     return normalize(Files.readString(Path.of(getTestDataPath(), rule, name)));
   }
 
-  /** Unifies line endings and drops the trailing newline — the IDE manages end-of-file newlines at save time, not in the formatter. */
+  /** Unifies line endings and drops trailing newlines, which the IDE manages at save time rather than in the formatter. */
   @NotNull
   private static String normalize(@NotNull String text) {
     return text.replace("\r\n", "\n").replaceAll("\n+$", "");

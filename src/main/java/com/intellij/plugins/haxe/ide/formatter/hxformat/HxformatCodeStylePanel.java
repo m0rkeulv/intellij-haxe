@@ -14,8 +14,8 @@ import javax.swing.JPanel;
 
 /**
  * The hxformat tab: whether a project's own hxformat.json overrides the
- * scheme's Haxe formatting per file (see HxformatSettingsModifier).
- * No preview - the tab only hosts the toggle, so nothing watches it.
+ * scheme's Haxe formatting per file (see {@link HxformatSettingsModifier}).
+ * The tab has no preview, so nothing watches its toggle.
  */
 public class HxformatCodeStylePanel extends HaxeOptionsPreviewPanelBase {
 

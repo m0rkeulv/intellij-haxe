@@ -24,14 +24,17 @@ public final class HaxeFormatterNodes {
   private HaxeFormatterNodes() {
   }
 
-  /** A chained call link: a REFERENCE_EXPRESSION whose receiver (first child) is itself a call. */
+  /**
+   * Whether the node is a link of a method chain: a REFERENCE_EXPRESSION whose
+   * receiver (its first child) is itself a call, like {@code a().b} in {@code a().b()}.
+   */
   public static boolean isChainLink(@Nullable ASTNode reference) {
     if (reference == null || reference.getElementType() != REFERENCE_EXPRESSION) return false;
     ASTNode receiver = reference.getFirstChildNode();
     return receiver != null && receiver.getElementType() == CALL_EXPRESSION;
   }
 
-  /** The node or its outermost ancestor reached by climbing while the parent is one of {@code kinds}. */
+  /** The highest ancestor reachable from the node through parents of the given kinds; the node itself when its parent is of another kind. */
   @NotNull
   public static ASTNode outermostOfKind(@NotNull ASTNode node, @NotNull TokenSet kinds) {
     ASTNode root = node;
@@ -41,17 +44,17 @@ public final class HaxeFormatterNodes {
     return root;
   }
 
-  /** A run of metadata siblings and the code node written on their line after them. */
+  /** A run of metadata siblings and the code node that follows them on the same line. */
   public record MetadataRun(List<ASTNode> metadata, ASTNode decorated) {
   }
 
   /**
-   * The run of EMBEDDED_META siblings {@code node} opens, separated by
-   * line-less whitespace only, closed by the code node on the same line.
-   * Metadata sits BESIDE the declaration it decorates in the PSI, so this
-   * run is the only tie between a declaration and the metadata opening
-   * its line. Null when {@code node} is no metadata, the run ends its line,
-   * or a comment or directive closes it.
+   * The run of EMBEDDED_META siblings that starts at {@code node} and ends at
+   * the code node after them on the same line. In the PSI, metadata is a
+   * sibling of the declaration it decorates, not its child, so this run is
+   * the only link between a declaration and the metadata before it on its
+   * line. Null when {@code node} is not metadata, when a line break follows
+   * the run, or when a comment or directive ends it.
    */
   @Nullable
   public static MetadataRun sameLineMetadataRun(@NotNull ASTNode node) {
@@ -72,17 +75,21 @@ public final class HaxeFormatterNodes {
     return null;
   }
 
-  /** A region's #if or #end reached from a leaf (null when unterminated that way) and whether a newline was crossed on the way. */
+  /**
+   * The #if or #end of a conditional-compilation region, found by walking
+   * from a leaf, and whether the walk crossed a newline. The directive is
+   * null when the region has no such end in that direction.
+   */
   public record RegionEnd(@Nullable ASTNode directive, boolean crossedNewline) {
   }
 
-  /** The #if opening the region the leaf belongs to, through nested regions, and whether a newline lies on the way. */
+  /** The #if that opens the leaf's region, skipping nested regions, and whether a newline lies between them. */
   @NotNull
   public static RegionEnd regionOpener(@NotNull ASTNode leaf) {
     return regionEnd(leaf, false);
   }
 
-  /** The #end closing the region the leaf belongs to, through nested regions, and whether a newline lies on the way. */
+  /** The #end that closes the leaf's region, skipping nested regions, and whether a newline lies between them. */
   @NotNull
   public static RegionEnd regionCloser(@NotNull ASTNode leaf) {
     return regionEnd(leaf, true);
@@ -109,7 +116,7 @@ public final class HaxeFormatterNodes {
     return forward ? PsiTreeUtil.nextLeaf(leaf) : PsiTreeUtil.prevLeaf(leaf);
   }
 
-  /** A BLOCK_STATEMENT holding nothing but its braces and whitespace. */
+  /** Whether the node is a BLOCK_STATEMENT holding nothing but its braces and whitespace. */
   public static boolean isEmptyBlock(@Nullable ASTNode block) {
     if (block == null || block.getElementType() != BLOCK_STATEMENT) return false;
     for (ASTNode child = block.getFirstChildNode(); child != null; child = child.getTreeNext()) {
@@ -119,7 +126,7 @@ public final class HaxeFormatterNodes {
     return true;
   }
 
-  /** A function's body: what follows its header after the parameters; null for a bodiless declaration. */
+  /** A function's body: the first node after the parameters that is not part of the header; null for a declaration without a body. */
   @Nullable
   public static ASTNode functionBody(@NotNull ASTNode function) {
     ASTNode parameters = function.findChildByType(PARAMETER_LIST);
@@ -132,19 +139,19 @@ public final class HaxeFormatterNodes {
     return null;
   }
 
-  /** The function has statements to stand off from: a body that is neither absent nor an empty block. */
+  /** Whether the function has a body that is neither absent nor an empty block. */
   public static boolean hasStatementBody(@NotNull ASTNode function) {
     ASTNode body = functionBody(function);
     return body != null && !isEmptyBlock(body);
   }
 
-  /** The statement brace style puts a '{' on its own line: NEXT_LINE, NEXT_LINE_SHIFTED or NEXT_LINE_SHIFTED2. */
-  public static boolean nextLineBraces(@NotNull CommonCodeStyleSettings settings) {
+  /** Whether the statement brace style puts a '{' on its own line: NEXT_LINE, NEXT_LINE_SHIFTED or NEXT_LINE_SHIFTED2. */
+  public static boolean isBraceOnNextLine(@NotNull CommonCodeStyleSettings settings) {
     return isNextLineStyle(settings.BRACE_STYLE);
   }
 
-  /** The body's '{' goes on its own line under the style governing its owner: the method style for a function, the statement style otherwise. */
-  public static boolean nextLineBraces(@NotNull CommonCodeStyleSettings settings, @NotNull ASTNode body) {
+  /** Whether the body's '{' goes on its own line: under the method brace style for a function body, the statement style otherwise. */
+  public static boolean isBraceOnNextLine(@NotNull CommonCodeStyleSettings settings, @NotNull ASTNode body) {
     ASTNode owner = body.getTreeParent();
     boolean function = owner != null && FUNCTION_LIKE_OWNERS.contains(owner.getElementType());
     return isNextLineStyle(function ? settings.METHOD_BRACE_STYLE : settings.BRACE_STYLE);

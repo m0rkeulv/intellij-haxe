@@ -3,12 +3,15 @@ package limeparser;
 import haxe.io.Path;
 
 /**
-	A haxelib as `haxelib path` reports it: the classpaths belong to this one
-	library; includeXml is the content of its include.xml when it ships one
-	(lime merges those as nested projects); extraDefines are the -D entries
-	of the library's extraParams.hxml; extraArgs are its remaining compiler
-	arguments (--macro lines and the like), which cannot be evaluated
-	statically and are kept for reference only.
+	A haxelib as `haxelib path` reports it.
+
+	- `classpaths` belong to this one library.
+	- `includeXml` is the content of the library's include.xml, if it ships
+	  one; lime merges it as a nested project.
+	- `extraDefines` are the -D entries of the library's extraParams.hxml.
+	- `extraArgs` are its other compiler arguments (--macro lines and the
+	  like). They cannot be evaluated statically and are kept for reference
+	  only.
 **/
 typedef ResolvedHaxelib = {
 	name:String,
@@ -24,15 +27,13 @@ typedef ResolvedHaxelib = {
 	Evaluates a lime/openfl project.xml the way lime's own parser does, but
 	collects only the build configuration the IDE needs: defines, haxedefs,
 	haxelibs (with versions), source classpaths and the app's export layout.
-	Conditional if/unless attributes, <section> grouping, <include> files and
-	${} variable substitution are honoured; window, asset and other elements
-	are ignored.
+	It honours if/unless attributes, <section> grouping, <include> files and
+	${} variable substitution, and ignores window, asset and other elements.
 
-	An `if` value is an OR ("||") of AND groups (space-separated tokens); a
+	An `if` value is an OR ("||") of AND groups of space-separated tokens. A
 	token passes when it is "true", a known define, a known environment
-	variable or the current command, and fails when it is "false" or
-	unknown. `unless` uses the same evaluation and excludes the element on a
-	match.
+	variable or the current command; it fails when it is "false" or unknown.
+	`unless` is evaluated the same way and excludes the element on a match.
 **/
 class ProjectXmlEvaluator {
 	/** An include resolver that finds no files. **/
@@ -47,8 +48,8 @@ class ProjectXmlEvaluator {
 	public final haxedefs:Map<String, String> = [];
 	public final haxelibs:Array<{name:String, version:String}> = [];
 	public final sources:Array<String> = [];
-	// <app> attributes drive the export layout (path) and the executable name
-	// (file); lime's default export root is "bin"
+	// The <app> attributes: path is the export root (lime's default is
+	// "bin"), file the executable name.
 	public var appPath:String = "bin";
 	public var appFile:String = "";
 
@@ -59,8 +60,8 @@ class ProjectXmlEvaluator {
 	/** Resolves a haxelib and its transitive dependencies in order, or null when unresolvable. **/
 	final haxelibResolver:(String, String) -> Null<Array<ResolvedHaxelib>>;
 	final visitedIncludes:Array<String> = [];
-	// asset type -> the haxelib handling it (<library handler="swf" type="swf"/>,
-	// usually registered by a library's include.xml)
+	// asset type -> the haxelib that handles it (<library handler="swf"
+	// type="swf"/>, usually registered by a library's include.xml)
 	final libraryHandlers:Map<String, String> = [];
 	final declaredAssetTypes:Array<String> = [];
 	// paths in a library's include.xml resolve against the library root, not the project
@@ -95,10 +96,10 @@ class ProjectXmlEvaluator {
 	}
 
 	/**
-		An asset library whose type has a registered handler pulls that handler
-		haxelib into the build, as lime does when it runs the handler to process
-		the assets (the swf library for .swf assets, for example). The handler
-		usually comes from a library's include.xml, so this runs after the whole
+		Adds the handler haxelib of every declared asset library type that has
+		one, as lime does when it runs the handler to process the assets (the
+		swf library for .swf assets, for example). The handler is usually
+		registered by a library's include.xml, so this runs after the whole
 		project is parsed.
 	**/
 	function resolveAssetHandlers():Void {
@@ -112,7 +113,7 @@ class ProjectXmlEvaluator {
 
 	function parseElements(parent:Xml, section:String):Void {
 		for (element in parent.elements()) {
-			if (!isValidElement(element, section)) continue;
+			if (!isElementActive(element, section)) continue;
 
 			switch (element.nodeName) {
 				case "section": parseElements(element, "");
@@ -210,10 +211,10 @@ class ProjectXmlEvaluator {
 		}
 		for (library in resolved) {
 			if (isRegistered(library.name)) continue;
-			// Only the project's own version is a pin. A dependency's resolved
-			// version comes from its checkout, and listing it as a pin would make
-			// a later `haxelib path name:version` pick that release over the
-			// repository's current (git or dev) selection.
+			// Only the version the project itself declares is a pin. A
+			// dependency's resolved version comes from its checkout; listing it
+			// as a pin would make a later `haxelib path name:version` pick that
+			// release over the repository's current (git or dev) selection.
 			var pinnedVersion = library.name == name ? version : "";
 			registerHaxelib(library.name, pinnedVersion, library.version);
 			for (classpath in library.classpaths) {
@@ -237,9 +238,10 @@ class ProjectXmlEvaluator {
 	}
 
 	/**
-		Lists the haxelib with the project's pinned version (empty when none).
-		Like lime, it also defines the library's name with its resolved version,
-		which is why `if="openfl"` works below a `<haxelib name="openfl"/>` line.
+		Lists the haxelib with the version the project pins (empty when none).
+		Like lime, it also defines the library's name with its resolved
+		version, which is why `if="openfl"` works below a
+		`<haxelib name="openfl"/>` line.
 	**/
 	function registerHaxelib(name:String, pinnedVersion:String, resolvedVersion:String):Void {
 		haxelibs.push({name: name, version: pinnedVersion});
@@ -281,8 +283,12 @@ class ProjectXmlEvaluator {
 		}
 	}
 
-	/** Inside an included section only the matching <section> element counts. **/
-	function isValidElement(element:Xml, section:String):Bool {
+	/**
+		Whether the element takes effect: its if/unless conditions pass, and,
+		inside an include that names a section, it is the <section> element
+		with that id.
+	**/
+	function isElementActive(element:Xml, section:String):Bool {
 		var ifValue = element.get("if");
 		if (ifValue != null && !matchesConditions(ifValue)) return false;
 		var unlessValue = element.get("unless");

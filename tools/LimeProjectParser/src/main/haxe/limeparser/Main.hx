@@ -6,14 +6,14 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
-	CLI entry: evaluates a lime/openfl project file and prints the build
-	configuration as JSON. project.xml is evaluated natively; project.hxp is a
-	Haxe script and runs via the user's haxe with -lib lime -lib hxp (see
-	HxpEvaluator).
+	The command-line entry point: evaluates a lime/openfl project file and
+	prints the build configuration as JSON. A project.xml is evaluated
+	directly. A project.hxp is a Haxe script, which the user's haxe runs with
+	-lib lime -lib hxp (see HxpEvaluator).
 
-	The caller supplies the seed defines (target, platform, tool versions) via
-	-D; the tool does not derive them itself. Relative <include> paths resolve
-	against the project file's directory.
+	The caller passes the initial defines (target, platform, tool versions)
+	as -D arguments; the tool does not derive them itself. Relative <include>
+	paths resolve against the project file's directory.
 **/
 class Main {
 	static final USAGE = "usage: LimeProjectParser <project.xml|project.hxp> [--target <id>] [--command <cmd>]"

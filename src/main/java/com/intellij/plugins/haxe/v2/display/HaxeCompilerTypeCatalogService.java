@@ -34,29 +34,35 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
 /**
- * The compiler's post-macro type catalog: every type the compilation server
- * knows that exists in NO source file the IDE indexes, i.e. types created by
- * macros ({@code Context.defineType}, {@code defineModule}). The unified index
- * facades consult it as a third leg beside the stub and file-based indexes.
- * That gives completion, resolve and import candidates for generated types
- * without touching IntelliJ's index lifecycle: the server drives filling and
- * refresh ({@code ModuleInfo.sign} changes), never the VFS.
+ * The compiler's catalog of generated types: every type the compilation
+ * server knows that exists in NO source file the IDE indexes, i.e. types
+ * created by macros ({@code Context.defineType}, {@code defineModule}). The
+ * unified index facades consult it as a third source beside the stub and
+ * file-based indexes. That gives completion, resolve and import candidates
+ * for generated types without touching IntelliJ's index lifecycle: the
+ * server, not the VFS, drives filling and refresh.
  *
- * Queries are strictly cache-only (safe under the read lock); an empty
- * catalog schedules a background fill. The fill walks
+ * Queries answer from the cache only, so they are safe under the read lock.
+ * An empty catalog schedules a background fill. The fill walks
  * {@code server/contexts}, {@code server/modules} and {@code server/module},
- * and keeps only the types the source FQN indexes cannot find. The server's
- * module cache stays empty until a real compile, so the fill compiles each
- * context once first ({@code --no-output}).
+ * and keeps only the types the source indexes cannot find. The server's
+ * module cache stays empty until a real compile, so the fill first compiles
+ * each context once ({@code --no-output}).
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeCompilerTypeCatalogService {
 
-  /** One compiler-known type with no source; {@code fqn} is its qualified name in the class-name index form. */
+  /** One compiler-known type without source; {@code fqn} is its qualified name in the form the class-name indexes use. */
   public record GeneratedType(@NotNull String contextKey, @NotNull String fqn, @NotNull String name) {
   }
 
+  /**
+   * One context's generated types, by qualified and by short name.
+   * {@code moduleSigns} holds each module's {@code sign}, which the server
+   * changes whenever it retypes the module; the next fill reuses the entries
+   * of modules whose sign is unchanged.
+   */
   private record ContextCatalog(@NotNull HaxeCompilerDisplayService.DisplayContext context,
                                 @NotNull Map<String, GeneratedType> byFqn,
                                 @NotNull Map<String, List<GeneratedType>> byName,
@@ -69,7 +75,7 @@ public final class HaxeCompilerTypeCatalogService {
   private final Map<String, ContextCatalog> catalogs = new ConcurrentHashMap<>();
   private final AtomicBoolean filling = new AtomicBoolean();
   private final Map<String, Long> failedAt = new ConcurrentHashMap<>();
-  /** Guards against a fill storm while the catalog legitimately stays empty (no contexts, server off). */
+  /** Limits fill attempts while the catalog stays empty for a legitimate reason (no contexts, server off). */
   private volatile long lastFillScheduledAt;
 
   public HaxeCompilerTypeCatalogService(@NotNull Project project) {
@@ -85,7 +91,7 @@ public final class HaxeCompilerTypeCatalogService {
 
   @NotNull
   public List<GeneratedType> byName(@NotNull String name) {
-    if (!enabled()) return List.of();
+    if (!shouldAnswer()) return List.of();
     List<GeneratedType> result = new ArrayList<>();
     for (ContextCatalog catalog : catalogs.values()) {
       result.addAll(catalog.byName().getOrDefault(name, List.of()));
@@ -95,7 +101,7 @@ public final class HaxeCompilerTypeCatalogService {
 
   @NotNull
   public List<GeneratedType> byFqn(@NotNull String fqn) {
-    if (!enabled()) return List.of();
+    if (!shouldAnswer()) return List.of();
     List<GeneratedType> result = new ArrayList<>();
     for (ContextCatalog catalog : catalogs.values()) {
       GeneratedType entry = catalog.byFqn().get(fqn);
@@ -104,10 +110,10 @@ public final class HaxeCompilerTypeCatalogService {
     return result;
   }
 
-  /** Every generated type's FQN — the compiler leg of qualified-name enumeration. */
+  /** The FQN of every generated type: the compiler's share of qualified-name enumeration. */
   @NotNull
   public Set<String> allFqns() {
-    if (!enabled()) return Set.of();
+    if (!shouldAnswer()) return Set.of();
     Set<String> result = new HashSet<>();
     for (ContextCatalog catalog : catalogs.values()) {
       result.addAll(catalog.byFqn().keySet());
@@ -117,7 +123,7 @@ public final class HaxeCompilerTypeCatalogService {
 
   @NotNull
   public Set<String> allNames() {
-    if (!enabled()) return Set.of();
+    if (!shouldAnswer()) return Set.of();
     Set<String> result = new HashSet<>();
     for (ContextCatalog catalog : catalogs.values()) {
       result.addAll(catalog.byName().keySet());
@@ -126,19 +132,19 @@ public final class HaxeCompilerTypeCatalogService {
   }
 
   /**
-   * The entry's blueprint-rendered class. Cache-only like everything else on
-   * this path: a cold blueprint schedules hydration and answers null this
-   * once. Call in a read action.
+   * The class rendered from the entry's blueprint. Cache-only like every
+   * query here: a missing blueprint schedules hydration, and this call
+   * answers null. Call in a read action.
    */
   @Nullable
-  public HaxeClassModel materialize(@NotNull GeneratedType entry) {
+  public HaxeClassModel renderedClass(@NotNull GeneratedType entry) {
     ContextCatalog catalog = catalogs.get(entry.contextKey());
     if (catalog == null) return null;
     return HaxeCompilerResolveService.getInstance(project).blueprintClass(catalog.context(), entry.fqn());
   }
 
-  /** Answers whether the compiler leg should respond at all; a cold catalog schedules its fill. */
-  private boolean enabled() {
+  /** Whether the catalog answers at all, which the completion mode decides. An empty catalog also schedules its fill. */
+  private boolean shouldAnswer() {
     if (!HaxeCompilerSettings.getInstance(project).getCompletionMode().usesCompiler()) return false;
     if (catalogs.isEmpty()) scheduleFillAll();
     return true;
@@ -168,7 +174,7 @@ public final class HaxeCompilerTypeCatalogService {
     ContextCatalog catalog = catalogs.get(entry.contextKey());
     if (catalog == null) return null;
     HaxeCompilerResolveService.getInstance(project).hydrateNowForTests(catalog.context(), entry.fqn());
-    return materialize(entry);
+    return renderedClass(entry);
   }
 
   // --- background fill ---
@@ -178,9 +184,9 @@ public final class HaxeCompilerTypeCatalogService {
     // background index queries only add storage contention to the test run
     if (ApplicationManager.getApplication().isUnitTestMode()) return;
     // resolve running INSIDE an indexer reaches this service through the
-    // unified index. A fill scheduled from there feeds a churn loop: the
-    // fill's stub queries force more indexing, whose resolve calls this
-    // again. The next caller outside indexing schedules instead.
+    // unified index. A fill scheduled from there feeds a loop: the fill's
+    // stub queries force more indexing, whose resolve calls land here again.
+    // The next caller outside indexing schedules the fill instead.
     if (FileBasedIndex.getInstance().getFileBeingCurrentlyIndexed() != null) return;
     if (System.currentTimeMillis() - lastFillScheduledAt < FAILURE_COOLDOWN_MS) return;
     if (!filling.compareAndSet(false, true)) return;
@@ -228,9 +234,9 @@ public final class HaxeCompilerTypeCatalogService {
       failedAt.put(contextKey, System.currentTimeMillis());
       return;
     }
-    // best effort: a failed warm-up must not abort the fill. The module
-    // cache may already be warm from an earlier compile, and re-running init
-    // macros can fail on redefinitions while the cache is fine.
+    // a failed warm-up compile must not abort the fill. The module cache may
+    // already be filled by an earlier compile, and re-running init macros can
+    // fail on redefinitions while the cache is fine.
     displayService.ensureContextCompiled(connected, contextKey);
 
     try {
@@ -246,7 +252,11 @@ public final class HaxeCompilerTypeCatalogService {
     }
   }
 
-  /** Null when indexing is in progress: a dumb-mode diff would misread source types as generated. */
+  /**
+   * The context's catalog, reusing the previous entries of unchanged modules.
+   * Null while indexing is in progress, because the source indexes would
+   * then miss source types and they would be taken for generated ones.
+   */
   @Nullable
   private ContextCatalog collectCatalog(@NotNull String contextKey,
                                         @NotNull HaxeCompilerDisplayService.DisplayContext context,
@@ -286,9 +296,10 @@ public final class HaxeCompilerTypeCatalogService {
         }
       }
 
-      // A dependency-only module IS its single type (the defineType shape):
-      // there is no ModuleInfo to enumerate more from. Real source modules in
-      // the set (std, haxelibs) drop out in the index diff.
+      // A module seen only as a dependency is taken to be its single type, as
+      // Context.defineType creates it; there is no ModuleInfo listing more.
+      // Real source modules in the set (std, haxelibs) drop out in the
+      // source-index check.
       // TODO: Context.defineModule can create multi-type modules; whether the
       //  server exposes their type lists anywhere is unverified - only the
       //  module-named type is catalogued.
@@ -335,7 +346,7 @@ public final class HaxeCompilerTypeCatalogService {
     }
   }
 
-  /** Reuses the previous fill's generated-or-not verdicts for an unchanged module's types. */
+  /** Copies the previous fill's entries for the types of an unchanged module. */
   private static void copyEntries(@NotNull ContextCatalog previous,
                                   @NotNull List<String> typeFqns,
                                   @NotNull Map<String, GeneratedType> byFqn) {
@@ -349,7 +360,7 @@ public final class HaxeCompilerTypeCatalogService {
 
   /**
    * The types no source index knows, i.e. the generated ones. Null while
-   * indexing is in progress, since the diff would be wrong.
+   * indexing is in progress, since the answer would then be wrong.
    *
    * A non-blocking read on purpose: these index queries can be forced to
    * index PENDING files inline (for example everything a define change just
@@ -364,7 +375,7 @@ public final class HaxeCompilerTypeCatalogService {
       GlobalSearchScope scope = GlobalSearchScope.allScope(project);
       List<String> generated = new ArrayList<>();
       for (String fqn : typeFqns) {
-        // the two SOURCE legs only: the unified facade would recurse into
+        // only the two SOURCE indexes: the unified facade would recurse into
         // this catalog
         boolean inSource = !HaxeFullyQualifiedClassNameStubIndex.getByFqn(fqn, project, scope).isEmpty()
                            || !HaxeFullyQualifiedClassNameIndex.getByFqn(fqn, project, scope).isEmpty();

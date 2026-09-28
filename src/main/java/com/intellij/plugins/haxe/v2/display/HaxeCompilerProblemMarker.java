@@ -19,12 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Marks OTHER files a compile reported errors in (red file names in the
- * Project view and editor tabs, via {@link WolfTheProblemSolver}). A
- * diagnostics response covers every file the compile touched — the entry for
- * the edited file becomes editor annotations, but a dependency's parse error
- * would otherwise vanish silently. Files recover when a later pass no longer
- * reports them.
+ * Marks the OTHER files in which a compile reported errors, through
+ * {@link WolfTheProblemSolver}: their names turn red in the Project view and
+ * editor tabs. A diagnostics response covers every file the compile touched.
+ * The edited file's entry becomes editor annotations, and without these marks
+ * a dependency's parse error would go unnoticed. A mark is cleared when a
+ * later pass no longer reports errors in the file.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeCompilerProblemMarker {
@@ -45,9 +45,10 @@ public final class HaxeCompilerProblemMarker {
   }
 
   /**
-   * Applies one diagnostics response: project files (other than the edited
-   * one) with error-severity entries get marked, previously marked files
-   * absent from the response get cleared. Call on a background thread.
+   * Applies one diagnostics response. Project files other than the edited
+   * one get marked when they have error-severity entries. Previously marked
+   * files without errors in this response get cleared. Call on a background
+   * thread.
    */
   public void updateFromDiagnostics(@NotNull String editedFilePath, @NotNull List<FileDiagnostics> results) {
     Map<String, VirtualFile> nowBroken = new HashMap<>();
@@ -56,24 +57,24 @@ public final class HaxeCompilerProblemMarker {
       if (!hasErrorSeverity(entry)) continue;
       VirtualFile file = LocalFileSystem.getInstance().findFileByPath(entry.file());
       if (file == null || !file.isValid()) continue;
-      // library files are not the user's problem to fix - only mark project content
+      // only project content is marked; library files are not the user's to fix
       boolean inContent = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInContent(file));
       if (!inContent) continue;
       nowBroken.put(file.getPath(), file);
     }
 
-    WolfTheProblemSolver wolf = WolfTheProblemSolver.getInstance(project);
+    WolfTheProblemSolver problemSolver = WolfTheProblemSolver.getInstance(project);
     for (String path : markedPaths) {
       if (!nowBroken.containsKey(path)) {
         VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
         if (file != null) {
-          wolf.clearProblemsFromExternalSource(file, SOURCE);
+          problemSolver.clearProblemsFromExternalSource(file, SOURCE);
         }
         markedPaths.remove(path);
       }
     }
     for (Map.Entry<String, VirtualFile> broken : nowBroken.entrySet()) {
-      wolf.reportProblemsFromExternalSource(broken.getValue(), SOURCE);
+      problemSolver.reportProblemsFromExternalSource(broken.getValue(), SOURCE);
       markedPaths.add(broken.getKey());
     }
   }

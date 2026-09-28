@@ -73,7 +73,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertEquals(List.of("whitespace.unknownKey"), unsupported);
   }
 
-  /** A lineEnds/sameLine-only config - wrapping untouched. */
+  /** A config with only lineEnds and sameLine keys leaves wrapping at the profile. */
   @Test
   @DisplayName("line ends and same line only config")
   public void testLineEndsAndSameLineOnlyConfig() throws Exception {
@@ -112,7 +112,7 @@ public class HxformatImportTest extends HaxeLightFixtureTestCase {
     assertTrue(unsupported.isEmpty(), "a lineEnds/sameLine-only config maps completely, got: " + unsupported);
   }
 
-  /** The sections added by the full-spec audit: wrapping rules, parens, brackets, clamp, line ends. */
+  /** Wrapping rules, parens, brackets, the maxAnywhereInFile clamp and line ends. */
   @Test
   @DisplayName("audited sections map")
   public void testAuditedSectionsMap() throws Exception {

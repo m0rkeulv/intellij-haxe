@@ -7,9 +7,9 @@ import tools.jackson.databind.JsonNode;
  * One entry of a {@code display/diagnostics} result.
  *
  * {@code args} stays raw JSON because its shape depends on the
- * {@link DiagnosticKind}; the {@code ...Arg} accessors read the common shapes.
- * {@code code} is the optional LSP-style identifier of the diagnostic, null
- * when the compiler sends none (haxe 4 never does).
+ * {@link DiagnosticKind}. The {@code ...Arg} accessors read the common shapes.
+ * {@code code} is the diagnostic's LSP-style identifier. It is null when the
+ * compiler sends none, and haxe 4 never sends one.
  */
 public record Diagnostic(DiagnosticKind kind,
                          Range range,
@@ -59,8 +59,9 @@ public record Diagnostic(DiagnosticKind kind,
   }
 
   /**
-   * The text haxe 5 offers in place of the removable span ({@code newCode});
-   * null when absent or empty, both of which mean plain removal.
+   * The replacement text haxe 5 offers for the removable span
+   * ({@code newCode}). Null when absent or empty; both mean the span is
+   * simply removed.
    */
   public String newCodeArg() {
     if (args == null) return null;

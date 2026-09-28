@@ -86,9 +86,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     new CustomOption("BLANK_LINES_BEFORE_FIELD_DOC_COMMENT", "haxe.codestyle.blank.lines.before.field.doc", BLANK_LINES),
     new CustomOption("BLANK_LINES_AFTER_DOCUMENTED_FIELD", "haxe.codestyle.blank.lines.after.documented.field", BLANK_LINES));
 
-  // inactive-branch treatment lives in the dedicated Conditional Compilation
-  // tab - its options span indentation, spacing and line breaks at once, not
-  // just wrapping
+  // inactive-branch options live in the Conditional Compilation tab, because
+  // they affect indentation, spacing and line breaks at once, not just wrapping
   private static final List<CustomOption> WRAPPING_OPTIONS = List.of(
     new CustomOption("FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE", "haxe.codestyle.wrapping.expression.body.on.next.line", EXPRESSION_BODY_GROUP),
     new CustomOption("STRUCTURE_EXTENSION_ON_OWN_LINE", "haxe.codestyle.wrapping.structure.extension.own.line", STRUCTURE_EXTENSION_GROUP),
@@ -140,9 +139,9 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
   }
 
   /**
-   * The platform's doc-formatting switch (a reformat may run with it off)
-   * is the Haxe toggle; Haxe docs are markdown, so no leading asterisks and
-   * no tags to drop.
+   * Backs the platform's doc-formatting switch, which a reformat may turn
+   * off, with the Haxe FORMAT_DOC_COMMENTS setting. Haxe docs are markdown,
+   * so there are no leading asterisks and no tags to remove.
    */
   @Override
   public DocCommentSettings getDocCommentSettings(@NotNull CodeStyleSettings rootSettings) {
@@ -278,8 +277,8 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
         ASSIGNMENT_WRAP.name(),
         PLACE_ASSIGNMENT_SIGN_ON_NEXT_LINE.name()
       );
-      // the platform default label says "permits" - Java sealed-class syntax
-      // that does not exist in Haxe
+      // the platform's default label mentions "permits", Java sealed-class
+      // syntax that does not exist in Haxe
       consumer.renameStandardOption(EXTENDS_LIST_WRAP.name(), HaxeCodeStyleBundle.message("haxe.codestyle.wrapping.extends.list"));
       showCustomOptions(consumer, WRAPPING_OPTIONS);
       showBodyPlacements(consumer);
@@ -295,7 +294,7 @@ public class HaxeLanguageCodeStyleSettingsProvider extends LanguageCodeStyleSett
     return () -> HaxeCodeStyleBundle.message(titleKey);
   }
 
-  /** Shows the options in table order - the order the tab lists them in. */
+  /** Shows the options in table order, which is the order the tab lists them in. */
   private static void showCustomOptions(@NotNull CodeStyleSettingsCustomizable consumer, List<CustomOption> options) {
     for (CustomOption option : options) {
       String title = HaxeCodeStyleBundle.message(option.titleKey());

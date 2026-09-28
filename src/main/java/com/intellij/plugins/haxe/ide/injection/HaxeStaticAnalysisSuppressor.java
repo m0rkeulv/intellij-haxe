@@ -11,12 +11,13 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Set;
 
 /**
- * Silences the plugin's static-analysis inspections where they must not
- * speak: in analysis-exempt code (doc-comment fences, inactive conditional
- * branches), and everywhere while the compiler is the only analysis
- * ("compiler diagnostics only"). The compiler-backed batch inspections are
- * the compiler's own voice and stay. Covers the inspections that bypass the
- * HaxeInspection base (and its shouldSkip guard) with their own visitors.
+ * Suppresses the plugin's static-analysis inspections where they must stay
+ * silent: in code exempt from analysis (doc-comment code fences, inactive
+ * conditional branches), and everywhere while the compiler is the only
+ * analysis ("compiler diagnostics only"). The compiler-backed batch
+ * inspections report the compiler's own findings and stay active in that
+ * mode. This covers the inspections that bypass the HaxeInspection base
+ * class, and its shouldSkip check, with their own visitors.
  */
 public class HaxeStaticAnalysisSuppressor implements InspectionSuppressor {
 

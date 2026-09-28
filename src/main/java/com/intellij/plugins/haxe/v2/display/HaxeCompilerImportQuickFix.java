@@ -19,9 +19,9 @@ import java.util.regex.Pattern;
 
 /**
  * Imports the type the compiler suggested for an unresolved identifier,
- * through the plugin's single import chokepoint. Implements both fix
- * interfaces: the batch conversion keeps an annotation fix only when it is
- * a {@link LocalQuickFix}.
+ * through {@link HaxeAddImportHelper}, the plugin's single place for adding
+ * imports. Implements both fix interfaces, because Inspect Code keeps an
+ * annotation's fix only when it is a {@link LocalQuickFix}.
  */
 final class HaxeCompilerImportQuickFix implements IntentionAction, LocalQuickFix {
   private final String qualifiedName;

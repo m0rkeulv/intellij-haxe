@@ -10,12 +10,11 @@ import java.util.List;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.MSL_COMMENT;
 
 /**
- * Normalizes a line comment's opener the way haxe-formatter does (its
- * printCommentLine): "//text" becomes "// text". Content opening with '/',
- * '*', '-' or whitespace keeps its shape - divider art ("//----", "////"),
- * doc-style "///" and already-spaced text are only right-trimmed. A
- * comment's text is INSIDE its token, out of block formatting's reach -
- * hence a text pass.
+ * Puts a space after the "//" of a line comment, as haxe-formatter's
+ * printCommentLine does: "//text" becomes "// text". Content that starts
+ * with '/', '*', '-' or whitespace keeps its shape and is only right-trimmed.
+ * This covers divider lines ("//----", "////"), doc-style "///" and text
+ * that already has its space.
  */
 public class HaxeLineCommentPostFormatProcessor extends HaxeTextPostFormatProcessor {
 
@@ -50,12 +49,12 @@ public class HaxeLineCommentPostFormatProcessor extends HaxeTextPostFormatProces
     if (keepsShape(content)) {
       return "//" + content.stripTrailing();
     }
-    // haxe-formatter right-trims line ends afterwards, so a bare "//" stays bare
+    // haxe-formatter right-trims every line afterwards, so an empty comment stays "//"
     String stripped = content.strip();
     return stripped.isEmpty() ? "//" : "// " + stripped;
   }
 
-  /** Divider art, extra slashes and already-spaced text keep their shape. */
+  /** Whether the comment content keeps its shape: a divider, extra slashes or text that already starts with whitespace. */
   private static boolean keepsShape(@NotNull String content) {
     if (content.isEmpty()) return false;
     char first = content.charAt(0);

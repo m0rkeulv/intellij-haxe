@@ -10,21 +10,23 @@ import org.jetbrains.annotations.NotNull;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.LOCAL_VAR_DECLARATION;
 
 /**
- * haxe-formatter's wrapping.multiVar split: a declaration list whose joined
- * line passes the split width goes one declarator per line - unless a
- * declarator is short enough, as the tool measures it, to keep the list
- * filling (its anyItemLength rule precedes the split rule).
+ * Reproduces haxe-formatter's wrapping.multiVar split. A declaration list
+ * whose joined line reaches the split width puts each declarator on its own
+ * line. A list keeps filling instead when one of its declarators is short
+ * enough, as the tool measures it, because the tool's anyItemLength rule
+ * comes before its split rule.
  */
 public final class HaxeMultiVarSplit {
 
   // the tool measures a declarator with its trailing comma or semicolon; the
-  // first one also carries the var keyword's gap
+  // first one also counts the space after the var keyword
   private static final int DECLARATOR_EXTRA = 1;
   private static final int FIRST_DECLARATOR_EXTRA = 2;
 
   private HaxeMultiVarSplit() {
   }
 
+  /** Whether the declaration list splits one declarator per line. */
   public static boolean splits(@NotNull ASTNode declarationList, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     int splitWidth = haxe.MULTI_VAR_SPLIT_WIDTH;
     if (splitWidth <= 0) return false;
@@ -32,19 +34,15 @@ public final class HaxeMultiVarSplit {
     if (fillItemLength > 0 && shortestDeclaratorLength(declarationList) <= fillItemLength) return false;
     PsiFile file = declarationList.getPsi().getContainingFile();
     if (file == null) return false;
-    // the statement's post-format line indent matches its current one in all
-    // but pathological inputs - good enough for a width heuristic
+    // the line's current indent stands in for its indent after formatting;
+    // the two differ only for unusual input
     CharSequence text = file.getViewProvider().getContents();
     int tabSize = HaxeJoinedLine.tabSize(common);
     int indentColumns = HaxeIndentText.indentWidth(HaxeIndentText.lineIndentAt(text, declarationList.getStartOffset()), tabSize);
     return indentColumns + HaxeJoinedLine.oneLineWidth(declarationList) >= splitWidth;
   }
 
-  /**
-   * The shortest declarator as haxe-formatter measures its multiVar items:
-   * each with its trailing comma or semicolon, the first one two wider (its
-   * item starts at the var keyword's gap).
-   */
+  /** The length of the shortest declarator, measured as the tool measures multiVar items; 0 for a list without declarators. */
   private static int shortestDeclaratorLength(@NotNull ASTNode declarationList) {
     int shortest = Integer.MAX_VALUE;
     boolean first = true;

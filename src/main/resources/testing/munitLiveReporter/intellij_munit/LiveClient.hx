@@ -17,9 +17,9 @@ import intellij_haxe_test.FlashSupport;
 	each test emits an adjacent started/finished pair carrying the measured
 	duration.
 
-	Implements the base `ITestResultClient` only - the richer interfaces are
-	younger than the runner hook, and needing less keeps the injection
-	compiling on older munit versions.
+	It implements only the base `ITestResultClient`. The richer interfaces
+	are newer than the runner's `addResultClient`, so requiring less keeps
+	the injection compiling on older munit versions.
 
 	munit's own PrintClient writes progress glyphs without line breaks, so
 	every service message starts on a fresh line of its own.
@@ -42,12 +42,13 @@ class LiveClient implements ITestResultClient {
 
 	public function new(rootSuite:String) {
 		this.rootSuite = rootSuite;
-		// munit's PrintClient hijacks haxe.Log.trace and prints immediately -
-		// BEFORE this client's after-the-fact started/finished pair, so the
-		// IDE would attribute the text to the class instead of the test. This
-		// client (attached last) re-hijacks: traces buffer here and replay as
-		// the reported test's own output; the immediate print is swallowed so
-		// the text appears exactly once, on the right node.
+		// munit's PrintClient replaces haxe.Log.trace and prints at once,
+		// BEFORE this client's started/finished pair for the test, so the IDE
+		// would attribute the text to the class instead of the test. This
+		// client is attached last and replaces trace again: traces are
+		// buffered here and replayed as the reported test's own output. The
+		// immediate print no longer happens, so the text appears exactly
+		// once, on the right node.
 		haxe.Log.trace = function(value:Dynamic, ?info:haxe.PosInfos) {
 			traceBuffer.push(haxe.Log.formatOutput(value, info));
 		};
@@ -80,12 +81,12 @@ class LiveClient implements ITestResultClient {
 			printLine("##teamcity[testSuiteFinished name='" + escape(rootSuite) + "']");
 			rootOpen = false;
 		}
-		// the runner waits for every client's completion callback before it
-		// reports the run finished - not calling it would hang the process
+		// The runner waits for every client's completion callback before it
+		// reports the run finished; without the call the process would hang.
 		if (handler != null) handler(this);
 		announceHostedRunFinished(failCount + errorCount > 0);
-		// nothing on flash ends the process by itself; every service message
-		// is already flushed - only the runner's cosmetic summary is cut off
+		// On flash nothing ends the process by itself. Every service message
+		// is already flushed; exiting cuts off only the runner's own summary.
 		#if flash
 		FlashSupport.exit(0);
 		#end
@@ -137,10 +138,11 @@ class LiveClient implements ITestResultClient {
 	}
 
 	static function printLine(line:String):Void {
-		// the leading break closes PrintClient's unfinished glyph line (sys
-		// only - flash's NATIVE trace and js's console.log are line-oriented
-		// already, and the native trace bypasses the haxe.Log hijack above,
-		// so the buffered replay cannot re-enter the buffer)
+		// The leading line break ends PrintClient's unfinished line of progress
+		// glyphs; TcOutput adds it on sys targets only. flash's NATIVE trace
+		// and js's console.log already print whole lines. The native trace
+		// also bypasses the haxe.Log.trace replacement above, so replayed
+		// output does not land in the buffer again.
 		TcOutput.printLine(line, true);
 	}
 }

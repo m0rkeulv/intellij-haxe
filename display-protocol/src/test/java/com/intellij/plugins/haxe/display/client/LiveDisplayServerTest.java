@@ -24,9 +24,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * The full flow against a real {@code haxe --wait} server. Opt-in with
- * {@code -PdisplayTests=true}; drives the PATH haxe or the one named by
- * {@code -PdisplayTestHaxe}, and self-skips when that haxe cannot run.
+ * Runs the client against a real {@code haxe --wait} server. The suite is
+ * opt-in with {@code -PdisplayTests=true}. It drives the haxe on the PATH, or
+ * the one {@code -PdisplayTestHaxe} names, and skips itself when that haxe
+ * cannot run.
  */
 @DisplayName("Display protocol: live server (integration)")
 public class LiveDisplayServerTest {
@@ -40,8 +41,8 @@ public class LiveDisplayServerTest {
     }
     """;
 
-  /// Which compiler to drive: the default PATH haxe, or an alternative
-  /// binary via -PdisplayTestHaxe (e.g. a haxe 5 preview).
+  /// The compiler to drive: the haxe on the PATH, or another binary named by
+  /// -PdisplayTestHaxe (for example a haxe 5 preview).
   private static final String HAXE_EXE = System.getProperty("display.test.haxe", "haxe");
 
   @TempDir
@@ -98,9 +99,9 @@ public class LiveDisplayServerTest {
     boolean cleanOnDisk = onDisk.isEmpty() || onDisk.get(0).diagnostics().isEmpty();
     assertTrue(cleanOnDisk, "fixture should have no diagnostics on disk");
 
-    // Once a module is cached, `contents` alone is IGNORED - the server
-    // serves the cached result (mtime unchanged). The file must be
-    // invalidated whenever the buffer diverges from disk.
+    // Once the server has cached a module, it IGNORES `contents` and serves
+    // the cached result, because the file's mtime is unchanged. The file
+    // must be invalidated whenever the buffer diverges from disk.
     client.invalidate(baseArgs, fixtureFile);
 
     String broken = FIXTURE.replace("label.toUpperCase()", "labell.toUpperCase()");
@@ -134,9 +135,9 @@ public class LiveDisplayServerTest {
       .orElse(null);
     assertNotNull(deprecation, "@:enum abstract must surface a deprecation warning");
 
-    // What identification the wire offers, per compiler generation: 4.x sends
-    // prose only; 5+ fills code with the SPECIFIC -w warning identifier
-    // (WDeprecatedEnumAbstract here, not just the WDeprecated class).
+    // Haxe 4.x identifies a warning only by its message. Haxe 5+ fills `code`
+    // with the SPECIFIC -w warning identifier: WDeprecatedEnumAbstract here,
+    // not just the WDeprecated class.
     if (sendsDiagnosticCodes()) {
       assertNotNull(deprecation.code(), "haxe 5+ identifies warnings by code");
       assertTrue(deprecation.code().startsWith("WDeprecated"),
@@ -145,8 +146,8 @@ public class LiveDisplayServerTest {
       assertNull(deprecation.code(), "haxe 4.x sends no code ids");
     }
 
-    // The flag-side counterpart: -w -WDeprecated suppresses the warning CLASS
-    // at the request level, so class-based filtering is possible without ids.
+    // Without codes, a whole warning CLASS can still be filtered: -w
+    // -WDeprecated in the request arguments suppresses it.
     List<String> suppressed = new ArrayList<>(baseArgs);
     suppressed.add("-w");
     suppressed.add("-WDeprecated");
@@ -179,9 +180,9 @@ public class LiveDisplayServerTest {
       .orElse(null);
     assertNotNull(removable, "the unused local must surface as REMOVABLE_CODE");
 
-    // The wire fact the remove quick fix relies on: the args' removal span
-    // covers the BINDING ("var dummy:Int = ") and deliberately KEEPS the
-    // initializer expression - `var x = sideEffect();` must not lose the call.
+    // The remove quick fix relies on this: the removal span in the args
+    // covers the BINDING ("var dummy:Int = ") and KEEPS the initializer, so
+    // `var x = sideEffect();` does not lose the call.
     Range removal = removable.removableRangeArg();
     assertNotNull(removal, "removable-code args must carry the removal range");
     if (sendsReplaceableCode()) {
@@ -220,10 +221,10 @@ public class LiveDisplayServerTest {
   }
 
   /**
-   * The compiler completes at the end of a PARTIAL identifier (what an
-   * editor sends, with the buffer as contents) and after a dot; a request
-   * placed on an identifier that already resolves is refused as
-   * "Unsupported method".
+   * The compiler completes after a dot and at the end of a PARTIAL
+   * identifier, which is what an editor sends along with its buffer as
+   * contents. It refuses a request placed on an identifier that already
+   * resolves as "Unsupported method".
    */
   @Test
   @DisplayName("completion answers fields after a dot and keywords at a partial identifier")
@@ -238,7 +239,7 @@ public class LiveDisplayServerTest {
     int partialEnd = partial.indexOf("\t\ttr") + "\t\ttr".length();
     client.invalidate(baseArgs, fixtureFile);
     CompletionList toplevel = client.completion(baseArgs, fixtureFile, partialEnd, partial, true);
-    List<String> keywords = toplevel.items().stream().filter(CompletionItem::isKeyword).map(CompletionItem::name).toList();
+    List<String> keywords = toplevel.items().stream().filter(CompletionItem::isKeywordOrLiteral).map(CompletionItem::name).toList();
     List<String> names = toplevel.items().stream().map(CompletionItem::name).toList();
     assertEquals(2, toplevel.modeKind(), "toplevel mode at a statement");
     assertTrue(keywords.contains("var"), "statement keywords must be offered: " + keywords);
@@ -276,10 +277,10 @@ public class LiveDisplayServerTest {
     }
   }
 
-  // A macro-defined type: exists in NO source file, only in the compiler's
-  // post-macro world - the case the IDE's type catalog serves.
-  // defineType runs inside onAfterInitMacros: haxe 5 forbids it straight from
-  // an initialization macro, and the deferred form works on 4.2+ as well
+  // A type defined by a macro. It exists in NO source file, only in the
+  // compiler's typed program after macros ran; the IDE's type catalog serves
+  // this case. defineType runs inside onAfterInitMacros because haxe 5 forbids
+  // it directly in an initialization macro; the deferred form works on 4.2+ too.
   private static final String GEN_MACRO = """
     import haxe.macro.Context;
     class GenMacro {
@@ -319,8 +320,8 @@ public class LiveDisplayServerTest {
     List<String> genArgs = List.of("--cwd", workDir.toString(), "-cp", ".", "-main", "LiveGen",
                                    "--macro", "GenMacro.define()", "-js", "gen.js", "--no-output");
 
-    // the module cache is EMPTY until a real compile - the wire fact the
-    // IDE's context warm-up compile exists for
+    // the module cache stays EMPTY until a real compile, which is why the IDE
+    // runs a warm-up compile per context
     assertNull(typedContextHolding(genArgs, "LiveGen"), "no module cache before a compile");
 
     DisplayResponse compiled = HaxeDisplayTransport.request("127.0.0.1", port, genArgs, 30_000);
@@ -330,9 +331,9 @@ public class LiveDisplayServerTest {
     assertNotNull(context, "the typed context must list the compiled module");
     assertTrue(context.holdsTypedModules(), "the IDE filters typed contexts by their desc");
 
-    // a defineType-created module is INVISIBLE to the flat listing and has no
-    // ModuleInfo of its own; it surfaces only in the dependency lists of the
-    // modules using it - the discovery path the IDE's type catalog walks
+    // server/modules does NOT list a module that defineType created, and haxe 4
+    // serves no ModuleInfo for it. It appears only in the dependency lists of
+    // the modules using it, which is where the IDE's type catalog finds it.
     List<String> listed = client.modules(genArgs, context.signature());
     assertFalse(listed.contains("gen.GeneratedThing"), "server/modules must not list the defined module");
     ModuleInfo userInfo = client.module(genArgs, context.signature(), "LiveGen");
@@ -349,8 +350,8 @@ public class LiveDisplayServerTest {
                    "haxe 4 server/module rejects a defined module");
     }
 
-    // server/type answers on both generations - blueprints are how the
-    // defined type's members become visible
+    // server/type answers on both generations, so blueprints make the defined
+    // type's members visible
     TypeBlueprint blueprint = client.typeBlueprint(genArgs, context.signature(), "gen.GeneratedThing", "GeneratedThing");
     assertNotNull(blueprint.findMember("tag"), "generated members must be listed by name");
     assertNotNull(blueprint.findMember("make"), "generated members must be listed by name");
@@ -360,9 +361,9 @@ public class LiveDisplayServerTest {
     }
   }
 
-  /// The capability helpers below name the haxe 5 behavior changes one by
-  /// one - a test gates on the capability it exercises, never on a bare
-  /// version check borrowed from an unrelated capability.
+  /// Each capability helper below names one haxe 5 behavior change. A test
+  /// checks the capability it exercises, never a bare version number or the
+  /// helper of an unrelated capability.
   private static boolean isHaxe5OrNewer() {
     return serverVersion.major() >= 5;
   }
@@ -382,14 +383,14 @@ public class LiveDisplayServerTest {
     return isHaxe5OrNewer();
   }
 
-  /// Haxe 5 (preview) serializes server/type member types BEFORE forcing lazy
-  /// typing, so fields arrive as unresolved TMono; 4.x answers concrete types.
-  /// Names and shapes are reliable on both - only type resolution differs.
+  /// Haxe 5 (preview) serializes server/type member types BEFORE it forces
+  /// lazy typing, so the fields arrive as unresolved TMono. Haxe 4.x sends
+  /// concrete types. Names and shapes are reliable on both.
   private static boolean blueprintTypesResolved() {
     return !isHaxe5OrNewer();
   }
 
-  /** The server context whose module cache holds {@code module}, or null (also while no cache exists at all). */
+  /** The server context whose module cache holds {@code module}. Null when none does, including before any compile. */
   private static HaxeServerContext typedContextHolding(List<String> args, String module) {
     try {
       for (HaxeServerContext context : client.contexts(args)) {
@@ -421,14 +422,14 @@ public class LiveDisplayServerTest {
     }
   }
 
-  /** The server needs a moment to bind; poll with a cheap request. */
+  /** The server needs a moment to bind its port, so this polls with a cheap request. */
   private static void waitUntilAccepting() throws Exception {
     long deadline = System.currentTimeMillis() + 15_000;
     while (true) {
       try {
-        // any completed exchange proves the server accepts; the RESPONSE may
-        // legitimately be empty (haxe 5 answers the legacy --version request
-        // with a bare close)
+        // Any completed exchange proves the server accepts connections. The
+        // response may be empty: haxe 5 answers the legacy --version request
+        // by just closing the connection.
         HaxeDisplayTransport.request("127.0.0.1", port, List.of("--version"), 5_000);
         return;
       } catch (Exception e) {

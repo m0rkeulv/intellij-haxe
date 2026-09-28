@@ -12,11 +12,12 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * The settings image of a DEFAULT hxformat.json (haxe-formatter 1.18): what
- * the file-scoped override and the scheme importer install before laying a
- * config's own keys on top ({@link HxformatJsonMapper}). One method per
- * config section, in the mapper's order, so a section's profile reads
- * against its mapping.
+ * The complete settings that a DEFAULT hxformat.json (haxe-formatter 1.18)
+ * stands for. The per-file override ({@link HxformatSettingsModifier}) and
+ * the scheme importer install them first and then apply the config's own
+ * keys on top ({@link HxformatJsonMapper}). There is one method per config
+ * section, in the mapper's order, so each section reads side by side with
+ * its mapping.
  */
 public final class HxformatDefaultProfile {
 
@@ -24,7 +25,7 @@ public final class HxformatDefaultProfile {
   static final int UI_CHOP_DOWN =
     CommonCodeStyleSettings.WRAP_ON_EVERY_ITEM | CommonCodeStyleSettings.WRAP_AS_NEEDED;
 
-  // every wrap policy of the common settings, reset before the profile lands
+  // every wrap policy of the common settings, reset before the profile is applied
   private static final List<Field> WRAP_FIELDS = Arrays.stream(CommonCodeStyleSettings.class.getFields())
     .filter(field -> field.getType() == int.class && field.getName().endsWith("_WRAP"))
     .toList();
@@ -52,10 +53,10 @@ public final class HxformatDefaultProfile {
     indent.INDENT_SIZE = HxformatDefaults.TAB_WIDTH;
     // a wrapped declaration header (implementsExtends) continues TWO steps in
     indent.CONTINUATION_INDENT_SIZE = HxformatDefaults.CONTINUATION_STEPS * HxformatDefaults.TAB_WIDTH;
-    // indentation.conditionalPolicy=Aligned - inactive branches too
+    // indentation.conditionalPolicy=Aligned, applied to unparsable inactive branches too
     haxe.ALIGN_INACTIVE_CONDITIONAL_BRANCHES = true;
-    // haxe-formatter indents every comment to its scope - no first-column
-    // exception - and always reindents plain /*..*/ comment interiors
+    // haxe-formatter indents every comment to its scope, first-column ones
+    // included, and always reindents the inner lines of plain /*..*/ comments
     common.KEEP_FIRST_COLUMN_COMMENT = false;
     haxe.REINDENT_MULTILINE_COMMENTS = true;
   }
@@ -63,23 +64,23 @@ public final class HxformatDefaultProfile {
   private static void applyWrapping(CodeStyleSettings settings, CommonCodeStyleSettings common, HaxeCodeStyleSettings haxe) {
     // wrapping.maxLineLength
     settings.setRightMargin(HaxeLanguage.INSTANCE, HxformatDefaults.MAX_LINE_LENGTH);
-    // wrapping.arrayWrap/mapWrap/objectLiteral/methodChain: break one-per-line
+    // wrapping.arrayWrap/mapWrap/objectLiteral/methodChain: one item per line
     // when the line exceeds maxLineLength. The settings UI stores "chop down
-    // if long" as WRAP_ON_EVERY_ITEM | WRAP_AS_NEEDED - a bare
-    // WRAP_ON_EVERY_ITEM renders as "invalid option value" in the combo box
+    // if long" as WRAP_ON_EVERY_ITEM | WRAP_AS_NEEDED; a bare
+    // WRAP_ON_EVERY_ITEM shows as "invalid option value" in the combo box
     common.ARRAY_INITIALIZER_WRAP = UI_CHOP_DOWN;
     common.METHOD_CALL_CHAIN_WRAP = UI_CHOP_DOWN;
-    // wrapping.implementsExtends: FillLine - break only past maxLineLength
+    // wrapping.implementsExtends: FillLine, which breaks only past maxLineLength
     common.EXTENDS_LIST_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
-    // wrapping.functionSignature: FillLine - the parameters re-pack up to
-    // the margin whatever breaks were written (the fill below), a line past
-    // the margin breaks where the tool's accounting puts it
+    // wrapping.functionSignature: FillLine. The parameters re-pack up to the
+    // margin whatever breaks were written (see the joined-line fill below),
+    // and a line past the margin breaks where the tool would break it
     common.METHOD_PARAMETERS_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
     // wrapping.callParameter: NoWrap below its item-count and length
-    // thresholds, FillLine past the margin - so a line that a second reformat
-    // joined breaks again where it overflows. (The operator chains keep a
-    // split rule of their own: a margin wrap on them would let an operand's
-    // break win over a chopped method chain.)
+    // thresholds, FillLine past the margin, so a line joined by a second
+    // reformat breaks again where it overflows. The operator chains use their
+    // own split rules instead: a margin wrap on them would let an operand's
+    // break win over a chopped method chain
     common.CALL_PARAMETERS_WRAP = CommonCodeStyleSettings.WRAP_AS_NEEDED;
     // haxe-formatter indents wrapped parameters and arguments (one step for
     // arguments, two for a signature); it never aligns them under the first
@@ -99,7 +100,8 @@ public final class HxformatDefaultProfile {
     haxe.ADD_CHAIN_SPLIT_TOTAL_LENGTH = HxformatDefaults.ADD_CHAIN_TOTAL_LENGTH;
     // wrapping.callParameter/functionSignature/anonFunctionSignature fillLine
     // re-packs parameters and arguments on the JOINED line: written breaks
-    // in a list and around its parens go, the fill's own breaks stay
+    // in a list and around its parens are removed, and only the fill's own
+    // breaks remain
     haxe.FILL_CALL_ARGUMENTS_ON_JOINED_LINE = true;
     // wrapping.multiVar: lineLength -> onePerLineAfterFirst, preceded by
     // anyItemLength -> fillLine (the length-based JOIN of short multi-vars
@@ -146,9 +148,9 @@ public final class HxformatDefaultProfile {
     common.CATCH_ON_NEW_LINE = false;
     common.SPECIAL_ELSE_IF_TREATMENT = true;
     // sameLine.ifBody/elseBody/forBody/whileBody/doWhileBody/tryBody/
-    // catchBody=Next - every non-block statement body breaks onto its own
-    // line (the per-construct placements carry the policy; the common flag
-    // stays in sync for the settings UI)
+    // catchBody=Next: every non-block statement body breaks onto its own
+    // line. The per-construct placements carry the policy; the common flag
+    // only mirrors it for the settings UI
     common.KEEP_CONTROL_STATEMENT_IN_ONE_LINE = false;
     haxe.IF_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
     haxe.ELSE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_NEXT_LINE;
@@ -163,9 +165,10 @@ public final class HxformatDefaultProfile {
     haxe.VALUE_IF_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE;
     haxe.VALUE_TRY_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_SAME_LINE;
     haxe.VALUE_CASE_BODY_PLACEMENT = HaxeCodeStyleSettings.BODY_PLACEMENT_KEEP;
-    // sameLine.functionBody=Next (anonFunctionBody=Same has no flag - always inline)
+    // sameLine.functionBody=Next; anonFunctionBody=Same needs no flag, since
+    // anonymous function bodies always stay inline
     haxe.FUNCTION_EXPRESSION_BODY_ON_NEXT_LINE = true;
-    // sameLine.returnBodySingleLine - a broken return re-joins its value
+    // sameLine.returnBodySingleLine: a return broken before its value is re-joined
     haxe.RETURN_VALUE_ON_SAME_LINE = true;
   }
 
@@ -239,7 +242,7 @@ public final class HxformatDefaultProfile {
     haxe.SPACE_WITHIN_STRING_INTERPOLATION = false;
     // whitespace.typeExtensionPolicy=After
     haxe.STRUCTURE_EXTENSION_ON_OWN_LINE = true;
-    // whitespace.addLineCommentSpace=true - "//text" becomes "// text"
+    // whitespace.addLineCommentSpace=true: "//text" becomes "// text"
     haxe.ADD_LINE_COMMENT_SPACE = true;
   }
 
@@ -258,11 +261,11 @@ public final class HxformatDefaultProfile {
     common.BLANK_LINES_AROUND_FIELD = HxformatDefaults.BLANK_LINES_BETWEEN_VARS;
     common.BLANK_LINES_AROUND_METHOD = HxformatDefaults.BLANK_LINES_BETWEEN_FUNCTIONS;
     common.BLANK_LINES_BEFORE_CLASS_END = HxformatDefaults.BLANK_LINES_END_TYPE;
-    // classEmptyLines.afterStaticVars/afterPrivateVars - a staticness or
-    // visibility change splits the var block
+    // classEmptyLines.afterStaticVars/afterPrivateVars: a change of
+    // staticness or visibility splits the var block
     haxe.BLANK_LINES_BETWEEN_FIELD_GROUPS = HxformatDefaults.BLANK_LINES_BETWEEN_VAR_GROUPS;
-    // beforeDocCommentEmptyLines/afterFieldsWithDocComments - a documented
-    // field stands off from both neighbors
+    // beforeDocCommentEmptyLines/afterFieldsWithDocComments: a blank line
+    // separates a documented field from both neighbors
     haxe.BLANK_LINES_BEFORE_FIELD_DOC_COMMENT = HxformatDefaults.BLANK_LINES_AROUND_DOCUMENTED_FIELD;
     haxe.BLANK_LINES_AFTER_DOCUMENTED_FIELD = HxformatDefaults.BLANK_LINES_AROUND_DOCUMENTED_FIELD;
     // emptyLines.afterLeftCurly=Remove, beforeBlocks=Remove (the case-body edge)
@@ -281,11 +284,12 @@ public final class HxformatDefaultProfile {
   }
 
   /**
-   * A scheme created by the settings UI CLONES the currently selected scheme,
-   * so unmapped wrap fields would inherit arbitrary (possibly corrupted)
-   * values - the hxformat image must not depend on what was selected. Also
-   * repairs a legacy bare WRAP_ON_EVERY_ITEM, which the settings combos
-   * reject ("chop down if long" is stored as EVERY_ITEM|AS_NEEDED).
+   * Resets every wrap policy to DO_NOT_WRAP. A scheme created in the
+   * settings UI CLONES the selected scheme, so wrap fields the profile does
+   * not set would otherwise inherit arbitrary, possibly invalid, values. The
+   * reset also repairs a legacy bare WRAP_ON_EVERY_ITEM, which the settings
+   * combo boxes reject ("chop down if long" is stored as
+   * WRAP_ON_EVERY_ITEM | WRAP_AS_NEEDED).
    */
   private static void resetWrapFields(CommonCodeStyleSettings common) {
     for (Field field : WRAP_FIELDS) {

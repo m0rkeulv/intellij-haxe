@@ -19,35 +19,42 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.WHITESPACES
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
- * haxe-formatter's item rules for array, map and object literals
- * (wrapping.arrayWrap, mapWrap and objectLiteral), decided the way the tool
- * decides them on the literal's items - each counting the ", " after it,
- * none after the last - and its joined line. First match wins; a kind's
- * thresholds that are not configurable in the tool sit at 0 and take their
- * rule out:
+ * Reproduces haxe-formatter's item rules for array, map and object literals
+ * (wrapping.arrayWrap, mapWrap and objectLiteral). As in the tool, the rules
+ * measure the literal's items, each counting the ", " after it except the
+ * last, and the literal's joined line. The first matching rule wins. A
+ * threshold the tool does not offer for a kind is always 0, which removes
+ * its rule:
  *
  * <pre>
  * an item written over several lines (arrays, maps) / the literal written over lines (objects) -> ONE_PER_LINE
- * up to KEEP_ITEM_COUNT items on a line within the margin                                       -> KEEP
- * items totalling at most KEEP_TOTAL_LENGTH                                                     -> KEEP
+ * up to KEEP_ITEM_COUNT items on a line within the margin                                       -> ONE_LINE
+ * items totalling at most KEEP_TOTAL_LENGTH                                                     -> ONE_LINE
  * FILL_EQUAL_ITEM_COUNT items or more of one length, at most FILL_EQUAL_ITEM_LENGTH             -> FILL_AFTER_LEADING_BREAK
  * FILL_ITEM_COUNT items or more, each at most FILL_ITEM_LENGTH                                  -> FILL_AFTER_LEADING_BREAK
  * an item reaching CHOP_ITEM_LENGTH                                                             -> ONE_PER_LINE
  * items totalling CHOP_TOTAL_LENGTH or more                                                     -> ONE_PER_LINE
  * CHOP_ITEM_COUNT items or more                                                                 -> ONE_PER_LINE
  * the line past the margin under a chopping array wrap setting                                  -> ONE_PER_LINE
- * otherwise                                                                                     -> KEEP
+ * otherwise                                                                                     -> ONE_LINE
  * </pre>
  *
- * Items are of one length when every width matches, the last item allowed
- * to be its separator short. A threshold of 0 takes its rule out; a kind
- * with every threshold at 0 leaves its literals to the array wrap setting
- * alone ({@link Decision#NONE}). A literal's decision is memoized on it
- * ({@link HaxeWrapMemo}).
+ * Items are of one length when all widths match; the last item may be
+ * shorter by the separator it lacks. A threshold of 0 removes its rule.
+ * When every threshold of a kind is 0, the array wrap setting alone decides
+ * that kind's literals ({@link Decision#NONE}). Each literal's decision is
+ * cached on it ({@link HaxeWrapMemo}).
  */
 public final class HaxeLiteralItemRules {
 
-  public enum Decision { NONE, KEEP, ONE_PER_LINE, FILL_AFTER_LEADING_BREAK }
+  /**
+   * What happens to a literal's items. NONE leaves them to the array wrap
+   * setting. ONE_LINE puts them all on one line (the tool's noWrap).
+   * ONE_PER_LINE puts each item, and the closing bracket, on its own line.
+   * FILL_AFTER_LEADING_BREAK starts the items on a new line, fills them up to
+   * the margin and puts the closing bracket on its own line.
+   */
+  public enum Decision { NONE, ONE_LINE, ONE_PER_LINE, FILL_AFTER_LEADING_BREAK }
 
   /** The literal kinds with item rules, each reading its own thresholds and collecting its own items. */
   public enum Kind {
@@ -96,14 +103,14 @@ public final class HaxeLiteralItemRules {
       return items;
     }
 
-    /** Arrays and maps chop on an item written over lines; an object chops when the literal itself was. */
+    /** Whether the literal counts as written over several lines: for arrays and maps an item spans lines, for objects the literal does. */
     boolean writtenOverLines(@NotNull ASTNode literal, @NotNull List<ASTNode> items) {
       if (this == OBJECT) return literal.textContains('\n');
       return items.stream().anyMatch(item -> item.textContains('\n'));
     }
   }
 
-  /** One kind's thresholds as configured; a threshold of 0 takes its rule out. */
+  /** One kind's thresholds as configured; a threshold of 0 removes its rule. */
   record Thresholds(int keepItemCount, int keepTotalLength,
                     int fillEqualItemLength, int fillEqualItemCount, int fillItemLength, int fillItemCount,
                     int chopItemLength, int chopTotalLength, int chopItemCount) {
@@ -114,7 +121,7 @@ public final class HaxeLiteralItemRules {
     }
   }
 
-  /** The three kinds' thresholds together, the memo's settings input. */
+  /** The thresholds of all three kinds, as one settings input of the cache. */
   record AllThresholds(Thresholds array, Thresholds map, Thresholds object) {
     static AllThresholds of(@NotNull HaxeCodeStyleSettings haxe) {
       return new AllThresholds(Kind.ARRAY.thresholds(haxe), Kind.MAP.thresholds(haxe), Kind.OBJECT.thresholds(haxe));
@@ -130,7 +137,7 @@ public final class HaxeLiteralItemRules {
   private HaxeLiteralItemRules() {
   }
 
-  /** The literal's decision; NONE for a node that is no literal of a kind with rules, a comprehension or an empty literal. */
+  /** The literal's decision; NONE for a node that is no array, map or object literal, a comprehension or an empty literal. */
   @NotNull
   public static Decision decide(@NotNull ASTNode literal, @NotNull CommonCodeStyleSettings common, @NotNull HaxeCodeStyleSettings haxe) {
     Kind kind = Kind.ofLiteral(literal);
@@ -146,7 +153,7 @@ public final class HaxeLiteralItemRules {
     Items items = measure(itemNodes);
     boolean exceeds = exceedsMargin(literal, common, haxe);
 
-    // a threshold of 0 takes its rule out; the others still apply
+    // a threshold of 0 removes its rule; the others still apply
     boolean fewItems = t.keepItemCount() > 0 && items.count() <= t.keepItemCount() && !exceeds;
     boolean smallTotal = t.keepTotalLength() > 0 && items.total() <= t.keepTotalLength();
     boolean equalItems = t.fillEqualItemLength() > 0 && t.fillEqualItemCount() > 0
@@ -157,14 +164,14 @@ public final class HaxeLiteralItemRules {
     boolean longTotal = t.chopTotalLength() > 0 && items.total() >= t.chopTotalLength();
     boolean manyItems = t.chopItemCount() > 0 && items.count() >= t.chopItemCount();
     if (kind.writtenOverLines(literal, itemNodes)) return Decision.ONE_PER_LINE;
-    if (fewItems || smallTotal) return Decision.KEEP;
+    if (fewItems || smallTotal) return Decision.ONE_LINE;
     if (equalItems || tinyItems) return Decision.FILL_AFTER_LEADING_BREAK;
     if (longItem || longTotal || manyItems) return Decision.ONE_PER_LINE;
     if (exceeds && chops(common)) return Decision.ONE_PER_LINE;
-    return Decision.KEEP;
+    return Decision.ONE_LINE;
   }
 
-  /** Each item's printed width plus the ", " after it (none after the last), summed and compared. */
+  /** Measures the items, each by its printed width plus the ", " after it (none after the last). */
   private static Items measure(List<ASTNode> items) {
     int total = 0;
     int longest = 0;
@@ -189,7 +196,7 @@ public final class HaxeLiteralItemRules {
     return line != null && line.width() > margin;
   }
 
-  /** The array wrap setting breaks one per line past the margin (the overflow rule of the tool's lists). */
+  /** Whether the array wrap setting is "chop down if long", the counterpart of the overflow rule in the tool's lists. */
   private static boolean chops(CommonCodeStyleSettings common) {
     return WrappingUtil.getWrapType(common.ARRAY_INITIALIZER_WRAP) == WrapType.CHOP_DOWN_IF_LONG;
   }

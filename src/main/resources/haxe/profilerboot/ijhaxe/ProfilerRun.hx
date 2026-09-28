@@ -2,11 +2,12 @@ package ijhaxe;
 
 #if cpp
 /**
-	Runtime side of the injected profiling bootstrap: start plus an
-	idempotent stop — hxcpp's stop crashes on a second call, and both the
-	main-return and the System.exit instrumentation may reach it. When the
-	build carries HXCPP_TELEMETRY and the IDE handed us an endpoint, the
-	telemetry collector streams alongside the text-report profiler.
+	The runtime side of the injected profiling bootstrap: a start, and a stop
+	that is safe to call twice. hxcpp's own stop crashes on a second call,
+	and both the instrumented return from main and the instrumented
+	System.exit may reach it. When the build has HXCPP_TELEMETRY and the IDE
+	provided an endpoint, the telemetry collector streams alongside the
+	text-report profiler.
 **/
 class ProfilerRun {
 	static var stopped = false;

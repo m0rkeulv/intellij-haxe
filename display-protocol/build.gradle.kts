@@ -11,9 +11,10 @@ repositories {
 }
 
 // Haxe JSON-RPC display protocol: DTOs mirroring std haxe.display.*, the
-// null-terminated socket transport to a `haxe --wait <port>` server, and the
-// type-blueprint cache. Must stay free of IDE and project-model dependencies;
-// the main plugin adds the IDE glue on top. Wire facts live in README.md.
+// JSON codec and client, and the null-terminated socket transport to a
+// `haxe --wait <port>` server. Must stay free of IDE and project-model
+// dependencies; the main plugin adds the IDE glue on top. Wire facts live in
+// README.md.
 dependencies {
     intellijPlatform {
         intellijIdea(providers.gradleProperty("platformVersion"))

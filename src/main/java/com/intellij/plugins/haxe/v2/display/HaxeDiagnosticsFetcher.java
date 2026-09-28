@@ -23,21 +23,23 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The shared half of the compiler-diagnostics annotators: request gating,
- * the {@code display/diagnostics} fetch, and wire-range conversion. Every
- * per-feature annotator (errors, unused imports, removable code) collects
- * through {@link #collect} and fetches through {@link #fetch}.
+ * The part the compiler-diagnostics annotators share: deciding whether a
+ * request can be sent, fetching {@code display/diagnostics}, and converting
+ * the compiler's ranges to document ranges. Every annotator (errors, unused
+ * imports, removable code) collects through {@link #collect} and fetches
+ * through {@link #fetch}.
  *
- * The cache keeps the LAST KNOWN diagnostics per file. Within the TTL, one
- * editor pass costs one request however many annotators consume it. Its main
- * job, though, is surviving transient fetch failures (a restarting server, a
- * refused socket): a re-highlight then still renders the last known
- * diagnostics instead of wiping them until the next edit.
+ * The cache keeps the LAST KNOWN diagnostics per file. Within its time to
+ * live, one highlighting pass sends one request however many annotators use
+ * the result. Its main job, though, is to survive transient fetch failures,
+ * such as a restarting server or a refused socket. A re-highlight then still
+ * shows the last known diagnostics instead of clearing them until the next
+ * edit.
  */
 @CustomLog
 final class HaxeDiagnosticsFetcher {
 
-  /** Collected under the read lock; the network half runs on it unlocked. */
+  /** The inputs of one fetch, collected under the read lock; the fetch itself runs without the lock. */
   record Request(@NotNull HaxeCompilerDisplayService.DisplayContext context,
                  @NotNull HaxeCompilerDisplayService service,
                  @NotNull String filePath,
@@ -51,7 +53,8 @@ final class HaxeDiagnosticsFetcher {
    * Last known diagnostics per file path, one map per PROJECT: a file open in
    * two projects must not render the other project's diagnostics, and one
    * project's cache clear must not wipe the others. Entries outlive the TTL
-   * as the transient-failure fallback; the service dies with its project.
+   * as the fallback for transient failures; the service is disposed with its
+   * project.
    */
   @Service(Service.Level.PROJECT)
   static final class Cache {
@@ -71,13 +74,13 @@ final class HaxeDiagnosticsFetcher {
   private HaxeDiagnosticsFetcher() {
   }
 
-  /** The request when compiler diagnostics can run for this file, else null (feature toggles are the caller's gate). */
+  /** The request for this file, or null when compiler diagnostics cannot run for it. The caller checks the feature toggles. */
   @Nullable
   static Request collect(@NotNull PsiFile file, @NotNull Editor editor) {
     return collect(file, editor.getDocument());
   }
 
-  /** Batch (Inspect Code) entry: no editor; the file's document still decides whether unsaved contents ride along. */
+  /** Batch (Inspect Code) entry without an editor. The file's document still decides whether unsaved contents are sent. */
   @Nullable
   static Request collect(@NotNull PsiFile file) {
     VirtualFile virtualFile = file.getVirtualFile();
@@ -91,7 +94,7 @@ final class HaxeDiagnosticsFetcher {
     VirtualFile virtualFile = file.getVirtualFile();
     if (virtualFile == null || !virtualFile.isInLocalFileSystem()) return null;
 
-    // no request while the text does not parse - the compiler would choke on
+    // no request while the text does not parse: the compiler would fail on
     // the same syntax, and the parser's own error highlighting covers it
     if (!HaxeCompilerDisplayService.isSyntaxClean(file.getProject(), virtualFile)) {
       log.debug("no display/diagnostics for " + virtualFile.getPath() + ": the file has parse errors");
@@ -111,9 +114,10 @@ final class HaxeDiagnosticsFetcher {
   }
 
   /**
-   * This file's diagnostics, fetched once per file and buffer state and
-   * shared by the annotators of one pass. Only the call that fills the cache
-   * also runs the whole-project sweep feeding the Project view problem marks.
+   * The file's diagnostics, fetched once per file and buffer state and shared
+   * by the annotators of one pass. Only a call that fills the cache also
+   * requests the whole-project diagnostics, which feed the problem marks in
+   * the Project view.
    */
   @Nullable
   static List<Diagnostic> fetch(@NotNull Request request) {
@@ -130,20 +134,21 @@ final class HaxeDiagnosticsFetcher {
     List<FileDiagnostics> results =
       request.service().diagnostics(request.context(), request.filePath(), request.contents());
     if (results == null) {
-      // transient failure (server restarting, one refused socket): keep
-      // rendering the last known diagnostics rather than wiping highlights.
-      // Out-of-date ranges drop in toTextRange; the quick fixes re-validate
-      // the captured text before touching the document.
+      // a transient failure (server restarting, a refused socket): keep
+      // showing the last known diagnostics instead of clearing the
+      // highlights. toTextRange drops ranges that no longer fit, and the
+      // quick fixes check the captured text again before changing the
+      // document.
       return cached != null ? cached.diagnostics() : null;
     }
 
-    // only the whole-project sweep surfaces errors in OTHER files (the
-    // per-file request stays silent about broken dependencies); its findings
-    // become Project view problem marks instead of editor annotations
-    List<FileDiagnostics> sweep = request.service().projectDiagnostics(request.context());
-    if (sweep != null) {
+    // only the whole-project request reports errors in OTHER files (the
+    // per-file request stays silent about broken dependencies). They become
+    // problem marks in the Project view, not editor annotations.
+    List<FileDiagnostics> projectResults = request.service().projectDiagnostics(request.context());
+    if (projectResults != null) {
       HaxeCompilerProblemMarker.getInstance(request.service().getProject())
-        .updateFromDiagnostics(request.filePath(), sweep);
+        .updateFromDiagnostics(request.filePath(), projectResults);
     }
 
     List<Diagnostic> diagnostics = results.stream()
@@ -182,7 +187,11 @@ final class HaxeDiagnosticsFetcher {
     };
   }
 
-  /** Wire ranges are 0-based line/character; out-of-date positions are dropped rather than clamped wrongly. */
+  /**
+   * Converts a compiler range (0-based line and character) to a document
+   * range. A position that no longer fits the document gives null rather
+   * than a wrongly clamped range.
+   */
   @Nullable
   static TextRange toTextRange(@NotNull Document document, @NotNull Range range) {
     Integer start = toOffset(document, range.start());

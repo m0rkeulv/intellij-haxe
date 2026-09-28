@@ -6,16 +6,16 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 
 /**
-	Init macro wrapping ONLY the main class's `main` with profiler start/stop
-	so a build profiles without source changes:
+	An initialization macro that wraps ONLY the main class's `main` with a
+	profiler start and stop, so a build is profiled without source changes:
 	`--macro ijhaxe.ProfilerBoot.use('run.hxcppprof')`. Lime applications
-	never return from main — their one shutdown path is
-	`lime.system.System.exit`, so that gets a stop prepended too (the
-	metadata pattern simply never matches in non-lime builds).
+	never return from main; they always shut down through
+	`lime.system.System.exit`, so that method gets a stop prepended too. In
+	builds without lime, that metadata matches no type and has no effect.
 **/
 class ProfilerBoot {
 	public static function use(dumpFile:String) {
-		// Compiler.getConfiguration (the main-class lookup) exists since haxe 4.3
+		// Compiler.getConfiguration, which names the main class, exists since haxe 4.3
 		#if (haxe_ver >= 4.3)
 		var main = Compiler.getConfiguration().mainClass;
 		if (main == null) {

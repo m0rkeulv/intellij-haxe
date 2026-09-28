@@ -8,9 +8,10 @@ import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import java.util.function.Consumer;
 
 /**
- * Code style tweaks the formatter suites share: a tweak of one settings
- * view lifted to the whole-settings shape the base reformat takes, and the
- * equivalents of the hxformat.json options the comparison fixtures use.
+ * Code style tweaks shared by the formatter suites: adapters that turn a
+ * tweak of the common or the Haxe settings into a tweak of the whole
+ * settings, which the base reformat takes, and settings equivalents of the
+ * hxformat.json options the comparison fixtures use.
  */
 final class HaxeCodeStyleTweaks {
 

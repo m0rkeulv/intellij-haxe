@@ -11,13 +11,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Context-menu toggle on an hxformat.json: switches the hxformat integration
- * on (the scheme's opt-out also hides the status bar widget and the settings
- * page warning) and marks the file as the project's fallback formatting
- * config, used whenever no hxformat.json sits above a source file. A config
- * found by the normal upward search still wins, matching the CLI. Unchecking
- * only clears the fallback; the integration stays on (the settings checkbox
- * owns that).
+ * A context-menu toggle on an hxformat.json. Checking it switches the
+ * hxformat integration on; while a scheme opts out, the status bar entry and
+ * the settings page warning are hidden as well. It also makes the file the
+ * project's fallback config, used whenever no hxformat.json sits above a
+ * source file. A config found by the upward search still wins, as in the
+ * CLI. Unchecking only clears the fallback; the integration stays on,
+ * because the settings checkbox controls it.
  */
 public final class HxformatUseAsRulesAction extends ToggleAction implements DumbAware {
 

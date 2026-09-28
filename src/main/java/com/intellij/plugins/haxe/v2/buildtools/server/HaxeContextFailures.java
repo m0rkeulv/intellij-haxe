@@ -11,11 +11,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The last compiler-request failure per container. A build context that fails
- * to compile (e.g. a define override making a library uncompilable) silently
- * disables every compiler-backed feature — this store makes the failure
- * visible: the display service records request outcomes, the tool window's
- * Compilation server row shows the failure.
+ * The last failed compiler request per container. A build context that fails
+ * to compile, for example because a define override breaks a library,
+ * silently disables every compiler-backed feature. This store makes such a
+ * failure visible: the display service records the outcome of each request,
+ * and the tool window shows the failure in the Compilation server row.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeContextFailures {
@@ -44,7 +44,7 @@ public final class HaxeContextFailures {
     return Map.copyOf(failures);
   }
 
-  /** Drops the failures of every container the given server serves — a stopped server's failures describe a dead process. */
+  /** Drops the failures of every container the given server serves. They describe a process that no longer runs. */
   public void clearForServer(@NotNull String serverId) {
     for (String containerId : List.copyOf(failures.keySet())) {
       if (serverId.equals(HaxeCompilationServerManager.serverIdFor(project, containerId))) {
@@ -53,7 +53,10 @@ public final class HaxeContextFailures {
     }
   }
 
-  /** Records a request outcome (null failure = success); repaints the tool window on state transitions. */
+  /**
+   * Records the outcome of a request; a null failure means success. When the
+   * container's failure changes, the tool window repaints.
+   */
   public void record(@NotNull String containerId, @Nullable String failure) {
     boolean changed = failure != null
                       ? !failure.equals(failures.put(containerId, failure))

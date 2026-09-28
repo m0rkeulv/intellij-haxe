@@ -23,19 +23,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Error highlighting straight from the compiler: one {@code display/diagnostics}
- * request per (debounced) editor pass, carrying the buffer when it differs
- * from disk. Covers the PROBLEM kinds: compiler and parser errors, deprecation
- * warnings, unresolved identifiers and missing fields, with the compiler's
- * suggestions as quick fixes (imports and spelling corrections, the missing
- * members). Unused imports and removable code have their own annotators and
- * toggles. Opt-in via the Haxe Compiler settings page; requires the
- * compilation server and a haxe with the JSON-RPC diagnostics method (4.3+).
+ * Error highlighting from the compiler's {@code display/diagnostics}, one
+ * request per highlighting pass, carrying the editor buffer when it differs
+ * from disk. Covers the problem kinds: compiler and parser errors,
+ * deprecation warnings, unresolved identifiers and missing fields. The
+ * compiler's suggestions become quick fixes (imports, spelling corrections
+ * and the missing members). Unused imports and removable code have their own
+ * annotators and toggles. Opt-in on the Haxe Compiler settings page; requires
+ * the compilation server and haxe 4.3 or newer, which added the JSON-RPC
+ * diagnostics method.
  */
 public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
   @Override
-  protected boolean featureEnabled(@NotNull HaxeCompilerSettings settings) {
+  protected boolean isFeatureEnabled(@NotNull HaxeCompilerSettings settings) {
     return settings.isDiagnosticsErrorsEnabled();
   }
 
@@ -44,7 +45,7 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
     return HaxeCompilerDiagnosticsBatchInspections.ERRORS_SHORT_NAME;
   }
 
-  /** A problem kind the module's language level does not filter out. */
+  /** The problem kinds, except warnings the module's language level hides. */
   @Override
   protected boolean handles(@NotNull PsiFile file, @NotNull Diagnostic diagnostic) {
     if (!isProblemKind(diagnostic.kind())) return false;
@@ -54,7 +55,7 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
 
   /**
    * The problem kinds. Unused imports and removable code have their own
-   * annotators; inactive #if regions are already rendered by the define
+   * annotators. Inactive #if regions are already shown by the define
    * context, so a weak warning per block would only add noise.
    */
   private static boolean isProblemKind(@NotNull DiagnosticKind kind) {
@@ -87,8 +88,8 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
 
   /**
    * The compiler's own suggestions as fixes: an import or a spelling
-   * correction per unresolved-identifier suggestion, the listed members per
-   * missing-fields entry.
+   * correction per unresolved-identifier suggestion, and one fix adding the
+   * listed members per missing-fields entry.
    */
   @NotNull
   static List<IntentionAction> compilerFixesFor(@NotNull Document document, @NotNull Diagnostic diagnostic,

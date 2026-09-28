@@ -23,15 +23,17 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Live IDE integration (gated, {@code -PliveCompilerTests=true}): the full
- * chain from a real {@code haxe --wait} compilation server to what the user
- * sees — the type catalog discovering a {@code Context.defineType} type, the
- * unified indexes resolving it, and completion offering it. Fixtures live in
- * {@code testData/liveCompiler/}. Self-skips when haxe is not on the PATH.
+ * Live IDE integration, opt-in with {@code -PliveCompilerTests=true}. Covers
+ * the full chain from a real {@code haxe --wait} compilation server to what
+ * the user sees: the type catalog discovering a {@code Context.defineType}
+ * type, the unified indexes resolving it, and completion offering it.
+ * Fixtures live in {@code testData/liveCompiler/}. Skips itself when haxe is
+ * not on the PATH.
  *
- * The catalog fill and blueprint hydration run through the {@code @TestOnly}
- * synchronous seams: production scheduling is disabled in unit-test mode, and
- * a stepping debugger session stays deterministic.
+ * The catalog fill and blueprint hydration run through the synchronous
+ * {@code @TestOnly} entry points, because production scheduling is disabled
+ * in unit-test mode. That also keeps a stepping debugger session
+ * deterministic.
  */
 @DisplayName("Compiler services: compiler integration (live)")
 public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestCase {

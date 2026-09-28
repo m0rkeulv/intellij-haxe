@@ -27,17 +27,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/// Renders a `-D dump=pretty` module dump as a read-only Haxe preview:
-/// the post-macro typed AST is close enough to Haxe that the normal parser,
-/// highlighting and folding apply once the declaration headers are sanitized.
-/// Preview files are marked with
-/// [#PREVIEW_KEY] — the semantic annotators and the per-file
-/// highlighting level keep error analysis off them while the color
-/// annotators still paint.
+/// Renders a `-D dump=pretty` module dump as a read-only Haxe preview. The
+/// post-macro typed AST is close enough to Haxe that the normal parser,
+/// highlighting and folding apply once the declaration headers are rewritten
+/// ([#sanitize]). Preview files carry [#PREVIEW_KEY]. The semantic
+/// annotators and the per-file highlighting level keep error analysis off
+/// them, while the color annotators still paint.
 ///
-/// Split for threading: [#prepare] does all the work (file IO, parse,
-/// offset lookup) and runs on a BACKGROUND thread; [#openPrepared] only
-/// opens the editor and runs on the EDT.
+/// The work is split by thread: [#prepare] does the file IO, parsing and
+/// offset lookup on a BACKGROUND thread, and [#openPrepared] only opens the
+/// editor, on the EDT.
 @CustomLog
 public final class HaxeGeneratedCodePreview {
 
@@ -49,10 +48,10 @@ public final class HaxeGeneratedCodePreview {
   }
 
   // a dumped declaration header carries the module-qualified name
-  // ("class haxe.iterators.ArrayIterator<T>"); group 1 = declaration keyword,
-  // group 2 = package prefix (lowercase first segment, dot-separated),
-  // group 3 = the type name. Dots are illegal in declared names, so the
-  // prefix moves into a package statement.
+  // ("class haxe.iterators.ArrayIterator<T>"). Group 1 is the declaration
+  // keyword, group 2 the package prefix (lowercase first segment,
+  // dot-separated), group 3 the type name. Dots are illegal in declared
+  // names, so the prefix moves into a package statement.
   private static final Pattern QUALIFIED_DECLARATION =
     Pattern.compile("\\b(class|interface|enum|abstract|typedef)\\s+([a-z][\\w]*(?:\\.[\\w]+)*)\\.([A-Z]\\w*)");
 
@@ -71,8 +70,8 @@ public final class HaxeGeneratedCodePreview {
 
   /**
    * Renders the module dump and locates the named member of the named type
-   * (falling back to the type declaration, then the file top). Involves file
-   * IO and a PSI parse — background threads only.
+   * (falling back to the type declaration, then the top of the file).
+   * Involves file IO and a PSI parse, so background threads only.
    */
   @Nullable
   public static PreparedPreview prepare(@NotNull Project project,

@@ -21,14 +21,16 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The compiler's metadata registry ({@code display/metadata}): built-ins plus
- * anything libraries registered via {@code Compiler.registerCustomMetadata}.
- * Consumers: metadata completion (merged entries) and the unused-member
- * keep-alive policy (a registry-known meta may be consumed invisibly; an
- * unknown one is likely a typo).
+ * The compiler's metadata registry ({@code display/metadata}): the built-in
+ * metadata plus any that libraries registered with
+ * {@code Compiler.registerCustomMetadata}. Metadata completion merges the
+ * entries into its own. The unused-member inspections use the registry to
+ * decide which metadata keeps a member alive: known metadata may be consumed
+ * invisibly by a macro, while unknown metadata is likely a typo.
  *
- * Cache-only under the read lock, hydrated once per server (the registry is a
- * property of the compiler binary, so it is keyed by server port).
+ * Answers from its cache only, so it is safe under the read lock. The
+ * registry is hydrated once per server. It belongs to the compiler binary,
+ * so it is keyed by the server's port.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -39,7 +41,7 @@ public final class HaxeCompilerMetadataService {
 
   private final Project project;
   private final AtomicBoolean hydrating = new AtomicBoolean();
-  // per-module SDKs mean several servers (and so several registries) at once
+  // modules with different SDKs run several servers, each with its own registry
   private final Map<Integer, Registry> registries = new ConcurrentHashMap<>();
 
   public HaxeCompilerMetadataService(@NotNull Project project) {
@@ -52,8 +54,8 @@ public final class HaxeCompilerMetadataService {
   }
 
   /**
-   * Registry entries, or null while unavailable/not hydrated. Cache-only;
-   * call in a read action.
+   * The registry entries, or null while the registry is unavailable or not
+   * hydrated yet. Cache-only; call in a read action.
    */
   @Nullable
   public List<MetadataEntry> entries(@NotNull VirtualFile contextFile) {
@@ -78,8 +80,7 @@ public final class HaxeCompilerMetadataService {
     if (DumbService.isDumb(project)) return null;
     HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile);
     if (context == null) return null;
-    // the registry is a property of the compiler binary, so it lives and dies
-    // with that SDK's server instance; another SDK's registry is never served
+    // only the registry of this SDK's running server applies
     int currentPort = HaxeCompilationServerManager.getInstance(project).runningPortForSdk(context.sdkName());
     Registry known = currentPort > 0 ? registries.get(currentPort) : null;
     if (known != null) {

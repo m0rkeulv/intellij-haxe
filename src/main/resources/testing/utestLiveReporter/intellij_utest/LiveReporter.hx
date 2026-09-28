@@ -13,18 +13,19 @@ import intellij_haxe_test.FlashSupport;
 #end
 
 /**
-	Streams one TeamCity service message per test as it runs, riding the
-	runner's public `onTestStart`/`onTestComplete` dispatchers (attached into
-	`utest.Runner.new` by the IDE's build macro - see Macro.hx). utest's own
-	batch reporter still prints everything again at the end; the IDE
-	deduplicates, so a build where the injection did not happen behaves
-	exactly as before.
+	Streams TeamCity service messages for each test as it runs, through the
+	runner's public `onTestStart`/`onTestComplete` dispatchers. The IDE's
+	build macro attaches it in `utest.Runner.new` (see Macro.hx). utest's own
+	batch reporter still prints everything again at the end, and the IDE
+	drops the duplicates, so a build without the injection behaves like a
+	plain utest run.
 
-	Event names keep utest's TeamCity shape (package dots become underscores:
-	`unit_crypto.AesTest.test_ff1`). A warnings-only test - e.g. "no
-	assertions" from a version-gated body that compiled to nothing - reports
-	as failed with the warning text as the message, matching the vshaxe
-	test-adapter's Warning-to-Failure mapping so both IDEs show one verdict.
+	Event names keep utest's TeamCity shape, with package dots turned into
+	underscores (`unit_crypto.AesTest.test_ff1`). A test with only warnings
+	reports as failed, with the warning text as the message; an example is
+	"no assertions" from a test body that conditional compilation left
+	empty. The vshaxe test adapter maps warnings to failures the same way,
+	so both IDEs show the same verdict.
 **/
 class LiveReporter {
 	final rootSuite:String;
@@ -112,8 +113,8 @@ class LiveReporter {
 			rootOpen = false;
 		}
 		announceHostedRunFinished(anyFailed);
-		// nothing on flash ends the process by itself; every line above is
-		// already flushed (adl forwards traces synchronously)
+		// On flash nothing ends the process by itself. Every line above is
+		// already flushed, because adl forwards traces synchronously.
 		#if flash
 		FlashSupport.exit(0);
 		#end

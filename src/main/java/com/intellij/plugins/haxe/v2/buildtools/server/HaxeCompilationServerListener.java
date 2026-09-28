@@ -3,8 +3,8 @@ package com.intellij.plugins.haxe.v2.buildtools.server;
 import com.intellij.util.messages.Topic;
 
 /**
- * Project-bus notification for compilation server state transitions (started,
- * stopped, died, new port). Delivered on the EDT.
+ * Project message bus topic for compilation-server state changes: a server
+ * started, stopped, died or moved to a new port. Delivered on the EDT.
  */
 @FunctionalInterface
 public interface HaxeCompilationServerListener {

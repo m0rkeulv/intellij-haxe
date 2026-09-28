@@ -9,10 +9,10 @@ import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * The one entry point for dropping everything derived from the compilation
- * server, and the daemon restart the services post after hydrating.
- * Callers never clear individual services: a partial clear leaves PSI-level
- * results derived from the skipped caches alive.
+ * The single entry point for clearing everything derived from the
+ * compilation server, plus the highlighting restart the services post after
+ * hydration. Callers never clear individual services, because a partial
+ * clear keeps PSI-level results derived from the skipped caches alive.
  */
 public final class HaxeCompilerCaches {
 
@@ -20,7 +20,7 @@ public final class HaxeCompilerCaches {
   }
 
   /**
-   * Clears every compiler-derived cache (warm-up bookkeeping, type catalog,
+   * Clears every compiler-derived cache (compiled contexts, type catalog,
    * metadata registry, blueprints, usage verdicts, dumps, preview files and
    * diagnostics), then drops the PSI caches and restarts the daemon. The
    * order matters: the services empty first, the PSI drop removes results
@@ -45,8 +45,8 @@ public final class HaxeCompilerCaches {
 
   /**
    * Restarts highlighting from any thread. The restart is posted to the EDT
-   * with an explicit non-modal state (a post from a pooled thread without one
-   * runs write-unsafe) and skipped once the project is disposed.
+   * with an explicit non-modal state, because a post from a pooled thread
+   * without one runs write-unsafe. It is skipped once the project is disposed.
    */
   public static void restartHighlightingLater(@NotNull Project project, @NotNull @NonNls String reason) {
     Runnable restart = () -> DaemonCodeAnalyzer.getInstance(project).restart(reason);

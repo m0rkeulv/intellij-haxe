@@ -1,23 +1,24 @@
 package ijhaxe;
 
-// under HXCPP_TRACY the pollable telemetry API is replaced by Tracy stubs
-// that THROW - a tracy build profiles through Tracy's own UI instead
+// Under HXCPP_TRACY, Tracy stubs that THROW replace the pollable telemetry
+// API; a tracy build is profiled through Tracy's own UI instead.
 #if (cpp && HXCPP_TELEMETRY && !HXCPP_TRACY)
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 
 /**
-	Streams hxcpp telemetry frames to the IDE as an HXTS session over the
-	socket named by the IJ_HAXE_TELEMETRY env var (host:port). Without the
-	var, or on any failure, telemetry stays off — the application is never
-	disturbed. Stash/dump must run on the instrumented (main) thread, so a
-	haxe.Timer drives them there (lime pumps the main event loop); a writer
-	thread owns the socket so sends never stall a frame. stop() flushes the
-	final frame and briefly waits for the writer to drain — the process
-	usually dies in Sys.exit right after.
+	Streams hxcpp telemetry frames to the IDE as an HXTS session, over the
+	socket named by the IJ_HAXE_TELEMETRY environment variable (host:port).
+	Without the variable, or on any failure, telemetry stays off and the
+	application is never disturbed. Stashing and dumping frames must happen
+	on the instrumented main thread, so a haxe.Timer runs them there (lime
+	pumps the main event loop). A writer thread owns the socket, so sending
+	never stalls a frame. stop() flushes the final frame and briefly waits
+	for the writer to drain, because the process usually exits in Sys.exit
+	right after.
 **/
 class TelemetryRun {
-	/** A tick can fail transiently (landing badly against a major collection); only a persistent failure stops the collector. */
+	/** A tick can fail once in a while (when it coincides with a major collection); only repeated failures stop the collector. */
 	static inline var MAX_TICK_FAILURES = 5;
 
 	static var threadNum = -1;
@@ -28,7 +29,7 @@ class TelemetryRun {
 	static var stopped = false;
 	static var tickFailures = 0;
 	static var emptyDumps = 0;
-	/** The previous window's end stamp — the wall span the next window's deltas normalize against. */
+	/** The end time of the previous window; the next window's sample deltas are scaled to the wall time since then. */
 	static var lastStampSeconds:Float = -1;
 
 	public static function tryStart():Void {
@@ -53,12 +54,12 @@ class TelemetryRun {
 			drained = new sys.thread.Lock();
 			sys.thread.Thread.create(writerLoop);
 			queue.add(header());
-			// the runtime pre-stashed a blank frame at start; the first dump discards it
+			// the runtime stashed a blank frame at start; the first dump discards it
 			CppTelemetry.stash();
 			timer = new haxe.Timer(16);
 			timer.run = tick;
 		} catch (e:Dynamic) {
-			// a runtime whose telemetry entry points reject (future stubs) must not crash the app
+			// a runtime whose telemetry entry points throw (future stubs) must not crash the app
 			try socket.close() catch (closeError:Dynamic) {}
 			socket = null;
 		}
@@ -73,7 +74,7 @@ class TelemetryRun {
 			CppTelemetry.stash();
 			shipFrame();
 		} catch (e:Dynamic) {}
-		queue.add(Bytes.alloc(0)); // sentinel: writer drains, closes, releases
+		queue.add(Bytes.alloc(0)); // end marker: the writer drains, closes and releases `drained`
 		drained.wait(0.5);
 	}
 
@@ -84,8 +85,8 @@ class TelemetryRun {
 			if (shipFrame()) {
 				emptyDumps = 0;
 			} else {
-				// not an error by itself, but a long silent stretch is the
-				// third way the stream can freeze - say so once
+				// An empty dump is not an error by itself, but a long run of
+				// them means the stream has stalled; this is logged once.
 				emptyDumps++;
 				if (emptyDumps == 60) logError("telemetry dump returned no frame for 60 ticks");
 			}
@@ -97,17 +98,17 @@ class TelemetryRun {
 				logError("telemetry collector stopped - the session keeps what was streamed");
 				stopped = true;
 				if (timer != null) timer.stop();
-				queue.add(Bytes.alloc(0)); // sentinel: writer drains and closes - the IDE sees a clean end
+				queue.add(Bytes.alloc(0)); // end marker: the writer drains and closes, so the IDE sees a clean end
 			}
 		}
 	}
 
-	/** The run console shows stderr, so a dying collector explains itself there. */
+	/** Writes to stderr, which the run console shows, so a failing collector explains itself there. */
 	static function logError(message:String):Void {
 		try Sys.stderr().writeString("[ijhaxe] " + message + "\n") catch (e:Dynamic) {}
 	}
 
-	/** Ships the stashed frame; false when the runtime had nothing stashed to dump. */
+	/** Queues the stashed frame for sending; false when the runtime had no stashed frame to dump. */
 	static function shipFrame():Bool {
 		var gcTimes = new Array<Int>();
 		var names = new Array<String>();
@@ -141,17 +142,18 @@ class TelemetryRun {
 
 	/**
 		Rescales the window's sample deltas from profiler-clock ticks to
-		MICROSECONDS summing to the window's wall span. The runtime's ~1 ms
-		clock is a Sleep(1) loop whose real period follows the OS timer
-		state, so raw tick counts over- or under-run the wall window (130 %
-		frames observed) — while the stamps bounding the window are exact.
-		Cumulative rounding keeps the rescaled total exact.
+		MICROSECONDS that add up to the window's wall time. The runtime's
+		roughly 1 ms clock is a Sleep(1) loop whose real period depends on the
+		OS timer, so raw tick counts can overshoot or undershoot the wall time
+		by a wide margin (a frame can count 130 % of its wall time). The timestamps bounding the window are
+		exact. Rounding the running total, rather than each delta, keeps the
+		rescaled sum exact.
 	**/
 	static function normalizeDeltas(samples:Array<Int>, stampSeconds:Float):Void {
 		var totalTicks = 0;
 		var i = 0;
 		while (i < samples.length) {
-			i += samples[i] + 1; // [depth, ids..., delta]
+			i += samples[i] + 1; // each sample is [depth, ids..., delta]
 			totalTicks += samples[i];
 			i++;
 		}

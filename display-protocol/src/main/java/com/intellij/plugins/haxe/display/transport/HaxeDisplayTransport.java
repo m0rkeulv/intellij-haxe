@@ -10,13 +10,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-/// The null-terminated request form of a `haxe --wait <port>` server:
-/// connect, write every argument followed by `\n` and a single trailing
-/// `\0`, read until the server closes, close.
+/// Sends one request to a `haxe --wait <port>` server. It writes every
+/// argument followed by `\n`, ends the request with a single `\0` byte, and
+/// reads the answer until the server closes the connection.
 ///
-/// Strictly one socket per request, closed immediately. The server serves one
-/// connection at a time, and an open idle connection stalls every other
-/// client, builds included, until a server-side read timeout. Never pool.
+/// Every request uses its own socket and closes it at once; never pool
+/// connections. The server handles one connection at a time, and an idle
+/// open connection stalls every other client, builds included, until a
+/// server-side read timeout.
 public final class HaxeDisplayTransport {
 
   private static final int CONNECT_TIMEOUT_MS = 3_000;
@@ -64,9 +65,9 @@ public final class HaxeDisplayTransport {
   }
 
   /**
-   * Splits the response into lines and classifies by first byte: 0x01 = log
-   * line (embedded newlines arrive as further 0x01 bytes), 0x02 = fatal-error
-   * marker, anything else is payload.
+   * Splits the response into lines and sorts each by its first byte. 0x01
+   * starts a log line, and a newline inside a log message arrives as another
+   * 0x01 byte. 0x02 is the fatal-error marker. Any other line is payload.
    */
   static DisplayResponse classify(byte[] raw) {
     String text = new String(raw, StandardCharsets.UTF_8);
