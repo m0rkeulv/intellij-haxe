@@ -11,6 +11,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.CompletionItem;
 import com.intellij.plugins.haxe.display.protocol.CompletionList;
 import com.intellij.plugins.haxe.display.protocol.Position;
+import com.intellij.plugins.haxe.ide.completion.HaxeLambdaLookups;
+import com.intellij.plugins.haxe.ide.completion.HaxeLambdaShape;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompletionMode;
 import icons.HaxeIcons;
@@ -50,6 +52,9 @@ public class HaxeCompilerCompletionContributor extends CompletionContributor {
     for (CompletionItem item : completion.items()) {
       target.addElement(lookupElement(item));
     }
+    // the lambda lookups are the IDE's own, shaped by the compiler's expected type
+    HaxeLambdaShape lambda = HaxeLambdaShape.fromCompiler(completion.expectedType());
+    if (lambda != null) HaxeLambdaLookups.addTo(target, lambda, parameters);
     if (completion.incomplete()) {
       target.restartCompletionOnAnyPrefixChange();
     }

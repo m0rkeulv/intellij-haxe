@@ -69,10 +69,11 @@ public class HaxeExpectedEnumValueCompletionContributor extends CompletionContri
 
   /**
    * The type the completed expression must conform to, from declarations only: type tags and
-   * resolved signatures. Returns null where finding the type would require inference.
+   * resolved signatures. Returns null where finding the type would require inference. Shared
+   * with the lambda contributor, which offers a function literal at the same sites.
    */
   @Nullable
-  private static ResultHolder declaredExpectedType(@NotNull HaxeReferenceExpression reference) {
+  static ResultHolder declaredExpectedType(@NotNull HaxeReferenceExpression reference) {
     PsiElement parent = reference.getParent();
     if (parent instanceof HaxeAssignExpression assign) {
       return assignTargetDeclaredType(assign, reference);

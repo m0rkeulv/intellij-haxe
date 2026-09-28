@@ -135,10 +135,20 @@ public final class DisplayJson {
       if (item != null) items.add(item);
     }
     JsonNode replaceRange = data.path("replaceRange");
+    JsonNode mode = data.path("mode");
     return new CompletionList(List.copyOf(items),
-                              data.path("mode").path("kind").asInt(-1),
+                              mode.path("kind").asInt(-1),
+                              expectedTypeOf(mode.path("args")),
                               replaceRange.isMissingNode() || replaceRange.isNull() ? null : Range.fromJson(replaceRange),
                               data.path("isIncomplete").asBoolean(false));
+  }
+
+  /** The mode's expected type with typedefs followed, else the raw one; null when the position expects nothing. */
+  private static JsonTypeRef expectedTypeOf(JsonNode modeArgs) {
+    for (JsonNode candidate : List.of(modeArgs.path("expectedTypeFollowed"), modeArgs.path("expectedType"))) {
+      if (!candidate.isMissingNode() && !candidate.isNull()) return JsonTypeRef.of(candidate);
+    }
+    return null;
   }
 
   /** The item of a {@code display/completionItem/resolve} result: a completion item with its doc comment. */

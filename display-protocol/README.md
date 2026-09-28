@@ -101,6 +101,14 @@ In the result, `replaceRange` (0-based) covers the typed prefix,
 `filterString` repeats that prefix, and `isIncomplete` flags a list the
 compiler cut short.
 
+A Toplevel position that sits in an argument, an initializer, an assignment
+or a return carries the type it expects in `mode.args.expectedType`, with
+typedefs followed in `expectedTypeFollowed`. The items never include a
+snippet: at `[1, 2, 3].filter(<caret>)` the list is the plain toplevel one,
+and the expected type is a `TFun` (`Int -> Bool`, argument names empty).
+The lambda suggestion the reference client shows there is its own, built
+from that expected type, and so is the plugin's.
+
 An item is `{kind, args, ?type, index}`. A Local carries its type in
 `args.type` and a field in `args.field.type`, and the item-level `type` may
 be absent. `DisplayJson.decodeCompletion` falls back through both.

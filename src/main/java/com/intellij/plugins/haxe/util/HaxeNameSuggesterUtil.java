@@ -26,6 +26,7 @@ import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.codeStyle.NameUtil;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -35,6 +36,18 @@ import java.util.regex.Pattern;
  * @author: Fedor.Korotkov
  */
 public class HaxeNameSuggesterUtil {
+  /** The conventional short name of a value of each standard type, by the type's simple name. */
+  private static final Map<String, String> CONVENTIONAL_TYPE_NAMES = Map.of(
+    "Dynamic", "obj",
+    "Void", "v",
+    "Int", "i",
+    "Bool", "b",
+    "Float", "f",
+    "String", "str",
+    "Array", "arr",
+    "Map", "map");
+  private static final String FUNCTION_VALUE_NAME = "func";
+
   private HaxeNameSuggesterUtil() {
   }
 
@@ -95,25 +108,8 @@ public class HaxeNameSuggesterUtil {
   @NotNull
   public static String getDefaultExpressionName(PsiElement expression) {
     ResultHolder typeResult = HaxeTypeResolver.getPsiElementType(expression, new HaxeGenericResolver());
-    SpecificTypeReference type = typeResult.getType();
-
-    if (type.isDynamic()) { return "obj"; }
-    if (type.isVoid()) { return "v"; }
-    if (type.isInt()) { return "i"; }
-    if (type.isBool()) { return "b"; }
-    if (type.isFloat()) { return "f"; }
-    if (type.isString()) { return "str"; }
-    if (type.isArray()) { return "arr"; }
-    if (type.isMapType()) { return "map"; }
-
-    if (type instanceof SpecificHaxeClassReference) {
-      SpecificHaxeClassReference ref = (SpecificHaxeClassReference)type;
-      HaxeClass clazz = ref.getHaxeClass();
-      String name = null == clazz ? null : clazz.getName();
-      if (null != name) {
-        return HaxeStringUtil.toLowerFirst(name);
-      }
-    }
+    String byType = conventionalName(typeResult.getType());
+    if (byType != null) return byType;
 
     // If result typing doesn't work (e.g. it's Unknown or Invalid), then try against
     // the kind of expression.
@@ -214,6 +210,56 @@ public class HaxeNameSuggesterUtil {
     return "x";
   }
 
+  /** The conventional name for a value of a resolved type, or null when the type gives no lead. */
+  @Nullable
+  private static String conventionalName(@NotNull SpecificTypeReference type) {
+    if (type.isDynamic()) return CONVENTIONAL_TYPE_NAMES.get("Dynamic");
+    if (type.isVoid()) return CONVENTIONAL_TYPE_NAMES.get("Void");
+    if (type.isInt()) return CONVENTIONAL_TYPE_NAMES.get("Int");
+    if (type.isBool()) return CONVENTIONAL_TYPE_NAMES.get("Bool");
+    if (type.isFloat()) return CONVENTIONAL_TYPE_NAMES.get("Float");
+    if (type.isString()) return CONVENTIONAL_TYPE_NAMES.get("String");
+    if (type.isArray()) return CONVENTIONAL_TYPE_NAMES.get("Array");
+    if (type.isMapType()) return CONVENTIONAL_TYPE_NAMES.get("Map");
+    if (type instanceof SpecificHaxeClassReference classReference) {
+      HaxeClass clazz = classReference.getHaxeClass();
+      String name = clazz == null ? null : clazz.getName();
+      if (name != null) return HaxeStringUtil.toLowerFirst(name);
+    }
+    return null;
+  }
+
+  /**
+   * Names for a value known only by its type, such as a lambda parameter:
+   * the name its declaration carries, if any, then the conventional short
+   * name of a standard type ({@code i} for Int, {@code func} for a function),
+   * then the variants the platform derives from the type name. Each name is
+   * made unique against the keywords, the names in use around
+   * {@code context} and {@code alsoUsed}.
+   */
+  @NotNull
+  public static List<String> getSuggestedNamesForType(@Nullable String declaredName,
+                                                      @Nullable String typeName,
+                                                      boolean isFunction,
+                                                      @Nullable PsiElement context,
+                                                      @NotNull Set<String> alsoUsed) {
+    Collection<String> candidates = new LinkedHashSet<>();
+    if (declaredName != null && !declaredName.isEmpty()) candidates.add(declaredName);
+    if (isFunction) {
+      candidates.add(FUNCTION_VALUE_NAME);
+    } else if (typeName != null && !typeName.isEmpty()) {
+      String conventional = CONVENTIONAL_TYPE_NAMES.get(typeName);
+      if (conventional != null) candidates.add(conventional);
+      candidates.addAll(generateNames(typeName, false, "Array".equals(typeName)));
+    }
+    if (candidates.isEmpty()) candidates.add(CONVENTIONAL_TYPE_NAMES.get("Dynamic"));
+
+    Set<String> ignoreNameList = new HashSet<>(HaxeRefactoringUtil.collectKeywords());
+    ignoreNameList.addAll(alsoUsed);
+    if (context != null) ignoreNameList.addAll(HaxeRefactoringUtil.collectUsedNames(context));
+    return uniqueAgainst(candidates, ignoreNameList);
+  }
+
   @NotNull
   public static List<String> getSuggestedNames(final PsiElement expression, final boolean wantUpperCase) {
     return getSuggestedNames(expression, wantUpperCase, true, null);
@@ -241,16 +287,21 @@ public class HaxeNameSuggesterUtil {
     if (findUsed) {
       ignoreNameList.addAll(HaxeRefactoringUtil.collectUsedNames(expression));
     }
-    final List<String> result = new ArrayList<String>();
+    return uniqueAgainst(candidates, ignoreNameList);
+  }
+
+  /** Each candidate with the smallest numeric suffix that keeps it out of {@code ignore}. */
+  @NotNull
+  private static List<String> uniqueAgainst(@NotNull Collection<String> candidates, @NotNull Set<String> ignore) {
+    final List<String> result = new ArrayList<>();
     for (String candidate : candidates) {
       int index = 0;
       String suffix = "";
-      while (ignoreNameList.contains(candidate + suffix)) {
+      while (ignore.contains(candidate + suffix)) {
         suffix = Integer.toString(++index);
       }
       result.add(candidate + suffix);
     }
-
     return result;
   }
 }

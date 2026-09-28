@@ -42,7 +42,7 @@ public class DisplayJsonTest {
     // trimmed from a Toplevel-mode response: one item per kind the lookup shows, plus an
     // anonymous structure, which the decoder drops because it has no insert text
     String payload = """
-      {"jsonrpc":"2.0","id":1,"result":{"result":{"mode":{"kind":2},"isIncomplete":true,
+      {"jsonrpc":"2.0","id":1,"result":{"result":{"mode":{"kind":2,"args":{"expectedType":{"kind":"TType","args":{"path":{"pack":[],"moduleName":"Main","typeName":"Handler","importStatus":0},"params":[]}},"expectedTypeFollowed":{"kind":"TFun","args":{"args":[{"name":"","opt":false,"t":{"kind":"TAbstract","args":{"path":{"pack":[],"moduleName":"StdTypes","typeName":"Int","importStatus":0},"params":[]}}}],"ret":{"kind":"TAbstract","args":{"path":{"pack":[],"moduleName":"StdTypes","typeName":"Bool","importStatus":0},"params":[]}}}}}},"isIncomplete":true,
         "replaceRange":{"start":{"line":3,"character":8},"end":{"line":3,"character":10}},
         "items":[
           {"kind":"Local","args":{"id":1,"name":"count","type":{"kind":"TAbstract","args":{"path":{"pack":[],"moduleName":"StdTypes","typeName":"Int","importStatus":0},"params":[]}}},"index":0},
@@ -62,6 +62,8 @@ public class DisplayJsonTest {
 
     assertEquals(2, completion.modeKind());
     assertTrue(completion.incomplete());
+    assertTrue(completion.expectedType().isFunction(), "the followed expected type wins over the typedef");
+    assertEquals("(Int) -> Bool", completion.expectedType().presentable());
     assertEquals(new Range(new Position(3, 8), new Position(3, 10)), completion.replaceRange());
     List<String> names = completion.items().stream().map(CompletionItem::name).toList();
     assertEquals(List.of("count", "shout", "Red", "StringMap", "ds", "Json", "var", "null", ":keep", "debug"), names);
