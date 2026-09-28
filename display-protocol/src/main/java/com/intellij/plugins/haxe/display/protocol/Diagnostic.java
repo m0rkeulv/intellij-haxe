@@ -37,6 +37,11 @@ public record Diagnostic(DiagnosticKind kind,
       .toList();
   }
 
+  /** The typed args of a MISSING_FIELDS entry; null for any other shape. */
+  public MissingFields missingFieldsArg() {
+    return MissingFields.fromJson(args);
+  }
+
   /** The description of a REMOVABLE_CODE entry; empty when absent. */
   public String descriptionArg() {
     return args != null ? args.path("description").asString("") : "";

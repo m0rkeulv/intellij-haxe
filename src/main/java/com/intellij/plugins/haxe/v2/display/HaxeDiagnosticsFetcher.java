@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.Position;
 import com.intellij.plugins.haxe.display.protocol.Range;
 import com.intellij.psi.PsiFile;
+import lombok.CustomLog;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ import org.jetbrains.annotations.Nullable;
  * refused socket): a re-highlight then still renders the last known
  * diagnostics instead of wiping them until the next edit.
  */
+@CustomLog
 final class HaxeDiagnosticsFetcher {
 
   /** Collected under the read lock; the network half runs on it unlocked. */
@@ -91,11 +93,17 @@ final class HaxeDiagnosticsFetcher {
 
     // no request while the text does not parse - the compiler would choke on
     // the same syntax, and the parser's own error highlighting covers it
-    if (!HaxeCompilerDisplayService.isSyntaxClean(file.getProject(), virtualFile)) return null;
+    if (!HaxeCompilerDisplayService.isSyntaxClean(file.getProject(), virtualFile)) {
+      log.debug("no display/diagnostics for " + virtualFile.getPath() + ": the file has parse errors");
+      return null;
+    }
 
     HaxeCompilerDisplayService service = HaxeCompilerDisplayService.getInstance(file.getProject());
     HaxeCompilerDisplayService.DisplayContext context = service.contextFor(virtualFile);
-    if (context == null) return null;
+    if (context == null) {
+      log.debug("no display/diagnostics for " + virtualFile.getPath() + ": no build context");
+      return null;
+    }
 
     boolean diverged = FileDocumentManager.getInstance().isDocumentUnsaved(document);
     String contents = diverged ? document.getText() : null;
@@ -142,11 +150,17 @@ final class HaxeDiagnosticsFetcher {
       .filter(entry -> FileUtil.pathsEqual(entry.file(), request.filePath()))
       .flatMap(entry -> entry.diagnostics().stream())
       .toList();
+    log.debug("display/diagnostics for " + key + ": " + diagnostics.size() + " of " + countOf(results)
+              + " diagnostics belong to the file");
     if (cache.size() >= CACHE_MAX_FILES) {
       evictOldest(cache);
     }
     cache.put(key, new CacheEntry(contentsHash, System.currentTimeMillis(), diagnostics));
     return diagnostics;
+  }
+
+  private static int countOf(@NotNull List<FileDiagnostics> results) {
+    return results.stream().mapToInt(entry -> entry.diagnostics().size()).sum();
   }
 
   static void clearCache(@NotNull Project project) {

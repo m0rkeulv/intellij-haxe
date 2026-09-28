@@ -69,6 +69,8 @@ public final class HaxeCompilerSettingsPanel {
     new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.unused.imports.checkbox"));
   private final JCheckBox diagnosticsRemovableCodeCheckBox =
     new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.removable.code.checkbox"));
+  private final JCheckBox diagnosticsOnlyCheckBox =
+    new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.only.checkbox"));
   private final ListTableModel<ModuleLevelRow> tableModel = new ListTableModel<>(new ModuleColumn(), new LevelColumn());
   private final TableView<ModuleLevelRow> table = new TableView<>(tableModel);
   private final JPanel mainPanel;
@@ -81,6 +83,7 @@ public final class HaxeCompilerSettingsPanel {
     diagnosticsErrorsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.errors.tooltip"));
     diagnosticsUnusedImportsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.unused.imports.tooltip"));
     diagnosticsRemovableCodeCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.removable.code.tooltip"));
+    diagnosticsOnlyCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.diagnostics.only.tooltip"));
     for (JCheckBox child : diagnosticsChildren()) {
       child.setBorder(JBUI.Borders.emptyLeft(24));
     }
@@ -102,6 +105,7 @@ public final class HaxeCompilerSettingsPanel {
       .addComponent(diagnosticsErrorsCheckBox)
       .addComponent(diagnosticsUnusedImportsCheckBox)
       .addComponent(diagnosticsRemovableCodeCheckBox)
+      .addComponent(diagnosticsOnlyCheckBox)
       .addComponentFillVertically(new JBScrollPane(table), 8)
       .getPanel();
   }
@@ -146,8 +150,17 @@ public final class HaxeCompilerSettingsPanel {
     diagnosticsRemovableCodeCheckBox.setSelected(enabled);
   }
 
+  public boolean isCompilerDiagnosticsOnly() {
+    return diagnosticsOnlyCheckBox.isSelected();
+  }
+
+  public void setCompilerDiagnosticsOnly(boolean enabled) {
+    diagnosticsOnlyCheckBox.setSelected(enabled);
+  }
+
   private List<JCheckBox> diagnosticsChildren() {
-    return List.of(diagnosticsErrorsCheckBox, diagnosticsUnusedImportsCheckBox, diagnosticsRemovableCodeCheckBox);
+    return List.of(diagnosticsErrorsCheckBox, diagnosticsUnusedImportsCheckBox, diagnosticsRemovableCodeCheckBox,
+                   diagnosticsOnlyCheckBox);
   }
 
   /// The per-feature toggles only apply while the master toggle is on.

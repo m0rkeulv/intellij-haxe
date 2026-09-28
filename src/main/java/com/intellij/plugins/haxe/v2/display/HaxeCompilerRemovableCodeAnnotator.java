@@ -14,11 +14,12 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Removable code straight from the compiler's {@code display/diagnostics}:
- * unused pattern variables and similar spans the typer proves dead. The quick
- * fix removes the args' removal range, which may be wider than the highlighted
- * span; when haxe 5 supplies {@code newCode}, it replaces instead. While its
- * toggle is on it REPLACES the plugin's unused field, function and local
- * variable inspections (they gate themselves off).
+ * unused local variables and functions (the compiler reports no unused
+ * fields or methods). The quick fix removes the args' removal range, which
+ * may be wider than the highlighted span; when haxe 5 supplies
+ * {@code newCode}, it replaces instead. While its toggle is on it REPLACES
+ * the plugin's unused local-variable and local-function inspections (they
+ * gate themselves off).
  */
 public class HaxeCompilerRemovableCodeAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 

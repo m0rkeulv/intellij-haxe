@@ -8,6 +8,7 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.display.protocol.Diagnostic;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiFile;
+import lombok.CustomLog;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -20,6 +21,7 @@ import org.jetbrains.annotations.Nullable;
  * contribute their toggle, their paired batch inspection, the diagnostics
  * they handle and the annotation itself.
  */
+@CustomLog
 abstract class HaxeCompilerDiagnosticsAnnotatorBase
   extends ExternalAnnotator<HaxeDiagnosticsFetcher.Request, List<Diagnostic>> {
 
@@ -36,7 +38,9 @@ abstract class HaxeCompilerDiagnosticsAnnotatorBase
   @Override
   @Nullable
   public final HaxeDiagnosticsFetcher.Request collectInformation(@NotNull PsiFile file, @NotNull Editor editor, boolean hasErrors) {
-    return enabled(file) ? HaxeDiagnosticsFetcher.collect(file, editor) : null;
+    boolean enabled = enabled(file);
+    log.debug(getClass().getSimpleName() + " pass for " + file.getName() + ": enabled=" + enabled);
+    return enabled ? HaxeDiagnosticsFetcher.collect(file, editor) : null;
   }
 
   /** Batch (Inspect Code) entry, reached through the paired inspection. */
@@ -57,12 +61,16 @@ abstract class HaxeCompilerDiagnosticsAnnotatorBase
     if (diagnostics == null) return;
     Document document = file.getViewProvider().getDocument();
     if (document == null) return;
+    int annotated = 0;
     for (Diagnostic diagnostic : diagnostics) {
       if (!handles(file, diagnostic)) continue;
       TextRange range = HaxeDiagnosticsFetcher.toTextRange(document, diagnostic.range());
       if (range == null) continue;
       annotate(holder, file, document, diagnostic, range);
+      annotated++;
     }
+    log.debug(getClass().getSimpleName() + " annotated " + annotated + " of " + diagnostics.size()
+              + " diagnostics in " + file.getName());
   }
 
   private boolean enabled(@NotNull PsiFile file) {

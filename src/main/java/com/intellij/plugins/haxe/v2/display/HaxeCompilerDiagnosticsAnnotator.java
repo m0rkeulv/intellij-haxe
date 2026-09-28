@@ -10,6 +10,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.protocol.Diagnostic;
 import com.intellij.plugins.haxe.display.protocol.DiagnosticKind;
 import com.intellij.plugins.haxe.display.protocol.InitializeResult;
+import com.intellij.plugins.haxe.display.protocol.MissingFields;
 import com.intellij.plugins.haxe.ide.annotator.semantics.HaxeSyntaxMigrationFixes;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
@@ -18,14 +19,18 @@ import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Error highlighting straight from the compiler: one {@code display/diagnostics}
  * request per (debounced) editor pass, carrying the buffer when it differs
  * from disk. Covers the PROBLEM kinds: compiler and parser errors, deprecation
- * warnings, unresolved identifiers and missing fields. Unused imports and
- * removable code have their own annotators and toggles. Opt-in via the Haxe
- * Compiler settings page; requires the compilation server and a haxe with
- * the JSON-RPC diagnostics method (4.3+).
+ * warnings, unresolved identifiers and missing fields, with the compiler's
+ * suggestions as quick fixes (imports and spelling corrections, the missing
+ * members). Unused imports and removable code have their own annotators and
+ * toggles. Opt-in via the Haxe Compiler settings page; requires the
+ * compilation server and a haxe with the JSON-RPC diagnostics method (4.3+).
  */
 public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 
@@ -74,7 +79,53 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
     if (modernize != null) {
       builder = builder.withFix(modernize);
     }
+    for (IntentionAction fix : compilerFixesFor(document, diagnostic, range)) {
+      builder = builder.withFix(fix);
+    }
     builder.create();
+  }
+
+  /**
+   * The compiler's own suggestions as fixes: an import or a spelling
+   * correction per unresolved-identifier suggestion, the listed members per
+   * missing-fields entry.
+   */
+  @NotNull
+  static List<IntentionAction> compilerFixesFor(@NotNull Document document, @NotNull Diagnostic diagnostic,
+                                               @NotNull TextRange range) {
+    return switch (diagnostic.kind()) {
+      case UNRESOLVED_IDENTIFIER -> suggestionFixes(document, diagnostic, range);
+      case MISSING_FIELDS -> missingFieldFixes(diagnostic);
+      default -> List.of();
+    };
+  }
+
+  @NotNull
+  private static List<IntentionAction> suggestionFixes(@NotNull Document document, @NotNull Diagnostic diagnostic,
+                                                       @NotNull TextRange range) {
+    List<IntentionAction> fixes = new ArrayList<>();
+    String currentText = document.getText(range);
+    for (Diagnostic.IdentifierSuggestion suggestion : diagnostic.suggestionArgs()) {
+      if (suggestion.isImportCandidate()) {
+        fixes.add(new HaxeCompilerImportQuickFix(suggestion.name()));
+      }
+      else {
+        String label = HaxeBundle.message("haxe.diagnostics.fix.change.to", suggestion.name());
+        fixes.add(new HaxeReplaceRangeQuickFix(label, range, currentText, suggestion.name()));
+      }
+    }
+    return fixes;
+  }
+
+  @NotNull
+  private static List<IntentionAction> missingFieldFixes(@NotNull Diagnostic diagnostic) {
+    MissingFields missing = diagnostic.missingFieldsArg();
+    if (missing == null) return List.of();
+    List<IntentionAction> fixes = new ArrayList<>();
+    for (MissingFields.Entry entry : missing.entries()) {
+      fixes.add(new HaxeImplementMissingFieldsQuickFix(missing.typeName(), entry));
+    }
+    return fixes;
   }
 
   /**

@@ -80,10 +80,29 @@ public interface HaxeCompilerSettings {
 
   void setDiagnosticsUnusedImportsEnabled(boolean enabled);
 
-  /** Removable code from the compiler; while on it REPLACES the plugin's unused field/function/local-var inspections. */
+  /**
+   * Removable code from the compiler: unused local variables and functions
+   * (the compiler reports no unused fields or methods). While on it REPLACES
+   * the plugin's unused local-variable and local-function inspections.
+   */
   boolean isDiagnosticsRemovableCodeEnabled();
 
   void setDiagnosticsRemovableCodeEnabled(boolean enabled);
+
+  /**
+   * Whether the compiler's diagnostics are the ONLY analysis: the plugin's
+   * own semantic annotators and inspections stand down while this and the
+   * master toggle are on. Syntax coloring, inactive-code dimming and the
+   * parser's error elements are not analysis and stay.
+   */
+  boolean isCompilerDiagnosticsOnly();
+
+  void setCompilerDiagnosticsOnly(boolean enabled);
+
+  /** The effective verdict of {@link #isCompilerDiagnosticsOnly()}: only meaningful under the master toggle. */
+  default boolean isStaticAnalysisSuppressed() {
+    return isCompilerDiagnosticsEnabled() && isCompilerDiagnosticsOnly();
+  }
 
   /**
    * Whether conditional compilation (`#if haxe_ver` and friends) evaluates

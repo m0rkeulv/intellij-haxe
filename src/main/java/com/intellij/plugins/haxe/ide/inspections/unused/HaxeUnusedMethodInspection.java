@@ -21,7 +21,6 @@ import java.util.List;
 
 import static com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedDeclarationsFixes.createAddKeepMetaFix;
 import static com.intellij.plugins.haxe.ide.inspections.unused.HaxeUnusedDeclarationsFixes.createRemoveMethodFix;
-import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 
 public class HaxeUnusedMethodInspection extends LocalInspectionTool {
 
@@ -29,9 +28,6 @@ public class HaxeUnusedMethodInspection extends LocalInspectionTool {
     @Override
     public ProblemDescriptor[] checkFile(@NotNull PsiFile file, @NotNull InspectionManager manager, boolean isOnTheFly) {
         if (!(file instanceof HaxeFile)) return null;
-        HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(file.getProject());
-        // the compiler's removable-code annotator owns unused-code analysis while its toggle is on
-        if (settings.isCompilerDiagnosticsEnabled() && settings.isDiagnosticsRemovableCodeEnabled()) return null;
         List<HaxeMethodDeclaration> unusedMethodDeclarations = new ArrayList<>();
         new HaxeAnnotatingVisitor() {
 

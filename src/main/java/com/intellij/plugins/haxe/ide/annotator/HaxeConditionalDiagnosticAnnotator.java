@@ -50,6 +50,7 @@ public class HaxeConditionalDiagnosticAnnotator implements Annotator, DumbAware 
   public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
     if (!(element instanceof PsiComment comment)) return;
     if (comment.getTokenType() != HaxeTokenTypeSets.PPEXPRESSION) return;
+    if (AnnotatorUtil.isStaticAnalysisSuppressed(comment)) return;
 
     PsiElement runHead = runHead(comment);
     String message = runVerdict(runHead, comment.getProject(), holder);

@@ -246,6 +246,10 @@ public final class HaxeLibrarySync {
         // one External Libraries entry PER library in the output (see HaxelibPathParser.parseSections)
         for (LibrarySection section : HaxelibPathParser.parseSections(dependency.name(), output)) {
           if (section.classpaths().isEmpty()) continue;
+          // TODO: drop classpaths under the module's own content roots - a lib resolving to the open
+          //  checkout (a tests project's <haxelib path="../.."/>) registers the module's source folder
+          //  as a library root, and the platform then skips inspections and external annotators there
+
           String version = sectionVersion(section, dependency);
           String entryName = version == null ? section.name() : section.name() + " " + version;
           if (isScmCheckout(section)) entryName += " [git]";

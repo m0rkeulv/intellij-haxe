@@ -100,6 +100,42 @@ without a comment arrives with `doc: null`, and
 repeated in its `index` key) answers `{item}` in the same shape with the
 same doc.
 
+## Diagnostics (`display/diagnostics`, verified against 4.3.7)
+
+Params `{file, ?contents}` (or `fileContents` for several files, or empty
+for the whole project); the answer is `[{file, diagnostics}]`. Eight kinds
+exist and every compiler warning that has no kind of its own arrives as a
+`CompilerError` with severity Warning, so the `args` string is the only
+thing telling a warning class apart on 4.x (haxe 5 adds the `code`):
+
+- `UnresolvedIdentifier` args list suggestions: `kind` 0 an import
+  candidate as a qualified path, 1 a typo correction. A type-hint on an
+  unimported type gets both; a misspelt call gets corrections.
+- `MissingFields` args `{moduleType, moduleFile, entries[{fields, cause}]}`
+  with `cause.kind` one of `AbstractParent`, `ImplementedInterface`,
+  `PropertyAccessor`, `FieldAccess` and `FinalFields`, and each field the
+  full JSON class field (name, type, kind, scope, expr). `FieldAccess`
+  fires for a call to an unknown function (`trce("x")`), so it doubles as
+  a create-missing-member source; `FinalFields` for a class whose final
+  fields no constructor initializes.
+- `RemovableCode` reports unused LOCAL variables only (`description`
+  "Unused variable", `range` the whole declaration). Unused private fields
+  and functions are never reported; nor are no-effect expressions.
+- Warnings folded into `CompilerError`: an unused `case` ("This case is
+  unused"), the deprecated `@:enum abstract` spelling, `$type(x)` (WInfo:
+  the message IS the type name), variable shadowing, unsafe enum equality.
+  "Local variable used without being initialized" (WVarInit) comes as an
+  Error.
+- `relatedInformation` carries secondary locations: the shadowing warning
+  points at the previous declaration (`{location{file, range}, depth,
+  message}`).
+- `InactiveBlock` is a Hint over the region with `{expr}` the condition.
+- Warning classes are switched per request with `-w`: `+WVarShadow` and
+  `+WUnsafeEnumEquality` are the only two disabled by default in 4.3.7,
+  `-WInfo` drops the `$type` output, several flags may combine in one value
+  (`+WVarShadow+WUnsafeEnumEquality`) or repeat the option, and `+WAll`
+  enables everything.
+
 ## Haxe 5 differences (verified against 5.0.0-preview.1)
 
 The JSON-RPC surface is unchanged — same methods, framing and envelopes —

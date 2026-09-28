@@ -62,6 +62,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
            || panel.isDiagnosticsErrorsEnabled() != settings.isDiagnosticsErrorsEnabled()
            || panel.isDiagnosticsUnusedImportsEnabled() != settings.isDiagnosticsUnusedImportsEnabled()
            || panel.isDiagnosticsRemovableCodeEnabled() != settings.isDiagnosticsRemovableCodeEnabled()
+           || panel.isCompilerDiagnosticsOnly() != settings.isCompilerDiagnosticsOnly()
            || panel.getCompletionMode() != settings.getCompletionMode();
   }
 
@@ -76,6 +77,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     settings.setDiagnosticsErrorsEnabled(panel.isDiagnosticsErrorsEnabled());
     settings.setDiagnosticsUnusedImportsEnabled(panel.isDiagnosticsUnusedImportsEnabled());
     settings.setDiagnosticsRemovableCodeEnabled(panel.isDiagnosticsRemovableCodeEnabled());
+    settings.setCompilerDiagnosticsOnly(panel.isCompilerDiagnosticsOnly());
     settings.setCompletionMode(panel.getCompletionMode());
     HaxeLanguageLevelUtil.notifyLanguageLevelChanged(project);
   }
@@ -93,6 +95,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     panel.setDiagnosticsErrorsEnabled(settings.isDiagnosticsErrorsEnabled());
     panel.setDiagnosticsUnusedImportsEnabled(settings.isDiagnosticsUnusedImportsEnabled());
     panel.setDiagnosticsRemovableCodeEnabled(settings.isDiagnosticsRemovableCodeEnabled());
+    panel.setCompilerDiagnosticsOnly(settings.isCompilerDiagnosticsOnly());
     panel.setCompletionMode(settings.getCompletionMode());
   }
 

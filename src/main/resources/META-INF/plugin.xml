@@ -552,7 +552,7 @@
     <annotator language="HaxeMetadata" id="inactiveDimMeta" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInactiveCodeDimAnnotator"/>
     <multiHostInjector implementation="com.intellij.plugins.haxe.ide.injection.HaxeDocFenceInjector"/>
     <highlightErrorFilter implementation="com.intellij.plugins.haxe.ide.injection.HaxeExemptCodeErrorFilter"/>
-    <lang.inspectionSuppressor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeExemptCodeInspectionSuppressor"/>
+    <lang.inspectionSuppressor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.injection.HaxeStaticAnalysisSuppressor"/>
 
     <lang.elementManipulator forClass="com.intellij.plugins.haxe.lang.parser.HaxePsiDocCommentImpl" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeDocCommentManipulator"/>
     <lang.elementManipulator forClass="com.intellij.plugins.haxe.lang.psi.impl.HaxeStringLiteralImpl" implementationClass="com.intellij.plugins.haxe.lang.parser.HaxeStringLiteralManipulator"/>

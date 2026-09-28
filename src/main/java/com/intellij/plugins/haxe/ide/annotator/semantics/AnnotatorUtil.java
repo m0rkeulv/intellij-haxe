@@ -8,6 +8,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeClassReferenceModel;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.display.HaxeGeneratedCodePreview;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -25,14 +26,23 @@ public class AnnotatorUtil {
 
   /**
    * Common entry guard for semantic annotators: skips elements that are no
-   * longer valid, elements in generated-code preview files (see
-   * {@link #isInGeneratedPreview} for why the preview gets no semantic
-   * analysis) and elements in doc-comment code fragments (see
+   * longer valid, everything while the compiler is the only analysis (see
+   * {@link #isStaticAnalysisSuppressed}), elements in generated-code preview
+   * files (see {@link #isInGeneratedPreview} for why the preview gets no
+   * semantic analysis) and elements in doc-comment code fragments (see
    * {@link #isInDocCodeFragment}). Validity is checked first — an
    * invalidated element cannot be asked for its containing file.
    */
   public static boolean shouldSkip(@NotNull PsiElement element) {
-    return !element.isValid() || isInGeneratedPreview(element) || isInAnalysisExemptCode(element);
+    return !element.isValid()
+           || isStaticAnalysisSuppressed(element)
+           || isInGeneratedPreview(element)
+           || isInAnalysisExemptCode(element);
+  }
+
+  /** The "compiler diagnostics only" setting: the plugin's own analysis stands down project-wide. */
+  public static boolean isStaticAnalysisSuppressed(@NotNull PsiElement element) {
+    return HaxeCompilerSettings.getInstance(element.getProject()).isStaticAnalysisSuppressed();
   }
 
   /**

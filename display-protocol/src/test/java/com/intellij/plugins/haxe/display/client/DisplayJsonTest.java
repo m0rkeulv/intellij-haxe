@@ -116,6 +116,52 @@ public class DisplayJsonTest {
   }
 
   @Test
+  @DisplayName("missing fields decode their cause and typed field lists")
+  public void missingFieldsDecodeTheirCauseAndTypedFieldLists() throws Exception {
+    // captured: a class implementing an interface with a method and a (get, never) property,
+    // and a class whose two final fields no constructor initializes (trimmed)
+    String payload = """
+      {"jsonrpc":"2.0","id":1,"result":{"result":[{"file":"C:\\\\work\\\\Live.hx","diagnostics":[
+        {"kind":7,"severity":1,"range":{"start":{"line":4,"character":6},"end":{"line":4,"character":10}},
+         "args":{"moduleType":{"kind":"class","pack":[],"name":"Live","moduleName":"Live"},"moduleFile":"C:\\\\work\\\\Live.hx",
+           "entries":[{"fields":[
+             {"field":{"name":"greet","type":{"kind":"TFun","args":{"args":[{"name":"name","opt":false,"t":{"kind":"TInst","args":{"path":{"typeName":"String","moduleName":"String","pack":[]},"params":[]}}}],"ret":{"kind":"TInst","args":{"path":{"typeName":"String","moduleName":"String","pack":[]},"params":[]}}}},"isPublic":true,"kind":{"kind":"FMethod","args":"MethNormal"},"pos":{"file":"Live.hx","min":20,"max":55},"scope":1},"unique":true},
+             {"field":{"name":"id","type":{"kind":"TAbstract","args":{"path":{"typeName":"Int","moduleName":"StdTypes","pack":[]},"params":[]}},"isPublic":true,"kind":{"kind":"FVar","args":{"read":{"kind":"AccCall"},"write":{"kind":"AccNever"}}},"pos":{"file":"Live.hx","min":56,"max":79},"scope":1},"unique":true}],
+             "cause":{"kind":"ImplementedInterface","args":{"parent":{"path":{"typeName":"Greeter","moduleName":"Live","pack":[]},"params":[]}}}}]},
+         "relatedInformation":[]},
+        {"kind":7,"severity":1,"range":{"start":{"line":3,"character":6},"end":{"line":3,"character":12}},
+         "args":{"moduleType":{"kind":"class","pack":[],"name":"Holder","moduleName":"Live"},"moduleFile":"C:\\\\work\\\\Live.hx",
+           "entries":[{"fields":[],"cause":{"kind":"FinalFields","args":{"fields":[
+             {"name":"label","type":{"kind":"TInst","args":{"path":{"typeName":"String","moduleName":"String","pack":[]},"params":[]}},"isPublic":false,"isFinal":true,"kind":{"kind":"FVar","args":{"read":{"kind":"AccNormal"},"write":{"kind":"AccCtor"}}},"pos":{"file":"Live.hx","min":191,"max":210},"scope":1},
+             {"name":"x","type":{"kind":"TAbstract","args":{"path":{"typeName":"Int","moduleName":"StdTypes","pack":[]},"params":[]}},"isPublic":false,"isFinal":true,"kind":{"kind":"FVar","args":{"read":{"kind":"AccNormal"},"write":{"kind":"AccCtor"}}},"pos":{"file":"Live.hx","min":178,"max":190},"scope":1}]}}}]},
+         "relatedInformation":[]}]}],"timestamp":1790550805.32}}""";
+
+    List<Diagnostic> diagnostics = DisplayJson.decodeDiagnostics(DisplayJson.unwrap(payload)).get(0).diagnostics();
+
+    MissingFields implemented = diagnostics.get(0).missingFieldsArg();
+    assertEquals("Live", implemented.typeName());
+    MissingFields.Entry interfaceEntry = implemented.entries().get(0);
+    assertEquals("ImplementedInterface", interfaceEntry.causeKind());
+    MissingFields.MissingField greet = interfaceEntry.fields().get(0);
+    assertTrue(greet.isMethod());
+    assertTrue(greet.isPublic());
+    assertFalse(greet.isStatic());
+    assertEquals("(name:String) -> String", greet.type().presentable());
+    MissingFields.MissingField id = interfaceEntry.fields().get(1);
+    assertEquals("FVar", id.fieldKind());
+    assertEquals("AccCall", id.readAccess());
+    assertEquals("AccNever", id.writeAccess());
+
+    MissingFields.Entry finals = diagnostics.get(1).missingFieldsArg().entries().get(0);
+    assertTrue(finals.isFinalFields());
+    assertTrue(finals.fields().isEmpty(), "the fields sit in the cause for final fields");
+    List<String> finalNames = finals.causeFields().stream().map(MissingFields.MissingField::name).toList();
+    assertEquals(List.of("label", "x"), finalNames);
+    assertEquals(191, finals.causeFields().get(0).position());
+    assertNull(diagnostics.get(0).removableRangeArg(), "no removable range on a missing-fields entry");
+  }
+
+  @Test
   @DisplayName("hover decodes item kind and json type")
   public void hoverDecodesItemKindAndJsonType() throws Exception {
     // captured hover over a local String variable (trimmed)

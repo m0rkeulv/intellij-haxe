@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -73,6 +72,15 @@ public final class HaxeCompilerResolveService {
   public static final Key<String> BLUEPRINT_DOT_PATH = Key.create("haxe.blueprint.dotpath");
 
   private static final long FAILURE_COOLDOWN_MS = 30_000;
+  /**
+   * The types StdTypes.hx declares: no module of their own, so
+   * {@code server/type} answers "No such module" - and an unresolved
+   * receiver evaluates to Dynamic, which would otherwise be hydrated on
+   * every unresolved member access.
+   */
+  private static final Set<String> STD_TYPES_DECLARATIONS = Set.of(
+    "Void", "Bool", "Int", "Float", "Single", "Dynamic", "Null",
+    "Iterator", "Iterable", "KeyValueIterator", "KeyValueIterable", "ArrayAccess");
   /**
    * Keeps the fallback one level deep. Resolving the RECEIVER inside the
    * fallback runs the resolver again, and its failures would enter this
@@ -190,7 +198,7 @@ public final class HaxeCompilerResolveService {
 
   @Nullable
   private BlueprintLookup blueprintLookup(@NotNull VirtualFile contextFile, @Nullable String dotPath) {
-    if (dotPath == null || dotPath.isEmpty()) return null;
+    if (dotPath == null || dotPath.isEmpty() || STD_TYPES_DECLARATIONS.contains(dotPath)) return null;
     HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile);
     if (context == null) return null;
 
@@ -271,65 +279,12 @@ public final class HaxeCompilerResolveService {
     JsonTypeRef type = member.type();
     if (member.isMethod() && type != null && type.isFunction()) {
       text.append("function ").append(member.name())
-        .append('(').append(parameterListText(type)).append("):")
-        .append(safeTypeText(JsonTypeRef.of(type.args().path("ret"))));
+        .append('(').append(HaxeTypeSyntax.parameterListText(type)).append("):")
+        .append(HaxeTypeSyntax.returnTypeText(type));
     } else {
-      text.append("var ").append(member.name()).append(':').append(safeTypeText(type));
+      text.append("var ").append(member.name()).append(':').append(HaxeTypeSyntax.safeTypeText(type));
     }
     text.append(";\n");
-  }
-
-  @NotNull
-  private static String parameterListText(@NotNull JsonTypeRef functionType) {
-    List<String> parameters = new ArrayList<>();
-    int index = 0;
-    for (var argument : functionType.args().path("args")) {
-      String name = argument.path("name").asString("");
-      // parameter names must be identifiers - the compiler can emit odd ones for closures
-      if (!name.matches("[A-Za-z_]\\w*")) {
-        name = "arg" + index;
-      }
-      boolean optional = argument.path("opt").asBoolean(false);
-      parameters.add((optional ? "?" : "") + name + ":" + safeTypeText(JsonTypeRef.of(argument.path("t"))));
-      index++;
-    }
-    return String.join(", ", parameters);
-  }
-
-  /**
-   * Renders a blueprint type as haxe type syntax the parser accepts; anything
-   * not safely expressible degrades to Dynamic rather than producing a
-   * declaration that fails to parse.
-   */
-  @NotNull
-  static String safeTypeText(@Nullable JsonTypeRef type) {
-    if (type == null) return "Dynamic";
-    return switch (type.kind()) {
-      case "TInst", "TEnum", "TType", "TAbstract" -> classTypeText(type);
-      case "TFun" -> functionTypeText(type);
-      default -> "Dynamic";
-    };
-  }
-
-  @NotNull
-  private static String classTypeText(@NotNull JsonTypeRef type) {
-    String dotPath = type.dotPath();
-    // a plain dot path of identifiers - privates/natives can carry other shapes
-    if (dotPath == null || !dotPath.matches("[A-Za-z_][\\w.]*")) return "Dynamic";
-    List<String> parameters = new ArrayList<>();
-    for (var param : type.args().path("params")) {
-      parameters.add(safeTypeText(JsonTypeRef.of(param)));
-    }
-    return parameters.isEmpty() ? dotPath : dotPath + "<" + String.join(", ", parameters) + ">";
-  }
-
-  @NotNull
-  private static String functionTypeText(@NotNull JsonTypeRef type) {
-    String arguments = type.args().path("args").valueStream()
-      .map(argument -> safeTypeText(JsonTypeRef.of(argument.path("t"))))
-      .collect(Collectors.joining(", "));
-    String returnType = safeTypeText(JsonTypeRef.of(type.args().path("ret")));
-    return "(" + arguments + ") -> " + returnType;
   }
 
   // --- hydration ---
