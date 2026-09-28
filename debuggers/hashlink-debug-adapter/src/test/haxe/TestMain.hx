@@ -44,6 +44,7 @@ class TestMain {
 			{name: "OperatorsTest", run: tests.debug.eval.OperatorsTest.run},
 			{name: "X64CallEmitterTest", run: tests.debug.eval.call.X64CallEmitterTest.run},
 			{name: "X86CallEmitterTest", run: tests.debug.eval.call.X86CallEmitterTest.run},
+			{name: "EvalCallInjectorTest", run: tests.debug.session.EvalCallInjectorTest.run},
 		];
 
 		var assert = new Assert();

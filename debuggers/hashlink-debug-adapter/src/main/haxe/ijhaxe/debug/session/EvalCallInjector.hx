@@ -292,11 +292,13 @@ class EvalCallInjector {
 	}
 
 	// The top of the scratch stack for an injected call: the 256-byte-aligned
-	// address at or just below the current Esp, as in hld. The call's pushes
-	// then land below the interrupted frame and leave it intact.
-	static inline function scratchStackTop(esp:Pointer):Pointer {
-		var top = Int64.sub(esp, Int64.ofInt(0xFF));
-		var lowByte = top.low & 0xFF;
-		return Int64.add(top, Int64.ofInt((0x100 - lowByte) & 0xFF));
+	// address 256 to 511 bytes below the current Esp. The gap keeps the
+	// interrupted frame intact: the x86 trampoline stores a float return AT
+	// the top, so a top at or within 8 bytes of Esp would overwrite the
+	// frame's live top slot, and the gap also clears the 128-byte red zone
+	// that SysV code may keep below Esp.
+	public static function scratchStackTop(esp:Pointer):Pointer {
+		var below = Int64.sub(esp, Int64.ofInt(0x100));
+		return Int64.sub(below, Int64.ofInt(below.low & 0xFF));
 	}
 }
