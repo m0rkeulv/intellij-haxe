@@ -15,6 +15,7 @@ class BreakpointsTest {
 		duplicateAddressReusesBreakpoint(assert);
 		tempBreakpointsPatchAndRestore(assert);
 		tempSharedWithUserBreakpointNotRestored(assert);
+		patchedSitesCoverEveryTrapKind(assert);
 	}
 
 	static function addr(v:Int):Pointer {
@@ -102,6 +103,21 @@ class BreakpointsTest {
 		// clearing the temp must NOT restore the byte the user breakpoint owns
 		assert.equals(INT3, api.peek(addr(70)), "user breakpoint survives clearTemps");
 		assert.isTrue(bps.isBreakpointAddress(addr(70)), "user breakpoint still tracked");
+	}
+
+	static function patchedSitesCoverEveryTrapKind(assert:Assert):Void {
+		var api = new FakeDebugApi();
+		var bps = new Breakpoints(api, 1);
+		bps.setForSource("Main.hx", [loc(10, 14)]);
+		bps.addTemp(addr(20));
+		bps.armExceptions([{address: addr(30), fidx: 0, op: 0, reg: 0}]);
+		bps.armNativeThrow(addr(40));
+
+		assert.isTrue(bps.isPatchedSite(addr(10)), "a user breakpoint is a patched site");
+		assert.isTrue(bps.isPatchedSite(addr(20)), "a step temp is a patched site");
+		assert.isTrue(bps.isPatchedSite(addr(30)), "an armed throw site is a patched site");
+		assert.isTrue(bps.isPatchedSite(addr(40)), "hl_throw's armed entry is a patched site");
+		assert.isFalse(bps.isPatchedSite(addr(50)), "an unpatched address is a foreign trap");
 	}
 
 	static function duplicateAddressReusesBreakpoint(assert:Assert):Void {

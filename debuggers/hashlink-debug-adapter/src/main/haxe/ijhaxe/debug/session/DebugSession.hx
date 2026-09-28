@@ -122,6 +122,10 @@ class DebugSession {
 	// here for the next resume while an HL thread is reported for inspection.
 	// -1 when no pause event is held.
 	var pauseEventThread:Int = -1;
+	// True from a forceBreak until its stop is taken by forceBreakAndDrain or
+	// consumed elsewhere as a stray trap (by the dance that resumes past a
+	// racing hit), in which case the drain issues the break again.
+	var forcedBreakPending:Bool = false;
 
 	var alive:Bool = true;
 
@@ -546,25 +550,39 @@ class DebugSession {
 		}
 	}
 
-	// Stops the running debuggee so its memory can be patched;
-	// resumeAfterMemoryWrite lets it run again. The stop is never shown to the
-	// user.
-	function pauseForMemoryWrite():Void {
+	// Stops the running debuggee so its memory can be patched, and returns
+	// whether resumeAfterMemoryWrite must let it run again afterwards. The stop
+	// is never shown to the user. False when no forced stop arrived, or when a
+	// stop of the debuggee's own raced the interrupt: that stop was reported
+	// and owns the debuggee now, so nothing may resume it behind the user.
+	function pauseForMemoryWrite():Bool {
 		var outcome = forceBreakAndDrain();
-		if (outcome != null) {
-			stoppedThreadId = outcome.threadId;
+		if (outcome == null) {
+			return false;
 		}
+		stoppedThreadId = outcome.threadId;
+		return true;
 	}
 
-	// Interrupts the running debuggee (forceBreak), skips auto-continued
-	// lifecycle events until the forced stop arrives, and returns that outcome.
-	// Returns null when the debuggee exited meanwhile (state is Exited and
-	// EvExited was emitted) or when the stop did not arrive within
+	// Interrupts the running debuggee (forceBreak) and drains events until the
+	// forced stop arrives: a trap at no patched site (Windows raises it on a
+	// thread of its own, linux delivers a SIGTRAP), possibly behind a few
+	// auto-continued lifecycle events. A stop of the debuggee's own that races
+	// the interrupt (a patched trap, a runtime error) is handled as the stop it
+	// is: once it freezes the debuggee it owns the freeze, and the forced stop
+	// then surfaces as a stray trap on a later resume. Returns the forced stop,
+	// or null when the debuggee exited (EvExited was emitted), a racing stop
+	// took over (state is Stopped) or no stop arrived within
 	// MAX_FORCE_BREAK_POLLS. Serves both the memory-write pause and the user
 	// pause.
 	function forceBreakAndDrain():Null<WaitOutcome> {
-		api.forceBreak(debuggeePid);
+		var forced = drainForForcedStop();
+		forcedBreakPending = false;
+		return forced;
+	}
 
+	function drainForForcedStop():Null<WaitOutcome> {
+		issueForcedBreak();
 		for (_ in 0...MAX_FORCE_BREAK_POLLS) {
 			var outcome = api.wait(debuggeePid, ATTACH_DRAIN_MS);
 			switch (outcome.result) {
@@ -572,16 +590,37 @@ class DebugSession {
 				case Handled:
 					// an auto-continued lifecycle event that froze no thread: not the
 					// forced stop, keep waiting
-				case Exit:
-					state = Exited;
-					releaseExitedProcess(outcome.threadId);
-					emitExitedAfterOutputDrain();
-					return null;
-				default:
+				case Breakpoint if (!isPatchedTrap(outcome.threadId)):
 					return outcome;
+				default:
+					handleWaitOutcome(outcome);
+					if (state != Running) {
+						return null;
+					}
+					// resuming past the racing stop may have consumed the forced
+					// stop as a stray trap; the debuggee runs again, so break anew
+					if (!forcedBreakPending) {
+						issueForcedBreak();
+					}
 			}
 		}
 		return null;
+	}
+
+	function issueForcedBreak():Void {
+		forcedBreakPending = true;
+		api.forceBreak(debuggeePid);
+	}
+
+	// Whether the thread's trap is one of the session's own INT3s rather than
+	// a foreign one (a forced break, the attach or loader breakpoint).
+	function isPatchedTrap(threadId:Int):Bool {
+		if (breakpoints == null) {
+			return false;
+		}
+		// INT3 leaves the instruction pointer one byte past the trap
+		var eip = api.readRegister(debuggeePid, threadId, Eip);
+		return breakpoints.isPatchedSite(Int64.sub(eip, Int64.ofInt(1)));
 	}
 
 	function resumeAfterMemoryWrite():Void {
@@ -665,13 +704,8 @@ class DebugSession {
 		switch (state) {
 			case Running:
 				var outcome = forceBreakAndDrain();
-				if (state == Exited) {
-					// the debuggee exited during the interrupt (EvExited already sent)
-					emit(EvPaused(requestSeq));
-					return;
-				}
 				if (outcome == null) {
-					reject(requestSeq, "Could not pause the debuggee");
+					settlePauseWithoutForcedStop(requestSeq);
 					return;
 				}
 				pauseEventThread = outcome.threadId;
@@ -685,6 +719,19 @@ class DebugSession {
 				emit(EvPaused(requestSeq));
 			default:
 				reject(requestSeq, "Cannot pause: debuggee is not running");
+		}
+	}
+
+	// No forced stop to report. The debuggee either exited (EvExited already
+	// sent) or stopped on its own while the interrupt was pending (that stop is
+	// already reported), and the pause is only acknowledged; otherwise nothing
+	// stopped it.
+	function settlePauseWithoutForcedStop(requestSeq:Int):Void {
+		switch (state) {
+			case Running:
+				reject(requestSeq, "Could not pause the debuggee");
+			default:
+				emit(EvPaused(requestSeq));
 		}
 	}
 
@@ -994,12 +1041,7 @@ class DebugSession {
 		// INT3 leaves the instruction pointer one byte past the trap
 		var eip = api.readRegister(debuggeePid, threadId, Eip);
 		var hitAddress = Int64.sub(eip, Int64.ofInt(1));
-		var userBp = breakpoints != null ? breakpoints.atAddress(hitAddress) : null;
-		var temp = breakpoints != null && breakpoints.isTemp(hitAddress);
-		var throwSite = breakpoints != null ? breakpoints.exceptionAt(hitAddress) : null;
-		var nativeThrow = breakpoints != null && breakpoints.isNativeThrow(hitAddress);
-
-		if (userBp == null && !temp && throwSite == null && !nativeThrow) {
+		if (breakpoints == null || !breakpoints.isPatchedSite(hitAddress)) {
 			handleUnpatchedTrap(threadId);
 			return;
 		}
@@ -1007,11 +1049,13 @@ class DebugSession {
 		// rewind to the INT3's address, so the original instruction runs on the next resume
 		api.writeRegister(debuggeePid, threadId, Eip, hitAddress);
 
+		var userBp = breakpoints.atAddress(hitAddress);
+		var throwSite = breakpoints.exceptionAt(hitAddress);
 		if (userBp != null) {
 			lineBreakpoints.handleHit(threadId, userBp);
 		} else if (throwSite != null) {
 			exceptions.handleSiteHit(threadId, throwSite);
-		} else if (nativeThrow) {
+		} else if (breakpoints.isNativeThrow(hitAddress)) {
 			exceptions.handleNativeThrowHit(threadId);
 		} else {
 			stepping.handleTempHit(threadId, hitAddress);
@@ -1020,12 +1064,14 @@ class DebugSession {
 
 	// A trap at no known patch site. It is either hl_throw's own hl_debug_break
 	// completing a parked VM throw (ExceptionController reports that stop), or
-	// an attach or loader breakpoint or other stray trap, which is resumed
-	// silently.
+	// a forced break, an attach or loader breakpoint or other stray trap, which
+	// is resumed silently.
 	function handleUnpatchedTrap(threadId:Int):Void {
 		if (exceptions.handleVmThrowBreak(threadId)) {
 			return;
 		}
+		// while a forced break is pending, the stray trap is its stop
+		forcedBreakPending = false;
 		api.resume(debuggeePid, threadId);
 	}
 

@@ -73,9 +73,7 @@ class ExceptionController {
 			return;
 		}
 		var wasRunning = switch (session.state) { case Running: true; default: false; };
-		if (wasRunning) {
-			session.pauseForMemoryWrite();
-		}
+		var pausedForWrite = wasRunning && session.pauseForMemoryWrite();
 		if (sitesChange) {
 			if (wantSites) session.breakpoints.armExceptions(session.exceptionSites.all());
 			else session.breakpoints.disarmExceptions();
@@ -94,7 +92,7 @@ class ExceptionController {
 				vmThrowFrames.clear();
 			}
 		}
-		if (wasRunning) {
+		if (pausedForWrite) {
 			session.resumeAfterMemoryWrite();
 		}
 	}

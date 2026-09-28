@@ -34,9 +34,7 @@ class LineBreakpointController {
 
 		// a running debuggee has to be stopped before its memory can be written
 		var wasRunning = switch (session.state) { case Running: true; default: false; };
-		if (wasRunning) {
-			session.pauseForMemoryWrite();
-		}
+		var pausedForWrite = wasRunning && session.pauseForMemoryWrite();
 		session.breakpoints.setForSource(sourceKey, planned.locations);
 		// setForSource re-armed this source's breakpoints. If the stop is on one of
 		// them, its INT3 is back at the current instruction pointer. Lift it again
@@ -44,7 +42,7 @@ class LineBreakpointController {
 		// the next continue runs into the fresh INT3 and hits the same line again
 		// (run to cursor, or toggling a breakpoint in this file while stopped).
 		reconcileStoppedBreakpoint();
-		if (wasRunning) {
+		if (pausedForWrite) {
 			session.resumeAfterMemoryWrite();
 		}
 
