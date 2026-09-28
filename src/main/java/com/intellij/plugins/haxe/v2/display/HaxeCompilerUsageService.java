@@ -2,8 +2,6 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtilRt;
@@ -114,7 +112,8 @@ public final class HaxeCompilerUsageService {
     FindReferencesKind kind = declaration instanceof HaxeMethod
                               ? FindReferencesKind.WITH_BASE_AND_DESCENDANTS
                               : FindReferencesKind.DIRECT;
-    scheduleHydration(new Request(key, context, unsavedContents(virtualFile), kind, fileStamp));
+    String contents = HaxeCompilerDisplayService.unsavedContents(virtualFile);
+    scheduleHydration(new Request(key, context, contents, kind, fileStamp));
     return UsageState.UNKNOWN;
   }
 
@@ -131,13 +130,6 @@ public final class HaxeCompilerUsageService {
     if (verdicts.dropUnusedOutside(savedPath)) {
       HaxeCompilerCaches.restartHighlightingLater(project, "haxe: a saved file may reference members held unused");
     }
-  }
-
-  @Nullable
-  private static String unsavedContents(@NotNull VirtualFile virtualFile) {
-    FileDocumentManager documents = FileDocumentManager.getInstance();
-    Document document = documents.getCachedDocument(virtualFile);
-    return document != null && documents.isDocumentUnsaved(document) ? document.getText() : null;
   }
 
   private void scheduleHydration(@NotNull Request request) {

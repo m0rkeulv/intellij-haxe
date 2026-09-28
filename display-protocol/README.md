@@ -157,6 +157,25 @@ haxe 5 adds the `code`.
   one value (`+WVarShadow+WUnsafeEnumEquality`), or the option can repeat.
   `+WAll` enables everything.
 
+## References and definition (`display/references`, `display/definition`, verified against 4.3.7)
+
+- Both take `{file, offset, ?contents}`; references add `kind`: `direct`,
+  `withBaseAndDescendants` (the base field and every override) or
+  `withDescendants`. Both answer a list of `{file, range}` with the file as
+  an absolute path and a 0-based range.
+- A field usage is recorded at the trailing name-length window of the field
+  access expression's position (the compiler's `patch_string_pos`), which
+  is the name itself in `obj.field`, `Main.field` and a bare `field`.
+- A compound assignment breaks that rule: for `field += x` (any compound
+  operator, any receiver) the typer gives the left-hand access the position
+  of the whole assignment, so the range is
+  `[assignmentEnd - name.length, assignmentEnd)`, which lands on the tail
+  of the right-hand side (`ht(2)` for `total += weight(2)`). Plain `=`,
+  reads and `++` are positioned correctly. The IDE maps such a range back
+  through the assignment expression that ends at the range end.
+- `display/references` never lists the declaration itself; the query may
+  be placed at the declaration or at any usage.
+
 ## Haxe 5 differences (verified against 5.0.0-preview.1)
 
 The JSON-RPC surface is unchanged: the same methods, framing and envelopes.

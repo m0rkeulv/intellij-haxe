@@ -4,6 +4,7 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompletionMode;
+import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
 import com.intellij.ui.table.TableView;
@@ -11,6 +12,7 @@ import com.intellij.util.ui.ColumnInfo;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.ListTableModel;
+import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -63,6 +65,10 @@ public final class HaxeCompilerSettingsPanel {
   private @Nullable HaxeLanguageLevel compilerLevel;
   private final JCheckBox useLevelForConditionalsCheckBox =
     new JCheckBox(HaxeBundle.message("haxe.compiler.conditionals.language.level.checkbox"));
+  private final JCheckBox compilerIdeFeaturesCheckBox =
+    new JCheckBox(HaxeBundle.message("haxe.compiler.ide.features.checkbox"));
+  private final JBLabel compilerIdeFeaturesHint =
+    new JBLabel(HaxeBundle.message("haxe.compiler.ide.features.hint"), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
   private final JCheckBox compilerDiagnosticsCheckBox =
     new JCheckBox(HaxeBundle.message("haxe.compiler.diagnostics.checkbox"));
   private final JCheckBox diagnosticsErrorsCheckBox =
@@ -93,6 +99,9 @@ public final class HaxeCompilerSettingsPanel {
     updateDiagnosticsChildEnablement();
     completionModeCombo.setRenderer(BuilderKt.textListCellRenderer("", HaxeCompletionMode::getPresentableText));
     completionModeCombo.setToolTipText(HaxeBundle.message("haxe.compiler.completion.mode.tooltip"));
+    compilerIdeFeaturesCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.ide.features.tooltip"));
+    // the hint sits under the checkbox text, past its box
+    compilerIdeFeaturesHint.setBorder(JBUI.Borders.emptyLeft(24));
 
     useLevelForConditionalsCheckBox.setToolTipText(HaxeBundle.message("haxe.compiler.conditionals.language.level.tooltip"));
 
@@ -103,6 +112,8 @@ public final class HaxeCompilerSettingsPanel {
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.default.language.level"), defaultLevelCombo)
       .addComponent(useLevelForConditionalsCheckBox)
       .addLabeledComponent(HaxeBundle.message("haxe.compiler.completion.mode"), completionModeCombo)
+      .addComponent(compilerIdeFeaturesCheckBox)
+      .addComponent(compilerIdeFeaturesHint)
       .addComponent(compilerDiagnosticsCheckBox)
       .addComponent(diagnosticsErrorsCheckBox)
       .addComponent(diagnosticsUnusedImportsCheckBox)
@@ -180,6 +191,14 @@ public final class HaxeCompilerSettingsPanel {
 
   public void setCompletionMode(@NotNull HaxeCompletionMode mode) {
     completionModeCombo.setSelectedItem(mode);
+  }
+
+  public boolean isCompilerIdeFeaturesEnabled() {
+    return compilerIdeFeaturesCheckBox.isSelected();
+  }
+
+  public void setCompilerIdeFeaturesEnabled(boolean enabled) {
+    compilerIdeFeaturesCheckBox.setSelected(enabled);
   }
 
   @NotNull

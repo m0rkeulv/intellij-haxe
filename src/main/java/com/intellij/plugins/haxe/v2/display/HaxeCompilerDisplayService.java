@@ -5,6 +5,8 @@ import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManag
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
@@ -457,6 +459,18 @@ public final class HaxeCompilerDisplayService {
   static VirtualFile physicalFileOf(@NotNull PsiElement element) {
     PsiFile file = element.getContainingFile();
     return file != null ? file.getOriginalFile().getVirtualFile() : null;
+  }
+
+  /**
+   * The editor's text of the file when it differs from disk, else null. A
+   * request sends it as {@code contents}, after invalidating the file on the
+   * server, since the compiler otherwise reads the saved file. Read action.
+   */
+  @Nullable
+  static String unsavedContents(@NotNull VirtualFile file) {
+    FileDocumentManager documents = FileDocumentManager.getInstance();
+    Document document = documents.getCachedDocument(file);
+    return document != null && documents.isDocumentUnsaved(document) ? document.getText() : null;
   }
 
   // --- build file resolution ---

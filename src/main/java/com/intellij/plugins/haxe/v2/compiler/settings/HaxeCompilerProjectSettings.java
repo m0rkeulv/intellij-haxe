@@ -34,6 +34,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
     public boolean compilerDiagnosticsOnly = false;
     public boolean useLanguageLevelForConditionals = true;
     public String completionMode = HaxeCompletionMode.IDE_AND_COMPILER.getId();
+    public boolean compilerIdeFeatures = false;
   }
 
   private final @Nullable Project project;
@@ -195,5 +196,15 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public void setCompletionMode(@NotNull HaxeCompletionMode mode) {
     state.completionMode = mode.getId();
+  }
+
+  @Override
+  public boolean isCompilerIdeFeaturesEnabled() {
+    return state.compilerIdeFeatures;
+  }
+
+  @Override
+  public void setCompilerIdeFeaturesEnabled(boolean enabled) {
+    state.compilerIdeFeatures = enabled;
   }
 }

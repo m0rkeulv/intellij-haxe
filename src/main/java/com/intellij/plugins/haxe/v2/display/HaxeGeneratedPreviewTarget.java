@@ -15,10 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * A navigation target whose navigate() builds the module dump and opens the
@@ -105,7 +102,7 @@ public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarg
         // the cache for the next attempt.
         Future<HaxeGeneratedCodePreview.PreparedPreview> preparing =
           ApplicationManager.getApplication().executeOnPooledThread(() -> preparePreview(project));
-        prepared = awaitCancelable(preparing, indicator);
+        prepared = HaxeCancelableFutures.await(preparing, indicator, "generated-code preview preparation failed");
       }
 
       @Override
@@ -132,29 +129,5 @@ public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarg
     // rendering and the offset lookup parse the dump, which can be
     // library-sized, so they stay off the EDT
     return HaxeGeneratedCodePreview.prepare(project, moduleDump, dotPath, memberName);
-  }
-
-  /** Waits for the preparation, aborting the task (dialog included) the moment the user cancels. */
-  @Nullable
-  private static HaxeGeneratedCodePreview.PreparedPreview awaitCancelable(
-    @NotNull Future<HaxeGeneratedCodePreview.PreparedPreview> preparing,
-    @NotNull ProgressIndicator indicator) {
-    while (true) {
-      indicator.checkCanceled();
-      try {
-        return preparing.get(100, TimeUnit.MILLISECONDS);
-      }
-      catch (TimeoutException stillPreparing) {
-        // keep polling; the wait must stay short so cancellation is prompt
-      }
-      catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        return null;
-      }
-      catch (ExecutionException e) {
-        log.warn("generated-code preview preparation failed", e.getCause());
-        return null;
-      }
-    }
   }
 }

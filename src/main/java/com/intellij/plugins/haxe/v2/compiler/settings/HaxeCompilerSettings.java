@@ -118,4 +118,13 @@ public interface HaxeCompilerSettings {
   HaxeCompletionMode getCompletionMode();
 
   void setCompletionMode(@NotNull HaxeCompletionMode mode);
+
+  /**
+   * Whether Find Usages and go-to-declaration ask the compilation server
+   * ({@code display/references}, {@code display/definition}) instead of the
+   * plugin's static resolution. Rename and Safe Delete stay static.
+   */
+  boolean isCompilerIdeFeaturesEnabled();
+
+  void setCompilerIdeFeaturesEnabled(boolean enabled);
 }
