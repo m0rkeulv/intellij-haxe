@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.refactoring.rename;
 
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
+import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.codeStyle.SuggestedNameInfo;
@@ -9,8 +10,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -54,6 +57,37 @@ public class HaxeNameSuggestionProviderTest extends HaxeLightFixtureTestCase {
     	}
     }
     """;
+  private static final String LOWERCASE_CLASS_SOURCE = """
+    class <caret>myThing {}
+    """;
+  private static final String CAPITALIZED_METHOD_SOURCE = """
+    class Main {
+    	static function <caret>GetValue() {}
+    }
+    """;
+  private static final String CONSTANT_SOURCE = """
+    class Main {
+    	static final <caret>maxCount = 5;
+    }
+    """;
+  private static final String NULLABLE_PARAMETER_SOURCE = """
+    class Main {
+    	static function run(<caret>x:Null<Int>) {}
+    }
+    """;
+  private static final String ARRAY_FIELD_SOURCE = """
+    class Box {}
+    class Main {
+    	var <caret>x:Array<Box>;
+    }
+    """;
+  private static final String CAPITALIZED_TYPED_LOCAL_SOURCE = """
+    class Main {
+    	static function main() {
+    		var <caret>Label:String = "a";
+    	}
+    }
+    """;
 
   @Override
   protected String getBasePath() {
@@ -86,8 +120,8 @@ public class HaxeNameSuggestionProviderTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("a method gets no suggestions")
-  public void testAMethodGetsNoSuggestions() {
+  @DisplayName("a method named to convention gets no suggestions")
+  public void testAMethodNamedToConventionGetsNoSuggestions() {
     myFixture.configureByText("Main.hx", METHOD_SOURCE);
     Set<String> names = new LinkedHashSet<>();
 
@@ -104,6 +138,70 @@ public class HaxeNameSuggestionProviderTest extends HaxeLightFixtureTestCase {
 
     assertFalse(names.contains("str"), "str is taken by the sibling local: " + names);
     assertTrue(names.contains("str1"), names.toString());
+  }
+
+  @Test
+  @DisplayName("rename started on the name element itself gets the same suggestions")
+  public void testRenameStartedOnTheNameElementItselfGetsTheSameSuggestions() {
+    myFixture.configureByText("Main.hx", TYPED_LOCAL_SOURCE);
+    PsiElement leaf = myFixture.getFile().findElementAt(myFixture.getCaretOffset());
+    HaxeComponentName name = PsiTreeUtil.getParentOfType(leaf, HaxeComponentName.class);
+    assertNotNull(name);
+    Set<String> names = new LinkedHashSet<>();
+
+    SuggestedNameInfo info = new HaxeNameSuggestionProvider().getSuggestedNames(name, null, names);
+
+    assertNotNull(info, "the provider answers for the name element the in-place renamer hands over");
+    assertTrue(names.contains("str"), names.toString());
+  }
+
+  @Test
+  @DisplayName("the recased name leads the type based names")
+  public void testTheRecasedNameLeadsTheTypeBasedNames() {
+    Set<String> names = suggestionsAtCaret(CAPITALIZED_TYPED_LOCAL_SOURCE);
+
+    assertEquals("label", names.iterator().next(), names.toString());
+    assertTrue(names.contains("str"), names.toString());
+  }
+
+  @Test
+  @DisplayName("a class gets its name capitalized")
+  public void testAClassGetsItsNameCapitalized() {
+    Set<String> names = suggestionsAtCaret(LOWERCASE_CLASS_SOURCE);
+
+    assertEquals(List.of("MyThing"), List.copyOf(names));
+  }
+
+  @Test
+  @DisplayName("a method gets its name decapitalized")
+  public void testAMethodGetsItsNameDecapitalized() {
+    Set<String> names = suggestionsAtCaret(CAPITALIZED_METHOD_SOURCE);
+
+    assertEquals(List.of("getValue"), List.copyOf(names));
+  }
+
+  @Test
+  @DisplayName("a constant gets upper snake case")
+  public void testAConstantGetsUpperSnakeCase() {
+    Set<String> names = suggestionsAtCaret(CONSTANT_SOURCE);
+
+    assertTrue(names.contains("MAX_COUNT"), names.toString());
+  }
+
+  @Test
+  @DisplayName("a nullable parameter is named by the wrapped type")
+  public void testANullableParameterIsNamedByTheWrappedType() {
+    Set<String> names = suggestionsAtCaret(NULLABLE_PARAMETER_SOURCE);
+
+    assertTrue(names.contains("i"), names.toString());
+  }
+
+  @Test
+  @DisplayName("an array field is named by its element type in the plural")
+  public void testAnArrayFieldIsNamedByItsElementTypeInThePlural() {
+    Set<String> names = suggestionsAtCaret(ARRAY_FIELD_SOURCE);
+
+    assertTrue(names.contains("boxes"), names.toString());
   }
 
   private Set<String> suggestionsAtCaret(String source) {

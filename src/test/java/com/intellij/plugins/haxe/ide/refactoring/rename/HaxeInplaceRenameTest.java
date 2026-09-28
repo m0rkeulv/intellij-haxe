@@ -1,5 +1,9 @@
 package com.intellij.plugins.haxe.ide.refactoring.rename;
 
+import com.intellij.codeInsight.lookup.Lookup;
+import com.intellij.codeInsight.lookup.LookupElement;
+import com.intellij.codeInsight.lookup.LookupManager;
+import com.intellij.codeInsight.template.impl.TemplateManagerImpl;
 import com.intellij.ide.DataManager;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
@@ -82,6 +86,13 @@ public class HaxeInplaceRenameTest extends HaxeLightFixtureTestCase {
     	}
     }
     """;
+  private static final String TYPED_LOCAL_SOURCE = """
+    class Main {
+    	static function main() {
+    		var <caret>x:String = "a";
+    	}
+    }
+    """;
   private static final String PARAMETER_REFERENCE_SOURCE = """
     class Main {
     	static function main(count:Int) {
@@ -109,6 +120,23 @@ public class HaxeInplaceRenameTest extends HaxeLightFixtureTestCase {
 
     assertTrue(myFixture.getFile().getText().contains("function go()"), myFixture.getFile().getText());
     assertTrue(textOf(MAIN_HX_NAME).contains("Helper.go()"), textOf(MAIN_HX_NAME));
+  }
+
+  @Test
+  @DisplayName("the in place name lookup offers the suggestions")
+  public void testTheInPlaceNameLookupOffersTheSuggestions() {
+    myFixture.configureByText(MAIN_HX_NAME, TYPED_LOCAL_SOURCE);
+    // keeps the template interactive, as the editor does, instead of finishing it at once
+    TemplateManagerImpl.setTemplateTesting(getTestRootDisposable());
+    DataContext context = DataManager.getInstance().getDataContext(myFixture.getEditor().getComponent());
+
+    new VariableInplaceRenameHandler().doRename(nameAtCaret(), myFixture.getEditor(), context);
+
+    Lookup lookup = LookupManager.getActiveLookup(myFixture.getEditor());
+    assertNotNull(lookup, "the template stop opens the name lookup");
+    List<String> offered = lookup.getItems().stream().map(LookupElement::getLookupString).toList();
+    assertTrue(offered.containsAll(List.of("str", "string")), offered.toString());
+    TemplateManagerImpl.getTemplateState(myFixture.getEditor()).gotoEnd(false);
   }
 
   @Test

@@ -210,6 +210,7 @@
     <lang.surroundDescriptor language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.surroundWith.HaxeSurroundDescriptor"/>
     <lang.refactoringSupport language="Haxe"
                              implementationClass="com.intellij.plugins.haxe.ide.refactoring.HaxeRefactoringSupportProvider"/>
+    <lang.namesValidator language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.refactoring.HaxeNamesValidator"/>
     <lang.foldingBuilder language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.folding.HaxeFoldingBuilder"/>
     <lang.importOptimizer language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.HaxeImportOptimizer"/>
 
