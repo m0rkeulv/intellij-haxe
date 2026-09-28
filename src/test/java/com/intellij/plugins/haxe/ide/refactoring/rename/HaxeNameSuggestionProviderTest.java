@@ -81,6 +81,29 @@ public class HaxeNameSuggestionProviderTest extends HaxeLightFixtureTestCase {
     	var <caret>x:Array<Box>;
     }
     """;
+  private static final String OVERRIDE_PARAMETER_SOURCE = """
+    class Base {
+    	public function new() {}
+    	public function update(elapsed:Float, paused:Bool) {}
+    }
+    class Main extends Base {
+    	override public function update(dt:Float, <caret>p:Bool) {}
+    }
+    """;
+  private static final String INTERFACE_PARAMETER_SOURCE = """
+    interface Drawable {
+    	function draw(canvas:String):Void;
+    }
+    class Main implements Drawable {
+    	public function draw(<caret>c:String) {}
+    }
+    """;
+  private static final String SETTER_PARAMETER_SOURCE = """
+    class Main {
+    	public var width(default, set):Float;
+    	function set_width(<caret>v:Float):Float return width = v;
+    }
+    """;
   private static final String CAPITALIZED_TYPED_LOCAL_SOURCE = """
     class Main {
     	static function main() {
@@ -153,6 +176,30 @@ public class HaxeNameSuggestionProviderTest extends HaxeLightFixtureTestCase {
 
     assertNotNull(info, "the provider answers for the name element the in-place renamer hands over");
     assertTrue(names.contains("str"), names.toString());
+  }
+
+  @Test
+  @DisplayName("an overriding method's parameter is offered the overridden parameter's name first")
+  public void testAnOverridingMethodsParameterIsOfferedTheOverriddenParametersNameFirst() {
+    Set<String> names = suggestionsAtCaret(OVERRIDE_PARAMETER_SOURCE);
+
+    assertEquals("paused", names.iterator().next(), names.toString());
+  }
+
+  @Test
+  @DisplayName("an implementing method's parameter is offered the interface parameter's name first")
+  public void testAnImplementingMethodsParameterIsOfferedTheInterfaceParametersNameFirst() {
+    Set<String> names = suggestionsAtCaret(INTERFACE_PARAMETER_SOURCE);
+
+    assertEquals("canvas", names.iterator().next(), names.toString());
+  }
+
+  @Test
+  @DisplayName("a setter's parameter is offered value")
+  public void testASettersParameterIsOfferedValue() {
+    Set<String> names = suggestionsAtCaret(SETTER_PARAMETER_SOURCE);
+
+    assertEquals("value", names.iterator().next(), names.toString());
   }
 
   @Test

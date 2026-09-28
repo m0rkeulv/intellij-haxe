@@ -94,6 +94,12 @@ public class HaxeNameSuggesterUtil {
     return uniqueAgainst(names, takenNames(context, alsoUsed));
   }
 
+  /** Given names in the kind's casing with their tails, clear of {@code alsoUsed}. */
+  @NotNull
+  public static List<String> getSuggestedNames(@NotNull List<String> names, @NotNull HaxeNameKind kind, @NotNull Set<String> alsoUsed) {
+    return uniqueAgainst(casedVariants(names, kind), takenNames(null, alsoUsed));
+  }
+
   /** A given name in the kind's casings, clear of {@code alsoUsed}. */
   @NotNull
   public static List<String> getRecasedName(@NotNull String name, @NotNull HaxeNameKind kind, @NotNull Set<String> alsoUsed) {

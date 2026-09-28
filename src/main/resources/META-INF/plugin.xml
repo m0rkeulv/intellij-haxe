@@ -348,6 +348,7 @@
     <!-- early so the expected values are in the lookup's first shown frame; late arrivals sort below frozen items -->
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeExpectedEnumValueCompletionContributor"/>
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeLambdaCompletionContributor"/>
+    <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.ide.completion.HaxeDeclarationNameCompletionContributor"/>
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRuntimeCompletionContributor"/>
     <!-- opt-in via compiler diagnostics: macro-generated members of the enclosing class -->
     <completion.contributor language="Haxe" order="after ControllingCompletion" implementationClass="com.intellij.plugins.haxe.v2.display.HaxeBlueprintCompletionContributor"/>

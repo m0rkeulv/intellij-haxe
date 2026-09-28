@@ -2,6 +2,10 @@ package com.intellij.plugins.haxe.ide.refactoring.rename;
 
 import com.intellij.plugins.haxe.ide.refactoring.HaxeRefactoringUtil;
 import com.intellij.plugins.haxe.lang.psi.*;
+import com.intellij.plugins.haxe.model.HaxeClassModel;
+import com.intellij.plugins.haxe.model.HaxeClassReferenceModel;
+import com.intellij.plugins.haxe.model.HaxeMethodModel;
+import com.intellij.plugins.haxe.model.HaxeParameterModel;
 import com.intellij.plugins.haxe.model.type.HaxeTypeResolver;
 import com.intellij.plugins.haxe.model.type.ResultHolder;
 import com.intellij.plugins.haxe.util.HaxeNameKind;
@@ -13,8 +17,10 @@ import com.intellij.refactoring.rename.NameSuggestionProvider;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -28,6 +34,8 @@ import java.util.Set;
  * a rename is free to keep.
  */
 public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
+  private static final String SETTER_PREFIX = "set_";
+  private static final String SETTER_VALUE_NAME = "value";
 
   @Override
   public @Nullable SuggestedNameInfo getSuggestedNames(@NotNull PsiElement element,
@@ -38,8 +46,10 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     HaxeNameKind kind = kindOf(declaration);
     Set<String> used = usedNamesExcept(declaration);
 
-    // the name recased to convention first: it is the rename the user most likely came for
-    Set<String> names = new LinkedHashSet<>(recasedCurrentName(declaration, kind, used));
+    // the name the method's contract gives, then the name recased to convention, then names from the value
+    Set<String> names = new LinkedHashSet<>();
+    if (declaration instanceof HaxeParameter parameter) names.addAll(namesFromTheMethodContract(parameter, used));
+    names.addAll(recasedCurrentName(declaration, kind, used));
     HaxeSuggestedNames suggested = suggestForValue(declaration, kind, used);
     names.addAll(suggested.names());
     names.remove(declaration.getName());
@@ -78,6 +88,57 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     ResultHolder type = typeTag == null ? null : HaxeTypeResolver.getTypeFromTypeTag(typeTag, declaration);
     if (initialValue == null && type == null) return HaxeSuggestedNames.NONE;
     return HaxeNameSuggesterUtil.suggest(initialValue, type, kind, null, used);
+  }
+
+  /**
+   * What the method's contract calls the parameter: the overridden or
+   * implemented method's parameter at the same position, and for a
+   * property setter {@code value}, since the property's own name would
+   * shadow the field the setter assigns.
+   */
+  @NotNull
+  private static List<String> namesFromTheMethodContract(@NotNull HaxeParameter parameter, @NotNull Set<String> used) {
+    if (!(parameter.getParent() instanceof HaxeParameterList parameters) || !(parameters.getParent() instanceof HaxeMethod method)) {
+      return List.of();
+    }
+    HaxeMethodModel model = method.getModel();
+    List<String> names = new ArrayList<>();
+    int position = parameters.getParameterList().indexOf(parameter);
+    for (HaxeMethodModel contract : contractsOf(model)) {
+      List<HaxeParameterModel> contractParameters = contract.getParameters();
+      if (position < contractParameters.size()) names.add(contractParameters.get(position).getName());
+    }
+    if (isPropertySetter(model)) names.add(SETTER_VALUE_NAME);
+    return HaxeNameSuggesterUtil.getSuggestedNames(names, HaxeNameKind.VARIABLE, used);
+  }
+
+  /** The methods this one overrides or implements, nearest first. */
+  @NotNull
+  private static List<HaxeMethodModel> contractsOf(@NotNull HaxeMethodModel method) {
+    List<HaxeMethodModel> contracts = new ArrayList<>();
+    for (HaxeMethodModel parent = method.getParentMethod(null); parent != null; parent = parent.getParentMethod(null)) {
+      if (contracts.contains(parent)) break;
+      contracts.add(parent);
+    }
+    HaxeClassModel declaringClass = method.getDeclaringClass();
+    if (declaringClass == null) return contracts;
+    for (HaxeClassReferenceModel implemented : declaringClass.getImplementingInterfaces()) {
+      HaxeClassModel interfaceModel = implemented.getHaxeClassModel();
+      if (interfaceModel == null) continue;
+      // the model's by-name lookup misses interface methods; the method list has them
+      for (HaxeMethodModel declared : interfaceModel.getMethods(null)) {
+        if (Objects.equals(declared.getName(), method.getName())) contracts.add(declared);
+      }
+    }
+    return contracts;
+  }
+
+  /** A method {@code set_width} of a class with a property {@code width}. */
+  private static boolean isPropertySetter(@NotNull HaxeMethodModel method) {
+    String name = method.getName();
+    HaxeClassModel declaringClass = method.getDeclaringClass();
+    if (declaringClass == null || name == null || !name.startsWith(SETTER_PREFIX)) return false;
+    return declaringClass.getField(name.substring(SETTER_PREFIX.length()), null) != null;
   }
 
   /** The current name in the kind's casings; the caller drops the name itself. */
