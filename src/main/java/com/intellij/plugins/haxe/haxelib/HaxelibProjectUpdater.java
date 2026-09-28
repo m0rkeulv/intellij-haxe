@@ -31,6 +31,7 @@ import com.intellij.openapi.module.ModuleUtil;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.*;
@@ -38,7 +39,6 @@ import com.intellij.openapi.roots.ex.ProjectRootManagerEx;
 import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.roots.libraries.LibraryTable;
 import com.intellij.openapi.roots.libraries.LibraryTablesRegistrar;
-import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -1590,15 +1590,12 @@ public class HaxelibProjectUpdater {
         updatingProject.setUpdating(true);
       }
 
-      // Waiting for runWhenProjectIsInitialized() ensures that the project is
-      // fully loaded and accessible.  Otherwise, we crash. ;)
-      StartupManager.getInstance(updatingProject.getProject()).runWhenProjectIsInitialized(new Runnable() {
-        public void run() {
-          log.debug("Starting haxelib library sync...");
-          runUpdate();
-        }
+      // A project is queued from its post-startup activity or later, so it is
+      // open; the sync still has to wait for the indexes it reads.
+      DumbService.getInstance(updatingProject.getProject()).runWhenSmart(() -> {
+        log.debug("Starting haxelib library sync...");
+        runUpdate();
       });
-
     }
 
     /**

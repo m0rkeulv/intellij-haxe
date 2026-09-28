@@ -54,8 +54,7 @@ public class HaxeUtil {
     Task.Backgroundable task = new Task.Backgroundable(project, HaxeBundle.message("haxe.project.reparsing"), false) {
       public void run(@NotNull ProgressIndicator indicator) {
         final Collection<VirtualFile> haxeFiles = new ArrayList<VirtualFile>();
-        final VirtualFile baseDir = project.getBaseDir();
-        if (baseDir != null) {
+        if (project.getBasePath() != null) {
           FileBasedIndex.getInstance().iterateIndexableFiles(new ContentIterator() {
             public boolean processFile(VirtualFile file) {
               if (HaxeFileType.INSTANCE == file.getFileType()) {

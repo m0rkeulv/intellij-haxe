@@ -21,12 +21,10 @@ package com.intellij.plugins.haxe.ide.highlight;
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors;
 import com.intellij.openapi.editor.HighlighterColors;
 import com.intellij.openapi.editor.XmlHighlighterColors;
+import com.intellij.openapi.editor.colors.CodeInsightColors;
 import com.intellij.openapi.editor.colors.TextAttributesKey;
-import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import org.jetbrains.annotations.NotNull;
-
-import java.awt.*;
 
 import static com.intellij.openapi.editor.colors.EditorColors.INJECTED_LANGUAGE_FRAGMENT;
 import static com.intellij.openapi.editor.colors.TextAttributesKey.createTextAttributesKey;
@@ -112,7 +110,7 @@ public class HaxeSyntaxHighlighterColors {
   createTextAttributesKey("HAXE_TYPE_REIFICATION", DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE);
 
   public static final TextAttributesKey CONDITIONAL_ERROR =
-  createTextAttributesKey("HAXE_CONDITIONAL_ERROR",getConditionalErrorFallback());
+  createTextAttributesKey("HAXE_CONDITIONAL_ERROR", CodeInsightColors.WRONG_REFERENCES_ATTRIBUTES); //closest color available as fallback
 
   public static final TextAttributesKey INTERFACE =
     createTextAttributesKey(HAXE_INTERFACE, DefaultLanguageHighlighterColors.INTERFACE_NAME);
@@ -142,11 +140,5 @@ public class HaxeSyntaxHighlighterColors {
     return TextAttributesKey.createTextAttributesKey(  HaxeLanguage.INSTANCE.getID() + ":INJECTED_LANGUAGE_FRAGMENT", INJECTED_LANGUAGE_FRAGMENT);
   }
 
-
-  private static TextAttributes getConditionalErrorFallback() {
-    TextAttributes textAttributes = new TextAttributes();
-    textAttributes.setBackgroundColor(Color.decode("#b25c5e"));
-    return textAttributes;
-  }
 
 }

@@ -47,6 +47,7 @@ public class HaxeColorSettingsPage implements ColorSettingsPage {
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.doc.code"), DOC_CODE),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.doc.tag"), DOC_TAG),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation"), CONDITIONALLY_NOT_COMPILED),
+    new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation.error"), CONDITIONAL_ERROR),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.unparseable.data"), UNPARSEABLE_DATA),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation.defined.flag"), DEFINED_VAR),
     new AttributesDescriptor(HaxeBundle.message("haxe.color.settings.description.conditional.compilation.undefined.flag"), UNDEFINED_VAR),
@@ -92,6 +93,7 @@ public class HaxeColorSettingsPage implements ColorSettingsPage {
     ourTags.put("local.variable", LOCAL_VARIABLE);
     ourTags.put("class", CLASS);
     ourTags.put("compilation", CONDITIONALLY_NOT_COMPILED);
+    ourTags.put("conditional.error", CONDITIONAL_ERROR);
     ourTags.put("unparseable", UNPARSEABLE_DATA);
     ourTags.put("defined.flag", DEFINED_VAR);
     ourTags.put("undefined.flag", UNDEFINED_VAR);
@@ -153,7 +155,7 @@ public class HaxeColorSettingsPage implements ColorSettingsPage {
   public String getDemoText() {
     return """
       <compilation>#if <defined.flag>definedFlag</defined.flag> && <undefined.flag>undefinedFlag</undefined.flag>
-      #error "Error!!"
+      <conditional.error>#error "Error!!"</conditional.error>
       #else</compilation>
       import <class>util.Date</class>;
       <compilation>#end</compilation>
