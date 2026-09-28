@@ -421,13 +421,14 @@ The rules every wait loop must follow (`waitForSingleStep`,
   respond), then feed it to `handleWaitOutcome`.
 - **Check `outcome.threadId`** on SingleStep: only the dancing thread has the
   trap flag, but never assume.
-- **A forced break (pause, memory-write pause) is only the trap at no patched
-  site.** `forceBreakAndDrain` tells the forced stop from a breakpoint, temp
-  or throw-site hit that races it by `Breakpoints.isPatchedSite(Eip - 1)`.
-  A racing hit goes through `handleWaitOutcome` as the stop it is (with its
-  Eip rewind); reporting it as the pause skipped the rewind, and the next
-  continue resumed one byte into the patched instruction. The forced stop
-  then arrives as a stray trap on a later resume and is continued silently.
+- **A forced break (pause, memory-write pause) is only a trap at an unpatched
+  site.** `forceBreakAndDrain` tells the forced stop apart from a breakpoint,
+  step temp or throw-site hit that races it with
+  `Breakpoints.isPatchedSite(Eip - 1)`. A racing hit goes through
+  `handleWaitOutcome` like any other stop, including its Eip rewind.
+  Reporting it as the pause would skip the rewind, and the next continue
+  would resume one byte into the patched instruction. The forced stop then
+  arrives as a stray trap on a later resume and is continued silently.
 - **Thread-specific state must carry its thread id.** The suspend-all
   singletons (`stoppedThreadId` + `currentStoppedBreakpoint`, written
   together at each stop) are fine, but the in-flight step is bound to the

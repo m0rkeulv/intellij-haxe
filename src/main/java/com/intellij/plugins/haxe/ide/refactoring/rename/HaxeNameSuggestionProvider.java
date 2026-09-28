@@ -23,16 +23,19 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Rename suggestions for a Haxe declaration. First the current name recased
- * for its kind: a class named {@code myThing} is offered {@code MyThing}, a
- * constant {@code maxCount} is offered {@code MAX_COUNT}. Then, for a value
- * declaration (a local, a field, a parameter), names read off its
- * initializer and its declared type; the chosen name is remembered for the
- * next value like it. The names avoid
- * those in use around the declaration, except the declaration's own, which
- * a rename is free to keep.
- */
+/// Rename suggestions for a Haxe declaration, in this order:
+///
+/// 1. For a parameter, the name the method's contract gives it: the
+///    parameter at the same position in the overridden or implemented
+///    method, or `value` for a property setter.
+/// 2. The current name recased to the kind's convention: a class `myThing`
+///    is offered `MyThing`, a constant `maxCount` is offered `MAX_COUNT`.
+/// 3. For a local, field or parameter, names from its initializer and its
+///    declared type. The name chosen from these is remembered for the next
+///    similar value.
+///
+/// The names avoid those already in use around the declaration, except the
+/// declaration's own name, which a rename may keep.
 public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
   private static final String SETTER_PREFIX = "set_";
   private static final String SETTER_VALUE_NAME = "value";
@@ -46,11 +49,10 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     HaxeNameKind kind = kindOf(declaration);
     Set<String> used = usedNamesExcept(declaration);
 
-    // the name the method's contract gives, then the name recased to convention, then names from the value
     Set<String> names = new LinkedHashSet<>();
-    if (declaration instanceof HaxeParameter parameter) names.addAll(namesFromTheMethodContract(parameter, used));
+    if (declaration instanceof HaxeParameter parameter) names.addAll(namesFromMethodContract(parameter, used));
     names.addAll(recasedCurrentName(declaration, kind, used));
-    HaxeSuggestedNames suggested = suggestForValue(declaration, kind, used);
+    HaxeSuggestedNames suggested = namesFromValue(declaration, kind, used);
     names.addAll(suggested.names());
     names.remove(declaration.getName());
     if (names.isEmpty()) return null;
@@ -59,8 +61,9 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
   }
 
   /**
-   * The declaring component: rename started on a declaration hands over the
-   * name element, rename started on a reference the component it resolves to.
+   * The declaring component. A rename started on a declaration hands over
+   * its name element; one started on a reference hands over the component
+   * the reference resolves to.
    */
   @Nullable
   private static HaxeNamedComponent declarationOf(@NotNull PsiElement element) {
@@ -68,9 +71,9 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     return element instanceof HaxeNamedComponent component ? component : null;
   }
 
-  /** Names from a value's initializer and declared type; other declarations give none. */
+  /** Names from the initializer and declared type of a local, field or parameter; other declarations get none. */
   @NotNull
-  private static HaxeSuggestedNames suggestForValue(@NotNull HaxeNamedComponent declaration,
+  private static HaxeSuggestedNames namesFromValue(@NotNull HaxeNamedComponent declaration,
                                                     @NotNull HaxeNameKind kind,
                                                     @NotNull Set<String> used) {
     HaxeVarInit initializer;
@@ -91,13 +94,13 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
   }
 
   /**
-   * What the method's contract calls the parameter: the overridden or
-   * implemented method's parameter at the same position, and for a
-   * property setter {@code value}, since the property's own name would
-   * shadow the field the setter assigns.
+   * What the method's contract calls the parameter: the name of the
+   * parameter at the same position in the overridden or implemented method,
+   * and {@code value} for a property setter, since the property's own name
+   * would shadow the field the setter assigns.
    */
   @NotNull
-  private static List<String> namesFromTheMethodContract(@NotNull HaxeParameter parameter, @NotNull Set<String> used) {
+  private static List<String> namesFromMethodContract(@NotNull HaxeParameter parameter, @NotNull Set<String> used) {
     if (!(parameter.getParent() instanceof HaxeParameterList parameters) || !(parameters.getParent() instanceof HaxeMethod method)) {
       return List.of();
     }
@@ -109,7 +112,7 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
       if (position < contractParameters.size()) names.add(contractParameters.get(position).getName());
     }
     if (isPropertySetter(model)) names.add(SETTER_VALUE_NAME);
-    return HaxeNameSuggesterUtil.getSuggestedNames(names, HaxeNameKind.VARIABLE, used);
+    return HaxeNameSuggesterUtil.suggestFrom(names, HaxeNameKind.VARIABLE, used);
   }
 
   /** The methods this one overrides or implements, nearest first. */
@@ -133,7 +136,7 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     return contracts;
   }
 
-  /** A method {@code set_width} of a class with a property {@code width}. */
+  /** Whether the method is a property setter: {@code set_width} in a class with a field {@code width}. */
   private static boolean isPropertySetter(@NotNull HaxeMethodModel method) {
     String name = method.getName();
     HaxeClassModel declaringClass = method.getDeclaringClass();
@@ -141,12 +144,12 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     return declaringClass.getField(name.substring(SETTER_PREFIX.length()), null) != null;
   }
 
-  /** The current name in the kind's casings; the caller drops the name itself. */
+  /** The current name in each casing the kind uses; the caller drops the unchanged name. */
   @NotNull
   private static List<String> recasedCurrentName(@NotNull HaxeNamedComponent declaration,
                                                  @NotNull HaxeNameKind kind,
                                                  @NotNull Set<String> used) {
-    return HaxeNameSuggesterUtil.getRecasedName(declaration.getName(), kind, used);
+    return HaxeNameSuggesterUtil.recased(declaration.getName(), kind, used);
   }
 
   @NotNull
@@ -160,7 +163,7 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     };
   }
 
-  /** A static field that is final or inline holds a constant. */
+  /** Whether the field holds a constant: a static field that is final or inline. */
   private static boolean isConstant(@NotNull HaxeFieldDeclaration field) {
     if (!field.isStatic()) return false;
     HaxeMutabilityModifier mutability = field.getMutabilityModifier();

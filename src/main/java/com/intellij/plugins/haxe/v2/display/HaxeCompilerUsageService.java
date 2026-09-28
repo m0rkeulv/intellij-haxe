@@ -38,9 +38,9 @@ import org.jetbrains.annotations.Nullable;
  * Inspections run under the read lock, so queries only read the cache. A
  * miss schedules background hydration and answers UNKNOWN. When the verdict
  * arrives, highlighting restarts and the inspection reads it from the cache.
- * A verdict belongs to one revision of its file and to the saved state of
- * every other file: the compiler sees other files as saved, so a save
- * elsewhere retires the UNUSED verdicts it may contradict (see
+ * A verdict holds for one revision of its own file and for the saved state
+ * of every other file, since the compiler sees other files as saved. A save
+ * elsewhere therefore retires the UNUSED verdicts it may contradict (see
  * {@link HaxeUsageVerdictCache}).
  */
 @Service(Service.Level.PROJECT)
@@ -68,7 +68,7 @@ public final class HaxeCompilerUsageService {
       public void after(@NotNull List<? extends @NotNull VFileEvent> events) {
         for (VFileEvent event : events) {
           if (event instanceof VFileContentChangeEvent && isHaxeSource(event.getPath())) {
-            retireUnusedVerdictsOutside(event.getPath());
+            retireUnusedVerdictsInOtherFiles(event.getPath());
           }
         }
       }
@@ -126,8 +126,8 @@ public final class HaxeCompilerUsageService {
     return FileUtilRt.extensionEquals(path, HaxeFileType.DEFAULT_EXTENSION);
   }
 
-  private void retireUnusedVerdictsOutside(@NotNull String savedPath) {
-    if (verdicts.dropUnusedOutside(savedPath)) {
+  private void retireUnusedVerdictsInOtherFiles(@NotNull String savedPath) {
+    if (verdicts.dropUnusedInOtherFiles(savedPath)) {
       HaxeCompilerCaches.restartHighlightingLater(project, "haxe: a saved file may reference members held unused");
     }
   }

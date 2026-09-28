@@ -7,9 +7,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Suggested names, best first, with what they describe: the kind of value,
- * the property the initializer is about and the type, which is what a
- * chosen name is remembered under.
+ * Suggested names, best first, together with the description of the value
+ * they are for: the kind of declaration, the property its initializer is
+ * about, and its type. The chosen name is remembered under that description
+ * ({@link HaxeNameStatistics}).
  */
 public record HaxeSuggestedNames(@NotNull List<String> names,
                                  @NotNull HaxeNameKind kind,
@@ -27,12 +28,12 @@ public record HaxeSuggestedNames(@NotNull List<String> names,
     return names.getFirst();
   }
 
-  /** Remembers the choice so it ranks first the next time the same kind of value is named. */
+  /** Remembers the chosen name so it ranks first the next time a similar value is named. */
   public void recordChosen(@NotNull String name) {
     HaxeNameStatistics.recordChosen(kind, propertyName, typeText, name);
   }
 
-  /** The names as the platform's rename and introduce flows take them; they report the choice back. */
+  /** The names in the form the platform's rename and introduce refactorings take; they report the chosen name back through it. */
   @NotNull
   public SuggestedNameInfo asInfo() {
     return new SuggestedNameInfo(names.toArray(String[]::new)) {

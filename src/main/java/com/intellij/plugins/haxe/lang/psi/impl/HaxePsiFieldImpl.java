@@ -284,9 +284,11 @@ public abstract class HaxePsiFieldImpl extends HaxeStubBasedNamedComponent<HaxeF
   }
 
   /**
-   * A local has no visibility. Reported as a private field it gets the
-   * Groovy plugin's private-field scope enlarger, whose module-wide scope
-   * is no longer local and so blocks in-place rename.
+   * Whether this is a local: a variable in a block or a switch-case capture.
+   * A local has no visibility, so its modifier list claims none. As a
+   * private field it would get the Groovy plugin's private-field scope
+   * enlarger, and a local whose scope reaches the whole module cannot be
+   * renamed in place.
    */
   private boolean isLocalDeclaration() {
     return this instanceof HaxeLocalVarDeclaration || this instanceof HaxeSwitchCaseCapture;

@@ -28,9 +28,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Turns the compiler's file locations into the PSI the platform's usage and
- * navigation surfaces take. A location names a file by its path and a
- * 0-based range; a range the document no longer holds is dropped rather
+ * Turns the compiler's locations into the PSI that the platform's usage and
+ * navigation views take. A location names a file by its path and a 0-based
+ * range; a range that lies beyond the current document is dropped rather
  * than clamped. Every method needs the read lock.
  */
 final class HaxeCompilerLocations {
@@ -52,15 +52,15 @@ final class HaxeCompilerLocations {
   }
 
   /**
-   * The usage the range marks. The compiler records a field access at the
-   * trailing name-length window of the access expression's position, which
-   * is the name itself, except in a compound assignment ({@code field += x}):
-   * there the typer gives the left-hand access the whole assignment's
-   * position, so the window sits at the assignment's end. Such a range maps
-   * back to the assignment's left-hand reference. A range at no reference
-   * gives the bare element, so a usage the static resolver cannot explain
-   * (a generated member) still lists. {@code name} is the referenced name
-   * when known.
+   * The usage at the range. The compiler reports a field access as the last
+   * name-length characters of the access expression, which is normally the
+   * name itself. In a compound assignment ({@code field += x}) the left-hand
+   * access has the position of the whole assignment, so the reported range
+   * sits at the end of the assignment instead; such a range is mapped back
+   * to the assignment's left-hand reference. A range that holds no reference
+   * gives the bare element, so a usage the static resolver cannot explain,
+   * such as a generated member, is still listed. {@code name} is the
+   * referenced name, or null when unknown.
    */
   @Nullable
   static UsageInfo usageIn(@NotNull PsiFile file, @NotNull Range range, @Nullable String name) {

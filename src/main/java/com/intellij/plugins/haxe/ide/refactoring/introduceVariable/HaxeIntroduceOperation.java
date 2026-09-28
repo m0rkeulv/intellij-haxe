@@ -157,13 +157,13 @@ public class HaxeIntroduceOperation {
     mySuggestedNames = suggestedNames;
   }
 
-  /** The suggestion the names came from; the chosen name is remembered under its description. */
+  /** Sets the suggested names together with their description, under which the chosen name is remembered. */
   public void setSuggestion(@NotNull HaxeSuggestedNames suggestion) {
     mySuggestion = suggestion;
     mySuggestedNames = suggestion.names();
   }
 
-  /** Remembers {@code chosenName} for the next value like this one. */
+  /** Remembers {@code chosenName} for the next similar value. */
   public void recordChosenName(@Nullable String chosenName) {
     if (mySuggestion != null && chosenName != null) mySuggestion.recordChosen(chosenName);
   }

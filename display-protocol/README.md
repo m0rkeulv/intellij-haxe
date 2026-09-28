@@ -106,8 +106,9 @@ or a return carries the type it expects in `mode.args.expectedType`, with
 typedefs followed in `expectedTypeFollowed`. The items never include a
 snippet: at `[1, 2, 3].filter(<caret>)` the list is the plain toplevel one,
 and the expected type is a `TFun` (`Int -> Bool`, argument names empty).
-The lambda suggestion the reference client shows there is its own, built
-from that expected type, and so is the plugin's.
+The lambda suggestion the reference client shows there is built by the
+client itself from that expected type; the plugin builds its own the same
+way.
 
 An item is `{kind, args, ?type, index}`. A Local carries its type in
 `args.type` and a field in `args.field.type`, and the item-level `type` may
@@ -171,16 +172,16 @@ haxe 5 adds the `code`.
   `withBaseAndDescendants` (the base field and every override) or
   `withDescendants`. Both answer a list of `{file, range}` with the file as
   an absolute path and a 0-based range.
-- A field usage is recorded at the trailing name-length window of the field
-  access expression's position (the compiler's `patch_string_pos`), which
-  is the name itself in `obj.field`, `Main.field` and a bare `field`.
+- A field usage is reported as the last name-length characters of the field
+  access expression (the compiler's `patch_string_pos`), which is the name
+  itself in `obj.field`, `Main.field` and a bare `field`.
 - A compound assignment breaks that rule: for `field += x` (any compound
   operator, any receiver) the typer gives the left-hand access the position
   of the whole assignment, so the range is
-  `[assignmentEnd - name.length, assignmentEnd)`, which lands on the tail
-  of the right-hand side (`ht(2)` for `total += weight(2)`). Plain `=`,
-  reads and `++` are positioned correctly. The IDE maps such a range back
-  through the assignment expression that ends at the range end.
+  `[assignmentEnd - name.length, assignmentEnd)`, which lands on the end of
+  the right-hand side (`ht(2)` for `total += weight(2)`). Plain `=`, reads
+  and `++` are positioned correctly. The IDE maps such a range back through
+  the assignment expression that ends where the range ends.
 - `display/references` never lists the declaration itself; the query may
   be placed at the declaration or at any usage.
 

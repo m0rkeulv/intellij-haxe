@@ -462,8 +462,8 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * The editor's text of the file when it differs from disk, else null. A
-   * request sends it as {@code contents}, after invalidating the file on the
+   * The file's text in the editor when it has unsaved changes, else null. A
+   * request sends it as {@code contents} after invalidating the file on the
    * server, since the compiler otherwise reads the saved file. Read action.
    */
   @Nullable

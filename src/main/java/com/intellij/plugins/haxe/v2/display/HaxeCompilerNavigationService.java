@@ -28,17 +28,18 @@ import java.util.List;
 import java.util.concurrent.Future;
 
 /**
- * The compilation server's answers to Find Usages ({@code display/references})
+ * Asks the compilation server for Find Usages ({@code display/references})
  * and go-to-declaration ({@code display/definition}) at a position in a
  * file. Both are single, user-initiated requests that block on the network.
- * Find Usages calls from a progress thread; go-to-declaration calls under
- * the read lock and gets the pooled variant, which waits cancelably for a
- * bounded time. For an unsaved buffer the file is invalidated on the server
- * first, because a cached module ignores {@code contents} otherwise.
+ * Find Usages calls from a progress thread. Go-to-declaration calls under
+ * the read lock, so it uses the variant that runs the request on a pooled
+ * thread and waits cancelably for a bounded time. A file with unsaved
+ * changes is invalidated on the server first, because the server ignores
+ * {@code contents} for a module it has cached.
  *
- * Availability is decided up front, as for completion: a file the compiler
- * cannot serve gets no request, and a notification once per project names
- * the ways out.
+ * Availability is checked up front, as for completion: a file the compiler
+ * cannot serve gets no request, and a notification, shown once per project,
+ * offers to configure the server or to switch back to the IDE's features.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -91,15 +92,16 @@ public final class HaxeCompilerNavigationService {
   }
 
   /**
-   * As {@link #definition} for a caller under the read lock: the request
-   * runs on a pooled thread while the caller waits cancelably for at most
-   * {@link #ANSWER_TIMEOUT_MS}. Empty when the server gives none or the wait
-   * runs out.
+   * {@link #definition} for a caller that holds the read lock and so must
+   * not block on the network: the request runs on a pooled thread while the
+   * caller waits cancelably for at most {@link #ANSWER_TIMEOUT_MS}. Empty
+   * when the server gives none or the wait runs out.
    */
   @NotNull
   public List<Location> definitionUnderReadLock(@NotNull VirtualFile file, int offset) {
     Future<List<Location>> request = ApplicationManager.getApplication().executeOnPooledThread(() -> definition(file, offset));
-    List<Location> answer = HaxePooledAnswers.await(request, ANSWER_TIMEOUT_MS, "display/definition for " + file.getPath());
+    String label = "display/definition for " + file.getPath();
+    List<Location> answer = HaxeCancelableFutures.awaitUnderReadLock(request, ANSWER_TIMEOUT_MS, label);
     return answer == null ? List.of() : answer;
   }
 

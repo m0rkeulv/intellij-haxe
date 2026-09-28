@@ -99,9 +99,9 @@ public abstract class HaxeStubBasedNamedComponent<T extends StubElement<?>> exte
   }
 
   /**
-   * A reference resolves to the component while its name element is what
-   * gets renamed; both must report the same scope, and the name element
-   * owns the rule.
+   * The name element's scope, which owns the rule. A reference resolves to
+   * the component while rename works on the name element, and in-place
+   * rename needs both to report the same scope.
    */
   @NotNull
   @Override

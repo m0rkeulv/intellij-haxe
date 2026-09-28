@@ -41,11 +41,11 @@ import org.jetbrains.annotations.Nullable;
 public class HaxeRefactoringSupportProvider extends RefactoringSupportProvider {
 
   /**
-   * Declarations used only within their block (locals, parameters, local
-   * functions) rename in place as variables: every usage sits in the editor.
-   * The element is the name under the caret on a declaration, and the
-   * declaring component when rename starts from a reference, since a
-   * reference resolves to the component.
+   * Declarations visible only inside their block (locals, parameters, local
+   * functions) are renamed in place as variables, since every usage is in
+   * the current editor. {@code element} is the name under the caret when
+   * rename starts on the declaration, and the declaring component when it
+   * starts on a reference, since a reference resolves to the component.
    */
   @Override
   public boolean isInplaceRenameAvailable(PsiElement element, PsiElement context) {
@@ -54,11 +54,11 @@ public class HaxeRefactoringSupportProvider extends RefactoringSupportProvider {
   }
 
   /**
-   * Members, module-level declarations and types rename in place as members:
-   * the platform renames the current file live and the other files on
-   * commit, and invoking rename again while editing opens the dialog. A
-   * constructor is not renamed itself; a call of it is handled by
-   * {@link HaxeConstructorCallInplaceRenameHandler}.
+   * Members, module-level declarations and types are renamed in place as
+   * members: the platform updates the current file while the user types and
+   * the other files when the rename is committed; invoking rename a second
+   * time opens the dialog. Constructors are excluded; a rename started on a
+   * constructor call is handled by {@link HaxeConstructorCallInplaceRenameHandler}.
    */
   @Override
   public boolean isMemberInplaceRenameAvailable(PsiElement element, PsiElement context) {

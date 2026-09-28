@@ -21,11 +21,11 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Marks the files in which the compiler reported errors, through
  * {@link WolfTheProblemSolver}: their names turn red in the Project view and
- * editor tabs. The edited file is judged by its own diagnostics, every other
- * project file by the whole-project sweep, which lists only the files the
- * build reaches; {@link HaxeCompilerProblemMarks} keeps the two kinds of
- * evidence apart. Library files are never marked, since they are not the
- * user's to fix.
+ * the editor tabs. The edited file is judged by its own diagnostics. Every
+ * other project file is judged by the whole-project sweep, which lists only
+ * the files the build reaches. {@link HaxeCompilerProblemMarks} keeps the
+ * two kinds of evidence apart. Library files are never marked, since they
+ * are not the user's to fix.
  *
  * TODO: a broken file the build never reaches gets no mark until it is
  *  opened; listing the module's sources in the sweep ({@code fileContents})
@@ -50,14 +50,15 @@ public final class HaxeCompilerProblemMarker {
   }
 
   /**
-   * Applies one pass: the edited file's own diagnostics and, when it
-   * answered, the whole-project sweep. Call on a background thread.
+   * Applies one diagnostics pass: the edited file's own diagnostics and, when
+   * the sweep answered, the whole-project sweep (null when it did not). Call
+   * on a background thread.
    */
   public void updateFromDiagnostics(@NotNull String editedFilePath,
-                                    @NotNull List<FileDiagnostics> ownResults,
+                                    @NotNull List<FileDiagnostics> editedFileResults,
                                     @Nullable List<FileDiagnostics> sweepResults) {
     String editedPath = FileUtil.toSystemIndependentName(editedFilePath);
-    boolean editedBroken = brokenPaths(ownResults).contains(editedPath);
+    boolean editedBroken = brokenPaths(editedFileResults).contains(editedPath);
     Set<String> sweepBroken = sweepResults == null ? null : projectFilesAmong(brokenPaths(sweepResults));
     Update update = marks.apply(editedPath, editedBroken, sweepBroken);
 

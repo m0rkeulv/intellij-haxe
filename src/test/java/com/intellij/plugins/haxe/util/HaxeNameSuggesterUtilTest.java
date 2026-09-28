@@ -60,11 +60,11 @@ public class HaxeNameSuggesterUtilTest extends HaxeLightFixtureTestCase {
     arguments("var v = <caret>items[0];", List.of("item", "i")),
     // a construction names the class; sprite is the local in scope
     arguments("var v = <caret>new Sprite();", List.of("sprite1")),
-    // a short string literal names its words, in any language a Haxe name can spell; a keyword or a letter beyond ASCII cannot
+    // a short string literal of identifier words names them; a keyword or a non-ASCII letter disqualifies it
     arguments("var v = <caret>\"Der Kommisar\";", List.of("derKommisar", "str")),
     arguments("var v = <caret>\"Größe\";", List.of("str")),
     arguments("var v = <caret>\"class\";", List.of("str")),
-    // parentheses and casts look through to the operand, the cast adds its target type
+    // parentheses and casts are looked through to the operand; a cast adds its target type
     arguments("var v = <caret>(sprite.getName());", List.of("name")),
     arguments("var v = <caret>cast(raw, Sprite);", List.of("raw1", "sprite1")),
     // an array literal pluralizes its element type
@@ -176,9 +176,9 @@ public class HaxeNameSuggesterUtilTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("a lambda parameter is named by its type name alone")
   public void testALambdaParameterIsNamedByItsTypeNameAlone() {
-    List<String> fromType = HaxeNameSuggesterUtil.getSuggestedNamesForType(null, "Int", false, null, Set.of());
-    List<String> declared = HaxeNameSuggesterUtil.getSuggestedNamesForType("index", "Int", false, null, Set.of());
-    List<String> function = HaxeNameSuggesterUtil.getSuggestedNamesForType(null, null, true, null, Set.of());
+    List<String> fromType = HaxeNameSuggesterUtil.suggestForType(null, "Int", false, null, Set.of());
+    List<String> declared = HaxeNameSuggesterUtil.suggestForType("index", "Int", false, null, Set.of());
+    List<String> function = HaxeNameSuggesterUtil.suggestForType(null, null, true, null, Set.of());
 
     assertEquals("i", fromType.getFirst(), fromType.toString());
     assertEquals("index", declared.getFirst(), declared.toString());

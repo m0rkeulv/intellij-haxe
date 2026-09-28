@@ -32,13 +32,15 @@ import java.util.stream.IntStream;
 
 /**
  * The two lookups offered where a function is expected: an arrow function
- * and a function literal, each shaped by the expected signature. Choosing
- * one inserts a live template whose stops are the parameter names, each
- * offering the name suggester's names for its type, with the caret ending
- * in the body; a non-void function literal starts its body with a return
- * statement. While that template runs, its stops are ordinary code
- * positions to completion, so the lookups stay away from it and the
- * autopopup is held off there ({@link HaxeLambdaCompletionConfidence}).
+ * and a function literal, both shaped by the expected signature. Choosing
+ * one inserts a live template with one stop per parameter name; each stop
+ * offers the suggested names for its parameter, and the caret ends up in
+ * the body. A function literal that returns a value starts its body with
+ * {@code return}.
+ *
+ * Completion treats the template's stops as ordinary code positions, so
+ * while the template is active no lambda is offered inside it, and
+ * {@link HaxeLambdaCompletionConfidence} keeps the auto-popup closed there.
  */
 public final class HaxeLambdaLookups {
 
@@ -68,13 +70,13 @@ public final class HaxeLambdaLookups {
     return false;
   }
 
-  /** Each parameter's names, best first; a parameter's names avoid the ones the parameters before it lead with. */
+  /** The suggested names of every parameter, best first; a parameter avoids the names the earlier parameters lead with. */
   @NotNull
   private static List<List<String>> suggestedNames(@NotNull HaxeLambdaShape shape, @NotNull PsiElement context) {
     List<List<String>> names = new ArrayList<>();
     Set<String> taken = new HashSet<>();
     for (HaxeLambdaShape.Parameter parameter : shape.parameters()) {
-      List<String> suggestions = HaxeNameSuggesterUtil.getSuggestedNamesForType(
+      List<String> suggestions = HaxeNameSuggesterUtil.suggestForType(
         parameter.declaredName(), parameter.typeName(), parameter.isFunction(), context, taken);
       names.add(suggestions);
       taken.add(suggestions.getFirst());
@@ -88,7 +90,7 @@ public final class HaxeLambdaLookups {
     List<String> defaults = defaults(names);
     boolean bare = defaults.size() == 1;
     String presentable = (bare ? defaults.getFirst() : parenthesized(defaults)) + " ->";
-    String template = (bare ? variable(0) : parenthesizedVariables(defaults.size())) + " -> $END$";
+    String template = (bare ? placeholder(0) : parenthesizedPlaceholders(defaults.size())) + " -> $END$";
     return lookup(presentable, template, names, false);
   }
 
@@ -98,7 +100,7 @@ public final class HaxeLambdaLookups {
     List<String> defaults = defaults(names);
     String presentable = "function" + parenthesized(defaults) + " {}";
     String body = shape.returnsVoid() ? "$END$" : "return $END$;";
-    String template = "function" + parenthesizedVariables(defaults.size()) + " {\n" + body + "\n}";
+    String template = "function" + parenthesizedPlaceholders(defaults.size()) + " {\n" + body + "\n}";
     return lookup(presentable, template, names, true);
   }
 
@@ -159,14 +161,15 @@ public final class HaxeLambdaLookups {
   }
 
   @NotNull
-  private static String parenthesizedVariables(int count) {
+  private static String parenthesizedPlaceholders(int count) {
     return IntStream.range(0, count)
-      .mapToObj(HaxeLambdaLookups::variable)
+      .mapToObj(HaxeLambdaLookups::placeholder)
       .collect(Collectors.joining(", ", "(", ")"));
   }
 
+  /** The template text that marks a parameter's stop, such as {@code $PARAM0$}. */
   @NotNull
-  private static String variable(int index) {
+  private static String placeholder(int index) {
     return "$" + variableName(index) + "$";
   }
 

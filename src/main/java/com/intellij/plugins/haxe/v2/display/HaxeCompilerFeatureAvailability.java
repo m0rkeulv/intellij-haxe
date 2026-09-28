@@ -8,12 +8,13 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * The precondition the compiler-only features share: the project's
+ * Whether the compiler can serve a file, as compiler-only completion and the
+ * compiler-backed Find Usages and navigation require: the project's
  * compilation server is switched on, the file's container has a build
- * command, and the file has a display context. The build command is
- * required because the display context otherwise falls back to a lone
- * known build file, which answers nothing useful without the command's
- * setup.
+ * command, and the file has a display context. Without a build command the
+ * display context can still come from the project's active build file, but
+ * that file alone lacks the setup the command adds, so the server's answers
+ * would be of no use.
  */
 final class HaxeCompilerFeatureAvailability {
 

@@ -15,16 +15,16 @@ import java.util.List;
 
 /**
  * The shape of the function a completion position expects: its parameters,
- * and whether it returns nothing, which decides between an expression body
- * and a return statement. Source-neutral: it is built from the static type
- * model in the IDE modes and from the compiler's expected type in the
- * compiler-only mode, and the lookups read only this. Parameter names are
- * not decided here; the name suggester derives them from what a parameter
- * records.
+ * and whether it returns Void, which decides whether a function literal's
+ * body starts with {@code return}. It is built from the static type model
+ * in the IDE completion modes and from the compiler's expected type in the
+ * compiler-only mode; the lookups read only this record, so both sources
+ * give the same suggestions. Parameter names are not chosen here; the name
+ * suggester derives them from what each parameter records.
  */
 public record HaxeLambdaShape(@NotNull List<Parameter> parameters, boolean returnsVoid) {
 
-  /** One expected parameter: the name its signature declares, if any, and its type's simple name, or whether it is itself a function. */
+  /** One expected parameter: the name its signature declares, if any, the simple name of its type, and whether that type is a function. */
   public record Parameter(@Nullable String declaredName, @Nullable String typeName, boolean isFunction) {
   }
 

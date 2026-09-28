@@ -102,7 +102,7 @@ public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarg
         // the cache for the next attempt.
         Future<HaxeGeneratedCodePreview.PreparedPreview> preparing =
           ApplicationManager.getApplication().executeOnPooledThread(() -> preparePreview(project));
-        prepared = HaxeCancelableFutures.await(preparing, indicator, "generated-code preview preparation failed");
+        prepared = HaxeCancelableFutures.awaitUnderProgress(preparing, indicator, "generated-code preview preparation failed");
       }
 
       @Override

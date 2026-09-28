@@ -25,9 +25,9 @@ import java.util.List;
  * Find Usages answered by the compilation server: one
  * {@code display/references} request at the searched element, whose
  * locations become the usages. No static search runs. The search scope
- * still applies, and text occurrences are not searched. A method is asked
- * for with base and overriding declarations included, which is what the
- * static handler offers through its dialog.
+ * still applies; text occurrences are not searched. For a method the
+ * request includes the base and the overriding declarations, matching what
+ * the static handler offers in its dialog.
  */
 public final class HaxeCompilerFindUsagesHandler extends FindUsagesHandler {
 
@@ -74,7 +74,7 @@ public final class HaxeCompilerFindUsagesHandler extends FindUsagesHandler {
     return element instanceof HaxeReference reference ? reference.getReferenceName() : null;
   }
 
-  /** The location's usage when it lies in the search scope; the compiler never lists the declaration itself. */
+  /** The usage at the location, or null when the location lies outside the search scope. The compiler never lists the declaration itself. */
   @Nullable
   private static UsageInfo usageFor(@NotNull Project project, @NotNull Location location, @Nullable String name, @NotNull SearchScope scope) {
     VirtualFile file = HaxeCompilerLocations.fileOf(location);

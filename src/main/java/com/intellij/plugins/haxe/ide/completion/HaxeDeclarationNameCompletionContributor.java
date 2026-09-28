@@ -14,13 +14,16 @@ import org.jetbrains.annotations.Nullable;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/**
- * Names for a declaration being typed, where nothing about the value is
- * known yet because a Haxe name precedes its type: the identifiers the
- * surrounding code already uses without a declaration ({@code var |} with
- * {@code total = 1;} below offers {@code total}), and for a constructor
- * parameter the class's fields.
- */
+/// Suggests a name for a declaration while it is being typed. A Haxe name
+/// comes before its type, so nothing about the value is known yet; the
+/// suggestions come from the surrounding code instead: identifiers it
+/// already uses without a declaration, and for a constructor parameter the
+/// class's fields. Here `total` is offered at the caret:
+///
+/// ```haxe
+/// var |
+/// total = 1;
+/// ```
 public class HaxeDeclarationNameCompletionContributor extends CompletionContributor {
   /** A body longer than this is not searched for undeclared names; the walk is per keystroke. */
   private static final int MAX_SEARCHED_LENGTH = 50_000;
@@ -54,7 +57,7 @@ public class HaxeDeclarationNameCompletionContributor extends CompletionContribu
     };
   }
 
-  /** The names the function body uses undeclared, and for a constructor the fields the class has. */
+  /** For a constructor the class's fields first, then the names the function uses without declaring them. */
   @NotNull
   private static Set<String> namesForParameter(@NotNull HaxeParameter parameter) {
     PsiElement function = parameter.getParent() instanceof HaxeParameterList list ? list.getParent() : null;
@@ -87,7 +90,11 @@ public class HaxeDeclarationNameCompletionContributor extends CompletionContribu
     return names;
   }
 
-  /** {@code total} or {@code this.total}, but not {@code other.total} nor the {@code other} of it. */
+  /**
+   * Whether the reference is a bare name ({@code total}) or a member of
+   * {@code this} ({@code this.total}). A member of another object
+   * ({@code other.total}) and a qualifier ({@code other}) are not.
+   */
   private static boolean isPlainName(@NotNull HaxeReferenceExpression reference) {
     PsiElement qualifier = reference.getFirstChild();
     boolean plain = qualifier instanceof HaxeIdentifier || qualifier instanceof HaxeThisExpression;

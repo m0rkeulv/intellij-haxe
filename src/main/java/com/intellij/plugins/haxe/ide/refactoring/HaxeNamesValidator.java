@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/** What may be a Haxe name: the platform asks before a rename, the suggesters before offering one. */
+/** Decides what is a valid Haxe name. The platform asks before accepting a rename, the name suggesters before offering a name. */
 public class HaxeNamesValidator implements NamesValidator {
   // an identifier as the compiler lexes it: an ASCII letter or underscore, then ASCII letters, digits and underscores
   private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");

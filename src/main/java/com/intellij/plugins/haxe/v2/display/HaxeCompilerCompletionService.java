@@ -85,7 +85,7 @@ public final class HaxeCompilerCompletionService {
     String path = file.getPath();
     Future<CompletionList> request = ApplicationManager.getApplication()
       .executeOnPooledThread(() -> fetch(displayService, context, path, contents, unsaved, offset, autoTriggered));
-    return HaxePooledAnswers.await(request, ANSWER_TIMEOUT_MS, "display/completion for " + path);
+    return HaxeCancelableFutures.awaitUnderReadLock(request, ANSWER_TIMEOUT_MS, "display/completion for " + path);
   }
 
   /**

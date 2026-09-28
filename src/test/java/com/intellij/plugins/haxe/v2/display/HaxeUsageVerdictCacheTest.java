@@ -38,11 +38,11 @@ public class HaxeUsageVerdictCacheTest {
     cache.put(usedElsewhere, REVISION, UsageState.USED);
     cache.put(unusedInSavedFile, REVISION, UsageState.UNUSED);
 
-    boolean dropped = cache.dropUnusedOutside(OTHER_FILE);
+    boolean dropped = cache.dropUnusedInOtherFiles(OTHER_FILE);
 
     assertTrue(dropped);
     assertNull(cache.get(unusedElsewhere, REVISION), "the saved file may now reference the member");
-    assertEquals(UsageState.USED, cache.get(usedElsewhere, REVISION), "a stale USED only keeps a hint quiet");
+    assertEquals(UsageState.USED, cache.get(usedElsewhere, REVISION), "a stale USED only hides a hint");
     assertEquals(UsageState.UNUSED, cache.get(unusedInSavedFile, REVISION), "the saved file's own verdicts retire by revision");
   }
 
@@ -51,7 +51,7 @@ public class HaxeUsageVerdictCacheTest {
   public void testASaveThatDropsNothingSaysSo() {
     cache.put(keyFor(DECLARING_FILE, "run"), REVISION, UsageState.USED);
 
-    assertFalse(cache.dropUnusedOutside(OTHER_FILE));
+    assertFalse(cache.dropUnusedInOtherFiles(OTHER_FILE));
   }
 
   private static Key keyFor(String filePath, String memberName) {

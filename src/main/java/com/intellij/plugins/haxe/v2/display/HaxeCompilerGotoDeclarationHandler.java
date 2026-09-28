@@ -16,16 +16,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Go-to-declaration answered by the compilation server: a reference under
- * the caret gets the declarations {@code display/definition} names, as the
- * PSI elements at those locations, so the platform navigates, previews and
- * offers a chooser for several targets as it does for static results. The
- * platform calls handlers under a cancelable progress, and the request
- * waits for a bounded time; Ctrl-hover also asks, so each hovered reference
- * costs one request. A declaration under the caret gets no target, so the
- * platform keeps its show-usages behaviour there, and a file the compiler
- * cannot serve gets none either, after the notification; the platform then
- * resolves the reference itself.
+ * Go-to-declaration answered by the compilation server. For a reference
+ * under the caret, the targets are the PSI elements at the locations
+ * {@code display/definition} returns, so the platform navigates, previews
+ * and offers a chooser for several targets just as for static results. The
+ * platform calls handlers under a cancelable progress, and the request waits
+ * a bounded time. Ctrl-hover asks too, so every hovered reference costs one
+ * request.
+ *
+ * No targets are returned for a declaration under the caret, where the
+ * platform keeps its show-usages behaviour, nor for a file the compiler
+ * cannot serve, where the notification is shown and the platform resolves
+ * the reference itself.
  */
 public final class HaxeCompilerGotoDeclarationHandler implements GotoDeclarationHandler {
 

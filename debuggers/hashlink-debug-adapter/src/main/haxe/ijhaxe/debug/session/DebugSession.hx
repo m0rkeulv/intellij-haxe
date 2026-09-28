@@ -122,9 +122,9 @@ class DebugSession {
 	// here for the next resume while an HL thread is reported for inspection.
 	// -1 when no pause event is held.
 	var pauseEventThread:Int = -1;
-	// True from a forceBreak until its stop is taken by forceBreakAndDrain or
-	// consumed elsewhere as a stray trap (by the dance that resumes past a
-	// racing hit), in which case the drain issues the break again.
+	// True from a forceBreak until its stop arrives. forceBreakAndDrain
+	// usually takes that stop; when resuming past a racing breakpoint hit
+	// swallows it as a stray trap instead, the drain issues the break again.
 	var forcedBreakPending:Bool = false;
 
 	var alive:Bool = true;
@@ -550,11 +550,12 @@ class DebugSession {
 		}
 	}
 
-	// Stops the running debuggee so its memory can be patched, and returns
-	// whether resumeAfterMemoryWrite must let it run again afterwards. The stop
-	// is never shown to the user. False when no forced stop arrived, or when a
-	// stop of the debuggee's own raced the interrupt: that stop was reported
-	// and owns the debuggee now, so nothing may resume it behind the user.
+	// Stops the running debuggee so its memory can be patched; the stop is
+	// never shown to the user. Returns true when resumeAfterMemoryWrite must
+	// let the debuggee run again afterwards. Returns false when no forced stop
+	// arrived, or when the debuggee stopped by itself (a breakpoint, a runtime
+	// error) before the interrupt landed: that stop has been reported to the
+	// user and must not be resumed behind their back.
 	function pauseForMemoryWrite():Bool {
 		var outcome = forceBreakAndDrain();
 		if (outcome == null) {
@@ -565,15 +566,16 @@ class DebugSession {
 	}
 
 	// Interrupts the running debuggee (forceBreak) and drains events until the
-	// forced stop arrives: a trap at no patched site (Windows raises it on a
-	// thread of its own, linux delivers a SIGTRAP), possibly behind a few
-	// auto-continued lifecycle events. A stop of the debuggee's own that races
-	// the interrupt (a patched trap, a runtime error) is handled as the stop it
-	// is: once it freezes the debuggee it owns the freeze, and the forced stop
-	// then surfaces as a stray trap on a later resume. Returns the forced stop,
-	// or null when the debuggee exited (EvExited was emitted), a racing stop
-	// took over (state is Stopped) or no stop arrived within
-	// MAX_FORCE_BREAK_POLLS. Serves both the memory-write pause and the user
+	// forced stop arrives: a trap at an address the session did not patch
+	// (Windows raises it on a thread of its own, linux sends a SIGTRAP),
+	// possibly after a few auto-continued lifecycle events.
+	// The debuggee may stop by itself before the interrupt lands (a patched
+	// trap, a runtime error). That stop is handled like any other and owns the
+	// frozen debuggee; the forced stop then arrives as a stray trap on a later
+	// resume.
+	// Returns the forced stop, or null when the debuggee exited (EvExited was
+	// emitted), stopped by itself (state is Stopped), or did not stop within
+	// MAX_FORCE_BREAK_POLLS. Serves both the memory-write pause and the user's
 	// pause.
 	function forceBreakAndDrain():Null<WaitOutcome> {
 		var forced = drainForForcedStop();
@@ -722,10 +724,10 @@ class DebugSession {
 		}
 	}
 
-	// No forced stop to report. The debuggee either exited (EvExited already
-	// sent) or stopped on its own while the interrupt was pending (that stop is
-	// already reported), and the pause is only acknowledged; otherwise nothing
-	// stopped it.
+	// Answers a pause request that got no forced stop. When the debuggee
+	// exited (EvExited already sent) or stopped by itself while the interrupt
+	// was pending (that stop is already reported), the pause is acknowledged.
+	// When it is still running, the pause failed.
 	function settlePauseWithoutForcedStop(requestSeq:Int):Void {
 		switch (state) {
 			case Running:

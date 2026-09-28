@@ -624,7 +624,7 @@ public abstract class HaxeIntroduceHandler implements RefactoringActionHandler {
   public static class HaxeInplaceVariableIntroducer extends InplaceVariableIntroducer<PsiElement> {
     private final HaxeComponentName myTarget;
     private  Map<HaxeComponentName, String> additional;
-    /** Remembers the chosen name; absent when the introducer is not driven by an operation. */
+    /** Records the chosen name; null when the introducer runs without an operation. */
     private final @Nullable HaxeIntroduceOperation myOperation;
 
     public HaxeInplaceVariableIntroducer(HaxeComponentName target,

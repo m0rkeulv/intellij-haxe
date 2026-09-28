@@ -15,8 +15,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Names read off an expression: what it is, and where it sits. Raw
- * lowerCamel words, best first; the casing and the tails come later.
+ * Names taken from an expression: from what it is, and from where it sits.
+ * The results are raw lowerCamel names, best first; casing and tails are
+ * applied later.
  */
 public final class HaxeExpressionNames {
   /** A call named {@code getUserName} or {@code toString} is about its remainder: {@code userName}, {@code string}. */
@@ -30,12 +31,12 @@ public final class HaxeExpressionNames {
   }
 
   /**
-   * Names from the expression's own shape: the property a getter call
-   * returns ({@code user.getName()} gives {@code name}, {@code userName}),
-   * the callee of any other call, the referenced name, the singular of an
-   * indexed array, the class of a {@code new}, the words of a short string
-   * literal. Parentheses, type checks and casts look through to their
-   * operand.
+   * Names from what the expression is: the property a getter call returns
+   * ({@code user.getName()} gives {@code name} and {@code userName}), the
+   * called method for any other call, the referenced name, the singular of
+   * an indexed array, the class of a {@code new}, the words of a short
+   * string literal. Parentheses, type checks and casts are looked through
+   * to their operand.
    */
   @NotNull
   public static List<String> ofExpression(@Nullable PsiElement expression) {
@@ -51,7 +52,7 @@ public final class HaxeExpressionNames {
       case HaxeStringLiteralExpression literal -> ofStringLiteral(literal);
       case HaxeRegularExpression ignored -> List.of(REGEX_VALUE_NAME);
       case HaxeFunctionLiteral ignored -> List.of(FUNCTION_VALUE_NAME);
-      case HaxeReferenceExpression reference -> listOfNullable(lastName(reference));
+      case HaxeReferenceExpression reference -> listOfNullable(referenceName(reference));
       default -> List.of();
     };
   }
@@ -74,7 +75,7 @@ public final class HaxeExpressionNames {
       return listOfNullable(parameterName(construction, index));
     }
     if (parent instanceof HaxeAssignExpression assignment && expression == assignment.getRightExpression()) {
-      return assignment.getLeftExpression() instanceof HaxeReferenceExpression target ? listOfNullable(lastName(target)) : List.of();
+      return assignment.getLeftExpression() instanceof HaxeReferenceExpression target ? listOfNullable(referenceName(target)) : List.of();
     }
     return List.of();
   }
@@ -98,7 +99,7 @@ public final class HaxeExpressionNames {
   @NotNull
   private static List<String> ofCall(@NotNull HaxeCallExpression call) {
     if (!(call.getExpression() instanceof HaxeReferenceExpression callee)) return List.of();
-    String method = lastName(callee);
+    String method = referenceName(callee);
     if (method == null) return List.of();
     List<String> words = NameUtilCore.nameToWordList(method);
     boolean namesAProperty = words.size() > 1 && PROPERTY_VERBS.contains(StringUtil.toLowerCase(words.getFirst()));
@@ -109,7 +110,7 @@ public final class HaxeExpressionNames {
     return receiver == null ? List.of(property) : List.of(property, receiver + StringUtil.capitalize(property));
   }
 
-  /** {@code items[i]} gives {@code item}; an array whose names have no singular gives nothing. */
+  /** The singular of the array's names: {@code items[i]} gives {@code item}. A name without a distinct singular gives nothing. */
   @NotNull
   private static List<String> ofArrayAccess(@NotNull HaxeArrayAccessExpression access) {
     List<HaxeExpression> operands = access.getExpressionList();
@@ -163,12 +164,12 @@ public final class HaxeExpressionNames {
     if (receiver == null) return null;
     PsiElement target = receiver.resolve();
     boolean isVariable = target instanceof HaxePsiField || target instanceof HaxeParameter;
-    return isVariable ? lastName(receiver) : null;
+    return isVariable ? referenceName(receiver) : null;
   }
 
-  /** The last segment of a possibly qualified reference. */
+  /** The name a possibly qualified reference ends in: {@code name} for {@code user.name}. */
   @Nullable
-  private static String lastName(@NotNull HaxeReferenceExpression reference) {
+  private static String referenceName(@NotNull HaxeReferenceExpression reference) {
     HaxeIdentifier identifier = reference.getIdentifier();
     String name = identifier != null ? identifier.getText() : null;
     return name == null || name.isEmpty() ? null : name;

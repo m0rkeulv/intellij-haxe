@@ -31,26 +31,27 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 
 /**
- * Names for a value, as the refactorings, the create-from-usage fixes and
- * completion suggest them. A name comes from what the initializer is and
- * where it sits ({@link HaxeExpressionNames}), then from the type
- * ({@link HaxeTypeNames}); each is cased for the kind of value and shortened
- * to its word tails ({@link HaxeNameKind}), names chosen before for the same
- * kind of value rank first ({@link HaxeNameStatistics}), and every name is
- * kept clear of the keywords and the names in use around the value.
+ * Suggests names for a value, for the refactorings, the create-from-usage
+ * fixes and completion. Candidates come first from the initializer, from
+ * what it is and where it sits ({@link HaxeExpressionNames}), then from the
+ * value's type ({@link HaxeTypeNames}). Each candidate is cased for the kind
+ * of declaration and offered together with its shorter word tails
+ * ({@link HaxeNameKind}). Names the user picked before for a similar value
+ * move to the front ({@link HaxeNameStatistics}). Finally, a name that is a
+ * keyword or already in use around the value gets a numeric suffix.
  */
 public class HaxeNameSuggesterUtil {
-  /** Named when nothing about the value gives a lead. */
+  /** The name offered when nothing about the value suggests one. */
   private static final String FALLBACK_NAME = "value";
 
   private HaxeNameSuggesterUtil() {
   }
 
   /**
-   * Names for a value of {@code type} initialized by {@code initializer},
-   * either of which may be absent; the type is inferred from the
-   * initializer when not given. The names avoid those in use around
-   * {@code context} and {@code alsoUsed}.
+   * Names for a value of {@code type} initialized by {@code initializer};
+   * either may be absent, and the type is inferred from the initializer when
+   * not given. The names avoid those in use around {@code context} and those
+   * in {@code alsoUsed}.
    */
   @NotNull
   public static HaxeSuggestedNames suggest(@Nullable PsiElement initializer,
@@ -77,15 +78,15 @@ public class HaxeNameSuggesterUtil {
   }
 
   /**
-   * Names for a value known only by its declared name and the simple name
-   * of its type, as a compiler answer describes a lambda parameter.
+   * Names for a value known only by the name its declaration gives it, if
+   * any, and the simple name of its type, as a lambda parameter is known.
    */
   @NotNull
-  public static List<String> getSuggestedNamesForType(@Nullable String declaredName,
-                                                      @Nullable String typeName,
-                                                      boolean isFunction,
-                                                      @Nullable PsiElement context,
-                                                      @NotNull Set<String> alsoUsed) {
+  public static List<String> suggestForType(@Nullable String declaredName,
+                                            @Nullable String typeName,
+                                            boolean isFunction,
+                                            @Nullable PsiElement context,
+                                            @NotNull Set<String> alsoUsed) {
     List<String> raw = new ArrayList<>();
     if (declaredName != null && !declaredName.isEmpty()) raw.add(declaredName);
     raw.addAll(HaxeTypeNames.ofTypeName(typeName, isFunction));
@@ -94,23 +95,23 @@ public class HaxeNameSuggesterUtil {
     return uniqueAgainst(names, takenNames(context, alsoUsed));
   }
 
-  /** Given names in the kind's casing with their tails, clear of {@code alsoUsed}. */
+  /** Names built from the given raw names: each cased for the kind and offered with its tails, avoiding {@code alsoUsed}. */
   @NotNull
-  public static List<String> getSuggestedNames(@NotNull List<String> names, @NotNull HaxeNameKind kind, @NotNull Set<String> alsoUsed) {
-    return uniqueAgainst(casedVariants(names, kind), takenNames(null, alsoUsed));
+  public static List<String> suggestFrom(@NotNull List<String> rawNames, @NotNull HaxeNameKind kind, @NotNull Set<String> alsoUsed) {
+    return uniqueAgainst(casedVariants(rawNames, kind), takenNames(null, alsoUsed));
   }
 
-  /** A given name in the kind's casings, clear of {@code alsoUsed}. */
+  /** The whole name in each casing the kind uses, avoiding {@code alsoUsed}. */
   @NotNull
-  public static List<String> getRecasedName(@NotNull String name, @NotNull HaxeNameKind kind, @NotNull Set<String> alsoUsed) {
+  public static List<String> recased(@NotNull String name, @NotNull HaxeNameKind kind, @NotNull Set<String> alsoUsed) {
     if (!HaxeNamesValidator.isIdentifier(name)) return List.of();
     return uniqueAgainst(kind.recased(name), takenNames(null, alsoUsed));
   }
 
   /**
-   * The name and its tails in the kind's casing for each raw name in turn,
-   * then the same in the kind's alternate casing; a raw name that is no
-   * Haxe identifier is dropped.
+   * Every raw name with its shorter tails in the kind's casing, followed by
+   * the same in the kind's alternate casing. Raw names that are not valid
+   * Haxe identifiers are dropped.
    */
   @NotNull
   private static List<String> casedVariants(@NotNull List<String> raw, @NotNull HaxeNameKind kind) {
@@ -135,7 +136,7 @@ public class HaxeNameSuggesterUtil {
     return taken;
   }
 
-  /** A name by the shape of an expression that names nothing itself and has no known type. */
+  /** A generic name, by kind of expression, for an expression that suggests no name itself and has no known type. */
   @NotNull
   private static String defaultNameFor(@NotNull PsiElement expression) {
     return switch (expression) {
@@ -159,14 +160,14 @@ public class HaxeNameSuggesterUtil {
     };
   }
 
-  /** Each candidate with the smallest numeric suffix that keeps it out of {@code ignore}. */
+  /** Each candidate with the smallest numeric suffix that keeps it out of {@code taken}. */
   @NotNull
-  private static List<String> uniqueAgainst(@NotNull Collection<String> candidates, @NotNull Set<String> ignore) {
+  private static List<String> uniqueAgainst(@NotNull Collection<String> candidates, @NotNull Set<String> taken) {
     final List<String> result = new ArrayList<>();
     for (String candidate : candidates) {
       int index = 0;
       String suffix = "";
-      while (ignore.contains(candidate + suffix)) {
+      while (taken.contains(candidate + suffix)) {
         suffix = Integer.toString(++index);
       }
       result.add(candidate + suffix);

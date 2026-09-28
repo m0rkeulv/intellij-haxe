@@ -9,10 +9,10 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The registered go-to-declaration handler: it delegates to the
- * compiler-backed handler while "use compiler for IDE features" is on, and
- * to the static handler otherwise. Whichever answers nothing leaves the
- * platform to resolve the reference under the caret itself, which no
- * handler can switch off.
+ * compiler-backed handler while "Use compiler for IDE features" is on, and
+ * to the static handler otherwise. When the chosen handler answers nothing,
+ * the platform resolves the reference under the caret itself; no handler
+ * can switch that off.
  */
 public final class HaxeGotoDeclarationProxy implements GotoDeclarationHandler {
 
@@ -22,8 +22,8 @@ public final class HaxeGotoDeclarationProxy implements GotoDeclarationHandler {
   @Override
   public PsiElement @Nullable [] getGotoDeclarationTargets(@Nullable PsiElement sourceElement, int offset, Editor editor) {
     if (sourceElement == null) return null;
-    boolean compiler = HaxeCompilerSettings.getInstance(sourceElement.getProject()).isCompilerIdeFeaturesEnabled();
-    GotoDeclarationHandler handler = compiler ? compilerHandler : staticHandler;
+    boolean useCompiler = HaxeCompilerSettings.getInstance(sourceElement.getProject()).isCompilerIdeFeaturesEnabled();
+    GotoDeclarationHandler handler = useCompiler ? compilerHandler : staticHandler;
     return handler.getGotoDeclarationTargets(sourceElement, offset, editor);
   }
 }

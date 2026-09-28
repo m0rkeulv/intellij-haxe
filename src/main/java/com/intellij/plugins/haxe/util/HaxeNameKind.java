@@ -9,13 +9,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/** What a suggested name will name; it decides the casing of the suggestions. */
+/** The kind of declaration a suggested name is for; it decides how the suggestions are cased. */
 public enum HaxeNameKind {
   /** A class, interface, enum, abstract or typedef: UpperCamelCase. */
   TYPE,
   /** An enum constructor or enum-abstract value: UpperCamelCase. */
   ENUM_VALUE,
-  /** lowerCamelCase. */
+  /** A method or function: lowerCamelCase. */
   METHOD,
   /** A local, parameter or field: lowerCamelCase. */
   VARIABLE,
@@ -44,7 +44,7 @@ public enum HaxeNameKind {
     return this == CONSTANT ? VARIABLE.variantsOf(rawName) : List.of();
   }
 
-  /** The whole name in this kind's casings, without its tails: what a rename offers for a name against convention. */
+  /** The whole name, without its tails, in each casing this kind uses: what a rename offers for a name that breaks the convention. */
   @NotNull
   public List<String> recased(@NotNull String name) {
     List<String> recased = new ArrayList<>();
@@ -54,7 +54,7 @@ public enum HaxeNameKind {
     return recased;
   }
 
-  /** The platform's word-tail variants, shortest first, reversed so the whole name leads. */
+  /** The name and its tails as the platform builds them, reversed from its shortest-first order so the whole name leads. */
   @NotNull
   private static List<String> tailsOf(@NotNull String rawName, boolean upperSnake) {
     List<String> tails = new ArrayList<>(NameUtil.getSuggestionsByName(rawName, "", "", upperSnake, false, false));

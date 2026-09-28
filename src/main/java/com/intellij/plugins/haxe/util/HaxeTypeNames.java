@@ -36,9 +36,9 @@ public final class HaxeTypeNames {
 
   /**
    * Names for a value of the type: the conventional short name of a standard
-   * type, the pluralized element name of an array, the key and value names of
-   * a map, and the type's own name. Typedefs and {@code Null<T>} are looked
-   * through.
+   * type, the plural of an array's element type ({@code users}), a map's key
+   * and value types combined ({@code stringIntMap}), and the type's own name.
+   * Typedefs and {@code Null<T>} are looked through.
    */
   @NotNull
   public static List<String> of(@Nullable ResultHolder holder) {

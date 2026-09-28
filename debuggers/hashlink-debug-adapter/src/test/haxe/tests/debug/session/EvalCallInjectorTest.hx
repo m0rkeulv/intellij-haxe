@@ -13,9 +13,9 @@ class EvalCallInjectorTest {
 		scratchStackTopStaysBelowTheInterruptedFrame(assert);
 	}
 
-	// A 256-aligned Esp once made the scratch top equal Esp, so the x86 float
-	// return spilled onto the interrupted frame's top slot; every residue must
-	// now leave a gap of at least 256 bytes.
+	// The x86 trampoline stores a float return at the scratch top, so the top
+	// must stay at least 256 bytes below Esp whatever Esp's alignment; an Esp
+	// that is already 256-byte aligned is the edge case.
 	static function scratchStackTopStaysBelowTheInterruptedFrame(assert:Assert):Void {
 		var alignedEsp = Int64.make(0x7FFF, 0x00010000);
 		for (residue in ESP_RESIDUES) {

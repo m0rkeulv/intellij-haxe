@@ -10,22 +10,26 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * The names chosen before for the same kind of value, kept in the platform's
- * statistics store. A value is described by what it names, the property its
- * initializer is about and its type; a choice counts under the full
- * description and under the property and the type alone, so a name picked
- * for one {@code Sprite} field reaches the next {@code Sprite} whatever its
- * initializer.
+ * Remembers which names the user picked, in the platform's statistics store.
+ * A value is described by three things: the kind of declaration, the
+ * property its initializer is about, and its type. A pick counts under the
+ * full description and also under the property alone and the type alone,
+ * so a name chosen for one {@code Sprite} field is suggested for the next
+ * {@code Sprite} field whatever its initializer. In the store, a
+ * description is the statistics context and the name its value.
  */
 public final class HaxeNameStatistics {
   private static final String CONTEXT_PREFIX = "haxeName#";
-  /** A name chosen this often, or half as often as the most chosen one, is offered even when nothing else suggests it. */
+  /**
+   * A name nothing else suggests is still offered once it was picked at
+   * least this often, and at least half as often as the most picked name.
+   */
   private static final int FREQUENT_USE_FLOOR = 3;
 
   private HaxeNameStatistics() {
   }
 
-  /** Counts the choice under the full description and under each of its parts. */
+  /** Counts the pick under the full description and under each of its parts. */
   public static void recordChosen(@NotNull HaxeNameKind kind, @Nullable String propertyName, @Nullable String typeText, @NotNull String name) {
     if (propertyName == null && typeText == null) return;
     StatisticsManager statistics = StatisticsManager.getInstance();
@@ -36,7 +40,7 @@ public final class HaxeNameStatistics {
     }
   }
 
-  /** Names chosen often enough for this description that are not among {@code names} yet. */
+  /** Names picked often enough for this description that are not among {@code names} yet. */
   @NotNull
   public static List<String> frequentlyChosen(@NotNull HaxeNameKind kind,
                                               @Nullable String propertyName,
@@ -56,7 +60,7 @@ public final class HaxeNameStatistics {
     return frequent;
   }
 
-  /** The names most chosen for this description first; names never chosen keep their order. */
+  /** The names sorted by how often they were picked for this description; names never picked keep their order. */
   @NotNull
   public static List<String> mostChosenFirst(@NotNull HaxeNameKind kind,
                                              @Nullable String propertyName,

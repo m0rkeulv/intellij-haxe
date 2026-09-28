@@ -12,11 +12,11 @@ import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * The registered find-usages factory: it hands out the compiler-backed
- * handler while "use compiler for IDE features" is on, and the static
+ * The registered Find Usages factory: it hands out the compiler-backed
+ * handler while "Use compiler for IDE features" is on, and the static
  * handler otherwise. Identifier highlighting asks for a handler on every
- * caret move, so it always gets the static one; a file the compiler cannot
- * serve gets no handler at all, and the notification says why.
+ * caret move, so it always gets the static one. A file the compiler cannot
+ * serve gets no handler at all, and the notification explains why.
  */
 public final class HaxeFindUsagesFactoryProxy extends FindUsagesHandlerFactory {
 
@@ -35,8 +35,8 @@ public final class HaxeFindUsagesFactoryProxy extends FindUsagesHandlerFactory {
 
   @Override
   public FindUsagesHandler createFindUsagesHandler(@NotNull PsiElement element, boolean forHighlightUsages) {
-    boolean compiler = !forHighlightUsages && HaxeCompilerSettings.getInstance(project).isCompilerIdeFeaturesEnabled();
-    if (!compiler) return staticFactory.createFindUsagesHandler(element, forHighlightUsages);
+    boolean useCompiler = !forHighlightUsages && HaxeCompilerSettings.getInstance(project).isCompilerIdeFeaturesEnabled();
+    if (!useCompiler) return staticFactory.createFindUsagesHandler(element, forHighlightUsages);
     if (!canFindUsages(element)) return FindUsagesHandler.NULL_HANDLER;
 
     PsiFile file = element.getContainingFile();

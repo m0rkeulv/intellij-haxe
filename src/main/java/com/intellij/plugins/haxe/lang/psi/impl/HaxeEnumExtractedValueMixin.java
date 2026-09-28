@@ -87,7 +87,7 @@ public abstract class HaxeEnumExtractedValueMixin extends HaxeReferenceImpl impl
     return HaxeComponentType.VARIABLE;
   }
 
-  /** The name element owns the scope rule, as for every other component. */
+  /** The name element's scope, which owns the rule, as for every other component. */
   @NotNull
   @Override
   public SearchScope getUseScope() {
