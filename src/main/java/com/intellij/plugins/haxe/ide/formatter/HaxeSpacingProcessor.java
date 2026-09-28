@@ -843,15 +843,14 @@ public class HaxeSpacingProcessor {
       Spacing fill = callFillSpacing(pair);
       if (fill != null) return fill;
     }
-    if (type1 == OCOMMA) return spaceIf(isArgumentList() ? common.SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS : common.SPACE_AFTER_COMMA);
+    if (type1 == OCOMMA) return spaceIf(isTypeArgumentList() ? common.SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS : common.SPACE_AFTER_COMMA);
     if (pair.type2() == OCOMMA) return spaceIf(common.SPACE_BEFORE_COMMA);
     return null;
   }
 
-  /** Whether the node is the argument list of a call or a new, or a function's parameter list. */
-  private boolean isArgumentList() {
-    return PARAMETER_AND_ARGUMENT_LISTS.contains(elementType)
-           && (parentType == CALL_EXPRESSION || parentType == NEW_EXPRESSION || FUNCTION_DEFINITION.contains(parentType));
+  /** Whether the node lists type arguments ({@code Map<String, Int>}) or a declaration's type parameters ({@code class Box<T, U>}). */
+  private boolean isTypeArgumentList() {
+    return elementType == TYPE_PARAM || elementType == GENERIC_PARAM;
   }
 
   /** The remaining colons and arrows, metadata parens and the return keyword. */

@@ -17,6 +17,7 @@
  */
 package com.intellij.plugins.haxe.lang;
 
+import static com.intellij.plugins.haxe.lang.HaxeCodeStyleTweaks.commonSettings;
 import static com.intellij.plugins.haxe.lang.HaxeCodeStyleTweaks.haxeSettings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -196,6 +197,49 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
     myTestStyleSettings.SPACE_BEFORE_SEMICOLON = true;
     myTestStyleSettings.SPACE_AFTER_SEMICOLON = false;
     doTest();
+  }
+
+  @Test
+  @DisplayName("comma settings apply to their own lists")
+  public void testCommaSettingsApplyToTheirOwnLists() {
+    // the plain setting governs parameter, argument and literal commas; the
+    // type-arguments setting governs type arguments and type parameters
+    Consumer<CommonCodeStyleSettings> typeArgumentCommasOnly = common -> {
+      common.SPACE_AFTER_COMMA = false;
+      common.SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS = true;
+    };
+    Consumer<CommonCodeStyleSettings> plainCommasOnly = common -> {
+      common.SPACE_AFTER_COMMA = true;
+      common.SPACE_AFTER_COMMA_IN_TYPE_ARGUMENTS = false;
+    };
+    String source = """
+      class Box<T, U> {
+      	static function pair(first:Int, second:Int):Map<String, Int> {
+      		var items = [first, second];
+      		return pair(items[0], items[1]);
+      	}
+      }
+      """;
+
+    String typeArgumentsSpaced = reformat(commonSettings(typeArgumentCommasOnly), source);
+    String plainSpaced = reformat(commonSettings(plainCommasOnly), source);
+
+    assertEquals("""
+      class Box<T, U> {
+          static function pair(first:Int,second:Int):Map<String, Int> {
+              var items = [first,second];
+              return pair(items[0],items[1]);
+          }
+      }
+      """, typeArgumentsSpaced);
+    assertEquals("""
+      class Box<T,U> {
+          static function pair(first:Int, second:Int):Map<String,Int> {
+              var items = [first, second];
+              return pair(items[0], items[1]);
+          }
+      }
+      """, plainSpaced);
   }
 
   @Test
