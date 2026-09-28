@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
@@ -10,6 +9,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.Diagnostic;
 import com.intellij.plugins.haxe.display.protocol.DiagnosticSeverity;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerProblemMarks.Update;
 import com.intellij.problems.WolfTheProblemSolver;
 import java.util.HashSet;
@@ -89,7 +89,7 @@ public final class HaxeCompilerProblemMarker {
     for (String path : paths) {
       VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
       if (file == null || !file.isValid()) continue;
-      boolean inContent = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInContent(file));
+      boolean inContent = HaxeReadActions.compute(() -> ProjectFileIndex.getInstance(project).isInContent(file));
       if (inContent) inProject.add(file.getPath());
     }
     return inProject;

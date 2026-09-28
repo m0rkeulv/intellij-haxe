@@ -381,10 +381,6 @@ public abstract class HaxeIntroduceHandler implements RefactoringActionHandler {
     return !isFunctionMethodClass;
   }
 
-  protected Collection<String> getSuggestedNames(final PsiElement expression) {
-    return suggestNames(expression).names();
-  }
-
   protected HaxeSuggestedNames suggestNames(final PsiElement expression) {
     return HaxeNameSuggesterUtil.suggest(expression, null, HaxeNameKind.VARIABLE, expression, Set.of());
   }

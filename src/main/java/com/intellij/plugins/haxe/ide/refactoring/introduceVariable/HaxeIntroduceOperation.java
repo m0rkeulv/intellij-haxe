@@ -153,10 +153,6 @@ public class HaxeIntroduceOperation {
     return mySuggestedNames;
   }
 
-  public void setSuggestedNames(Collection<String> suggestedNames) {
-    mySuggestedNames = suggestedNames;
-  }
-
   /** Sets the suggested names together with their description, under which the chosen name is remembered. */
   public void setSuggestion(@NotNull HaxeSuggestedNames suggestion) {
     mySuggestion = suggestion;

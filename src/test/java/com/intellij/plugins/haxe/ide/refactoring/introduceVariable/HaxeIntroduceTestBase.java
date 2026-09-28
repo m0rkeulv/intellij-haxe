@@ -50,7 +50,7 @@ public abstract class HaxeIntroduceTestBase extends HaxeLightFixtureTestCase {
       myFixture.getFile().findElementAt(myFixture.getEditor().getCaretModel().getOffset()),
       parentClass
     );
-    return handler.getSuggestedNames(expr);
+    return handler.suggestNames(expr).names();
   }
 
   protected abstract HaxeIntroduceHandler createHandler();

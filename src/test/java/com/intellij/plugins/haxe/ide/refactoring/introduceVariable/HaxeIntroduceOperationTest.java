@@ -1,5 +1,7 @@
 package com.intellij.plugins.haxe.ide.refactoring.introduceVariable;
 
+import com.intellij.plugins.haxe.util.HaxeNameKind;
+import com.intellij.plugins.haxe.util.HaxeSuggestedNames;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +18,7 @@ public class HaxeIntroduceOperationTest {
   @DisplayName("a suggested name counts as suggested")
   public void testASuggestedNameCountsAsSuggested() {
     HaxeIntroduceOperation operation = new HaxeIntroduceOperation(null, null, null, null, "introduce");
-    operation.setSuggestedNames(List.of("name", "spriteName"));
+    operation.setSuggestion(suggestion("name", "spriteName"));
 
     operation.suggestName();
 
@@ -28,11 +30,15 @@ public class HaxeIntroduceOperationTest {
   @DisplayName("a name set afterwards no longer counts as suggested")
   public void testANameSetAfterwardsNoLongerCountsAsSuggested() {
     HaxeIntroduceOperation operation = new HaxeIntroduceOperation(null, null, null, null, "introduce");
-    operation.setSuggestedNames(List.of("name"));
+    operation.setSuggestion(suggestion("name"));
     operation.suggestName();
 
     operation.setName("chosen");
 
     assertFalse(operation.isNameSuggested());
+  }
+
+  private static HaxeSuggestedNames suggestion(String... names) {
+    return new HaxeSuggestedNames(List.of(names), HaxeNameKind.VARIABLE, null, null);
   }
 }
