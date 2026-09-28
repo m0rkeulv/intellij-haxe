@@ -30,21 +30,27 @@ import java.util.Map;
 /**
  * The member renamer behind {@link HaxePropertyInplaceRenameHandler}. When
  * the popup chose the whole family, the template edits the property name
- * wherever the family spells it in the current file: a property in full, an
- * accessor and its calls in the part after the {@code get_}/{@code set_}
- * prefix. That holds when the rename starts on an accessor too, since only
- * the part after its prefix is edited then, and the prefix is put back on
- * the committed name. The template's edits are rolled back before the
- * commit renames every member for real; the family's own automatic renamer
- * is left out of that commit, since its question has already been answered.
+ * wherever the family spells it in the current file: in full in a property,
+ * and after the {@code get_}/{@code set_} prefix in an accessor and its
+ * calls. A rename started on an accessor works the same way: the template
+ * edits only the part after its prefix, and the prefix is put back on the
+ * committed name. On commit, the template's edits are rolled back and every
+ * member is renamed for real, other files included. The family's own
+ * automatic renamer is left out of that commit, since the popup has already
+ * answered its question.
  */
 class HaxePropertyInplaceRenamer extends MemberInplaceRenamer {
+  /** Whether the popup chose the whole family. */
   private final boolean withAccessors;
-  /** The property the edited member belongs to; null when the family is not renamed along. */
+  /** The property of the family renamed along; null when the member is renamed alone. */
   private final @Nullable HaxeFieldDeclaration property;
-  /** The {@code get_}/{@code set_} prefix of the edited accessor, empty when the edited member is the property or is renamed alone. */
+  /** The {@code get_}/{@code set_} prefix the template leaves alone when the rename starts on an accessor; empty otherwise. */
   private final String editedPrefix;
-  /** The edited member's whole name; the inherited old name is the part after the prefix, which is what every template segment holds. */
+  /**
+   * The edited member's whole old name. The inherited old name holds only
+   * the edited part: the platform writes it back into every template segment
+   * on revert, and each segment holds only the property name.
+   */
   private final @Nullable String fullOldName;
 
   HaxePropertyInplaceRenamer(@NotNull PsiNameIdentifierOwner element, @NotNull Editor editor, boolean withAccessors) {
@@ -73,19 +79,20 @@ class HaxePropertyInplaceRenamer extends MemberInplaceRenamer {
     return new HaxePropertyInplaceRenamer(variable, getSubstituted(), editor, initialName, myOldName, withAccessors);
   }
 
-  /** The edited member's name after its prefix, at its declaration. */
+  /** The part of the edited member's name after its prefix, at the declaration. */
   @Override
   protected @NotNull TextRange getRangeToRename(@NotNull PsiElement element) {
     return new TextRange(editedPrefix.length(), element.getTextLength());
   }
 
-  /** The edited member's name after its prefix, at a reference. */
+  /** The part of the edited member's name after its prefix, at a reference. */
   @Override
   protected @NotNull TextRange getRangeToRename(@NotNull PsiReference reference) {
     TextRange range = super.getRangeToRename(reference);
     return new TextRange(range.getStartOffset() + editedPrefix.length(), range.getEndOffset());
   }
 
+  /** A reference joins the template when its text after the prefix is the edited part of the name. */
   @Override
   protected boolean acceptReference(PsiReference reference) {
     String referenceText = getRangeToRename(reference).substring(reference.getElement().getText());
@@ -99,7 +106,7 @@ class HaxePropertyInplaceRenamer extends MemberInplaceRenamer {
     return new MyLookupExpression(property.getName(), myNameSuggestions, property, selectedElement, shouldSelectAll(), myAdvertisementText);
   }
 
-  /** The family's other members in the current file, each edited from its prefix to the end of the name. */
+  /** Adds the family's other members in the current file, each edited from the end of its prefix to the end of its name. */
   @Override
   protected void collectAdditionalElementsToRename(@NotNull List<? super Pair<PsiElement, TextRange>> stringUsages) {
     super.collectAdditionalElementsToRename(stringUsages);
@@ -118,13 +125,18 @@ class HaxePropertyInplaceRenamer extends MemberInplaceRenamer {
     }
   }
 
-  /** The prefix is put back on the typed name before the family is renamed; an unchanged name is passed as the old one, which skips the rename. */
+  /**
+   * Puts the prefix back on the typed name. An unchanged name is passed on as
+   * the edited part, because the platform skips a rename whose new name
+   * equals its old one.
+   */
   @Override
   protected void performRefactoringRename(String newName, StartMarkAction markAction) {
     String fullName = editedPrefix + newName;
     super.performRefactoringRename(fullName.equals(fullOldName) ? myOldName : fullName, markAction);
   }
 
+  /** Renames the member with the family's other members added, and without the family's own automatic renamer. */
   @Override
   protected void performRenameInner(PsiElement element, String newName) {
     RenameProcessor processor = createRenameProcessor(element, newName);
@@ -152,12 +164,12 @@ class HaxePropertyInplaceRenamer extends MemberInplaceRenamer {
     }
   }
 
-  /** The edited member's name without the edited prefix. */
+  /** The edited part of the old name: the whole old name after the edited prefix. */
   private String editedName() {
     return fullOldName == null ? "" : fullOldName.substring(editedPrefix.length());
   }
 
-  /** The member's name after the prefix the template leaves alone; the whole name when the family is not renamed along. */
+  /** The part of the member's name the template edits: after the prefix of an accessor renamed with its family, otherwise the whole name. */
   @Nullable
   private static String editedNameOf(@NotNull PsiNamedElement element, boolean withAccessors) {
     String name = element.getName();

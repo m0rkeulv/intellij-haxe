@@ -13,8 +13,8 @@ import java.util.Collection;
 
 /**
  * The rename dialog's counterpart of {@link HaxePropertyInplaceRenameHandler}:
- * a "Rename property accessors" checkbox, and once the new name is confirmed,
- * the platform's renaming dialog listing the other members of the family
+ * a "Rename property accessors" checkbox in the dialog. Once the new name is
+ * confirmed, the platform lists the family's other members
  * ({@link HaxePropertyFamily}) with the names they will take.
  */
 public class HaxePropertyAccessorRenamerFactory implements AutomaticRenamerFactory {

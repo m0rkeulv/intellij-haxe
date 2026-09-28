@@ -24,16 +24,17 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-/// In-place rename of a property or one of its accessors. `var width(get, set)`
-/// binds the methods `get_width` and `set_width` by name, so renaming one of
-/// the three on its own leaves the compiler without the accessors. Before the
-/// template starts, a popup asks how far the rename reaches: the member alone,
-/// or the whole family ({@link HaxePropertyFamily}), overrides included. The
-/// other members are renamed when the template is committed, since their
-/// names differ from the edited one by a prefix and cannot follow it live.
-/// The rename dialog asks the same through {@link HaxePropertyAccessorRenamerFactory}.
+/// In-place rename of a property or one of its accessors. A property declared
+/// `var width(get, set)` binds the methods `get_width` and `set_width` by
+/// name, so renaming one of the three alone leaves the compiler without its
+/// accessors. Before the template starts, a popup asks how far the rename
+/// reaches: the whole family ([HaxePropertyFamily]), overrides included, or
+/// the member alone. With the family chosen, the members in the current file
+/// follow the name while it is typed, and those in other files are renamed
+/// when the template is committed ([HaxePropertyInplaceRenamer]). The rename
+/// dialog offers the same choice through [HaxePropertyAccessorRenamerFactory].
 public class HaxePropertyInplaceRenameHandler extends MemberInplaceRenameHandler {
-  /** The popup's answer in tests, where no popup opens; unset fails loudly rather than choosing silently. */
+  /** The popup's answer in tests, where no popup opens: true renames the whole family. Left unset, the rename fails rather than pick an answer silently. */
   @TestOnly
   public static Boolean renameAccessorsInTests;
 
@@ -63,7 +64,7 @@ public class HaxePropertyInplaceRenameHandler extends MemberInplaceRenameHandler
     if (!renamer.performInplaceRename(names)) performDialogRename(element, editor, context, renamer.initialName());
   }
 
-  /** Asks whether the rename reaches the whole family; the popup is skipped in tests. */
+  /** Asks whether the rename takes the whole family along. Tests answer through {@link #renameAccessorsInTests} instead of the popup. */
   private static void askRenameScope(@NotNull Editor editor, String propertyName, boolean onProperty, @NotNull Consumer<Boolean> onAnswer) {
     if (ApplicationManager.getApplication().isUnitTestMode()) {
       onAnswer.accept(Objects.requireNonNull(renameAccessorsInTests, "renameAccessorsInTests answers in place of the popup"));

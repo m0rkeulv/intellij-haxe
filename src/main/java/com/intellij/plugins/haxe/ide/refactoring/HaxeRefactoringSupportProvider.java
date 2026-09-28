@@ -59,11 +59,12 @@ public class HaxeRefactoringSupportProvider extends RefactoringSupportProvider {
    * Members, module-level declarations and types are renamed in place as
    * members: the platform updates the current file while the user types and
    * the other files when the rename is committed; invoking rename a second
-   * time opens the dialog. Two kinds are left to handlers of their own: a
-   * rename started on a constructor call, which
-   * {@link HaxeConstructorCallInplaceRenameHandler} turns into a class rename,
-   * and a property with bound accessors or one of those accessors, which
-   * {@link HaxePropertyInplaceRenameHandler} first asks how far to rename.
+   * time opens the dialog. Two cases are left to handlers of their own. A
+   * rename started on a constructor call goes to
+   * {@link HaxeConstructorCallInplaceRenameHandler}, which renames the class.
+   * A property that binds accessors, or one of those accessors, goes to
+   * {@link HaxePropertyInplaceRenameHandler}, which first asks how far the
+   * rename reaches.
    */
   @Override
   public boolean isMemberInplaceRenameAvailable(PsiElement element, PsiElement context) {

@@ -22,13 +22,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/// A property together with the accessor methods its declaration binds by
-/// name. `var width(get, set):Int` is served by `get_width` and
-/// `set_width`, whether the class declares them, inherits them or a subclass
-/// overrides them; an interface property is implemented by a property of the
-/// same name in each implementing class, with accessors of its own. The
-/// family holds every declaration the name reaches, so that a rename moves
-/// them together and the compiler keeps finding the accessors.
+/// A property and the accessor methods it binds by name. A property declared
+/// `var width(get, set):Int` is read through `get_width` and written through
+/// `set_width`, and the compiler finds both by their names alone. The family
+/// holds every declaration that name ties together: the property, the same
+/// property in a supertype or an implementing class, both accessors, and
+/// every override of them. Renaming one member without the others leaves the
+/// compiler looking for accessors that no longer exist.
 ///
 /// TODO: module-level properties (`static var x(get, never)` beside a module
 ///  function `get_x`) get no family; the lookup goes through the class model.
@@ -38,19 +38,23 @@ public record HaxePropertyFamily(@NotNull List<HaxeFieldDeclaration> properties,
   public static final String GETTER_PREFIX = "get_";
   public static final String SETTER_PREFIX = "set_";
 
-  /** Whether the element is a property with a bound accessor, one of its accessors, or the name element of either. No index search. */
+  /**
+   * Whether the element is a property that binds a {@code get} or {@code set}
+   * accessor, one of those accessors, or the name element of either. It
+   * searches no index, so availability checks can call it.
+   */
   public static boolean isPropertyOrAccessor(@Nullable PsiElement element) {
     return propertyOf(element) != null;
   }
 
-  /** The family of a property, of one of its accessors, or of either one's name element; null for any other element. */
+  /** The family of a property, of one of its accessors, or of either one's name element. Null for anything else, including a property that binds no accessor. */
   @Nullable
   public static HaxePropertyFamily of(@Nullable PsiElement element) {
     HaxeFieldDeclaration property = propertyOf(element);
     return property == null ? null : familyOf(property);
   }
 
-  /** The property the element declares or serves: the declaration itself, or the property an accessor method is bound to. */
+  /** The property behind the element: the element itself when it is a property that binds an accessor, or the property an accessor serves. Name elements are accepted too. */
   @Nullable
   public static HaxeFieldDeclaration propertyOf(@Nullable PsiElement element) {
     return switch (declarationOf(element)) {
@@ -60,7 +64,12 @@ public record HaxePropertyFamily(@NotNull List<HaxeFieldDeclaration> properties,
     };
   }
 
-  /** The property an accessor serves: for {@code get_width}, the field {@code width} of the method's class when it is declared with {@code get}. Null for any other method. */
+  /**
+   * The property an accessor serves, or null when the method is no accessor.
+   * {@code get_width} serves the field {@code width} that the method's class
+   * declares or inherits, provided the field is declared with {@code get}.
+   * A setter needs {@code set} in the same way.
+   */
   @Nullable
   public static HaxeFieldDeclaration propertyOfAccessor(@NotNull HaxeMethod method) {
     String name = method.getName();
@@ -79,21 +88,12 @@ public record HaxePropertyFamily(@NotNull List<HaxeFieldDeclaration> properties,
     return element instanceof HaxeComponentName name ? name.getParent() : element;
   }
 
-  public String propertyName() {
-    return properties.getFirst().getName();
-  }
-
-  /** Whether the element, or the declaration it names, is one of the family's members. */
-  public boolean contains(@Nullable PsiElement element) {
-    PsiElement declaration = declarationOf(element);
-    return properties.contains(declaration) || getters.contains(declaration) || setters.contains(declaration);
-  }
-
   /**
    * The new name of every other member when {@code member} is renamed to
-   * {@code newName}: the properties take the property name and the
-   * accessors their prefix plus it. Empty when no property name follows,
-   * which is an accessor renamed to a name without its prefix.
+   * {@code newName}. Properties take the property name, and accessors take
+   * their prefix followed by it. Empty when the new name implies no property
+   * name, which happens when an accessor is renamed to a name without its
+   * prefix.
    */
   @NotNull
   public Map<PsiNamedElement, String> renamesFor(@NotNull PsiElement member, @NotNull String newName) {
@@ -107,9 +107,9 @@ public record HaxePropertyFamily(@NotNull List<HaxeFieldDeclaration> properties,
     return renames;
   }
 
-  /** The property name a member's new name implies: the name itself for a property, the name behind the prefix for an accessor. Null when an accessor's new name lacks its prefix. */
+  /** The property name that a member's new name implies: the new name itself for a property, the part after the prefix for an accessor. Null when an accessor's new name drops its prefix. */
   @Nullable
-  public String propertyNameFor(@NotNull PsiElement member, @NotNull String newName) {
+  private static String propertyNameFor(@NotNull PsiElement member, @NotNull String newName) {
     String prefix = declarationOf(member) instanceof HaxeMethod accessor ? accessorPrefixOf(accessor.getName()) : null;
     if (prefix == null) return newName;
     return newName.startsWith(prefix) ? newName.substring(prefix.length()) : null;
@@ -187,7 +187,7 @@ public record HaxePropertyFamily(@NotNull List<HaxeFieldDeclaration> properties,
     return supertypes;
   }
 
-  /** The same-named properties of the classes implementing or extending the property's class, all the way down. */
+  /** The same-named properties in the types below the property's own, at any depth; for an interface property, its implementations. */
   @NotNull
   private static List<HaxeFieldDeclaration> implementationsOf(@NotNull HaxeFieldDeclaration property) {
     List<HaxeFieldDeclaration> implementations = new ArrayList<>();
@@ -197,7 +197,7 @@ public record HaxePropertyFamily(@NotNull List<HaxeFieldDeclaration> properties,
     return implementations;
   }
 
-  /** The accessor and its overrides, all the way down; empty when the property binds no such accessor. */
+  /** The accessor and its overrides at any depth; empty when the property binds no such accessor. */
   @NotNull
   private static List<HaxeMethod> withOverrides(@Nullable HaxeMethodModel accessor) {
     if (accessor == null) return List.of();
@@ -209,7 +209,7 @@ public record HaxePropertyFamily(@NotNull List<HaxeFieldDeclaration> properties,
     return methods;
   }
 
-  /** The same-named members of every inheritor of the member's class; the search takes the name element. */
+  /** The same-named members in every inheritor of the member's class. The search expects the name element, not the declaration. */
   @NotNull
   private static List<PsiElement> definitionsBelow(@Nullable HaxeComponentName name) {
     if (name == null) return List.of();
