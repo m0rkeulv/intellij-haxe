@@ -23,8 +23,8 @@ import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.Nullable;
 
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_LIKE_OWNERS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.BINARY_EXPRESSIONS;
-import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.FUNCTION_DEFINITION;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 
@@ -64,7 +64,7 @@ public class HaxeAlignmentProcessor {
 
     if (elementType == PARAMETER_LIST || elementType == EXPRESSION_LIST || elementType == CALL_EXPRESSION_LIST) {
       boolean doAlign = false;
-      if (FUNCTION_DEFINITION.contains(parentType)) {
+      if (FUNCTION_LIKE_OWNERS.contains(parentType)) {
         doAlign = mySettings.ALIGN_MULTILINE_PARAMETERS;
       }
       else if (parentType == CALL_EXPRESSION) {

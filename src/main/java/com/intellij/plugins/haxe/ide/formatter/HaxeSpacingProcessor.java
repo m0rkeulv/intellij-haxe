@@ -619,7 +619,7 @@ public class HaxeSpacingProcessor {
     if (elementType == FOR_STATEMENT) return spaceIf(common.SPACE_BEFORE_FOR_PARENTHESES);
     if (elementType == TRY_STATEMENT) return spaceIf(common.SPACE_BEFORE_TRY_PARENTHESES);
     if (elementType == CATCH_STATEMENT) return spaceIf(common.SPACE_BEFORE_CATCH_PARENTHESES);
-    if (FUNCTION_DEFINITION.contains(elementType)) return spaceIf(common.SPACE_BEFORE_METHOD_PARENTHESES);
+    if (FUNCTION_LIKE_OWNERS.contains(elementType)) return spaceIf(common.SPACE_BEFORE_METHOD_PARENTHESES);
     if (elementType == CALL_EXPRESSION) return spaceIf(common.SPACE_BEFORE_METHOD_CALL_PARENTHESES);
     return null;
   }
@@ -650,7 +650,7 @@ public class HaxeSpacingProcessor {
     if (elementType == FOR_STATEMENT) return braceSpacing(common.SPACE_BEFORE_FOR_LBRACE, common.BRACE_STYLE, pair);
     if (elementType == TRY_STATEMENT) return braceSpacing(common.SPACE_BEFORE_TRY_LBRACE, common.BRACE_STYLE, pair);
     if (elementType == CATCH_STATEMENT) return braceSpacing(common.SPACE_BEFORE_CATCH_LBRACE, common.BRACE_STYLE, pair);
-    if (FUNCTION_DEFINITION.contains(elementType)) return braceSpacing(common.SPACE_BEFORE_METHOD_LBRACE, common.METHOD_BRACE_STYLE, pair);
+    if (FUNCTION_LIKE_OWNERS.contains(elementType)) return braceSpacing(common.SPACE_BEFORE_METHOD_LBRACE, common.METHOD_BRACE_STYLE, pair);
     return null;
   }
 
@@ -667,7 +667,7 @@ public class HaxeSpacingProcessor {
     if (parentType == SWITCH_STATEMENT && elementType == PARENTHESIZED_EXPRESSION) return spaceIf(common.SPACE_WITHIN_SWITCH_PARENTHESES);
     if (elementType == TRY_STATEMENT) return spaceIf(common.SPACE_WITHIN_TRY_PARENTHESES);
     if (elementType == CATCH_STATEMENT) return spaceIf(common.SPACE_WITHIN_CATCH_PARENTHESES);
-    if (FUNCTION_DEFINITION.contains(elementType)) {
+    if (FUNCTION_LIKE_OWNERS.contains(elementType)) {
       boolean ownLine = parenOnNextLine(type1, common.METHOD_PARAMETERS_LPAREN_ON_NEXT_LINE, common.METHOD_PARAMETERS_RPAREN_ON_NEXT_LINE);
       return spaceAndBreakIf(common.SPACE_WITHIN_METHOD_PARENTHESES, ownLine);
     }
@@ -1310,7 +1310,7 @@ public class HaxeSpacingProcessor {
                                 // statement list and format like active statements
                                 || parentType == PPBODY
                                 || parentType == INACTIVE_STATEMENT_LIST
-                                || FUNCTION_DEFINITION.contains(parentType);
+                                || FUNCTION_LIKE_OWNERS.contains(parentType);
     return !statementPosition;
   }
 
@@ -1335,9 +1335,9 @@ public class HaxeSpacingProcessor {
 
   /** Whether the keep-in-one-line option for the header's kind keeps an empty body's {} on the header's line. */
   private boolean emptyBodyStaysInline(@Nullable IElementType headerType) {
-    // FUNCTION_LITERAL first: FUNCTION_DEFINITION contains it too
+    // FUNCTION_LITERAL first: FUNCTION_LIKE_OWNERS contains it too
     if (headerType == FUNCTION_LITERAL) return common.KEEP_SIMPLE_LAMBDAS_IN_ONE_LINE;
-    if (FUNCTION_DEFINITION.contains(headerType)) return common.KEEP_SIMPLE_METHODS_IN_ONE_LINE;
+    if (FUNCTION_LIKE_OWNERS.contains(headerType)) return common.KEEP_SIMPLE_METHODS_IN_ONE_LINE;
     return common.KEEP_SIMPLE_BLOCKS_IN_ONE_LINE;
   }
 

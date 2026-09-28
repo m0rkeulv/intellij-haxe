@@ -31,8 +31,9 @@ import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeLiteralItemRules;
 import com.intellij.plugins.haxe.ide.formatter.wrapping.HaxeLiteralItemRules.Decision;
 
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterNodes.isChainLink;
-import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.PARAMETER_AND_ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.BRACKET_LITERALS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.FUNCTION_LIKE_OWNERS;
+import static com.intellij.plugins.haxe.ide.formatter.HaxeFormatterTokenSets.PARAMETER_AND_ARGUMENT_LISTS;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets.*;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
@@ -164,7 +165,7 @@ public class HaxeWrappingProcessor {
     IElementType parentType = parent == null ? null : parent.getElementType();
     if (parentType == CALL_EXPRESSION && callsWrap) return callArgumentWrap(child, assignmentSignWrap);
     // an enum constructor's parameters wrap like a signature's
-    boolean signature = FUNCTION_DEFINITION.contains(parentType) || parentType == ENUM_VALUE_DECLARATION_CONSTRUCTOR;
+    boolean signature = FUNCTION_LIKE_OWNERS.contains(parentType) || parentType == ENUM_VALUE_DECLARATION_CONSTRUCTOR;
     boolean signaturesWrap = mySettings.METHOD_PARAMETERS_WRAP != CommonCodeStyleSettings.DO_NOT_WRAP;
     return signature && signaturesWrap ? parameterWrap(child) : null;
   }

@@ -243,6 +243,47 @@ public class HaxeFormatterTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("module level function formats like a method")
+  public void testModuleLevelFunctionFormatsLikeAMethod() {
+    Consumer<CommonCodeStyleSettings> methodRules = common -> {
+      common.METHOD_BRACE_STYLE = CommonCodeStyleSettings.NEXT_LINE;
+      common.SPACE_BEFORE_METHOD_PARENTHESES = true;
+      common.ALIGN_MULTILINE_PARAMETERS = true;
+    };
+    String source = """
+      function helper(first:Int,
+      second:Int) {
+      	return first + second;
+      }
+
+      class Main {
+      	static function main(first:Int,
+      	second:Int) {
+      		helper(first, second);
+      	}
+      }
+      """;
+
+    String formatted = reformat(commonSettings(methodRules), source);
+
+    assertEquals("""
+      function helper (first:Int,
+                       second:Int)
+      {
+          return first + second;
+      }
+
+      class Main {
+          static function main (first:Int,
+                                second:Int)
+          {
+              helper(first, second);
+          }
+      }
+      """, formatted);
+  }
+
+  @Test
   @DisplayName("indent typedef")
   public void testIndentTypedef() throws Exception {
     doTest();
