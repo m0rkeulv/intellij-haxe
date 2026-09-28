@@ -116,7 +116,7 @@ final class HaxeDiagnosticsFetcher {
   /**
    * The file's diagnostics, fetched once per file and buffer state and shared
    * by the annotators of one pass. Only a call that fills the cache also
-   * requests the whole-project diagnostics, which feed the problem marks in
+   * requests the whole-project diagnostics and updates the problem marks in
    * the Project view.
    */
   @Nullable
@@ -143,13 +143,11 @@ final class HaxeDiagnosticsFetcher {
     }
 
     // only the whole-project request reports errors in OTHER files (the
-    // per-file request stays silent about broken dependencies). They become
-    // problem marks in the Project view, not editor annotations.
+    // per-file request stays silent about broken dependencies). Both feed
+    // the problem marks in the Project view, which are not editor annotations.
     List<FileDiagnostics> projectResults = request.service().projectDiagnostics(request.context());
-    if (projectResults != null) {
-      HaxeCompilerProblemMarker.getInstance(request.service().getProject())
-        .updateFromDiagnostics(request.filePath(), projectResults);
-    }
+    HaxeCompilerProblemMarker.getInstance(request.service().getProject())
+      .updateFromDiagnostics(request.filePath(), results, projectResults);
 
     List<Diagnostic> diagnostics = results.stream()
       .filter(entry -> FileUtil.pathsEqual(entry.file(), request.filePath()))

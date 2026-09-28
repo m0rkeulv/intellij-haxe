@@ -10,21 +10,26 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.Diagnostic;
 import com.intellij.plugins.haxe.display.protocol.DiagnosticSeverity;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerProblemMarks.Update;
 import com.intellij.problems.WolfTheProblemSolver;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Marks the OTHER files in which a compile reported errors, through
+ * Marks the files in which the compiler reported errors, through
  * {@link WolfTheProblemSolver}: their names turn red in the Project view and
- * editor tabs. A diagnostics response covers every file the compile touched.
- * The edited file's entry becomes editor annotations, and without these marks
- * a dependency's parse error would go unnoticed. A mark is cleared when a
- * later pass no longer reports errors in the file.
+ * editor tabs. The edited file is judged by its own diagnostics, every other
+ * project file by the whole-project sweep, which lists only the files the
+ * build reaches; {@link HaxeCompilerProblemMarks} keeps the two kinds of
+ * evidence apart. Library files are never marked, since they are not the
+ * user's to fix.
+ *
+ * TODO: a broken file the build never reaches gets no mark until it is
+ *  opened; listing the module's sources in the sweep ({@code fileContents})
+ *  would type them all.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeCompilerProblemMarker {
@@ -33,7 +38,7 @@ public final class HaxeCompilerProblemMarker {
   private static final Object SOURCE = new Object();
 
   private final Project project;
-  private final Set<String> markedPaths = ConcurrentHashMap.newKeySet();
+  private final HaxeCompilerProblemMarks marks = new HaxeCompilerProblemMarks();
 
   public HaxeCompilerProblemMarker(@NotNull Project project) {
     this.project = project;
@@ -45,38 +50,48 @@ public final class HaxeCompilerProblemMarker {
   }
 
   /**
-   * Applies one diagnostics response. Project files other than the edited
-   * one get marked when they have error-severity entries. Previously marked
-   * files without errors in this response get cleared. Call on a background
-   * thread.
+   * Applies one pass: the edited file's own diagnostics and, when it
+   * answered, the whole-project sweep. Call on a background thread.
    */
-  public void updateFromDiagnostics(@NotNull String editedFilePath, @NotNull List<FileDiagnostics> results) {
-    Map<String, VirtualFile> nowBroken = new HashMap<>();
-    for (FileDiagnostics entry : results) {
-      if (FileUtil.pathsEqual(entry.file(), editedFilePath)) continue;
-      if (!hasErrorSeverity(entry)) continue;
-      VirtualFile file = LocalFileSystem.getInstance().findFileByPath(entry.file());
-      if (file == null || !file.isValid()) continue;
-      // only project content is marked; library files are not the user's to fix
-      boolean inContent = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInContent(file));
-      if (!inContent) continue;
-      nowBroken.put(file.getPath(), file);
-    }
+  public void updateFromDiagnostics(@NotNull String editedFilePath,
+                                    @NotNull List<FileDiagnostics> ownResults,
+                                    @Nullable List<FileDiagnostics> sweepResults) {
+    String editedPath = FileUtil.toSystemIndependentName(editedFilePath);
+    boolean editedBroken = brokenPaths(ownResults).contains(editedPath);
+    Set<String> sweepBroken = sweepResults == null ? null : projectFilesAmong(brokenPaths(sweepResults));
+    Update update = marks.apply(editedPath, editedBroken, sweepBroken);
 
     WolfTheProblemSolver problemSolver = WolfTheProblemSolver.getInstance(project);
-    for (String path : markedPaths) {
-      if (!nowBroken.containsKey(path)) {
-        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-        if (file != null) {
-          problemSolver.clearProblemsFromExternalSource(file, SOURCE);
-        }
-        markedPaths.remove(path);
-      }
+    for (String path : update.clear()) {
+      VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+      if (file != null) problemSolver.clearProblemsFromExternalSource(file, SOURCE);
     }
-    for (Map.Entry<String, VirtualFile> broken : nowBroken.entrySet()) {
-      problemSolver.reportProblemsFromExternalSource(broken.getValue(), SOURCE);
-      markedPaths.add(broken.getKey());
+    for (String path : update.report()) {
+      VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+      if (file != null) problemSolver.reportProblemsFromExternalSource(file, SOURCE);
     }
+  }
+
+  /** The files with error-severity entries, as system-independent paths. */
+  @NotNull
+  private static Set<String> brokenPaths(@NotNull List<FileDiagnostics> results) {
+    Set<String> broken = new HashSet<>();
+    for (FileDiagnostics entry : results) {
+      if (hasErrorSeverity(entry)) broken.add(FileUtil.toSystemIndependentName(entry.file()));
+    }
+    return broken;
+  }
+
+  @NotNull
+  private Set<String> projectFilesAmong(@NotNull Set<String> paths) {
+    Set<String> inProject = new HashSet<>();
+    for (String path : paths) {
+      VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+      if (file == null || !file.isValid()) continue;
+      boolean inContent = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInContent(file));
+      if (inContent) inProject.add(file.getPath());
+    }
+    return inProject;
   }
 
   private static boolean hasErrorSeverity(@NotNull FileDiagnostics entry) {
