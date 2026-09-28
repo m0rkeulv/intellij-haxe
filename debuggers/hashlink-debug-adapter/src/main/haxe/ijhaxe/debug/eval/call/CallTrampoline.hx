@@ -18,16 +18,12 @@ import haxe.io.Bytes;
 **/
 interface CallTrampoline {
 	/**
-		The most arguments `build` accepts.
-	**/
-	function maxArgs():Int;
-
-	/**
 		The trampoline bytes that call `funcAddr` with `args`. `floatBits` is the
 		width of a float return: 0 for an int or pointer return (delivered in
 		RAX/EAX), 32 or 64 for a float. On x86-64 a float result is copied into
 		RAX; on x86 it is stored in a scratch slot the caller knows (see
-		X86CallEmitter).
+		X86CallEmitter). Throws when the arguments exceed what the calling
+		convention's register or stack path carries.
 	**/
 	function build(funcAddr:Int64, args:Array<CallArg>, floatBits:Int):Bytes;
 }

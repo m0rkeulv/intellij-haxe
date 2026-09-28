@@ -18,8 +18,8 @@ import haxe.Int64;
 	 - a literal into a matching primitive slot (Int, Float, Bool, Int64 and
 	   the smaller integer types);
 	 - `null` into any pointer slot;
-	 - a call result or another slot's value: a pointer copy for reference
-	   types, a numeric conversion for primitives;
+	 - a call result: a pointer copy for reference types, a numeric
+	   conversion for primitives;
 	 - a primitive into an existing Null<T> box, or into a Dynamic box that
 	   already holds that kind, updated in place.
 
@@ -61,10 +61,6 @@ class ValueWriter {
 				writeInt(target, value);
 			case LFloat(value):
 				writeFloat(target, value);
-			case LPath(_):
-				throw new DebugError("internal: path literals are resolved by the caller");
-			case LString(_):
-				throw new DebugError("internal: string literals are materialized by the caller");
 		}
 	}
 
@@ -138,45 +134,6 @@ class ValueWriter {
 		}
 	}
 
-	/**
-		Copies the value of the `source` slot into the target (variable = variable).
-
-		TODO: nothing calls this; assignments go through assignRaw. Remove it.
-	**/
-	public function copy(target:WriteTarget, source:WriteTarget):Void {
-		if (target.type.match(HNull(_))) {
-			// a null source clears the slot; any other value updates the box
-			if (isPointer(source.type) && Int64.compare(mem.readPointer(source.address), Int64.ofInt(0)) == 0) {
-				out.writePointer(target.address, Int64.ofInt(0));
-				return;
-			}
-			copy(unwrapNullBox(target), source);
-			return;
-		}
-		if (source.type.match(HNull(_))) {
-			copy(target, unwrapNullBox(source));
-			return;
-		}
-		if (isPointer(target.type)) {
-			if (!isPointer(source.type)) {
-				throw new DebugError('Cannot assign ' + ValueReader.typeName(source.type)
-					+ ' to the reference "' + target.name + '"');
-			}
-			out.writePointer(target.address, mem.readPointer(source.address));
-			return;
-		}
-		// primitive target: read the source as a number and coerce
-		if (isFloat(target.type)) {
-			writeFloat(target, readNumericAsFloat(source));
-			return;
-		}
-		if (target.type.match(HBool)) {
-			writeBool(target, Int64.compare(readNumericAsInt(source), Int64.ofInt(0)) != 0);
-			return;
-		}
-		writeInt(target, readNumericAsInt(source));
-	}
-
 	function writeNull(target:WriteTarget):Void {
 		if (!isPointer(target.type)) {
 			throw new DebugError('Cannot assign null to the ' + ValueReader.typeName(target.type)
@@ -239,27 +196,6 @@ class ValueWriter {
 				+ "; allocating a new boxed value is not supported)");
 		}
 		writePayload(box.offset(align.dynPayload));
-	}
-
-	function readNumericAsInt(source:WriteTarget):Int64 {
-		return switch (source.type) {
-			case HUi8: Int64.ofInt(mem.readU8(source.address));
-			case HUi16: Int64.ofInt(mem.readU16(source.address));
-			case HI32: Int64.ofInt(mem.readI32(source.address));
-			case HI64: mem.readI64(source.address);
-			case HBool: Int64.ofInt(mem.readU8(source.address) != 0 ? 1 : 0);
-			default:
-				throw new DebugError("Can only copy a numeric value into a primitive slot (source is "
-					+ ValueReader.typeName(source.type) + ")");
-		}
-	}
-
-	function readNumericAsFloat(source:WriteTarget):Float {
-		return switch (source.type) {
-			case HF32: mem.readF32(source.address);
-			case HF64: mem.readF64(source.address);
-			default: int64ToFloat(readNumericAsInt(source));
-		}
 	}
 
 	static function sameKind(a:HLType, b:HLType):Bool {

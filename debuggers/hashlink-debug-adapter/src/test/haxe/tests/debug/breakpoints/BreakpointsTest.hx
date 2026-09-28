@@ -37,8 +37,7 @@ class BreakpointsTest {
 		assert.equals(14, installed[0].line, "line recorded");
 		assert.equals(INT3, api.peek(addr(10)), "INT3 written to memory");
 		assert.isTrue(api.flushed > 0, "instruction cache flushed");
-		assert.isTrue(bps.isBreakpointAddress(addr(10)), "address is a known breakpoint");
-		assert.isTrue(bps.atAddress(addr(10)) != null, "lookup by address");
+		assert.isTrue(bps.atAddress(addr(10)) != null, "address is a known breakpoint");
 	}
 
 	static function replacingSourceRestoresOldAndInstallsNew(assert:Assert):Void {
@@ -52,8 +51,8 @@ class BreakpointsTest {
 
 		assert.equals(0x55, api.peek(addr(10)), "old breakpoint byte restored");
 		assert.equals(INT3, api.peek(addr(20)), "new breakpoint installed");
-		assert.isFalse(bps.isBreakpointAddress(addr(10)), "old address no longer tracked");
-		assert.isTrue(bps.isBreakpointAddress(addr(20)), "new address tracked");
+		assert.isTrue(bps.atAddress(addr(10)) == null, "old address no longer tracked");
+		assert.isTrue(bps.atAddress(addr(20)) != null, "new address tracked");
 		assert.isTrue(second[0].id != 0, "new breakpoint has an id");
 	}
 
@@ -102,7 +101,7 @@ class BreakpointsTest {
 		bps.clearTemps();
 		// clearing the temp must NOT restore the byte the user breakpoint owns
 		assert.equals(INT3, api.peek(addr(70)), "user breakpoint survives clearTemps");
-		assert.isTrue(bps.isBreakpointAddress(addr(70)), "user breakpoint still tracked");
+		assert.isTrue(bps.atAddress(addr(70)) != null, "user breakpoint still tracked");
 	}
 
 	static function patchedSitesCoverEveryTrapKind(assert:Assert):Void {

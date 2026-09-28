@@ -180,13 +180,6 @@ class VariableInspector {
 	}
 
 	/**
-		True once a stop has produced at least one frame (any thread walked).
-	**/
-	public inline function hasFrames():Bool {
-		return stops.hasFrames();
-	}
-
-	/**
 		The frames of `threadId` (walked+cached on first request; all threads are
 		frozen at a stop). Each carries the globally-unique frame id the client
 		uses for scopes/variables/evaluate.
@@ -207,13 +200,6 @@ class VariableInspector {
 	**/
 	public inline function scopesFor(frameId:Int):Array<ScopeInfo> {
 		return view.scopesFor(frameId);
-	}
-
-	/**
-		The decoded value in HL register `reg` of a frame (for describing a thrown exception).
-	**/
-	public inline function readRegisterValue(frameId:Int, reg:Int):Null<VariableInfo> {
-		return view.readRegisterValue(frameId, reg);
 	}
 
 	/**

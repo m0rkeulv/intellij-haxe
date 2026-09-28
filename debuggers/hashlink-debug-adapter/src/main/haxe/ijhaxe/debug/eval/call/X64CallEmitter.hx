@@ -47,13 +47,6 @@ class X64CallEmitter implements CallTrampoline {
 	}
 
 	/**
-		The number of arguments the register-only calling path supports.
-	**/
-	public function maxArgs():Int {
-		return winCall ? 4 : 6; // SysV: the integer count; placeArgs checks floats separately
-	}
-
-	/**
 		The trampoline bytes that call `funcAddr` with `args`. A nonzero
 		`floatBits` copies XMM0 into RAX after the call; F32 and F64 both sit in
 		XMM0's low bits, so both widths take the same path. Throws when an
@@ -105,8 +98,8 @@ class X64CallEmitter implements CallTrampoline {
 			// by position: argument i uses slot i (RCX/RDX/R8/R9 or XMM0..3)
 			var cpu = [RCX, RDX, R8, R9];
 			for (i in 0...args.length) {
-				if (i >= 4) {
-					throw new DebugError("Too many arguments to call (max " + maxArgs() + ")");
+				if (i >= cpu.length) {
+					throw new DebugError("Too many arguments to call (max " + cpu.length + ")");
 				}
 				result.push(args[i].isFloat ? {reg: i, xmm: true} : {reg: cpu[i], xmm: false});
 			}
@@ -124,7 +117,7 @@ class X64CallEmitter implements CallTrampoline {
 				result.push({reg: nextFloat++, xmm: true});
 			} else {
 				if (nextInt >= intRegs.length) {
-					throw new DebugError("Too many arguments to call (max " + maxArgs() + ")");
+					throw new DebugError("Too many arguments to call (max " + intRegs.length + ")");
 				}
 				result.push({reg: intRegs[nextInt++], xmm: false});
 			}

@@ -77,10 +77,6 @@ class Breakpoints {
 		return byAddress.get(addressKey(address));
 	}
 
-	public function isBreakpointAddress(address:Pointer):Bool {
-		return byAddress.exists(addressKey(address));
-	}
-
 	/**
 		True when one of the session's own INT3s sits at `address`: a breakpoint,
 		a step temp, an armed throw site or hl_throw's armed entry. A trap
@@ -88,10 +84,6 @@ class Breakpoints {
 	**/
 	public function isPatchedSite(address:Pointer):Bool {
 		return atAddress(address) != null || isTemp(address) || exceptionAt(address) != null || isNativeThrow(address);
-	}
-
-	public function all():Array<PatchedBreakpoint> {
-		return [for (bp in byAddress) bp];
 	}
 
 	/**

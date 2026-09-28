@@ -57,13 +57,6 @@ class StopState {
 	}
 
 	/**
-		True once a stop has produced at least one frame (any thread walked).
-	**/
-	public function hasFrames():Bool {
-		return frameCaches.iterator().hasNext();
-	}
-
-	/**
 		The frames of `threadId`, walked and cached on the first request. Each
 		carries the globally unique frame id the client uses for scopes,
 		variables and evaluate.

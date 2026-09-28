@@ -40,10 +40,6 @@ class X86CallEmitter implements CallTrampoline {
 
 	public function new() {}
 
-	public function maxArgs():Int {
-		return MAX_ARGS;
-	}
-
 	public function build(funcAddr:Int64, args:Array<CallArg>, floatBits:Int):Bytes {
 		if (args.length > MAX_ARGS) {
 			throw new DebugError("Too many arguments to call (max " + MAX_ARGS + ")");
