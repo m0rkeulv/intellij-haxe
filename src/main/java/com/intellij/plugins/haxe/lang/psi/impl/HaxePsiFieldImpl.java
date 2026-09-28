@@ -30,11 +30,8 @@ import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.util.HaxeAbstractEnumUtil;
 
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
-import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.*;
 import com.intellij.psi.javadoc.PsiDocComment;
-import com.intellij.psi.search.LocalSearchScope;
-import com.intellij.psi.search.SearchScope;
 import com.intellij.psi.stubs.IStubElementType;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -262,20 +259,6 @@ public abstract class HaxePsiFieldImpl extends HaxeStubBasedNamedComponent<HaxeF
     return this.getModifierList().hasModifierProperty(name);
   }
 
-  @NotNull
-  @Override
-  public SearchScope getUseScope() {
-    final PsiElement localVar = UsefulPsiTreeUtil.getParentOfType(this, HaxeLocalVarDeclaration.class);
-    if (localVar != null) {
-      final PsiElement outerBlock = UsefulPsiTreeUtil.getParentOfType(localVar, HaxeBlockStatement.class);
-      if (outerBlock != null) {
-        return new LocalSearchScope(outerBlock);
-      }
-    }
-    return super.getUseScope();
-  }
-
-
   private @NonNull HaxeModifierList createASTBackedModifierList() {
     HaxeModifierList list = super.getModifierList();
 
@@ -294,12 +277,19 @@ public abstract class HaxePsiFieldImpl extends HaxeStubBasedNamedComponent<HaxeF
       list.setModifierProperty(HaxePsiModifier.INLINE, true);
     }
 
-    if (isPublic()) {
-      list.setModifierProperty(HaxePsiModifier.PUBLIC, true);
-    } else {
-      list.setModifierProperty(HaxePsiModifier.PRIVATE, true);
+    if (!isLocalDeclaration()) {
+      list.setModifierProperty(isPublic() ? HaxePsiModifier.PUBLIC : HaxePsiModifier.PRIVATE, true);
     }
     return list;
+  }
+
+  /**
+   * A local has no visibility. Reported as a private field it gets the
+   * Groovy plugin's private-field scope enlarger, whose module-wide scope
+   * is no longer local and so blocks in-place rename.
+   */
+  private boolean isLocalDeclaration() {
+    return this instanceof HaxeLocalVarDeclaration || this instanceof HaxeSwitchCaseCapture;
   }
 
   private @NonNull HaxeModifierListFromStub createStubBackedModifierList(HaxeFieldStub stub) {

@@ -97,6 +97,11 @@ public abstract class HaxeNamedElementImpl extends HaxeStubBasedPsiElementBase<H
     return this;
   }
 
+  /**
+   * Declarations used only within their block (locals, parameters, local
+   * functions) get a local scope; the owning component reports this same
+   * scope, so a reference's target and the name it renames agree.
+   */
   @NotNull
   @Override
   public SearchScope getUseScope() {

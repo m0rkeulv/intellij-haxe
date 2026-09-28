@@ -24,6 +24,7 @@ import com.intellij.psi.PsiReference;
 import com.intellij.psi.impl.source.SourceTreeToPsiMap;
 import com.intellij.psi.impl.source.tree.ChildRole;
 import com.intellij.psi.impl.source.tree.LeafPsiElement;
+import com.intellij.psi.search.SearchScope;
 import com.intellij.psi.stubs.StubElement;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -95,6 +96,18 @@ public abstract class HaxeStubBasedNamedComponent<T extends StubElement<?>> exte
       componentName.setName(name);
     }
     return this;
+  }
+
+  /**
+   * A reference resolves to the component while its name element is what
+   * gets renamed; both must report the same scope, and the name element
+   * owns the rule.
+   */
+  @NotNull
+  @Override
+  public SearchScope getUseScope() {
+    final HaxeComponentName componentName = getComponentName();
+    return componentName != null ? componentName.getUseScope() : super.getUseScope();
   }
 
   @Override

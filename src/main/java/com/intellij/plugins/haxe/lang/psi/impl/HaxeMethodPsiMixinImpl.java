@@ -33,13 +33,10 @@ import com.intellij.plugins.haxe.model.HaxeMethodModel;
 
 import com.intellij.plugins.haxe.model.HaxeParameterModel;
 import com.intellij.plugins.haxe.util.HaxeResolveUtil;
-import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.PsiImplUtil;
 import com.intellij.psi.impl.PsiSuperMethodImplUtil;
 import com.intellij.psi.javadoc.PsiDocComment;
-import com.intellij.psi.search.LocalSearchScope;
-import com.intellij.psi.search.SearchScope;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.MethodSignature;
 import com.intellij.psi.util.MethodSignatureBackedByPsiMethod;
@@ -436,18 +433,6 @@ public abstract class HaxeMethodPsiMixinImpl extends HaxeStubBasedNamedComponent
   public PsiParameterList getParameterList() {
     final HaxeParameterList list = PsiTreeUtil.getStubChildOfType(this, HaxeParameterList.class);
     return ((list != null) ? list : new HaxeParameterListImpl(new HaxeDummyASTNode("Dummy parameter list", getProject())));
-  }
-
-  @NotNull
-  @Override
-  public SearchScope getUseScope() {
-    if(this instanceof HaxeLocalFunctionDeclaration) {
-      final PsiElement outerBlock = UsefulPsiTreeUtil.getParentOfType(this, HaxeBlockStatement.class);
-      if(outerBlock != null) {
-        return new LocalSearchScope(outerBlock);
-      }
-    }
-    return super.getUseScope();
   }
 
   @Nullable

@@ -1,0 +1,214 @@
+package com.intellij.plugins.haxe.ide.refactoring.rename;
+
+import com.intellij.ide.DataManager;
+import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
+import com.intellij.plugins.haxe.ide.refactoring.HaxeRefactoringSupportProvider;
+import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
+import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.refactoring.rename.RenameHandler;
+import com.intellij.refactoring.rename.RenameHandlerRegistry;
+import com.intellij.refactoring.rename.inplace.MemberInplaceRenameHandler;
+import com.intellij.refactoring.rename.inplace.VariableInplaceRenameHandler;
+import com.intellij.testFramework.fixtures.CodeInsightTestUtil;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@DisplayName("Rename: in place")
+public class HaxeInplaceRenameTest extends HaxeLightFixtureTestCase {
+
+  private static final String HELPER_HX_NAME = "Helper.hx";
+  private static final String HELPER_HX_SOURCE = """
+    class Helper {
+    	public static function <caret>run() {}
+    }
+    """;
+  private static final String MAIN_HX_NAME = "Main.hx";
+  private static final String MAIN_HX_SOURCE = """
+    class Main {
+    	static function main() {
+    		Helper.run();
+    	}
+    }
+    """;
+  private static final String LOCAL_SOURCE = """
+    class Main {
+    	static function main() {
+    		var <caret>count = 1;
+    		trace(count);
+    	}
+    }
+    """;
+  private static final String HELPER_HX_DECLARATION = """
+    class Helper {
+    	public static function run() {}
+    }
+    """;
+  private static final String MAIN_HX_REFERENCE = """
+    class Main {
+    	static function main() {
+    		Helper.<caret>run();
+    	}
+    }
+    """;
+  private static final String LOCAL_REFERENCE_SOURCE = """
+    class Main {
+    	static function main() {
+    		var count = 1;
+    		trace(<caret>count);
+    	}
+    }
+    """;
+  private static final String HELPER_WITH_CONSTRUCTOR_HX_SOURCE = """
+    class Helper {
+    	public function new() {}
+    }
+    """;
+  private static final String NEW_EXPRESSION_REFERENCE_SOURCE = """
+    class Main {
+    	static function main() {
+    		var helper = new <caret>Helper();
+    	}
+    }
+    """;
+  private static final String PARAMETER_REFERENCE_SOURCE = """
+    class Main {
+    	static function main(count:Int) {
+    		trace(<caret>count);
+    	}
+    }
+    """;
+
+  @Override
+  protected String getBasePath() {
+    return "";
+  }
+
+  @Test
+  @DisplayName("a member renames in place and the other files follow")
+  public void testAMemberRenamesInPlaceAndTheOtherFilesFollow() {
+    myFixture.addFileToProject(MAIN_HX_NAME, MAIN_HX_SOURCE);
+    myFixture.configureByText(HELPER_HX_NAME, HELPER_HX_SOURCE);
+    HaxeRefactoringSupportProvider provider = new HaxeRefactoringSupportProvider();
+    PsiElement name = nameAtCaret();
+    assertTrue(provider.isMemberInplaceRenameAvailable(name, name));
+    assertFalse(provider.isInplaceRenameAvailable(name, name), "a member is not a variable to the variable renamer");
+
+    CodeInsightTestUtil.doInlineRename(new MemberInplaceRenameHandler(), "go", myFixture);
+
+    assertTrue(myFixture.getFile().getText().contains("function go()"), myFixture.getFile().getText());
+    assertTrue(textOf(MAIN_HX_NAME).contains("Helper.go()"), textOf(MAIN_HX_NAME));
+  }
+
+  @Test
+  @DisplayName("a local renames in place as a variable")
+  public void testALocalRenamesInPlaceAsAVariable() {
+    myFixture.configureByText(MAIN_HX_NAME, LOCAL_SOURCE);
+    HaxeRefactoringSupportProvider provider = new HaxeRefactoringSupportProvider();
+    PsiElement name = nameAtCaret();
+    assertTrue(provider.isInplaceRenameAvailable(name, name));
+    assertFalse(provider.isMemberInplaceRenameAvailable(name, name));
+
+    CodeInsightTestUtil.doInlineRename(new VariableInplaceRenameHandler(), "total", myFixture);
+
+    String text = myFixture.getFile().getText();
+    assertTrue(text.contains("var total = 1;") && text.contains("trace(total)"), text);
+  }
+
+  @Test
+  @DisplayName("a member renames in place from a reference too")
+  public void testAMemberRenamesInPlaceFromAReferenceToo() {
+    myFixture.addFileToProject(HELPER_HX_NAME, HELPER_HX_DECLARATION);
+    myFixture.configureByText(MAIN_HX_NAME, MAIN_HX_REFERENCE);
+    HaxeRefactoringSupportProvider provider = new HaxeRefactoringSupportProvider();
+    PsiElement target = myFixture.getElementAtCaret();
+    assertTrue(provider.isMemberInplaceRenameAvailable(target, target), target.getClass().getName());
+
+    renameInPlaceFromReference(new MemberInplaceRenameHandler(), "go", target);
+
+    assertTrue(myFixture.getFile().getText().contains("Helper.go()"), myFixture.getFile().getText());
+    assertTrue(textOf(HELPER_HX_NAME).contains("function go()"), textOf(HELPER_HX_NAME));
+  }
+
+  @Test
+  @DisplayName("a local renames in place from a reference too")
+  public void testALocalRenamesInPlaceFromAReferenceToo() {
+    myFixture.configureByText(MAIN_HX_NAME, LOCAL_REFERENCE_SOURCE);
+    HaxeRefactoringSupportProvider provider = new HaxeRefactoringSupportProvider();
+    PsiElement target = myFixture.getElementAtCaret();
+    assertTrue(provider.isInplaceRenameAvailable(target, target), target.getClass().getName());
+
+    renameInPlaceFromReference(new VariableInplaceRenameHandler(), "total", target);
+
+    String text = myFixture.getFile().getText();
+    assertTrue(text.contains("var total = 1;") && text.contains("trace(total)"), text);
+  }
+
+  @Test
+  @DisplayName("a class renames in place from a new expression")
+  public void testAClassRenamesInPlaceFromANewExpression() {
+    myFixture.addFileToProject(HELPER_HX_NAME, HELPER_WITH_CONSTRUCTOR_HX_SOURCE);
+    myFixture.configureByText(MAIN_HX_NAME, NEW_EXPRESSION_REFERENCE_SOURCE);
+    HaxeRefactoringSupportProvider provider = new HaxeRefactoringSupportProvider();
+    // the target is the constructor, which the generic member handler must leave alone: its name is `new`
+    PsiElement target = myFixture.getElementAtCaret();
+    assertFalse(provider.isMemberInplaceRenameAvailable(target, target), target.getClass().getName());
+    DataContext context = DataManager.getInstance().getDataContext(myFixture.getEditor().getComponent());
+    List<? extends RenameHandler> handlers = RenameHandlerRegistry.getInstance().getRenameHandlers(context);
+    assertEquals(1, handlers.size(), "one handler, or the platform asks which to use: " + handlers);
+    assertInstanceOf(HaxeConstructorCallInplaceRenameHandler.class, handlers.getFirst());
+
+    renameInPlaceFromReference(new HaxeConstructorCallInplaceRenameHandler(), "Gone", target);
+
+    assertTrue(myFixture.getFile().getText().contains("new Gone()"), myFixture.getFile().getText());
+    assertTrue(textOf("Gone.hx").contains("class Gone {"), textOf("Gone.hx"));
+  }
+
+  @Test
+  @DisplayName("a parameter renames in place from a reference too")
+  public void testAParameterRenamesInPlaceFromAReferenceToo() {
+    myFixture.configureByText(MAIN_HX_NAME, PARAMETER_REFERENCE_SOURCE);
+    HaxeRefactoringSupportProvider provider = new HaxeRefactoringSupportProvider();
+    PsiElement target = myFixture.getElementAtCaret();
+    assertTrue(provider.isInplaceRenameAvailable(target, target), target.getClass().getName());
+
+    renameInPlaceFromReference(new VariableInplaceRenameHandler(), "total", target);
+
+    String text = myFixture.getFile().getText();
+    assertTrue(text.contains("main(total:Int)") && text.contains("trace(total)"), text);
+  }
+
+  /**
+   * Renames in the editor holding the reference; the target is the declaring
+   * component the reference resolves to, which is what the platform hands the
+   * handlers. The fixture-only overload opens an editor on the target's file
+   * instead, which is a rename from the declaration.
+   */
+  private void renameInPlaceFromReference(VariableInplaceRenameHandler handler, String newName, PsiElement target) {
+    CodeInsightTestUtil.doInlineRename(handler, newName, myFixture.getEditor(), target);
+  }
+
+  private PsiElement nameAtCaret() {
+    PsiElement leaf = myFixture.getFile().findElementAt(myFixture.getCaretOffset());
+    HaxeComponentName name = PsiTreeUtil.getParentOfType(leaf, HaxeComponentName.class, false);
+    assertNotNull(name);
+    return name;
+  }
+
+  private String textOf(String fileName) {
+    PsiFile file = PsiManager.getInstance(getProject()).findFile(myFixture.findFileInTempDir(fileName));
+    assertNotNull(file);
+    return file.getText();
+  }
+}

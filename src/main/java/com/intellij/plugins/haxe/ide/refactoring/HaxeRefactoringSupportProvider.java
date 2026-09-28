@@ -26,8 +26,12 @@ import com.intellij.plugins.haxe.ide.refactoring.introduceVariable.HaxeIntroduce
 import com.intellij.plugins.haxe.ide.refactoring.introduceField.HaxeIntroduceConstantHandler;
 import com.intellij.plugins.haxe.ide.refactoring.memberPullUp.HaxePullUpHandler;
 import com.intellij.plugins.haxe.ide.refactoring.memberPushDown.HaxePushDownHandler;
+import com.intellij.plugins.haxe.ide.refactoring.rename.HaxeConstructorCallInplaceRenameHandler;
+import com.intellij.plugins.haxe.ide.refactoring.rename.HaxeRenameProcessor;
+import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedElement;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.search.LocalSearchScope;
 import com.intellij.refactoring.RefactoringActionHandler;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,9 +39,42 @@ import org.jetbrains.annotations.Nullable;
  * @author: Fedor.Korotkov
  */
 public class HaxeRefactoringSupportProvider extends RefactoringSupportProvider {
+
+  /**
+   * Declarations used only within their block (locals, parameters, local
+   * functions) rename in place as variables: every usage sits in the editor.
+   * The element is the name under the caret on a declaration, and the
+   * declaring component when rename starts from a reference, since a
+   * reference resolves to the component.
+   */
   @Override
   public boolean isInplaceRenameAvailable(PsiElement element, PsiElement context) {
-    return element instanceof HaxeNamedElement;
+    HaxeNamedElement name = nameOf(element);
+    return name != null && isLocal(name);
+  }
+
+  /**
+   * Members, module-level declarations and types rename in place as members:
+   * the platform renames the current file live and the other files on
+   * commit, and invoking rename again while editing opens the dialog. A
+   * constructor is not renamed itself; a call of it is handled by
+   * {@link HaxeConstructorCallInplaceRenameHandler}.
+   */
+  @Override
+  public boolean isMemberInplaceRenameAvailable(PsiElement element, PsiElement context) {
+    HaxeNamedElement name = nameOf(element);
+    return name != null && !isLocal(name) && HaxeRenameProcessor.canBeRenamed(element);
+  }
+
+  /** The name element, whether the rename starts on it or on its component. */
+  @Nullable
+  private static HaxeNamedElement nameOf(PsiElement element) {
+    if (element instanceof HaxeNamedElement name) return name;
+    return element instanceof HaxeNamedComponent component ? component.getComponentName() : null;
+  }
+
+  private static boolean isLocal(HaxeNamedElement name) {
+    return name.getUseScope() instanceof LocalSearchScope;
   }
 
   @Override
