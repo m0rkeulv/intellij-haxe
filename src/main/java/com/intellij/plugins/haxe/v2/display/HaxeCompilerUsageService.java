@@ -6,7 +6,13 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileManager;
+import com.intellij.openapi.vfs.newvfs.BulkFileListener;
+import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
+import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.FindReferencesKind;
 import com.intellij.plugins.haxe.display.protocol.Location;
@@ -16,6 +22,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.display.HaxeUsageSearch.UsageState;
+import com.intellij.plugins.haxe.v2.display.HaxeUsageVerdictCache.Key;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,22 +40,16 @@ import org.jetbrains.annotations.Nullable;
  * Inspections run under the read lock, so queries only read the cache. A
  * miss schedules background hydration and answers UNKNOWN. When the verdict
  * arrives, highlighting restarts and the inspection reads it from the cache.
- * A verdict belongs to one revision of its file: any edit in the file
- * discards it, since offsets move. Edits in OTHER files leave a verdict stale
- * until then. The consumers tolerate a stale USED, because it only keeps
- * suppressing a hint.
+ * A verdict belongs to one revision of its file and to the saved state of
+ * every other file: the compiler sees other files as saved, so a save
+ * elsewhere retires the UNUSED verdicts it may contradict (see
+ * {@link HaxeUsageVerdictCache}).
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeCompilerUsageService {
 
-  private record UsageKey(@NotNull String contextKey, @NotNull String filePath, @NotNull String memberName, int offset) {
-  }
-
-  private record Verdict(long fileStamp, @NotNull UsageState state) {
-  }
-
-  private record Request(@NotNull UsageKey key,
+  private record Request(@NotNull Key key,
                          @NotNull HaxeCompilerDisplayService.DisplayContext context,
                          @Nullable String contents,
                          @NotNull FindReferencesKind kind,
@@ -58,12 +59,22 @@ public final class HaxeCompilerUsageService {
   private static final long FAILURE_COOLDOWN_MS = 30_000;
 
   private final Project project;
-  private final Map<UsageKey, Verdict> verdicts = new ConcurrentHashMap<>();
-  private final Set<UsageKey> hydrating = ConcurrentHashMap.newKeySet();
-  private final Map<UsageKey, Long> failedAt = new ConcurrentHashMap<>();
+  private final HaxeUsageVerdictCache verdicts = new HaxeUsageVerdictCache();
+  private final Set<Key> hydrating = ConcurrentHashMap.newKeySet();
+  private final Map<Key, Long> failedAt = new ConcurrentHashMap<>();
 
   public HaxeCompilerUsageService(@NotNull Project project) {
     this.project = project;
+    project.getMessageBus().connect().subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
+      @Override
+      public void after(@NotNull List<? extends @NotNull VFileEvent> events) {
+        for (VFileEvent event : events) {
+          if (event instanceof VFileContentChangeEvent && isHaxeSource(event.getPath())) {
+            retireUnusedVerdictsOutside(event.getPath());
+          }
+        }
+      }
+    });
   }
 
   @NotNull
@@ -88,14 +99,12 @@ public final class HaxeCompilerUsageService {
     if (context == null) return UsageState.UNKNOWN;
 
     long fileStamp = virtualFile.getModificationStamp();
-    UsageKey key = new UsageKey(HaxeCompilerDisplayService.contextKey(context),
-                                virtualFile.getPath(),
-                                componentName.getText(),
-                                componentName.getTextRange().getStartOffset());
-    Verdict verdict = verdicts.get(key);
-    if (verdict != null && verdict.fileStamp() == fileStamp) {
-      return verdict.state();
-    }
+    Key key = new Key(HaxeCompilerDisplayService.contextKey(context),
+                      virtualFile.getPath(),
+                      componentName.getText(),
+                      componentName.getTextRange().getStartOffset());
+    UsageState cached = verdicts.get(key, fileStamp);
+    if (cached != null) return cached;
 
     // no request while the text does not parse; cached verdicts are still
     // served above, only new server work waits for valid syntax
@@ -114,6 +123,16 @@ public final class HaxeCompilerUsageService {
     failedAt.clear();
   }
 
+  private static boolean isHaxeSource(@NotNull String path) {
+    return FileUtilRt.extensionEquals(path, HaxeFileType.DEFAULT_EXTENSION);
+  }
+
+  private void retireUnusedVerdictsOutside(@NotNull String savedPath) {
+    if (verdicts.dropUnusedOutside(savedPath)) {
+      HaxeCompilerCaches.restartHighlightingLater(project, "haxe: a saved file may reference members held unused");
+    }
+  }
+
   @Nullable
   private static String unsavedContents(@NotNull VirtualFile virtualFile) {
     FileDocumentManager documents = FileDocumentManager.getInstance();
@@ -130,7 +149,7 @@ public final class HaxeCompilerUsageService {
       try {
         UsageState state = fetchVerdict(request);
         if (state != UsageState.UNKNOWN) {
-          verdicts.put(request.key(), new Verdict(request.fileStamp(), state));
+          verdicts.put(request.key(), request.fileStamp(), state);
           failedAt.remove(request.key());
           HaxeCompilerCaches.restartHighlightingLater(project, "haxe: compiler usage data updated");
         } else {
