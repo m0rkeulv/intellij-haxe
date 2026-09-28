@@ -228,6 +228,8 @@
          pre-existing renamers will take over if they are found first, and our extensions won't be used. -->
     <renamePsiElementProcessor order="first" implementation="com.intellij.plugins.haxe.ide.refactoring.rename.HaxeRenameProcessor"/>
     <renameHandler implementation="com.intellij.plugins.haxe.ide.refactoring.rename.HaxeConstructorCallInplaceRenameHandler"/>
+    <renameHandler implementation="com.intellij.plugins.haxe.ide.refactoring.rename.HaxePropertyInplaceRenameHandler"/>
+    <automaticRenamerFactory implementation="com.intellij.plugins.haxe.ide.refactoring.rename.HaxePropertyAccessorRenamerFactory"/>
     <nameSuggestionProvider implementation="com.intellij.plugins.haxe.ide.refactoring.rename.HaxeNameSuggestionProvider"/>
     <!-- =============================================================================================== -->
 

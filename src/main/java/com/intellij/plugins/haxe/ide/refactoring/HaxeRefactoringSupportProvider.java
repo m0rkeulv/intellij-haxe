@@ -27,9 +27,11 @@ import com.intellij.plugins.haxe.ide.refactoring.introduceField.HaxeIntroduceCon
 import com.intellij.plugins.haxe.ide.refactoring.memberPullUp.HaxePullUpHandler;
 import com.intellij.plugins.haxe.ide.refactoring.memberPushDown.HaxePushDownHandler;
 import com.intellij.plugins.haxe.ide.refactoring.rename.HaxeConstructorCallInplaceRenameHandler;
+import com.intellij.plugins.haxe.ide.refactoring.rename.HaxePropertyInplaceRenameHandler;
 import com.intellij.plugins.haxe.ide.refactoring.rename.HaxeRenameProcessor;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedElement;
+import com.intellij.plugins.haxe.model.HaxePropertyFamily;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.search.LocalSearchScope;
 import com.intellij.refactoring.RefactoringActionHandler;
@@ -57,13 +59,19 @@ public class HaxeRefactoringSupportProvider extends RefactoringSupportProvider {
    * Members, module-level declarations and types are renamed in place as
    * members: the platform updates the current file while the user types and
    * the other files when the rename is committed; invoking rename a second
-   * time opens the dialog. Constructors are excluded; a rename started on a
-   * constructor call is handled by {@link HaxeConstructorCallInplaceRenameHandler}.
+   * time opens the dialog. Two kinds are left to handlers of their own: a
+   * rename started on a constructor call, which
+   * {@link HaxeConstructorCallInplaceRenameHandler} turns into a class rename,
+   * and a property with bound accessors or one of those accessors, which
+   * {@link HaxePropertyInplaceRenameHandler} first asks how far to rename.
    */
   @Override
   public boolean isMemberInplaceRenameAvailable(PsiElement element, PsiElement context) {
     HaxeNamedElement name = nameOf(element);
-    return name != null && !isLocal(name) && HaxeRenameProcessor.canBeRenamed(element);
+    return name != null
+           && !isLocal(name)
+           && HaxeRenameProcessor.canBeRenamed(element)
+           && !HaxePropertyFamily.isPropertyOrAccessor(element);
   }
 
   /** The name element, whether the rename starts on it or on its component. */

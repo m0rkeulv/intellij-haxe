@@ -6,6 +6,7 @@ import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeClassReferenceModel;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
 import com.intellij.plugins.haxe.model.HaxeParameterModel;
+import com.intellij.plugins.haxe.model.HaxePropertyFamily;
 import com.intellij.plugins.haxe.model.type.HaxeTypeResolver;
 import com.intellij.plugins.haxe.model.type.ResultHolder;
 import com.intellij.plugins.haxe.util.HaxeNameKind;
@@ -37,7 +38,6 @@ import java.util.Set;
 /// The names avoid those already in use around the declaration, except the
 /// declaration's own name, which a rename may keep.
 public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
-  private static final String SETTER_PREFIX = "set_";
   private static final String SETTER_VALUE_NAME = "value";
 
   @Override
@@ -111,7 +111,7 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
       List<HaxeParameterModel> contractParameters = contract.getParameters();
       if (position < contractParameters.size()) names.add(contractParameters.get(position).getName());
     }
-    if (isPropertySetter(model)) names.add(SETTER_VALUE_NAME);
+    if (isPropertySetter(method)) names.add(SETTER_VALUE_NAME);
     return HaxeNameSuggesterUtil.suggestFrom(names, HaxeNameKind.VARIABLE, used);
   }
 
@@ -136,12 +136,10 @@ public class HaxeNameSuggestionProvider implements NameSuggestionProvider {
     return contracts;
   }
 
-  /** Whether the method is a property setter: {@code set_width} in a class with a field {@code width}. */
-  private static boolean isPropertySetter(@NotNull HaxeMethodModel method) {
+  /** Whether the method is a property setter: {@code set_width} bound by a property {@code width}. */
+  private static boolean isPropertySetter(@NotNull HaxeMethod method) {
     String name = method.getName();
-    HaxeClassModel declaringClass = method.getDeclaringClass();
-    if (declaringClass == null || name == null || !name.startsWith(SETTER_PREFIX)) return false;
-    return declaringClass.getField(name.substring(SETTER_PREFIX.length()), null) != null;
+    return name != null && name.startsWith(HaxePropertyFamily.SETTER_PREFIX) && HaxePropertyFamily.propertyOfAccessor(method) != null;
   }
 
   /** The current name in each casing the kind uses; the caller drops the unchanged name. */
