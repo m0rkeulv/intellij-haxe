@@ -8,7 +8,7 @@ package com.intellij.plugins.haxe.lang.psi.stubs;
  * check (UpToDateStubIndexMismatch).
  */
 public final class HaxeStubVersions {
-  public static final int STUB_VERSION = 140;
+  public static final int STUB_VERSION = 141;
 
   private HaxeStubVersions() {}
 }

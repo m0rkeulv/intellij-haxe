@@ -948,9 +948,16 @@ switchCaseBlock ::=  statementList | (literalExpression <<semicolonUnlessPrecede
 {implements="com.intellij.plugins.haxe.lang.psi.HaxeCodeBlock"}
 switchCase ::= 'case'  switchCaseExpr ((','|'|') switchCaseExpr)* guard? ':' switchCaseBlock? {pin=1 recoverWhile="switch_case_recover"}
 private switchCaseExprElement ::= <<pushCollectionInitializersAllow>>   (switchExtractorExpression  | switchCaseCaptureVar | switchCaseCapture | switchEnumBitOperationExpression | enumExtractObjectLiteral | min2RefsQualifiedReferenceExpression | enumExtractedValue | statement ) {hooks=[popCollectionInitializersRule]}
-switchCaseExprArray ::= "["  (switchCaseExprElement ","?)* "]"
+switchCaseExprArray ::= "["  (switchCaseExprElement switchCaseExprTail? ","?)* "]"
+
+// The compiler parses a case pattern as a plain expression, so an operator may follow a pattern;
+// macro DSLs use it (hxparse: `case [pattern && condition]`). `|` is excluded because it separates
+// case alternatives.
+private switchCaseTailOperator ::= logicOrOperator | logicAndOperator | compareOperation | (!'|' bitOperation)  | shiftOperator | additiveOperator | multiplicativeOperator | moduloOperator | coalescingOperator
+switchCaseExprTail ::= switchCaseTailOperator <<pushCollectionInitializersAllow>> expression {pin=1 hooks=[popCollectionInitializersRule]}
+
 // Should NOT be named Expression, because it should not be an expression.
-switchCaseExpr ::= <<pushCollectionInitializersDeny>> (switchCaseExprArray  |  switchCaseExprElement) {hooks=[popCollectionInitializersRule]}
+switchCaseExpr ::= <<pushCollectionInitializersDeny>> (switchCaseExprArray  |  switchCaseExprElement switchCaseExprTail?) {hooks=[popCollectionInitializersRule]}
 
 extractorMatchAssignExpression ::= referenceExpression "=";
 left extractorMatchExpression ::=  '=>' ( switchCaseExpr)
@@ -990,7 +997,10 @@ enumExtractedValue::= enumExtractedValueReference | primitiveExtractedValue
 //extractVariable ::= identifier
 //{pin=3 mixin="com.intellij.plugins.haxe.lang.psi.impl.HaxePsiFieldImpl" implements="com.intellij.plugins.haxe.lang.psi.HaxePsiField"}
 
-private primitiveExtractedValue  ::= enumExtractObjectLiteral | enumExtractArrayLiteral {recoverWhile=expression_recover}
+// No recoverWhile here: this is an alternative of the capture initializer, and when it fails it
+// must backtrack so the expression alternative gets its turn. A recover predicate would consume
+// the tokens instead.
+private primitiveExtractedValue  ::= enumExtractObjectLiteral | enumExtractArrayLiteral
 private expressionOrEnumExtractorExpression ::=  switchExtractorExpression | enumExtractArrayLiteral | enumExtractObjectLiteral | enumExtractedValue | expression   {extends=expression}
 enumObjectLiteralElement ::= objectLiteralComponentName ':' ( expressionOrEnumExtractorExpression)
 {
