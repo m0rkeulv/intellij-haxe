@@ -203,6 +203,11 @@ public class HaxeExpressionEvaluator {
         return handleSwitchCaseCaptureVar(resolver, captureVar);
       }
 
+      if (element instanceof HaxeSwitchCaseCapture capture) {
+        ResultHolder captureType = handleSwitchCaseCapture(context, resolver, capture);
+        return captureType != null ? captureType : createUnknown(capture);
+      }
+
       if (element instanceof HaxeFieldDeclaration declaration) {
         return handleFieldDeclaration(context, resolver, declaration);
       }

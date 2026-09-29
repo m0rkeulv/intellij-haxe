@@ -84,6 +84,11 @@ public class HaxeCallExpressionEvaluatorCacheService  {
     settledInfoStamp.incrementAndGet();
   }
 
+  /** The current settled-information stamp. A dirty entry in any evaluator cache is worth recomputing at most once per value. */
+  public static long settledInfoStamp() {
+    return settledInfoStamp.longValue();
+  }
+
   /** Records the attempt: at most one refresh per entry per stamp value. */
   private boolean refreshArmed(Object key) {
     if (anyComputeInFlight()) return false;

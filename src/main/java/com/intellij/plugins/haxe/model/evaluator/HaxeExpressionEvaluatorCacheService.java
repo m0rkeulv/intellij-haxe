@@ -26,6 +26,15 @@ public class HaxeExpressionEvaluatorCacheService  {
 
   private volatile  Map<EvaluationKey, ResultHolder> cacheMap = new ConcurrentHashMap<>();
   private volatile Map<PsiElement, ResultHolder> methodReturnTypes = new ConcurrentHashMap<>();
+  // Return types whose computation was truncated, for example by a
+  // self-referential initializer or an unresolvable argument. They are
+  // served with a taint, like the call-expression cache's dirty entries, so
+  // no consumer stores anything built on them as complete. Without them, a
+  // return type that can never compute cleanly (such as a function returning
+  // a self-referential, macro-built rule table) is rebuilt for every
+  // consumer on every pass.
+  private volatile Map<PsiElement, ResultHolder> dirtyMethodReturnTypes = new ConcurrentHashMap<>();
+  private final Map<PsiElement, Long> dirtyRefreshAttempts = new ConcurrentHashMap<>();
   public static boolean skipCaching = false;// just convenience flag for debugging
 
 
@@ -88,31 +97,68 @@ public class HaxeExpressionEvaluatorCacheService  {
 
 
   /**
-   * Inferred method return types. A result computed while truncation was
-   * observed (a probe gate refusal, a prevention) is served but NOT stored,
-   * so a later clean compute can land; a plain PSI-dependent cache would
-   * keep the first Unknown computed deep inside an evaluation until the next
-   * code change, starving every later consumer (the return-type inlay, any
-   * local initialized from the call).
+   * Inferred method return types. A clean result is stored and served as
+   * is. A result whose computation was truncated (a probe gate refusal, a
+   * recursion prevention) is stored as a dirty entry and served with a
+   * taint, so no consumer caches anything built on it as complete.
+   *
+   * A dirty entry stored deep inside an evaluation is recomputed once by
+   * the first top-level consumer, where a clean result may land. After
+   * that, and for an entry stored at top level, it is recomputed only when
+   * new type information settles
+   * ({@link HaxeCallExpressionEvaluatorCacheService#informationSettled}).
+   * This keeps an Unknown computed deep inside an evaluation from starving
+   * the return-type inlay, while a type that can never compute cleanly is
+   * not rebuilt for every consumer.
    */
   public @NotNull ResultHolder methodReturnType(@NotNull PsiElement method, @NotNull Supplier<ResultHolder> compute) {
     ResultHolder cached = methodReturnTypes.get(method);
     if (cached != null) return cached;
+    ResultHolder dirty = dirtyMethodReturnTypes.get(method);
+    boolean topLevel = isTopLevelCompute();
+    if (dirty != null && !(topLevel && dirtyRefreshArmed(method))) {
+      HaxeEvaluationTaint.taint();
+      return dirty;
+    }
+
     long taintMark = HaxeEvaluationTaint.mark();
     ResultHolder computed = compute.get();
+    if (!computed.isCacheable()) return computed;
     boolean clean = !HaxeEvaluationTaint.taintedSince(taintMark);
     // clean Unknown inside a guarded computation is still path-dependent
     // (same rule as the expression cache's failure caching)
     boolean unknownInsideGuards = computed.isUnknown() && HaxeEvaluationTaint.insideGuardedComputation();
-    if (clean && !unknownInsideGuards && computed.isCacheable()) {
+    if (clean && !unknownInsideGuards) {
       methodReturnTypes.put(method, computed);
+      dirtyMethodReturnTypes.remove(method);
+      dirtyRefreshAttempts.remove(method);
+    }
+    else if (dirty == null) {
+      dirtyMethodReturnTypes.put(method, computed);
+      if (topLevel) dirtyRefreshAttempts.put(method, HaxeCallExpressionEvaluatorCacheService.settledInfoStamp());
     }
     return computed;
+  }
+
+  /** Whether the current computation is a top-level query rather than a step deep inside a resolve or call-evaluation tower. */
+  private static boolean isTopLevelCompute() {
+    return !HaxeCallExpressionEvaluatorCacheService.anyComputeInFlight() && !HaxeEvaluationTaint.insideGuardedComputation();
+  }
+
+  /** Whether the dirty entry may be recomputed now; records the attempt, so this holds at most once per settled-information stamp. */
+  private boolean dirtyRefreshArmed(@NotNull PsiElement method) {
+    long stamp = HaxeCallExpressionEvaluatorCacheService.settledInfoStamp();
+    Long lastAttempt = dirtyRefreshAttempts.get(method);
+    if (lastAttempt != null && lastAttempt == stamp) return false;
+    dirtyRefreshAttempts.put(method, stamp);
+    return true;
   }
 
   public void clearCaches() {
     synchronized(this) {
       methodReturnTypes.clear();
+      dirtyMethodReturnTypes.clear();
+      dirtyRefreshAttempts.clear();
       cacheMap.clear();
     }
   }

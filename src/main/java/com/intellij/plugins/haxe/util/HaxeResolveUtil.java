@@ -728,9 +728,10 @@ public class HaxeResolveUtil {
         }
       }
       if (psiField.getTypeTag() == null &&  psiField.getVarInit() == null) {
-        HaxeComponentName componentName = psiField.getComponentName();
-        HaxeExpressionEvaluatorContext context = new HaxeExpressionEvaluatorContext(componentName);
-        ResultHolder holder = HaxeExpressionEvaluator.searchReferencesForType(componentName, context, null, null);
+        ResultHolder holder = isSwitchCaseCapture(psiField)
+                              ? evaluate(psiField, null).result
+                              : typeFromUsages(psiField);
+
         if (!holder.isUnknown()) {
           //TODO function literals does not have a HaxeType and will result in null
           HaxeResolveResult resolveResult = holder.getType().asResolveResult();
@@ -772,6 +773,24 @@ public class HaxeResolveUtil {
 
 
     return getHaxeClassResolveResult(initExpression, specialization);
+  }
+
+  /**
+   * Whether the field is a switch-case capture. A capture's type follows
+   * from its pattern position or the switch subject, so its usages add
+   * nothing, and a usage search would rescan the enclosing method on every
+   * read of the capture.
+   */
+  private static boolean isSwitchCaseCapture(@NotNull HaxePsiField field) {
+    return field instanceof HaxeSwitchCaseCapture || field instanceof HaxeSwitchCaseCaptureVar;
+  }
+
+  /** The type a local declared without type tag and initializer gets from how it is used. */
+  @NotNull
+  private static ResultHolder typeFromUsages(@NotNull HaxePsiField field) {
+    HaxeComponentName componentName = field.getComponentName();
+    HaxeExpressionEvaluatorContext context = new HaxeExpressionEvaluatorContext(componentName);
+    return HaxeExpressionEvaluator.searchReferencesForType(componentName, context, null, null);
   }
 
   private static HaxeResolveResult resolveValueExpressionClass(HaxeValueExpression valueExpression,
