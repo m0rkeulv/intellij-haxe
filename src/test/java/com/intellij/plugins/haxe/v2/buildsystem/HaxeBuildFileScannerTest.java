@@ -9,6 +9,9 @@ import org.junit.jupiter.params.provider.FieldSource;
 
 import java.util.List;
 
+import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.CLASSPATH_ONLY_PROJECT_SOURCE;
+import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.MAVEN_POM_SOURCE;
+import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.NME_SAMPLE_PROJECT_SOURCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -32,32 +35,11 @@ public class HaxeBuildFileScannerTest extends HaxeCodeInsightFixtureTestCase {
     </project>
     """;
 
-  static final String CLASSPATH_ONLY_PROJECT_SOURCE = """
-    <project>
-      <app main="Main"/>
-      <classpath path="src"/>
-    </project>
-    """;
-
   static final String NME_PROJECT_SOURCE = """
     <project>
       <app main="Main"/>
       <classpath name="src"/>
       <haxelib name="nme"/>
-    </project>
-    """;
-
-  static final String NME_SAMPLE_PROJECT_SOURCE = """
-    <project>
-      <app main="Main" file="Sample"/>
-      <window width="800" height="600"/>
-    </project>
-    """;
-
-  static final String MAVEN_POM_SOURCE = """
-    <project>
-      <modelVersion>4.0.0</modelVersion>
-      <artifactId>shapes</artifactId>
     </project>
     """;
 
