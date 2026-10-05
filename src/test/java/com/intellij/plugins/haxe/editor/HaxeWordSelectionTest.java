@@ -13,7 +13,7 @@ public class HaxeWordSelectionTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
-    return "/editor/";
+    return "";
   }
 
   @Test
