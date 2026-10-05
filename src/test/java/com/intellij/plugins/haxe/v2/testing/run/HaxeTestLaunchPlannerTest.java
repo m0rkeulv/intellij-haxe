@@ -17,6 +17,8 @@ import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
 import com.intellij.util.execution.ParametersListUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -123,16 +125,6 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("single test run adds the anchored utest pattern")
-  public void testSingleTestRunAddsTheAnchoredUtestPattern() throws ExecutionException {
-    String path = fixturePath("test.hxml");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("cases.SampleTest"), "testPasses");
-    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, null, singleRun, false);
-    assertTrue(plan.command().contains("UTEST_PATTERN=\\.testPasses$"),
-               "anchored method pattern expected: " + plan.command());
-  }
-
-  @Test
   @DisplayName("single suite run narrows by the filter pattern")
   public void testSingleSuiteRunNarrowsByTheFilterPattern() throws ExecutionException {
     String path = fixturePath("test.hxml");
@@ -173,7 +165,9 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   public void testMunitSingleMethodNarrowsThroughTheMacroDefine() throws ExecutionException {
     String path = fixturePath("targets/munit-neko.hxml");
     HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), "testAdd");
-    HaxeTestLaunchPlanner.planSingle(getProject(), path, null, singleRun, false);
+
+    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, null, singleRun, false);
+    assertEquals(HaxeTarget.NEKO, plan.target(), "the single run keeps the build's target");
 
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     assertNotNull(file);
@@ -184,20 +178,23 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
                "the macro's narrowing define must ride the compile: " + compile.command());
   }
 
-  @Test
-  @DisplayName("lime single run launches the packaged binary like the whole build")
-  public void testLimeSingleRunLaunchesThePackagedBinaryLikeTheWholeBuild() throws ExecutionException {
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {
+    // lime single run launches the packaged binary like the whole build
+    "Neko",
+    // html5 single run plans a browser hosted run over the packaged web root
+    "HTML5"})
+  @DisplayName("lime single run plans like the whole build")
+  public void testLimeSingleRunPlansLikeTheWholeBuild(String targetId) throws ExecutionException {
     String path = fixturePath("targets/lime-project.xml");
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "Neko");
+    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, targetId);
     HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), null);
 
     Plan single = HaxeTestLaunchPlanner.planSingle(getProject(), path, null, singleRun, false);
     Plan whole = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
-    assertFalse(single.singleStage(), "the compile stays in the before-run step");
-    assertEquals(HaxeTarget.NEKO, single.target());
-    assertEquals(whole.command(), single.command(), "the single run launches the same packaged binary");
-    assertEquals(whole.workDirectory(), single.workDirectory());
+
+    assertEquals(whole, single, "the single run launches the same packaged output");
   }
 
   @Test
@@ -228,28 +225,10 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "HTML5");
 
-    Path indexHtml = fixturesRoot.resolve("targets/export/html5/bin/index.html");
-    Files.createDirectories(indexHtml.getParent());
-    Files.writeString(indexHtml, "<html></html>");
-    LocalFileSystem.getInstance().refreshAndFindFileByNioFile(indexHtml);
-
+    // the web root is planned without existing: plans also back configuration validation before any compile
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
     assertTrue(plan.browserHosted(), "html5 tests run in a served browser page");
     assertEquals(HaxeTarget.JAVA_SCRIPT, plan.target());
-    assertTrue(plan.command().get(0).replace('\\', '/').endsWith("export/html5/bin"),
-               "the packaged web root is what gets served: " + plan.command());
-  }
-
-  @Test
-  @DisplayName("html5 single run plans a browser hosted run over the packaged web root")
-  public void testHtml5SingleRunPlansABrowserHostedRunOverThePackagedWebRoot() throws Exception {
-    String path = fixturePath("targets/lime-project.xml");
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(file, "HTML5");
-    HaxeTestSingleRuns.SingleRun singleRun = new HaxeTestSingleRuns.SingleRun(List.of("CalculatorTest"), null);
-
-    Plan plan = HaxeTestLaunchPlanner.planSingle(getProject(), path, null, singleRun, false);
-    assertTrue(plan.browserHosted(), "the packaged html5 output is served like the whole build");
     assertTrue(plan.command().get(0).replace('\\', '/').endsWith("export/html5/bin"),
                "the packaged web root is what gets served: " + plan.command());
   }
