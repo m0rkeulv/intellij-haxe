@@ -2,6 +2,9 @@ package com.intellij.plugins.haxe.v2.display;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -9,6 +12,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @DisplayName("Compiler services: generated dump service args")
 public class HaxeGeneratedDumpServiceArgsTest {
@@ -58,17 +62,18 @@ public class HaxeGeneratedDumpServiceArgsTest {
     assertFalse(args.contains("--no-output"), "lime display hxml disables generation; dumps need it");
   }
 
-  @Test
-  @DisplayName("run shapes are refused")
-  public void testRunShapesAreRefused() {
-    assertNull(HaxeGeneratedDumpService.dumpArgs(List.of("-x", "Main"), DUMP_ROOT), "-x executes the program");
-    assertNull(HaxeGeneratedDumpService.dumpArgs(List.of("--run", "Main"), DUMP_ROOT), "--run executes the program");
-  }
+  /** (compiler args, why no dump build can come from them). */
+  static final List<Arguments> REFUSED_SHAPES = List.of(
+    // run shapes are refused
+    arguments(List.of("-x", "Main"), "-x executes the program"),
+    arguments(List.of("--run", "Main"), "--run executes the program"),
+    // target-less arg sets are refused
+    arguments(List.of("-main", "Main", "--interp"), "no generation pass means no dumps"));
 
-  @Test
-  @DisplayName("target-less arg sets are refused")
-  public void testTargetLessArgSetsAreRefused() {
-    assertNull(HaxeGeneratedDumpService.dumpArgs(List.of("-main", "Main", "--interp"), DUMP_ROOT),
-               "no generation pass means no dumps");
+  @ParameterizedTest(name = "{1}")
+  @FieldSource("REFUSED_SHAPES")
+  @DisplayName("shapes without a generation pass are refused")
+  public void testShapesWithoutAGenerationPassAreRefused(List<String> args, String reason) {
+    assertNull(HaxeGeneratedDumpService.dumpArgs(args, DUMP_ROOT), reason);
   }
 }
