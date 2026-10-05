@@ -13,6 +13,9 @@ class RuntimeTypesTest {
 		primitiveKindsMapDirectly(assert);
 		objectKindResolvesByName(assert);
 		nullKindWrapsInner(assert);
+		dynObjKindResolvesDirectly(assert);
+		abstractResolvesItsName(assert);
+		guidReadsAsInt64(assert);
 		unknownReturnsNull(assert);
 		funKindReconstructsTheSignature(assert);
 	}
@@ -99,16 +102,18 @@ class RuntimeTypesTest {
 		assert.isTrue(t != null && t.match(HNull(HI32)), "HNULL wraps the inner runtime type");
 	}
 
+	static function dynObjKindResolvesDirectly(assert:Assert):Void {
+		var api = new FakeDebugApi();
+		pokeI32(api, 0x200, 16); // HDYNOBJ
+		var dynObj = types(api, _ -> null).typeAt(addr(0x200));
+		assert.isTrue(dynObj != null && dynObj.match(HDynObj), "dynobj kind resolves to HDynObj");
+	}
+
 	static function unknownReturnsNull(assert:Assert):Void {
 		var api = new FakeDebugApi();
 		pokeI32(api, 0x100, 20); // HMETHOD: unsupported
 		assert.isTrue(types(api, _ -> null).typeAt(addr(0x100)) == null, "unsupported kind yields null");
 		assert.isTrue(types(api, _ -> null).typeAt(addr(0)) == null, "null pointer yields null");
-		pokeI32(api, 0x200, 16); // HDYNOBJ
-		var dynObj = types(api, _ -> null).typeAt(addr(0x200));
-		assert.isTrue(dynObj != null && dynObj.match(HDynObj), "dynobj kind resolves to HDynObj");
-		abstractResolvesItsName(assert);
-		guidReadsAsInt64(assert);
 	}
 
 	static function abstractResolvesItsName(assert:Assert):Void {
