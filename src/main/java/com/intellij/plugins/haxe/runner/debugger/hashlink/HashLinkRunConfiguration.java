@@ -137,8 +137,8 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
       throw new RuntimeConfigurationWarning(HaxeDebuggerBundle.message("haxe.run.hl.output.missing", program.toString()));
     }
     if (useCustomHlBinary) {
-      Path custom = HashLinkRunConfigurations.resolveAgainstModule(module, customHlBinaryPath);
-      if (customHlBinaryPath.isBlank() || custom == null) {
+      Path custom = resolveCustomHlBinaryOrNull();
+      if (custom == null) {
         throw new RuntimeConfigurationError(HaxeDebuggerBundle.message("hashlink.runner.custom.hl.not.set"));
       }
       if (!Files.isRegularFile(custom)) {
@@ -209,12 +209,16 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
     if (!useCustomHlBinary) {
       return HashLinkRunConfigurations.resolveHlExecutable(module);
     }
-    Path custom = HashLinkRunConfigurations.resolveAgainstModule(module, customHlBinaryPath);
+    Path custom = resolveCustomHlBinaryOrNull();
     if (custom == null || !Files.isRegularFile(custom)) {
       throw new ExecutionException(
         HaxeDebuggerBundle.message("haxe.run.custom.hl.missing", custom != null ? custom.toString() : "<not set>"));
     }
     return custom;
+  }
+
+  private @Nullable Path resolveCustomHlBinaryOrNull() {
+    return customHlBinaryPath.isBlank() ? null : resolveAgainstModule(customHlBinaryPath);
   }
 
   // --- program resolution ---
@@ -231,7 +235,7 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
 
   private @Nullable Path resolveProgramOrNull(Module module) {
     if (!hlFilePath.isBlank()) {
-      return HashLinkRunConfigurations.resolveAgainstModule(module, hlFilePath);
+      return resolveAgainstModule(hlFilePath);
     }
     return HashLinkRunConfigurations.detectedOutput(module).orElse(null);
   }
@@ -239,7 +243,7 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
   /** The working directory: the explicit setting, else the program's directory. */
   @Nullable Path resolveWorkingDirectory(Module module) {
     if (!workingDirectory.isBlank()) {
-      return HashLinkRunConfigurations.resolveAgainstModule(module, workingDirectory);
+      return resolveAgainstModule(workingDirectory);
     }
     Path program = resolveProgramOrNull(module);
     return program != null ? program.getParent() : null;
