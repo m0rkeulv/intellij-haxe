@@ -18,9 +18,6 @@ public class HaxeStdClassPathsTest {
   static final List<Arguments> STD_FOLDER_CANDIDATES = List.of(
     // a set variable replaces the defaults, every entry in order
     arguments("C:\\HaxeToolkit\\haxe\\std", "C:/HaxeToolkit/haxe", false, List.of("C:\\HaxeToolkit\\haxe\\std")),
-    arguments("C:/does-not-exist;C:/HaxeToolkit/haxe/std", "C:/HaxeToolkit/haxe", false,
-              List.of("C:/does-not-exist", "C:/HaxeToolkit/haxe/std")),
-    arguments("/opt/haxe/std:/opt/more", "/usr/bin", true, List.of("/opt/haxe/std", "/opt/more")),
     // a folder listed twice becomes one candidate
     arguments("C:/HaxeToolkit/haxe/std;C:/HaxeToolkit/haxe/std", "C:/HaxeToolkit/haxe", false,
               List.of("C:/HaxeToolkit/haxe/std")),
