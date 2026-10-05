@@ -7,6 +7,8 @@ import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerProjectSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerCompletionService;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerNavigationService;
 import com.intellij.application.options.CodeStyle;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
@@ -65,10 +67,18 @@ public abstract class HaxeLightFixtureTestCase extends HaxeCodeInsightFixtureTes
     try {
       dropTemporaryCodeStyleSettings();
       restoreCompilerSettingsDefaults();
+      rearmCompilerNotifications();
     }
     finally {
       super.tearDown();
     }
+  }
+
+  /** The once-per-project "no compilation server" notifications stay fired on the shared project otherwise. */
+  private void rearmCompilerNotifications() {
+    if (myFixture == null) return;
+    HaxeCompilerNavigationService.getInstance(myFixture.getProject()).resetUnavailabilityNotificationForTests();
+    HaxeCompilerCompletionService.getInstance(myFixture.getProject()).resetUnavailabilityNotificationForTests();
   }
 
   /** A leftover temporary code style would leak into the next test of the shared project. */

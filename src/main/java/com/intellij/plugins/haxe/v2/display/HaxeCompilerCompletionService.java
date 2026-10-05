@@ -148,4 +148,10 @@ public final class HaxeCompilerCompletionService {
   public boolean unavailabilityNotifiedForTests() {
     return unavailabilityNotified;
   }
+
+  /** Arms the once-per-project notification again; the shared light project otherwise keeps it fired between tests. */
+  @TestOnly
+  public void resetUnavailabilityNotificationForTests() {
+    unavailabilityNotified = false;
+  }
 }
