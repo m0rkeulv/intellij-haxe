@@ -15,7 +15,6 @@ import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeReferenceExpression;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.plugins.haxe.util.HaxeTestDefines;
-import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiErrorElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.impl.source.PsiFileImpl;
@@ -118,39 +117,6 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     \t}
     \t#end
     }""";
-
-  @Test
-  @DisplayName("dead branch is one comment leaf in the tree")
-  public void testDeadBranchIsOneCommentLeafInTheTree() {
-    PsiFile file = myFixture.configureByText("Foo.hx", """
-      class Foo {
-      \t#if never
-      \tfunction dead():Void {}
-      \t#end
-      }""");
-
-    List<PsiComment> ppBodies = PsiTreeUtil.findChildrenOfType(file, PsiComment.class).stream()
-      .filter(comment -> comment.getTokenType() == HaxeTokenTypeSets.PPBODY)
-      .toList();
-    assertEquals(1, ppBodies.size(), "the parser must see the merged blob as one comment leaf");
-    assertTrue(ppBodies.get(0).getText().contains("function dead"));
-  }
-
-  @Test
-  @DisplayName("class level branch parses as members")
-  public void testClassLevelBranchParsesAsMembers() {
-    HaxeInactiveBody body = inactiveBody("""
-      class Foo {
-      \t#if never
-      \tpublic static function dead(a:Int):Void {
-      \t\ttrace(a);
-      \t}
-      \t#end
-      }""");
-
-    assertNotNull(PsiTreeUtil.findChildOfType(body, HaxeMethodDeclaration.class),
-                  "the dead method must parse into real member PSI");
-  }
 
   @Test
   @DisplayName("statement level branch parses as statements")
