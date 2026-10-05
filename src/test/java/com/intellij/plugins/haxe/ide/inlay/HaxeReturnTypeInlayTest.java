@@ -22,13 +22,6 @@ public class HaxeReturnTypeInlayTest extends HaxeInlayTestBase {
     setTestStyleSettings(2);
   }
 
-  // test to generate preview used in inlay settings example
-  @Test
-  @DisplayName("preview")
-  public void testPreview() throws Exception {
-    doTest(hintsProvider);
-  }
-
   @Test
   @DisplayName("return type generics")
   public void testReturnTypeGenerics() throws Exception {

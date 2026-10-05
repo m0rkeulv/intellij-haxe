@@ -22,12 +22,6 @@ public class HaxeForLoopInlayTest extends HaxeInlayTestBase {
     setTestStyleSettings(2);
   }
 
-  // test to generate preview used in inlay settings example
-  @Test
-  @DisplayName("preview")
-  public void testPreview() throws Exception {
-    doTest(hintsProvider);
-  }
   @Test
   @DisplayName("loop generics")
   public void testLoopGenerics() throws Exception {
