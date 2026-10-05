@@ -38,19 +38,6 @@ public class HaxeCompilerDiagnosticsOnlyTest extends HaxeLightFixtureTestCase {
     myFixture.enableInspections(HaxeUnresolvedTypeInspection.class, HaxeUnresolvedSymbolInspection.class);
   }
 
-  @Override
-  protected void tearDown() throws Exception {
-    try {
-      // the shared light project keeps project-level state between tests
-      HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(getProject());
-      settings.setCompilerDiagnosticsEnabled(false);
-      settings.setCompilerDiagnosticsOnly(false);
-    }
-    finally {
-      super.tearDown();
-    }
-  }
-
   @Test
   @DisplayName("the plugins static analysis stands down while the compiler is the only source")
   public void testThePluginsStaticAnalysisStandsDownWhileTheCompilerIsTheOnlySource() {

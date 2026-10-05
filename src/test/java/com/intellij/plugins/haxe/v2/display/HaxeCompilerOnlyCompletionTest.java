@@ -27,17 +27,6 @@ public class HaxeCompilerOnlyCompletionTest extends HaxeLightFixtureTestCase {
     return "";
   }
 
-  @Override
-  protected void tearDown() throws Exception {
-    try {
-      // the shared light project keeps project-level state between tests
-      HaxeCompilerSettings.getInstance(getProject()).setCompletionMode(HaxeCompletionMode.IDE_AND_COMPILER);
-    }
-    finally {
-      super.tearDown();
-    }
-  }
-
   @Test
   @DisplayName("without a compilation server the IDE stays silent and notifies once")
   public void testWithoutACompilationServerTheIdeStaysSilentAndNotifiesOnce() {
