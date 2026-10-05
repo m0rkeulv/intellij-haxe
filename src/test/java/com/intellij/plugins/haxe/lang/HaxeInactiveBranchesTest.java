@@ -579,7 +579,27 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     arguments("A=1,B=2", "(B > A)", true),
     // a '-' before a number is the number's sign, not an operation
     arguments("", "(-1)", true),
-    arguments("v=-1", "(v == -1)", true));
+    arguments("v=-1", "(v == -1)", true),
+    // a bare name is its define's value: only unset, 0 and "0" leave the branch inactive
+    arguments("cpp=true", "(cpp)", true),
+    arguments("cpp=\"2.1\"", "(cpp)", true),
+    arguments("cpp=1.2", "(cpp)", true),
+    arguments("cpp=\"0\"", "(cpp)", false),
+    arguments("cpp=0", "(cpp)", false),
+    arguments("", "(!cpp)", true),
+    // a valued define compares against a version string
+    arguments("myVersion=9.2.0", "(myVersion < \"9.0.0\")", false),
+    // either operand set, any value; a parenthesized condition may span lines
+    arguments("cpp", "(cpp || js)", true),
+    arguments("js", "(cpp || js)", true),
+    arguments("js,cpp", "(cpp || js)", true),
+    arguments("js=1,cpp=2.3", "(cpp || js)", true),
+    arguments("js=\"foo\"", "(cpp\n\t||\n\tjs)", true),
+    // one operand unset or false
+    arguments("cpp,js=false", "(cpp && js)", false),
+    arguments("cpp=false,js", "(cpp && js)", false),
+    arguments("cpp", "(cpp && js)", false),
+    arguments("js", "(cpp && js)", false));
 
   @ParameterizedTest(name = "{1} with [{0}]")
   @FieldSource("CONDITION_EVALUATIONS")
