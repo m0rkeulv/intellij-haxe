@@ -10,8 +10,12 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /** Each build system resolves its CURRENT selection: the haxe target it compiles to, and the debug compile additions that target takes. */
 @DisplayName("Build tools: build system")
@@ -65,43 +69,29 @@ public class HaxeBuildSystemTest extends HaxeCodeInsightFixtureTestCase {
     assertNull(HaxeBuildSystem.of(HaxeBuildFileType.HXP_SCRIPT).launchTarget(getProject(), script));
   }
 
-  @Test
-  @DisplayName("hxml debug additions follow the selected target")
-  public void testHxmlDebugAdditionsFollowTheSelectedTarget() {
-    HaxeBuildSystem system = HaxeBuildSystem.of(HaxeBuildFileType.HXML);
+  /** (hxml fixture, debugger, debug compile additions - null when the target has no debugger lane). */
+  static final List<Arguments> HXML_DEBUG_ADDITIONS = List.of(
+    // hxml debug additions follow the selected target
+    arguments("targets/hl.hxml", Debugger.DEFAULT, List.of("-debug")),
+    arguments("targets/cpp.hxml", Debugger.DEFAULT, List.of("-debug", "-lib", "intellij-hxcpp-debug-server")),
+    // targets without a debugger lane add nothing
+    arguments("targets/jvm.hxml", Debugger.DEFAULT, null),
+    // hxml cpp additions compile in the launched debuggers server
+    arguments("targets/cpp.hxml", Debugger.HXCPP_VSHAXE, List.of("-debug", "-lib", "hxcpp-debug-server")),
+    // the legacy build keeps its own debugger lib
+    arguments("targets/cpp.hxml", Debugger.HXCPP_LEGACY, List.of("-debug")),
+    // hxml flash additions tag the swf for the player debugger only
+    arguments("targets/swf.hxml", Debugger.FLASH_PLAYER, List.of("-debug", "-D", "fdb")),
+    // AIR under adl needs no debugger tag
+    arguments("targets/swf.hxml", Debugger.DEFAULT, List.of("-debug")));
 
-    HaxeBuildFile hl = fixture("targets/hl.hxml", HaxeBuildFileType.HXML);
-    assertEquals(List.of("-debug"), system.debugCompileAdditions(getProject(), hl, Debugger.DEFAULT));
+  @ParameterizedTest(name = "{0} / {1}")
+  @FieldSource("HXML_DEBUG_ADDITIONS")
+  @DisplayName("hxml debug additions follow the target and debugger")
+  public void testHxmlDebugAdditionsFollowTheTargetAndDebugger(String fixturePath, Debugger debugger, List<String> additions) {
+    HaxeBuildFile hxml = fixture(fixturePath, HaxeBuildFileType.HXML);
 
-    HaxeBuildFile cpp = fixture("targets/cpp.hxml", HaxeBuildFileType.HXML);
-    assertEquals(List.of("-debug", "-lib", "intellij-hxcpp-debug-server"),
-                 system.debugCompileAdditions(getProject(), cpp, Debugger.DEFAULT));
-
-    HaxeBuildFile jvm = fixture("targets/jvm.hxml", HaxeBuildFileType.HXML);
-    assertNull(system.debugCompileAdditions(getProject(), jvm, Debugger.DEFAULT), "targets without a debugger lane add nothing");
-  }
-
-  @Test
-  @DisplayName("hxml cpp additions compile in the launched debuggers server")
-  public void testHxmlCppAdditionsCompileInTheLaunchedDebuggersServer() {
-    HaxeBuildSystem system = HaxeBuildSystem.of(HaxeBuildFileType.HXML);
-    HaxeBuildFile cpp = fixture("targets/cpp.hxml", HaxeBuildFileType.HXML);
-
-    assertEquals(List.of("-debug", "-lib", "hxcpp-debug-server"),
-                 system.debugCompileAdditions(getProject(), cpp, Debugger.HXCPP_VSHAXE));
-    assertEquals(List.of("-debug"), system.debugCompileAdditions(getProject(), cpp, Debugger.HXCPP_LEGACY),
-                 "the legacy build keeps its own debugger lib");
-  }
-
-  @Test
-  @DisplayName("hxml flash additions tag the swf for the player debugger only")
-  public void testHxmlFlashAdditionsTagTheSwfForThePlayerDebuggerOnly() {
-    HaxeBuildSystem system = HaxeBuildSystem.of(HaxeBuildFileType.HXML);
-    HaxeBuildFile swf = fixture("targets/swf.hxml", HaxeBuildFileType.HXML);
-
-    assertEquals(List.of("-debug", "-D", "fdb"), system.debugCompileAdditions(getProject(), swf, Debugger.FLASH_PLAYER));
-    assertEquals(List.of("-debug"), system.debugCompileAdditions(getProject(), swf, Debugger.DEFAULT),
-                 "AIR under adl needs no debugger tag");
+    assertEquals(additions, HaxeBuildSystem.of(HaxeBuildFileType.HXML).debugCompileAdditions(getProject(), hxml, debugger));
   }
 
   @Test
