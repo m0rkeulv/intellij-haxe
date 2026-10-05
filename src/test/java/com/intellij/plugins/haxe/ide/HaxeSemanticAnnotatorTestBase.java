@@ -33,16 +33,10 @@ import java.util.*;
 
 public abstract class HaxeSemanticAnnotatorTestBase extends HaxeToolkitLightFixtureTestCase {
 
+  private static final InspectionProfileEntry[] NO_EXTRA_TOOLS = new InspectionProfileEntry[0];
 
   @Override
   protected abstract String getBasePath();
-
-  private void doTest(boolean checkWarnings, boolean checkInfos, boolean checkWeakWarnings,
-                      @Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections,
-                      String... additionalFiles)
-    throws Exception {
-    doTest(checkWarnings, checkInfos, checkWeakWarnings, unsetInspections, new InspectionProfileEntry[0], additionalFiles);
-  }
 
   /**
    * {@code extraTools} are pre-configured inspection INSTANCES (e.g. with an
@@ -52,9 +46,9 @@ public abstract class HaxeSemanticAnnotatorTestBase extends HaxeToolkitLightFixt
   private void doTest(boolean checkWarnings, boolean checkInfos, boolean checkWeakWarnings,
                       @Nullable Set<Class<? extends LocalInspectionTool>> unsetInspections,
                       InspectionProfileEntry[] extraTools,
-                      String... additionalFiles)
+                      String... files)
     throws Exception {
-    myFixture.configureByFiles(ArrayUtil.mergeArrays(new String[]{getTestName(false) + ".hx"}, additionalFiles));
+    myFixture.configureByFiles(files);
     myFixture.enableInspections(getAnnotatorBasedInspection());
     myFixture.enableInspections(HaxeInspectionTestTools.semanticInspections(unsetInspections));
     if (extraTools.length > 0) {
@@ -63,28 +57,38 @@ public abstract class HaxeSemanticAnnotatorTestBase extends HaxeToolkitLightFixt
     myFixture.testHighlighting(checkWarnings, checkInfos, checkWeakWarnings);
   }
 
+  /** The test-named fixture first, then {@code additionalFiles}. */
+  private String[] testFiles(String... additionalFiles) {
+    return ArrayUtil.mergeArrays(new String[]{getTestName(false) + ".hx"}, additionalFiles);
+  }
+
   protected void doTestSkippingInspections(Set<Class<? extends LocalInspectionTool>> unsetInspections) throws Exception {
-    doTest(true, false, false, unsetInspections);
+    doTest(true, false, false, unsetInspections, NO_EXTRA_TOOLS, testFiles());
   }
 
   protected void doTestReplacingInspection(InspectionProfileEntry configuredTool) throws Exception {
     Set<Class<? extends LocalInspectionTool>> replacedClass = Set.of(configuredTool.getClass().asSubclass(LocalInspectionTool.class));
-    doTest(true, false, false, replacedClass, new InspectionProfileEntry[]{configuredTool});
+    doTest(true, false, false, replacedClass, new InspectionProfileEntry[]{configuredTool}, testFiles());
   }
 
   protected void doTestNoFixWithWarnings(String... additionalFiles) throws Exception {
-    doTest(true, false, false, null, additionalFiles);
+    doTest(true, false, false, null, NO_EXTRA_TOOLS, testFiles(additionalFiles));
   }
   protected void doTestNoFixWithWeakWarnings(String... additionalFiles) throws Exception {
-    doTest(true, false, true, null, additionalFiles);
+    doTest(true, false, true, null, NO_EXTRA_TOOLS, testFiles(additionalFiles));
+  }
+
+  /** {@link #doTestNoFixWithWeakWarnings} over explicitly named files, the first being the one under test - for fixtures the test name cannot locate. */
+  protected void doTestFilesNoFixWithWeakWarnings(String... files) throws Exception {
+    doTest(true, false, true, null, NO_EXTRA_TOOLS, files);
   }
 
   protected void doTestNoFixWithoutWarnings(String... additionalFiles) throws Exception {
-    doTest(false, false, false, null, additionalFiles);
+    doTest(false, false, false, null, NO_EXTRA_TOOLS, testFiles(additionalFiles));
   }
 
   protected void doTestActions(String... filters) throws Exception {
-    doTest(false, false, false, null);
+    doTest(false, false, false, null, NO_EXTRA_TOOLS, testFiles());
     applyActionsAndCheckResult(filters);
   }
 
