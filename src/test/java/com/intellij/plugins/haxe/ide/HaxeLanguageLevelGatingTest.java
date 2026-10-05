@@ -39,7 +39,7 @@ public class HaxeLanguageLevelGatingTest extends HaxeSemanticAnnotatorTestBase {
     setLevel(level);
     // pre-4.2 `is` semantics are driven by the LEVEL; the 4.1-compat
     // inspection option defaults to off
-    doTestSkippingInspections(null);
+    doTestNoFixWithWarnings();
   }
 
   /** The fix fixtures also carry the diagnostic's markup, so the highlighting is checked with warnings before the fix runs. */
