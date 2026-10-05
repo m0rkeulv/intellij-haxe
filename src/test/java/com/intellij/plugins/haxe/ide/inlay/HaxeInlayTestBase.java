@@ -37,9 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * Jupiter front for the platform's JUnit3-style
  * {@link DeclarativeInlayHintsProviderTestCase}. The engine keeps the platform
  * comparison logic but swaps its light fixture for the same heavy Haxe module
- * fixture the other code-insight tests use. Lifecycle stays template-method
- * shaped so subclasses keep their {@code useHaxeToolkit(); super.setUp();}
- * ordering; everything runs on the EDT like the JUnit3-era dispatch.
+ * fixture the other code-insight tests use. Every test gets the latest Haxe
+ * toolkit on its source roots and a 2-space indent; everything runs on the EDT
+ * like the JUnit3-era dispatch.
  */
 @RunInEdt(writeIntent = true)
 public abstract class HaxeInlayTestBase {
@@ -80,9 +80,11 @@ public abstract class HaxeInlayTestBase {
     return null != myHaxeToolkit;
   }
 
-  public void setUp() throws Exception {
+  private void setUp() throws Exception {
+    useHaxeToolkit();
     engine.start();
     myFixture = engine.fixture();
+    setTestStyleSettings(2);
   }
 
   protected void tearDown() throws Exception {

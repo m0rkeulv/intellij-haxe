@@ -15,13 +15,6 @@ public class HaxeLocalVarInlayTest extends HaxeInlayTestBase {
     return "/inlay/haxe.local.variable/";
   }
 
-  @Override
-  public void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
-    setTestStyleSettings(2);
-  }
-
   @Test
   @DisplayName("simple var hints")
   public void testSimpleVarHints() throws Exception {
