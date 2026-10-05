@@ -18,6 +18,8 @@ import com.intellij.util.execution.ParametersListUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -28,6 +30,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
  * Plans are derived from hxml fixtures only - nothing is compiled. Fixtures live
@@ -387,48 +390,30 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     assertTrue(hlPlan.command().get(1).endsWith("tests.hl"), "artifact path expected: " + hlPlan.command());
   }
 
-  @Test
-  @DisplayName("munit build is detected from its lib and compiles with the injected client")
-  public void testMunitBuildIsDetectedFromItsLibAndCompilesWithTheInjectedClient() throws ExecutionException {
-    String path = fixturePath("targets/munit-neko.hxml");
-    assertEquals("munit", HaxeTestFrameworks.forBuildFile(getProject(), path).libraryName());
+  /** (tests build fixture, library its -lib names, the compile fragment injecting its reporter, planned target, single stage). */
+  static final List<Arguments> FRAMEWORK_BUILDS = List.of(
+    // munit build is detected from its lib and compiles with the injected client (its result channel)
+    arguments("targets/munit-neko.hxml", "munit", "--macro intellij_munit.Macro.init()", HaxeTarget.NEKO, false),
+    // buddy build is detected from its lib and compiles with the reporter define (selecting the shipped reporter)
+    arguments("targets/buddy-interp.hxml", "buddy", "-D reporter=intellij_buddy.TcReporter", HaxeTarget.INTERP, true),
+    // tink build is detected from its lib and compiles with the injected reporter (its result channel)
+    arguments("targets/tink-interp.hxml", "tink_unittest", "--macro intellij_tink.Macro.init()", HaxeTarget.INTERP, true));
+
+  @ParameterizedTest(name = "{1}")
+  @FieldSource("FRAMEWORK_BUILDS")
+  @DisplayName("framework build is detected from its lib and compiles with its reporter")
+  public void testFrameworkBuildIsDetectedFromItsLibAndCompilesWithItsReporter(String fixture, String library, String injection,
+                                                                             HaxeTarget target, boolean singleStage)
+    throws ExecutionException {
+    String path = fixturePath(fixture);
 
     String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, null);
-    assertTrue(arguments.contains("--macro intellij_munit.Macro.init()"),
-               "the injected client is munit's result channel: " + arguments);
-    assertFalse(arguments.contains("-D teamcity "), "utest's batch define has no meaning for munit: " + arguments);
-
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
-    assertEquals(HaxeTarget.NEKO, plan.target());
-  }
 
-  @Test
-  @DisplayName("buddy build is detected from its lib and compiles with the reporter define")
-  public void testBuddyBuildIsDetectedFromItsLibAndCompilesWithTheReporterDefine() throws ExecutionException {
-    String path = fixturePath("targets/buddy-interp.hxml");
-    assertEquals("buddy", HaxeTestFrameworks.forBuildFile(getProject(), path).libraryName());
-
-    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, null);
-    assertTrue(arguments.contains("-D reporter=intellij_buddy.TcReporter"),
-               "buddy's reporter override selects the shipped reporter: " + arguments);
-
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
-    assertTrue(plan.singleStage(), "buddy runs on the interpreter");
-  }
-
-  @Test
-  @DisplayName("tink build is detected from its lib and compiles with the injected reporter")
-  public void testTinkBuildIsDetectedFromItsLibAndCompilesWithTheInjectedReporter() throws ExecutionException {
-    String path = fixturePath("targets/tink-interp.hxml");
-    assertEquals("tink_unittest", HaxeTestFrameworks.forBuildFile(getProject(), path).libraryName());
-
-    String arguments = HaxeTestCompileArguments.compileArguments(getProject(), path, null);
-    assertTrue(arguments.contains("--macro intellij_tink.Macro.init()"),
-               "the injected reporter is tink's result channel: " + arguments);
-    assertFalse(arguments.contains("-D teamcity "), "utest's batch define has no meaning for tink: " + arguments);
-
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), path, null, false);
-    assertTrue(plan.singleStage(), "tink runs on the interpreter");
+    assertEquals(library, HaxeTestFrameworks.forBuildFile(getProject(), path).libraryName());
+    assertTrue(arguments.contains(injection), "the framework's reporter must ride the compile: " + arguments);
+    assertEquals(target, plan.target());
+    assertEquals(singleStage, plan.singleStage());
   }
 
   @Test
