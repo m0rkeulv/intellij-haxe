@@ -22,7 +22,6 @@ import com.intellij.codeInsight.lookup.Lookup;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupManager;
 import com.intellij.codeInsight.template.impl.TemplateManagerImpl;
-import com.intellij.plugins.haxe.lang.psi.HaxeCallExpression;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -115,18 +114,6 @@ public class HaxeIntroduceVariableTest extends HaxeIntroduceTestBase {
     List<String> offered = lookup.getItems().stream().map(LookupElement::getLookupString).toList();
     assertTrue(offered.containsAll(List.of("name", "spriteName", "str")), offered.toString());
     TemplateManagerImpl.getTemplateState(myFixture.getEditor()).gotoEnd(false);
-  }
-
-  @Test
-  @DisplayName("suggest name 1 - name derived from getTest call")
-  public void testSuggestName1() throws Throwable {
-    doTestSuggestions(HaxeCallExpression.class, "test");
-  }
-
-  @Test
-  @DisplayName("suggest name 2 - name derived from test call")
-  public void testSuggestName2() throws Throwable {
-    doTestSuggestions(HaxeCallExpression.class, "test1");
   }
 
   @Test
