@@ -34,17 +34,6 @@ public class HaxeCompilerIdeFeaturesRoutingTest extends HaxeLightFixtureTestCase
     return "";
   }
 
-  @Override
-  protected void tearDown() throws Exception {
-    try {
-      // the once-per-project notification survives on the shared light project
-      HaxeCompilerNavigationService.getInstance(getProject()).resetUnavailabilityNotificationForTests();
-    }
-    finally {
-      super.tearDown();
-    }
-  }
-
   @Test
   @DisplayName("find usages stays static while the option is off")
   public void testFindUsagesStaysStaticWhileTheOptionIsOff() {
