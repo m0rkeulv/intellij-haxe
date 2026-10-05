@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.lang;
 
+import com.intellij.codeInsight.daemon.impl.HighlightInfo;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.lexer.Lexer;
@@ -232,6 +233,8 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
 
     var errors = myFixture.doHighlighting(HighlightSeverity.ERROR);
     assertTrue(errors.isEmpty(), "inactive branches are analysis-exempt: " + errors);
+    var warnings = markersInsideTheConditional(HighlightSeverity.WARNING, source);
+    assertTrue(warnings.isEmpty(), "dead code gets no warning markers either: " + warnings);
   }
 
   @Test
@@ -270,9 +273,7 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
       }""";
     myFixture.configureByText("Foo.hx", source);
 
-    var warnings = myFixture.doHighlighting(HighlightSeverity.WEAK_WARNING).stream()
-      .filter(info -> info.getStartOffset() >= source.indexOf("#if") && info.getEndOffset() <= source.indexOf("#end"))
-      .toList();
+    var warnings = markersInsideTheConditional(HighlightSeverity.WEAK_WARNING, source);
     assertTrue(warnings.isEmpty(), "dead fields get no unused markers and no usage searches: " + warnings);
   }
 
@@ -832,6 +833,15 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     myFixture.configureByText("Foo.hx", source);
     return myFixture.doHighlighting(HighlightSeverity.ERROR).stream()
       .map(info -> String.valueOf(info.getDescription()))
+      .toList();
+  }
+
+  /** The markers of at least the severity that lie inside the configured source's #if..#end region. */
+  private List<HighlightInfo> markersInsideTheConditional(HighlightSeverity minimumSeverity, String source) {
+    int regionStart = source.indexOf("#if");
+    int regionEnd = source.indexOf("#end");
+    return myFixture.doHighlighting(minimumSeverity).stream()
+      .filter(info -> info.getStartOffset() >= regionStart && info.getEndOffset() <= regionEnd)
       .toList();
   }
 
