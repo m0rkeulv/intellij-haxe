@@ -26,7 +26,6 @@ public class HaxeInlayForSemanticTest extends HaxeInlayTestBase {
     setTestStyleSettings(2);
   }
 
-  // test to generate preview used in inlay settings example
   @Test
   @DisplayName("operator dynamic test")
   public void testOperatorDynamicTest() throws Exception {
