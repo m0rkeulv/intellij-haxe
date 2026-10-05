@@ -85,7 +85,11 @@ public abstract class HaxeSemanticAnnotatorTestBase extends HaxeToolkitLightFixt
 
   protected void doTestActions(String... filters) throws Exception {
     doTest(false, false, false, null);
+    applyActionsAndCheckResult(filters);
+  }
 
+  /** Launches every available intention whose text is one of {@code filters}, then compares with the test-named _expected fixture. */
+  protected void applyActionsAndCheckResult(String... filters) {
     List<IntentionAction> intentions = myFixture.getAvailableIntentions();
     for (final IntentionAction action : intentions) {
       if (Arrays.asList(filters).contains(action.getText())) {
