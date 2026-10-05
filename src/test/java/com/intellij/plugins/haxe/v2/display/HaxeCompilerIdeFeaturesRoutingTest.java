@@ -37,8 +37,8 @@ public class HaxeCompilerIdeFeaturesRoutingTest extends HaxeLightFixtureTestCase
   @Override
   protected void tearDown() throws Exception {
     try {
-      // the shared light project keeps project-level state between tests
-      HaxeCompilerSettings.getInstance(getProject()).setCompilerIdeFeaturesEnabled(false);
+      // the once-per-project notification survives on the shared light project
+      HaxeCompilerNavigationService.getInstance(getProject()).resetUnavailabilityNotificationForTests();
     }
     finally {
       super.tearDown();
@@ -90,7 +90,10 @@ public class HaxeCompilerIdeFeaturesRoutingTest extends HaxeLightFixtureTestCase
 
     PsiElement[] targets = new HaxeGotoDeclarationProxy().getGotoDeclarationTargets(atCaret, offset, myFixture.getEditor());
 
-    assertNull(targets);
+    // the static handler answers nothing here either; the notification proves the compiler handler was asked
+    assertNull(targets, "the compiler handler answers nothing without a server");
+    HaxeCompilerNavigationService service = HaxeCompilerNavigationService.getInstance(getProject());
+    assertTrue(service.unavailabilityNotifiedForTests(), "the missing server must be reported");
   }
 
   private PsiElement helperDeclaration() {
