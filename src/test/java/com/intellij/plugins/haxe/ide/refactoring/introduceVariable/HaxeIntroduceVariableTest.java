@@ -141,6 +141,12 @@ public class HaxeIntroduceVariableTest extends HaxeIntroduceTestBase {
   }
 
   @Test
+  @DisplayName("replace this - given name beside a same-named field")
+  public void testReplaceThis() throws Throwable {
+    doTest(null, false, "myThis", false);
+  }
+
+  @Test
   @DisplayName("extract string")
   public void testExtractString() throws Throwable {
     doTestInplace(null, false, null);
