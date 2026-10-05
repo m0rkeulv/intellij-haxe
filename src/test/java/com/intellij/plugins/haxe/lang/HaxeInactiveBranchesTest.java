@@ -623,67 +623,6 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("invalid version literal is flagged like the compiler")
-  public void testInvalidVersionLiteralIsFlaggedLikeTheCompiler() {
-    List<String> errors = conditionErrors("""
-      class Foo {
-      \t#if (version("banana") > version("1.0.0"))
-      \tvar marker:Int;
-      \t#end
-      }""");
-
-    assertEquals(1, errors.size(), "ONE problems entry per condition, not one per token: " + errors);
-    assertTrue(errors.get(0).contains("Should follow SemVer"), "the compiler hard-errors on this literal: " + errors);
-  }
-
-  @Test
-  @DisplayName("shortened version value suggests the full form")
-  public void testShortenedVersionValueSuggestsTheFullForm() {
-    HaxeTestDefines.set(getProject(), "hl_ver=1.13");
-    try {
-      List<String> errors = conditionErrors("""
-        class Foo {
-        \t#if (hl_ver >= version("1.12.0"))
-        \tvar marker:Int;
-        \t#end
-        }""");
-
-      assertEquals(1, errors.size(), "one entry for the condition: " + errors);
-      assertTrue(errors.get(0).contains("major.minor.patch") && errors.get(0).contains("\"1.13.0\""),
-                 "the message explains the missing part and suggests the fix: " + errors);
-    }
-    finally {
-      HaxeTestDefines.set(getProject(), null);
-    }
-  }
-
-  @Test
-  @DisplayName("unknown function is flagged like the compiler")
-  public void testUnknownFunctionIsFlaggedLikeTheCompiler() {
-    List<String> errors = conditionErrors("""
-      class Foo {
-      \t#if (foo("x"))
-      \tvar marker:Int;
-      \t#end
-      }""");
-
-    assertTrue(errors.contains("Invalid condition expression"), "unknown calls are compiler errors: " + errors);
-  }
-
-  @Test
-  @DisplayName("undefined define comparisons stay quiet")
-  public void testUndefinedDefineComparisonsStayQuiet() {
-    List<String> errors = conditionErrors("""
-      class Foo {
-      \t#if (undef_thing > 3)
-      \tvar marker:Int;
-      \t#end
-      }""");
-
-    assertTrue(errors.isEmpty(), "null-poisoned comparisons are legal: " + errors);
-  }
-
-  @Test
   @DisplayName("conditions in dead regions stay quiet")
   public void testConditionsInDeadRegionsStayQuiet() {
     // the compiler never evaluates (or validates) a condition inside an
@@ -731,22 +670,6 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     assertTrue(flagged, "the compiler evaluates and rejects this condition: " + errors);
   }
 
-  @Test
-  @DisplayName("multi dot number condition stays quiet")
-  public void testMultiDotNumberConditionStaysQuiet() {
-    // the diagnostic scanner must decline a multi-dot number (no flex rule
-    // produces one as a single token) instead of accepting it and crashing
-    // on Float.valueOf during evaluation
-    List<String> errors = conditionErrors("""
-      class Foo {
-      \t#if (foo == 1.2.3)
-      \tvar marker:Int;
-      \t#end
-      }""");
-
-    assertTrue(errors.isEmpty(), "an unscannable condition reports nothing: " + errors);
-  }
-
   // (condition as written after #if, its PPEXPRESSION run, the start of the inactive body after it)
   static final List<Arguments> CONDITION_RUNS = List.of(
     arguments("(utest-abc)", "(utest-abc)", "\n\tvar marker"),
@@ -773,8 +696,9 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     assertTrue(bodies.get(0).startsWith(bodyStart), "the body starts right after the condition: " + bodies);
   }
 
-  // (defines, condition, the error the compiler reports for it - null when it compiles)
-  static final List<Arguments> OPERATOR_VERDICTS = List.of(
+  // (defines, condition, the ONE error the compiler reports for it - null when it compiles)
+  static final List<Arguments> CONDITION_DIAGNOSTICS = List.of(
+    // operators outside the condition grammar
     arguments("my-flag", "(my-flag)", "Unsupported operation: '-' is not allowed in a condition"),
     arguments("A=1,B=2", "(B-A)", "Unsupported operation: '-' is not allowed in a condition"),
     arguments("", "(a * b)", "Unsupported operation: '*' is not allowed in a condition"),
@@ -784,12 +708,24 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     arguments("A=1,B=2", "(B > A)", null),
     arguments("", "(a == -1)", null),
     // without parentheses '-flag' is body, and the condition 'my' is fine
-    arguments("my-flag", "my-flag", null));
+    arguments("my-flag", "my-flag", null),
+    // invalid version literal
+    arguments("", "(version(\"banana\") > version(\"1.0.0\"))", "Invalid version string \"banana\". Should follow SemVer."),
+    // shortened version value suggests the full form
+    arguments("hl_ver=1.13", "(hl_ver >= version(\"1.12.0\"))",
+              "Invalid version \"1.13\": a version comparison needs all three major.minor.patch parts - did you mean \"1.13.0\"?"),
+    // unknown function
+    arguments("", "(foo(\"x\"))", "Invalid condition expression"),
+    // undefined define comparisons stay quiet: a null-poisoned comparison is legal
+    arguments("", "(undef_thing > 3)", null),
+    // multi dot number stays quiet: no flex rule yields one token, so the
+    // scanner declines it instead of crashing on Float.valueOf
+    arguments("", "(foo == 1.2.3)", null));
 
   @ParameterizedTest(name = "{1} with [{0}]")
-  @FieldSource("OPERATOR_VERDICTS")
-  @DisplayName("operators outside the condition grammar are flagged like the compiler")
-  public void testOperatorsOutsideTheConditionGrammarAreFlaggedLikeTheCompiler(String defines, String condition, String expectedError) {
+  @FieldSource("CONDITION_DIAGNOSTICS")
+  @DisplayName("condition diagnostics match the compiler")
+  public void testConditionDiagnosticsMatchTheCompiler(String defines, String condition, String expectedError) {
     HaxeTestDefines.set(getProject(), defines);
     try {
       List<String> errors = conditionErrors("""
