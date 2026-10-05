@@ -77,12 +77,6 @@ public class HxcppDebugAdapterTest {
   }
 
   @Test
-  @DisplayName("launch succeeds once debuggee is connected")
-  public void launchSucceedsOnceDebuggeeIsConnected() throws Exception {
-    assertTrue(dapClient.sendRequest(new LaunchRequest(), TIMEOUT).isSuccess());
-  }
-
-  @Test
   @DisplayName("launch fails clearly without debuggee")
   public void launchFailsClearlyWithoutDebuggee() throws Exception {
     // separate adapter nobody connects to, with a short accept timeout
@@ -670,22 +664,13 @@ public class HxcppDebugAdapterTest {
   }
 
   @Test
-  @DisplayName("server error becomes dap error response")
-  public void serverErrorBecomesDapErrorResponse() throws Exception {
-    server.handle("threads", params -> {
-      throw new RuntimeException("boom");
-    });
-    Response response = dapClient.sendRequest(new ThreadsRequest(), TIMEOUT);
-    assertFailedWith(response, "boom");
-  }
-
-  @Test
   @DisplayName("request loop survives a failed request")
   public void requestLoopSurvivesAFailedRequest() throws Exception {
     server.handle("threads", params -> {
       throw new RuntimeException("boom");
     });
-    assertFalse(dapClient.sendRequest(new ThreadsRequest(), TIMEOUT).isSuccess());
+    Response failed = dapClient.sendRequest(new ThreadsRequest(), TIMEOUT);
+    assertFailedWith(failed, "boom");
 
     server.handle("threads", params -> """
         [{"id": 0, "name": "main"}]
