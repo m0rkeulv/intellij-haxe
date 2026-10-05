@@ -20,13 +20,6 @@ public class HaxeInlayPreviewTest extends HaxeInlayTestBase {
     return "/inlay/";
   }
 
-  @Override
-  public void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
-    setTestStyleSettings(2);
-  }
-
   @ParameterizedTest(name = "{0} preview")
   @ValueSource(strings = {"haxe.capture.variable", "haxe.enum.extractor", "haxe.field.type", "haxe.local.variable",
     "haxe.loop.type", "haxe.return.type", "haxe.untyped.parameter.type"})

@@ -15,13 +15,6 @@ public class HaxeForLoopInlayTest extends HaxeInlayTestBase {
     return "/inlay/haxe.loop.type/";
   }
 
-  @Override
-  public void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
-    setTestStyleSettings(2);
-  }
-
   @Test
   @DisplayName("loop generics")
   public void testLoopGenerics() throws Exception {

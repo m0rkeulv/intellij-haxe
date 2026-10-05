@@ -19,13 +19,6 @@ public class HaxeInlayForSemanticTest extends HaxeInlayTestBase {
     return "/inlay/semantic/";
   }
 
-  @Override
-  public void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
-    setTestStyleSettings(2);
-  }
-
   @Test
   @DisplayName("operator dynamic test")
   public void testOperatorDynamicTest() throws Exception {

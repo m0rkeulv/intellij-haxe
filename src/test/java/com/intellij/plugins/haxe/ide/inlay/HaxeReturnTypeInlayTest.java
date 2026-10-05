@@ -15,13 +15,6 @@ public class HaxeReturnTypeInlayTest extends HaxeInlayTestBase {
     return "/inlay/haxe.return.type/";
   }
 
-  @Override
-  public void setUp() throws Exception {
-    useHaxeToolkit();
-    super.setUp();
-    setTestStyleSettings(2);
-  }
-
   @Test
   @DisplayName("return type generics")
   public void testReturnTypeGenerics() throws Exception {
