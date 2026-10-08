@@ -23,35 +23,17 @@ import com.intellij.openapi.projectRoots.*;
 import com.intellij.openapi.projectRoots.impl.ProjectJdkImpl;
 import com.intellij.openapi.roots.JavadocOrderRootType;
 import com.intellij.openapi.roots.OrderRootType;
+import com.intellij.openapi.util.JDOMUtil;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeCommonBundle;
-import com.intellij.util.xmlb.Accessor;
-import com.intellij.util.xmlb.SerializationFilter;
 import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
-import java.util.Set;
 
 public class HaxeSdkType extends SdkType {
-
-  // SDK entries stored before these fields existed never carry them; writing
-  // them out as empty strings would make every startup flag such an SDK as
-  // inconsistently updated (the workspace model compares serialized forms).
-  // Omitted while empty, the stored shape survives until a real value is set.
-  private static final Set<String> OMITTED_WHEN_EMPTY = Set.of("nodeBinPath", "flashPlayerPath", "flexSdkName");
-  private static final SerializationFilter SKIP_EMPTY_RUNTIME_FIELDS = new SerializationFilter() {
-    @Override
-    public boolean accepts(@NotNull Accessor accessor, @NotNull Object bean) {
-      if (!OMITTED_WHEN_EMPTY.contains(accessor.getName())) {
-        return true;
-      }
-      Object value = accessor.read(bean);
-      return value != null && !value.toString().isEmpty();
-    }
-  };
 
   public HaxeSdkType() {
     super(HaxeCommonBundle.message("haxe.sdk.name"));
@@ -143,14 +125,24 @@ public class HaxeSdkType extends SdkType {
 
   @Override
   public SdkAdditionalData loadAdditionalData(Element additional) {
-    return XmlSerializer.deserialize(additional, HaxeSdkData.class);
+    HaxeSdkData data = XmlSerializer.deserialize(additional, HaxeSdkData.class);
+    if (!isWrittenInCurrentFormat(data, additional)) data.markStoredInOldFormat();
+    return data;
   }
 
   @Override
   public void saveAdditionalData(SdkAdditionalData additionalData, Element additional) {
     if (additionalData instanceof HaxeSdkData) {
-      XmlSerializer.serializeInto(additionalData, additional, SKIP_EMPTY_RUNTIME_FIELDS);
+      XmlSerializer.serializeInto(additionalData, additional);
     }
+  }
+
+  // The platform compares the stored text with a fresh save on every save and
+  // logs an error while they differ (a field added or removed since).
+  private boolean isWrittenInCurrentFormat(HaxeSdkData data, Element stored) {
+    Element current = new Element(stored.getName());
+    saveAdditionalData(data, current);
+    return JDOMUtil.write(current).equals(JDOMUtil.write(stored));
   }
 
   @NotNull
