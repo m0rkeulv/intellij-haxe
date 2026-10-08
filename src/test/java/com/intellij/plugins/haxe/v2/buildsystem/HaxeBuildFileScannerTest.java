@@ -12,6 +12,7 @@ import java.util.List;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.CLASSPATH_ONLY_PROJECT_SOURCE;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.MAVEN_POM_SOURCE;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.NME_SAMPLE_PROJECT_SOURCE;
+import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.SECTIONED_LIME_PROJECT_SOURCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -53,6 +54,10 @@ public class HaxeBuildFileScannerTest extends HaxeCodeInsightFixtureTestCase {
     arguments("openfl-project.lime", OPENFL_PROJECT_SOURCE, HaxeBuildFileType.OPENFL),
     // <classpath> is lime's alias of <source>
     arguments("classpath-only.xml", CLASSPATH_ONLY_PROJECT_SOURCE, HaxeBuildFileType.LIME),
+    // the recognised elements may sit inside a <section>
+    arguments("sectioned.xml", SECTIONED_LIME_PROJECT_SOURCE, HaxeBuildFileType.LIME),
+    // under the lime extensions a project without a library or a source path is nobody's
+    arguments("app-only.xml", NME_SAMPLE_PROJECT_SOURCE, null),
     arguments("nme-project.nmml", NME_PROJECT_SOURCE, HaxeBuildFileType.NMML),
     // the extension picks the nme tool even when the project declares openfl
     arguments("openfl-project.nmml", OPENFL_PROJECT_SOURCE, HaxeBuildFileType.NMML),

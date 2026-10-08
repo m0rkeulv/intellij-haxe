@@ -20,6 +20,17 @@ public final class ProjectXmlFixtures {
     </project>
     """;
 
+  /** The lime elements sit inside a conditional section, not directly under the root. */
+  public static final String SECTIONED_LIME_PROJECT_SOURCE = """
+    <project>
+      <section if="desktop">
+        <app main="Main"/>
+        <source path="src"/>
+        <haxelib name="lime"/>
+      </section>
+    </project>
+    """;
+
   public static final String MAVEN_POM_SOURCE = """
     <project>
       <modelVersion>4.0.0</modelVersion>
