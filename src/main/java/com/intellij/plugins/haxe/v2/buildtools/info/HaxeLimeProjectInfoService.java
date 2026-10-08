@@ -65,9 +65,11 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   private final Project project;
   private final HaxeProjectInfoCache<HaxeBuildFileInfo> cache;
+  private final HaxeBuildToolFailures failures;
 
   public HaxeLimeProjectInfoService(@NotNull Project project) {
     this.project = project;
+    this.failures = HaxeBuildToolFailures.getInstance(project);
     this.cache = new HaxeProjectInfoCache<>(project, "Haxe lime display", null);
   }
 
@@ -135,6 +137,9 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     if (info == null) {
       // resilience over purity: a tool failure falls back to lime display
       info = runDisplay(key, tool, fileName, workDirectory);
+    }
+    if (info != null) {
+      failures.record(key.filePath(), null);
     }
 
     return new Outcome<>(info, settled);
@@ -223,12 +228,14 @@ public final class HaxeLimeProjectInfoService implements Disposable {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(DISPLAY_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {
         log.warn(tool + " display failed for " + fileName + " (" + key.targetFlag() + "): " + firstErrorLine(output));
+        failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(tool + " display", output));
         return null;
       }
       return parseDisplayOutput(output.getStdout(), key.targetFlag(), projectFileContent(key.filePath()));
     }
     catch (ExecutionException e) {
       log.warn(tool + " display could not run for " + fileName + ": " + e.getMessage());
+      failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(tool + " display", e));
       return null;
     }
   }

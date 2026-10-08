@@ -9,8 +9,8 @@ import com.intellij.util.messages.Topic;
  * window tree) refreshes on it.
  * <p>
  * Delivered on the PUBLISHER's thread - the sync/workspace/settings publishers
- * fire on the EDT, {@link HaxeContextFailures#record} fires from the background
- * threads recording compiler-request outcomes. Subscribers must be safe to
+ * fire on the EDT, {@link HaxeLastFailures#record} fires from the background
+ * threads recording compiler-request and build-tool outcomes. Subscribers must be safe to
  * call from any thread: dispatch to {@code invokeLater} or a non-blocking read
  * action before touching UI or PSI (both current subscribers do).
  */

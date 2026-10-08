@@ -68,10 +68,12 @@ public final class HaxeToolWindowNodes {
    * container's tests build files; {@code marked} = the store holds an explicit
    * mark for it (a stale mark outlives its framework lib, so it is no
    * testsFile); {@code frameworkDetected} = its libraries include a known test
-   * framework.
+   * framework; {@code toolFailure} = the build tool's last failed evaluation
+   * of the file, or null.
    */
   public record BuildFileRow(@NotNull HaxeBuildFile buildFile, @NotNull String containerId, boolean active,
-                             boolean manual, boolean testsFile, boolean marked, boolean frameworkDetected)
+                             boolean manual, boolean testsFile, boolean marked, boolean frameworkDetected,
+                             @Nullable String toolFailure)
     implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {

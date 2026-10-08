@@ -134,7 +134,8 @@ final class HaxeToolWindowTreeBuilder {
     boolean tests = container.testsPaths().contains(path);
     boolean marked = container.markedTestsPaths().contains(path);
     boolean frameworkDetected = HaxeTestFrameworks.detectedFramework(fileEntry.info().libraries()) != null;
-    return new BuildFileRow(fileEntry.buildFile(), container.id(), active, fileEntry.manual(), tests, marked, frameworkDetected);
+    return new BuildFileRow(fileEntry.buildFile(), container.id(), active, fileEntry.manual(), tests, marked, frameworkDetected,
+                            fileEntry.toolFailure());
   }
 
   @NotNull

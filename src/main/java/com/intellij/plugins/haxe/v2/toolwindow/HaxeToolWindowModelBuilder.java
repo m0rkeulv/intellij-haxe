@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeBuildToolFailures;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
@@ -60,7 +61,8 @@ final class HaxeToolWindowModelBuilder {
   }
 
   /** {@code sectionIds}/{@code sectionLabels}/{@code sectionDescriptors} list a multi-section hxml's {@code --next} compilations (empty otherwise); {@code selectedSection} indexes into them. */
-  record FileEntry(HaxeBuildFile buildFile, HaxeBuildFileInfo info, boolean manual, List<ActionNode> actions,
+  record FileEntry(HaxeBuildFile buildFile, HaxeBuildFileInfo info, @Nullable String toolFailure, boolean manual,
+                   List<ActionNode> actions,
                    List<String> sectionIds, List<String> sectionLabels, List<String> sectionDescriptors,
                    int selectedSection) {
   }
@@ -330,9 +332,11 @@ final class HaxeToolWindowModelBuilder {
                           : HaxeSectionSelectionStore.getInstance(project).getSelectedSection(buildFile.file(), sectionIds);
 
     HaxeBuildFileInfo info = effectiveInfo(containerId, buildFile);
+    String toolFailure = HaxeBuildToolFailures.getInstance(project).lastFailure(buildFile.file().getPath());
     boolean manual = manualPaths.contains(buildFile.file().getPath());
     List<ActionNode> actions = buildFileActions(containerId, buildFile);
-    return new FileEntry(buildFile, info, manual, actions, sectionIds, sectionLabels(sectionIds), sectionDescriptors, selectedSection);
+    return new FileEntry(buildFile, info, toolFailure, manual, actions, sectionIds, sectionLabels(sectionIds), sectionDescriptors,
+                         selectedSection);
   }
 
   /** The {@code --next} sections of a multi-section hxml; empty for single-section files and other build types. */
