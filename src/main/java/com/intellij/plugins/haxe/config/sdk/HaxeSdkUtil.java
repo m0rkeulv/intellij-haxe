@@ -151,7 +151,7 @@ public class HaxeSdkUtil extends HaxeSdkUtilBase {
       result = locateExecutable("neko");
     }
 
-    log.debug("returning neko path: " + String.valueOf(result));
+    if (log.isDebugEnabled()) log.debug("returning neko path: " + String.valueOf(result));
     return result;
   }
 

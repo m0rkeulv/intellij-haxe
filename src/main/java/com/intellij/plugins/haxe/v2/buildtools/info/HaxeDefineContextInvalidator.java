@@ -53,7 +53,9 @@ final class HaxeDefineContextInvalidator {
     }
     Runnable reparseOpenEditors = () -> reparseOpenEditors(project, conditionalFiles);
     ApplicationManager.getApplication().invokeLater(reparseOpenEditors, ModalityState.nonModal(), project.getDisposed());
-    log.debug("define context: " + conditionalFiles.size() + " conditional haxe files invalidated");
+    if (log.isDebugEnabled()) {
+      log.debug("define context: " + conditionalFiles.size() + " conditional haxe files invalidated");
+    }
   }
 
   /** Walks the indexable files without a lock — this is where an uncached stubable flag reads its file. */

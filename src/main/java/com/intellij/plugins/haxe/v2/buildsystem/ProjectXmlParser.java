@@ -50,7 +50,7 @@ public final class ProjectXmlParser {
     }
     catch (XMLStreamException e) {
       // malformed or partially edited file - keep whatever was collected so far
-      log.debug("Failed to parse project xml: " + e.getMessage());
+      if (log.isDebugEnabled()) log.debug("Failed to parse project xml: " + e.getMessage());
     }
     return new HaxeBuildFileInfo(null, null, List.copyOf(defines), List.copyOf(libraries), List.copyOf(classpaths));
   }
@@ -93,7 +93,7 @@ public final class ProjectXmlParser {
       }
     }
     catch (XMLStreamException e) {
-      log.debug("Failed to parse project xml: " + e.getMessage());
+      if (log.isDebugEnabled()) log.debug("Failed to parse project xml: " + e.getMessage());
     }
     return List.copyOf(includes);
   }
@@ -112,7 +112,7 @@ public final class ProjectXmlParser {
       }
     }
     catch (XMLStreamException e) {
-      log.debug("Failed to parse project xml: " + e.getMessage());
+      if (log.isDebugEnabled()) log.debug("Failed to parse project xml: " + e.getMessage());
     }
     return null;
   }

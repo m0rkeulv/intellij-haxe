@@ -94,7 +94,7 @@ public final class HaxeVariableSourceNavigator {
       .submit(RESOLVE_EXECUTOR)
       .onSuccess(target -> {
         if (target == null) {
-          LOG.debug("jump-to-source: no target for path '" + path + "'");
+          if (LOG.isDebugEnabled()) LOG.debug("jump-to-source: no target for path '" + path + "'");
         }
         navigatable.setSourcePosition(target);
       })
@@ -111,13 +111,15 @@ public final class HaxeVariableSourceNavigator {
                          : null;
     if (context == null) {
       // without a frame context nothing (locals, imports) can resolve
-      LOG.debug("jump-to-source: no context element (frame position " + frame + ")");
+      if (LOG.isDebugEnabled()) LOG.debug("jump-to-source: no context element (frame position " + frame + ")");
       return null;
     }
 
     if (path.equals("this")) {
       HaxeClass enclosing = PsiTreeUtil.getParentOfType(context, HaxeClass.class);
-      LOG.debug("jump-to-source: bare this -> enclosing class " + (enclosing != null ? enclosing.getName() : null));
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("jump-to-source: bare this -> enclosing class " + (enclosing != null ? enclosing.getName() : null));
+      }
       return enclosing != null ? XDebuggerUtil.getInstance().createPositionByElement(enclosing.getNavigationElement()) : null;
     }
 
@@ -167,11 +169,15 @@ public final class HaxeVariableSourceNavigator {
       }
       HaxeBaseMemberModel member = candidate.getModel().getMember(memberName, null);
       if (member != null) {
-        LOG.debug("jump-to-source: member '" + memberName + "' found on runtime type '" + bare + "'");
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("jump-to-source: member '" + memberName + "' found on runtime type '" + bare + "'");
+        }
         return XDebuggerUtil.getInstance().createPositionByElement(member.getBasePsi().getNavigationElement());
       }
     }
-    LOG.debug("jump-to-source: runtime type '" + typeName + "' / member '" + memberName + "' not found");
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("jump-to-source: runtime type '" + typeName + "' / member '" + memberName + "' not found");
+    }
     return null;
   }
 
@@ -179,12 +185,12 @@ public final class HaxeVariableSourceNavigator {
     PsiFile fragment = HaxeElementGenerator.createExpressionCodeFragment(project, expression, context, false);
     HaxeReference chain = outermostReference(fragment);
     if (chain == null) {
-      LOG.debug("jump-to-source: no reference parsed from '" + expression + "'");
+      if (LOG.isDebugEnabled()) LOG.debug("jump-to-source: no reference parsed from '" + expression + "'");
       return null;
     }
     PsiElement resolved = chain.resolve();
     if (resolved == null) {
-      LOG.debug("jump-to-source: '" + chain.getText() + "' did not resolve");
+      if (LOG.isDebugEnabled()) LOG.debug("jump-to-source: '" + chain.getText() + "' did not resolve");
       return null;
     }
     return XDebuggerUtil.getInstance().createPositionByElement(resolved.getNavigationElement());

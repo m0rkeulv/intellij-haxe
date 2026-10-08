@@ -2567,7 +2567,6 @@ public class HaxeExpressionEvaluatorHandlers {
       }
     }
 
-    //log.debug(ftype.getDebugString());
     // More parameters than expected
     if (parameterExpressionsSize > parameterTypesSize) {
       for (int n = parameterTypesSize; n < parameterExpressionsSize; n++) {

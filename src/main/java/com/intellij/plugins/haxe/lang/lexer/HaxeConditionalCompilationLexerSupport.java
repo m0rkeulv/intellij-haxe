@@ -234,7 +234,7 @@ public class HaxeConditionalCompilationLexerSupport {
     @Override
     public Block startBlock(IElementType type) {
       if (type == PPIF) {
-        log.debug("Root Section requested to start an invalid block type:" + type.toString());
+        if (log.isDebugEnabled()) log.debug("Root Section requested to start an invalid block type:" + type.toString());
       }
       return super.startBlock(null);
     }
@@ -335,7 +335,7 @@ public class HaxeConditionalCompilationLexerSupport {
   public void conditionEnd() {
     HaxeConditionalExpression condition = getCurrentBlock().getCondition();
     if (null != condition && !condition.isComplete()) {
-       log.debug("Ending condition before it is complete: '" + condition.toString() + "'");
+       if (log.isDebugEnabled()) log.debug("Ending condition before it is complete: '" + condition.toString() + "'");
     }
   }
 

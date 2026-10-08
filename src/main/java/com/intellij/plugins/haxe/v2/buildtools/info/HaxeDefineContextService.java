@@ -254,7 +254,9 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
         .executeSynchronously();
       lastComputed = after;
       boolean changed = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
-      log.debug("define context refresh: changed=" + changed + ", defines=" + (after == null ? "legacy" : after.size()));
+      if (log.isDebugEnabled()) {
+        log.debug("define context refresh: changed=" + changed + ", defines=" + (after == null ? "legacy" : after.size()));
+      }
       if (changed) {
         HaxeDefineContextInvalidator.invalidateConditionalFiles(project);
       }
