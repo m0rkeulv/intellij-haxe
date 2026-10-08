@@ -155,7 +155,7 @@ public class HaxelibUtil {
             }
           }
           catch (IOException e) {
-            log.debug("IOException reading .current file for library " + libName, e);
+            if (log.isDebugEnabled()) log.debug("IOException reading .current file for library " + libName, e);
           }
         }
       } else if(libVersion.equalsIgnoreCase("dev")) {
@@ -170,7 +170,7 @@ public class HaxelibUtil {
               }
             }
             catch (IOException e) {
-              log.debug("IOException reading .dev file for library " + libName, e);
+              if (log.isDebugEnabled()) log.debug("IOException reading .dev file for library " + libName, e);
             }
           }
       }else {
@@ -207,7 +207,7 @@ public class HaxelibUtil {
           // Second is normally the version string.  But that's not *always* the case, if it's a dev path.
           if (!versionPattern.matcher(libParts[1]).matches()
               && !(new File(HaxeStringUtil.join("/", rootName, libParts[0], ".dev"))).exists()) {
-            log.debug("Library version '" + libParts[1] + "' didn't match the regex.");
+            if (log.isDebugEnabled()) log.debug("Library version '" + libParts[1] + "' didn't match the regex.");
           }
         }
         String libRoot = FileUtil.join(rootName, libParts[0], libParts[1]);

@@ -55,19 +55,19 @@ public class HaxeSdkUtilBase {
   private static String getExecutablePathByFolderPath(String folderPath, String name) {
     if (!SystemInfo.isLinux) {
       final String candidatePath = folderPath + "/bin/" + getExecutableName(name);
-      LOG.debug("candidatePath: " + candidatePath);
+      if (LOG.isDebugEnabled()) LOG.debug("candidatePath: " + candidatePath);
       if (fileExists(candidatePath)) {
         return FileUtil.toSystemIndependentName(candidatePath);
       }
     }
 
     final String resultPath = folderPath + "/" + getExecutableName(name);
-    LOG.debug("resultPath: " + resultPath);
+    if (LOG.isDebugEnabled()) LOG.debug("resultPath: " + resultPath);
     if (fileExists(resultPath)) {
       return FileUtil.toSystemIndependentName(resultPath);
     }
 
-    LOG.debug(name + " path: null");
+    if (LOG.isDebugEnabled()) LOG.debug(name + " path: null");
     return null;
   }
 

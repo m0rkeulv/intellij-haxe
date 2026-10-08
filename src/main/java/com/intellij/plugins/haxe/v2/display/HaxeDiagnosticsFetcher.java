@@ -97,14 +97,16 @@ final class HaxeDiagnosticsFetcher {
     // no request while the text does not parse: the compiler would fail on
     // the same syntax, and the parser's own error highlighting covers it
     if (!HaxeCompilerDisplayService.isSyntaxClean(file.getProject(), virtualFile)) {
-      log.debug("no display/diagnostics for " + virtualFile.getPath() + ": the file has parse errors");
+      if (log.isDebugEnabled()) {
+        log.debug("no display/diagnostics for " + virtualFile.getPath() + ": the file has parse errors");
+      }
       return null;
     }
 
     HaxeCompilerDisplayService service = HaxeCompilerDisplayService.getInstance(file.getProject());
     HaxeCompilerDisplayService.DisplayContext context = service.contextFor(virtualFile);
     if (context == null) {
-      log.debug("no display/diagnostics for " + virtualFile.getPath() + ": no build context");
+      if (log.isDebugEnabled()) log.debug("no display/diagnostics for " + virtualFile.getPath() + ": no build context");
       return null;
     }
 
@@ -153,8 +155,10 @@ final class HaxeDiagnosticsFetcher {
       .filter(entry -> FileUtil.pathsEqual(entry.file(), request.filePath()))
       .flatMap(entry -> entry.diagnostics().stream())
       .toList();
-    log.debug("display/diagnostics for " + key + ": " + diagnostics.size() + " of " + countOf(results)
-              + " diagnostics belong to the file");
+    if (log.isDebugEnabled()) {
+      log.debug("display/diagnostics for " + key + ": " + diagnostics.size() + " of " + countOf(results)
+                + " diagnostics belong to the file");
+    }
     if (cache.size() >= CACHE_MAX_FILES) {
       evictOldest(cache);
     }

@@ -173,7 +173,7 @@ public final class HaxeBuildFileInspector {
       return VfsUtilCore.loadText(file);
     }
     catch (IOException e) {
-      log.debug("Unable to read build file " + file.getPath());
+      if (log.isDebugEnabled()) log.debug("Unable to read build file " + file.getPath());
       return null;
     }
   }
