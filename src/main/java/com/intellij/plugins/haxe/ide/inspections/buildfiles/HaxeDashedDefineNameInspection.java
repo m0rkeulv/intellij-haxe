@@ -32,12 +32,18 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /// A define whose name carries a dash: the compiler registers `-D my-flag` (or
 /// `<haxedef name="my-flag"/>`) under `my_flag`, so only that spelling works in
 /// `#if`. Covers hxml files and the XML files the plugin classifies as Lime,
 /// OpenFL or NME project files. The quick fix rewrites the name to the
-/// compiler's spelling; a `=value` part stays.
+/// compiler's spelling; a `=value` part stays. A Lime `<define>` is also a
+/// condition define, matched by its written name in `if`/`unless` attributes
+/// and `${name}` substitutions, so those references in the file follow the
+/// rename.
 public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
 
   @Override
@@ -107,6 +113,9 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
   }
 
   private static final class ReplaceWithCompilerNameFix extends PsiUpdateModCommandQuickFix {
+    private static final String CONDITION_DEFINE_TAG = "define";
+    private static final Set<String> CONDITION_ATTRIBUTES = Set.of("if", "unless");
+
     private final String compilerName;
 
     private ReplaceWithCompilerNameFix(@NotNull String compilerName) {
@@ -133,7 +142,33 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
     }
 
     private static void renameAttribute(@NotNull XmlAttributeValue value) {
-      if (value.getParent() instanceof XmlAttribute attribute) attribute.setValue(HaxeDefine.compilerName(value.getValue()));
+      if (!(value.getParent() instanceof XmlAttribute attribute)) return;
+      String name = value.getValue();
+      String compilerName = HaxeDefine.compilerName(name);
+      attribute.setValue(compilerName);
+      if (isConditionDefine(attribute)) renameConditionReferences(attribute.getContainingFile(), name, compilerName);
+    }
+
+    /** Only {@code <define>} feeds Lime's condition defines; a {@code <haxedef>} reaches the compiler alone. */
+    private static boolean isConditionDefine(@NotNull XmlAttribute attribute) {
+      XmlTag tag = attribute.getParent();
+      return tag != null && CONDITION_DEFINE_TAG.equalsIgnoreCase(tag.getLocalName());
+    }
+
+    private static void renameConditionReferences(@NotNull PsiFile file, @NotNull String name, @NotNull String compilerName) {
+      // the name as a whole condition token: bounded by the value's ends, whitespace or the || separator
+      Pattern conditionToken = Pattern.compile("(?<![^\\s|])" + Pattern.quote(name) + "(?![^\\s|])");
+      // the name directly after a ${ opener, followed by the closing }, whitespace or a comparison operator
+      Pattern substitution = Pattern.compile("(?<=\\$\\{)" + Pattern.quote(name) + "(?=[\\s}=!<>])");
+      String replacement = Matcher.quoteReplacement(compilerName);
+      for (XmlAttribute attribute : PsiTreeUtil.findChildrenOfType(file, XmlAttribute.class)) {
+        String value = attribute.getValue();
+        if (value == null || !value.contains(name)) continue;
+        boolean condition = CONDITION_ATTRIBUTES.contains(attribute.getLocalName().toLowerCase(Locale.ROOT));
+        String renamed = condition ? conditionToken.matcher(value).replaceAll(replacement) : value;
+        renamed = substitution.matcher(renamed).replaceAll(replacement);
+        if (!renamed.equals(value)) attribute.setValue(renamed);
+      }
     }
 
     private static void replaceHxmlValue(@NotNull HXMLValue value) {
