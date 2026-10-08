@@ -77,6 +77,12 @@ public class HxcppDebugAdapterTest {
   }
 
   @Test
+  @DisplayName("launch succeeds once debuggee is connected")
+  public void launchSucceedsOnceDebuggeeIsConnected() throws Exception {
+    assertTrue(dapClient.sendRequest(new LaunchRequest(), TIMEOUT).isSuccess());
+  }
+
+  @Test
   @DisplayName("launch fails clearly without debuggee")
   public void launchFailsClearlyWithoutDebuggee() throws Exception {
     // separate adapter nobody connects to, with a short accept timeout
