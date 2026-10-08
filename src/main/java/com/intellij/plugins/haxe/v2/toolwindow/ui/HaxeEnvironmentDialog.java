@@ -12,6 +12,7 @@ import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants.CustomTargetProblem;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;
@@ -161,11 +162,17 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
     super.doOKAction();
   }
 
-  /** The error for an entered custom target; null when it is blank (clears the target) or a valid target name. */
+  /** The error for an entered custom target; null when it is blank (clears the target) or a name the compiler accepts. */
   @Nullable
   private static String customTargetError(@NotNull String entered) {
-    boolean valid = entered.isBlank() || HaxeModuleVariants.isTargetName(entered.trim());
-    return valid ? null : HaxeBundle.message("haxe.environment.dialog.custom.target.invalid");
+    String name = entered.trim();
+    CustomTargetProblem problem = name.isEmpty() ? null : HaxeModuleVariants.customTargetProblem(name);
+    if (problem == null) return null;
+    return switch (problem) {
+      case RESERVED -> HaxeBundle.message("haxe.environment.dialog.custom.target.reserved", name);
+      case TOO_LONG -> HaxeBundle.message("haxe.environment.dialog.custom.target.too.long", HaxeModuleVariants.MAX_CUSTOM_TARGET_LENGTH);
+      case NOT_A_TARGET_NAME -> HaxeBundle.message("haxe.environment.dialog.custom.target.invalid");
+    };
   }
 
   private static final class NameColumn extends ColumnInfo<DefineRow, String> {
