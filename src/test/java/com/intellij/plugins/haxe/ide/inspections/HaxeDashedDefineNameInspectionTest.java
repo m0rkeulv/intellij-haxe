@@ -78,12 +78,13 @@ public class HaxeDashedDefineNameInspectionTest extends HaxeLightFixtureTestCase
   static final List<Arguments> FIXES = List.of(
     // replaces the hxml define name and keeps the value
     arguments("build.hxml", "-D a-<caret>b=1\n-D my-flag\n", "Replace with 'a_b'", "-D a_b=1\n-D my-flag\n"),
-    // replaces the project xml define name
+    // replaces the project xml haxedef name; a haxedef is no condition define, so an if= token stays
     arguments("project.xml",
               """
               <project>
                 <haxelib name="openfl"/>
                 <haxedef name="my-<caret>flag"/>
+                <section if="my-flag"/>
               </project>
               """,
               "Replace with 'my_flag'",
@@ -91,6 +92,36 @@ public class HaxeDashedDefineNameInspectionTest extends HaxeLightFixtureTestCase
               <project>
                 <haxelib name="openfl"/>
                 <haxedef name="my_flag"/>
+                <section if="my-flag"/>
+              </project>
+              """),
+    // a <define> is matched by name in conditions and substitutions: those follow, a path that happens to match does not
+    arguments("project.xml",
+              """
+              <project>
+                <haxelib name="openfl"/>
+                <define name="my-<caret>flag"/>
+                <section if="my-flag debug">
+                  <haxeflag name="--no-traces" unless="other || my-flag"/>
+                  <set name="label" value="${my-flag}"/>
+                  <set name="legacy" value="${my-flag == 1}"/>
+                  <source path="my-flag"/>
+                  <section if="my-flag-extra"/>
+                </section>
+              </project>
+              """,
+              "Replace with 'my_flag'",
+              """
+              <project>
+                <haxelib name="openfl"/>
+                <define name="my_flag"/>
+                <section if="my_flag debug">
+                  <haxeflag name="--no-traces" unless="other || my_flag"/>
+                  <set name="label" value="${my_flag}"/>
+                  <set name="legacy" value="${my_flag == 1}"/>
+                  <source path="my-flag"/>
+                  <section if="my-flag-extra"/>
+                </section>
               </project>
               """));
 
