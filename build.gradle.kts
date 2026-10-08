@@ -185,6 +185,11 @@ tasks {
         // an intended formatter/generator behavior change. Review the git diff!
         systemProperty("idea.tests.overwrite.data", System.getProperty("idea.tests.overwrite.data", "false"))
 
+        // The light test fixture installs no look and feel. With a display present the
+        // platform treats every HTML component created in a test as a missing global
+        // style sheet and logs it ("Missing global CSS sheet"); headless, it does not.
+        systemProperty("java.awt.headless", "true")
+
         // Compiler integration tests (`haxe --wait`) used in IDE services (catalog, resolve, completion).
         // Tests are opt-in as they depend on haxe being installed and might be sensitive to what version is installed.
         val liveCompilerTests = providers.gradleProperty("liveCompilerTests").getOrElse("false").toBoolean()
