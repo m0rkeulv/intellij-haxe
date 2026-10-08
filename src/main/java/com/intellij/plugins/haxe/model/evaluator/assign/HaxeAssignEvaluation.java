@@ -156,7 +156,7 @@ public class HaxeAssignEvaluation {
       if (toModel == null) {
         this.explanations.addMissingModel(toClassReference.getClassName());
         if(!toClassReference.isReification()) {
-          log.warn("Unable to evaluate class assign due to missing model (code:" + to.context.getText() + ")");
+          log.debug("Unable to evaluate class assign due to missing model (code:" + to.context.getText() + ")");
           complete(false, "model(s) missing");
         }else {
           complete(false, "Unable to evaluate class assign (reification)");
@@ -167,7 +167,7 @@ public class HaxeAssignEvaluation {
       if (fromModel == null) {
         this.explanations.addMissingModel(fromClassReference.getClassName());
         if(!fromClassReference.isReification()) {
-          log.warn("Unable to evaluate class assign due to missing model (code:" + from.context.getText() + ")");
+          log.debug("Unable to evaluate class assign due to missing model (code:" + from.context.getText() + ")");
           complete(false, "model(s) missing");
         }else {
           complete(false, "Unable to evaluate class assign (reification)");
