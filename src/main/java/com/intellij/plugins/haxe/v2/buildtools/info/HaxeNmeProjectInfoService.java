@@ -52,6 +52,7 @@ public final class HaxeNmeProjectInfoService implements Disposable {
 
   private static final int PREPARE_TIMEOUT_MS = 60_000;
   private static final String BUILD_FILE_MARKER = "PREPARE BUILD_FILE=";
+  private static final String PREPARE_TOOL = "nme prepare";
 
   // a haxelib-repo path segment naming an installed version: haxelib stores
   // versions with commas (6,3,149) or as "git"; the segment BEFORE it is the
@@ -73,9 +74,11 @@ public final class HaxeNmeProjectInfoService implements Disposable {
 
   private final Project project;
   private final HaxeProjectInfoCache<PreparedRun> cache;
+  private final HaxeBuildToolFailures failures;
 
   public HaxeNmeProjectInfoService(@NotNull Project project) {
     this.project = project;
+    this.failures = HaxeBuildToolFailures.getInstance(project);
     this.cache = new HaxeProjectInfoCache<>(project, "Haxe nme prepare", HaxeNmeProjectInfoService::deletePreparedDir);
   }
 
@@ -175,18 +178,20 @@ public final class HaxeNmeProjectInfoService implements Disposable {
       GeneralCommandLine commandLine = new GeneralCommandLine(command).withWorkDirectory(workDirectory);
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(PREPARE_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {
-        // TODO: show a failed nme prepare to the user; it is only logged.
         log.warn("nme prepare failed for " + fileName + " (" + key.targetFlag() + "): " + firstErrorLine(output));
+        failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(PREPARE_TOOL, output));
         return null;
       }
       Evaluation evaluation = parsePreparedBuildFile(output.getStdout(), workDirectory, fileName);
       if (evaluation != null) {
         run = new PreparedRun(evaluation, tempBin);
       }
+      failures.record(key.filePath(), null);
       return run;
     }
     catch (Exception e) {
       log.warn("nme prepare could not run for " + fileName + ": " + e.getMessage());
+      failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(PREPARE_TOOL, e));
       return null;
     }
     finally {

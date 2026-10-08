@@ -70,6 +70,7 @@
          window) is the only configuration surface -->
     <moduleType id="HAXE_MODULE" implementationClass="com.intellij.plugins.haxe.ide.module.HaxeModuleType"/>
     <projectSdkSetupValidator id="haxeSdk" implementation="com.intellij.plugins.haxe.codeInsight.daemon.HaxeProjectSdkSetupValidator"/>
+    <editorNotificationProvider implementation="com.intellij.plugins.haxe.v2.editor.HaxeBuildToolFailureNotificationProvider"/>
     <sdkFinder implementation="com.intellij.plugins.haxe.haxelib.HaxeSdkFinder"/>
     <library.type implementation="com.intellij.plugins.haxe.ide.library.HaxeLibraryType"/>
 
@@ -978,6 +979,8 @@
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
     <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
               topic="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener"/>
+    <listener class="com.intellij.plugins.haxe.v2.editor.HaxeBuildToolFailureBannerRefresh"
+              topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
 
   </projectListeners>
 

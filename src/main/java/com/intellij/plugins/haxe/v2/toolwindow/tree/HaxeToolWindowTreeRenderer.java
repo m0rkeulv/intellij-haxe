@@ -118,6 +118,9 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     if (fileRow.testsFile()) {
       append("  " + HaxeBundle.message("haxe.toolwindow.node.build.file.tests"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
+    if (fileRow.toolFailure() != null) {
+      append("  " + HaxeBundle.message("haxe.toolwindow.node.build.file.tool.failed"), SimpleTextAttributes.ERROR_ATTRIBUTES);
+    }
   }
 
   private void renderServer(@NotNull CompilationServerNode server) {
@@ -197,6 +200,8 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       case SectionNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.section");
       case ProgramNode program -> programTooltip(program);
       case TestRunNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.run.unit.tests");
+      case BuildFileRow row when row.toolFailure() != null ->
+        HaxeBundle.message("haxe.toolwindow.tooltip.build.file.tool.failed", row.toolFailure());
       case null, default -> null;
     };
   }
