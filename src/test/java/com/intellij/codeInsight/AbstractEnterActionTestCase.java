@@ -21,7 +21,6 @@
 package com.intellij.codeInsight;
 
 import com.intellij.plugins.haxe.HaxeLightCodeInsightTestBase;
-import com.intellij.plugins.haxe.util.HaxeTestUtils;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import org.jetbrains.annotations.NonNls;
 
@@ -30,7 +29,6 @@ public abstract class AbstractEnterActionTestCase extends HaxeLightCodeInsightTe
   @Override
   protected void tearDown() throws Exception {
     CodeStyleSettingsManager.getInstance(getProject()).dropTemporarySettings();
-    HaxeTestUtils.cleanupUnexpiredAppleUITimers(this::addSuppressedException);
     super.tearDown();
   }
 

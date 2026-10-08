@@ -639,6 +639,15 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
     assertEquals("\"hi\"", evaluated(frameId, "intMap.get(5)"), "the inserted entry reads back");
     assertEquals("\"v2\"", evaluated(frameId, "intMap.get(2)"), "pre-existing entry intact");
 
+    request(new DisconnectRequest());
+  }
+
+  @Test
+  @DisplayName("boxes primitives into dynamic arguments")
+  public void boxesPrimitivesIntoDynamicArguments() throws Exception {
+    runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_LINE);
+    int frameId = topFrameId(lastStoppedThreadId());
+
     // stringMap is Map<String,Int>: its values are stored BOXED (Dynamic), so
     // the int literal 9 has to be boxed into a vdynamic on the way in
     assertEquals("null", evaluated(frameId, "stringMap.get(\"c\")"), "absent key is null before insert");
