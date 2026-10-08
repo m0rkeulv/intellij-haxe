@@ -3,9 +3,11 @@ package com.intellij.plugins.haxe.ide.projectStructure.detection;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.buildsystem.lime.LimeProjectShape;
 import com.intellij.util.xml.NanoXmlUtil;
 import lombok.CustomLog;
 import lombok.experimental.UtilityClass;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.ByteArrayInputStream;
@@ -19,17 +21,12 @@ import java.util.Set;
 @UtilityClass
 public class HaxeProjectFileDetectionUtil {
 
-  /** The extensions of Lime/OpenFL project files: {@code .xml} and Lime's own {@code .lime} (Lime also reads {@code .nmml}, which is classified as NME). */
-  public static final Set<String> LIME_XML_EXTENSIONS = Set.of("xml", "lime");
-
   public boolean isOpenFLProject(VirtualFile file) {
-    if (!hasLimeXmlExtension(file)) return false;
-    return guessProjectType(file) == XmlProjectType.OPENFL;
+    return hasLimeXmlExtension(file) && shapeOf(file).isOpenfl();
   }
 
   public boolean isLimeProject(VirtualFile file) {
-    if (!hasLimeXmlExtension(file)) return false;
-    return guessProjectType(file) == XmlProjectType.LIME;
+    return hasLimeXmlExtension(file) && shapeOf(file).isLime();
   }
 
   public boolean isHxmlProject(VirtualFile file) {
@@ -37,24 +34,23 @@ public class HaxeProjectFileDetectionUtil {
   }
 
   /**
-   * Any file under NME's extension with a {@code <project>} element. NME needs no
+   * Any file under NME's extension with a {@code <project>} root. NME needs no
    * {@code <haxelib>} or {@code <source>} (it adds itself and uses the project
    * folder), and a project declaring the openfl lib is still built by NME.
    */
   public boolean isNMMLProject(VirtualFile file) {
-    if (!hasExtension(file, "nmml")) return false;
-    HaxeXmlProjectParser parsed = parse(file);
-    return parsed != null && parsed.hasProjectTag;
-  }
-
-  private XmlProjectType guessProjectType(VirtualFile file) {
-    HaxeXmlProjectParser parsed = parse(file);
-    return parsed == null ? XmlProjectType.UNKNOWN : parsed.getProjectType();
+    return hasExtension(file, "nmml") && shapeOf(file).projectRoot();
   }
 
   public static List<String> sourcePaths(VirtualFile file) {
     HaxeXmlProjectParser parsed = parse(file);
-    return parsed == null ? List.of() : parsed.getSources();
+    return parsed == null ? List.of() : parsed.sources;
+  }
+
+  @NotNull
+  private static LimeProjectShape shapeOf(VirtualFile file) {
+    HaxeXmlProjectParser parsed = parse(file);
+    return parsed == null ? LimeProjectShape.NONE : parsed.shape.build();
   }
 
   /** The file's project elements; null when it cannot be read. */
@@ -72,61 +68,43 @@ public class HaxeProjectFileDetectionUtil {
     }
   }
 
-  private enum XmlProjectType {
-    OPENFL,
-    LIME,
-    UNKNOWN
-  }
-
+  /** Feeds the shape from the byte stream and collects the source paths on the way. */
   private static class HaxeXmlProjectParser extends NanoXmlUtil.BaseXmlBuilder {
-    // <source path> and its alias <classpath path>; historic nmml spells the latter <classpath name>
-    private static final Set<String> SOURCE_ELEMENTS = Set.of("source", "classpath");
     private static final Set<String> SOURCE_PATH_ATTRIBUTES = Set.of("path", "name");
 
-    String currentElement = null;
-    boolean hasOpenFlLib = false;
-    boolean hasLibTags = false;
-    boolean hasProjectTag = false;
-
-    List<String> sources = new ArrayList<>();
-
-    @Override
-    public void addAttribute(String key, @Nullable String nsPrefix, @Nullable String nsSystemID, String value, String type) throws Exception {
-      super.addAttribute(key, nsPrefix, nsSystemID, value, type);
-      if (this.currentElement.equals("haxelib")) {
-        hasLibTags = true;
-        if (key.equalsIgnoreCase("name") && value.equalsIgnoreCase("openfl")) {
-          hasOpenFlLib = true;
-        }
-      }
-      if (SOURCE_ELEMENTS.contains(currentElement) && SOURCE_PATH_ATTRIBUTES.contains(key.toLowerCase(Locale.ROOT))) {
-        sources.add(value);
-      }
-    }
+    final LimeProjectShape.Builder shape = new LimeProjectShape.Builder();
+    final List<String> sources = new ArrayList<>();
+    private String currentElement = "";
+    private boolean rootSeen;
 
     @Override
     public void startElement(String name, @Nullable String nsPrefix, @Nullable String nsSystemID, String systemID, int lineNr) throws Exception {
       super.startElement(name, nsPrefix, nsSystemID, systemID, lineNr);
-      currentElement = name;
-      if (name.equalsIgnoreCase("project")) {
-        hasProjectTag = true;
+      currentElement = name.toLowerCase(Locale.ROOT);
+      if (rootSeen) {
+        shape.element(name);
+      }
+      else {
+        shape.root(name);
+        rootSeen = true;
       }
     }
 
-    public XmlProjectType getProjectType() {
-      if (hasProjectTag && hasOpenFlLib) return XmlProjectType.OPENFL;
-      if (hasProjectTag && (hasLibTags || !sources.isEmpty())) return XmlProjectType.LIME;
-      return XmlProjectType.UNKNOWN;
+    @Override
+    public void addAttribute(String key, @Nullable String nsPrefix, @Nullable String nsSystemID, String value, String type) throws Exception {
+      super.addAttribute(key, nsPrefix, nsSystemID, value, type);
+      String attribute = key.toLowerCase(Locale.ROOT);
+      if (attribute.equals("name")) {
+        shape.library(currentElement, value);
+      }
+      if (LimeProjectShape.SOURCE_ELEMENTS.contains(currentElement) && SOURCE_PATH_ATTRIBUTES.contains(attribute)) {
+        sources.add(value);
+      }
     }
-
-    public List<String> getSources() {
-      return sources;
-    }
-
   }
 
   private static boolean hasLimeXmlExtension(@Nullable VirtualFile file) {
-    return isFile(file) && LIME_XML_EXTENSIONS.contains(extensionOf(file));
+    return isFile(file) && LimeProjectShape.FILE_EXTENSIONS.contains(extensionOf(file));
   }
 
   private static boolean hasExtension(@Nullable VirtualFile file, String extension) {

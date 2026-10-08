@@ -23,6 +23,7 @@ import java.util.Set;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.CLASSPATH_ONLY_PROJECT_SOURCE;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.MAVEN_POM_SOURCE;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.NME_SAMPLE_PROJECT_SOURCE;
+import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.SECTIONED_LIME_PROJECT_SOURCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -55,6 +56,8 @@ public class ProjectXmlFileDescriptionTest extends HaxeCodeInsightFixtureTestCas
     arguments("openfl-project.lime", OPENFL_PROJECT_SOURCE, OpenflXmlFileDescription.class, HaxeIcons.OPENFL_LOGO),
     // <classpath> is lime's alias of <source>
     arguments("classpath-only.xml", CLASSPATH_ONLY_PROJECT_SOURCE, LimeXmlFileDescription.class, HaxeIcons.LIME_LOGO),
+    // the recognised elements may sit inside a <section>
+    arguments("sectioned.xml", SECTIONED_LIME_PROJECT_SOURCE, LimeXmlFileDescription.class, HaxeIcons.LIME_LOGO),
     arguments("sample.nmml", NME_SAMPLE_PROJECT_SOURCE, NMMLFileDescription.class, HaxeIcons.NMML_LOGO),
     // the extension picks NME even when the project declares openfl
     arguments("openfl-project.nmml", OPENFL_PROJECT_SOURCE, NMMLFileDescription.class, HaxeIcons.NMML_LOGO),
