@@ -2,9 +2,10 @@ package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -130,13 +131,24 @@ public final class HaxeToolWindowNodes {
    * time against that file's type, selected target and its container's environment
    * SDK. {@code presentableCommand} is the short display form (and, for custom
    * actions, the editable text).
+   * A custom action may carry a {@code launch}: after its command compiled the file, the
+   * build's output ({@code launchOutput}, the tree's current view of it) runs through that
+   * kind's configuration; null output means the file produces nothing launchable right now.
    */
   public record ActionNode(@NotNull String ownerId,
                            @NotNull String name,
                            @NotNull List<String> command,
                            @Nullable String workDirectory,
                            @NotNull String presentableCommand,
-                           boolean custom) implements HaxeToolWindowNode {
+                           boolean custom,
+                           @Nullable Launch launch,
+                           @Nullable String launchOutput) implements HaxeToolWindowNode {
+    /** The run configuration kind a launching action runs; null for a plain action or an unknown stored kind. */
+    @Nullable
+    public HaxeLaunchKind launchKind() {
+      return launch == null ? null : HaxeLaunchKind.byId(launch.kindId());
+    }
+
     @Override
     public String expansionKey() {
       return "action:" + name;
@@ -194,8 +206,7 @@ public final class HaxeToolWindowNodes {
    * the selected target's background evaluation.
    */
   public record ProgramNode(@NotNull HaxeBuildFile buildFile,
-                            @NotNull String kind,
-                            @NotNull HaxeTarget target,
+                            @NotNull HaxeLaunchKind kind,
                             @NotNull String targetOutput) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {

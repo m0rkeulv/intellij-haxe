@@ -19,9 +19,15 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
 import com.intellij.plugins.haxe.runner.HaxeRunConfigurationType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionConfigurationFactory;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionRunConfiguration;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.EnvCompileCommandNode;
@@ -33,6 +39,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Launches from tree rows. Action and program rows run through run
@@ -65,8 +73,30 @@ public final class HaxeToolWindowLaunches {
   }
 
   public static void runAction(@NotNull Project project, @NotNull ActionNode actionNode) {
+    runAction(project, actionNode, DefaultRunExecutor.getRunExecutorInstance());
+  }
+
+  /**
+   * An action row under the given executor: a plain action runs its command in
+   * the Run console (Run executor only); a launching action runs the build's
+   * output through its kind's configuration, the command as the build step.
+   */
+  public static void runAction(@NotNull Project project, @NotNull ActionNode actionNode, @NotNull Executor executor) {
     if (actionNode.command().isEmpty()) return;
-    HaxeConfigurationLaunches.runSelected(project, actionConfiguration(project, actionNode), DefaultRunExecutor.getRunExecutorInstance());
+    RunnerAndConfigurationSettings settings = actionNode.launch() != null
+                                              ? launchingActionConfiguration(project, actionNode)
+                                              : actionConfiguration(project, actionNode);
+    if (settings != null) {
+      HaxeConfigurationLaunches.runSelected(project, settings, executor);
+    }
+  }
+
+  /** A launching action row under a profiler entry's executor; see {@link #profileProgram}. */
+  public static void profileAction(@NotNull Project project, @NotNull ActionNode actionNode, @NotNull Executor executor) {
+    RunnerAndConfigurationSettings settings = launchingActionConfiguration(project, actionNode);
+    if (settings != null) {
+      profile(project, settings, executor);
+    }
   }
 
   // TODO: run tools through a run configuration like action rows, so they land in the run dropdown
@@ -104,7 +134,12 @@ public final class HaxeToolWindowLaunches {
    */
   public static void profileProgram(@NotNull Project project, @NotNull ProgramNode programNode, @NotNull Executor executor) {
     RunnerAndConfigurationSettings settings = programConfiguration(project, programNode);
-    if (settings == null) return;
+    if (settings != null) {
+      profile(project, settings, executor);
+    }
+  }
+
+  private static void profile(@NotNull Project project, @NotNull RunnerAndConfigurationSettings settings, @NotNull Executor executor) {
     if (DumbService.isDumb(project)) {
       String message = HaxeBundle.message("haxe.toolwindow.profile.indexing");
       DumbService.getInstance(project).showDumbModeNotificationForAction(message, null);
@@ -138,25 +173,56 @@ public final class HaxeToolWindowLaunches {
 
   /**
    * The program row's run configuration (created on first use), or null —
-   * with the reason notified — when the build file belongs to no module or
-   * its target produces nothing runnable.
+   * with the reason notified — when the build file belongs to no module.
    */
   @Nullable
   private static RunnerAndConfigurationSettings programConfiguration(@NotNull Project project, @NotNull ProgramNode programNode) {
-    VirtualFile file = programNode.buildFile().file();
+    Module module = moduleOf(project, programNode.buildFile().file());
+    if (module == null) return null;
+
+    String buildAction = HaxeBuildSystem.of(programNode.buildFile().type()).defaultBuildActionName();
+    return HaxeProgramLaunches.findOrCreate(project, module, programNode.buildFile(), programNode.kind(),
+                                            programNode.targetOutput(), buildAction, Map.of(), true);
+  }
+
+  /**
+   * A launching action's run configuration (created on first use), or null -
+   * with the reason notified - when the file belongs to no module, produces
+   * no launchable output, or the stored kind is unknown to this plugin.
+   */
+  @Nullable
+  private static RunnerAndConfigurationSettings launchingActionConfiguration(@NotNull Project project, @NotNull ActionNode actionNode) {
+    Launch launch = Objects.requireNonNull(actionNode.launch());
+    HaxeBuildFile buildFile = ReadAction.computeBlocking(() -> HaxeBuildFileScanner.findBuildFile(project, actionNode.ownerId()));
+    if (buildFile == null) return null;
+    String fileName = buildFile.file().getName();
+
+    HaxeLaunchKind kind = actionNode.launchKind();
+    if (kind == null) {
+      notifyUser(project, HaxeBundle.message("haxe.toolwindow.action.launch.unknown.kind", actionNode.name(), launch.kindId()));
+      return null;
+    }
+    if (actionNode.launchOutput() == null) {
+      notifyUser(project, HaxeBundle.message("haxe.toolwindow.program.unsupported", fileName));
+      return null;
+    }
+    Module module = moduleOf(project, buildFile.file());
+    if (module == null) return null;
+
+    Map<Parameter, String> overrides = Parameter.fromKeys(launch.parameters());
+    return HaxeProgramLaunches.findOrCreate(project, module, buildFile, kind, actionNode.launchOutput(), actionNode.name(),
+                                            overrides, launch.injectDebugArguments());
+  }
+
+  /** The module owning the build file, or null with the reason notified. */
+  @Nullable
+  private static Module moduleOf(@NotNull Project project, @NotNull VirtualFile file) {
     // the file index needs a read action - the EDT has no implicit read access
     Module module = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).getModuleForFile(file));
     if (module == null) {
       notifyUser(project, HaxeBundle.message("haxe.toolwindow.program.no.module", file.getName()));
-      return null;
     }
-
-    RunnerAndConfigurationSettings settings = HaxeProgramLaunches.findOrCreate(
-      project, module, programNode.buildFile(), programNode.target(), programNode.targetOutput());
-    if (settings == null) {
-      notifyUser(project, HaxeBundle.message("haxe.toolwindow.program.unsupported", file.getName()));
-    }
-    return settings;
+    return module;
   }
 
   /** The action row's run configuration: the registered one, else a new one added to the RunManager. */

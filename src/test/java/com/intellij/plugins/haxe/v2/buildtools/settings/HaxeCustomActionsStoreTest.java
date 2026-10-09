@@ -1,12 +1,14 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
 import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -69,6 +71,23 @@ public class HaxeCustomActionsStoreTest {
     HaxeCustomActionsStore reloaded = new HaxeCustomActionsStore();
     reloaded.loadState(deserialized);
     assertEquals(List.of(new CustomAction("docs", "haxe doc.hxml", "${moduleRoot}/docs")), reloaded.getActions(FILE));
+  }
+
+  @Test
+  @DisplayName("a launching action survives the xml round trip with its kind, parameters and debug flag")
+  public void aLaunchingActionSurvivesTheXmlRoundTripWithItsKindParametersAndDebugFlag() {
+    HaxeCustomActionsStore store = new HaxeCustomActionsStore();
+    Launch launch = new Launch("HASHLINK", Map.of("hlFile", "dist/final.hl"), false);
+    store.addAction(FILE, new CustomAction("final", "haxe final.hxml", "", launch));
+    store.addAction(FILE, new CustomAction("docs", "haxe doc.hxml", ""));
+
+    Element serialized = XmlSerializer.serialize(store.getState());
+    HaxeCustomActionsStore reloaded = new HaxeCustomActionsStore();
+    reloaded.loadState(XmlSerializer.deserialize(serialized, HaxeCustomActionsStore.State.class));
+
+    assertEquals(List.of(new CustomAction("final", "haxe final.hxml", "", launch),
+                         new CustomAction("docs", "haxe doc.hxml", "", null)),
+                 reloaded.getActions(FILE));
   }
 
   @Test
