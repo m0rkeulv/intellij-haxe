@@ -9,11 +9,12 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
 import com.intellij.plugins.haxe.v2.toolwindow.ui.HaxeCustomActionDialog;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Tree context menu on a custom action row: edits its name/command.
+ * Tree context menu on a custom action row: edits its name, command, work directory and launch.
  */
 public final class HaxeEditCustomActionAction extends DumbAwareAction {
 
@@ -27,14 +28,15 @@ public final class HaxeEditCustomActionAction extends DumbAwareAction {
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
     Project project = e.getProject();
-    if (project == null || !(panel.getSelectedUserObject() instanceof ActionNode actionNode) || !actionNode.custom()) return;
+    BuildFileRow row = panel.getSelectedBuildFileRowAncestor();
+    if (project == null || row == null || !(panel.getSelectedUserObject() instanceof ActionNode actionNode) || !actionNode.custom()) return;
 
     // edit the STORED values - the node's command is the ${target}-expanded display form
     CustomAction stored = HaxeCustomActionsStore.getInstance(project).getActions(actionNode.ownerId()).stream()
       .filter(action -> action.name().equals(actionNode.name()))
       .findFirst()
       .orElse(new CustomAction(actionNode.name(), actionNode.presentableCommand(), ""));
-    HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forAction(project, stored);
+    HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forAction(project, row.buildFile(), actionNode.launchOutput(), stored);
     if (dialog.showAndGet()) {
       HaxeCustomActionsStore.getInstance(project).updateAction(actionNode.ownerId(), actionNode.name(), dialog.getAction());
       panel.refreshTree();

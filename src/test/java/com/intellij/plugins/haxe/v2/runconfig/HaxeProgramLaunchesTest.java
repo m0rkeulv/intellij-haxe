@@ -186,6 +186,8 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
 
     assertNotSame(buildAndRun, release, "a different build action is a different configuration");
     assertSame(release, releaseAgain);
+    assertEquals(INTERP_HXML_NAME + " release (HashLink)", release.getName(), "the action's configuration carries its name");
+    assertEquals(INTERP_HXML_NAME + " (HashLink)", buildAndRun.getName());
     HaxeActionBeforeRunTaskProvider.Task step = buildStepOf(release);
     assertEquals("release", step.getActionName());
     assertFalse(step.isInjectDebugArguments());
