@@ -38,7 +38,8 @@ public final class HaxeRunActionNodeAction extends DumbAwareAction {
   @Override
   public void update(@NotNull AnActionEvent e) {
     Object selected = panel.getSelectedUserObject();
-    e.getPresentation().setEnabledAndVisible(selected instanceof ActionNode || selected instanceof ToolNode);
+    boolean plainAction = selected instanceof ActionNode actionNode && actionNode.launch() == null;
+    e.getPresentation().setEnabledAndVisible(plainAction || selected instanceof ToolNode);
   }
 
   @Override

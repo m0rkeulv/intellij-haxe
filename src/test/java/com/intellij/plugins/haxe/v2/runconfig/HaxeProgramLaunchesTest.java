@@ -4,6 +4,7 @@ import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.configurations.SearchScopeProvidingRunProfile;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
@@ -17,7 +18,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpRunConfiguration;
 import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
-import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches.LaunchSpec;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,12 +30,15 @@ import org.junit.jupiter.params.provider.FieldSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,8 +97,8 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
                           HaxeBuildFileType type,
                           String targetFlag,
                           Class<?> expectedConfiguration) {
-    LaunchSpec spec = HaxeProgramLaunches.specFor(target, targetOutput, type, targetFlag);
-    assertEquals(expectedConfiguration, spec == null ? null : spec.configurationClass());
+    HaxeLaunchKind kind = HaxeProgramLaunches.kindFor(target, targetOutput, type, targetFlag);
+    assertEquals(expectedConfiguration, kind == null ? null : kind.configurationClass());
   }
 
   @Test
@@ -103,17 +107,18 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     HaxeBuildFile buildFile = interpHxml();
     HaxeBuildFileInfo info = HxmlFileParser.parse(INTERP_HXML_SOURCE);
 
-    String launchKind = HaxeProgramLaunches.launchKind(getProject(), info, buildFile);
+    HaxeLaunchKind launchKind = HaxeProgramLaunches.launchKind(getProject(), info, buildFile);
 
-    assertEquals("Haxe Interpreter", launchKind);
+    assertEquals(HaxeLaunchKind.INTERP, launchKind);
+    assertEquals("Haxe Interpreter", launchKind.displayName());
     assertEquals("", HaxeProgramLaunches.launchOutput(info));
   }
 
   @Test
   @DisplayName("interpreter runs without a build step")
   public void testInterpreterRunsWithoutABuildStep() {
-    assertFalse(HaxeProgramLaunches.compilesBeforeLaunch(HaxeTarget.INTERP));
-    assertTrue(HaxeProgramLaunches.compilesBeforeLaunch(HaxeTarget.HL));
+    assertFalse(HaxeLaunchKind.INTERP.compilesBeforeLaunch());
+    assertTrue(HaxeLaunchKind.HASHLINK.compilesBeforeLaunch());
   }
 
   @Test
@@ -164,6 +169,90 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     RunnerAndConfigurationSettings second = findOrCreate(buildFile);
 
     assertSame(first, second);
+  }
+
+  @Test
+  @DisplayName("a launching action gets a configuration of its own keyed by its name")
+  public void testALaunchingActionGetsAConfigurationOfItsOwnKeyedByItsName() throws IOException {
+    HaxeBuildFile buildFile = interpHxml();
+    RunnerAndConfigurationSettings buildAndRun =
+      HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.HL, "out/game.hl");
+    assertNotNull(buildAndRun);
+
+    RunnerAndConfigurationSettings release = HaxeProgramLaunches.findOrCreate(
+      getProject(), myFixture.getModule(), buildFile, HaxeLaunchKind.HASHLINK, "out/game.hl", "release", Map.of(), false);
+    RunnerAndConfigurationSettings releaseAgain = HaxeProgramLaunches.findOrCreate(
+      getProject(), myFixture.getModule(), buildFile, HaxeLaunchKind.HASHLINK, "out/game.hl", "release", Map.of(), false);
+
+    assertNotSame(buildAndRun, release, "a different build action is a different configuration");
+    assertSame(release, releaseAgain);
+    HaxeActionBeforeRunTaskProvider.Task step = buildStepOf(release);
+    assertEquals("release", step.getActionName());
+    assertFalse(step.isInjectDebugArguments());
+  }
+
+  @Test
+  @DisplayName("parameters default from the build file and a blank override keeps the default")
+  public void testParametersDefaultFromTheBuildFileAndABlankOverrideKeepsTheDefault() throws IOException {
+    HaxeBuildFile buildFile = interpHxml();
+    Path hlFile = Path.of(buildFile.file().getParent().getPath()).resolve("out/game.hl");
+    Map<Parameter, String> defaults =
+      HaxeProgramLaunches.defaultParameters(getProject(), buildFile, HaxeLaunchKind.HASHLINK, "out/game.hl");
+    assertEquals(Map.of(Parameter.HL_FILE, hlFile.toString()), defaults);
+
+    HashLinkRunConfiguration defaulted = hashLinkConfiguration(HaxeProgramLaunches.findOrCreate(
+      getProject(), myFixture.getModule(), buildFile, HaxeLaunchKind.HASHLINK, "out/game.hl", "release",
+      Map.of(Parameter.HL_FILE, "  "), true));
+    assertEquals(hlFile.toString(), defaulted.getHlFilePath());
+
+    HashLinkRunConfiguration overridden = hashLinkConfiguration(HaxeProgramLaunches.findOrCreate(
+      getProject(), myFixture.getModule(), buildFile, HaxeLaunchKind.HASHLINK, "out/game.hl", "final",
+      Map.of(Parameter.HL_FILE, "dist/final.hl"), true));
+    assertEquals("dist/final.hl", overridden.getHlFilePath());
+  }
+
+  /** (kind, target output, expected default parameters relative to the hxml folder). */
+  static final List<Arguments> HXML_DEFAULTS = List.of(
+    arguments(HaxeLaunchKind.BROWSER, "out/web/game.js", Map.of(Parameter.CONTENT_ROOT, "out/web")),
+    arguments(HaxeLaunchKind.FLASH, "out/game.swf", Map.of(Parameter.SWF, "out/game.swf")),
+    // the neko runtime runs the bytecode: no executable, the .n as the argument
+    arguments(HaxeLaunchKind.NEKO, "out/game.n",
+              Map.of(Parameter.EXECUTABLE, "", Parameter.PROGRAM_ARGUMENTS, "out/game.n", Parameter.WORKING_DIRECTORY, "out")),
+    arguments(HaxeLaunchKind.INTERP, "",
+              Map.of(Parameter.WORKING_DIRECTORY, "", Parameter.COMPILER_ARGUMENTS, INTERP_HXML_NAME)));
+
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("HXML_DEFAULTS")
+  @DisplayName("hxml defaults per kind")
+  public void testHxmlDefaultsPerKind(HaxeLaunchKind kind, String targetOutput, Map<Parameter, String> relativeExpected)
+    throws IOException {
+    HaxeBuildFile buildFile = interpHxml();
+    Path folder = Path.of(buildFile.file().getParent().getPath());
+    Map<Parameter, String> expected = new EnumMap<>(Parameter.class);
+    relativeExpected.forEach((parameter, value) -> expected.put(parameter, resolvedDefault(folder, parameter, value)));
+
+    assertEquals(expected, HaxeProgramLaunches.defaultParameters(getProject(), buildFile, kind, targetOutput));
+  }
+
+  /**
+   * Path-valued defaults come back absolute under the hxml folder; the empty
+   * executable and the file argument stay as they are. The interpreter's
+   * working directory is the build work directory as the VFS spells it
+   * (forward slashes), not a resolved output path.
+   */
+  private static String resolvedDefault(Path folder, Parameter parameter, String value) {
+    if (value.isEmpty()) {
+      return parameter == Parameter.WORKING_DIRECTORY ? FileUtil.toSystemIndependentName(folder.toString()) : value;
+    }
+    return parameter == Parameter.COMPILER_ARGUMENTS ? value : folder.resolve(value).toString();
+  }
+
+  private static HaxeActionBeforeRunTaskProvider.Task buildStepOf(RunnerAndConfigurationSettings settings) {
+    return (HaxeActionBeforeRunTaskProvider.Task)settings.getConfiguration().getBeforeRunTasks().getFirst();
+  }
+
+  private static HashLinkRunConfiguration hashLinkConfiguration(RunnerAndConfigurationSettings settings) {
+    return (HashLinkRunConfiguration)settings.getConfiguration();
   }
 
   private HaxeBuildFile interpHxml() throws IOException {

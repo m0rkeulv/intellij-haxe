@@ -11,19 +11,39 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * User-defined actions per build file (keyed by its path): a name plus a command
  * line executed in the build file's work directory
- * ({@link com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories}).
- * Shares {@code .idea/haxeBuildConfig.xml} with the other build-config stores.
+ * ({@link com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories}),
+ * optionally followed by a launch of the build's output through a run
+ * configuration. Shares {@code .idea/haxeBuildConfig.xml} with the other
+ * build-config stores.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeCustomActions", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeCustomActionsStore implements PersistentStateComponent<HaxeCustomActionsStore.State> {
 
-  /** {@code workDirectory} may carry root variables; blank means the build file's directory. */
-  public record CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
+  /**
+   * How a launching action runs its build file's output: the run configuration
+   * kind (the id of a {@code HaxeLaunchKind}), the kind's fields the launch
+   * fills by parameter key (a blank value keeps the default derived from the
+   * build file) and whether a Debug launch adds the debug compile arguments.
+   */
+  public record Launch(@NotNull String kindId, @NotNull Map<String, String> parameters, boolean injectDebugArguments) {
+  }
+
+  /**
+   * {@code workDirectory} may carry root variables; blank means the build file's
+   * directory. A null {@code launch} is a plain action: its command runs in a console.
+   */
+  public record CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory,
+                             @Nullable Launch launch) {
+    public CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
+      this(name, command, workDirectory, null);
+    }
   }
 
   public static final class State {
@@ -39,6 +59,14 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     public String name;
     public String command = "";
     public String workDirectory = "";
+    public String launchKind = "";
+    public List<LaunchParameterState> launchParameters = new ArrayList<>();
+    public boolean injectDebugArguments = true;
+  }
+
+  public static final class LaunchParameterState {
+    public String key;
+    public String value = "";
   }
 
   private State state = new State();
@@ -71,6 +99,9 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     List<ActionState> cleaned = new ArrayList<>();
     for (Object entry : (List<?>)container.actions) {
       if (entry instanceof ActionState actionState && !StringUtil.isEmptyOrSpaces(actionState.name)) {
+        if (actionState.launchParameters == null) {
+          actionState.launchParameters = new ArrayList<>();
+        }
         cleaned.add(actionState);
       }
     }
@@ -116,7 +147,19 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
   @NotNull
   private static CustomAction toAction(@NotNull ActionState actionState) {
     String command = StringUtil.notNullize(actionState.command);
-    return new CustomAction(actionState.name, command, StringUtil.notNullize(actionState.workDirectory));
+    return new CustomAction(actionState.name, command, StringUtil.notNullize(actionState.workDirectory), toLaunch(actionState));
+  }
+
+  @Nullable
+  private static Launch toLaunch(@NotNull ActionState actionState) {
+    if (StringUtil.isEmptyOrSpaces(actionState.launchKind)) return null;
+    Map<String, String> parameters = new LinkedHashMap<>();
+    for (Object entry : (List<?>)actionState.launchParameters) {
+      if (entry instanceof LaunchParameterState parameter && !StringUtil.isEmptyOrSpaces(parameter.key)) {
+        parameters.put(parameter.key, StringUtil.notNullize(parameter.value));
+      }
+    }
+    return new Launch(actionState.launchKind, Map.copyOf(parameters), actionState.injectDebugArguments);
   }
 
   @NotNull
@@ -125,7 +168,21 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     actionState.name = action.name();
     actionState.command = action.command();
     actionState.workDirectory = action.workDirectory();
+    Launch launch = action.launch();
+    if (launch != null) {
+      actionState.launchKind = launch.kindId();
+      launch.parameters().forEach((key, value) -> actionState.launchParameters.add(parameterState(key, value)));
+      actionState.injectDebugArguments = launch.injectDebugArguments();
+    }
     return actionState;
+  }
+
+  @NotNull
+  private static LaunchParameterState parameterState(@NotNull String key, @NotNull String value) {
+    LaunchParameterState parameter = new LaunchParameterState();
+    parameter.key = key;
+    parameter.value = value;
+    return parameter;
   }
 
   @Nullable

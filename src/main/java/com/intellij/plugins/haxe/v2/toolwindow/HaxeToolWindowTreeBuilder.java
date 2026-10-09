@@ -11,6 +11,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDepende
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.ContainerEntry;
@@ -23,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.tree.DefaultMutableTreeNode;
 import java.util.List;
+import java.util.Objects;
 import java.util.Locale;
 import java.util.Map;
 
@@ -220,7 +222,7 @@ final class HaxeToolWindowTreeBuilder {
 
   @NotNull
   private DefaultMutableTreeNode actionsGroupNode(@NotNull FileEntry entry) {
-    String launchKind = HaxeProgramLaunches.launchKind(project, entry.info(), entry.buildFile());
+    HaxeLaunchKind launchKind = HaxeProgramLaunches.launchKind(project, entry.info(), entry.buildFile());
     int count = entry.actions().size() + (launchKind != null ? 1 : 0);
     DefaultMutableTreeNode actionsNode = new DefaultMutableTreeNode(
       new ActionsGroupNode(entry.buildFile().file().getPath(), count));
@@ -228,8 +230,8 @@ final class HaxeToolWindowTreeBuilder {
       actionsNode.add(new DefaultMutableTreeNode(action));
     }
     if (launchKind != null) {
-      ProgramNode program =
-        new ProgramNode(entry.buildFile(), launchKind, entry.info().target(), HaxeProgramLaunches.launchOutput(entry.info()));
+      String launchOutput = Objects.requireNonNull(HaxeProgramLaunches.launchOutput(entry.info()));
+      ProgramNode program = new ProgramNode(entry.buildFile(), launchKind, launchOutput);
       actionsNode.add(new DefaultMutableTreeNode(program));
     }
     return actionsNode;

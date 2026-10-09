@@ -21,6 +21,7 @@ import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
@@ -334,7 +335,7 @@ final class HaxeToolWindowModelBuilder {
     HaxeBuildFileInfo info = effectiveInfo(containerId, buildFile);
     String toolFailure = HaxeBuildToolFailures.getInstance(project).lastFailure(buildFile.file().getPath());
     boolean manual = manualPaths.contains(buildFile.file().getPath());
-    List<ActionNode> actions = buildFileActions(containerId, buildFile);
+    List<ActionNode> actions = buildFileActions(containerId, buildFile, HaxeProgramLaunches.launchOutput(info));
     return new FileEntry(buildFile, info, toolFailure, manual, actions, sectionIds, sectionLabels(sectionIds), sectionDescriptors,
                          selectedSection);
   }
@@ -415,7 +416,9 @@ final class HaxeToolWindowModelBuilder {
    * Everything runs in the build file's own directory.
    */
   @NotNull
-  private List<ActionNode> buildFileActions(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
+  private List<ActionNode> buildFileActions(@NotNull String containerId,
+                                            @NotNull HaxeBuildFile buildFile,
+                                            @Nullable String launchOutput) {
     List<ActionNode> actions = new ArrayList<>();
     String ownerId = buildFile.file().getPath();
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
@@ -430,7 +433,7 @@ final class HaxeToolWindowModelBuilder {
       List<String> command = HaxeCustomCommands.parse(HaxeCustomCommands.expandRoots(expanded, moduleRoot, projectRoot));
       String actionWorkDirectory =
         HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, moduleRoot, projectRoot);
-      actions.add(new ActionNode(ownerId, custom.name(), command, actionWorkDirectory, expanded, true));
+      actions.add(new ActionNode(ownerId, custom.name(), command, actionWorkDirectory, expanded, true, custom.launch(), launchOutput));
     }
     return actions;
   }
@@ -444,7 +447,7 @@ final class HaxeToolWindowModelBuilder {
     for (String actionName : buildSystem.defaultActionNames()) {
       List<String> command = buildSystem.actionCommand(project, environmentSdk, buildFile, actionName);
       String presentable = buildSystem.presentableCommand(project, buildFile, actionName);
-      actions.add(new ActionNode(ownerId, actionName, Objects.requireNonNull(command), workDirectory, presentable, false));
+      actions.add(new ActionNode(ownerId, actionName, Objects.requireNonNull(command), workDirectory, presentable, false, null, null));
     }
   }
 
