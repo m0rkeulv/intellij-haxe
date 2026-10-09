@@ -163,7 +163,8 @@ public final class HaxeProgramLaunches {
       return existing;
     }
 
-    String name = kind.configurationName(file.getName());
+    boolean defaultBuild = buildAction.equals(HaxeBuildSystem.of(buildFile.type()).defaultBuildActionName());
+    String name = kind.configurationName(defaultBuild ? file.getName() : file.getName() + " " + buildAction);
     RunnerAndConfigurationSettings settings = RunManager.getInstance(project).createConfiguration(name, kind.factory());
     apply(settings.getConfiguration(), parameters);
     DapRunConfigurationBase configuration = (DapRunConfigurationBase)settings.getConfiguration();

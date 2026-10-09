@@ -100,8 +100,8 @@ public final class HaxeToolWindowNodes {
     }
   }
 
-  /** "Actions" grouping row under a build file; ownerId is the build file's path. */
-  public record ActionsGroupNode(@NotNull String ownerId, int count) implements HaxeToolWindowNode {
+  /** "Actions" grouping row under a build file; ownerId is the build file's path, launchOutput what a launching action would run (null when nothing is launchable). */
+  public record ActionsGroupNode(@NotNull String ownerId, int count, @Nullable String launchOutput) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
       return "actions";
