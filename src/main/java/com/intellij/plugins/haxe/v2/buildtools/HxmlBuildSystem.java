@@ -5,7 +5,6 @@ import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions.Debugger;
 import java.util.List;
-import java.util.Set;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,14 +26,9 @@ final class HxmlBuildSystem implements HaxeBuildSystem {
   }
 
   @Override
-  public @NotNull Set<String> reservedActionNames() {
-    return Set.of(HxmlProjects.BUILD_ACTION, HxmlProjects.LEGACY_BUILD_ACTION);
-  }
-
-  @Override
   public @Nullable List<String> actionCommand(@NotNull Project project, @Nullable String environmentSdk,
                                               @NotNull HaxeBuildFile buildFile, @NotNull String actionName) {
-    if (!HxmlProjects.isBuildAction(actionName)) return null;
+    if (!HxmlProjects.BUILD_ACTION.equals(actionName)) return null;
     return HxmlProjects.buildCommand(project, environmentSdk, buildFile.file());
   }
 

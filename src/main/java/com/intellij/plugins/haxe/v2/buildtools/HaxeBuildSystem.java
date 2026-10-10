@@ -7,7 +7,6 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions.Debugger;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,16 +50,6 @@ public interface HaxeBuildSystem {
    */
   @NotNull
   List<String> defaultActionNames();
-
-  /**
-   * Every name {@link #actionCommand} answers: the built-ins plus identifiers
-   * they had before a rename. A custom action may not take one, since the
-   * built-in would run in its place.
-   */
-  @NotNull
-  default Set<String> reservedActionNames() {
-    return Set.copyOf(defaultActionNames());
-  }
 
   /** A named built-in action's command; null when the name is not one of the built-ins. */
   @Nullable

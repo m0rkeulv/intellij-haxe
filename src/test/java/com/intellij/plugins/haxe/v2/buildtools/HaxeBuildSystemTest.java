@@ -162,24 +162,23 @@ public class HaxeBuildSystemTest extends HaxeCodeInsightFixtureTestCase {
     assertNull(HaxeBuildSystem.of(HaxeBuildFileType.HXP_SCRIPT).debugCompileAdditions(getProject(), script, Debugger.DEFAULT));
   }
 
-  /** (build file type, the names a custom action may not take). */
-  static final List<Arguments> RESERVED_ACTION_NAMES = List.of(
-    // hxml still resolves the build action's pre-rename identifier
-    arguments(HaxeBuildFileType.HXML, Set.of("Build", "compile")),
+  /** (build file type, its own action names - the names a custom action may not take). */
+  static final List<Arguments> DEFAULT_ACTION_NAMES = List.of(
+    arguments(HaxeBuildFileType.HXML, Set.of("Build")),
     arguments(HaxeBuildFileType.LIME, Set.of("test", "run", "build", "clean")),
     arguments(HaxeBuildFileType.NMML, Set.of("test", "run", "build", "clean")),
     arguments(HaxeBuildFileType.HXP_SCRIPT, Set.of("build")));
 
   @ParameterizedTest(name = "{0}")
-  @FieldSource("RESERVED_ACTION_NAMES")
-  @DisplayName("reserved action names are every name the built ins answer")
-  public void testReservedActionNamesAreEveryNameTheBuiltInsAnswer(HaxeBuildFileType type, Set<String> reserved) {
+  @FieldSource("DEFAULT_ACTION_NAMES")
+  @DisplayName("default action names all resolve as built ins")
+  public void testDefaultActionNamesAllResolveAsBuiltIns(HaxeBuildFileType type, Set<String> names) {
     HaxeBuildSystem buildSystem = HaxeBuildSystem.of(type);
     VirtualFile file = myFixture.addFileToProject("reserved." + extensionOf(type), "").getVirtualFile();
     HaxeBuildFile buildFile = new HaxeBuildFile(file, type);
 
-    assertEquals(reserved, buildSystem.reservedActionNames());
-    for (String name : reserved) {
+    assertEquals(names, Set.copyOf(buildSystem.defaultActionNames()));
+    for (String name : names) {
       boolean answered = buildSystem.actionCommand(getProject(), null, buildFile, name) != null;
       assertTrue(answered, name + " must resolve as a built-in");
     }
