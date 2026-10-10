@@ -29,6 +29,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -427,6 +428,23 @@ public final class HaxeProgramLaunches {
     catch (InvalidPathException e) {
       return false;
     }
+  }
+
+  /**
+   * Gives an existing configuration of any type the "Run Haxe action" step
+   * that compiles {@code buildFile} with {@code buildAction} before it runs,
+   * unless it carries that step already. The configuration's other steps stay.
+   */
+  public static void ensureBuildStep(@NotNull RunConfiguration configuration,
+                                     @NotNull HaxeBuildFile buildFile,
+                                     @NotNull String buildAction,
+                                     boolean injectDebugArguments) {
+    String path = buildFile.file().getPath();
+    List<BeforeRunTask<?>> steps = configuration.getBeforeRunTasks();
+    if (steps.stream().anyMatch(task -> buildsFile(task, path, buildAction))) return;
+    List<BeforeRunTask<?>> withBuild = new ArrayList<>(steps);
+    withBuild.addFirst(buildStep(buildFile, buildAction, injectDebugArguments));
+    configuration.setBeforeRunTasks(withBuild);
   }
 
   /** The "Run Haxe action" step compiling the build file before the program launches. */

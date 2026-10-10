@@ -5,7 +5,6 @@ import com.intellij.icons.AllIcons;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
-import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -125,9 +124,9 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
 
   private void renderAction(@NotNull ActionNode action) {
     valueRow(actionIcon(action.name()), action.name(), action.presentableCommand(), false);
-    HaxeLaunchKind kind = action.launchKind();
-    if (kind != null) {
-      append("  " + HaxeBundle.message("haxe.toolwindow.node.action.launches", kind.displayName()), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    String launchTarget = action.launchTarget();
+    if (launchTarget != null) {
+      append("  " + HaxeBundle.message("haxe.toolwindow.node.action.launches", launchTarget), SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
   }
 

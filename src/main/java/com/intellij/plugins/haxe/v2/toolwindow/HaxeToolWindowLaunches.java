@@ -2,8 +2,10 @@ package com.intellij.plugins.haxe.v2.toolwindow;
 
 import com.intellij.execution.Executor;
 import com.intellij.execution.RunManager;
+import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.configurations.ConfigurationFactory;
+import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.impl.RunDialog;
 import com.intellij.notification.NotificationType;
@@ -40,7 +42,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Launches from tree rows. Action and program rows run through run
@@ -82,7 +83,8 @@ public final class HaxeToolWindowLaunches {
    * output through its kind's configuration, the command as the build step.
    */
   public static void runAction(@NotNull Project project, @NotNull ActionNode actionNode, @NotNull Executor executor) {
-    if (actionNode.command().isEmpty()) return;
+    // an action may be a bare trigger of an existing configuration; every other kind needs its command
+    if (actionNode.command().isEmpty() && !(actionNode.launch() instanceof Launch.Existing)) return;
     RunnerAndConfigurationSettings settings = actionNode.launch() != null
                                               ? launchingActionConfiguration(project, actionNode)
                                               : actionConfiguration(project, actionNode);
@@ -192,18 +194,27 @@ public final class HaxeToolWindowLaunches {
    */
   @Nullable
   private static RunnerAndConfigurationSettings launchingActionConfiguration(@NotNull Project project, @NotNull ActionNode actionNode) {
-    Launch launch = Objects.requireNonNull(actionNode.launch());
     HaxeBuildFile buildFile = ReadAction.computeBlocking(() -> HaxeBuildFileScanner.findBuildFile(project, actionNode.ownerId()));
     if (buildFile == null) return null;
-    String fileName = buildFile.file().getName();
+    return switch (actionNode.launch()) {
+      case Launch.Create create -> createdConfiguration(project, actionNode, buildFile, create);
+      case Launch.Existing existing -> existingConfiguration(project, actionNode, buildFile, existing);
+      case null -> null;
+    };
+  }
 
+  @Nullable
+  private static RunnerAndConfigurationSettings createdConfiguration(@NotNull Project project,
+                                                                    @NotNull ActionNode actionNode,
+                                                                    @NotNull HaxeBuildFile buildFile,
+                                                                    @NotNull Launch.Create launch) {
     HaxeLaunchKind kind = actionNode.launchKind();
     if (kind == null) {
       notifyUser(project, HaxeBundle.message("haxe.toolwindow.action.launch.unknown.kind", actionNode.name(), launch.kindId()));
       return null;
     }
     if (actionNode.launchOutput() == null) {
-      notifyUser(project, HaxeBundle.message("haxe.toolwindow.program.unsupported", fileName));
+      notifyUser(project, HaxeBundle.message("haxe.toolwindow.program.unsupported", buildFile.file().getName()));
       return null;
     }
     Module module = moduleOf(project, buildFile.file());
@@ -212,6 +223,30 @@ public final class HaxeToolWindowLaunches {
     Map<Parameter, String> overrides = Parameter.fromKeys(launch.parameters());
     return HaxeProgramLaunches.findOrCreate(project, module, buildFile, kind, actionNode.launchOutput(), actionNode.name(),
                                             overrides, launch.injectDebugArguments());
+  }
+
+  /** The named configuration, given the action's command as its build step when the action has one. */
+  @Nullable
+  private static RunnerAndConfigurationSettings existingConfiguration(@NotNull Project project,
+                                                                     @NotNull ActionNode actionNode,
+                                                                     @NotNull HaxeBuildFile buildFile,
+                                                                     @NotNull Launch.Existing launch) {
+    RunnerAndConfigurationSettings settings = RunManager.getInstance(project).findConfigurationByName(launch.configurationName());
+    if (settings == null) {
+      String message = HaxeBundle.message("haxe.toolwindow.action.launch.missing.configuration", actionNode.name(), launch.configurationName());
+      notifyUser(project, message);
+      return null;
+    }
+    if (!actionNode.command().isEmpty()) {
+      HaxeProgramLaunches.ensureBuildStep(settings.getConfiguration(), buildFile, actionNode.name(), launch.injectDebugArguments());
+    }
+    return settings;
+  }
+
+  /** Whether the named existing configuration has a debug runner; false when it does not exist. */
+  public static boolean canDebug(@NotNull Project project, @NotNull String configurationName) {
+    RunnerAndConfigurationSettings settings = RunManager.getInstance(project).findConfigurationByName(configurationName);
+    return settings != null && ProgramRunner.getRunner(DefaultDebugExecutor.EXECUTOR_ID, settings.getConfiguration()) != null;
   }
 
   /** The module owning the build file, or null with the reason notified. */

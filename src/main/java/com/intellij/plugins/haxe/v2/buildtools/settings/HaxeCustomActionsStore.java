@@ -27,12 +27,26 @@ import java.util.LinkedHashMap;
 public final class HaxeCustomActionsStore implements PersistentStateComponent<HaxeCustomActionsStore.State> {
 
   /**
-   * How a launching action runs its build file's output: the run configuration
-   * kind (the id of a {@code HaxeLaunchKind}), the kind's fields the launch
-   * fills by parameter key (a blank value keeps the default derived from the
-   * build file) and whether a Debug launch adds the debug compile arguments.
+   * What a launching action does after its command compiled the build file:
+   * runs the output through a Haxe configuration created for the action, or
+   * starts an existing configuration of any type. Either way the command is
+   * the configuration's build step; {@code injectDebugArguments} says whether
+   * a Debug launch adds the debug compile arguments to it.
    */
-  public record Launch(@NotNull String kindId, @NotNull Map<String, String> parameters, boolean injectDebugArguments) {
+  public sealed interface Launch permits Launch.Create, Launch.Existing {
+    boolean injectDebugArguments();
+
+    /**
+     * A configuration created by kind (the id of a {@code HaxeLaunchKind}) with
+     * the kind's fields the launch fills by parameter key; a blank value keeps
+     * the default derived from the build file.
+     */
+    record Create(@NotNull String kindId, @NotNull Map<String, String> parameters, boolean injectDebugArguments) implements Launch {
+    }
+
+    /** An existing configuration, by its name in the run dropdown. */
+    record Existing(@NotNull String configurationName, boolean injectDebugArguments) implements Launch {
+    }
   }
 
   /**
@@ -61,6 +75,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     public String workDirectory = "";
     public String launchKind = "";
     public List<LaunchParameterState> launchParameters = new ArrayList<>();
+    public String runConfiguration = "";
     public boolean injectDebugArguments = true;
   }
 
@@ -152,6 +167,9 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
 
   @Nullable
   private static Launch toLaunch(@NotNull ActionState actionState) {
+    if (!StringUtil.isEmptyOrSpaces(actionState.runConfiguration)) {
+      return new Launch.Existing(actionState.runConfiguration, actionState.injectDebugArguments);
+    }
     if (StringUtil.isEmptyOrSpaces(actionState.launchKind)) return null;
     Map<String, String> parameters = new LinkedHashMap<>();
     for (Object entry : (List<?>)actionState.launchParameters) {
@@ -159,7 +177,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
         parameters.put(parameter.key, StringUtil.notNullize(parameter.value));
       }
     }
-    return new Launch(actionState.launchKind, Map.copyOf(parameters), actionState.injectDebugArguments);
+    return new Launch.Create(actionState.launchKind, Map.copyOf(parameters), actionState.injectDebugArguments);
   }
 
   @NotNull
@@ -168,11 +186,17 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     actionState.name = action.name();
     actionState.command = action.command();
     actionState.workDirectory = action.workDirectory();
-    Launch launch = action.launch();
-    if (launch != null) {
-      actionState.launchKind = launch.kindId();
-      launch.parameters().forEach((key, value) -> actionState.launchParameters.add(parameterState(key, value)));
-      actionState.injectDebugArguments = launch.injectDebugArguments();
+    switch (action.launch()) {
+      case Launch.Create create -> {
+        actionState.launchKind = create.kindId();
+        create.parameters().forEach((key, value) -> actionState.launchParameters.add(parameterState(key, value)));
+        actionState.injectDebugArguments = create.injectDebugArguments();
+      }
+      case Launch.Existing existing -> {
+        actionState.runConfiguration = existing.configurationName();
+        actionState.injectDebugArguments = existing.injectDebugArguments();
+      }
+      case null -> { }
     }
     return actionState;
   }

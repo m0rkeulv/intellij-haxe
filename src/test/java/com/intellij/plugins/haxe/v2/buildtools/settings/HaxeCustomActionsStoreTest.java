@@ -74,11 +74,12 @@ public class HaxeCustomActionsStoreTest {
   }
 
   @Test
-  @DisplayName("a launching action survives the xml round trip with its kind, parameters and debug flag")
+  @DisplayName("launching actions survive the xml round trip, created and existing alike")
   public void aLaunchingActionSurvivesTheXmlRoundTripWithItsKindParametersAndDebugFlag() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    Launch launch = new Launch("HASHLINK", Map.of("hlFile", "dist/final.hl"), false);
+    Launch launch = new Launch.Create("HASHLINK", Map.of("hlFile", "dist/final.hl"), false);
     store.addAction(FILE, new CustomAction("final", "haxe final.hxml", "", launch));
+    store.addAction(FILE, new CustomAction("deploy", "", "", new Launch.Existing("Deploy (Gradle)", true)));
     store.addAction(FILE, new CustomAction("docs", "haxe doc.hxml", ""));
 
     Element serialized = XmlSerializer.serialize(store.getState());
@@ -86,6 +87,7 @@ public class HaxeCustomActionsStoreTest {
     reloaded.loadState(XmlSerializer.deserialize(serialized, HaxeCustomActionsStore.State.class));
 
     assertEquals(List.of(new CustomAction("final", "haxe final.hxml", "", launch),
+                         new CustomAction("deploy", "", "", new Launch.Existing("Deploy (Gradle)", true)),
                          new CustomAction("docs", "haxe doc.hxml", "", null)),
                  reloaded.getActions(FILE));
   }
