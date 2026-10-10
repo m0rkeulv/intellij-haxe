@@ -14,13 +14,15 @@ public final class HxmlProjects {
 
   /** The hxml default action's name - doubles as its identifier in stored configurations. */
   public static final String BUILD_ACTION = "Build";
+  /** The build action's pre-rename identifier, still found in stored configurations. */
+  public static final String LEGACY_BUILD_ACTION = "compile";
 
   private HxmlProjects() {
   }
 
-  /** Whether a stored action name means the hxml build ("compile" is the action's pre-rename identifier). */
+  /** Whether a stored action name means the hxml build. */
   public static boolean isBuildAction(@NotNull String actionName) {
-    return actionName.equals(BUILD_ACTION) || actionName.equals("compile");
+    return actionName.equals(BUILD_ACTION) || actionName.equals(LEGACY_BUILD_ACTION);
   }
 
   /// The direct compile: `haxe <file>`, run in the file's work directory
