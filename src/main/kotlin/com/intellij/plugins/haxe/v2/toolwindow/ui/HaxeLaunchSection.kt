@@ -1,13 +1,14 @@
 package com.intellij.plugins.haxe.v2.toolwindow.ui
 
 import com.intellij.execution.RunManager
+import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
-import com.intellij.openapi.fileChooser.FileChooserFactory
-import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.plugins.haxe.HaxeBundle
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind
@@ -19,7 +20,6 @@ import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.ui.layout.selectedValueMatches
-import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.EnumMap
@@ -34,9 +34,9 @@ import javax.swing.JComponent
  * build file's defaults as empty text, where a blank field keeps the default
  * live) and "Runs run configuration" (an existing configuration of any type;
  * the action's command becomes its build step). Choosing in one group resets
- * the other. A file-valued parameter browses with a save-style dialog, since
- * the artifact usually does not exist before the first build; a directory one
- * with a folder chooser.
+ * the other. A file-valued parameter browses with a file-or-folder chooser:
+ * the artifact usually does not exist before the first build, so choosing its
+ * folder keeps the expected file name; a directory one with a folder chooser.
  */
 class HaxeLaunchSection(
   private val project: Project,
@@ -141,20 +141,28 @@ class HaxeLaunchSection(
       editor.addBrowseFolderListener(project, descriptor)
     }
     Shape.FILE -> TextFieldWithBrowseButton(field).also { editor ->
-      editor.addActionListener { browseFile(parameter, field) }
+      val descriptor = FileChooserDescriptorFactory.singleFileOrDir()
+        .withTitle(titleOf(parameter))
+        .withDescription(HaxeBundle.message("haxe.custom.action.dialog.launch.browse.file"))
+      editor.addBrowseFolderListener(FileOrFolderListener(descriptor, field))
     }
   }
 
-  /** A save-style dialog: the folder to navigate to and the name to enter, starting from the field's value or its default. */
-  private fun browseFile(parameter: Parameter, field: JBTextField) {
-    val descriptor = FileSaverDescriptor(titleOf(parameter), HaxeBundle.message("haxe.custom.action.dialog.launch.browse.file"))
-    val start = pathOf(field.text.trim().ifEmpty { field.emptyText.text })
-    val startDirectory = start?.parent?.takeIf { Files.isDirectory(it) }
-    val chosen = FileChooserFactory.getInstance()
-      .createSaveFileDialog(descriptor, project)
-      .save(startDirectory, start?.fileName?.toString() ?: "")
-    if (chosen != null) {
-      field.text = chosen.file.path
+  /**
+   * Opens where the field points, or where its default does while it is blank;
+   * a chosen folder keeps the expected file name, so an artifact the build has
+   * not written yet can still be pointed at.
+   */
+  private inner class FileOrFolderListener(descriptor: FileChooserDescriptor, private val field: JBTextField)
+    : TextBrowseFolderListener(descriptor, project) {
+
+    override fun getComponentText(): String = field.text.trim().ifEmpty { field.emptyText.text }
+
+    override fun chosenFileToResultingText(chosenFile: VirtualFile): String {
+      val path = super.chosenFileToResultingText(chosenFile)
+      if (!chosenFile.isDirectory) return path
+      val name = pathOf(getComponentText())?.fileName?.toString() ?: return path
+      return Path.of(path, name).toString()
     }
   }
 
