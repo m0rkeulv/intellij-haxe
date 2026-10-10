@@ -29,9 +29,9 @@ import java.util.Map;
 /// The run configuration kinds a build's output launches through: HL bytecode
 /// → HashLink Application, JS → Web Browser, a swf → Flash (AIR for lime's air
 /// target), C++ → HXCPP, neko → Neko, an interpreter build → Haxe Interpreter.
-/// A kind's parameters are the configuration fields a launch fills (artifact
-/// and launcher paths); [HaxeProgramLaunches] derives their defaults from the
-/// build file and applies them. The persisted id of a kind is its `name()`.
+/// A kind's parameters are the configuration fields a launch fills (paths,
+/// arguments, working directory); [HaxeProgramLaunches] derives their defaults
+/// from the build file and applies them. The persisted id of a kind is its `name()`.
 public enum HaxeLaunchKind {
   HASHLINK(HashLinkRunConfiguration.class, HashLinkConfigurationFactory.class,
            "haxe.toolwindow.program.configuration.name.hashlink", HaxeTarget.HL, Lane.HASHLINK,

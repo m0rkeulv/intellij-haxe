@@ -18,8 +18,8 @@ import java.util.LinkedHashMap;
  * User-defined actions per build file (keyed by its path): a name plus a command
  * line executed in the build file's work directory
  * ({@link com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories}),
- * optionally followed by a launch of the build's output through a run
- * configuration. Shares {@code .idea/haxeBuildConfig.xml} with the other
+ * optionally followed by starting a run configuration. Shares
+ * {@code .idea/haxeBuildConfig.xml} with the other
  * build-config stores.
  */
 @Service(Service.Level.PROJECT)
@@ -27,19 +27,20 @@ import java.util.LinkedHashMap;
 public final class HaxeCustomActionsStore implements PersistentStateComponent<HaxeCustomActionsStore.State> {
 
   /**
-   * What a launching action does after its command compiled the build file:
-   * runs the output through a Haxe configuration created for the action, or
-   * starts an existing configuration of any type. Either way the command is
-   * the configuration's build step; {@code injectDebugArguments} says whether
-   * a Debug launch adds the debug compile arguments to it.
+   * The run configuration a launching action starts: a Haxe configuration
+   * created for the action, which runs the build's output, or an existing
+   * configuration of any type. Either way the action's command, when it has
+   * one, is the configuration's build step; {@code injectDebugArguments} says
+   * whether a Debug launch adds the debug compile arguments to that step.
    */
   public sealed interface Launch permits Launch.Create, Launch.Existing {
     boolean injectDebugArguments();
 
     /**
-     * A configuration created by kind (the id of a {@code HaxeLaunchKind}) with
-     * the kind's fields the launch fills by parameter key; a blank value keeps
-     * the default derived from the build file.
+     * A configuration created for the action: {@code kindId} is a
+     * {@code HaxeLaunchKind} id, {@code parameters} the field overrides by
+     * parameter key; a blank or missing value keeps the default derived from
+     * the build file.
      */
     record Create(@NotNull String kindId, @NotNull Map<String, String> parameters, boolean injectDebugArguments) implements Launch {
     }

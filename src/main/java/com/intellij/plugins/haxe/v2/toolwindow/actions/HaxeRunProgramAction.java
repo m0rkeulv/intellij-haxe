@@ -20,10 +20,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Run / Debug on the "compile &amp; run" tree row and on a launching action row:
- * launches the build file's program through the kind's visible run
- * configuration (compile attached as a before-launch step). A plain action row
- * is untouched — compiling and running the output are separate concepts.
+ * Run / Debug on the Build &amp; run tree row and on a launching action row:
+ * starts the row's visible run configuration, with the compile attached as a
+ * before-launch step. A plain action row is untouched — compiling and running
+ * the output are separate concepts.
  */
 public final class HaxeRunProgramAction extends DumbAwareAction {
 
@@ -67,7 +67,7 @@ public final class HaxeRunProgramAction extends DumbAwareAction {
     return kind != null && (!debug || HaxeDebugSupport.supportsProgramDebug(kind.target()));
   }
 
-  /** The kind a Build & run row or a launching action row launches through; null for every other row. */
+  /** The kind a Build & run row or a created-configuration action row launches through; null for every other row. */
   @Nullable
   static HaxeLaunchKind launchKindOf(@Nullable Object selected) {
     return switch (selected) {

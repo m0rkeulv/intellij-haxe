@@ -135,9 +135,10 @@ public final class HaxeToolWindowNodes {
    * time against that file's type, selected target and its container's environment
    * SDK. {@code presentableCommand} is the short display form (and, for custom
    * actions, the editable text).
-   * A custom action may carry a {@code launch}: after its command compiled the file, the
-   * build's output ({@code launchOutput}, the tree's current view of it) runs through that
-   * kind's configuration; null output means the file produces nothing launchable right now.
+   * A custom action may carry a {@code launch}: a run configuration started after its
+   * command compiled the file - one created to run the build's output
+   * ({@code launchOutput}, as the tree currently sees it), or an existing one. A null
+   * {@code launchOutput} means the file produces nothing launchable right now.
    */
   public record ActionNode(@NotNull String ownerId,
                            @NotNull String name,
@@ -153,7 +154,7 @@ public final class HaxeToolWindowNodes {
       return launch instanceof Launch.Create create ? HaxeLaunchKind.byId(create.kindId()) : null;
     }
 
-    /** What the row's gray tail names: the kind, or the existing configuration; null for a plain action. */
+    /** What the row's gray tail names: the kind, or the existing configuration; null for a plain action or an unknown kind. */
     @Nullable
     public String launchTarget() {
       return switch (launch) {

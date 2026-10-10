@@ -13,8 +13,9 @@ import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNo
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Tree context menu on a custom action row: removes it after a confirmation,
- * since the entry sits beside Edit and Duplicate.
+ * Tree context menu on a custom action row: removes it, after a confirmation
+ * since the entry sits beside Edit and Duplicate, and drops the "Run Haxe
+ * action" build steps that named it.
  */
 public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
 

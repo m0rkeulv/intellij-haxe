@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
@@ -106,13 +107,18 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
     return new CustomAction(copyName(actionNode.name()), command, workDirectoryOverride(project, buildFile, actionNode.workDirectory()), null);
   }
 
-  /** The default build action's command with a launch of the row's kind, every parameter at its default. */
+  /**
+   * The default build action's command with a launch of the row's kind, every
+   * parameter at its default. The interpreter row's command runs the program
+   * itself, so its copy is a plain action.
+   */
   @Nullable
   private static CustomAction copyOfBuildAndRun(@NotNull Project project, @NotNull ProgramNode programNode) {
     List<String> command = ReadAction.computeBlocking(() -> defaultBuildCommand(project, programNode.buildFile()));
     if (command == null) return null;
 
-    Launch launch = new Launch.Create(programNode.kind().name(), Map.of(), true);
+    HaxeLaunchKind kind = programNode.kind();
+    Launch launch = kind.compilesBeforeLaunch() ? new Launch.Create(kind.name(), Map.of(), true) : null;
     String name = copyName(HaxeBundle.message("haxe.toolwindow.node.program"));
     return new CustomAction(name, ParametersListUtil.join(command), "", launch);
   }
