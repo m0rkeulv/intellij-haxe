@@ -30,6 +30,10 @@ public final class HaxeCustomCommands {
   public static final String MODULE_ROOT_VARIABLE = "${moduleRoot}";
   /** The variable {@link #expandRoots} resolves to the project's base directory. */
   public static final String PROJECT_ROOT_VARIABLE = "${projectRoot}";
+  /** The variable {@link #expandTools} resolves to the container SDK's haxe executable. */
+  public static final String HAXE_VARIABLE = "${haxe}";
+  /** The variable {@link #expandTools} resolves to the haxelib executable the build tools use. */
+  public static final String HAXELIB_VARIABLE = "${haxelib}";
 
   private HaxeCustomCommands() {
   }
@@ -92,6 +96,55 @@ public final class HaxeCustomCommands {
       expanded = expanded.replace(PROJECT_ROOT_VARIABLE, projectRoot);
     }
     return expanded;
+  }
+
+  /**
+   * Expands {@code ${haxe}} and {@code ${haxelib}} to the executables of the
+   * container's SDK, so a command follows an SDK switch and runs on every
+   * platform. A path containing whitespace is quoted, so the command still
+   * splits into the same arguments.
+   */
+  @NotNull
+  public static String expandTools(@NotNull Project project, @Nullable String environmentSdk, @NotNull String command) {
+    String expanded = command;
+    if (expanded.contains(HAXE_VARIABLE)) {
+      String haxe = HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk);
+      expanded = expanded.replace(HAXE_VARIABLE, quoted(haxe));
+    }
+    if (expanded.contains(HAXELIB_VARIABLE)) {
+      String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
+      expanded = expanded.replace(HAXELIB_VARIABLE, quoted(haxelib));
+    }
+    return expanded;
+  }
+
+  /**
+   * The variable standing for {@code executable} when it is the container
+   * SDK's haxe or haxelib, else the executable itself: a copied command then
+   * follows the SDK instead of naming one installation's path.
+   */
+  @NotNull
+  public static String toolVariableFor(@NotNull Project project, @Nullable String environmentSdk, @NotNull String executable) {
+    if (executable.equals(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk))) return HAXE_VARIABLE;
+    if (executable.equals(HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk))) return HAXELIB_VARIABLE;
+    return executable;
+  }
+
+  /** A typed command (its {@code ${target}} already expanded) as a runnable argv: tool and root variables expanded, then parsed. */
+  @NotNull
+  public static List<String> commandLine(@NotNull Project project,
+                                         @Nullable String environmentSdk,
+                                         @NotNull String command,
+                                         @Nullable String moduleRoot,
+                                         @Nullable String projectRoot) {
+    String withTools = expandTools(project, environmentSdk, command);
+    return parse(expandRoots(withTools, moduleRoot, projectRoot));
+  }
+
+  /** The value as one command-line argument: wrapped in double quotes when it contains whitespace. */
+  @NotNull
+  static String quoted(@NotNull String value) {
+    return value.chars().anyMatch(Character::isWhitespace) ? "\"" + value + "\"" : value;
   }
 
   /**

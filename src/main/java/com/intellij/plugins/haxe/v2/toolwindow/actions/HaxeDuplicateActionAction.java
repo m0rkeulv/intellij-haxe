@@ -10,6 +10,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeCustomCommands;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
@@ -24,6 +25,7 @@ import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -33,7 +35,8 @@ import java.util.Objects;
  * Add Action dialog pre-filled with a copy of the row - a generated action's
  * resolved command and work directory, a custom action's stored values, the
  * Build &amp; run row's default build command with its launch - so a built-in
- * row becomes a custom one to change.
+ * row becomes a custom one to change. A copied command starting with the
+ * SDK's haxe or haxelib names it as {@code ${haxe}} or {@code ${haxelib}}.
  */
 public final class HaxeDuplicateActionAction extends DumbAwareAction {
 
@@ -103,7 +106,7 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
   /** The resolved command line as the row runs it; the work directory stays blank when it is the build file's own. */
   @NotNull
   private static CustomAction copyOfGenerated(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull ActionNode actionNode) {
-    String command = ParametersListUtil.join(actionNode.command());
+    String command = withToolVariable(project, buildFile, actionNode.command());
     return new CustomAction(copyName(actionNode.name()), command, workDirectoryOverride(project, buildFile, actionNode.workDirectory()), null);
   }
 
@@ -120,16 +123,31 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
     HaxeLaunchKind kind = programNode.kind();
     Launch launch = kind.compilesBeforeLaunch() ? new Launch.Create(kind.name(), Map.of(), true) : null;
     String name = copyName(HaxeBundle.message("haxe.toolwindow.node.program"));
-    return new CustomAction(name, ParametersListUtil.join(command), "", launch);
+    return new CustomAction(name, withToolVariable(project, programNode.buildFile(), command), "", launch);
   }
 
   /** The file's default build action as its Build row runs it; resolving it reads the module index and the file. */
   @Nullable
   private static List<String> defaultBuildCommand(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
     HaxeBuildSystem buildSystem = HaxeBuildSystem.of(buildFile.type());
+    return buildSystem.actionCommand(project, environmentSdkOf(project, buildFile), buildFile, buildSystem.defaultBuildActionName());
+  }
+
+  /** The command as typed text, its leading executable as {@code ${haxe}} or {@code ${haxelib}} when it is the SDK's. */
+  @NotNull
+  private static String withToolVariable(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull List<String> command) {
+    if (command.isEmpty()) return "";
+    String environmentSdk = ReadAction.computeBlocking(() -> environmentSdkOf(project, buildFile));
+    List<String> arguments = new ArrayList<>(command);
+    arguments.set(0, HaxeCustomCommands.toolVariableFor(project, environmentSdk, arguments.getFirst()));
+    return ParametersListUtil.join(arguments);
+  }
+
+  /** The build file's container SDK; finding the container reads the module index. */
+  @Nullable
+  private static String environmentSdkOf(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
     String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    return buildSystem.actionCommand(project, environmentSdk, buildFile, buildSystem.defaultBuildActionName());
+    return HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
   }
 
   @NotNull

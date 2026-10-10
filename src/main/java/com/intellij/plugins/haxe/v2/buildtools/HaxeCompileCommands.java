@@ -203,7 +203,7 @@ public final class HaxeCompileCommands {
     String moduleRoot = HaxeContainers.containerRootPath(project, containerId);
     String projectRoot = HaxeContainers.projectRootPath(project);
     String expanded = HaxeCustomCommands.expandTarget(project, file, buildFile.type(), custom.command());
-    List<String> command = HaxeCustomCommands.parse(HaxeCustomCommands.expandRoots(expanded, moduleRoot, projectRoot));
+    List<String> command = HaxeCustomCommands.commandLine(project, environmentSdk, expanded, moduleRoot, projectRoot);
     String workDirectory = HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), null, moduleRoot, projectRoot);
     return new ActionCommand(command, workDirectory);
   }
