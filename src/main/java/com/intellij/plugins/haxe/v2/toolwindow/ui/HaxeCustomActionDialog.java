@@ -127,14 +127,14 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   }
 
   /**
-   * The build file's reserved action names (the build step resolves them before
+   * The build file's own action names (the build step resolves them before
    * any custom one) and its other custom actions' names (the store keeps one
    * action per name); {@code editedName} is the edited action's current name,
    * still free to keep.
    */
   @NotNull
   private static Set<String> takenNames(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @Nullable String editedName) {
-    Set<String> taken = new HashSet<>(HaxeBuildSystem.of(buildFile.type()).reservedActionNames());
+    Set<String> taken = new HashSet<>(HaxeBuildSystem.of(buildFile.type()).defaultActionNames());
     for (CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(buildFile.file().getPath())) {
       if (!custom.name().equals(editedName)) taken.add(custom.name());
     }
