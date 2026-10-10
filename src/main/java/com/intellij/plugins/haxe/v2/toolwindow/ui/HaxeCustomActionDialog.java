@@ -147,7 +147,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     List<ActionReference> runBefore = initial == null ? List.of() : initial.runBefore();
     HaxeRunBeforeSection runBeforeSection = new HaxeRunBeforeSection(name -> runBeforeCandidates(project, buildFile, name),
                                                                      reference -> HaxeActionReferences.label(project, path, reference),
-                                                                     reference -> HaxeActionReferences.fileLabel(project, path, reference),
+                                                                     buildFilePath -> HaxeActionReferences.location(project, buildFilePath),
                                                                      runBefore);
     return new HaxeCustomActionDialog(project, edited, adding,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",

@@ -15,6 +15,10 @@ import org.jetbrains.annotations.Nullable;
 /// `moduleB › build.hxml › Build`.
 public final class HaxeActionReferences {
 
+  /** Where another file's action lives: its module (the project for the project root) and the file's path inside it. */
+  public record Location(@NotNull String module, @NotNull String path) {
+  }
+
   private HaxeActionReferences() {
   }
 
@@ -27,21 +31,28 @@ public final class HaxeActionReferences {
 
   /** The build file part of the label - module and path inside it - or null for {@code ownerId}'s own file. */
   @Nullable
-  public static String fileLabel(@NotNull Project project, @NotNull String ownerId, @NotNull ActionReference reference) {
+  private static String fileLabel(@NotNull Project project, @NotNull String ownerId, @NotNull ActionReference reference) {
     String buildFile = reference.buildFile();
     if (buildFile == null || buildFile.equals(ownerId)) return null;
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFile);
+    Location location = location(project, buildFile);
     // a deleted file: its path is all there is to show
-    if (file == null) return buildFile;
-    return HaxeReadActions.compute(() -> moduleAndPath(project, file));
+    if (location == null) return buildFile;
+    return HaxeBundle.message("haxe.action.reference.file", location.module(), location.path());
   }
 
-  /** The file's module, or the project for the project root, and its path inside it. */
+  /** The module and path of the build file at {@code buildFile}, or null when no such file exists. */
+  @Nullable
+  public static Location location(@NotNull Project project, @NotNull String buildFile) {
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFile);
+    if (file == null) return null;
+    return HaxeReadActions.compute(() -> locationOf(project, file));
+  }
+
   @NotNull
-  private static String moduleAndPath(@NotNull Project project, @NotNull VirtualFile file) {
+  private static Location locationOf(@NotNull Project project, @NotNull VirtualFile file) {
     String containerId = HaxeContainers.containerIdFor(project, file);
-    String container = HaxeContainers.isProjectRoot(containerId) ? project.getName() : containerId;
-    return HaxeBundle.message("haxe.action.reference.file", container, pathInside(project, containerId, file));
+    String module = HaxeContainers.isProjectRoot(containerId) ? project.getName() : containerId;
+    return new Location(module, pathInside(project, containerId, file));
   }
 
   /** The file's path relative to its container's root, or its name when it lies elsewhere. */
