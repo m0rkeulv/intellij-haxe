@@ -51,6 +51,22 @@ public interface HaxeBuildSystem {
   @NotNull
   List<String> defaultActionNames();
 
+  /**
+   * The built-in actions this file offers, in menu order: the
+   * {@link #defaultActionNames} plus those the file's own content enables (an
+   * hxml building C++ gets Clean).
+   */
+  @NotNull
+  default List<String> actionNames(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
+    return defaultActionNames();
+  }
+
+  /** Where a built-in action runs; null runs it in the build file's work directory. */
+  @Nullable
+  default String actionWorkDirectory(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull String actionName) {
+    return null;
+  }
+
   /** A named built-in action's command; null when the name is not one of the built-ins. */
   @Nullable
   List<String> actionCommand(@NotNull Project project, @Nullable String environmentSdk, @NotNull HaxeBuildFile buildFile,
