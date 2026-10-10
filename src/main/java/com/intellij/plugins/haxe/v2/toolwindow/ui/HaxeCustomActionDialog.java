@@ -45,6 +45,9 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   public record EditedCommand(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
   }
 
+  /** The width the hint wraps at: the dialog's width less the label column, on the narrow side so no line is clipped. */
+  private static final int HINT_WIDTH = 400;
+
   private final String nameRequiredKey;
   /** The names the edited action may not take; see {@link #takenNames}. */
   private final Set<String> takenNames;
@@ -76,6 +79,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     if (hintKey != null) {
       hintArea.setText(HaxeBundle.message(hintKey));
     }
+    HaxeDialogHints.fitHeight(hintArea, JBUI.scale(HINT_WIDTH));
     if (launchSection != null) {
       launchPanel.add(launchSection.getComponent(), BorderLayout.CENTER);
     }
