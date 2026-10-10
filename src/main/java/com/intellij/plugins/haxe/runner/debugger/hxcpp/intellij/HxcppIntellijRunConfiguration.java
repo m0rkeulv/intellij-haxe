@@ -69,13 +69,12 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
    * Where a profiling run's report appears: the before-launch compile bakes
    * this ABSOLUTE path into the injected bootstrap, so the executable's
    * working directory cannot displace it. Null while no executable is
-   * configured yet.
+   * configured or resolvable yet.
    */
   @Nullable
   public Path expectedDumpPath() {
-    String executable = getExecutablePath();
-    if (executable.isBlank()) return null;
-    Path parent = Path.of(executable).getParent();
+    Path executable = resolveExecutableOrNull();
+    Path parent = executable == null ? null : executable.getParent();
     return parent == null ? null : parent.resolve(PROFILER_DUMP_FILE_NAME);
   }
 

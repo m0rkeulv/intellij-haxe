@@ -19,6 +19,9 @@ import com.intellij.plugins.haxe.runner.debugger.interp.InterpRunConfiguration;
 import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
+import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,8 +69,8 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     // HL/C output is a source directory, not runnable bytecode
     arguments(HaxeTarget.HL, "out/main.c", HaxeBuildFileType.HXML, null, null),
     arguments(HaxeTarget.CPP, "bin/windows/bin/Game.exe", HaxeBuildFileType.LIME, "windows", HxcppIntellijRunConfiguration.class),
-    // a plain hxml -debug build renames the executable; no single path serves run and debug
-    arguments(HaxeTarget.CPP, "out/cpp", HaxeBuildFileType.HXML, null, null),
+    // a plain hxml C++ build launches its executable; the configuration resolves the name per launch
+    arguments(HaxeTarget.CPP, "out/cpp", HaxeBuildFileType.HXML, null, HxcppIntellijRunConfiguration.class),
     arguments(HaxeTarget.NEKO, "out/game.n", HaxeBuildFileType.HXML, null, NekoRunConfiguration.class),
     arguments(HaxeTarget.NEKO, "bin/neko/bin/Game.exe", HaxeBuildFileType.LIME, "neko", NekoRunConfiguration.class),
     // the interpreter writes no output; "" is what launchOutput hands over
@@ -97,7 +101,7 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
                           HaxeBuildFileType type,
                           String targetFlag,
                           Class<?> expectedConfiguration) {
-    HaxeLaunchKind kind = HaxeProgramLaunches.kindFor(target, targetOutput, type, targetFlag);
+    HaxeLaunchKind kind = HaxeProgramLaunches.kindFor(target, targetOutput, type, targetFlag, List.of());
     assertEquals(expectedConfiguration, kind == null ? null : kind.configurationClass());
   }
 
@@ -243,6 +247,27 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals(List.of("Build"), stepActionsOf(configuration));
   }
 
+  @Test
+  @DisplayName("an hxml C++ build linking a library has no launch")
+  public void testAnHxmlCppBuildLinkingALibraryHasNoLaunch() {
+    List<HaxeDefine> staticLink = List.of(new HaxeDefine("static_link", null));
+
+    assertNull(HaxeProgramLaunches.kindFor(HaxeTarget.CPP, "out/cpp", HaxeBuildFileType.HXML, null, staticLink));
+  }
+
+  @Test
+  @DisplayName("a created hxml C++ configuration runs the executable its build step writes")
+  public void testACreatedHxmlCppConfigurationRunsTheExecutableItsBuildStepWrites() throws IOException {
+    HaxeBuildFile buildFile = hxml("cpp.hxml", "--main Main\n-cpp bin/cpp\n");
+    RunnerAndConfigurationSettings settings = HaxeProgramLaunches.findOrCreate(
+      getProject(), myFixture.getModule(), buildFile, HaxeLaunchKind.HXCPP, "bin/cpp", "Build", Map.of(), true);
+    HxcppIntellijRunConfiguration configuration = (HxcppIntellijRunConfiguration)settings.getConfiguration();
+
+    Path cppFolder = HaxeBuildWorkDirectories.resolve(getProject(), buildFile.file(), "bin/cpp");
+    assertEquals("${executable}", configuration.getExecutablePath());
+    assertEquals(cppFolder.resolve(HaxeSdkUtilBase.getExecutableName("Main")), configuration.resolveExecutableOrNull());
+  }
+
   /** (kind, target output, expected default parameters relative to the hxml folder). */
   static final List<Arguments> HXML_DEFAULTS = List.of(
     arguments(HaxeLaunchKind.BROWSER, "out/web/game.js", Map.of(Parameter.CONTENT_ROOT, "out/web")),
@@ -291,6 +316,12 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
 
   private static HashLinkRunConfiguration hashLinkConfiguration(RunnerAndConfigurationSettings settings) {
     return (HashLinkRunConfiguration)settings.getConfiguration();
+  }
+
+  private HaxeBuildFile hxml(String name, String source) throws IOException {
+    Path hxml = Files.writeString(projectDirectory.resolve(name), source);
+    VirtualFile file = Objects.requireNonNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(hxml));
+    return new HaxeBuildFile(file, HaxeBuildFileType.HXML);
   }
 
   private HaxeBuildFile interpHxml() throws IOException {

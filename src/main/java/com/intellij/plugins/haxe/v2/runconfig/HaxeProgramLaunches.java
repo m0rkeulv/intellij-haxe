@@ -20,7 +20,10 @@ import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
+import com.intellij.plugins.haxe.v2.buildtools.HxcppExecutables;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
@@ -45,11 +48,12 @@ import java.util.function.Consumer;
 /// launches and the run-configuration dropdown stay in sync; a launching
 /// custom action gets a configuration of its own, keyed by its name.
 ///
-/// CPP is wired for lime-family and nmml files only (both tools name the
-/// executable after `<app file>` regardless of -debug); for plain hxml a
-/// -debug build renames the executable (Main-debug.exe), so run and debug launch
-/// different artifacts — a single static executable path cannot serve both
-/// executors yet.
+/// CPP launches the executable the build links. Lime-family and nmml files
+/// name it after `<app file>` whatever the build type. A plain hxml build
+/// names it after the main class, with `-debug` for a debug build, so its
+/// configuration holds `${executable}` and resolves the name per launch
+/// ([HxcppExecutables]); an hxml linking a library or building for another
+/// platform gets no launch.
 ///
 /// An interpreter build (`--interp`) writes no output to launch: compiling IS
 /// running. Its Haxe Interpreter configuration runs the hxml the way the Build
@@ -65,13 +69,15 @@ public final class HaxeProgramLaunches {
    * output. {@code targetFlag} is the lime/nme target the file is set to
    * build (null for hxml): a swf launches as AIR only when that flag is
    * lime's air target - the output path says nothing reliable about it,
-   * since the air export directory is configurable.
+   * since the air export directory is configurable. {@code defines} decide
+   * whether an hxml C++ build links an executable this machine runs.
    */
   @Nullable
   static HaxeLaunchKind kindFor(@NotNull HaxeTarget target,
                                 @NotNull String targetOutput,
                                 @NotNull HaxeBuildFileType type,
-                                @Nullable String targetFlag) {
+                                @Nullable String targetFlag,
+                                @NotNull List<HaxeDefine> defines) {
     String output = targetOutput.toLowerCase(Locale.ROOT);
     return switch (target) {
       // HL/C output (-hl out/main.c) is a source directory, not runnable bytecode
@@ -81,7 +87,7 @@ public final class HaxeProgramLaunches {
         if (!output.endsWith(".swf")) yield null;
         yield LimeProjects.isAirTarget(targetFlag) ? HaxeLaunchKind.AIR : HaxeLaunchKind.FLASH;
       }
-      case CPP -> type != HaxeBuildFileType.HXML ? HaxeLaunchKind.HXCPP : null;
+      case CPP -> type != HaxeBuildFileType.HXML || HxcppExecutables.buildsHostExecutable(defines) ? HaxeLaunchKind.HXCPP : null;
       // hxml runs the .n through the neko runtime; lime/nme package a launcher
       case NEKO -> type != HaxeBuildFileType.HXML || output.endsWith(".n") ? HaxeLaunchKind.NEKO : null;
       case INTERP -> HaxeLaunchKind.INTERP;
@@ -94,7 +100,7 @@ public final class HaxeProgramLaunches {
   public static HaxeLaunchKind launchKind(@NotNull Project project, @NotNull HaxeBuildFileInfo info, @NotNull HaxeBuildFile buildFile) {
     String output = launchOutput(info);
     if (info.target() == null || output == null) return null;
-    return kindFor(info.target(), output, buildFile.type(), selectedTargetFlag(project, buildFile));
+    return kindFor(info.target(), output, buildFile.type(), selectedTargetFlag(project, buildFile), info.defines());
   }
 
   /** The lime/nme target flag the file is currently set to build; null for hxml, whose target is in the file itself. */
@@ -123,7 +129,8 @@ public final class HaxeProgramLaunches {
                                                             @NotNull HaxeBuildFile buildFile,
                                                             @NotNull HaxeTarget target,
                                                             @NotNull String targetOutput) {
-    HaxeLaunchKind kind = kindFor(target, targetOutput, buildFile.type(), selectedTargetFlag(project, buildFile));
+    List<HaxeDefine> defines = HaxeReadActions.compute(() -> HaxeBuildSections.inspectSelected(project, buildFile)).defines();
+    HaxeLaunchKind kind = kindFor(target, targetOutput, buildFile.type(), selectedTargetFlag(project, buildFile), defines);
     if (kind == null) return null;
     String buildAction = HaxeBuildSystem.of(buildFile.type()).defaultBuildActionName();
     return findOrCreate(project, module, buildFile, kind, targetOutput, buildAction, Map.of(), true);
@@ -302,6 +309,11 @@ public final class HaxeProgramLaunches {
                                     @NotNull HaxeBuildFile buildFile,
                                     @NotNull String targetOutput,
                                     @NotNull Map<Parameter, String> parameters) {
+    if (buildFile.type() == HaxeBuildFileType.HXML) {
+      // the name follows the launch's debug flags: resolved per launch
+      parameters.put(Parameter.EXECUTABLE, HxcppExecutables.EXECUTABLE_VARIABLE);
+      return;
+    }
     Path output = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput);
     if ("obj".equals(String.valueOf(output.getFileName()))) {
       // the CPP output path IS the obj dir; the executable sits in bin beside it

@@ -46,6 +46,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions.Debugger;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfiguration;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.openapi.util.UserDataHolder;
 import com.intellij.util.PathUtil;
 import com.intellij.util.xmlb.XmlSerializerUtil;
 import icons.HaxeIcons;
@@ -70,6 +71,8 @@ import java.util.Objects;
 public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider<HaxeActionBeforeRunTaskProvider.Task> {
 
   public static final Key<Task> ID = Key.create("HaxeActionBeforeRun");
+  /** The compile command the step last ran for a configuration: {@code ${executable}} reads the launch's debug flags and defines from it. */
+  private static final Key<List<String>> LAST_COMPILE = Key.create("haxe.build.step.last.compile");
 
   public static final class Task extends BeforeRunTask<Task> implements PersistentStateComponent<Task.State> {
 
@@ -221,6 +224,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
     List<String> command = compileCommand(project, configuration, environment.getExecutor(), task, templateCompile, resolved);
     if (command == null) return false;
+    if (configuration instanceof UserDataHolder holder) {
+      holder.putUserData(LAST_COMPILE, command);
+    }
 
     String title = HaxeDebuggerBundle.message("haxe.before.run.build.title",
                                               task.getActionName(), PathUtil.getFileName(task.getBuildFilePath()));
@@ -452,6 +458,24 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
       .filter(path -> !path.isBlank())
       .findFirst()
       .orElse(null);
+  }
+
+  /**
+   * The executable the configuration's Haxe build step writes for the current
+   * launch, which {@code ${executable}} stands for: an hxml C++ build's
+   * {@code -cpp} folder and hxcpp's name for the result, the debug flags and
+   * defines of the step's last compile counted in. Null without a build step,
+   * or for a build that links no executable this machine runs.
+   */
+  @Nullable
+  public static Path builtExecutable(@NotNull RunConfiguration configuration) {
+    String path = buildStepFilePath(configuration);
+    if (path == null) return null;
+    Project project = configuration.getProject();
+    HaxeBuildFile buildFile = HaxeReadActions.compute(() -> HaxeBuildFileScanner.findBuildFile(project, path));
+    if (buildFile == null) return null;
+    List<String> lastCompile = configuration instanceof UserDataHolder holder ? holder.getUserData(LAST_COMPILE) : null;
+    return HxcppExecutables.executable(project, buildFile, lastCompile != null ? lastCompile : List.of());
   }
 
   /**
