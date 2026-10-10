@@ -25,7 +25,7 @@ public class HaxeLaunchSectionTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("without a kind the section yields no launch")
   public void testWithoutAKindTheSectionYieldsNoLaunch() {
-    HaxeLaunchSection section = new HaxeLaunchSection(kind -> HASHLINK_DEFAULTS, null);
+    HaxeLaunchSection section = new HaxeLaunchSection(getProject(), kind -> HASHLINK_DEFAULTS, null);
 
     assertNull(section.launch());
   }
@@ -34,7 +34,7 @@ public class HaxeLaunchSectionTest extends HaxeLightFixtureTestCase {
   @DisplayName("a stored launch comes back as edited and blank fields stay defaults")
   public void testAStoredLaunchComesBackAsEditedAndBlankFieldsStayDefaults() {
     Launch stored = new Launch("HASHLINK", Map.of("hlFile", "dist/final.hl"), false);
-    HaxeLaunchSection section = new HaxeLaunchSection(kind -> HASHLINK_DEFAULTS, stored);
+    HaxeLaunchSection section = new HaxeLaunchSection(getProject(), kind -> HASHLINK_DEFAULTS, stored);
 
     Launch edited = section.launch();
 
@@ -46,7 +46,7 @@ public class HaxeLaunchSectionTest extends HaxeLightFixtureTestCase {
   @DisplayName("a key no parameter has is dropped on the way in")
   public void testAKeyNoParameterHasIsDroppedOnTheWayIn() {
     Launch stored = new Launch("NEKO", Map.of("executable", "", "futureKey", "x"), true);
-    HaxeLaunchSection section = new HaxeLaunchSection(kind -> Map.of(), stored);
+    HaxeLaunchSection section = new HaxeLaunchSection(getProject(), kind -> Map.of(), stored);
 
     assertEquals(new Launch("NEKO", Map.of(), true), section.launch(), "blank and unknown values are not stored");
   }
