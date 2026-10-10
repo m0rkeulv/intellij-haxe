@@ -36,15 +36,16 @@ import javax.swing.Icon
 import javax.swing.JComponent
 
 /**
- * The launch part of the custom action dialog, two collapsed groups of which
- * at most one is in use: "Creates run configuration" (the Haxe kind the
- * action launches its build's output through, the kind's parameters with the
- * build file's defaults as empty text, where a blank field keeps the default
- * live) and "Runs run configuration" (an existing configuration of any type;
- * the action's command becomes its build step). Choosing in one group resets
- * the other. A file-valued parameter browses with a file-or-folder chooser:
- * the artifact usually does not exist before the first build, so choosing its
- * folder keeps the expected file name; a directory one with a folder chooser.
+ * The launch part of the custom action dialog: two collapsed groups, at most
+ * one of them in use; choosing in one resets the other.
+ * "Create run configuration" picks the Haxe kind that launches the build's
+ * output and shows the kind's parameters, each with the build file's default
+ * as empty text; a blank field keeps following that default.
+ * "Run existing configuration" picks a configuration of any type; the
+ * action's command becomes its build step.
+ * A file parameter browses with a file-or-folder chooser: the artifact usually
+ * does not exist before the first build, so choosing a folder keeps the
+ * field's file name. A directory parameter browses with a folder chooser.
  */
 class HaxeLaunchSection(
   private val project: Project,
@@ -78,12 +79,12 @@ class HaxeLaunchSection(
       fields[parameter] = field
       editors[parameter] = editorFor(parameter, field)
     }
-    // the two groups sit directly under each other; the room goes inside each, around its rows
+    // the two groups sit flush; each keeps its spacing inside, above its first row and below its hint
     lateinit var create: CollapsibleRow
     lateinit var existing: CollapsibleRow
     component = panel {
       create = collapsibleGroup(HaxeBundle.message("haxe.custom.action.dialog.launch.section")) {
-        row(HaxeBundle.message("haxe.custom.action.dialog.launch.kind")) {
+        row(HaxeBundle.message("haxe.custom.action.dialog.launch.type")) {
           cell(kindCombo)
         }.topGap(TopGap.SMALL)
         for (parameter in Parameter.values()) {
@@ -169,7 +170,7 @@ class HaxeLaunchSection(
 
   /**
    * Opens where the field points, or where its default does while it is blank;
-   * a chosen folder keeps the expected file name, so an artifact the build has
+   * a chosen folder keeps the field's file name, so an artifact the build has
    * not written yet can still be pointed at.
    */
   private inner class FileOrFolderListener(descriptor: FileChooserDescriptor, private val field: JBTextField)

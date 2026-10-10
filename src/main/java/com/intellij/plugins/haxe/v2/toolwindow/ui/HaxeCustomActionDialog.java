@@ -30,8 +30,8 @@ import java.awt.BorderLayout;
 /**
  * Add/edit dialog for a custom tool window action: a name, the command line to
  * run and its working directory, and for a build file's action the optional
- * run configuration the command's output launches through
- * ({@link HaxeLaunchSection}). A blank work directory falls back to the row
+ * run configuration it creates or starts ({@link HaxeLaunchSection}). A blank
+ * work directory falls back to the row
  * kind's default (the build file's directory for actions, the container root
  * for tools); {@code ${moduleRoot}} and {@code ${projectRoot}} expand in both
  * the command and the work directory. The layout lives in the matching .form

@@ -132,8 +132,9 @@ public final class HaxeProgramLaunches {
   /**
    * The configuration launching {@code buildFile}'s output through {@code kind}
    * after the action named {@code buildAction} compiled it: the registered one
-   * when present (matched by kind + build file + action, so renames don't
-   * duplicate it), else a new one added to the RunManager. Parameters: the
+   * when present (matched by kind + build file + action, so renaming the
+   * configuration does not duplicate it), else a new one added to the
+   * RunManager. Parameters: the
    * kind's defaults derived from the build file, overlaid with the non-blank
    * {@code overrides} - a blank override keeps the default live.
    */

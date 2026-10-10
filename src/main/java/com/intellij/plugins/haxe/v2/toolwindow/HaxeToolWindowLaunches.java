@@ -78,12 +78,13 @@ public final class HaxeToolWindowLaunches {
   }
 
   /**
-   * An action row under the given executor: a plain action runs its command in
-   * the Run console (Run executor only); a launching action runs the build's
-   * output through its kind's configuration, the command as the build step.
+   * Runs an action row under the given executor: a plain action runs its
+   * command in the Run console (callers pass only the Run executor for it); a
+   * launching action starts its run configuration, created or existing, with
+   * the command as the build step.
    */
   public static void runAction(@NotNull Project project, @NotNull ActionNode actionNode, @NotNull Executor executor) {
-    // an action may be a bare trigger of an existing configuration; every other kind needs its command
+    // an action may be a bare trigger of an existing configuration; every other action needs its command
     if (actionNode.command().isEmpty() && !(actionNode.launch() instanceof Launch.Existing)) return;
     RunnerAndConfigurationSettings settings = actionNode.launch() != null
                                               ? launchingActionConfiguration(project, actionNode)
@@ -188,9 +189,10 @@ public final class HaxeToolWindowLaunches {
   }
 
   /**
-   * A launching action's run configuration (created on first use), or null -
-   * with the reason notified - when the file belongs to no module, produces
-   * no launchable output, or the stored kind is unknown to this plugin.
+   * A launching action's run configuration (created on first use, or the
+   * existing one it names), or null - with the reason notified - when the file
+   * belongs to no module, produces no launchable output, or the action names an
+   * unknown kind or a configuration that no longer exists.
    */
   @Nullable
   private static RunnerAndConfigurationSettings launchingActionConfiguration(@NotNull Project project, @NotNull ActionNode actionNode) {

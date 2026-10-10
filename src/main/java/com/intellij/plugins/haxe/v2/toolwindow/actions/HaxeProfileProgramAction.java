@@ -26,8 +26,9 @@ import javax.swing.Icon;
 import java.util.List;
 
 /**
- * Profile on the "compile &amp; run" tree row: launches the build file's
- * program through its lane's IU profiler entry (compile attached as a
+ * Profile on the Build &amp; run tree row and on a launching action row whose
+ * kind has a profiling lane: launches the build file's program through its
+ * lane's IU profiler entry (compile attached as a
  * before-launch step, with the profiler's compile additions where the lane
  * needs them). One registered entry runs directly and names itself on the
  * action; several open a chooser; none — the profiler module missing, the
