@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.v2.toolwindow.ui
 
+import com.intellij.execution.ProgramRunnerUtil
 import com.intellij.execution.RunManager
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.Project
@@ -18,13 +20,16 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.ui.layout.selectedValueMatches
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.EnumMap
 import java.util.function.Function
+import com.intellij.util.ui.EmptyIcon
 import javax.swing.DefaultComboBoxModel
+import javax.swing.Icon
 import javax.swing.JComponent
 
 /**
@@ -43,8 +48,8 @@ class HaxeLaunchSection(
   private val defaults: Function<HaxeLaunchKind, Map<Parameter, String>>,
   initial: Launch?,
 ) {
-  /** An entry of the existing-configuration combo; {@code typeName} is null when the stored name matches no configuration. */
-  private data class ConfigurationChoice(val name: String, val typeName: String?)
+  /** An entry of the existing-configuration combo; {@code icon} is null when the stored name matches no configuration. */
+  private data class ConfigurationChoice(val name: String, val icon: Icon?)
 
   private val kindCombo = ComboBox(DefaultComboBoxModel(kindChoices()))
   private val fields = EnumMap<Parameter, JBTextField>(Parameter::class.java)
@@ -59,7 +64,12 @@ class HaxeLaunchSection(
     kindCombo.renderer = textListCellRenderer { kind ->
       kind?.displayName() ?: HaxeBundle.message("haxe.custom.action.dialog.launch.none")
     }
-    configurationCombo.renderer = textListCellRenderer { choice -> choiceText(choice) }
+    // the run dropdown's look: the configuration's icon (temporary badge included) before its name
+    configurationCombo.renderer = listCellRenderer {
+      val choice = value
+      icon(choice?.icon ?: if (choice != null) AllIcons.Actions.Help else EmptyIcon.ICON_16)
+      text(choiceText(choice))
+    }
     for (parameter in Parameter.values()) {
       val field = JBTextField()
       fields[parameter] = field
@@ -177,7 +187,7 @@ class HaxeLaunchSection(
   /** "None" first, then every registered configuration; a stored name no configuration carries is listed as not found. */
   private fun configurationChoices(initial: Launch?): Array<ConfigurationChoice?> {
     val registered = RunManager.getInstance(project).allSettings
-      .map { ConfigurationChoice(it.name, it.type.displayName) }
+      .map { ConfigurationChoice(it.name, ProgramRunnerUtil.getConfigurationIcon(it, false)) }
       .sortedBy { it.name.lowercase() }
     val choices = mutableListOf<ConfigurationChoice?>(null)
     if (initial is Launch.Existing && registered.none { it.name == initial.configurationName() }) {
@@ -194,8 +204,8 @@ class HaxeLaunchSection(
 
   private fun choiceText(choice: ConfigurationChoice?): String = when {
     choice == null -> HaxeBundle.message("haxe.custom.action.dialog.existing.none")
-    choice.typeName == null -> HaxeBundle.message("haxe.custom.action.dialog.existing.missing", choice.name)
-    else -> "${choice.name} (${choice.typeName})"
+    choice.icon == null -> HaxeBundle.message("haxe.custom.action.dialog.existing.missing", choice.name)
+    else -> choice.name
   }
 
   private companion object {
