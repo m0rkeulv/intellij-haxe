@@ -10,6 +10,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -52,10 +55,20 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
 
   /**
    * {@code workDirectory} may carry root variables; blank means the build file's
-   * directory. A null {@code launch} is a plain action: its command runs in a console.
+   * directory. A null {@code launch} is a plain action: its command runs in a
+   * console. {@code runBefore} names the file's other actions that run first,
+   * in order.
    */
   public record CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory,
-                             @Nullable Launch launch) {
+                             @Nullable Launch launch, @NotNull List<String> runBefore) {
+    public CustomAction {
+      runBefore = List.copyOf(runBefore);
+    }
+
+    public CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory, @Nullable Launch launch) {
+      this(name, command, workDirectory, launch, List.of());
+    }
+
     public CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
       this(name, command, workDirectory, null);
     }
@@ -78,6 +91,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     public List<LaunchParameterState> launchParameters = new ArrayList<>();
     public String runConfiguration = "";
     public boolean injectDebugArguments = true;
+    public List<String> runBefore = new ArrayList<>();
   }
 
   public static final class LaunchParameterState {
@@ -117,6 +131,9 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
       if (entry instanceof ActionState actionState && !StringUtil.isEmptyOrSpaces(actionState.name)) {
         if (actionState.launchParameters == null) {
           actionState.launchParameters = new ArrayList<>();
+        }
+        if (actionState.runBefore == null) {
+          actionState.runBefore = new ArrayList<>();
         }
         cleaned.add(actionState);
       }
@@ -160,10 +177,86 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     }
   }
 
+  /** The build file's custom actions that run {@code name} before themselves. */
+  @NotNull
+  public List<String> dependents(@NotNull String ownerId, @NotNull String name) {
+    return getActions(ownerId).stream()
+      .filter(action -> action.runBefore().contains(name))
+      .map(CustomAction::name)
+      .toList();
+  }
+
+  /** Points every run-before reference to {@code oldName} at {@code newName}. */
+  public void renameReferences(@NotNull String ownerId, @NotNull String oldName, @NotNull String newName) {
+    ContainerActions container = find(ownerId);
+    if (container == null) return;
+    for (ActionState action : container.actions) {
+      action.runBefore.replaceAll(name -> oldName.equals(name) ? newName : name);
+    }
+  }
+
+  /** Drops every run-before reference to {@code name}. */
+  public void dropReferences(@NotNull String ownerId, @NotNull String name) {
+    ContainerActions container = find(ownerId);
+    if (container == null) return;
+    for (ActionState action : container.actions) {
+      action.runBefore.removeIf(name::equals);
+    }
+  }
+
+  /**
+   * The actions that run before {@code actionName}, in order: each custom
+   * action's run-before list expanded depth-first, every action at most once.
+   * Built-in actions run nothing before themselves. Null when the references
+   * loop back to an action already on the way.
+   */
+  @Nullable
+  public List<String> runBeforeChain(@NotNull String ownerId, @NotNull String actionName) {
+    Map<String, List<String>> references = new HashMap<>();
+    getActions(ownerId).forEach(action -> references.put(action.name(), action.runBefore()));
+    List<String> order = new ArrayList<>();
+    if (!collectRunBefore(actionName, references, new HashSet<>(), order)) return null;
+    return List.copyOf(order.subList(0, order.size() - 1));
+  }
+
+  /** Whether {@code action} runs {@code target} somewhere before itself, or its references loop. */
+  public boolean runsBefore(@NotNull String ownerId, @NotNull String action, @NotNull String target) {
+    List<String> chain = runBeforeChain(ownerId, action);
+    return chain == null || chain.contains(target);
+  }
+
+  /** Adds {@code name}'s run-before actions, then {@code name}; false when a reference loops back onto {@code onPath}. */
+  private static boolean collectRunBefore(@NotNull String name,
+                                          @NotNull Map<String, List<String>> references,
+                                          @NotNull Set<String> onPath,
+                                          @NotNull List<String> order) {
+    if (onPath.contains(name)) return false;
+    if (order.contains(name)) return true;
+    onPath.add(name);
+    for (String before : references.getOrDefault(name, List.of())) {
+      if (!collectRunBefore(before, references, onPath, order)) return false;
+    }
+    onPath.remove(name);
+    order.add(name);
+    return true;
+  }
+
   @NotNull
   private static CustomAction toAction(@NotNull ActionState actionState) {
     String command = StringUtil.notNullize(actionState.command);
-    return new CustomAction(actionState.name, command, StringUtil.notNullize(actionState.workDirectory), toLaunch(actionState));
+    String workDirectory = StringUtil.notNullize(actionState.workDirectory);
+    return new CustomAction(actionState.name, command, workDirectory, toLaunch(actionState), runBeforeOf(actionState));
+  }
+
+  @NotNull
+  private static List<String> runBeforeOf(@NotNull ActionState actionState) {
+    List<String> names = new ArrayList<>();
+    for (Object entry : (List<?>)actionState.runBefore) {
+      if (entry instanceof String name && !StringUtil.isEmptyOrSpaces(name)) {
+        names.add(name);
+      }
+    }
+    return names;
   }
 
   @Nullable
@@ -187,6 +280,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     actionState.name = action.name();
     actionState.command = action.command();
     actionState.workDirectory = action.workDirectory();
+    actionState.runBefore = new ArrayList<>(action.runBefore());
     switch (action.launch()) {
       case Launch.Create create -> {
         actionState.launchKind = create.kindId();

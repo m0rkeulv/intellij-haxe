@@ -23,6 +23,8 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.util.function.Function;
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.Map;
 import java.awt.BorderLayout;
@@ -48,22 +50,27 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   private final Set<String> takenNames;
   /** The launch section of a build file's action; null for a tool. */
   private final HaxeLaunchSection launchSection;
+  /** The run-before section of a build file's action; null for a tool. */
+  private final HaxeRunBeforeSection runBeforeSection;
 
   private JPanel panel;
   private JBTextField nameField;
   private JBTextField commandField;
   private JBTextField workDirectoryField;
+  private JPanel runBeforePanel;
   private JPanel launchPanel;
   private JTextPane hintArea;
 
   private HaxeCustomActionDialog(@NotNull Project project, @Nullable EditedCommand initial, boolean adding,
                                  @NotNull String addTitleKey, @NotNull String editTitleKey,
                                  @Nullable String hintKey, @NotNull String nameRequiredKey,
-                                 @NotNull Set<String> takenNames, @Nullable HaxeLaunchSection launchSection) {
+                                 @NotNull Set<String> takenNames, @Nullable HaxeLaunchSection launchSection,
+                                 @Nullable HaxeRunBeforeSection runBeforeSection) {
     super(project);
     this.nameRequiredKey = nameRequiredKey;
     this.takenNames = takenNames;
     this.launchSection = launchSection;
+    this.runBeforeSection = runBeforeSection;
     setTitle(HaxeBundle.message(adding ? addTitleKey : editTitleKey));
     HaxeDialogHints.style(hintArea);
     if (hintKey != null) {
@@ -74,6 +81,13 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     }
     else {
       launchPanel.setVisible(false);
+    }
+    if (runBeforeSection != null) {
+      runBeforeSection.setCurrentName(() -> nameField.getText().trim());
+      runBeforePanel.add(runBeforeSection.getComponent(), BorderLayout.CENTER);
+    }
+    else {
+      runBeforePanel.setVisible(false);
     }
     if (initial != null) {
       nameField.setText(initial.name());
@@ -121,9 +135,27 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     Function<HaxeLaunchKind, Map<Parameter, String>> defaults = kind -> launchDefaults(project, buildFile, launchOutput, kind);
     HaxeLaunchSection launchSection = new HaxeLaunchSection(project, defaults, initial == null ? null : initial.launch());
     Set<String> takenNames = takenNames(project, buildFile, adding || initial == null ? null : initial.name());
+    List<String> runBefore = initial == null ? List.of() : initial.runBefore();
+    HaxeRunBeforeSection runBeforeSection = new HaxeRunBeforeSection(name -> runBeforeCandidates(project, buildFile, name), runBefore);
     return new HaxeCustomActionDialog(project, edited, adding,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",
-                                      null, "haxe.custom.action.dialog.name.required", takenNames, launchSection);
+                                      null, "haxe.custom.action.dialog.name.required", takenNames, launchSection,
+                                      runBeforeSection);
+  }
+
+  /**
+   * The actions the edited one (by the name the dialog shows) may run first:
+   * the build file's built-in and custom actions, without the edited one and
+   * those already running it, which would loop.
+   */
+  @NotNull
+  private static List<String> runBeforeCandidates(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull String editedName) {
+    String path = buildFile.file().getPath();
+    HaxeCustomActionsStore store = HaxeCustomActionsStore.getInstance(project);
+    List<String> names = new ArrayList<>(HaxeBuildSystem.of(buildFile.type()).actionNames(project, buildFile));
+    store.getActions(path).forEach(action -> names.add(action.name()));
+    names.removeIf(name -> name.equals(editedName) || store.runsBefore(path, name, editedName));
+    return names;
   }
 
   /**
@@ -147,7 +179,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     return new HaxeCustomActionDialog(project, initial, initial == null,
                                       "haxe.custom.tool.dialog.add.title", "haxe.custom.tool.dialog.edit.title",
                                       "haxe.custom.tool.dialog.hint", "haxe.custom.tool.dialog.name.required",
-                                      Set.of(), null);
+                                      Set.of(), null, null);
   }
 
   @NotNull
@@ -159,8 +191,9 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     return HaxeProgramLaunches.defaultParameters(project, buildFile, kind, launchOutput);
   }
 
-  /** The form's launch slot; the section's panel lands in it when the dialog edits a build file's action. */
+  /** The form's launch and run-before slots; the sections' panels land in them when the dialog edits a build file's action. */
   private void createUIComponents() {
+    runBeforePanel = new JPanel(new BorderLayout());
     launchPanel = new JPanel(new BorderLayout());
   }
 
@@ -196,7 +229,8 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   public CustomAction getAction() {
     EditedCommand edited = getEditedCommand();
     Launch launch = launchSection == null ? null : launchSection.launch();
-    return new CustomAction(edited.name(), edited.command(), edited.workDirectory(), launch);
+    List<String> runBefore = runBeforeSection == null ? List.of() : runBeforeSection.actions();
+    return new CustomAction(edited.name(), edited.command(), edited.workDirectory(), launch, runBefore);
   }
 
   /** The edited values, independent of which store they land in. */

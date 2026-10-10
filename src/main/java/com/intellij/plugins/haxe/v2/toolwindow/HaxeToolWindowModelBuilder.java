@@ -432,7 +432,9 @@ final class HaxeToolWindowModelBuilder {
       List<String> command = HaxeCustomCommands.commandLine(project, environmentSdk, expanded, moduleRoot, projectRoot);
       String actionWorkDirectory =
         HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, moduleRoot, projectRoot);
-      actions.add(new ActionNode(ownerId, custom.name(), command, actionWorkDirectory, expanded, true, custom.launch(), launchOutput));
+      ActionNode actionNode = new ActionNode(ownerId, custom.name(), command, actionWorkDirectory, expanded, true, custom.launch(),
+                                             launchOutput, custom.runBefore());
+      actions.add(actionNode);
     }
     return actions;
   }
@@ -448,7 +450,7 @@ final class HaxeToolWindowModelBuilder {
       String presentable = buildSystem.presentableCommand(project, buildFile, actionName);
       String ownWorkDirectory = buildSystem.actionWorkDirectory(project, buildFile, actionName);
       String actionWorkDirectory = ownWorkDirectory != null ? ownWorkDirectory : workDirectory;
-      ActionNode actionNode = new ActionNode(ownerId, actionName, command, actionWorkDirectory, presentable, false, null, null);
+      ActionNode actionNode = new ActionNode(ownerId, actionName, command, actionWorkDirectory, presentable, false, null, null, List.of());
       actions.add(actionNode);
     }
   }

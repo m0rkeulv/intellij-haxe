@@ -40,7 +40,9 @@ public final class HaxeEditCustomActionAction extends DumbAwareAction {
     HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forAction(project, row.buildFile(), actionNode.launchOutput(), stored);
     if (dialog.showAndGet()) {
       CustomAction updated = dialog.getAction();
-      HaxeCustomActionsStore.getInstance(project).updateAction(actionNode.ownerId(), actionNode.name(), updated);
+      HaxeCustomActionsStore store = HaxeCustomActionsStore.getInstance(project);
+      store.updateAction(actionNode.ownerId(), actionNode.name(), updated);
+      store.renameReferences(actionNode.ownerId(), actionNode.name(), updated.name());
       updateBuildSteps(project, actionNode, updated);
       panel.refreshTree();
     }

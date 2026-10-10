@@ -219,6 +219,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     // the section scoping must not touch it.
     boolean templateCompile = configuration instanceof HaxeTestRunConfiguration testConfiguration
                               && testConfiguration.compilesThroughTemplate();
+    if (!templateCompile && !runBeforeActions(project, task)) return false;
     HaxeCompileCommands.Resolved resolved = resolveCompile(project, configuration, task, templateCompile);
     if (resolved == null) return false;
 
@@ -232,6 +233,28 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                                               task.getActionName(), PathUtil.getFileName(task.getBuildFilePath()));
     String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
     return runInBuildView(project, command, workDirectory, title);
+  }
+
+  /** Runs the actions the task's action runs before itself, each in the Build tool window; false at the first failure or an unusable chain (notified). */
+  private static boolean runBeforeActions(@NotNull Project project, @NotNull Task task) {
+    String buildFilePath = task.getBuildFilePath();
+    String actionName = task.getActionName();
+    HaxeCompileCommands.RunBefore runBefore =
+      ReadAction.nonBlocking(() -> HaxeCompileCommands.resolveRunBefore(project, buildFilePath, actionName)).executeSynchronously();
+    if (runBefore.problem() != null) {
+      notifyFailure(project, runBefore.problem());
+      return false;
+    }
+    String fileName = PathUtil.getFileName(buildFilePath);
+    for (HaxeCompileCommands.NamedAction action : runBefore.actions()) {
+      HaxeCompileCommands.Resolved resolved = action.resolved();
+      List<String> command =
+        HaxeCompileCommands.connectIfEnabled(project, resolved.containerId(), resolved.connectEligible(), resolved.command());
+      String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
+      String title = HaxeDebuggerBundle.message("haxe.before.run.build.title", action.name(), fileName);
+      if (!runInBuildView(project, command, workDirectory, title)) return false;
+    }
+    return true;
   }
 
   /** The compile to run, or null when it does not resolve (the user was notified). */
