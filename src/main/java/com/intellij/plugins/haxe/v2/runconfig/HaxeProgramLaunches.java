@@ -447,6 +447,45 @@ public final class HaxeProgramLaunches {
     configuration.setBeforeRunTasks(withBuild);
   }
 
+  /**
+   * Points the "Run Haxe action" steps that compile {@code buildFilePath} with
+   * the action {@code oldName} at {@code newName}, or drops them when
+   * {@code newName} is null. A step naming an action that no longer exists
+   * fails every launch of the configuration carrying it.
+   */
+  public static void retargetBuildSteps(@NotNull Project project,
+                                        @NotNull String buildFilePath,
+                                        @NotNull String oldName,
+                                        @Nullable String newName) {
+    for (RunnerAndConfigurationSettings settings : RunManager.getInstance(project).getAllSettings()) {
+      RunConfiguration configuration = settings.getConfiguration();
+      List<BeforeRunTask<?>> steps = configuration.getBeforeRunTasks();
+      boolean affected = steps.stream().anyMatch(task -> buildsFile(task, buildFilePath, oldName));
+      if (affected) {
+        configuration.setBeforeRunTasks(retargeted(steps, buildFilePath, oldName, newName));
+      }
+    }
+  }
+
+  @NotNull
+  private static List<BeforeRunTask<?>> retargeted(@NotNull List<BeforeRunTask<?>> steps,
+                                                   @NotNull String buildFilePath,
+                                                   @NotNull String oldName,
+                                                   @Nullable String newName) {
+    List<BeforeRunTask<?>> result = new ArrayList<>();
+    for (BeforeRunTask<?> task : steps) {
+      if (!buildsFile(task, buildFilePath, oldName)) {
+        result.add(task);
+      }
+      else if (newName != null) {
+        HaxeActionBeforeRunTaskProvider.Task build = (HaxeActionBeforeRunTaskProvider.Task)task;
+        build.setActionName(newName);
+        result.add(build);
+      }
+    }
+    return result;
+  }
+
   /** The "Run Haxe action" step compiling the build file before the program launches. */
   @NotNull
   private static HaxeActionBeforeRunTaskProvider.Task buildStep(@NotNull HaxeBuildFile buildFile,

@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
 import org.jetbrains.annotations.NotNull;
@@ -34,6 +35,7 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
                                           Messages.getQuestionIcon());
     if (answer != Messages.YES) return;
     HaxeCustomActionsStore.getInstance(project).removeAction(actionNode.ownerId(), actionNode.name());
+    HaxeProgramLaunches.retargetBuildSteps(project, actionNode.ownerId(), actionNode.name(), null);
     panel.refreshTree();
   }
 

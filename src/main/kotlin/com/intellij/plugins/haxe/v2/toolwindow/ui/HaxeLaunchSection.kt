@@ -26,11 +26,11 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.ui.layout.selectedValueMatches
+import com.intellij.util.ui.EmptyIcon
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.EnumMap
 import java.util.function.Function
-import com.intellij.util.ui.EmptyIcon
 import javax.swing.DefaultComboBoxModel
 import javax.swing.Icon
 import javax.swing.JComponent
@@ -51,7 +51,7 @@ class HaxeLaunchSection(
   private val defaults: Function<HaxeLaunchKind, Map<Parameter, String>>,
   initial: Launch?,
 ) {
-  /** An entry of the existing-configuration combo; {@code icon} is null when the stored name matches no configuration. */
+  /** An entry of the existing-configuration combo; `icon` is null when the stored name matches no configuration. */
   private data class ConfigurationChoice(val name: String, val icon: Icon?)
 
   private val kindCombo = ComboBox(DefaultComboBoxModel(kindChoices()))
@@ -60,9 +60,6 @@ class HaxeLaunchSection(
   private val createDebugArguments = JBCheckBox(HaxeBundle.message("haxe.custom.action.dialog.launch.debug.arguments"), true)
   private val configurationCombo = ComboBox(DefaultComboBoxModel(configurationChoices(initial)))
   private val existingDebugArguments = JBCheckBox(HaxeBundle.message("haxe.custom.action.dialog.launch.debug.arguments"), true)
-
-  private val createGroup: CollapsibleRow
-  private val existingGroup: CollapsibleRow
 
   val component: DialogPanel
 
@@ -115,11 +112,9 @@ class HaxeLaunchSection(
       }
       existing.topGap(TopGap.NONE).bottomGap(BottomGap.NONE)
     }
-    createGroup = create
-    existingGroup = existing
     // set once the panel exists: the group in use opens, the other stays folded
-    createGroup.expanded = initial is Launch.Create
-    existingGroup.expanded = initial is Launch.Existing
+    create.expanded = initial is Launch.Create
+    existing.expanded = initial is Launch.Existing
     when (initial) {
       is Launch.Create -> {
         kindCombo.selectedItem = HaxeLaunchKind.byId(initial.kindId())

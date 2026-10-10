@@ -224,10 +224,23 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     HaxeProgramLaunches.ensureBuildStep(existing, buildFile, "release", false);
     HaxeProgramLaunches.ensureBuildStep(existing, buildFile, "release", false);
 
-    List<String> stepActions = existing.getBeforeRunTasks().stream()
-      .map(task -> ((HaxeActionBeforeRunTaskProvider.Task)task).getActionName())
-      .toList();
-    assertEquals(List.of("release", "Build"), stepActions, "added once, ahead of the existing steps");
+    assertEquals(List.of("release", "Build"), stepActionsOf(existing), "added once, ahead of the existing steps");
+  }
+
+  @Test
+  @DisplayName("renaming an action retargets its build steps and removing it drops them")
+  public void testRenamingAnActionRetargetsItsBuildStepsAndRemovingItDropsThem() throws IOException {
+    HaxeBuildFile buildFile = interpHxml();
+    String path = buildFile.file().getPath();
+    RunConfiguration configuration = Objects.requireNonNull(
+      HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.HL, "out/game.hl")).getConfiguration();
+    HaxeProgramLaunches.ensureBuildStep(configuration, buildFile, "release", true);
+
+    HaxeProgramLaunches.retargetBuildSteps(getProject(), path, "release", "final");
+    assertEquals(List.of("final", "Build"), stepActionsOf(configuration));
+
+    HaxeProgramLaunches.retargetBuildSteps(getProject(), path, "final", null);
+    assertEquals(List.of("Build"), stepActionsOf(configuration));
   }
 
   /** (kind, target output, expected default parameters relative to the hxml folder). */
@@ -264,6 +277,12 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
       return parameter == Parameter.WORKING_DIRECTORY ? FileUtil.toSystemIndependentName(folder.toString()) : value;
     }
     return parameter == Parameter.COMPILER_ARGUMENTS ? value : folder.resolve(value).toString();
+  }
+
+  private static List<String> stepActionsOf(RunConfiguration configuration) {
+    return configuration.getBeforeRunTasks().stream()
+      .map(task -> ((HaxeActionBeforeRunTaskProvider.Task)task).getActionName())
+      .toList();
   }
 
   private static HaxeActionBeforeRunTaskProvider.Task buildStepOf(RunnerAndConfigurationSettings settings) {
