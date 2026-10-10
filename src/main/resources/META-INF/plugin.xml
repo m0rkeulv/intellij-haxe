@@ -981,6 +981,8 @@
               topic="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener"/>
     <listener class="com.intellij.plugins.haxe.v2.editor.HaxeBuildToolFailureBannerRefresh"
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
+    <listener class="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsMoveTracker"
+              topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
 
   </projectListeners>
 

@@ -6,6 +6,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
@@ -17,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Resolves a container's configured build command into a runnable command line,
@@ -78,7 +80,7 @@ public final class HaxeCompileCommands {
                          action.workDirectory());
   }
 
-  /** An action of a chain, by name, with its resolved command. */
+  /** An action of a chain, by the label it reads under, with its resolved command. */
   public record NamedAction(@NotNull String name, @NotNull Resolved resolved) {
   }
 
@@ -94,17 +96,19 @@ public final class HaxeCompileCommands {
    */
   @NotNull
   public static RunBefore resolveRunBefore(@NotNull Project project, @NotNull String buildFilePath, @NotNull String actionName) {
-    List<String> names = HaxeCustomActionsStore.getInstance(project).runBeforeChain(buildFilePath, actionName);
-    if (names == null) {
+    List<ActionReference> chain = HaxeCustomActionsStore.getInstance(project).runBeforeChain(buildFilePath, actionName);
+    if (chain == null) {
       return new RunBefore(List.of(), HaxeBundle.message("haxe.action.chain.cycle", actionName));
     }
     List<NamedAction> actions = new ArrayList<>();
-    for (String name : names) {
-      Resolved resolved = resolveAction(project, buildFilePath, name, "");
+    for (ActionReference reference : chain) {
+      String label = HaxeActionReferences.label(project, buildFilePath, reference);
+      // each referenced action runs as its own file runs it: its SDK, work directory and variables
+      Resolved resolved = resolveAction(project, Objects.requireNonNull(reference.buildFile()), reference.action(), "");
       if (resolved == null) {
-        return new RunBefore(List.of(), HaxeBundle.message("haxe.action.chain.missing", actionName, name));
+        return new RunBefore(List.of(), HaxeBundle.message("haxe.action.chain.missing", actionName, label));
       }
-      actions.add(new NamedAction(name, resolved));
+      actions.add(new NamedAction(label, resolved));
     }
     return new RunBefore(List.copyOf(actions), null);
   }

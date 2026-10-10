@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
 import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;
@@ -16,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class HaxeCustomActionsStoreTest {
 
   private static final String FILE = "/p/build.hxml";
+  private static final String OTHER_FILE = "/p/lib/build.hxml";
 
   @Test
   @DisplayName("defaults are empty")
@@ -96,53 +98,80 @@ public class HaxeCustomActionsStoreTest {
   @DisplayName("run before chains expand depth first and run every action once")
   public void runBeforeChainsExpandDepthFirstAndRunEveryActionOnce() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("prepare", "cmd-prepare", "", null, List.of("Clean")));
-    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of("prepare", "Clean")));
+    store.addAction(FILE, new CustomAction("prepare", "cmd-prepare", "", null, List.of(own("Clean"))));
+    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of(own("prepare"), own("Clean"))));
 
-    assertEquals(List.of("Clean", "prepare"), store.runBeforeChain(FILE, "release"));
-    assertEquals(List.of("Clean"), store.runBeforeChain(FILE, "prepare"));
+    assertEquals(List.of(in(FILE, "Clean"), in(FILE, "prepare")), store.runBeforeChain(FILE, "release"));
+    assertEquals(List.of(in(FILE, "Clean")), store.runBeforeChain(FILE, "prepare"));
     assertEquals(List.of(), store.runBeforeChain(FILE, "Build"), "a built-in runs nothing first");
   }
 
   @Test
-  @DisplayName("a loop in the run before references has no chain")
-  public void aLoopInTheRunBeforeReferencesHasNoChain() {
+  @DisplayName("a chain crosses build files and each runs its own references")
+  public void aChainCrossesBuildFilesAndEachRunsItsOwnReferences() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("a", "cmd-a", "", null, List.of("b")));
-    store.addAction(FILE, new CustomAction("b", "cmd-b", "", null, List.of("a")));
+    store.addAction(OTHER_FILE, new CustomAction("prepare", "cmd-prepare", "", null, List.of(own("Clean"))));
+    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of(in(OTHER_FILE, "prepare"))));
 
-    assertNull(store.runBeforeChain(FILE, "a"));
-    assertTrue(store.runsBefore(FILE, "a", "anything"), "a looping action is never offered");
+    assertEquals(List.of(in(OTHER_FILE, "Clean"), in(OTHER_FILE, "prepare")), store.runBeforeChain(FILE, "release"),
+                 "the other file's own reference means its own Clean");
   }
 
   @Test
-  @DisplayName("references follow a rename and go with a removal")
-  public void referencesFollowARenameAndGoWithARemoval() {
+  @DisplayName("a loop in the run before references has no chain, across build files too")
+  public void aLoopInTheRunBeforeReferencesHasNoChainAcrossBuildFilesToo() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("prepare", "cmd-prepare", ""));
-    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of("Clean", "prepare")));
+    store.addAction(FILE, new CustomAction("a", "cmd-a", "", null, List.of(in(OTHER_FILE, "b"))));
+    store.addAction(OTHER_FILE, new CustomAction("b", "cmd-b", "", null, List.of(in(FILE, "a"))));
 
-    store.renameReferences(FILE, "prepare", "setup");
-    assertEquals(List.of("Clean", "setup"), store.runBeforeChain(FILE, "release"));
-    assertEquals(List.of("release"), store.dependents(FILE, "setup"));
+    assertNull(store.runBeforeChain(FILE, "a"));
+    assertTrue(store.runsBefore(in(FILE, "a"), FILE, "anything"), "a looping action is never offered");
+  }
 
-    store.dropReferences(FILE, "setup");
-    assertEquals(List.of("Clean"), store.runBeforeChain(FILE, "release"));
-    assertTrue(store.dependents(FILE, "setup").isEmpty());
+  @Test
+  @DisplayName("references follow a rename and go with a removal, from any build file")
+  public void referencesFollowARenameAndGoWithARemovalFromAnyBuildFile() {
+    HaxeCustomActionsStore store = new HaxeCustomActionsStore();
+    store.addAction(OTHER_FILE, new CustomAction("prepare", "cmd-prepare", ""));
+    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of(own("Clean"), in(OTHER_FILE, "prepare"))));
+
+    store.renameReferences(OTHER_FILE, "prepare", "setup");
+    assertEquals(List.of(in(FILE, "Clean"), in(OTHER_FILE, "setup")), store.runBeforeChain(FILE, "release"));
+    assertEquals(List.of(in(FILE, "release")), store.dependents(OTHER_FILE, "setup"));
+
+    store.dropReferences(OTHER_FILE, "setup");
+    assertEquals(List.of(in(FILE, "Clean")), store.runBeforeChain(FILE, "release"));
+    assertTrue(store.dependents(OTHER_FILE, "setup").isEmpty());
+  }
+
+  @Test
+  @DisplayName("moving a build file or its folder keeps its actions and the references to them")
+  public void movingABuildFileOrItsFolderKeepsItsActionsAndTheReferencesToThem() {
+    HaxeCustomActionsStore store = new HaxeCustomActionsStore();
+    store.addAction(OTHER_FILE, new CustomAction("prepare", "cmd-prepare", "", null, List.of(own("Clean"))));
+    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of(in(OTHER_FILE, "prepare"))));
+
+    store.moveOwner("/p/lib", "/p/libs/core");
+    String moved = "/p/libs/core/build.hxml";
+    assertEquals(List.of("prepare"), store.getActions(moved).stream().map(CustomAction::name).toList());
+    assertEquals(List.of(in(moved, "Clean"), in(moved, "prepare")), store.runBeforeChain(FILE, "release"));
+
+    store.moveOwner(moved, "/p/libs/core/main.hxml");
+    assertEquals(List.of("prepare"), store.getActions("/p/libs/core/main.hxml").stream().map(CustomAction::name).toList());
   }
 
   @Test
   @DisplayName("run before survives the xml round trip")
   public void runBeforeSurvivesTheXmlRoundTrip() {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
-    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of("Clean", "prepare")));
+    CustomAction release = new CustomAction("release", "cmd-release", "", null, List.of(own("Clean"), in(OTHER_FILE, "prepare")));
+    store.addAction(FILE, release);
 
     Element serialized = XmlSerializer.serialize(store.getState());
     HaxeCustomActionsStore reloaded = new HaxeCustomActionsStore();
     reloaded.loadState(XmlSerializer.deserialize(serialized, HaxeCustomActionsStore.State.class));
 
-    assertEquals(List.of(new CustomAction("release", "cmd-release", "", null, List.of("Clean", "prepare"))),
-                 reloaded.getActions(FILE));
+    assertEquals(List.of(release), reloaded.getActions(FILE));
   }
 
   @Test
@@ -158,5 +187,13 @@ public class HaxeCustomActionsStoreTest {
     HaxeCustomActionsStore store = new HaxeCustomActionsStore();
     store.loadState(state);
     assertTrue(store.getActions(FILE).isEmpty());
+  }
+
+  private static ActionReference own(String action) {
+    return new ActionReference(null, action);
+  }
+
+  private static ActionReference in(String buildFile, String action) {
+    return new ActionReference(buildFile, action);
   }
 }
