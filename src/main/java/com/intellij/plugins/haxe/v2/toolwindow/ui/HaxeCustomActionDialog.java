@@ -54,7 +54,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   private JPanel launchPanel;
   private JTextPane hintArea;
 
-  private HaxeCustomActionDialog(@NotNull Project project, @Nullable EditedCommand initial,
+  private HaxeCustomActionDialog(@NotNull Project project, @Nullable EditedCommand initial, boolean adding,
                                  @NotNull String addTitleKey, @NotNull String editTitleKey,
                                  @Nullable String hintKey, @NotNull String nameRequiredKey,
                                  @NotNull Set<String> reservedNames, @Nullable HaxeLaunchSection launchSection) {
@@ -62,7 +62,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     this.nameRequiredKey = nameRequiredKey;
     this.reservedNames = reservedNames;
     this.launchSection = launchSection;
-    setTitle(HaxeBundle.message(initial == null ? addTitleKey : editTitleKey));
+    setTitle(HaxeBundle.message(adding ? addTitleKey : editTitleKey));
     HaxeDialogHints.style(hintArea);
     if (hintKey != null) {
       hintArea.setText(HaxeBundle.message(hintKey));
@@ -95,13 +95,31 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
                                                  @NotNull HaxeBuildFile buildFile,
                                                  @Nullable String launchOutput,
                                                  @Nullable CustomAction initial) {
+    return forAction(project, buildFile, launchOutput, initial, initial == null);
+  }
+
+  /** A copy of a row as a NEW action: the Add title over pre-filled values. */
+  @NotNull
+  public static HaxeCustomActionDialog forDuplicate(@NotNull Project project,
+                                                    @NotNull HaxeBuildFile buildFile,
+                                                    @Nullable String launchOutput,
+                                                    @NotNull CustomAction template) {
+    return forAction(project, buildFile, launchOutput, template, true);
+  }
+
+  @NotNull
+  private static HaxeCustomActionDialog forAction(@NotNull Project project,
+                                                  @NotNull HaxeBuildFile buildFile,
+                                                  @Nullable String launchOutput,
+                                                  @Nullable CustomAction initial,
+                                                  boolean adding) {
     EditedCommand edited = initial == null
                            ? null
                            : new EditedCommand(initial.name(), initial.command(), initial.workDirectory());
     Function<HaxeLaunchKind, Map<Parameter, String>> defaults = kind -> launchDefaults(project, buildFile, launchOutput, kind);
     HaxeLaunchSection launchSection = new HaxeLaunchSection(project, defaults, initial == null ? null : initial.launch());
     Set<String> reservedNames = Set.copyOf(HaxeBuildSystem.of(buildFile.type()).defaultActionNames());
-    return new HaxeCustomActionDialog(project, edited,
+    return new HaxeCustomActionDialog(project, edited, adding,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",
                                       null, "haxe.custom.action.dialog.name.required", reservedNames, launchSection);
   }
@@ -109,7 +127,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   /** A container's custom tool: no target placeholders, defaults to the container root, no launch. */
   @NotNull
   public static HaxeCustomActionDialog forTool(@NotNull Project project, @Nullable EditedCommand initial) {
-    return new HaxeCustomActionDialog(project, initial,
+    return new HaxeCustomActionDialog(project, initial, initial == null,
                                       "haxe.custom.tool.dialog.add.title", "haxe.custom.tool.dialog.edit.title",
                                       "haxe.custom.tool.dialog.hint", "haxe.custom.tool.dialog.name.required",
                                       Set.of(), null);
@@ -148,7 +166,9 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     if (reservedNames.contains(nameField.getText().trim())) {
       return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.name.reserved", nameField.getText().trim()), nameField);
     }
-    if (StringUtil.isEmptyOrSpaces(commandField.getText())) {
+    // a bare trigger of an existing configuration needs no command; everything else does
+    boolean triggersExisting = launchSection != null && launchSection.launch() instanceof Launch.Existing;
+    if (StringUtil.isEmptyOrSpaces(commandField.getText()) && !triggersExisting) {
       return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.command.required"), commandField);
     }
     return null;

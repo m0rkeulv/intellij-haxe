@@ -12,6 +12,7 @@ import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowLaunches;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ProgramNode;
@@ -54,9 +55,16 @@ public final class HaxeRunProgramAction extends DumbAwareAction {
   public void update(@NotNull AnActionEvent e) {
     // the Debug variant shows only for targets a debugger lane exists for -
     // neko, for one, runs but cannot be debugged
-    HaxeLaunchKind kind = launchKindOf(panel.getSelectedUserObject());
-    boolean applicable = kind != null && (!debug || HaxeDebugSupport.supportsProgramDebug(kind.target()));
-    e.getPresentation().setEnabledAndVisible(applicable);
+    e.getPresentation().setEnabledAndVisible(applicable(e.getProject(), panel.getSelectedUserObject()));
+  }
+
+  private boolean applicable(@Nullable Project project, @Nullable Object selected) {
+    if (project == null) return false;
+    if (selected instanceof ActionNode actionNode && actionNode.launch() instanceof Launch.Existing existing) {
+      return !debug || HaxeToolWindowLaunches.canDebug(project, existing.configurationName());
+    }
+    HaxeLaunchKind kind = launchKindOf(selected);
+    return kind != null && (!debug || HaxeDebugSupport.supportsProgramDebug(kind.target()));
   }
 
   /** The kind a Build & run row or a launching action row launches through; null for every other row. */

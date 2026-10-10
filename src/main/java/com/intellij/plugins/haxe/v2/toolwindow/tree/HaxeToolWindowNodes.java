@@ -143,10 +143,20 @@ public final class HaxeToolWindowNodes {
                            boolean custom,
                            @Nullable Launch launch,
                            @Nullable String launchOutput) implements HaxeToolWindowNode {
-    /** The run configuration kind a launching action runs; null for a plain action or an unknown stored kind. */
+    /** The kind a created-configuration launch runs through; null for a plain action, an existing-configuration launch or an unknown stored kind. */
     @Nullable
     public HaxeLaunchKind launchKind() {
-      return launch == null ? null : HaxeLaunchKind.byId(launch.kindId());
+      return launch instanceof Launch.Create create ? HaxeLaunchKind.byId(create.kindId()) : null;
+    }
+
+    /** What the row's gray tail names: the kind, or the existing configuration; null for a plain action. */
+    @Nullable
+    public String launchTarget() {
+      return switch (launch) {
+        case Launch.Create ignored -> launchKind() == null ? null : launchKind().displayName();
+        case Launch.Existing existing -> existing.configurationName();
+        case null -> null;
+      };
     }
 
     @Override

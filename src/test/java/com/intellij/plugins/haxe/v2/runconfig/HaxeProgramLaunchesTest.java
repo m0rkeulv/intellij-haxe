@@ -213,6 +213,23 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals("dist/final.hl", overridden.getHlFilePath());
   }
 
+  @Test
+  @DisplayName("an existing configuration gets the action as its build step once")
+  public void testAnExistingConfigurationGetsTheActionAsItsBuildStepOnce() throws IOException {
+    HaxeBuildFile buildFile = interpHxml();
+    RunConfiguration existing = Objects.requireNonNull(
+      HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.HL, "out/game.hl")).getConfiguration();
+    assertEquals(1, existing.getBeforeRunTasks().size(), "the Build & run step");
+
+    HaxeProgramLaunches.ensureBuildStep(existing, buildFile, "release", false);
+    HaxeProgramLaunches.ensureBuildStep(existing, buildFile, "release", false);
+
+    List<String> stepActions = existing.getBeforeRunTasks().stream()
+      .map(task -> ((HaxeActionBeforeRunTaskProvider.Task)task).getActionName())
+      .toList();
+    assertEquals(List.of("release", "Build"), stepActions, "added once, ahead of the existing steps");
+  }
+
   /** (kind, target output, expected default parameters relative to the hxml folder). */
   static final List<Arguments> HXML_DEFAULTS = List.of(
     arguments(HaxeLaunchKind.BROWSER, "out/web/game.js", Map.of(Parameter.CONTENT_ROOT, "out/web")),
