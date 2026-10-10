@@ -9,8 +9,12 @@ import com.intellij.plugins.haxe.util.ui.HaxeDialogHints;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCustomCommands;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeActionReferences;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
@@ -139,8 +143,12 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     Function<HaxeLaunchKind, Map<Parameter, String>> defaults = kind -> launchDefaults(project, buildFile, launchOutput, kind);
     HaxeLaunchSection launchSection = new HaxeLaunchSection(project, defaults, initial == null ? null : initial.launch());
     Set<String> takenNames = takenNames(project, buildFile, adding || initial == null ? null : initial.name());
-    List<String> runBefore = initial == null ? List.of() : initial.runBefore();
-    HaxeRunBeforeSection runBeforeSection = new HaxeRunBeforeSection(name -> runBeforeCandidates(project, buildFile, name), runBefore);
+    String path = buildFile.file().getPath();
+    List<ActionReference> runBefore = initial == null ? List.of() : initial.runBefore();
+    HaxeRunBeforeSection runBeforeSection = new HaxeRunBeforeSection(name -> runBeforeCandidates(project, buildFile, name),
+                                                                     reference -> HaxeActionReferences.label(project, path, reference),
+                                                                     reference -> HaxeActionReferences.fileLabel(project, path, reference),
+                                                                     runBefore);
     return new HaxeCustomActionDialog(project, edited, adding,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",
                                       null, "haxe.custom.action.dialog.name.required", takenNames, launchSection,
@@ -149,16 +157,36 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
 
   /**
    * The actions the edited one (by the name the dialog shows) may run first:
-   * the build file's built-in and custom actions, without the edited one and
-   * those already running it, which would loop.
+   * its own build file's built-in and custom actions, then every other build
+   * file's, without the edited action and those already running it, which
+   * would loop.
    */
   @NotNull
-  private static List<String> runBeforeCandidates(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull String editedName) {
+  private static List<ActionReference> runBeforeCandidates(@NotNull Project project,
+                                                           @NotNull HaxeBuildFile buildFile,
+                                                           @NotNull String editedName) {
     String path = buildFile.file().getPath();
+    List<ActionReference> candidates = new ArrayList<>();
+    actionNamesOf(project, buildFile).forEach(name -> candidates.add(new ActionReference(null, name)));
+    for (HaxeBuildFile other : HaxeReadActions.compute(() -> HaxeKnownBuildFiles.all(project))) {
+      String otherPath = other.file().getPath();
+      if (otherPath.equals(path)) continue;
+      actionNamesOf(project, other).forEach(name -> candidates.add(new ActionReference(otherPath, name)));
+    }
     HaxeCustomActionsStore store = HaxeCustomActionsStore.getInstance(project);
+    candidates.removeIf(candidate -> isEdited(candidate, editedName) || store.runsBefore(candidate.qualifiedFor(path), path, editedName));
+    return candidates;
+  }
+
+  private static boolean isEdited(@NotNull ActionReference candidate, @NotNull String editedName) {
+    return candidate.buildFile() == null && candidate.action().equals(editedName);
+  }
+
+  /** The build file's built-in actions, then its custom ones. */
+  @NotNull
+  private static List<String> actionNamesOf(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
     List<String> names = new ArrayList<>(HaxeBuildSystem.of(buildFile.type()).actionNames(project, buildFile));
-    store.getActions(path).forEach(action -> names.add(action.name()));
-    names.removeIf(name -> name.equals(editedName) || store.runsBefore(path, name, editedName));
+    HaxeCustomActionsStore.getInstance(project).getActions(buildFile.file().getPath()).forEach(action -> names.add(action.name()));
     return names;
   }
 
@@ -233,7 +261,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   public CustomAction getAction() {
     EditedCommand edited = getEditedCommand();
     Launch launch = launchSection == null ? null : launchSection.launch();
-    List<String> runBefore = runBeforeSection == null ? List.of() : runBeforeSection.actions();
+    List<ActionReference> runBefore = runBeforeSection == null ? List.of() : runBeforeSection.actions();
     return new CustomAction(edited.name(), edited.command(), edited.workDirectory(), launch, runBefore);
   }
 

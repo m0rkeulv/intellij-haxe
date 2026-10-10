@@ -139,7 +139,7 @@ public final class HaxeToolWindowNodes {
    * command compiled the file - one created to run the build's output
    * ({@code launchOutput}, as the tree currently sees it), or an existing one. A null
    * {@code launchOutput} means the file produces nothing launchable right now.
-   * {@code runBefore} names the actions that run first.
+   * {@code runBefore} labels the actions that run first.
    */
   public record ActionNode(@NotNull String ownerId,
                            @NotNull String name,

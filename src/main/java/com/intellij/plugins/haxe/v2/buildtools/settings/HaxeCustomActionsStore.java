@@ -10,11 +10,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.LinkedHashMap;
 
 /**
@@ -56,11 +56,10 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
   /**
    * {@code workDirectory} may carry root variables; blank means the build file's
    * directory. A null {@code launch} is a plain action: its command runs in a
-   * console. {@code runBefore} names the file's other actions that run first,
-   * in order.
+   * console. {@code runBefore} names the actions that run first, in order.
    */
   public record CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory,
-                             @Nullable Launch launch, @NotNull List<String> runBefore) {
+                             @Nullable Launch launch, @NotNull List<ActionReference> runBefore) {
     public CustomAction {
       runBefore = List.copyOf(runBefore);
     }
@@ -71,6 +70,19 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
 
     public CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
       this(name, command, workDirectory, null);
+    }
+  }
+
+  /**
+   * An action a custom action runs first: {@code action} of the build file at
+   * {@code buildFile}, or of the referring action's own file when that is
+   * null - so moving a build file leaves its own references intact.
+   */
+  public record ActionReference(@Nullable String buildFile, @NotNull String action) {
+    /** The reference with its build file filled in, read from an action of {@code ownerId}. */
+    @NotNull
+    public ActionReference qualifiedFor(@NotNull String ownerId) {
+      return buildFile != null ? this : new ActionReference(ownerId, action);
     }
   }
 
@@ -91,7 +103,13 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     public List<LaunchParameterState> launchParameters = new ArrayList<>();
     public String runConfiguration = "";
     public boolean injectDebugArguments = true;
-    public List<String> runBefore = new ArrayList<>();
+    public List<RunBeforeState> runBefore = new ArrayList<>();
+  }
+
+  /** A stored reference; an empty {@code buildFile} is the referring action's own file. */
+  public static final class RunBeforeState {
+    public String buildFile = "";
+    public String action;
   }
 
   public static final class LaunchParameterState {
@@ -132,9 +150,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
         if (actionState.launchParameters == null) {
           actionState.launchParameters = new ArrayList<>();
         }
-        if (actionState.runBefore == null) {
-          actionState.runBefore = new ArrayList<>();
-        }
+        actionState.runBefore = cleanedReferences(actionState.runBefore);
         cleaned.add(actionState);
       }
     }
@@ -177,86 +193,153 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     }
   }
 
-  /** The build file's custom actions that run {@code name} before themselves. */
+  /** The custom actions, of any build file, that run {@code action} of {@code buildFile} before themselves. */
   @NotNull
-  public List<String> dependents(@NotNull String ownerId, @NotNull String name) {
-    return getActions(ownerId).stream()
-      .filter(action -> action.runBefore().contains(name))
-      .map(CustomAction::name)
-      .toList();
+  public List<ActionReference> dependents(@NotNull String buildFile, @NotNull String action) {
+    List<ActionReference> dependents = new ArrayList<>();
+    for (ContainerActions container : state.containers) {
+      for (ActionState actionState : container.actions) {
+        boolean refers = actionState.runBefore.stream().anyMatch(reference -> names(container.ownerId, reference, buildFile, action));
+        if (refers) dependents.add(new ActionReference(container.ownerId, actionState.name));
+      }
+    }
+    return dependents;
   }
 
-  /** Points every run-before reference to {@code oldName} at {@code newName}. */
-  public void renameReferences(@NotNull String ownerId, @NotNull String oldName, @NotNull String newName) {
-    ContainerActions container = find(ownerId);
-    if (container == null) return;
-    for (ActionState action : container.actions) {
-      action.runBefore.replaceAll(name -> oldName.equals(name) ? newName : name);
+  /** Points every run-before reference, from any build file, to {@code oldName} of {@code buildFile} at {@code newName}. */
+  public void renameReferences(@NotNull String buildFile, @NotNull String oldName, @NotNull String newName) {
+    for (ContainerActions container : state.containers) {
+      for (ActionState actionState : container.actions) {
+        for (RunBeforeState reference : actionState.runBefore) {
+          if (names(container.ownerId, reference, buildFile, oldName)) reference.action = newName;
+        }
+      }
     }
   }
 
-  /** Drops every run-before reference to {@code name}. */
-  public void dropReferences(@NotNull String ownerId, @NotNull String name) {
-    ContainerActions container = find(ownerId);
-    if (container == null) return;
-    for (ActionState action : container.actions) {
-      action.runBefore.removeIf(name::equals);
+  /** Drops every run-before reference, from any build file, to {@code action} of {@code buildFile}. */
+  public void dropReferences(@NotNull String buildFile, @NotNull String action) {
+    for (ContainerActions container : state.containers) {
+      for (ActionState actionState : container.actions) {
+        actionState.runBefore.removeIf(reference -> names(container.ownerId, reference, buildFile, action));
+      }
     }
   }
 
   /**
-   * The actions that run before {@code actionName}, in order: each custom
-   * action's run-before list expanded depth-first, every action at most once.
-   * Built-in actions run nothing before themselves. Null when the references
-   * loop back to an action already on the way.
+   * Re-keys the actions of a moved or renamed build file - or of every build
+   * file below a moved or renamed folder - and the references naming them, so
+   * neither keeps pointing at the old path.
+   */
+  public void moveOwner(@NotNull String oldPath, @NotNull String newPath) {
+    for (ContainerActions container : state.containers) {
+      if (container.ownerId != null) container.ownerId = movedPath(container.ownerId, oldPath, newPath);
+      for (ActionState actionState : container.actions) {
+        for (RunBeforeState reference : actionState.runBefore) {
+          if (!reference.buildFile.isEmpty()) reference.buildFile = movedPath(reference.buildFile, oldPath, newPath);
+        }
+      }
+    }
+  }
+
+  @NotNull
+  private static String movedPath(@NotNull String path, @NotNull String oldPath, @NotNull String newPath) {
+    if (path.equals(oldPath)) return newPath;
+    return path.startsWith(oldPath + "/") ? newPath + path.substring(oldPath.length()) : path;
+  }
+
+  /** Whether a stored reference of an action in {@code ownerId} names {@code action} of {@code buildFile}. */
+  private static boolean names(@Nullable String ownerId, @NotNull RunBeforeState reference, @NotNull String buildFile,
+                               @NotNull String action) {
+    String referenced = reference.buildFile.isEmpty() ? ownerId : reference.buildFile;
+    return action.equals(reference.action) && buildFile.equals(referenced);
+  }
+
+  /**
+   * The actions that run before {@code actionName} of {@code buildFile}, in
+   * order, each with its build file filled in: every custom action's
+   * run-before list expanded depth-first, across build files, every action at
+   * most once. Built-in actions run nothing before themselves. Null when the
+   * references loop back to an action already on the way.
    */
   @Nullable
-  public List<String> runBeforeChain(@NotNull String ownerId, @NotNull String actionName) {
-    Map<String, List<String>> references = new HashMap<>();
-    getActions(ownerId).forEach(action -> references.put(action.name(), action.runBefore()));
-    List<String> order = new ArrayList<>();
-    if (!collectRunBefore(actionName, references, new HashSet<>(), order)) return null;
+  public List<ActionReference> runBeforeChain(@NotNull String buildFile, @NotNull String actionName) {
+    List<ActionReference> order = new ArrayList<>();
+    if (!collectRunBefore(new ActionReference(buildFile, actionName), new HashSet<>(), order)) return null;
     return List.copyOf(order.subList(0, order.size() - 1));
   }
 
-  /** Whether {@code action} runs {@code target} somewhere before itself, or its references loop. */
-  public boolean runsBefore(@NotNull String ownerId, @NotNull String action, @NotNull String target) {
-    List<String> chain = runBeforeChain(ownerId, action);
-    return chain == null || chain.contains(target);
+  /** Whether {@code candidate} (its build file filled in) runs {@code action} of {@code buildFile} before itself, or loops. */
+  public boolean runsBefore(@NotNull ActionReference candidate, @NotNull String buildFile, @NotNull String action) {
+    List<ActionReference> chain = runBeforeChain(Objects.requireNonNull(candidate.buildFile()), candidate.action());
+    return chain == null || chain.contains(new ActionReference(buildFile, action));
   }
 
-  /** Adds {@code name}'s run-before actions, then {@code name}; false when a reference loops back onto {@code onPath}. */
-  private static boolean collectRunBefore(@NotNull String name,
-                                          @NotNull Map<String, List<String>> references,
-                                          @NotNull Set<String> onPath,
-                                          @NotNull List<String> order) {
-    if (onPath.contains(name)) return false;
-    if (order.contains(name)) return true;
-    onPath.add(name);
-    for (String before : references.getOrDefault(name, List.of())) {
-      if (!collectRunBefore(before, references, onPath, order)) return false;
+  /** Adds {@code node}'s run-before actions, then {@code node}; false when a reference loops back onto {@code onPath}. */
+  private boolean collectRunBefore(@NotNull ActionReference node, @NotNull Set<ActionReference> onPath, @NotNull List<ActionReference> order) {
+    if (onPath.contains(node)) return false;
+    if (order.contains(node)) return true;
+    onPath.add(node);
+    for (ActionReference before : runBeforeOf(node)) {
+      if (!collectRunBefore(before, onPath, order)) return false;
     }
-    onPath.remove(name);
-    order.add(name);
+    onPath.remove(node);
+    order.add(node);
     return true;
+  }
+
+  /** What {@code node} runs first, each build file filled in; nothing for a built-in or unknown action. */
+  @NotNull
+  private List<ActionReference> runBeforeOf(@NotNull ActionReference node) {
+    String buildFile = Objects.requireNonNull(node.buildFile());
+    return getActions(buildFile).stream()
+      .filter(action -> action.name().equals(node.action()))
+      .findFirst()
+      .map(action -> qualified(action.runBefore(), buildFile))
+      .orElse(List.of());
+  }
+
+  @NotNull
+  private static List<ActionReference> qualified(@NotNull List<ActionReference> references, @NotNull String ownerId) {
+    return references.stream()
+      .map(reference -> reference.qualifiedFor(ownerId))
+      .toList();
   }
 
   @NotNull
   private static CustomAction toAction(@NotNull ActionState actionState) {
     String command = StringUtil.notNullize(actionState.command);
     String workDirectory = StringUtil.notNullize(actionState.workDirectory);
-    return new CustomAction(actionState.name, command, workDirectory, toLaunch(actionState), runBeforeOf(actionState));
+    return new CustomAction(actionState.name, command, workDirectory, toLaunch(actionState), referencesOf(actionState));
   }
 
   @NotNull
-  private static List<String> runBeforeOf(@NotNull ActionState actionState) {
-    List<String> names = new ArrayList<>();
-    for (Object entry : (List<?>)actionState.runBefore) {
-      if (entry instanceof String name && !StringUtil.isEmptyOrSpaces(name)) {
-        names.add(name);
+  private static List<ActionReference> referencesOf(@NotNull ActionState actionState) {
+    return actionState.runBefore.stream()
+      .map(reference -> new ActionReference(StringUtil.nullize(reference.buildFile), reference.action))
+      .toList();
+  }
+
+  // the entries a run-before list may hold; anything else came from an older format
+  @NotNull
+  private static List<RunBeforeState> cleanedReferences(@Nullable List<?> stored) {
+    List<RunBeforeState> cleaned = new ArrayList<>();
+    if (stored == null) return cleaned;
+    for (Object entry : stored) {
+      if (entry instanceof RunBeforeState reference && !StringUtil.isEmptyOrSpaces(reference.action)) {
+        reference.buildFile = StringUtil.notNullize(reference.buildFile);
+        cleaned.add(reference);
       }
     }
-    return names;
+    return cleaned;
+  }
+
+  @NotNull
+  private static RunBeforeState referenceState(@NotNull ActionReference reference) {
+    RunBeforeState state = new RunBeforeState();
+    state.buildFile = StringUtil.notNullize(reference.buildFile());
+    state.action = reference.action();
+    return state;
   }
 
   @Nullable
@@ -280,7 +363,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     actionState.name = action.name();
     actionState.command = action.command();
     actionState.workDirectory = action.workDirectory();
-    actionState.runBefore = new ArrayList<>(action.runBefore());
+    action.runBefore().forEach(reference -> actionState.runBefore.add(referenceState(reference)));
     switch (action.launch()) {
       case Launch.Create create -> {
         actionState.launchKind = create.kindId();

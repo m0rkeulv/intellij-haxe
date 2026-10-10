@@ -6,6 +6,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeActionReferences;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
@@ -32,7 +33,10 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
     Project project = e.getProject();
     if (project == null || !(panel.getSelectedUserObject() instanceof ActionNode actionNode) || !actionNode.custom()) return;
     HaxeCustomActionsStore store = HaxeCustomActionsStore.getInstance(project);
-    String question = confirmation(store.dependents(actionNode.ownerId(), actionNode.name()), actionNode.name());
+    List<String> dependents = store.dependents(actionNode.ownerId(), actionNode.name()).stream()
+      .map(reference -> HaxeActionReferences.label(project, actionNode.ownerId(), reference))
+      .toList();
+    String question = confirmation(dependents, actionNode.name());
     int answer = Messages.showYesNoDialog(project, question, HaxeBundle.message("haxe.toolwindow.remove.action"), Messages.getQuestionIcon());
     if (answer != Messages.YES) return;
     store.removeAction(actionNode.ownerId(), actionNode.name());
