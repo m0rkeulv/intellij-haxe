@@ -186,8 +186,7 @@ final class HaxeToolWindowModelBuilder {
     }
     String projectRoot = HaxeContainers.projectRootPath(project);
     for (HaxeCustomToolsStore.CustomTool custom : HaxeCustomToolsStore.getInstance(project).getTools(raw.id())) {
-      String expanded = HaxeCustomCommands.expandRoots(custom.command(), workDirectory, projectRoot);
-      List<String> command = HaxeCustomCommands.parse(expanded);
+      List<String> command = HaxeCustomCommands.commandLine(project, environmentSdk, custom.command(), workDirectory, projectRoot);
       String toolWorkDirectory =
         HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, workDirectory, projectRoot);
       tools.add(new ToolNode(raw.id(), custom.name(), command, toolWorkDirectory, custom.command(), true));
@@ -430,7 +429,7 @@ final class HaxeToolWindowModelBuilder {
     for (HaxeCustomActionsStore.CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(ownerId)) {
       // the row shows the expanded command, so a ${target} action reads like the default ones
       String expanded = HaxeCustomCommands.expandTarget(project, buildFile.file(), buildFile.type(), custom.command());
-      List<String> command = HaxeCustomCommands.parse(HaxeCustomCommands.expandRoots(expanded, moduleRoot, projectRoot));
+      List<String> command = HaxeCustomCommands.commandLine(project, environmentSdk, expanded, moduleRoot, projectRoot);
       String actionWorkDirectory =
         HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, moduleRoot, projectRoot);
       actions.add(new ActionNode(ownerId, custom.name(), command, actionWorkDirectory, expanded, true, custom.launch(), launchOutput));
