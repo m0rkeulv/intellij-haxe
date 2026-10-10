@@ -443,10 +443,13 @@ final class HaxeToolWindowModelBuilder {
                                  @Nullable String environmentSdk,
                                  @Nullable String workDirectory) {
     HaxeBuildSystem buildSystem = HaxeBuildSystem.of(buildFile.type());
-    for (String actionName : buildSystem.defaultActionNames()) {
-      List<String> command = buildSystem.actionCommand(project, environmentSdk, buildFile, actionName);
+    for (String actionName : buildSystem.actionNames(project, buildFile)) {
+      List<String> command = Objects.requireNonNull(buildSystem.actionCommand(project, environmentSdk, buildFile, actionName));
       String presentable = buildSystem.presentableCommand(project, buildFile, actionName);
-      actions.add(new ActionNode(ownerId, actionName, Objects.requireNonNull(command), workDirectory, presentable, false, null, null));
+      String ownWorkDirectory = buildSystem.actionWorkDirectory(project, buildFile, actionName);
+      String actionWorkDirectory = ownWorkDirectory != null ? ownWorkDirectory : workDirectory;
+      ActionNode actionNode = new ActionNode(ownerId, actionName, command, actionWorkDirectory, presentable, false, null, null);
+      actions.add(actionNode);
     }
   }
 

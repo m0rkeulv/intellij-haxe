@@ -77,13 +77,13 @@ public final class HaxeCompileCommands {
                          action.workDirectory());
   }
 
-  /** Action names offered for a build file: the type's defaults plus its custom actions. */
+  /** Action names offered for a build file: its built-in actions plus its custom actions. */
   @NotNull
   public static List<String> availableActionNames(@NotNull Project project, @NotNull VirtualFile file) {
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
     List<String> names = new ArrayList<>();
     if (type != null) {
-      names.addAll(HaxeBuildSystem.of(type).defaultActionNames());
+      names.addAll(HaxeBuildSystem.of(type).actionNames(project, new HaxeBuildFile(file, type)));
     }
     for (HaxeCustomActionsStore.CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(file.getPath())) {
       if (!names.contains(custom.name())) {
@@ -190,8 +190,11 @@ public final class HaxeCompileCommands {
                                              @NotNull String containerId,
                                              @NotNull HaxeBuildFile buildFile,
                                              @NotNull String actionName) {
-    List<String> defaultAction = HaxeBuildSystem.of(buildFile.type()).actionCommand(project, environmentSdk, buildFile, actionName);
-    if (defaultAction != null) return new ActionCommand(defaultAction, null);
+    HaxeBuildSystem buildSystem = HaxeBuildSystem.of(buildFile.type());
+    List<String> defaultAction = buildSystem.actionCommand(project, environmentSdk, buildFile, actionName);
+    if (defaultAction != null) {
+      return new ActionCommand(defaultAction, buildSystem.actionWorkDirectory(project, buildFile, actionName));
+    }
 
     VirtualFile file = buildFile.file();
     HaxeCustomActionsStore.CustomAction custom = HaxeCustomActionsStore.getInstance(project).getActions(file.getPath()).stream()

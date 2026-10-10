@@ -184,6 +184,33 @@ public class HaxeBuildSystemTest extends HaxeCodeInsightFixtureTestCase {
     }
   }
 
+  @Test
+  @DisplayName("a C++ hxml gets a clean action that runs in its output folder")
+  public void testACppHxmlGetsACleanActionThatRunsInItsOutputFolder() {
+    VirtualFile file = myFixture.addFileToProject("native/cpp.hxml", "-main Main\n-cpp out/cpp\n").getVirtualFile();
+    HaxeBuildFile buildFile = new HaxeBuildFile(file, HaxeBuildFileType.HXML);
+    HaxeBuildSystem buildSystem = HaxeBuildSystem.of(HaxeBuildFileType.HXML);
+
+    List<String> clean = buildSystem.actionCommand(getProject(), null, buildFile, "Clean");
+    String workDirectory = buildSystem.actionWorkDirectory(getProject(), buildFile, "Clean");
+
+    assertEquals(List.of("Build", "Clean"), buildSystem.actionNames(getProject(), buildFile));
+    assertEquals(List.of("run", "hxcpp", "Build.xml", "clean"), clean.subList(1, clean.size()));
+    assertEquals(HaxeBuildWorkDirectories.resolve(getProject(), file, "out/cpp").toString(), workDirectory);
+    assertEquals("hxcpp clean out/cpp", buildSystem.presentableCommand(getProject(), buildFile, "Clean"));
+  }
+
+  @Test
+  @DisplayName("an hxml building another target has no clean action")
+  public void testAnHxmlBuildingAnotherTargetHasNoCleanAction() {
+    VirtualFile file = myFixture.addFileToProject("web/js.hxml", "-main Main\n-js out/main.js\n").getVirtualFile();
+    HaxeBuildFile buildFile = new HaxeBuildFile(file, HaxeBuildFileType.HXML);
+    HaxeBuildSystem buildSystem = HaxeBuildSystem.of(HaxeBuildFileType.HXML);
+
+    assertEquals(List.of("Build"), buildSystem.actionNames(getProject(), buildFile));
+    assertNull(buildSystem.actionCommand(getProject(), null, buildFile, "Clean"));
+  }
+
   private static String extensionOf(HaxeBuildFileType type) {
     return switch (type) {
       case HXML -> "hxml";

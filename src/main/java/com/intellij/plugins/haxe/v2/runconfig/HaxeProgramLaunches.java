@@ -197,7 +197,7 @@ public final class HaxeProgramLaunches {
     switch (kind) {
       case HASHLINK -> hashLinkDefaults(project, buildFile, targetOutput, parameters);
       case BROWSER -> browserDefaults(project, buildFile, targetOutput, parameters);
-      case FLASH -> parameters.put(Parameter.SWF, resolvedOutput(project, buildFile.file(), targetOutput).toString());
+      case FLASH -> parameters.put(Parameter.SWF, HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput).toString());
       case AIR -> airDefaults(project, buildFile, targetOutput, parameters);
       case HXCPP -> hxcppDefaults(project, buildFile, targetOutput, parameters);
       case NEKO -> nekoDefaults(project, buildFile, targetOutput, parameters);
@@ -237,7 +237,7 @@ public final class HaxeProgramLaunches {
                                        @NotNull HaxeBuildFile buildFile,
                                        @NotNull String targetOutput,
                                        @NotNull Map<Parameter, String> parameters) {
-    Path output = resolvedOutput(project, buildFile.file(), targetOutput);
+    Path output = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput);
     if (buildFile.type() == HaxeBuildFileType.HXML) {
       parameters.put(Parameter.HL_FILE, output.toString());
       return;
@@ -267,7 +267,7 @@ public final class HaxeProgramLaunches {
                                       @NotNull HaxeBuildFile buildFile,
                                       @NotNull String targetOutput,
                                       @NotNull Map<Parameter, String> parameters) {
-    Path outputDirectory = resolvedOutput(project, buildFile.file(), targetOutput).getParent();
+    Path outputDirectory = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput).getParent();
     if (outputDirectory != null) {
       parameters.put(Parameter.CONTENT_ROOT, outputDirectory.toString());
     }
@@ -281,7 +281,7 @@ public final class HaxeProgramLaunches {
                                   @NotNull HaxeBuildFile buildFile,
                                   @NotNull String targetOutput,
                                   @NotNull Map<Parameter, String> parameters) {
-    Path binDir = resolvedOutput(project, buildFile.file(), targetOutput).getParent();
+    Path binDir = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput).getParent();
     if (binDir == null || binDir.getParent() == null) return;
     parameters.put(Parameter.DESCRIPTOR, binDir.getParent().resolve("application.xml").toString());
     parameters.put(Parameter.CONTENT_ROOT, binDir.toString());
@@ -302,7 +302,7 @@ public final class HaxeProgramLaunches {
                                     @NotNull HaxeBuildFile buildFile,
                                     @NotNull String targetOutput,
                                     @NotNull Map<Parameter, String> parameters) {
-    Path output = resolvedOutput(project, buildFile.file(), targetOutput);
+    Path output = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput);
     if ("obj".equals(String.valueOf(output.getFileName()))) {
       // the CPP output path IS the obj dir; the executable sits in bin beside it
       Path binDir = binDirBesideObj(output);
@@ -325,7 +325,7 @@ public final class HaxeProgramLaunches {
                                    @NotNull HaxeBuildFile buildFile,
                                    @NotNull String targetOutput,
                                    @NotNull Map<Parameter, String> parameters) {
-    Path output = resolvedOutput(project, buildFile.file(), targetOutput);
+    Path output = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput);
     if (buildFile.type() == HaxeBuildFileType.HXML) {
       // empty executable = the neko RUNTIME, resolved at launch (settings/SDK/PATH)
       parameters.put(Parameter.EXECUTABLE, "");
@@ -385,20 +385,6 @@ public final class HaxeProgramLaunches {
     String content = HaxeReadActions.compute(() -> HaxeBuildFileInspector.loadText(buildFile.file()));
     if (content == null) return null;
     return LimeProjects.isLimeFamily(buildFile.type()) ? LimeProjects.appFile(content) : ProjectXmlParser.parseAppFile(content);
-  }
-
-  /**
-   * The target output resolved the way the compiler would: against the build
-   * file's work directory - the file's own folder for the lime family (lime
-   * display runs there, so its paths resolve the same), the hxml anchor from
-   * {@link HaxeBuildWorkDirectories} otherwise.
-   */
-  @NotNull
-  private static Path resolvedOutput(@NotNull Project project, @NotNull VirtualFile buildFile, @NotNull String targetOutput) {
-    String anchor = HaxeBuildWorkDirectories.workDirectory(project, buildFile);
-    return Path.of(anchor != null ? anchor : buildFile.getParent().getPath())
-      .resolve(targetOutput)
-      .normalize();
   }
 
   private static boolean matches(@NotNull RunnerAndConfigurationSettings candidate,

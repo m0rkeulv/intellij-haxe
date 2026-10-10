@@ -2,18 +2,25 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/// Facts about plain hxml builds: the direct `haxe <file>` compile and
-/// its single default action. The lime counterpart is [LimeProjects].
+/// Facts about plain hxml builds: the direct `haxe <file>` compile, its
+/// default action and, for a C++ build, hxcpp's clean. The lime counterpart is
+/// [LimeProjects].
 public final class HxmlProjects {
 
   /** The hxml default action's name - doubles as its identifier in stored configurations. */
   public static final String BUILD_ACTION = "Build";
+  /** The action cleaning a C++ build's object files; offered only while the selected section targets C++. */
+  public static final String CLEAN_ACTION = "Clean";
 
   private HxmlProjects() {
   }
@@ -26,6 +33,24 @@ public final class HxmlProjects {
                                           @NotNull VirtualFile file) {
     String fileArgument = HaxeBuildWorkDirectories.fileArgument(project, file);
     return List.of(HaxeToolPathResolver.resolveHaxeExecutable(project, environmentSdk), fileArgument);
+  }
+
+  /// The `-cpp` folder of the selected section as the file spells it; null
+  /// when that section does not build C++. Haxe leaves hxcpp's `Build.xml`
+  /// there, and hxcpp keeps its object files below it.
+  @Nullable
+  public static String cppOutput(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
+    HaxeBuildFileInfo info = HaxeReadActions.compute(() -> HaxeBuildSections.inspectSelected(project, buildFile));
+    return info.target() == HaxeTarget.CPP ? info.targetOutput() : null;
+  }
+
+  /// hxcpp's own clean: the `clean` target of its build tool deletes the
+  /// object files, so the next compile rebuilds every one. It runs in the
+  /// `-cpp` folder, where the generated `Build.xml` is.
+  @NotNull
+  public static List<String> cleanCommand(@NotNull Project project, @Nullable String environmentSdk) {
+    String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
+    return List.of(haxelib, "run", "hxcpp", "Build.xml", "clean");
   }
 
   /// Whether the command invokes the haxe compiler directly (and so takes `--connect` right after the executable).
