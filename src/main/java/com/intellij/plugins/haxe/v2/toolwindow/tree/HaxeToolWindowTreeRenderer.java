@@ -123,7 +123,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
   }
 
   private void renderAction(@NotNull ActionNode action) {
-    valueRow(actionIcon(action.name()), action.name(), action.presentableCommand(), false);
+    valueRow(HaxeActionIcons.forAction(action.name()), action.name(), action.presentableCommand(), false);
     if (!action.runBefore().isEmpty()) {
       String after = HaxeBundle.message("haxe.toolwindow.node.action.after", String.join(", ", action.runBefore()));
       append("  " + after, SimpleTextAttributes.GRAYED_ATTRIBUTES);
@@ -252,15 +252,6 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     return customTarget.customTarget() != null
            ? customTarget.customTarget()
            : HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
-  }
-
-  /** Actions that only produce output get the build hammer; ones that run something keep the play icon. */
-  @NotNull
-  private static Icon actionIcon(@NotNull String actionName) {
-    boolean buildAction = actionName.equalsIgnoreCase("build")
-                          || actionName.equalsIgnoreCase("compile")
-                          || actionName.equalsIgnoreCase("clean");
-    return buildAction ? AllIcons.Actions.Compile : AllIcons.Actions.Execute;
   }
 
   @NotNull

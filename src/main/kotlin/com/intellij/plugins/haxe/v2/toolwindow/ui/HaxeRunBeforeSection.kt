@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.v2.toolwindow.ui
 
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListSeparator
@@ -10,6 +9,7 @@ import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.plugins.haxe.HaxeBundle
 import com.intellij.plugins.haxe.v2.buildtools.HaxeActionReferences.Location
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference
+import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeActionIcons
 import com.intellij.ui.AnActionButton
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.ToolbarDecorator
@@ -19,7 +19,7 @@ import com.intellij.ui.dsl.builder.BottomGap
 import com.intellij.ui.dsl.builder.CollapsibleRow
 import com.intellij.ui.dsl.builder.TopGap
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
+import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import java.util.function.Function
 import java.util.function.Supplier
 import javax.swing.Icon
@@ -49,7 +49,10 @@ class HaxeRunBeforeSection(
 
   init {
     list.emptyText.text = HaxeBundle.message("haxe.custom.action.dialog.run.before.empty")
-    list.cellRenderer = textListCellRenderer { reference -> reference?.let { label.apply(it) } ?: "" }
+    list.cellRenderer = listCellRenderer {
+      icon(HaxeActionIcons.forAction(value.action()))
+      text(label.apply(value))
+    }
     val decorated = ToolbarDecorator.createDecorator(list)
       .setAddAction { button -> chooseAction(button) }
       .createPanel()
@@ -92,11 +95,11 @@ class HaxeRunBeforeSection(
 
   /** A group per build file of one module, holding its actions. */
   private fun fileChoices(references: List<ActionReference>, located: Map<ActionReference, Location?>): List<Choice> =
-    references.groupBy { located.getValue(it)!!.path() }
-      .map { (path, actions) -> GroupChoice(path, fileIcon(path), actions.map(::ActionChoice)) }
+    references.groupBy { located.getValue(it)!! }
+      .map { (location, actions) -> GroupChoice(location.path(), fileIcon(location), actions.map(::ActionChoice)) }
 
-  private fun fileIcon(path: String): Icon =
-    FileTypeManager.getInstance().getFileTypeByFileName(path.substringAfterLast('/')).icon ?: AllIcons.FileTypes.Any_type
+  private fun fileIcon(location: Location): Icon =
+    location.type()?.icon ?: AllIcons.FileTypes.Any_type
 
   /** A row of the + popup: an action to add, or a module or build file that opens the next level. */
   private sealed interface Choice {
@@ -112,7 +115,10 @@ class HaxeRunBeforeSection(
   private inner class ChoiceStep(title: String?, private val choices: List<Choice>) : BaseListPopupStep<Choice>(title, choices) {
     override fun getTextFor(value: Choice): String = value.text
 
-    override fun getIconFor(value: Choice): Icon? = (value as? GroupChoice)?.icon
+    override fun getIconFor(value: Choice): Icon = when (value) {
+      is GroupChoice -> value.icon
+      is ActionChoice -> HaxeActionIcons.forAction(value.text)
+    }
 
     override fun hasSubstep(selectedValue: Choice): Boolean = selectedValue is GroupChoice
 
