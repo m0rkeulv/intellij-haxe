@@ -75,6 +75,16 @@ public class HaxeCustomCommandsTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("a copied command names the selected target as the target variable")
+  public void testACopiedCommandNamesTheSelectedTargetAsTheTargetVariable() {
+    List<String> generated = List.of("haxelib", "run", "lime", "build", "project.xml", "windows", "-64");
+
+    assertEquals(List.of("haxelib", "run", "lime", "build", "project.xml", "${target}", "-64"),
+                 HaxeCustomCommands.withTargetVariable(generated, "windows"));
+    assertEquals(generated, HaxeCustomCommands.withTargetVariable(generated, null), "hxml has no selectable target");
+  }
+
+  @Test
   @DisplayName("a copied command keeps its tool variable as typed")
   public void testACopiedCommandKeepsItsToolVariableAsTyped() {
     assertEquals("${haxe} build.hxml", ParametersListUtil.join(List.of("${haxe}", "build.hxml")));

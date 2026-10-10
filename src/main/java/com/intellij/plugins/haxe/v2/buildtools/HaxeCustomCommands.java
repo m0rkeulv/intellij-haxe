@@ -130,6 +130,23 @@ public final class HaxeCustomCommands {
     return executable;
   }
 
+  /**
+   * The inverse of {@link #expandTarget} for a copied command: the first
+   * argument after the executable that is the file's selected target flag
+   * becomes {@code ${target}}, so the copy follows the target switcher. Extra
+   * flags the target adds (such as {@code -64}) stay as they are; a null flag
+   * (hxml, hxp scripts) leaves the command unchanged.
+   */
+  @NotNull
+  public static List<String> withTargetVariable(@NotNull List<String> arguments, @Nullable String targetFlag) {
+    if (targetFlag == null || arguments.size() < 2) return arguments;
+    int index = arguments.subList(1, arguments.size()).indexOf(targetFlag);
+    if (index < 0) return arguments;
+    List<String> result = new ArrayList<>(arguments);
+    result.set(index + 1, TARGET_VARIABLE);
+    return result;
+  }
+
   /** A typed command (its {@code ${target}} already expanded) as a runnable argv: tool and root variables expanded, then parsed. */
   @NotNull
   public static List<String> commandLine(@NotNull Project project,
