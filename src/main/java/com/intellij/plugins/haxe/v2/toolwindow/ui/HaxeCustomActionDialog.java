@@ -99,7 +99,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
                            ? null
                            : new EditedCommand(initial.name(), initial.command(), initial.workDirectory());
     Function<HaxeLaunchKind, Map<Parameter, String>> defaults = kind -> launchDefaults(project, buildFile, launchOutput, kind);
-    HaxeLaunchSection launchSection = new HaxeLaunchSection(defaults, initial == null ? null : initial.launch());
+    HaxeLaunchSection launchSection = new HaxeLaunchSection(project, defaults, initial == null ? null : initial.launch());
     Set<String> reservedNames = Set.copyOf(HaxeBuildSystem.of(buildFile.type()).defaultActionNames());
     return new HaxeCustomActionDialog(project, edited,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",

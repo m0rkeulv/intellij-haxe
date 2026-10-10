@@ -55,29 +55,44 @@ public enum HaxeLaunchKind {
          "haxe.toolwindow.program.configuration.name.interp", HaxeTarget.INTERP, null,
          Parameter.COMPILER_ARGUMENTS, Parameter.WORKING_DIRECTORY);
 
-  /** A configuration field a launch fills; {@code key} is the stored spelling, the label names it in dialogs. */
+  /**
+   * A configuration field a launch fills; {@code key} is the stored spelling,
+   * the label names it in dialogs, the shape says how a dialog edits it.
+   */
   public enum Parameter {
-    HL_FILE("hlFile", "haxe.launch.parameter.hl.file"),
-    HL_BINARY("hlBinary", "haxe.launch.parameter.hl.binary"),
-    CONTENT_ROOT("contentRoot", "haxe.launch.parameter.content.root"),
-    SWF("swf", "haxe.launch.parameter.swf"),
-    DESCRIPTOR("descriptor", "haxe.launch.parameter.descriptor"),
-    EXECUTABLE("executable", "haxe.launch.parameter.executable"),
-    PROGRAM_ARGUMENTS("programArguments", "haxe.launch.parameter.program.arguments"),
-    WORKING_DIRECTORY("workingDirectory", "haxe.launch.parameter.working.directory"),
-    COMPILER_ARGUMENTS("compilerArguments", "haxe.launch.parameter.compiler.arguments");
+    HL_FILE("hlFile", "haxe.launch.parameter.hl.file", Shape.FILE),
+    HL_BINARY("hlBinary", "haxe.launch.parameter.hl.binary", Shape.FILE),
+    CONTENT_ROOT("contentRoot", "haxe.launch.parameter.content.root", Shape.DIRECTORY),
+    SWF("swf", "haxe.launch.parameter.swf", Shape.FILE),
+    DESCRIPTOR("descriptor", "haxe.launch.parameter.descriptor", Shape.FILE),
+    EXECUTABLE("executable", "haxe.launch.parameter.executable", Shape.FILE),
+    PROGRAM_ARGUMENTS("programArguments", "haxe.launch.parameter.program.arguments", Shape.TEXT),
+    WORKING_DIRECTORY("workingDirectory", "haxe.launch.parameter.working.directory", Shape.DIRECTORY),
+    COMPILER_ARGUMENTS("compilerArguments", "haxe.launch.parameter.compiler.arguments", Shape.TEXT);
+
+    /** What a parameter's value is: a file the build writes (it may not exist yet), a directory, or plain text. */
+    public enum Shape {
+      FILE, DIRECTORY, TEXT
+    }
 
     private final String key;
     private final String labelKey;
+    private final Shape shape;
 
-    Parameter(@NotNull String key, @NotNull String labelKey) {
+    Parameter(@NotNull String key, @NotNull String labelKey, @NotNull Shape shape) {
       this.key = key;
       this.labelKey = labelKey;
+      this.shape = shape;
     }
 
     @NotNull
     public String key() {
       return key;
+    }
+
+    @NotNull
+    public Shape shape() {
+      return shape;
     }
 
     @NotNull
