@@ -19,6 +19,9 @@ import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter.Shape
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.BottomGap
+import com.intellij.ui.dsl.builder.CollapsibleRow
+import com.intellij.ui.dsl.builder.TopGap
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
@@ -58,6 +61,9 @@ class HaxeLaunchSection(
   private val configurationCombo = ComboBox(DefaultComboBoxModel(configurationChoices(initial)))
   private val existingDebugArguments = JBCheckBox(HaxeBundle.message("haxe.custom.action.dialog.launch.debug.arguments"), true)
 
+  private val createGroup: CollapsibleRow
+  private val existingGroup: CollapsibleRow
+
   val component: DialogPanel
 
   init {
@@ -75,11 +81,14 @@ class HaxeLaunchSection(
       fields[parameter] = field
       editors[parameter] = editorFor(parameter, field)
     }
+    // the two groups sit directly under each other; the room goes inside each, around its rows
+    lateinit var create: CollapsibleRow
+    lateinit var existing: CollapsibleRow
     component = panel {
-      val createGroup = collapsibleGroup(HaxeBundle.message("haxe.custom.action.dialog.launch.section")) {
+      create = collapsibleGroup(HaxeBundle.message("haxe.custom.action.dialog.launch.section")) {
         row(HaxeBundle.message("haxe.custom.action.dialog.launch.kind")) {
           cell(kindCombo)
-        }
+        }.topGap(TopGap.SMALL)
         for (parameter in Parameter.values()) {
           row(parameter.label()) {
             cell(editors.getValue(parameter)).align(AlignX.FILL)
@@ -90,22 +99,27 @@ class HaxeLaunchSection(
         }.visibleIf(kindCombo.selectedValueMatches { it != null })
         row {
           comment(HaxeBundle.message("haxe.custom.action.dialog.launch.hint"))
-        }
+        }.bottomGap(BottomGap.SMALL)
       }
-      val existingGroup = collapsibleGroup(HaxeBundle.message("haxe.custom.action.dialog.existing.section")) {
+      create.topGap(TopGap.NONE).bottomGap(BottomGap.NONE)
+      existing = collapsibleGroup(HaxeBundle.message("haxe.custom.action.dialog.existing.section")) {
         row(HaxeBundle.message("haxe.custom.action.dialog.existing.configuration")) {
           cell(configurationCombo)
-        }
+        }.topGap(TopGap.SMALL)
         row {
           cell(existingDebugArguments)
         }.visibleIf(configurationCombo.selectedValueMatches { it != null })
         row {
           comment(HaxeBundle.message("haxe.custom.action.dialog.existing.hint"))
-        }
+        }.bottomGap(BottomGap.SMALL)
       }
-      createGroup.expanded = initial is Launch.Create
-      existingGroup.expanded = initial is Launch.Existing
+      existing.topGap(TopGap.NONE).bottomGap(BottomGap.NONE)
     }
+    createGroup = create
+    existingGroup = existing
+    // set once the panel exists: the group in use opens, the other stays folded
+    createGroup.expanded = initial is Launch.Create
+    existingGroup.expanded = initial is Launch.Existing
     when (initial) {
       is Launch.Create -> {
         kindCombo.selectedItem = HaxeLaunchKind.byId(initial.kindId())
