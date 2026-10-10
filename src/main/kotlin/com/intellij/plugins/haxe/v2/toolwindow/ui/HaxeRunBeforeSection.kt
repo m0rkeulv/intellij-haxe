@@ -1,11 +1,14 @@
 package com.intellij.plugins.haxe.v2.toolwindow.ui
 
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.plugins.haxe.HaxeBundle
+import com.intellij.plugins.haxe.v2.buildtools.HaxeActionReferences.Location
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference
 import com.intellij.ui.AnActionButton
 import com.intellij.ui.CollectionListModel
@@ -19,19 +22,21 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import java.util.function.Function
 import java.util.function.Supplier
+import javax.swing.Icon
 
 /**
  * The "Run before" part of the custom action dialog: actions that run first,
  * in order - of the same build file or of any other; a failure stops the rest
  * and the action itself. `candidates` offers, for the name the dialog
  * currently shows, the actions that can be added without a loop; `label`
- * names a reference in the list, `fileLabel` heads the popup's group of
- * another build file's actions.
+ * names a reference in the list, `location` finds another build file's
+ * module and path. The + popup lists the file's own actions, then one entry
+ * per module that opens its build files, each opening its actions.
  */
 class HaxeRunBeforeSection(
   private val candidates: Function<String, List<ActionReference>>,
   private val label: Function<ActionReference, String>,
-  private val fileLabel: Function<ActionReference, String?>,
+  private val location: Function<String, Location?>,
   initial: List<ActionReference>,
 ) {
   private val model = CollectionListModel(initial)
@@ -70,27 +75,61 @@ class HaxeRunBeforeSection(
   private fun chooseAction(button: AnActionButton) {
     val offered = candidates.apply(currentName.get()).filter { it !in model.items }
     if (offered.isEmpty()) return
+    val step = ChoiceStep(HaxeBundle.message("haxe.custom.action.dialog.run.before.add"), choices(offered))
     JBPopupFactory.getInstance()
-      .createListPopup(CandidateStep(offered))
+      .createListPopup(step)
       .show(button.preferredPopupPoint)
   }
 
-  /** The candidates by action name, another build file's under a heading naming that file. */
-  private inner class CandidateStep(private val offered: List<ActionReference>) :
-    BaseListPopupStep<ActionReference>(HaxeBundle.message("haxe.custom.action.dialog.run.before.add"), offered) {
+  /** The own file's actions, then a group per module of the other build files, in the order offered. */
+  private fun choices(offered: List<ActionReference>): List<Choice> {
+    val located = offered.associateWith { reference -> reference.buildFile()?.let { location.apply(it) } }
+    val (own, others) = offered.partition { located[it] == null }
+    val modules = others.groupBy { located.getValue(it)!!.module() }
+      .map { (module, references) -> GroupChoice(module, AllIcons.Nodes.Module, fileChoices(references, located)) }
+    return own.map(::ActionChoice) + modules
+  }
 
-    override fun getTextFor(value: ActionReference): String = value.action()
+  /** A group per build file of one module, holding its actions. */
+  private fun fileChoices(references: List<ActionReference>, located: Map<ActionReference, Location?>): List<Choice> =
+    references.groupBy { located.getValue(it)!!.path() }
+      .map { (path, actions) -> GroupChoice(path, fileIcon(path), actions.map(::ActionChoice)) }
 
-    override fun getSeparatorAbove(value: ActionReference): ListSeparator? {
-      val heading = fileLabel.apply(value) ?: return null
-      val index = offered.indexOf(value)
-      val previous = if (index > 0) fileLabel.apply(offered[index - 1]) else null
-      return if (heading != previous) ListSeparator(heading) else null
+  private fun fileIcon(path: String): Icon =
+    FileTypeManager.getInstance().getFileTypeByFileName(path.substringAfterLast('/')).icon ?: AllIcons.FileTypes.Any_type
+
+  /** A row of the + popup: an action to add, or a module or build file that opens the next level. */
+  private sealed interface Choice {
+    val text: String
+  }
+
+  private data class ActionChoice(val reference: ActionReference) : Choice {
+    override val text: String get() = reference.action()
+  }
+
+  private data class GroupChoice(override val text: String, val icon: Icon, val children: List<Choice>) : Choice
+
+  private inner class ChoiceStep(title: String?, private val choices: List<Choice>) : BaseListPopupStep<Choice>(title, choices) {
+    override fun getTextFor(value: Choice): String = value.text
+
+    override fun getIconFor(value: Choice): Icon? = (value as? GroupChoice)?.icon
+
+    override fun hasSubstep(selectedValue: Choice): Boolean = selectedValue is GroupChoice
+
+    override fun isSpeedSearchEnabled(): Boolean = true
+
+    // a line between the own file's actions and the first module
+    override fun getSeparatorAbove(value: Choice): ListSeparator? {
+      val firstGroup = value is GroupChoice && choices.first() is ActionChoice && choices.first { it is GroupChoice } === value
+      return if (firstGroup) ListSeparator() else null
     }
 
-    override fun onChosen(selectedValue: ActionReference, finalChoice: Boolean): PopupStep<*>? {
-      model.add(selectedValue)
-      return FINAL_CHOICE
+    override fun onChosen(selectedValue: Choice, finalChoice: Boolean): PopupStep<*>? = when (selectedValue) {
+      is GroupChoice -> ChoiceStep(null, selectedValue.children)
+      is ActionChoice -> {
+        model.add(selectedValue.reference)
+        FINAL_CHOICE
+      }
     }
   }
 }
