@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.buildtools;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
@@ -75,6 +76,37 @@ public final class HaxeCompileCommands {
     if (action == null || action.command().isEmpty()) return null;
     return buildResolved(project, containerId, environmentSdk, buildFile.file(), action.command(), extraArguments,
                          action.workDirectory());
+  }
+
+  /** An action of a chain, by name, with its resolved command. */
+  public record NamedAction(@NotNull String name, @NotNull Resolved resolved) {
+  }
+
+  /** The actions an action runs before itself, resolved in order, or the problem stopping them. */
+  public record RunBefore(@NotNull List<NamedAction> actions, @Nullable String problem) {
+  }
+
+  /**
+   * Resolves the actions {@code actionName} runs before itself, in order. The
+   * problem names a reference that loops back, or one naming no action of the
+   * file (a built-in can disappear, as Clean does when the selected section
+   * stops building C++). Call in a read action.
+   */
+  @NotNull
+  public static RunBefore resolveRunBefore(@NotNull Project project, @NotNull String buildFilePath, @NotNull String actionName) {
+    List<String> names = HaxeCustomActionsStore.getInstance(project).runBeforeChain(buildFilePath, actionName);
+    if (names == null) {
+      return new RunBefore(List.of(), HaxeBundle.message("haxe.action.chain.cycle", actionName));
+    }
+    List<NamedAction> actions = new ArrayList<>();
+    for (String name : names) {
+      Resolved resolved = resolveAction(project, buildFilePath, name, "");
+      if (resolved == null) {
+        return new RunBefore(List.of(), HaxeBundle.message("haxe.action.chain.missing", actionName, name));
+      }
+      actions.add(new NamedAction(name, resolved));
+    }
+    return new RunBefore(List.copyOf(actions), null);
   }
 
   /** Action names offered for a build file: its built-in actions plus its custom actions. */

@@ -124,6 +124,10 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
 
   private void renderAction(@NotNull ActionNode action) {
     valueRow(actionIcon(action.name()), action.name(), action.presentableCommand(), false);
+    if (!action.runBefore().isEmpty()) {
+      String after = HaxeBundle.message("haxe.toolwindow.node.action.after", String.join(", ", action.runBefore()));
+      append("  " + after, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
     String launchTarget = action.launchTarget();
     if (launchTarget != null) {
       append("  " + HaxeBundle.message("haxe.toolwindow.node.action.launches", launchTarget), SimpleTextAttributes.GRAYED_ATTRIBUTES);

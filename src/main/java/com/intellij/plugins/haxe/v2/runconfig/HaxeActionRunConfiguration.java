@@ -30,6 +30,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Runs one action of a build file (compile / test / build / a custom action).
@@ -91,6 +92,10 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
     if (resolve() == null) {
       throw new RuntimeConfigurationError(unresolvableMessage());
     }
+    String chainProblem = resolveRunBefore().problem();
+    if (chainProblem != null) {
+      throw new RuntimeConfigurationError(chainProblem);
+    }
   }
 
   @Override
@@ -109,19 +114,48 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
         if (resolved == null) {
           throw new ExecutionException(unresolvableMessage());
         }
-        List<String> command =
-          HaxeCompileCommands.connectIfEnabled(getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
-        GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory());
-        KillableColoredProcessHandler processHandler = new KillableColoredProcessHandler(commandLine) {
-          // a run action wraps the app - long-running, sparse output; the default reader
-          // busy-polls it (a pty needs its own blocking reader)
-          @Override
-          protected @NotNull BaseOutputReader.Options readerOptions() {
-            return hasPty() ? super.readerOptions() : BaseOutputReader.Options.forMostlySilentProcess();
-          }
-        };
+        HaxeCompileCommands.RunBefore runBefore = resolveRunBefore();
+        if (runBefore.problem() != null) {
+          throw new ExecutionException(runBefore.problem());
+        }
+        ProcessHandler processHandler = runBefore.actions().isEmpty()
+                                        ? processHandlerFor(resolved)
+                                        : chainedProcessHandler(runBefore.actions(), resolved);
         ProcessTerminatedListener.attach(processHandler);
         return processHandler;
+      }
+    };
+  }
+
+  /** The actions running first, then this one, each announced in the console; the first failure ends the chain. */
+  @NotNull
+  private ProcessHandler chainedProcessHandler(@NotNull List<HaxeCompileCommands.NamedAction> before,
+                                               @NotNull HaxeCompileCommands.Resolved resolved) {
+    List<HaxeChainedProcessHandler.Step> steps = new ArrayList<>();
+    for (HaxeCompileCommands.NamedAction action : before) {
+      steps.add(step(action.name(), action.resolved()));
+    }
+    steps.add(step(actionName, resolved));
+    return new HaxeChainedProcessHandler(steps);
+  }
+
+  @NotNull
+  private HaxeChainedProcessHandler.Step step(@NotNull String name, @NotNull HaxeCompileCommands.Resolved resolved) {
+    String header = HaxeBundle.message("haxe.action.chain.step", name, resolved.presentable());
+    return new HaxeChainedProcessHandler.Step(header, () -> processHandlerFor(resolved));
+  }
+
+  @NotNull
+  private ProcessHandler processHandlerFor(@NotNull HaxeCompileCommands.Resolved resolved) throws ExecutionException {
+    List<String> command =
+      HaxeCompileCommands.connectIfEnabled(getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
+    GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory());
+    return new KillableColoredProcessHandler(commandLine) {
+      // a run action wraps the app - long-running, sparse output; the default reader
+      // busy-polls it (a pty needs its own blocking reader)
+      @Override
+      protected @NotNull BaseOutputReader.Options readerOptions() {
+        return hasPty() ? super.readerOptions() : BaseOutputReader.Options.forMostlySilentProcess();
       }
     };
   }
@@ -130,6 +164,11 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
   @Nullable
   private HaxeCompileCommands.Resolved resolve() {
     return HaxeReadActions.compute(() -> HaxeCompileCommands.resolveAction(getProject(), buildFilePath, actionName, extraArguments));
+  }
+
+  @NotNull
+  private HaxeCompileCommands.RunBefore resolveRunBefore() {
+    return HaxeReadActions.compute(() -> HaxeCompileCommands.resolveRunBefore(getProject(), buildFilePath, actionName));
   }
 
   @NotNull

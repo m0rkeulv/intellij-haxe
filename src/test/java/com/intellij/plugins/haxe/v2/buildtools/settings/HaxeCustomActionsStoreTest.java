@@ -93,6 +93,59 @@ public class HaxeCustomActionsStoreTest {
   }
 
   @Test
+  @DisplayName("run before chains expand depth first and run every action once")
+  public void runBeforeChainsExpandDepthFirstAndRunEveryActionOnce() {
+    HaxeCustomActionsStore store = new HaxeCustomActionsStore();
+    store.addAction(FILE, new CustomAction("prepare", "cmd-prepare", "", null, List.of("Clean")));
+    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of("prepare", "Clean")));
+
+    assertEquals(List.of("Clean", "prepare"), store.runBeforeChain(FILE, "release"));
+    assertEquals(List.of("Clean"), store.runBeforeChain(FILE, "prepare"));
+    assertEquals(List.of(), store.runBeforeChain(FILE, "Build"), "a built-in runs nothing first");
+  }
+
+  @Test
+  @DisplayName("a loop in the run before references has no chain")
+  public void aLoopInTheRunBeforeReferencesHasNoChain() {
+    HaxeCustomActionsStore store = new HaxeCustomActionsStore();
+    store.addAction(FILE, new CustomAction("a", "cmd-a", "", null, List.of("b")));
+    store.addAction(FILE, new CustomAction("b", "cmd-b", "", null, List.of("a")));
+
+    assertNull(store.runBeforeChain(FILE, "a"));
+    assertTrue(store.runsBefore(FILE, "a", "anything"), "a looping action is never offered");
+  }
+
+  @Test
+  @DisplayName("references follow a rename and go with a removal")
+  public void referencesFollowARenameAndGoWithARemoval() {
+    HaxeCustomActionsStore store = new HaxeCustomActionsStore();
+    store.addAction(FILE, new CustomAction("prepare", "cmd-prepare", ""));
+    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of("Clean", "prepare")));
+
+    store.renameReferences(FILE, "prepare", "setup");
+    assertEquals(List.of("Clean", "setup"), store.runBeforeChain(FILE, "release"));
+    assertEquals(List.of("release"), store.dependents(FILE, "setup"));
+
+    store.dropReferences(FILE, "setup");
+    assertEquals(List.of("Clean"), store.runBeforeChain(FILE, "release"));
+    assertTrue(store.dependents(FILE, "setup").isEmpty());
+  }
+
+  @Test
+  @DisplayName("run before survives the xml round trip")
+  public void runBeforeSurvivesTheXmlRoundTrip() {
+    HaxeCustomActionsStore store = new HaxeCustomActionsStore();
+    store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of("Clean", "prepare")));
+
+    Element serialized = XmlSerializer.serialize(store.getState());
+    HaxeCustomActionsStore reloaded = new HaxeCustomActionsStore();
+    reloaded.loadState(XmlSerializer.deserialize(serialized, HaxeCustomActionsStore.State.class));
+
+    assertEquals(List.of(new CustomAction("release", "cmd-release", "", null, List.of("Clean", "prepare"))),
+                 reloaded.getActions(FILE));
+  }
+
+  @Test
   @SuppressWarnings({"unchecked", "rawtypes"})
   @DisplayName("foreign entries from format changes are dropped")
   public void foreignEntriesFromFormatChangesAreDropped() {

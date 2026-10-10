@@ -101,7 +101,7 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
       .filter(action -> action.name().equals(actionNode.name()))
       .findFirst()
       .orElse(new CustomAction(actionNode.name(), actionNode.presentableCommand(), ""));
-    return new CustomAction(copyName(stored.name()), stored.command(), stored.workDirectory(), stored.launch());
+    return new CustomAction(copyName(stored.name()), stored.command(), stored.workDirectory(), stored.launch(), stored.runBefore());
   }
 
   /** The resolved command line as the row runs it; the work directory stays blank when it is the build file's own. */

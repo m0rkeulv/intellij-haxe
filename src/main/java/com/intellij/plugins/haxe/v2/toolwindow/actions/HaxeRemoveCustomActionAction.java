@@ -11,11 +11,12 @@ import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
 import org.jetbrains.annotations.NotNull;
+import java.util.List;
 
 /**
  * Tree context menu on a custom action row: removes it, after a confirmation
  * since the entry sits beside Edit and Duplicate, and drops the "Run Haxe
- * action" build steps that named it.
+ * action" build steps and the run-before references that named it.
  */
 public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
 
@@ -30,14 +31,21 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
   public void actionPerformed(@NotNull AnActionEvent e) {
     Project project = e.getProject();
     if (project == null || !(panel.getSelectedUserObject() instanceof ActionNode actionNode) || !actionNode.custom()) return;
-    int answer = Messages.showYesNoDialog(project,
-                                          HaxeBundle.message("haxe.toolwindow.remove.action.confirm", actionNode.name()),
-                                          HaxeBundle.message("haxe.toolwindow.remove.action"),
-                                          Messages.getQuestionIcon());
+    HaxeCustomActionsStore store = HaxeCustomActionsStore.getInstance(project);
+    String question = confirmation(store.dependents(actionNode.ownerId(), actionNode.name()), actionNode.name());
+    int answer = Messages.showYesNoDialog(project, question, HaxeBundle.message("haxe.toolwindow.remove.action"), Messages.getQuestionIcon());
     if (answer != Messages.YES) return;
-    HaxeCustomActionsStore.getInstance(project).removeAction(actionNode.ownerId(), actionNode.name());
+    store.removeAction(actionNode.ownerId(), actionNode.name());
+    store.dropReferences(actionNode.ownerId(), actionNode.name());
     HaxeProgramLaunches.retargetBuildSteps(project, actionNode.ownerId(), actionNode.name(), null);
     panel.refreshTree();
+  }
+
+  /** The question, naming the actions that run this one first: their reference goes with it. */
+  @NotNull
+  private static String confirmation(@NotNull List<String> dependents, @NotNull String name) {
+    if (dependents.isEmpty()) return HaxeBundle.message("haxe.toolwindow.remove.action.confirm", name);
+    return HaxeBundle.message("haxe.toolwindow.remove.action.confirm.used", name, String.join(", ", dependents));
   }
 
   @Override
