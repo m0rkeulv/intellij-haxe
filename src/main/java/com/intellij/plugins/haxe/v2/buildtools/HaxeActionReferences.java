@@ -5,6 +5,8 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -15,8 +17,11 @@ import org.jetbrains.annotations.Nullable;
 /// `moduleB › build.hxml › Build`.
 public final class HaxeActionReferences {
 
-  /** Where another file's action lives: its module (the project for the project root) and the file's path inside it. */
-  public record Location(@NotNull String module, @NotNull String path) {
+  /**
+   * Where another file's action lives: its module (the project for the
+   * project root), the file's path inside it, and the file's kind when known.
+   */
+  public record Location(@NotNull String module, @NotNull String path, @Nullable HaxeBuildFileType type) {
   }
 
   private HaxeActionReferences() {
@@ -52,7 +57,7 @@ public final class HaxeActionReferences {
   private static Location locationOf(@NotNull Project project, @NotNull VirtualFile file) {
     String containerId = HaxeContainers.containerIdFor(project, file);
     String module = HaxeContainers.isProjectRoot(containerId) ? project.getName() : containerId;
-    return new Location(module, pathInside(project, containerId, file));
+    return new Location(module, pathInside(project, containerId, file), HaxeBuildFileScanner.detectType(project, file));
   }
 
   /** The file's path relative to its container's root, or its name when it lies elsewhere. */
