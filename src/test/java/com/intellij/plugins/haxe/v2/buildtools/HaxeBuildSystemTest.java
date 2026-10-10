@@ -8,6 +8,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions.Debugger;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -159,6 +160,38 @@ public class HaxeBuildSystemTest extends HaxeCodeInsightFixtureTestCase {
   public void testHxpScriptHasNoDebugAdditions() {
     HaxeBuildFile script = fixture("test.hxml", HaxeBuildFileType.HXP_SCRIPT);
     assertNull(HaxeBuildSystem.of(HaxeBuildFileType.HXP_SCRIPT).debugCompileAdditions(getProject(), script, Debugger.DEFAULT));
+  }
+
+  /** (build file type, the names a custom action may not take). */
+  static final List<Arguments> RESERVED_ACTION_NAMES = List.of(
+    // hxml still resolves the build action's pre-rename identifier
+    arguments(HaxeBuildFileType.HXML, Set.of("Build", "compile")),
+    arguments(HaxeBuildFileType.LIME, Set.of("test", "run", "build", "clean")),
+    arguments(HaxeBuildFileType.NMML, Set.of("test", "run", "build", "clean")),
+    arguments(HaxeBuildFileType.HXP_SCRIPT, Set.of("build")));
+
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("RESERVED_ACTION_NAMES")
+  @DisplayName("reserved action names are every name the built ins answer")
+  public void testReservedActionNamesAreEveryNameTheBuiltInsAnswer(HaxeBuildFileType type, Set<String> reserved) {
+    HaxeBuildSystem buildSystem = HaxeBuildSystem.of(type);
+    VirtualFile file = myFixture.addFileToProject("reserved." + extensionOf(type), "").getVirtualFile();
+    HaxeBuildFile buildFile = new HaxeBuildFile(file, type);
+
+    assertEquals(reserved, buildSystem.reservedActionNames());
+    for (String name : reserved) {
+      boolean answered = buildSystem.actionCommand(getProject(), null, buildFile, name) != null;
+      assertTrue(answered, name + " must resolve as a built-in");
+    }
+  }
+
+  private static String extensionOf(HaxeBuildFileType type) {
+    return switch (type) {
+      case HXML -> "hxml";
+      case NMML -> "nmml";
+      case HXP_SCRIPT -> "hxp";
+      default -> "xml";
+    };
   }
 
   private HaxeBuildFile fixture(String relativePath, HaxeBuildFileType type) {
