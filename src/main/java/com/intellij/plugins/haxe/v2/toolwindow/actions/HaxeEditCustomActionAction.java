@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
+import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.ActionNode;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
@@ -38,8 +39,18 @@ public final class HaxeEditCustomActionAction extends DumbAwareAction {
       .orElse(new CustomAction(actionNode.name(), actionNode.presentableCommand(), ""));
     HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forAction(project, row.buildFile(), actionNode.launchOutput(), stored);
     if (dialog.showAndGet()) {
-      HaxeCustomActionsStore.getInstance(project).updateAction(actionNode.ownerId(), actionNode.name(), dialog.getAction());
+      CustomAction updated = dialog.getAction();
+      HaxeCustomActionsStore.getInstance(project).updateAction(actionNode.ownerId(), actionNode.name(), updated);
+      updateBuildSteps(project, actionNode, updated);
       panel.refreshTree();
+    }
+  }
+
+  /** Build steps naming the action follow its new name; an emptied command drops them, since they would fail. */
+  private static void updateBuildSteps(@NotNull Project project, @NotNull ActionNode before, @NotNull CustomAction updated) {
+    String stepName = updated.command().isBlank() ? null : updated.name();
+    if (!before.name().equals(stepName)) {
+      HaxeProgramLaunches.retargetBuildSteps(project, before.ownerId(), before.name(), stepName);
     }
   }
 
