@@ -828,6 +828,14 @@
                      key="haxe.inspections.dashed.define.name"
                      groupPath="Haxe" groupKey="inspections.group.build.files" enabledByDefault="true" level="WARNING"
                      implementationClass="com.intellij.plugins.haxe.ide.inspections.buildfiles.HaxeDashedDefineNameInspection"/>
+    <localInspection shortName="HaxeMissingLibrary" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.missing.library.name"
+                     groupPath="Haxe" groupKey="inspections.group.build.files" enabledByDefault="true" level="WARNING"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.buildfiles.HaxeMissingLibraryInspection"/>
+    <localInspection shortName="HaxeMissingIncludeFile" bundle="messages.HaxeBundle"
+                     key="haxe.inspections.missing.include.name"
+                     groupPath="Haxe" groupKey="inspections.group.build.files" enabledByDefault="true" level="WARNING"
+                     implementationClass="com.intellij.plugins.haxe.ide.inspections.buildfiles.HaxeMissingIncludeFileInspection"/>
 
     <typeHierarchyProvider language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.hierarchy.type.HaxeTypeHierarchyProvider"/>
     <callHierarchyProvider language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.hierarchy.call.HaxeCallHierarchyProvider"/>

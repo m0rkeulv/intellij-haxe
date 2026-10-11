@@ -54,5 +54,12 @@ public record HaxeBuildFileInfo(@Nullable HaxeTarget target,
 
   /** A haxelib dependency, optionally pinned to a version (or git ref). */
   public record HaxeLibDependency(@NotNull String name, @Nullable String version) {
+
+    /// The dependency an hxml `-lib` value names: `name`, `name:1.2.0` or `name:git:https://...`.
+    @NotNull
+    public static HaxeLibDependency parse(@NotNull String value) {
+      String[] parts = value.split(":", 2);
+      return new HaxeLibDependency(parts[0], parts.length > 1 ? parts[1] : null);
+    }
   }
 }

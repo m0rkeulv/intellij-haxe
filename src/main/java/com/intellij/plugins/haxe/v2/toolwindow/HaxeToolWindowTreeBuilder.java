@@ -3,12 +3,13 @@ package com.intellij.plugins.haxe.v2.toolwindow;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
-import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
-import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.InstalledLibrary;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.LibraryStatus;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
@@ -17,7 +18,6 @@ import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.ContainerEntry;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.EnvironmentData;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.FileEntry;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.InstalledLibrary;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -25,7 +25,6 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.tree.DefaultMutableTreeNode;
 import java.util.List;
 import java.util.Objects;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -203,21 +202,8 @@ final class HaxeToolWindowTreeBuilder {
   private static LibraryNode libraryNode(@NotNull HaxeBuildFile buildFile,
                                          @NotNull HaxeLibDependency library,
                                          @Nullable Map<String, InstalledLibrary> installedLibraries) {
-    if (installedLibraries == null) {
-      return new LibraryNode(buildFile, library.name(), library.version(), null, true);
-    }
-    InstalledLibrary installedLibrary = installedLibraries.get(library.name().toLowerCase(Locale.ROOT));
-    if (installedLibrary == null) {
-      return new LibraryNode(buildFile, library.name(), library.version(), null, false);
-    }
-    // a pinned version must itself be installed - the name alone is not
-    // enough. A git checkout is listed as version "git", never as its
-    // url#ref spec.
-    // TODO: compare a git pin's #ref against the installed checkout
-    //       (HaxelibLocalDocs.gitCheckout) and flag mismatches
-    String requiredVersion = HaxelibGitSpec.parse(library.version()) != null ? HaxelibSemVer.GIT_SCM : library.version();
-    boolean installed = requiredVersion == null || installedLibrary.versions().contains(requiredVersion);
-    return new LibraryNode(buildFile, library.name(), library.version(), installedLibrary.selectedVersion(), installed);
+    LibraryStatus status = HaxeInstalledLibraries.status(installedLibraries, library);
+    return new LibraryNode(buildFile, library.name(), library.version(), status.selectedVersion(), status.installed());
   }
 
   @NotNull
