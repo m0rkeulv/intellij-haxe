@@ -37,10 +37,11 @@ import java.util.Objects;
 /**
  * The status-bar switcher for the build a Haxe file is analysed under:
  * "Context: build.hxml [hl]". Its popup lists every build containing the
- * file, the current one checked, and "Select automatically" while the file
- * is pinned. Hidden for files no build contains.
+ * file, the current one checked, plus "Select automatically" while the file
+ * is pinned or shows a followed context. Hidden for non-Haxe files and for
+ * files no build contains.
  */
-// TODO: multiverse: the IDE's editor switcher + a CodeInsightContextPresentationProvider replace this widget - see doc/planned/resolve-context-plan.md, route B
+// TODO: multiverse: the IDE's editor switcher + a CodeInsightContextPresentationProvider replace this widget
 public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
   public static final String ID = "HaxeResolveContext";
 
@@ -65,7 +66,7 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
   @Override
   public void install(@NotNull StatusBar statusBar) {
     super.install(statusBar);
-    // a context choice, an active-file switch or an edited build file changes the answer
+    // a context choice or a build setting (active file, target, section) changes the answer
     MessageBusConnection connection = getProject().getMessageBus().connect(this);
     connection.subscribe(HaxeResolveContextListener.TOPIC, (HaxeResolveContextListener)this::update);
     connection.subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::update);
@@ -136,7 +137,7 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     else {
       store.pin(file, choice.context().path());
     }
-    // the file's tree was lexed under the previous context; the compiler-backed answers (diagnostics, resolve fallback) were computed under it
+    // the file's tree and its compiler-backed answers (diagnostics, resolve fallback) belong to the previous context
     HaxeDefineContextService.getInstance(getProject()).fileContextChanged(file);
     HaxeCompilerCaches.clearAndRehighlight(getProject(), "haxe: resolve context changed");
   }

@@ -69,8 +69,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
     HaxeBuildSettingsListener.publish(project);
   }
 
-  @NotNull
-  /** The entries of a moved or renamed build file (or folder) keep their file; whether any did. */
+  /** Added and hidden build files keep their entries when they, or a folder above them, are moved or renamed; whether anything changed. */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     boolean changed = false;
     for (ContainerFiles container : state.containers) {
@@ -80,6 +79,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
     return changed;
   }
 
+  @NotNull
   public List<String> getAddedPaths(@NotNull String containerId) {
     ContainerFiles container = find(containerId);
     return container == null ? List.of() : List.copyOf(container.addedPaths);

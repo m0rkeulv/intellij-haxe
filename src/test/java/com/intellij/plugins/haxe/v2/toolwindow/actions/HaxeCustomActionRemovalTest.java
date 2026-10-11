@@ -94,7 +94,7 @@ public class HaxeCustomActionRemovalTest {
     }
 
     @Override
-    public @NotNull References references(@NotNull String name, @NotNull List<ActionReference> users) {
+    public @NotNull References references(@NotNull String name, @NotNull List<ActionReference> dependents) {
       assertNotNull(decision, "the references question must not be asked");
       return decision;
     }

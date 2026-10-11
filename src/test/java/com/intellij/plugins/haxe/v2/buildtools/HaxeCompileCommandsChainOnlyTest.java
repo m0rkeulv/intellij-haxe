@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** A custom action without a command is a chain of other actions: it resolves, contributes nothing of its own to a chain, and an unknown action still resolves to nothing. */
-@DisplayName("Build tools: compile commands chain-only")
+@DisplayName("Build tools: compile commands chain only")
 public class HaxeCompileCommandsChainOnlyTest extends HaxeCodeInsightFixtureTestCase {
   private static final String BUILD_HXML_SOURCE = """
     -cp src

@@ -91,9 +91,9 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
     @Override
     public void visitXmlTag(@NotNull XmlTag tag) {
       if (!ProjectXmlParser.DEFINE_TAGS.contains(tag.getLocalName().toLowerCase(Locale.ROOT))) return;
-      XmlAttributeValue name = HaxeBuildFileInspections.nameAttributeValue(tag);
+      XmlAttributeValue name = HaxeXmlAttributeValues.nameAttributeValue(tag);
       if (name == null) return;
-      checkName(holder, name, HaxeBuildFileInspections.valueRange(name));
+      checkName(holder, name, HaxeXmlAttributeValues.valueRange(name));
     }
   }
 

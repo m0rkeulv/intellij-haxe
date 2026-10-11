@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
 import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
@@ -40,16 +41,14 @@ import static com.intellij.plugins.haxe.config.HaxeTarget.FLAG_DEFINE_VALUE;
  * Attaches each module's haxelib dependencies as module-level libraries, so they
  * appear under External Libraries and feed resolve scopes. The dependency set
  * is the union of the module's build files: every file resolves under its own
- * build ({@link com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts HaxeResolveContexts}), so each build's libraries must be
+ * build ({@link HaxeResolveContexts}), so each build's libraries must be
  * attached, whichever file is active. The define context stays per build -
  * it counts only the libraries a file's build declares. Classpaths come from
  * `haxelib path`, which includes transitive dependencies. Managed entries
  * carry a name prefix so the sync can remove stale ones without touching
  * user-defined libraries.
  */
-// TODO: a file still resolves against libraries only ANOTHER build of its module pulls in (the compiler would refuse);
-//       a per-context resolve scope narrows that once the lexer and resolver know a file's context
-
+// TODO: a file resolves against the libraries of every build of its module; a per-context library scope would limit it to its own build's
 @CustomLog
 public final class HaxeLibrarySync {
 

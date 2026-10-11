@@ -27,15 +27,16 @@ import java.util.function.Supplier
 import javax.swing.Icon
 
 /**
- * The "Run before" part of the custom action dialog: actions that run first,
- * in order - of the same build file or of any other; a failure stops the rest
- * and the action itself. `candidates` offers, for the name the dialog
- * currently shows, every action but the edited one; `refusal` says why a
- * pick cannot run first (it would loop), shown instead of adding it; `label`
- * names a reference in the list, `missing` marks one naming nothing any
- * more, `location` finds another build file's module and path. The + popup
- * lists the file's own actions, then one entry per module that opens its
- * build files, each opening its actions.
+ * The "Run before" part of the custom action dialog: the actions that run
+ * first, in order, from this build file or any other; a failure stops the
+ * rest and the action itself. The + popup lists the file's own actions, then
+ * one entry per module, which opens its build files and then their actions.
+ *
+ * `candidates` offers every action but the edited one (by the name the
+ * dialog currently shows); `refusal` says why a pick cannot run first (it
+ * would loop), shown instead of adding it; `label` is a reference's text;
+ * `missing` tells whether a reference names nothing any more; `location`
+ * finds another build file's module and path.
  */
 class HaxeRunBeforeSection(
   private val candidates: Function<String, List<ActionReference>>,

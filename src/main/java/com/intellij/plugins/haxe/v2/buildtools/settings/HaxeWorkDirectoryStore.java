@@ -56,9 +56,11 @@ public final class HaxeWorkDirectoryStore implements PersistentStateComponent<Ha
     this.state = state;
   }
 
-  /** The stored override (absolute path), or null to use the type-derived default. */
-  @Nullable
-  /** The entries of a moved or renamed build file (or folder) keep their file, and a work directory inside the folder follows it. */
+  /**
+   * A build file keeps its work directory when it, or a folder above it, is
+   * moved or renamed, and a work directory inside a moved folder moves with
+   * it; whether anything changed.
+   */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     boolean changed = false;
     for (FileWorkDirectory file : state.files) {
@@ -74,6 +76,8 @@ public final class HaxeWorkDirectoryStore implements PersistentStateComponent<Ha
     return changed;
   }
 
+  /** The stored override (absolute path), or null to use the type-derived default. */
+  @Nullable
   public String getWorkDirectory(@NotNull String buildFilePath) {
     return state.files.stream()
       .filter(file -> buildFilePath.equals(file.buildFilePath))

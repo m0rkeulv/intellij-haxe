@@ -52,7 +52,7 @@ public class HaxeClassResolveCache {
   });
   }
 
-  /** Drops every entry: the roots-change path, where no PSI change announces itself. */
+  /** Drops every entry; part of the plugin-wide clear ({@code HaxeResolveCaches}), which also runs on roots changes. */
   public void clear() {
     myMap.clear();
   }

@@ -55,8 +55,7 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
     HaxeBuildSettingsListener.publish(project);
   }
 
-  @Nullable
-  /** The active build file keeps its activation when it, or a folder above it, moves or is renamed. */
+  /** The active build file stays active when it, or a folder above it, is moved or renamed; whether anything changed. */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     if (state.activeFile == null) return false;
     String movedActive = HaxeStoredPaths.moved(state.activeFile, oldPath, newPath);
@@ -65,6 +64,7 @@ public final class HaxeActiveBuildFileStore implements PersistentStateComponent<
     return changed;
   }
 
+  @Nullable
   public String getActiveFilePath() {
     return StringUtil.nullize(state.activeFile);
   }

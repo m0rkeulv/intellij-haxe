@@ -15,17 +15,17 @@ import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Carries the resolve context across navigation: a file opened from an
- * editor whose context reaches it takes that context
- * ({@link HaxeResolveContexts#follow}), so what the user lands on is what the
- * file they came from sees. A fresh open is told from a tab switch by pairing
- * the selection change, which names the file navigated from, with the
- * editor's creation; the two arrive in either order (the creation event
- * comes from the composite's own coroutine), so the file carries the
- * hand-over. The tree, possibly parsed earlier under another context, is
- * re-lexed once both have happened.
+ * Carries the resolve context across navigation: a Haxe file opened from
+ * another Haxe file's editor takes that file's context when the context
+ * reaches it ({@link HaxeResolveContexts#follow}), so the user sees the
+ * target as the origin sees it. Only a newly opened editor follows, never a
+ * switch to an open tab: the selection change names the origin, the editor's
+ * opening marks the open as new. The platform delivers the two in either
+ * order, so whichever arrives first leaves a marker on the file for the
+ * other. The file is then re-lexed, since its tree may have been parsed
+ * under another context.
  */
-// TODO: multiverse: EditorContextManager.setEditorContext on the opened editor replaces the follow - see doc/planned/resolve-context-plan.md, route B
+// TODO: multiverse: EditorContextManager.setEditorContext on the opened editor replaces the follow
 public final class HaxeResolveContextFollower implements FileEditorManagerListener {
 
   /** The file selected before this one, recorded while this one's editor may still be opening. */

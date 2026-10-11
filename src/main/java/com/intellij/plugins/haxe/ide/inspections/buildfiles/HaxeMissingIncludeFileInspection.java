@@ -51,7 +51,7 @@ public class HaxeMissingIncludeFileInspection extends LocalInspectionTool {
       if (path.isEmpty() || path.contains("${")) return;
       if (HaxeBuildFileIncludes.includeFile(folder, path) != null) return;
       String message = HaxeBundle.message("haxe.inspections.missing.include.message", path);
-      holder.registerProblem(pathValue, HaxeBuildFileInspections.valueRange(pathValue), message);
+      holder.registerProblem(pathValue, HaxeXmlAttributeValues.valueRange(pathValue), message);
     }
 
     /** The {@code path} attribute, or the legacy {@code name} one. */

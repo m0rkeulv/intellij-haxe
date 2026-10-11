@@ -29,16 +29,19 @@ import java.util.List;
 
 /**
  * Which build each file is analysed under. Ownership is by path: among the
- * project's known build files whose sources contain the file, the one with
- * the most specific source directory wins. Several builds sharing that
- * directory (two hxml with the same {@code -cp src}) are told apart by the
- * build whose {@code -main} class the file is, then by the project's active
- * build file, then by tool-window order. A file no build contains falls back
- * to its module's default build, the rule the compiler services used before
- * (the active build file when the module owns it, else the module's Build
- * command). Resolved from a project-level cache of the builds' source
- * directories, invalidated by build-settings events, the project roots, the
- * VFS structure and build-file content - never by the whole-PSI counter.
+ * project's known build files whose sources contain the file, those with the
+ * most specific source directory are its closest owners. The user's pin wins
+ * while its build contains the file, then the followed context (the build a
+ * navigation carried over) while it is among the closest owners. Otherwise
+ * the closest owners (two hxml with the same {@code -cp src}) are told apart
+ * by the build whose {@code -main} class the file is, then the project's
+ * active build file, then the Build command of the file's container, then
+ * tool-window order. A file no build contains falls back to its module's
+ * default build ({@link #defaultBuildFileFor}).
+ * <p>
+ * The builds' source directories are cached for the project, invalidated by
+ * build-settings events, project roots, VFS structure changes and edits of
+ * hxml or xml files - not by every PSI change.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeResolveContexts {
@@ -75,11 +78,12 @@ public final class HaxeResolveContexts {
   }
 
   /**
-   * The context a file is analysed under: the build the user pinned it to
-   * while that build still contains it, else the automatic choice; null when
-   * neither a build nor the file's module names one. Call in a read action.
+   * The context a file is analysed under: the user's pin, else the followed
+   * context - each only while its build still contains the file - else the
+   * automatic choice; null when neither a build nor the file's module names
+   * one. Call in a read action.
    */
-  // TODO: multiverse: the provider's getPreferredContext answers this - see doc/planned/resolve-context-plan.md, route B
+  // TODO: multiverse: the provider's getPreferredContext answers this
   @Nullable
   public HaxeResolveContext contextFor(@NotNull VirtualFile file) {
     List<Ownership> owners = owners(file);
@@ -109,11 +113,11 @@ public final class HaxeResolveContexts {
   /**
    * Gives {@code to} the context of {@code from}: a navigation landing in a
    * file several builds reach equally (a library or a shared source) shows it
-   * as the file it came from sees it. A file with a closer owner keeps that
-   * owner (every root hxml reaches the whole project through its implicit
-   * classpath); nothing happens either for a pinned file or when the two
-   * already agree. Returns whether the context changed. Call in a read
-   * action.
+   * as the file it came from sees it. Only among {@code to}'s closest owners:
+   * a root hxml's implicit classpath reaches the whole project, so a file
+   * with a closer owner keeps it. Nothing changes for a pinned file or when
+   * the two already agree. Returns whether the context changed. Call in a
+   * read action.
    */
   public boolean follow(@NotNull VirtualFile from, @NotNull VirtualFile to) {
     HaxeResolveContextStore store = HaxeResolveContextStore.getInstance(project);
@@ -123,7 +127,7 @@ public final class HaxeResolveContexts {
     List<Ownership> owners = owners(to);
     if (owners.isEmpty()) return false;
     List<Ownership> closest = closestOwners(to.getPath(), owners);
-    if (closest.size() < 2 || ownedBy(closest, origin.path()) == null) return false;
+    if (closest.size() < 2 || findOwner(closest, origin.path()) == null) return false;
     HaxeResolveContext current = contextFor(to);
     if (current != null && current.path().equals(origin.path())) return false;
     store.follow(to, origin.path());
@@ -140,7 +144,7 @@ public final class HaxeResolveContexts {
   @Nullable
   private Ownership pinnedAmong(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
     String pinnedPath = HaxeResolveContextStore.getInstance(project).getPinnedBuildFile(file);
-    return pinnedPath == null ? null : ownedBy(owners, pinnedPath);
+    return pinnedPath == null ? null : findOwner(owners, pinnedPath);
   }
 
   /** The followed build applies only while it stays among the file's closest owners - the rule {@link #follow} chose it by. */
@@ -148,11 +152,11 @@ public final class HaxeResolveContexts {
   private Ownership followedAmong(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
     String followedPath = HaxeResolveContextStore.getInstance(project).getFollowedBuildFile(file);
     if (followedPath == null || owners.isEmpty()) return null;
-    return ownedBy(closestOwners(file.getPath(), owners), followedPath);
+    return findOwner(closestOwners(file.getPath(), owners), followedPath);
   }
 
   @Nullable
-  private static Ownership ownedBy(@NotNull List<Ownership> owners, @Nullable String buildFilePath) {
+  private static Ownership findOwner(@NotNull List<Ownership> owners, @Nullable String buildFilePath) {
     if (buildFilePath == null) return null;
     return owners.stream()
       .filter(ownership -> ownership.buildFile().file().getPath().equals(buildFilePath))
@@ -161,7 +165,7 @@ public final class HaxeResolveContexts {
   }
 
   /** Every build whose sources contain the file: the most specific first, tool-window order among equals. Call in a read action. */
-  // TODO: multiverse: the provider's getContexts answers this - see doc/planned/resolve-context-plan.md, route B
+  // TODO: multiverse: the provider's getContexts answers this
   @NotNull
   public List<HaxeResolveContext> contextsReaching(@NotNull VirtualFile file) {
     return owners(file).stream()
@@ -224,9 +228,9 @@ public final class HaxeResolveContexts {
     for (Ownership candidate : candidates) {
       if (candidate.isMain(path)) return candidate;
     }
-    Ownership active = ownedBy(candidates, HaxeKnownBuildFiles.effectiveActivePath(project));
+    Ownership active = findOwner(candidates, HaxeKnownBuildFiles.effectiveActivePath(project));
     if (active != null) return active;
-    Ownership command = ownedBy(candidates, compileCommandPath(file));
+    Ownership command = findOwner(candidates, compileCommandPath(file));
     return command != null ? command : candidates.getFirst();
   }
 
@@ -238,7 +242,7 @@ public final class HaxeResolveContexts {
     return command == null ? null : command.buildFilePath();
   }
 
-  /** The owners whose source directory containing the path is the longest (every owner of a library file ties at none); {@code owners} is sorted that way. */
+  /** The owners tied for the most specific source directory containing the path - all of them for a library file. Expects {@code owners} sorted most specific first. */
   @NotNull
   private static List<Ownership> closestOwners(@NotNull String path, @NotNull List<Ownership> owners) {
     String pathAsPrefix = path + "/";

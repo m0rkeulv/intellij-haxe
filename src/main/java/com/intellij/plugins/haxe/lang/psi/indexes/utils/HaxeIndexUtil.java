@@ -76,7 +76,7 @@ public class HaxeIndexUtil {
   }
 
   public static boolean belongToPlatformNotTargeted(PsiFile file) {
-    // TODO: the active build's defines answer for every requester; a per-file answer needs the requesting file's context (resolve context, milestone 4)
+    // TODO: the active build's defines answer for every requester; a per-file answer needs the requesting file's resolve context
     Map<String, String> definitions = HaxeDefineDetectionManager.getInstance(file.getProject()).getAllDefinitions();
     HaxeProjectModel project = HaxeProjectModel.fromElement(file);
     if (project.getSdkRoot().contains(file)) {

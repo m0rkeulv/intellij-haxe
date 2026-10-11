@@ -45,17 +45,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG_DEFINE_VALUE;
 
 /**
- * The IDE's conditional-compilation define contexts, derived from the v2
- * build configuration: a build file's defines (via the tool evaluation for
- * xml projects — conditionals evaluated, toolchain defines included), the
- * target's platform defines and the library defines haxelib reports,
- * overlaid with the owning container's IDE Define overrides. A source file
- * is lexed with the defines of its resolve context's build file
- * ({@link #definesForSource}); the ACTIVE build file's set
- * ({@link #getActiveDefines}) feeds
- * {@code HaxeDefineDetectionManager.getAllDefinitions()} for everything asked
- * without a file. A context change re-indexes the files with conditional
- * compilation ({@link HaxeDefineContextInvalidator}).
+ * The define sets conditional compilation is evaluated with, one per build
+ * file, derived from the v2 build configuration: the build file's own
+ * defines (for Lime/OpenFL/NME files from the tool's evaluation, so
+ * conditions are evaluated and toolchain defines included), the target's
+ * platform defines and the library defines haxelib reports, overlaid with
+ * the container's Define overrides. A source file is lexed with the set of
+ * the build it is analysed under ({@link #definesForSource}); the active
+ * build file's set ({@link #getActiveDefines}) answers everything asked
+ * without a file, through {@code HaxeDefineDetectionManager.getAllDefinitions()}.
+ * When a set changes, the files lexed with it are re-lexed
+ * ({@link HaxeDefineContextInvalidator}).
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -95,9 +95,9 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   // both by build file path
   private final Map<String, Snapshot> snapshots = new ConcurrentHashMap<>();
   private final Map<String, FastState> fastStates = new ConcurrentHashMap<>();
-  /** The ACTIVE build's defines most recently handed to a consumer — what current PSI state was parsed against. */
+  /** The active build's defines last handed out by {@link #getActiveDefines} - what files without a resolve context were parsed against. */
   private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
-  /** Per build file path, the defines most recently handed out as a file's context. */
+  /** Per build file path, the defines last handed out for the files lexed under it. */
   private final Map<String, Map<String, String>> handedOutByPath = new ConcurrentHashMap<>();
   private final AtomicBoolean refreshQueued = new AtomicBoolean();
   private final Object refreshLock = new Object();
@@ -213,7 +213,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     return virtualFile instanceof LightVirtualFile ? null : virtualFile;
   }
 
-  /** A source file's resolve context changed (pin, unpin): that file alone is re-lexed under its new context. */
+  /** A source file's resolve context changed (pin, unpin, navigation): that file alone is re-lexed under its new context. */
   public void fileContextChanged(@NotNull VirtualFile sourceFile) {
     HaxeDefineContextInvalidator.invalidateFile(project, sourceFile);
   }

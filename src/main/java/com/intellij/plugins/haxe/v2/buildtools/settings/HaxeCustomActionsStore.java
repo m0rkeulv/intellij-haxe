@@ -232,9 +232,9 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
   }
 
   /**
-   * Re-keys the actions of a moved or renamed build file - or of every build
-   * file below a moved or renamed folder - and the references naming them, so
-   * neither keeps pointing at the old path; whether anything moved.
+   * A build file keeps its custom actions, and the run-before references
+   * naming them keep pointing at it, when it or a folder above it is moved
+   * or renamed; whether anything changed.
    */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     boolean changed = false;

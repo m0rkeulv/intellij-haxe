@@ -24,8 +24,7 @@ import java.util.Set;
 /// include.lime / include.nmml / include.xml Lime picks inside it. The
 /// references are soft: a path Lime expands (`${haxelib:x}`, environment
 /// variables) gets none, and one naming nothing is never an error.
-/// TODO: `<haxelib name>` to the library's own include file needs the haxelib
-///       repository root without running a process (today `haxelib config`).
+// TODO: link <haxelib name> to the library's include file; needs the haxelib repository root without running haxelib config
 public class HaxeProjectXmlPathReferenceContributor extends PsiReferenceContributor {
 
   /** The elements whose {@code path} attribute names a file or folder. */

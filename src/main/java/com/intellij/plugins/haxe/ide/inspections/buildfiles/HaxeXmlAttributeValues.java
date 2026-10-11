@@ -7,10 +7,10 @@ import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/** What the build-file inspections share: how they address attribute values. */
-final class HaxeBuildFileInspections {
+/** How the build-file inspections address XML attribute values: the {@code name} attribute's value, and the text inside the quotes. */
+final class HaxeXmlAttributeValues {
 
-  private HaxeBuildFileInspections() {
+  private HaxeXmlAttributeValues() {
   }
 
   @Nullable
