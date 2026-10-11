@@ -60,6 +60,11 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
   }
 
   @Nullable
+  /** The entries of a moved or renamed build file (or folder) keep their file; whether any did. */
+  public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
+    return HaxeStoredPaths.moveKeys(state.targetsByFile, oldPath, newPath);
+  }
+
   public String getSelectedTargetId(@NotNull VirtualFile buildFile) {
     return state.targetsByFile.get(buildFile.getPath());
   }

@@ -65,6 +65,18 @@ public final class HaxeResolveContextStore implements PersistentStateComponent<H
     HaxeResolveContextListener.publish(project);
   }
 
+  /** A moved or renamed file (or folder) keeps its pin, and a pin to a moved build file follows it; whether anything moved. */
+  public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
+    boolean changed = HaxeStoredPaths.moveKeys(state.buildFileByFile, oldPath, newPath);
+    changed |= HaxeStoredPaths.moveKeys(followedBuildFileByFile, oldPath, newPath);
+    for (Map.Entry<String, String> entry : state.buildFileByFile.entrySet()) {
+      String movedBuildFile = HaxeStoredPaths.moved(entry.getValue(), oldPath, newPath);
+      changed |= !movedBuildFile.equals(entry.getValue());
+      entry.setValue(movedBuildFile);
+    }
+    return changed;
+  }
+
   /** The pinned build file's path, or null when the file follows the automatic choice. */
   @Nullable
   public String getPinnedBuildFile(@NotNull VirtualFile file) {

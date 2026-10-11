@@ -85,6 +85,22 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
 
   /** The container's marked tests build file paths (possibly none). */
   @NotNull
+  /** A marked or excluded tests build file keeps its mark when it, or a folder above it, moves or is renamed. */
+  public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
+    boolean changed = false;
+    for (ContainerTestsFile entry : state.testsFiles) changed |= moveEntry(entry, oldPath, newPath);
+    for (ContainerTestsFile entry : state.excludedFiles) changed |= moveEntry(entry, oldPath, newPath);
+    return changed;
+  }
+
+  private static boolean moveEntry(@NotNull ContainerTestsFile entry, @NotNull String oldPath, @NotNull String newPath) {
+    if (entry.filePath == null) return false;
+    String movedFile = HaxeStoredPaths.moved(entry.filePath, oldPath, newPath);
+    boolean changed = !movedFile.equals(entry.filePath);
+    entry.filePath = movedFile;
+    return changed;
+  }
+
   public List<String> getTestsFilePaths(@NotNull String containerId) {
     return state.testsFiles.stream()
       .filter(entry -> containerId.equals(entry.containerId))

@@ -70,6 +70,16 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
   }
 
   @NotNull
+  /** The entries of a moved or renamed build file (or folder) keep their file; whether any did. */
+  public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
+    boolean changed = false;
+    for (ContainerFiles container : state.containers) {
+      changed |= HaxeStoredPaths.moveAll(container.addedPaths, oldPath, newPath);
+      changed |= HaxeStoredPaths.moveAll(container.hiddenPaths, oldPath, newPath);
+    }
+    return changed;
+  }
+
   public List<String> getAddedPaths(@NotNull String containerId) {
     ContainerFiles container = find(containerId);
     return container == null ? List.of() : List.copyOf(container.addedPaths);

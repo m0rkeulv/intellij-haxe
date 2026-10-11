@@ -45,6 +45,21 @@ public final class HaxeActionReferences {
     return HaxeBundle.message("haxe.action.reference.file", location.module(), location.path());
   }
 
+  /** Whether the reference names an existing action: its build file exists and offers the action (built in for its kind, or custom). */
+  public static boolean exists(@NotNull Project project, @NotNull String ownerId, @NotNull ActionReference reference) {
+    String buildFile = reference.buildFile() == null ? ownerId : reference.buildFile();
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFile);
+    if (file == null) return false;
+    return HaxeReadActions.compute(() -> HaxeCompileCommands.availableActionNames(project, file)).contains(reference.action());
+  }
+
+  /** The reference's label, marked when it names nothing (a removed action, a vanished built-in, a deleted file). */
+  @NotNull
+  public static String labelOrMissing(@NotNull Project project, @NotNull String ownerId, @NotNull ActionReference reference) {
+    String label = label(project, ownerId, reference);
+    return exists(project, ownerId, reference) ? label : HaxeBundle.message("haxe.action.reference.missing", label);
+  }
+
   /** The module and path of the build file at {@code buildFile}, or null when no such file exists. */
   @Nullable
   public static Location location(@NotNull Project project, @NotNull String buildFile) {

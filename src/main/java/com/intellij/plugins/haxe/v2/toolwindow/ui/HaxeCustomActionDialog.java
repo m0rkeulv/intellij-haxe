@@ -7,6 +7,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.util.ui.HaxeDialogHints;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCustomCommands;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.RunBeforeRefusal;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
@@ -147,7 +148,9 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     List<ActionReference> runBefore = initial == null ? List.of() : initial.runBefore();
     HaxeRunBeforeSection runBeforeSection = new HaxeRunBeforeSection(name -> runBeforeCandidates(project, buildFile, name),
                                                                      reference -> HaxeActionReferences.label(project, path, reference),
+                                                                     reference -> !HaxeActionReferences.exists(project, path, reference),
                                                                      buildFilePath -> HaxeActionReferences.location(project, buildFilePath),
+                                                                     (name, reference) -> refusalMessage(project, buildFile, name, reference),
                                                                      runBefore);
     return new HaxeCustomActionDialog(project, edited, adding,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",
@@ -156,10 +159,11 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   }
 
   /**
-   * The actions the edited one (by the name the dialog shows) may run first:
-   * its own build file's built-in and custom actions, then every other build
-   * file's, without the edited action and those already running it, which
-   * would loop.
+   * The actions offered to run before the edited one (by the name the dialog
+   * shows): its own build file's built-in and custom actions, then every
+   * other build file's, without the edited action itself. A pick that would
+   * loop is refused with a message ({@link #refusalMessage}) rather than
+   * left out silently.
    */
   @NotNull
   private static List<ActionReference> runBeforeCandidates(@NotNull Project project,
@@ -173,9 +177,24 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
       if (otherPath.equals(path)) continue;
       actionNamesOf(project, other).forEach(name -> candidates.add(new ActionReference(otherPath, name)));
     }
-    HaxeCustomActionsStore store = HaxeCustomActionsStore.getInstance(project);
-    candidates.removeIf(candidate -> isEdited(candidate, editedName) || store.runsBefore(candidate.qualifiedFor(path), path, editedName));
+    candidates.removeIf(candidate -> isEdited(candidate, editedName));
     return candidates;
+  }
+
+  /** Why the pick cannot run before the edited action, or null when it may. */
+  @Nullable
+  private static String refusalMessage(@NotNull Project project,
+                                       @NotNull HaxeBuildFile buildFile,
+                                       @NotNull String editedName,
+                                       @NotNull ActionReference candidate) {
+    String path = buildFile.file().getPath();
+    RunBeforeRefusal refusal = HaxeCustomActionsStore.getInstance(project).refusal(candidate.qualifiedFor(path), path, editedName);
+    if (refusal == null) return null;
+    String label = HaxeActionReferences.label(project, path, candidate);
+    return switch (refusal) {
+      case RUNS_IT_FIRST -> HaxeBundle.message("haxe.custom.action.dialog.run.before.refused.runs.first", label, editedName);
+      case LOOPS -> HaxeBundle.message("haxe.custom.action.dialog.run.before.refused.loops", label);
+    };
   }
 
   private static boolean isEdited(@NotNull ActionReference candidate, @NotNull String editedName) {

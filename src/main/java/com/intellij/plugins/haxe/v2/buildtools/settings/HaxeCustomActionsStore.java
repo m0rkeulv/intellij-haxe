@@ -234,23 +234,26 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
   /**
    * Re-keys the actions of a moved or renamed build file - or of every build
    * file below a moved or renamed folder - and the references naming them, so
-   * neither keeps pointing at the old path.
+   * neither keeps pointing at the old path; whether anything moved.
    */
-  public void moveOwner(@NotNull String oldPath, @NotNull String newPath) {
+  public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
+    boolean changed = false;
     for (ContainerActions container : state.containers) {
-      if (container.ownerId != null) container.ownerId = movedPath(container.ownerId, oldPath, newPath);
+      if (container.ownerId != null) {
+        String movedOwner = HaxeStoredPaths.moved(container.ownerId, oldPath, newPath);
+        changed |= !movedOwner.equals(container.ownerId);
+        container.ownerId = movedOwner;
+      }
       for (ActionState actionState : container.actions) {
         for (RunBeforeState reference : actionState.runBefore) {
-          if (!reference.buildFile.isEmpty()) reference.buildFile = movedPath(reference.buildFile, oldPath, newPath);
+          if (reference.buildFile.isEmpty()) continue;
+          String movedReference = HaxeStoredPaths.moved(reference.buildFile, oldPath, newPath);
+          changed |= !movedReference.equals(reference.buildFile);
+          reference.buildFile = movedReference;
         }
       }
     }
-  }
-
-  @NotNull
-  private static String movedPath(@NotNull String path, @NotNull String oldPath, @NotNull String newPath) {
-    if (path.equals(oldPath)) return newPath;
-    return path.startsWith(oldPath + "/") ? newPath + path.substring(oldPath.length()) : path;
+    return changed;
   }
 
   /** Whether a stored reference of an action in {@code ownerId} names {@code action} of {@code buildFile}. */
@@ -274,10 +277,15 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     return List.copyOf(order.subList(0, order.size() - 1));
   }
 
-  /** Whether {@code candidate} (its build file filled in) runs {@code action} of {@code buildFile} before itself, or loops. */
-  public boolean runsBefore(@NotNull ActionReference candidate, @NotNull String buildFile, @NotNull String action) {
+  /** Why a pick cannot run before an action: the pick runs that action first already, or its own run-before actions loop. */
+  public enum RunBeforeRefusal { RUNS_IT_FIRST, LOOPS }
+
+  /** The refusal for {@code candidate} (its build file filled in) running before {@code action} of {@code buildFile}; null when it may. */
+  @Nullable
+  public RunBeforeRefusal refusal(@NotNull ActionReference candidate, @NotNull String buildFile, @NotNull String action) {
     List<ActionReference> chain = runBeforeChain(Objects.requireNonNull(candidate.buildFile()), candidate.action());
-    return chain == null || chain.contains(new ActionReference(buildFile, action));
+    if (chain == null) return RunBeforeRefusal.LOOPS;
+    return chain.contains(new ActionReference(buildFile, action)) ? RunBeforeRefusal.RUNS_IT_FIRST : null;
   }
 
   /** Adds {@code node}'s run-before actions, then {@code node}; false when a reference loops back onto {@code onPath}. */
