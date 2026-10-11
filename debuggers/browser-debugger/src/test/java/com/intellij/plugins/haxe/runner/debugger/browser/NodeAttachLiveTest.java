@@ -43,8 +43,10 @@ import org.junit.jupiter.api.Timeout;
 ///
 ///   - the attach flavour runs the same parent/child dance as the browser
 ///       launch (fire-and-forget attach, startDebugging hand-over);
-///   - `continueOnAttach` releases the --inspect-brk hold after
-///       configurationDone — breakpoints installed first stop the run;
+///   - without `continueOnAttach` the --inspect-brk hold surfaces as the
+///       session's first stop, after the breakpoints are bound; releasing
+///       it then stops the run on them (js-debug's own release comes before
+///       a source-mapped breakpoint binds, so startup code runs past it);
 ///   - `resolveSourceMapLocations=["**"]` lets the map of an artifact
 ///       OUTSIDE the cwd resolve (the gutter single-run temp root) — null is
 ///       NOT equivalent: the DAP encoder drops null values, and an absent
@@ -144,7 +146,7 @@ public class NodeAttachLiveTest {
       child.sendRequestNoWait(ConfiguredLaunchRequest.of(startDebugging.getArguments().getConfiguration()));
 
       StoppedEvent stopped = configureAndAwaitBreakpoint(child, fixture);
-      assertNotNull(stopped, "no breakpoint stop (continueOnAttach or the source map failed)");
+      assertNotNull(stopped, "no breakpoint stop (the hold release or the source map failed)");
 
       StackTraceResponse stack = (StackTraceResponse)child.sendRequest(
         LiveProbeUtil.stackTraceRequest(stopped.getBody().getThreadId()), TIMEOUT);
@@ -179,7 +181,7 @@ public class NodeAttachLiveTest {
         if ("breakpoint".equals(stopped.getBody().getReason())) {
           return stopped;
         }
-        // an entry/pause stop surfacing despite continueOnAttach: release it
+        // the --inspect-brk hold: release it, as NodeEntryHoldRelease does
         probe("non-breakpoint stop (" + stopped.getBody().getReason() + ") - continuing");
         child.sendRequest(LiveProbeUtil.continueRequest(stopped.getBody().getThreadId()), TIMEOUT);
       }
@@ -194,7 +196,7 @@ public class NodeAttachLiveTest {
     config.put("request", "attach");
     config.put("name", "probe");
     config.put("port", inspectorPort);
-    config.put("continueOnAttach", true);
+    config.put("continueOnAttach", false);
     // the match-all glob, never null: the DAP encoder drops null values
     config.put("resolveSourceMapLocations", List.of("**"));
     config.put("cwd", cwd.toString());
