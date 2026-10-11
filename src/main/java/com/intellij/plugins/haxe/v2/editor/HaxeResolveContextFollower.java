@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.editor;
 
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.project.Project;
@@ -12,22 +13,25 @@ import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Carries the resolve context across navigation: a file opened from an
  * editor whose context reaches it takes that context
  * ({@link HaxeResolveContexts#follow}), so what the user lands on is what the
- * file they came from sees. Decided before the editor opens, so its
- * highlighting starts under the right context; the file's tree, possibly
- * parsed earlier under another one, is re-lexed once the editor is up. The
- * two hooks arrive on separate listener instances, so the file carries the
- * hand-over.
+ * file they came from sees. A fresh open is told from a tab switch by pairing
+ * the selection change, which names the file navigated from, with the
+ * editor's creation; the two arrive in either order (the creation event
+ * comes from the composite's own coroutine), so the file carries the
+ * hand-over. The tree, possibly parsed earlier under another context, is
+ * re-lexed once both have happened.
  */
 // TODO: multiverse: EditorContextManager.setEditorContext on the opened editor replaces the follow - see doc/planned/resolve-context-plan.md, route B
-public final class HaxeResolveContextFollower implements FileEditorManagerListener.Before, FileEditorManagerListener {
+public final class HaxeResolveContextFollower implements FileEditorManagerListener {
 
-  private static final Key<Boolean> RELEX_ON_OPEN = Key.create("haxe.resolve.context.relex.on.open");
+  /** The file selected before this one, recorded while this one's editor may still be opening. */
+  private static final Key<VirtualFile> NAVIGATED_FROM = Key.create("haxe.resolve.context.navigated.from");
+  /** The editor was created; the selection change naming the origin is still due. */
+  private static final Key<Boolean> OPENED = Key.create("haxe.resolve.context.opened");
 
   private final Project project;
 
@@ -36,28 +40,45 @@ public final class HaxeResolveContextFollower implements FileEditorManagerListen
   }
 
   @Override
-  public void beforeFileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
-    // the tabs restored while the project opens are not navigation
-    if (!StartupManager.getInstance(project).postStartupActivityPassed()) return;
-    VirtualFile from = selectedFile(source);
-    if (from == null || from.equals(file) || !isHaxe(from) || !isHaxe(file)) return;
-    boolean changed = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).follow(from, file));
-    if (changed) {
-      file.putUserData(RELEX_ON_OPEN, Boolean.TRUE);
+  public void selectionChanged(@NotNull FileEditorManagerEvent event) {
+    VirtualFile to = event.getNewFile();
+    VirtualFile from = event.getOldFile();
+    if (to == null || from == null || from.equals(to) || !isHaxe(to)) return;
+    if (to.getUserData(OPENED) != null) {
+      to.putUserData(OPENED, null);
+      follow(from, to);
+    }
+    else {
+      to.putUserData(NAVIGATED_FROM, from);
     }
   }
 
   @Override
   public void fileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
-    if (file.getUserData(RELEX_ON_OPEN) == null) return;
-    file.putUserData(RELEX_ON_OPEN, null);
-    HaxeDefineContextService.getInstance(project).fileContextChanged(file);
+    if (!isHaxe(file)) return;
+    VirtualFile from = file.getUserData(NAVIGATED_FROM);
+    if (from != null) {
+      file.putUserData(NAVIGATED_FROM, null);
+      follow(from, file);
+    }
+    else {
+      file.putUserData(OPENED, Boolean.TRUE);
+    }
   }
 
-  @Nullable
-  private static VirtualFile selectedFile(@NotNull FileEditorManager source) {
-    VirtualFile[] selected = source.getSelectedFiles();
-    return selected.length == 0 ? null : selected[0];
+  @Override
+  public void fileClosed(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
+    file.putUserData(NAVIGATED_FROM, null);
+    file.putUserData(OPENED, null);
+  }
+
+  private void follow(@NotNull VirtualFile from, @NotNull VirtualFile to) {
+    // the tabs restored while the project opens are not navigation
+    if (!StartupManager.getInstance(project).postStartupActivityPassed() || !isHaxe(from)) return;
+    boolean changed = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).follow(from, to));
+    if (changed) {
+      HaxeDefineContextService.getInstance(project).fileContextChanged(to);
+    }
   }
 
   private static boolean isHaxe(@NotNull VirtualFile file) {
