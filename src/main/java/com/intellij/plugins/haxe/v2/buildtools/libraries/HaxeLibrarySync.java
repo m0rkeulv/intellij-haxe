@@ -23,7 +23,6 @@ import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibPathParser.LibrarySection;
-import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import lombok.CustomLog;
@@ -40,14 +39,17 @@ import static com.intellij.plugins.haxe.config.HaxeTarget.FLAG_DEFINE_VALUE;
 /**
  * Attaches each module's haxelib dependencies as module-level libraries, so they
  * appear under External Libraries and feed resolve scopes. The dependency set
- * follows the module's CURRENT build file (the project's active file when this
- * module owns it, else the module's Build command file) — code must not resolve
- * against libraries only a non-current build file pulls in. Modules without a
- * current file fall back to the union of all their build files. Classpaths come
- * from `haxelib path`, which includes transitive dependencies. Managed entries
+ * is the union of the module's build files: every file resolves under its own
+ * build ({@link com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts HaxeResolveContexts}), so each build's libraries must be
+ * attached, whichever file is active. The define context stays per build -
+ * it counts only the libraries a file's build declares. Classpaths come from
+ * `haxelib path`, which includes transitive dependencies. Managed entries
  * carry a name prefix so the sync can remove stale ones without touching
  * user-defined libraries.
  */
+// TODO: a file still resolves against libraries only ANOTHER build of its module pulls in (the compiler would refuse);
+//       a per-context resolve scope narrows that once the lexer and resolver know a file's context
+
 @CustomLog
 public final class HaxeLibrarySync {
 
@@ -191,20 +193,16 @@ public final class HaxeLibrarySync {
   }
 
   /**
-   * The build files whose library sets the module exposes: its CURRENT build
-   * file (the project's effective active file when this module owns it, else
-   * the module's Build command file), plus its tests build files — the module's
-   * source roots hold the test sources too, so every tests build's libraries
-   * must resolve alongside the main build's. Without a current file the union
-   * of all known build files applies.
+   * The build files whose libraries the module gets: all its known build
+   * files, plus the container's tests build files it owns - the module's
+   * source roots hold the test sources too, and a marked tests build need
+   * not be a known build file.
    */
   @NotNull
   private static List<HaxeBuildFile> dependencySources(@NotNull Project project,
                                                        @NotNull Module module,
                                                        @NotNull List<HaxeBuildFile> buildFiles) {
-    HaxeBuildFile current = HaxeResolveContexts.getInstance(project).defaultBuildFileFor(module);
-    List<HaxeBuildFile> sources = new ArrayList<>(current != null ? List.of(current) : buildFiles);
-
+    List<HaxeBuildFile> sources = new ArrayList<>(buildFiles);
     for (HaxeBuildFile tests : testsBuildFiles(project, module, buildFiles)) {
       boolean known = sources.stream()
         .anyMatch(source -> source.file().getPath().equals(tests.file().getPath()));

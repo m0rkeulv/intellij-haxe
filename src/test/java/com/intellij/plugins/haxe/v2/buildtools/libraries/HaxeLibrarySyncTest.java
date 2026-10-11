@@ -78,6 +78,19 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
     assertUtestCollected("the module holds the test sources too - the tests build's libraries must resolve");
   }
 
+  @Test
+  @DisplayName("every build file of the module feeds its dependencies, not only the active one")
+  public void testEveryBuildFileOfTheModuleFeedsItsDependenciesNotOnlyTheActiveOne() {
+    VirtualFile web = myFixture.addFileToProject("web.hxml", "-cp src\n-main WebMain\n-lib tink_core\n-js bin/web.js\n").getVirtualFile();
+    myFixture.addFileToProject("node.hxml", "-cp src\n-main NodeMain\n-lib hxnodejs\n-js bin/node.js\n");
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+
+    List<String> names = collectedDependencyNames();
+
+    assertTrue(names.contains("tink_core") && names.contains("hxnodejs"),
+               "a file resolves under its own build, so both builds' libraries attach; got: " + names);
+  }
+
   /** The only build file sits in tests/ (registered manually) with its -libs behind includes. */
   @NotNull
   private VirtualFile registerTestsBuildInSubfolder() {
@@ -86,6 +99,17 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
     myFixture.addFileToProject("tests/compile-each.hxml", EACH_HXML);
     HaxeBuildFilesStore.getInstance(getProject()).addFile(myFixture.getModule().getName(), buildFile.getPath());
     return buildFile;
+  }
+
+  @NotNull
+  private List<String> collectedDependencyNames() {
+    Map<Module, List<HaxeLibDependency>> dependencies =
+      ReadAction.computeBlocking(() -> HaxeLibrarySync.collectDependencies(getProject()));
+    List<HaxeLibDependency> moduleDependencies = dependencies.get(myFixture.getModule());
+    assertNotNull(moduleDependencies, "the module must have a dependency entry");
+    return moduleDependencies.stream()
+      .map(HaxeLibDependency::name)
+      .toList();
   }
 
   private void assertUtestCollected(@NotNull String reason) {
