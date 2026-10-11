@@ -1,13 +1,21 @@
 package com.intellij.plugins.haxe.v2.buildtools.context;
 
+import com.intellij.openapi.roots.ModuleRootModificationUtil;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,6 +40,9 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
     -main Tool
     --interp
     """;
+
+  @TempDir
+  Path libraryDirectory;
 
   @Override
   protected String getBasePath() {
@@ -118,11 +129,36 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("a library file is reached by every build, the active one first")
+  public void testALibraryFileIsReachedByEveryBuildTheActiveOneFirst() throws IOException {
+    VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
+    VirtualFile node = hxml("node.hxml", NODE_HXML_SOURCE);
+    VirtualFile libraryFile = libraryFile("Lib.hx");
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(node.getPath());
+
+    List<String> reaching = contexts().contextsReaching(libraryFile).stream()
+      .map(HaxeResolveContext::path)
+      .toList();
+
+    assertEquals(Set.of(web.getPath(), node.getPath()), Set.copyOf(reaching), "no build's sources contain it, so every build reaches it");
+    assertEquals(node.getPath(), contextPath(libraryFile), "the active build is the default for a library file");
+  }
+
+  @Test
   @DisplayName("a file of a project without build files has no context")
   public void testAFileOfAProjectWithoutBuildFilesHasNoContext() {
     VirtualFile lone = source("src/Lone.hx", "class Lone {}");
 
     assertNull(contexts().contextFor(lone));
+  }
+
+  /** A file under a library root OUTSIDE the content root: in library scope, in no build's sources. */
+  private VirtualFile libraryFile(String name) throws IOException {
+    Path root = Files.createDirectories(libraryDirectory.resolve("lib"));
+    Path file = Files.writeString(root.resolve(name), "class Lib {}");
+    VirtualFile rootFile = Objects.requireNonNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root));
+    ModuleRootModificationUtil.addModuleLibrary(myFixture.getModule(), "haxelib: fake", List.of(rootFile.getUrl()), List.of());
+    return Objects.requireNonNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file));
   }
 
   private VirtualFile hxml(String name, String content) {

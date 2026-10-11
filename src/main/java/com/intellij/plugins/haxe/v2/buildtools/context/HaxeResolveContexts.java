@@ -5,6 +5,7 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootModificationTracker;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
@@ -81,7 +82,7 @@ public final class HaxeResolveContexts {
   // TODO: multiverse: the provider's getPreferredContext answers this - see doc/planned/resolve-context-plan.md, route B
   @Nullable
   public HaxeResolveContext contextFor(@NotNull VirtualFile file) {
-    List<Ownership> owners = owners(file.getPath());
+    List<Ownership> owners = owners(file);
     Ownership pinned = pinnedAmong(file, owners);
     if (pinned != null) {
       return new HaxeResolveContext(pinned.buildFile());
@@ -96,7 +97,7 @@ public final class HaxeResolveContexts {
 
   /** Whether the file's context is a pin that still applies (its build contains the file). Call in a read action. */
   public boolean isPinned(@NotNull VirtualFile file) {
-    return pinnedAmong(file, owners(file.getPath())) != null;
+    return pinnedAmong(file, owners(file)) != null;
   }
 
   @Nullable
@@ -113,7 +114,7 @@ public final class HaxeResolveContexts {
   // TODO: multiverse: the provider's getContexts answers this - see doc/planned/resolve-context-plan.md, route B
   @NotNull
   public List<HaxeResolveContext> contextsReaching(@NotNull VirtualFile file) {
-    return owners(file.getPath()).stream()
+    return owners(file).stream()
       .map(ownership -> new HaxeResolveContext(ownership.buildFile()))
       .toList();
   }
@@ -139,19 +140,29 @@ public final class HaxeResolveContexts {
     return HaxeContainers.containerIdFor(project, buildFile.file()).equals(module.getName()) ? buildFile : null;
   }
 
-  /** The builds containing the path, the most specific first; the cache's order (tool-window order) among equals. */
+  /**
+   * The builds reaching the file: those whose sources contain it, the most
+   * specific first and the cache's order (tool-window order) among equals.
+   * A library or std file sits in no build's sources, and every build
+   * compiles against the std and the module's libraries, so every known
+   * build reaches it.
+   */
+  // TODO: a haxelib library reaches only the builds declaring it; every build is offered until declared libraries are matched per build
   @NotNull
-  private List<Ownership> owners(@NotNull String path) {
-    String pathAsPrefix = path + "/";
+  private List<Ownership> owners(@NotNull VirtualFile file) {
+    String pathAsPrefix = file.getPath() + "/";
     List<Ownership> owners = new ArrayList<>();
     for (Ownership ownership : ownerships()) {
       if (ownership.specificity(pathAsPrefix) >= 0) owners.add(ownership);
+    }
+    if (owners.isEmpty() && ProjectFileIndex.getInstance(project).isInLibrary(file)) {
+      return ownerships();
     }
     owners.sort((a, b) -> Integer.compare(b.specificity(pathAsPrefix), a.specificity(pathAsPrefix)));
     return owners;
   }
 
-  /** Among the most specific owners: the build the file is the main class of, else the active build file, else the first. */
+  /** Among the most specific owners (every build, for a library file): the file's -main build, else the active build file, else the first. */
   @NotNull
   private Ownership preferred(@NotNull String path, @NotNull List<Ownership> owners) {
     String pathAsPrefix = path + "/";
