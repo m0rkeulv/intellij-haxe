@@ -222,6 +222,8 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     if (!templateCompile && !runBeforeActions(project, task)) return false;
     HaxeCompileCommands.Resolved resolved = resolveCompile(project, configuration, task, templateCompile);
     if (resolved == null) return false;
+    // a chain-only action did its work in the actions it runs first
+    if (resolved.chainOnly()) return true;
 
     List<String> command = compileCommand(project, configuration, environment.getExecutor(), task, templateCompile, resolved);
     if (command == null) return false;

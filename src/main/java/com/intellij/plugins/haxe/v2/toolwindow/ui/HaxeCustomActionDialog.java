@@ -268,9 +268,10 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     if (takenNames.contains(name)) {
       return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.name.taken", name), nameField);
     }
-    // a bare trigger of an existing configuration needs no command; everything else does
+    // a bare trigger of an existing configuration and a chain of other actions need no command of their own
     boolean triggersExisting = launchSection != null && launchSection.launch() instanceof Launch.Existing;
-    if (StringUtil.isEmptyOrSpaces(commandField.getText()) && !triggersExisting) {
+    boolean chainsActions = runBeforeSection != null && !runBeforeSection.actions().isEmpty();
+    if (StringUtil.isEmptyOrSpaces(commandField.getText()) && !triggersExisting && !chainsActions) {
       return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.command.required"), commandField);
     }
     return null;

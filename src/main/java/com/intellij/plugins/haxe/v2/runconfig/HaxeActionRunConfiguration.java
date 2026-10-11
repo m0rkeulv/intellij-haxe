@@ -118,24 +118,30 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
         if (runBefore.problem() != null) {
           throw new ExecutionException(runBefore.problem());
         }
-        ProcessHandler processHandler = runBefore.actions().isEmpty()
-                                        ? processHandlerFor(resolved)
-                                        : chainedProcessHandler(runBefore.actions(), resolved);
+        ProcessHandler processHandler = processHandler(runBefore.actions(), resolved);
         ProcessTerminatedListener.attach(processHandler);
         return processHandler;
       }
     };
   }
 
-  /** The actions running first, then this one, each announced in the console; the first failure ends the chain. */
+  /**
+   * A lone command runs as itself. Otherwise the actions running first, then
+   * this one unless it is chain-only, each announced in the console; the first
+   * failure ends the chain.
+   */
   @NotNull
-  private ProcessHandler chainedProcessHandler(@NotNull List<HaxeCompileCommands.NamedAction> before,
-                                               @NotNull HaxeCompileCommands.Resolved resolved) {
+  private ProcessHandler processHandler(@NotNull List<HaxeCompileCommands.NamedAction> before,
+                                        @NotNull HaxeCompileCommands.Resolved resolved) throws ExecutionException {
+    if (before.isEmpty() && resolved.chainOnly()) {
+      throw new ExecutionException(HaxeBundle.message("haxe.action.config.nothing.to.run", actionName));
+    }
+    if (before.isEmpty()) return processHandlerFor(resolved);
     List<HaxeChainedProcessHandler.Step> steps = new ArrayList<>();
     for (HaxeCompileCommands.NamedAction action : before) {
       steps.add(step(action.name(), action.resolved()));
     }
-    steps.add(step(actionName, resolved));
+    if (!resolved.chainOnly()) steps.add(step(actionName, resolved));
     return new HaxeChainedProcessHandler(steps);
   }
 

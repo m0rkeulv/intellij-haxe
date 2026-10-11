@@ -32,6 +32,11 @@ public final class HaxeCompileCommands {
                          @Nullable String workDirectory,
                          @NotNull String presentable,
                          boolean connectEligible) {
+
+    /** A custom action without a command: its run-before chain is the work, nothing runs as the action itself. */
+    public boolean chainOnly() {
+      return command.isEmpty();
+    }
   }
 
   private HaxeCompileCommands() {
@@ -53,6 +58,7 @@ public final class HaxeCompileCommands {
     List<String> base = action != null
                         ? action.command()
                         : HaxeBuildSystem.of(buildFile.type()).defaultCommand(project, environmentSdk, buildFile);
+    // TODO: the Build command runs one command and never the action's run-before chain, so a chain-only action is unset here
     if (base.isEmpty()) return null;
 
     String workDirectory = action == null ? null : action.workDirectory();
@@ -62,7 +68,8 @@ public final class HaxeCompileCommands {
   /**
    * Resolves a specific action of a build file into a runnable command line (the
    * run configuration path - the container is derived from the file's module).
-   * Call in a read action.
+   * Null for an unknown action; a custom action without a command resolves
+   * {@link Resolved#chainOnly() chain-only}. Call in a read action.
    */
   @Nullable
   public static Resolved resolveAction(@NotNull Project project,
@@ -75,9 +82,16 @@ public final class HaxeCompileCommands {
     String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     ActionCommand action = actionCommand(project, environmentSdk, containerId, buildFile, actionName);
-    if (action == null || action.command().isEmpty()) return null;
+    if (action == null) return null;
+    if (action.command().isEmpty()) return chainOnly(containerId, action.workDirectory());
     return buildResolved(project, containerId, environmentSdk, buildFile.file(), action.command(), extraArguments,
                          action.workDirectory());
+  }
+
+  /** The resolution of a custom action without a command: nothing to run, connect or extend with arguments. */
+  @NotNull
+  private static Resolved chainOnly(@NotNull String containerId, @Nullable String workDirectory) {
+    return new Resolved(containerId, List.of(), workDirectory, "", false);
   }
 
   /** An action of a chain, by the label it reads under, with its resolved command. */
@@ -108,7 +122,8 @@ public final class HaxeCompileCommands {
       if (resolved == null) {
         return new RunBefore(List.of(), HaxeBundle.message("haxe.action.chain.missing", actionName, label));
       }
-      actions.add(new NamedAction(label, resolved));
+      // a chain-only member's own actions are already in the flattened chain; it runs nothing itself
+      if (!resolved.chainOnly()) actions.add(new NamedAction(label, resolved));
     }
     return new RunBefore(List.copyOf(actions), null);
   }
