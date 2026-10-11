@@ -11,6 +11,8 @@ import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.util.FileContentUtilCore;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.indexing.FileBasedIndex;
@@ -51,6 +53,32 @@ final class HaxeDefineContextInvalidator {
     if (log.isDebugEnabled()) {
       log.debug("define context: " + conditionalFiles.size() + " conditional haxe files invalidated");
     }
+  }
+
+  /** The conditional files lexed under one of the build files; the others keep their trees. Pooled thread. */
+  static void invalidateConditionalFilesOf(@NotNull Project project, @NotNull Set<String> buildFilePaths) {
+    List<VirtualFile> conditionalFiles = collectConditionalFiles(project);
+    List<VirtualFile> files = ReadAction.nonBlocking(() -> inContextOf(project, conditionalFiles, buildFilePaths))
+      .expireWith(HaxeDefineContextService.getInstance(project))
+      .executeSynchronously();
+    invalidateFiles(project, files);
+    if (log.isDebugEnabled()) {
+      log.debug("define context: " + files.size() + " conditional haxe files of " + buildFilePaths.size() + " builds invalidated");
+    }
+  }
+
+  /** The files whose resolve context is one of the build files. Call in a read action. */
+  @NotNull
+  static List<VirtualFile> inContextOf(@NotNull Project project, @NotNull List<VirtualFile> files, @NotNull Set<String> buildFilePaths) {
+    HaxeResolveContexts contexts = HaxeResolveContexts.getInstance(project);
+    return files.stream()
+      .filter(file -> isInContextOf(contexts, file, buildFilePaths))
+      .toList();
+  }
+
+  private static boolean isInContextOf(@NotNull HaxeResolveContexts contexts, @NotNull VirtualFile file, @NotNull Set<String> buildFilePaths) {
+    HaxeResolveContext context = contexts.contextFor(file);
+    return context != null && buildFilePaths.contains(context.path());
   }
 
   /** One file's context changed (pin, unpin, navigation): that file alone is re-indexed and, when open, reparsed. Any thread. */

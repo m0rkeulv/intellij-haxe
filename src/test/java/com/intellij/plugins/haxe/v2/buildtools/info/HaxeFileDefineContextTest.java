@@ -1,8 +1,11 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
+import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import com.intellij.psi.PsiElement;
@@ -10,9 +13,13 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.testFramework.PlatformTestUtil;
+import java.io.IOException;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,6 +45,13 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     class %1$s { static var sys = false; }
     #end
     """;
+  private static final String FOO_GATED_SOURCE = """
+    #if foo
+    class %1$s { static var foo = true; }
+    #else
+    class %1$s { static var foo = false; }
+    #end
+    """;
 
   @Override
   protected String getBasePath() {
@@ -53,8 +67,8 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     PsiFile cppMain = myFixture.addFileToProject("src/CppMain.hx", SYS_GATED_SOURCE.formatted("CppMain"));
     PsiFile webMain = myFixture.addFileToProject("src/WebMain.hx", SYS_GATED_SOURCE.formatted("WebMain"));
 
-    assertTrue(sysBranchLive(cppMain), "CppMain is cpp.hxml's main: sys is defined there while web.hxml is active");
-    assertFalse(sysBranchLive(webMain), "WebMain follows web.hxml, which has no sys");
+    assertTrue(branchLive(cppMain, "sys = true"), "CppMain is cpp.hxml's main: sys is defined there while web.hxml is active");
+    assertFalse(branchLive(webMain, "sys = true"), "WebMain follows web.hxml, which has no sys");
   }
 
   @Test
@@ -65,12 +79,32 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
     VirtualFile shared = myFixture.addFileToProject("src/Shared.hx", SYS_GATED_SOURCE.formatted("Shared")).getVirtualFile();
     myFixture.openFileInEditor(shared);
-    assertFalse(sysBranchLive(psiFile(shared)), "a shared file follows the active build before a pin");
+    assertFalse(branchLive(psiFile(shared), "sys = true"), "a shared file follows the active build before a pin");
 
     HaxeResolveContextStore.getInstance(getProject()).pin(shared, cpp.getPath());
     HaxeDefineContextService.getInstance(getProject()).fileContextChanged(shared);
 
-    PlatformTestUtil.waitWithEventsDispatching("pinned to cpp.hxml: the sys branch must come alive", () -> sysBranchLive(psiFile(shared)), 10);
+    PlatformTestUtil.waitWithEventsDispatching("pinned to cpp.hxml: the sys branch must come alive", () -> branchLive(psiFile(shared), "sys = true"), 10);
+  }
+
+  @Test
+  @DisplayName("a build file edit re-lexes the files it defines")
+  public void testABuildFileEditReLexesTheFilesItDefines() throws IOException {
+    VirtualFile web = myFixture.addFileToProject("web.hxml", WEB_HXML_SOURCE).getVirtualFile();
+    VirtualFile cpp = myFixture.addFileToProject("cpp.hxml", CPP_HXML_SOURCE).getVirtualFile();
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+    VirtualFile cppMain = myFixture.addFileToProject("src/CppMain.hx", FOO_GATED_SOURCE.formatted("CppMain")).getVirtualFile();
+    VirtualFile webMain = myFixture.addFileToProject("src/WebMain.hx", FOO_GATED_SOURCE.formatted("WebMain")).getVirtualFile();
+    myFixture.openFileInEditor(cppMain);
+    assertFalse(branchLive(psiFile(cppMain), "foo = true"), "no -D foo yet");
+    Set<String> cppContext = Set.of(cpp.getPath());
+    List<VirtualFile> inCpp = HaxeReadActions.compute(() -> HaxeDefineContextInvalidator.inContextOf(getProject(), List.of(cppMain, webMain), cppContext));
+    assertEquals(List.of(cppMain), inCpp, "only CppMain is lexed under cpp.hxml");
+
+    WriteAction.runAndWait(() -> VfsUtil.saveText(cpp, CPP_HXML_SOURCE + "-D foo\n"));
+    HaxeDefineContextService.getInstance(getProject()).refreshAsync();
+
+    PlatformTestUtil.waitWithEventsDispatching("cpp.hxml gained -D foo: CppMain must be re-lexed", () -> branchLive(psiFile(cppMain), "foo = true"), 10);
   }
 
   private PsiFile psiFile(VirtualFile file) {
@@ -79,9 +113,9 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     return psiFile;
   }
 
-  /** Whether the {@code sys = true} declaration sits in live code rather than in a dead-branch blob. */
-  private static boolean sysBranchLive(PsiFile file) {
-    PsiElement leaf = file.findElementAt(file.getText().indexOf("sys = true"));
+  /** Whether the declaration holding the marker sits in live code rather than in a dead-branch blob. */
+  private static boolean branchLive(PsiFile file, String marker) {
+    PsiElement leaf = file.findElementAt(file.getText().indexOf(marker));
     assertNotNull(leaf);
     return PsiTreeUtil.getParentOfType(leaf, HaxeInactiveBody.class) == null;
   }

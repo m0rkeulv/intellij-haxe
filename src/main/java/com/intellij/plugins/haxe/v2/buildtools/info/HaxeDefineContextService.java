@@ -28,6 +28,7 @@ import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.text.SemVer;
+import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
@@ -306,31 +307,50 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
         .expireWith(this)
         .executeSynchronously();
       lastComputed = after;
-      boolean activeChanged = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
-      boolean changed = activeChanged || anyHandedOutChanged(byPathBefore);
+      Set<String> changed = changedContexts(before, after, byPathBefore);
       if (log.isDebugEnabled()) {
-        log.debug("define context refresh: changed=" + changed + ", defines=" + (after == null ? "legacy" : after.size()));
+        log.debug("define context refresh: changed=" + (changed == null ? "all" : changed.size()) + ", defines=" + (after == null ? "legacy" : after.size()));
       }
-      if (changed) {
-        // TODO: reparse only the files whose context's defines changed, not every conditional file
+      if (changed == null) {
         HaxeDefineContextInvalidator.invalidateConditionalFiles(project);
+      }
+      else if (!changed.isEmpty()) {
+        HaxeDefineContextInvalidator.invalidateConditionalFilesOf(project, changed);
       }
     }
   }
 
-  /** Whether a build file handed out as a context now computes to other defines; one that is gone counts once, then is forgotten. */
-  private boolean anyHandedOutChanged(@NotNull Map<String, Map<String, String>> before) {
-    boolean changed = false;
-    for (Map.Entry<String, Map<String, String>> entry : before.entrySet()) {
+  /**
+   * The build files whose defines differ from what was handed out: the
+   * active one when its set changed (the files following the active build
+   * are lexed under it), and every handed-out build file whose set changed.
+   * Null when every conditional file must be re-lexed: the active context
+   * went away, or a handed-out build file is gone and its files now fall to
+   * other contexts.
+   */
+  @Nullable
+  private Set<String> changedContexts(@Nullable Map<String, String> activeBefore,
+                                      @Nullable Map<String, String> activeAfter,
+                                      @NotNull Map<String, Map<String, String>> byPathBefore) {
+    Set<String> changed = new HashSet<>();
+    boolean activeChanged = activeBefore != NEVER_HANDED_OUT && !Objects.equals(activeBefore, activeAfter);
+    boolean everything = false;
+    if (activeChanged) {
+      String activePath = effectiveActivePath();
+      if (activePath == null) everything = true;
+      else changed.add(activePath);
+    }
+    for (Map.Entry<String, Map<String, String>> entry : byPathBefore.entrySet()) {
       Map<String, String> after = recomputedDefines(entry.getKey());
       if (after == null) {
         handedOutByPath.remove(entry.getKey());
+        everything = true;
       }
-      if (!Objects.equals(entry.getValue(), after)) {
-        changed = true;
+      else if (!Objects.equals(entry.getValue(), after)) {
+        changed.add(entry.getKey());
       }
     }
-    return changed;
+    return everything ? null : changed;
   }
 
   @Nullable
