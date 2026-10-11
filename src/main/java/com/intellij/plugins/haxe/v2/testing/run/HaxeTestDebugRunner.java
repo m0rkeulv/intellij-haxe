@@ -10,11 +10,10 @@ import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkBackend;
-import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkDebugRunner;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.browser.HaxeBrowserTestSupport;
-import com.intellij.plugins.haxe.runner.debugger.browser.NodeTestDebugBackend;
+import com.intellij.plugins.haxe.runner.debugger.browser.NodeDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijBackend;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpDapBackend;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
@@ -110,7 +109,7 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
       case BrowserDebugBackend ignored -> null;
       case HashLinkBackend hashLink -> hashLinkCommandLine(configuration, plan, hashLink);
       case HxcppIntellijBackend hxcpp -> hxcppCommandLine(plan, hxcpp);
-      case NodeTestDebugBackend node -> nodeCommandLine(plan, node);
+      case NodeDebugBackend node -> nodeCommandLine(plan, node);
       case InterpDapBackend interp -> interpCommandLine(plan, interp);
       default -> throw new IllegalStateException("no command line for backend " + backend.getClass().getName());
     };
@@ -121,7 +120,7 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
     throws ExecutionException, IOException {
     List<String> sourceDirectories = HaxeTestRunConfigurations.sourceDirectories(configuration);
     return new HashLinkBackend(hlRuntime(configuration, plan), hlProgram(plan),
-                               HashLinkDebugRunner.findFreePort(), sourceDirectories);
+                               findFreePort(), sourceDirectories);
   }
 
   @NotNull
@@ -140,7 +139,7 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
       //  events are replayed into the process handler
       return HaxeBrowserTestSupport.createBackend(configuration.getProject(), HaxeTestLaunchPlanner.browserWebRoot(plan));
     }
-    return new NodeTestDebugBackend(Path.of(plan.command().getFirst()), HashLinkDebugRunner.findFreePort(), plan.workDirectory());
+    return new NodeDebugBackend(Path.of(plan.command().getFirst()), findFreePort(), plan.workDirectory());
   }
 
   @NotNull
@@ -164,7 +163,7 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
 
   /** The plan's [node, artifact] with the inspector hold inserted; the adapter attaches to the port and releases the hold once configured. */
   @NotNull
-  private static GeneralCommandLine nodeCommandLine(@NotNull Plan plan, @NotNull NodeTestDebugBackend backend) {
+  private static GeneralCommandLine nodeCommandLine(@NotNull Plan plan, @NotNull NodeDebugBackend backend) {
     return new GeneralCommandLine()
       .withExePath(plan.command().getFirst())
       .withParameters("--inspect-brk=" + backend.getInspectorPort(), plan.command().get(1))

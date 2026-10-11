@@ -157,13 +157,6 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
-  @DisplayName("node runs without debug while the browser debugs")
-  public void testNodeRunsWithoutDebugWhileTheBrowserDebugs() {
-    assertFalse(HaxeLaunchKind.NODE.debuggable());
-    assertTrue(HaxeLaunchKind.BROWSER.debuggable());
-  }
-
-  @Test
   @DisplayName("interpreter runs without a build step")
   public void testInterpreterRunsWithoutABuildStep() {
     assertFalse(HaxeLaunchKind.INTERP.compilesBeforeLaunch());

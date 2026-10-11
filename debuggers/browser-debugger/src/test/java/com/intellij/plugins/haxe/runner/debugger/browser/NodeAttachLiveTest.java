@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Timeout;
 /// Wire probe for the NODE test-debug lane: the debuggee is
 /// `node --inspect-brk=<port> app.js` spawned by the PROBE (as the test
 /// runner spawns it), and vscode-js-debug ATTACHES (`pwa-node`). Pins
-/// what `NodeTestDebugBackend` relies on:
+/// what `NodeDebugBackend` relies on:
 ///
 ///   - the attach flavour runs the same parent/child dance as the browser
 ///       launch (fire-and-forget attach, startDebugging hand-over);
@@ -187,7 +187,7 @@ public class NodeAttachLiveTest {
     return null;
   }
 
-  /// The attach flavour of the parent config — what NodeTestDebugBackend sends.
+  /// The attach flavour of the parent config — what NodeDebugBackend sends.
   private static Map<String, Object> attachConfig(int inspectorPort, Path cwd) {
     Map<String, Object> config = new LinkedHashMap<>();
     config.put("type", "pwa-node");
