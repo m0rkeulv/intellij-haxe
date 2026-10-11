@@ -117,6 +117,13 @@ public class NodeDebugBackend implements DapBackend {
     return true;
   }
 
+  // the program's output arrives on node's own stdout and stderr; js-debug
+  // reports every console call again as an output event
+  @Override
+  public boolean echoesProgramOutput() {
+    return true;
+  }
+
   @Override
   public Request launchRequest() {
     // the CHILD configuration handed over by startDebugging (__pendingTargetId)
