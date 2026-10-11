@@ -7,6 +7,7 @@ import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.components.StoragePathMacros;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import java.util.HashMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -16,9 +17,10 @@ import java.util.TreeMap;
 
 /**
  * The build file a user pinned a source file to in the resolve-context
- * switcher, per file path. A pin overrides the automatic choice until
- * "Select automatically" clears it. Stored in the workspace file: a
- * per-developer setting, not project configuration.
+ * switcher, per file path, and - for the session only - the context a
+ * navigation gave a file. A pin overrides the automatic choice and a
+ * followed context until "Select automatically" clears both. Pins live in
+ * the workspace file: a per-developer setting, not project configuration.
  */
 // TODO: multiverse: the editor's selected context, onContextPicked and the reset action replace this store - see doc/planned/resolve-context-plan.md, route B
 @Service(Service.Level.PROJECT)
@@ -31,6 +33,8 @@ public final class HaxeResolveContextStore implements PersistentStateComponent<H
 
   private final @Nullable Project project;
   private State state = new State();
+  /** By file path; never persisted - a navigation's choice does not outlive the session. */
+  private final Map<String, String> followedBuildFileByFile = new HashMap<>();
 
   public HaxeResolveContextStore(@NotNull Project project) {
     this.project = project;
@@ -58,7 +62,7 @@ public final class HaxeResolveContextStore implements PersistentStateComponent<H
       state.buildFileByFile = new TreeMap<>();
     }
     this.state = state;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeResolveContextListener.publish(project);
   }
 
   /** The pinned build file's path, or null when the file follows the automatic choice. */
@@ -69,12 +73,26 @@ public final class HaxeResolveContextStore implements PersistentStateComponent<H
 
   public void pin(@NotNull VirtualFile file, @NotNull String buildFilePath) {
     state.buildFileByFile.put(file.getPath(), buildFilePath);
-    HaxeBuildSettingsListener.publish(project);
+    HaxeResolveContextListener.publish(project);
   }
 
+  /** Back to the automatic choice: drops the pin and the followed context alike. */
   public void unpin(@NotNull VirtualFile file) {
-    if (state.buildFileByFile.remove(file.getPath()) != null) {
-      HaxeBuildSettingsListener.publish(project);
+    boolean pinned = state.buildFileByFile.remove(file.getPath()) != null;
+    boolean followed = followedBuildFileByFile.remove(file.getPath()) != null;
+    if (pinned || followed) {
+      HaxeResolveContextListener.publish(project);
     }
+  }
+
+  /** The build file a navigation gave the file for this session, or null. */
+  @Nullable
+  public String getFollowedBuildFile(@NotNull VirtualFile file) {
+    return followedBuildFileByFile.get(file.getPath());
+  }
+
+  public void follow(@NotNull VirtualFile file, @NotNull String buildFilePath) {
+    followedBuildFileByFile.put(file.getPath(), buildFilePath);
+    HaxeResolveContextListener.publish(project);
   }
 }

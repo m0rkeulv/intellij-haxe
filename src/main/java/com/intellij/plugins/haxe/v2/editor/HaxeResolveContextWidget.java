@@ -21,8 +21,10 @@ import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContextLabels;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
+import com.intellij.util.messages.MessageBusConnection;
 import kotlinx.coroutines.CoroutineScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -63,8 +65,10 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
   @Override
   public void install(@NotNull StatusBar statusBar) {
     super.install(statusBar);
-    // a pin, an active-file switch or an edited build file changes the answer
-    getProject().getMessageBus().connect(this).subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::update);
+    // a context choice, an active-file switch or an edited build file changes the answer
+    MessageBusConnection connection = getProject().getMessageBus().connect(this);
+    connection.subscribe(HaxeResolveContextListener.TOPIC, (HaxeResolveContextListener)this::update);
+    connection.subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::update);
   }
 
   @Override
@@ -85,14 +89,19 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     }
     boolean pinned = contexts.isPinned(file);
     String label = HaxeResolveContextLabels.label(getProject(), current);
-    String tooltip = pinned
-                     ? HaxeBundle.message("haxe.resolve.context.widget.tooltip.pinned")
-                     : HaxeBundle.message("haxe.resolve.context.widget.tooltip.auto", reaching.size());
+    String tooltip = tooltipFor(file, contexts, pinned, reaching.size());
     WidgetState state = new WidgetState(tooltip, HaxeBundle.message("haxe.resolve.context.widget.text", label), reaching.size() > 1 || pinned);
     if (pinned) {
       state.setIcon(AllIcons.General.Pin_tab);
     }
     return state;
+  }
+
+  @NotNull
+  private static String tooltipFor(@NotNull VirtualFile file, @NotNull HaxeResolveContexts contexts, boolean pinned, int reaching) {
+    if (pinned) return HaxeBundle.message("haxe.resolve.context.widget.tooltip.pinned");
+    if (contexts.isFollowed(file)) return HaxeBundle.message("haxe.resolve.context.widget.tooltip.followed");
+    return HaxeBundle.message("haxe.resolve.context.widget.tooltip.auto", reaching);
   }
 
   @Override
@@ -105,7 +114,7 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     return JBPopupFactory.getInstance().createListPopup(new ChoiceStep(file, choices, current));
   }
 
-  /** The builds containing the file, then "Select automatically" while a pin applies. */
+  /** The builds containing the file, then "Select automatically" while a pin or a followed context applies. */
   @NotNull
   private List<Choice> choicesFor(@NotNull VirtualFile file) {
     HaxeResolveContexts contexts = HaxeResolveContexts.getInstance(getProject());
@@ -113,7 +122,7 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     for (HaxeResolveContext context : contexts.contextsReaching(file)) {
       choices.add(new Choice(context, HaxeResolveContextLabels.label(getProject(), context)));
     }
-    if (contexts.isPinned(file)) {
+    if (contexts.isPinned(file) || contexts.isFollowed(file)) {
       choices.add(new Choice(null, HaxeBundle.message("haxe.resolve.context.popup.auto")));
     }
     return choices;
