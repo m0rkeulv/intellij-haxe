@@ -3,7 +3,6 @@ package com.intellij.plugins.haxe.v2.editor;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.DataContext;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -16,11 +15,13 @@ import com.intellij.openapi.wm.StatusBarWidget;
 import com.intellij.openapi.wm.impl.status.EditorBasedStatusBarPopup;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeFileType;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContextLabels;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
 import kotlinx.coroutines.CoroutineScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -70,7 +71,7 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     if (file == null || !FileTypeRegistry.getInstance().isFileOfType(file, HaxeFileType.INSTANCE)) {
       return WidgetState.HIDDEN;
     }
-    return ReadAction.compute(() -> stateFor(file));
+    return HaxeReadActions.compute(() -> stateFor(file));
   }
 
   @NotNull
@@ -97,9 +98,9 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
   protected @Nullable ListPopup createPopup(@NotNull DataContext context) {
     VirtualFile file = CommonDataKeys.VIRTUAL_FILE.getData(context);
     if (file == null) return null;
-    List<Choice> choices = ReadAction.compute(() -> choicesFor(file));
+    List<Choice> choices = HaxeReadActions.compute(() -> choicesFor(file));
     if (choices.isEmpty()) return null;
-    HaxeResolveContext current = ReadAction.compute(() -> HaxeResolveContexts.getInstance(getProject()).contextFor(file));
+    HaxeResolveContext current = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(getProject()).contextFor(file));
     return JBPopupFactory.getInstance().createListPopup(new ChoiceStep(file, choices, current));
   }
 
@@ -125,6 +126,8 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     else {
       store.pin(file, choice.context().path());
     }
+    // the compiler-backed answers (diagnostics, resolve fallback) were computed under the previous context
+    HaxeCompilerCaches.clearAndRehighlight(getProject(), "haxe: resolve context changed");
   }
 
   private final class ChoiceStep extends BaseListPopupStep<Choice> {

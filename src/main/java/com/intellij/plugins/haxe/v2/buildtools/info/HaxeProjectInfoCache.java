@@ -47,8 +47,9 @@ final class HaxeProjectInfoCache<V> {
   private final Map<Key, CacheValue<V>> cache = new ConcurrentHashMap<>();
   private final Set<Key> inFlight = ConcurrentHashMap.newKeySet();
 
-  // callbacks waiting on an in-flight evaluation; a set, so a caller asking
-  // again before it lands is called back once, not once per ask
+  // callbacks waiting on an in-flight evaluation, held by identity: a caller
+  // re-asking with the SAME Runnable before it lands is called back once; a
+  // fresh lambda per ask is called back once per ask
   private final Map<Key, Set<Runnable>> pendingCallbacks = new ConcurrentHashMap<>();
   private final ExecutorService executor;
 
@@ -61,7 +62,8 @@ final class HaxeProjectInfoCache<V> {
   /**
    * The key's cached value, or null when not resolved (yet). Schedules the
    * evaluation on the executor when the cache is stale; {@code onUpdated}
-   * fires on the EDT after the run completes.
+   * fires on the EDT after the run completes - pass a long-lived instance,
+   * callbacks are kept by identity.
    */
   @Nullable
   V getCachedOrSchedule(@NotNull Key key,
