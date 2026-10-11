@@ -111,14 +111,20 @@ public final class HaxeBuildFileIncludes {
    */
   @Nullable
   public static VirtualFile includeFile(@NotNull VirtualFile folder, @NotNull String path) {
-    VirtualFile target = OSAgnosticPathUtil.isAbsolute(path)
-                         ? folder.getFileSystem().findFileByPath(path)
-                         : folder.findFileByRelativePath(path);
+    VirtualFile target = fileOrFolder(folder, path);
     if (target == null || !target.isDirectory()) return target;
     for (String name : FOLDER_INCLUDE_NAMES) {
       VirtualFile candidate = target.findChild(name);
       if (candidate != null && !candidate.isDirectory()) return candidate;
     }
     return null;
+  }
+
+  /** The file or folder a project-file path names, resolved against the including file's {@code folder}; null when nothing exists. */
+  @Nullable
+  public static VirtualFile fileOrFolder(@NotNull VirtualFile folder, @NotNull String path) {
+    return OSAgnosticPathUtil.isAbsolute(path)
+           ? folder.getFileSystem().findFileByPath(path)
+           : folder.findFileByRelativePath(path);
   }
 }
