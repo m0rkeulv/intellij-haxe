@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.util.text.HtmlBuilder;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
@@ -122,15 +123,15 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     }
   }
 
+  /** The name and, for an action that starts something, what it starts - like the Build & run row; the rest is in the tooltip. */
   private void renderAction(@NotNull ActionNode action) {
-    valueRow(HaxeActionIcons.forAction(action.name()), action.name(), action.presentableCommand(), false);
-    if (!action.runBefore().isEmpty()) {
-      String after = HaxeBundle.message("haxe.toolwindow.node.action.after", String.join(", ", action.runBefore()));
-      append("  " + after, SimpleTextAttributes.GRAYED_ATTRIBUTES);
-    }
+    Icon icon = HaxeActionIcons.forAction(action.name());
     String launchTarget = action.launchTarget();
-    if (launchTarget != null) {
-      append("  " + HaxeBundle.message("haxe.toolwindow.node.action.launches", launchTarget), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    if (launchTarget == null) {
+      labelRow(icon, action.name());
+    }
+    else {
+      valueRow(icon, action.name(), launchTarget, false);
     }
   }
 
@@ -210,6 +211,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       case LibraryNode library -> libraryTooltip(library);
       case SectionNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.section");
       case ProgramNode program -> programTooltip(program);
+      case ActionNode action -> actionTooltip(action);
       case TestRunNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.run.unit.tests");
       case BuildFileRow row when row.toolFailure() != null ->
         HaxeBundle.message("haxe.toolwindow.tooltip.build.file.tool.failed", row.toolFailure());
@@ -229,6 +231,21 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     boolean builds = program.kind().compilesBeforeLaunch();
     String key = builds ? "haxe.toolwindow.tooltip.program" : "haxe.toolwindow.tooltip.program.run";
     return HaxeBundle.message(key, program.kind().displayName());
+  }
+
+  /** The command, then what runs first and what the action starts, one per line. */
+  @NotNull
+  private static String actionTooltip(@NotNull ActionNode action) {
+    HtmlBuilder tooltip = new HtmlBuilder().append(action.presentableCommand());
+    if (!action.runBefore().isEmpty()) {
+      String runsFirst = HaxeBundle.message("haxe.toolwindow.tooltip.action.runs.first", String.join(", ", action.runBefore()));
+      tooltip.br().append(runsFirst);
+    }
+    String launchTarget = action.launchTarget();
+    if (launchTarget != null) {
+      tooltip.br().append(HaxeBundle.message("haxe.toolwindow.tooltip.action.starts", launchTarget));
+    }
+    return tooltip.wrapWithHtmlBody().toString();
   }
 
   @NotNull
