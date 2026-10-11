@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.hxml.psi.HXMLDefine;
 import com.intellij.plugins.haxe.hxml.psi.HXMLValue;
 import com.intellij.plugins.haxe.hxml.psi.HXMLVisitor;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeProjectXmlFiles;
 import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
@@ -23,7 +24,6 @@ import com.intellij.psi.XmlElementVisitor;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.xml.XmlAttribute;
 import com.intellij.psi.xml.XmlAttributeValue;
-import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
 
@@ -47,7 +47,7 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     PsiFile file = holder.getFile();
     if (file instanceof HXMLFile) return new HxmlDefineVisitor(holder);
-    if (file instanceof XmlFile && HaxeBuildFileInspections.isProjectXml(file)) return new ProjectXmlDefineVisitor(holder);
+    if (HaxeProjectXmlFiles.isProjectXml(file)) return new ProjectXmlDefineVisitor(holder);
     return PsiElementVisitor.EMPTY_VISITOR;
   }
 

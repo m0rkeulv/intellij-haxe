@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.hxml.psi.HXMLLib;
 import com.intellij.plugins.haxe.hxml.psi.HXMLValue;
 import com.intellij.plugins.haxe.hxml.psi.HXMLVisitor;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeProjectXmlFiles;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.InstalledLibrary;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.LibraryStatus;
@@ -23,7 +24,6 @@ import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.XmlElementVisitor;
 import com.intellij.psi.xml.XmlAttributeValue;
-import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
@@ -42,7 +42,7 @@ public class HaxeMissingLibraryInspection extends LocalInspectionTool {
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     PsiFile file = holder.getFile();
-    boolean buildFile = file instanceof HXMLFile || file instanceof XmlFile && HaxeBuildFileInspections.isProjectXml(file);
+    boolean buildFile = file instanceof HXMLFile || HaxeProjectXmlFiles.isProjectXml(file);
     if (!buildFile) return PsiElementVisitor.EMPTY_VISITOR;
 
     Map<String, InstalledLibrary> installed = installedPicture(file.getProject());
