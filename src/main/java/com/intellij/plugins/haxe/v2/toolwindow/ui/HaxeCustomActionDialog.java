@@ -272,7 +272,11 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     boolean triggersExisting = launchSection != null && launchSection.launch() instanceof Launch.Existing;
     boolean chainsActions = runBeforeSection != null && !runBeforeSection.actions().isEmpty();
     if (StringUtil.isEmptyOrSpaces(commandField.getText()) && !triggersExisting && !chainsActions) {
-      return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.command.required"), commandField);
+      // a tool has no run-before actions to offer instead
+      String messageKey = runBeforeSection == null
+                          ? "haxe.custom.action.dialog.command.required"
+                          : "haxe.custom.action.dialog.command.or.run.before.required";
+      return new ValidationInfo(HaxeBundle.message(messageKey), commandField);
     }
     return null;
   }

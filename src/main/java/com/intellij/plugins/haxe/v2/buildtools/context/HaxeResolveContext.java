@@ -5,11 +5,11 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * The build a file is analysed under: one of the project's known build
- * files, taken with the target or section that build is currently set to
+ * files, with the target or section that build file is currently set to
  * (those selections live per build file in their own stores). A context
- * names the build only; the define set it implies comes later.
+ * names only the build; the define context service derives its defines.
  */
-// TODO: multiverse: becomes the plugin's CodeInsightContext implementation - see doc/planned/resolve-context-plan.md, route B
+// TODO: multiverse (the platform's per-file code-insight contexts): this record becomes the plugin's CodeInsightContext
 public record HaxeResolveContext(@NotNull HaxeBuildFile buildFile) {
 
   /** The build file's path, the key every per-build-file store uses. */

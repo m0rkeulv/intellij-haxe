@@ -41,7 +41,7 @@ public final class HaxeFileTypeResolverCacheService implements Disposable {
         LowMemoryWatcher.register(this::invalidate, this);
     }
 
-    /** Drops every file's cached types: the roots-change path, where no PSI change bumps the modification count. */
+    /** Drops every file's cached types; called on low memory and by the plugin-wide clear ({@code HaxeResolveCaches}), which also runs on roots changes. */
     public void invalidate() {
         SimpleModificationTracker tracker = invalidationTracker;
         if (tracker != null) {

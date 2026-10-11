@@ -7,22 +7,23 @@ import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.components.StoragePathMacros;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import java.util.HashMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * The build file a user pinned a source file to in the resolve-context
- * switcher, per file path, and - for the session only - the context a
- * navigation gave a file. A pin overrides the automatic choice and a
- * followed context until "Select automatically" clears both. Pins live in
- * the workspace file: a per-developer setting, not project configuration.
+ * The resolve-context switcher's per-file choices, by source file path: the
+ * build file the user pinned a file to and, for the session only, the
+ * followed context - the build a navigation carried over from the file it
+ * was opened from. A pin wins over the followed context and the automatic
+ * choice; "Select automatically" clears both. Pins live in the workspace
+ * file: a per-developer setting, not project configuration.
  */
-// TODO: multiverse: the editor's selected context, onContextPicked and the reset action replace this store - see doc/planned/resolve-context-plan.md, route B
+// TODO: multiverse: the editor's selected context, onContextPicked and the reset action replace this store
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeResolveContexts", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class HaxeResolveContextStore implements PersistentStateComponent<HaxeResolveContextStore.State> {
@@ -65,7 +66,11 @@ public final class HaxeResolveContextStore implements PersistentStateComponent<H
     HaxeResolveContextListener.publish(project);
   }
 
-  /** A moved or renamed file (or folder) keeps its pin, and a pin to a moved build file follows it; whether anything moved. */
+  /**
+   * A source file keeps its pin and its followed context when it, or a
+   * folder above it, is moved or renamed, and a pin follows its moved build
+   * file; whether anything changed.
+   */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     boolean changed = HaxeStoredPaths.moveKeys(state.buildFileByFile, oldPath, newPath);
     changed |= HaxeStoredPaths.moveKeys(followedBuildFileByFile, oldPath, newPath);

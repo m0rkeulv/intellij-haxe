@@ -24,12 +24,12 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Haxelib's install picture for the project, as the tool window and the
- * build-file inspections see it. A fetch runs a haxelib process, so readers
- * under the read lock take the last {@link #snapshot} and ask for a
- * {@link #refreshAsync} when none exists; a landed fetch whose picture changed
- * restarts highlighting so the inspections follow. Fetch requests arriving
- * while one runs share that run.
+ * The installed picture of haxelib - which libraries and versions it has
+ * installed - as the tool window and the build-file inspections see it.
+ * Fetching it runs a haxelib process, so code under the read lock reads the
+ * last {@link #snapshot} and requests a {@link #refreshAsync} when there is
+ * none; a fetch whose result differs restarts highlighting so the
+ * inspections follow. A fetch requested while one runs shares that run.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeInstalledLibraries {
@@ -86,8 +86,7 @@ public final class HaxeInstalledLibraries {
     // a pinned version must itself be installed - the name alone is not
     // enough. A git checkout is listed as version "git", never as its
     // url#ref spec.
-    // TODO: compare a git pin's #ref against the installed checkout
-    //       (HaxelibLocalDocs.gitCheckout) and flag mismatches
+    // TODO: compare a git pin's #ref against the installed checkout (HaxelibLocalDocs.gitCheckout) and flag mismatches
     String requiredVersion = HaxelibGitSpec.parse(library.version()) != null ? HaxelibSemVer.GIT_SCM : library.version();
     boolean satisfied = requiredVersion == null || installedLibrary.versions().contains(requiredVersion);
     return new LibraryStatus(satisfied, installedLibrary.selectedVersion());

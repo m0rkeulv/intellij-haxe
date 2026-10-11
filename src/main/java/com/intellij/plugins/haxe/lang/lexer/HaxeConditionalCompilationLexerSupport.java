@@ -319,11 +319,6 @@ public class HaxeConditionalCompilationLexerSupport {
   }
 
   /**
-   * Manipulates the conditional Section/Block stack based upon the CC token.
-   * @param chars Characters that comprise the token.
-   * @param type Detected token type.
-   */
-  /**
    * Whether the directive about to be processed belongs to a swallowed
    * section: a {@code #if} opening inside an inactive branch, or any other
    * directive of a section opened that way. Asked BEFORE
@@ -337,6 +332,11 @@ public class HaxeConditionalCompilationLexerSupport {
     return currentContext.isSwallowed();
   }
 
+  /**
+   * Updates the section/block stack for a conditional-compilation token.
+   * @param chars the token's characters
+   * @param type the token's type
+   */
   public void processConditional(CharSequence chars, IElementType type) {
     if (PPIF.equals(type)) {
       // Start a new section...

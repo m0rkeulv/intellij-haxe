@@ -56,11 +56,11 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
     }
 
     @Override
-    public @NotNull References references(@NotNull String name, @NotNull List<ActionReference> users) {
-      String userLabels = users.stream()
+    public @NotNull References references(@NotNull String name, @NotNull List<ActionReference> dependents) {
+      String dependentLabels = dependents.stream()
         .map(reference -> HaxeActionReferences.label(project, ownerId, reference))
         .collect(Collectors.joining(", "));
-      String question = HaxeBundle.message("haxe.toolwindow.remove.action.references", name, userLabels);
+      String question = HaxeBundle.message("haxe.toolwindow.remove.action.references", name, dependentLabels);
       return switch (Messages.showYesNoCancelDialog(project, question, title(), Messages.getQuestionIcon())) {
         case Messages.YES -> References.REMOVE;
         case Messages.NO -> References.KEEP;

@@ -59,12 +59,12 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
     HaxeBuildSettingsListener.publish(project);
   }
 
-  @Nullable
-  /** The entries of a moved or renamed build file (or folder) keep their file; whether any did. */
+  /** A build file keeps its selected target when it, or a folder above it, is moved or renamed; whether anything changed. */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     return HaxeStoredPaths.moveKeys(state.targetsByFile, oldPath, newPath);
   }
 
+  @Nullable
   public String getSelectedTargetId(@NotNull VirtualFile buildFile) {
     return state.targetsByFile.get(buildFile.getPath());
   }

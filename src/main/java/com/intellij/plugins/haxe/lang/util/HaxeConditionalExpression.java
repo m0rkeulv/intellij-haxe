@@ -86,7 +86,6 @@ public class HaxeConditionalExpression {
     }
   }
 
-
   private void createToken(@NotNull CharSequence chars, @NotNull IElementType tokenType) {
     tokens.add(HaxeAstFactory.leaf(tokenType, chars));
     evaluated = false;
@@ -384,7 +383,7 @@ public class HaxeConditionalExpression {
   /** Evaluation Context */
   @Nullable
   private Project context;
-  /** Evaluation defines; set, they replace the project context's. */
+  /** When set, these defines replace the project context's. */
   @Nullable
   private Map<String, String> definitions;
 

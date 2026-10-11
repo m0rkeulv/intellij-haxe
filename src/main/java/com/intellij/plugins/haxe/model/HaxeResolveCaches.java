@@ -9,10 +9,11 @@ import com.intellij.plugins.haxe.model.evaluator.HaxeUntypedParameterBindingCach
 import org.jetbrains.annotations.NotNull;
 
 /**
- * The single entry point for clearing the plugin's own resolution caches; a
- * partial clear keeps results derived from the skipped caches alive. Every
- * PSI change ({@link HaxeResolveCachePsiChangeListener}) and every roots
- * change ({@link HaxeResolveCacheRootsListener}) clears them.
+ * The one place that clears the plugin's own resolution caches, always all
+ * of them: they feed each other, so a cache left out would keep answers
+ * derived from the ones cleared. Runs on every PSI change
+ * ({@link HaxeResolveCachePsiChangeListener}) and every roots change
+ * ({@link HaxeResolveCacheRootsListener}).
  */
 public final class HaxeResolveCaches {
 

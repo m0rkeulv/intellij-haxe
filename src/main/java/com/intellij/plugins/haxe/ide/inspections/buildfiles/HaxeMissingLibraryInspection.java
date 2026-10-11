@@ -32,10 +32,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Map;
 
 /// A `-lib` line or `<haxelib name>` naming a library haxelib has not
-/// installed, or not in the pinned version. The picture is the tool window's
-/// ([HaxeInstalledLibraries]): until its first fetch lands nothing is reported
-/// and a fetch is requested; a landed fetch re-runs the inspection. The quick
-/// fix is the tool window's install.
+/// installed, or not in the pinned version. It reads the installed picture
+/// the tool window shows ([HaxeInstalledLibraries]): until the first fetch
+/// lands it reports nothing and requests one, and a landed fetch re-runs it.
+/// The quick fix is the tool window's install.
 public class HaxeMissingLibraryInspection extends LocalInspectionTool {
   private static final String HAXELIB_TAG = "haxelib";
 
@@ -51,7 +51,7 @@ public class HaxeMissingLibraryInspection extends LocalInspectionTool {
     return file instanceof HXMLFile ? new HxmlLibraryVisitor(reporter) : new ProjectXmlLibraryVisitor(reporter);
   }
 
-  /** The last fetched picture; null while none exists, with a fetch requested that re-runs the inspection when it lands. */
+  /** The installed picture as last fetched; null while there is none, with a fetch requested that re-runs the inspection when it lands. */
   @Nullable
   private static Map<String, InstalledLibrary> installedPicture(@NotNull Project project) {
     HaxeInstalledLibraries libraries = HaxeInstalledLibraries.getInstance(project);
@@ -60,7 +60,7 @@ public class HaxeMissingLibraryInspection extends LocalInspectionTool {
     return installed;
   }
 
-  /** Registers the problem for a dependency the picture lacks; the fix installs it. */
+  /** Registers a problem for each dependency the installed picture lacks, with the install as its fix. */
   private record MissingLibraryReporter(@NotNull ProblemsHolder holder, @NotNull Map<String, InstalledLibrary> installed) {
 
     void check(@NotNull PsiElement element, @NotNull TextRange nameRange, @NotNull HaxeLibDependency library) {
@@ -113,14 +113,14 @@ public class HaxeMissingLibraryInspection extends LocalInspectionTool {
     @Override
     public void visitXmlTag(@NotNull XmlTag tag) {
       if (!HAXELIB_TAG.equalsIgnoreCase(tag.getLocalName())) return;
-      XmlAttributeValue name = HaxeBuildFileInspections.nameAttributeValue(tag);
+      XmlAttributeValue name = HaxeXmlAttributeValues.nameAttributeValue(tag);
       if (name == null || name.getValue().isBlank()) return;
       HaxeLibDependency library = new HaxeLibDependency(name.getValue(), StringUtil.nullize(tag.getAttributeValue("version")));
-      reporter.check(name, HaxeBuildFileInspections.valueRange(name), library);
+      reporter.check(name, HaxeXmlAttributeValues.valueRange(name), library);
     }
   }
 
-  /** Runs the tool window's install for the library; the sync afterwards refreshes the picture and this inspection. */
+  /** Runs the tool window's install for the library; the library sync afterwards refreshes the installed picture and with it this inspection. */
   private static final class InstallLibraryFix implements LocalQuickFix {
     private final String name;
     private final @Nullable String version;

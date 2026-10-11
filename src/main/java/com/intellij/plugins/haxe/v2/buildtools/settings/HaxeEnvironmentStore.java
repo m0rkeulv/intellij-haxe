@@ -134,9 +134,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     HaxeBuildSettingsListener.publish(project);
   }
 
-  /** The container's compile command, or null when unset (the container is skipped on project build). */
-  @Nullable
-  /** A Build command's file keeps the command when it, or a folder above it, moves or is renamed. */
+  /** A Build command keeps its build file when the file, or a folder above it, is moved or renamed; whether anything changed. */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     boolean changed = false;
     for (ContainerEnvironment environment : state.environments) {
@@ -148,6 +146,8 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     return changed;
   }
 
+  /** The container's compile command, or null when unset (the container is skipped on project build). */
+  @Nullable
   public CompileCommand getCompileCommand(@NotNull String containerId) {
     ContainerEnvironment environment = find(containerId);
     if (environment == null || StringUtil.isEmptyOrSpaces(environment.compileFilePath)) return null;

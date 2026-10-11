@@ -19,9 +19,9 @@ final class HaxeCustomActionRemoval {
   interface Decisions {
     boolean confirmRemoval(@NotNull String name);
 
-    /** Asked only when {@code users} is non-empty. */
+    /** Asked only when {@code dependents} - the actions that run it first - is non-empty. */
     @NotNull
-    References references(@NotNull String name, @NotNull List<ActionReference> users);
+    References references(@NotNull String name, @NotNull List<ActionReference> dependents);
   }
 
   private HaxeCustomActionRemoval() {
@@ -33,8 +33,8 @@ final class HaxeCustomActionRemoval {
                         @NotNull String name,
                         @NotNull Decisions decisions) {
     if (!decisions.confirmRemoval(name)) return false;
-    List<ActionReference> users = store.dependents(ownerId, name);
-    References references = users.isEmpty() ? References.KEEP : decisions.references(name, users);
+    List<ActionReference> dependents = store.dependents(ownerId, name);
+    References references = dependents.isEmpty() ? References.KEEP : decisions.references(name, dependents);
     if (references == References.CANCEL) return false;
     store.removeAction(ownerId, name);
     if (references == References.REMOVE) store.dropReferences(ownerId, name);

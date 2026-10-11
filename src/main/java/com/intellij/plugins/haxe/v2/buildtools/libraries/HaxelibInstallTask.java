@@ -11,9 +11,9 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * One background {@code haxelib install} with its user-facing outcome: a
- * notification either way and, after a success, a library sync with
- * {@code onSynced} once it completed. Shared by the tool window's Install
- * action and the missing-library quick fix.
+ * notification either way and, after a success, a library sync, then
+ * {@code onSynced}. Shared by the tool window's Install action and the
+ * missing-library quick fix.
  */
 public final class HaxelibInstallTask {
 

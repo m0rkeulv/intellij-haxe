@@ -11,21 +11,21 @@ import java.util.function.Consumer;
  * Runs an asynchronous action one run at a time. Requests arriving while a
  * run is in progress fold into ONE follow-up run, started when the current
  * run signals completion - a burst of triggers costs one extra run. A
- * request's callback runs after a run that started after the request, so
- * it sees the state the request was made in.
+ * request's callback runs once a run that started after the request has
+ * completed, so that run saw the state the request was made in.
  */
 final class HaxeCoalescingRunner {
 
-  /** Starts one run; the run calls the handed Runnable exactly once when it completed. */
-  private final Consumer<Runnable> run;
+  /** Starts one run; the run calls the handed Runnable exactly once when it has completed. */
+  private final Consumer<Runnable> startRun;
 
   // guarded by this: a run in progress, and the callbacks of the requests
   // that arrived during it (non-null = a follow-up run is wanted)
   private boolean running;
   private List<Runnable> pending;
 
-  HaxeCoalescingRunner(@NotNull Consumer<Runnable> run) {
-    this.run = run;
+  HaxeCoalescingRunner(@NotNull Consumer<Runnable> startRun) {
+    this.startRun = startRun;
   }
 
   void request(@Nullable Runnable onFinished) {
@@ -43,7 +43,7 @@ final class HaxeCoalescingRunner {
   }
 
   private void start(@NotNull List<Runnable> callbacks) {
-    run.accept(() -> finish(callbacks));
+    startRun.accept(() -> finish(callbacks));
   }
 
   private void finish(@NotNull List<Runnable> callbacks) {

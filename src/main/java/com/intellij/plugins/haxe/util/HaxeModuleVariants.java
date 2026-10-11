@@ -134,7 +134,7 @@ public final class HaxeModuleVariants {
    */
   @NotNull
   public static Set<String> activeVariants(@NotNull Project project) {
-    // TODO: the active build's defines answer for every requester; a per-file answer needs the requesting file's context (resolve context, milestone 4)
+    // TODO: the active build's defines answer for every requester; a per-file answer needs the requesting file's resolve context
     return CachedValuesManager.getManager(project).getCachedValue(project, () -> {
       Map<String, String> defines = HaxeConditionalExpression.projectDefinitions(project);
       Set<String> active = new HashSet<>();

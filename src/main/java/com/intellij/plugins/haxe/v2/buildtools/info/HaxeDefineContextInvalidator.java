@@ -29,11 +29,12 @@ import java.util.Set;
 
 /**
  * Re-indexes and reparses the haxe files whose parse depends on the define
- * context — those containing conditional compilation — after the context
+ * context - those containing conditional compilation - after a define set
  * changed. Files without it parse the same under every define set and are
- * left alone. Nothing is stored: every change invalidates every conditional
- * file, project and library alike, so two projects sharing libraries never
- * see each other's state.
+ * left alone. Keeps no state, so two projects sharing libraries never see
+ * each other's: each request scans the conditional files, project and
+ * library alike, and invalidates all of them, those lexed under given build
+ * files, or a single file.
  */
 @CustomLog
 final class HaxeDefineContextInvalidator {
@@ -41,12 +42,7 @@ final class HaxeDefineContextInvalidator {
   private HaxeDefineContextInvalidator() {
   }
 
-  /**
-   * Called from a pooled thread. The platform's per-file invalidation
-   * re-indexes in the background and reloads only loaded PSI; open editors
-   * additionally get the platform's forced reparse, the one event that
-   * rebuilds their highlighting lexer.
-   */
+  /** Every conditional file. Pooled thread. */
   static void invalidateConditionalFiles(@NotNull Project project) {
     List<VirtualFile> conditionalFiles = collectConditionalFiles(project);
     invalidateFiles(project, conditionalFiles);
@@ -88,10 +84,12 @@ final class HaxeDefineContextInvalidator {
 
   /**
    * Pooled thread only: the index request must not run under the EDT's read
-   * action. While the project is still opening nothing is write-safe (the
-   * editor restoration pumps the queue inside read actions, which also trips
-   * the platform's own reload the request posts), so the request waits for
-   * the startup to pass.
+   * action. The platform's per-file invalidation re-indexes in the background
+   * and reloads only loaded PSI; open editors also get a forced reparse, the
+   * one event that rebuilds their highlighting lexer. While the project is
+   * still opening, restored editors run queued events inside read actions,
+   * where the invalidation is not write-safe, so the request retries every
+   * second until startup has passed.
    */
   private static void invalidateFiles(@NotNull Project project, @NotNull List<VirtualFile> files) {
     if (project.isDisposed()) return;

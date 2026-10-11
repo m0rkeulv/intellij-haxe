@@ -37,7 +37,7 @@ public class HaxeGeneratedLexerWrapper extends _HaxeLexer {
   // before lexing each token - the pair must describe the same instant
   private boolean valueContextAtTokenStart;
 
-  // the define set #if evaluates against: the lexed file's own context
+  // the define set #if evaluates against, from the lexed file's own context; null = the project-wide set
   @Nullable
   private final Supplier<Map<String, String>> definitions;
 
