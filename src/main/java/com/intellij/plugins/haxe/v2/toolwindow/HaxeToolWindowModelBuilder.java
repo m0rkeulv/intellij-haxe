@@ -10,14 +10,12 @@ import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
-import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
@@ -34,11 +32,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -246,29 +242,6 @@ final class HaxeToolWindowModelBuilder {
       librariesByPath.put(entry.buildFile().file().getPath(), entry.info().libraries());
     }
     return HaxeTestFrameworks.testsBuildPaths(project, raw.id(), librariesByPath);
-  }
-
-  /** One installed haxelib: the selected version (null when none is set) and every installed version. */
-  record InstalledLibrary(@Nullable String selectedVersion, @NotNull Set<String> versions) {
-  }
-
-  /**
-   * Haxelib's install state per library (lower-cased name), or null when haxelib
-   * is unavailable. Runs an external process - call outside read actions.
-   */
-  @Nullable
-  static Map<String, InstalledLibrary> fetchInstalledLibraryVersions(@NotNull Project project) {
-    Sdk sdk = HaxeToolPathResolver.findConfiguredSdk(project);
-    VirtualFile workDir = ProjectUtil.guessProjectDir(project);
-    if (sdk == null || workDir == null) return null;
-
-    HaxelibInstalledIndex index = HaxelibInstalledIndex.fetchFromHaxelib(sdk, workDir);
-    Map<String, InstalledLibrary> byName = new HashMap<>();
-    for (String name : index.getInstalledLibraries()) {
-      InstalledLibrary library = new InstalledLibrary(index.getSelectedVersion(name), index.getInstalledVersions(name));
-      byName.put(name.toLowerCase(Locale.ROOT), library);
-    }
-    return byName;
   }
 
   @NotNull

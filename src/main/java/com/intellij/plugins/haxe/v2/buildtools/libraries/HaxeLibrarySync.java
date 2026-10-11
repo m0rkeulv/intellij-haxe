@@ -134,6 +134,7 @@ public final class HaxeLibrarySync {
                                            @Nullable Runnable onFinished) {
     if (!project.isDisposed()) {
       HaxeLibraryDefinesStore.getInstance(project).replaceAll(definesByModuleName);
+      HaxeInstalledLibraries.getInstance(project).refreshAsync();
     }
     if (onFinished != null) {
       onFinished.run();

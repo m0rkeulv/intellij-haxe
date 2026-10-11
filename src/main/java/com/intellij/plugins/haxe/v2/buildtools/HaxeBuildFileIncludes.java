@@ -94,7 +94,7 @@ public final class HaxeBuildFileIncludes {
     for (String path : ProjectXmlParser.parseIncludePaths(content)) {
       // TODO: a ${...} path needs lime's variable substitution (haxelib paths, defines); such includes are not watched
       if (path.contains("${")) continue;
-      VirtualFile included = resolveIncludeFile(folder, path);
+      VirtualFile included = includeFile(folder, path);
       if (included == null || !fileIndex.isInContent(included)) continue;
       if (visited.add(included.getPath())) {
         includes.add(included.getPath());
@@ -103,9 +103,14 @@ public final class HaxeBuildFileIncludes {
     }
   }
 
-  /** The include's project file: the path itself, or a folder's first existing include.lime / include.nmml / include.xml. */
+  /**
+   * The project file an {@code <include>} path names, resolved against the
+   * including file's {@code folder}: the path itself, or a folder's first
+   * existing include.lime / include.nmml / include.xml; null when nothing
+   * exists.
+   */
   @Nullable
-  private static VirtualFile resolveIncludeFile(@NotNull VirtualFile folder, @NotNull String path) {
+  public static VirtualFile includeFile(@NotNull VirtualFile folder, @NotNull String path) {
     VirtualFile target = OSAgnosticPathUtil.isAbsolute(path)
                          ? folder.getFileSystem().findFileByPath(path)
                          : folder.findFileByRelativePath(path);

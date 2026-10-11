@@ -24,6 +24,8 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.InstalledLibrary;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.toolwindow.actions.*;
@@ -213,9 +215,9 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /** Never lets a haxelib failure prevent the tree from updating - install state just becomes unknown. */
   private void updateTree(@NotNull List<ContainerEntry> scan) {
-    Map<String, HaxeToolWindowModelBuilder.InstalledLibrary> installed = null;
+    Map<String, InstalledLibrary> installed = null;
     try {
-      installed = HaxeToolWindowModelBuilder.fetchInstalledLibraryVersions(project);
+      installed = HaxeInstalledLibraries.getInstance(project).fetch();
     }
     catch (ProcessCanceledException e) {
       throw e;

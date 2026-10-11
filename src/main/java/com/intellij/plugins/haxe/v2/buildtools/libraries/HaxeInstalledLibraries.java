@@ -1,0 +1,139 @@
+package com.intellij.plugins.haxe.v2.buildtools.libraries;
+
+import com.intellij.openapi.components.Service;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
+import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
+import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
+import com.intellij.util.concurrency.AppExecutorUtil;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
+
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Haxelib's install picture for the project, as the tool window and the
+ * build-file inspections see it. A fetch runs a haxelib process, so readers
+ * under the read lock take the last {@link #snapshot} and ask for a
+ * {@link #refreshAsync} when none exists; a landed fetch whose picture changed
+ * restarts highlighting so the inspections follow. Fetch requests arriving
+ * while one runs share that run.
+ */
+@Service(Service.Level.PROJECT)
+public final class HaxeInstalledLibraries {
+
+  /** One installed haxelib: the selected version (null when none is set) and every installed version. */
+  public record InstalledLibrary(@Nullable String selectedVersion, @NotNull Set<String> versions) {
+  }
+
+  /**
+   * A dependency against the picture: {@code installed} when its name is
+   * installed in the pinned version (any version when unpinned);
+   * {@code selectedVersion} is the version haxelib selects for the name,
+   * null when the name is not installed at all.
+   */
+  public record LibraryStatus(boolean installed, @Nullable String selectedVersion) {
+  }
+
+  private final Project project;
+  private volatile @Nullable Map<String, InstalledLibrary> snapshot;
+  private @Nullable CompletableFuture<@Nullable Map<String, InstalledLibrary>> inFlight;
+
+  public HaxeInstalledLibraries(@NotNull Project project) {
+    this.project = project;
+  }
+
+  @NotNull
+  public static HaxeInstalledLibraries getInstance(@NotNull Project project) {
+    return project.getService(HaxeInstalledLibraries.class);
+  }
+
+  /** The last fetched picture by lower-cased name; null until a fetch landed with haxelib available. Never fetches. */
+  @Nullable
+  public Map<String, InstalledLibrary> snapshot() {
+    return snapshot;
+  }
+
+  /** The picture after a fetch, shared with one in flight; null when haxelib is unavailable. Runs a process - call on a pooled thread. */
+  @Nullable
+  public Map<String, InstalledLibrary> fetch() {
+    return refresh().join();
+  }
+
+  /** Fetches on a pooled thread; a request during a fetch shares that fetch. */
+  public void refreshAsync() {
+    refresh();
+  }
+
+  /** The dependency's state against {@code installed}; an unknown picture (null) counts every dependency as installed. */
+  @NotNull
+  public static LibraryStatus status(@Nullable Map<String, InstalledLibrary> installed, @NotNull HaxeLibDependency library) {
+    if (installed == null) return new LibraryStatus(true, null);
+    InstalledLibrary installedLibrary = installed.get(library.name().toLowerCase(Locale.ROOT));
+    if (installedLibrary == null) return new LibraryStatus(false, null);
+    // a pinned version must itself be installed - the name alone is not
+    // enough. A git checkout is listed as version "git", never as its
+    // url#ref spec.
+    // TODO: compare a git pin's #ref against the installed checkout
+    //       (HaxelibLocalDocs.gitCheckout) and flag mismatches
+    String requiredVersion = HaxelibGitSpec.parse(library.version()) != null ? HaxelibSemVer.GIT_SCM : library.version();
+    boolean satisfied = requiredVersion == null || installedLibrary.versions().contains(requiredVersion);
+    return new LibraryStatus(satisfied, installedLibrary.selectedVersion());
+  }
+
+  /** Seeds the picture; a fetch still in flight is awaited first so it cannot overwrite the seed. */
+  @TestOnly
+  public void setSnapshotForTests(@Nullable Map<String, InstalledLibrary> snapshot) {
+    CompletableFuture<?> pending;
+    synchronized (this) {
+      pending = inFlight;
+    }
+    if (pending != null) pending.handle((result, failure) -> null).join();
+    this.snapshot = snapshot;
+  }
+
+  @NotNull
+  private synchronized CompletableFuture<@Nullable Map<String, InstalledLibrary>> refresh() {
+    if (inFlight != null && !inFlight.isDone()) return inFlight;
+    inFlight = CompletableFuture.supplyAsync(this::fetchAndPublish, AppExecutorUtil.getAppExecutorService());
+    return inFlight;
+  }
+
+  /** The fresh picture, stored; a change re-runs the build-file inspections. */
+  @Nullable
+  private Map<String, InstalledLibrary> fetchAndPublish() {
+    Map<String, InstalledLibrary> fetched = fetchFromHaxelib(project);
+    boolean changed = !Objects.equals(snapshot, fetched);
+    snapshot = fetched;
+    if (changed) HaxeCompilerCaches.restartHighlightingLater(project, "haxe: installed libraries changed");
+    return fetched;
+  }
+
+  /** Haxelib's install state per lower-cased library name, or null when haxelib is unavailable. */
+  @Nullable
+  private static Map<String, InstalledLibrary> fetchFromHaxelib(@NotNull Project project) {
+    Sdk sdk = HaxeToolPathResolver.findConfiguredSdk(project);
+    VirtualFile workDir = ProjectUtil.guessProjectDir(project);
+    if (sdk == null || workDir == null) return null;
+
+    HaxelibInstalledIndex index = HaxelibInstalledIndex.fetchFromHaxelib(sdk, workDir);
+    Map<String, InstalledLibrary> byName = new HashMap<>();
+    for (String name : index.getInstalledLibraries()) {
+      InstalledLibrary library = new InstalledLibrary(index.getSelectedVersion(name), index.getInstalledVersions(name));
+      byName.put(name.toLowerCase(Locale.ROOT), library);
+    }
+    return byName;
+  }
+}

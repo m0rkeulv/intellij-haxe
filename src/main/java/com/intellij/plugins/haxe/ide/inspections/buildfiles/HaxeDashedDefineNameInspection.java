@@ -7,7 +7,6 @@ import com.intellij.modcommand.PsiUpdateModCommandQuickFix;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLLanguage;
 import com.intellij.plugins.haxe.buildsystem.hxml.psi.HXMLFile;
@@ -15,7 +14,6 @@ import com.intellij.plugins.haxe.hxml.psi.HXMLDefine;
 import com.intellij.plugins.haxe.hxml.psi.HXMLValue;
 import com.intellij.plugins.haxe.hxml.psi.HXMLVisitor;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
@@ -28,7 +26,6 @@ import com.intellij.psi.xml.XmlAttributeValue;
 import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -50,13 +47,8 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     PsiFile file = holder.getFile();
     if (file instanceof HXMLFile) return new HxmlDefineVisitor(holder);
-    if (file instanceof XmlFile && isProjectXml(file)) return new ProjectXmlDefineVisitor(holder);
+    if (file instanceof XmlFile && HaxeBuildFileInspections.isProjectXml(file)) return new ProjectXmlDefineVisitor(holder);
     return PsiElementVisitor.EMPTY_VISITOR;
-  }
-
-  private static boolean isProjectXml(@NotNull PsiFile file) {
-    VirtualFile virtualFile = file.getOriginalFile().getVirtualFile();
-    return virtualFile != null && HaxeBuildFileScanner.detectType(file.getProject(), virtualFile) != null;
   }
 
   private static void checkName(@NotNull ProblemsHolder holder, @NotNull PsiElement element, @NotNull TextRange nameRange) {
@@ -73,12 +65,6 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
   private static TextRange hxmlNameRange(@NotNull String defineValue) {
     int end = StringUtil.indexOfAny(defineValue, "= \t");
     return TextRange.from(0, end < 0 ? defineValue.length() : end);
-  }
-
-  @Nullable
-  private static XmlAttributeValue nameAttributeValue(@NotNull XmlTag tag) {
-    XmlAttribute attribute = tag.getAttribute("name");
-    return attribute == null ? null : attribute.getValueElement();
   }
 
   private static final class HxmlDefineVisitor extends HXMLVisitor {
@@ -105,10 +91,9 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
     @Override
     public void visitXmlTag(@NotNull XmlTag tag) {
       if (!ProjectXmlParser.DEFINE_TAGS.contains(tag.getLocalName().toLowerCase(Locale.ROOT))) return;
-      XmlAttributeValue name = nameAttributeValue(tag);
+      XmlAttributeValue name = HaxeBuildFileInspections.nameAttributeValue(tag);
       if (name == null) return;
-      TextRange nameRange = name.getValueTextRange().shiftLeft(name.getTextRange().getStartOffset());
-      checkName(holder, name, nameRange);
+      checkName(holder, name, HaxeBuildFileInspections.valueRange(name));
     }
   }
 

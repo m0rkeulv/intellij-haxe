@@ -248,7 +248,7 @@ public final class HxmlFileParser {
         accumulator.defines.add(parseDefine(value));
       }
       else if (LIBRARY_FLAGS.contains(flag) && value != null) {
-        accumulator.libraries.add(parseLibrary(value));
+        accumulator.libraries.add(HaxeLibDependency.parse(value));
       }
       else if (CLASSPATH_FLAGS.contains(flag) && value != null) {
         accumulator.classpaths.add(value);
@@ -296,13 +296,6 @@ public final class HxmlFileParser {
   private static HaxeDefine parseDefine(@NotNull String value) {
     String[] parts = value.split("=", 2);
     return new HaxeDefine(parts[0], parts.length > 1 ? parts[1] : null);
-  }
-
-  // "name", "name:1.2.0" or "name:git:https://..."
-  @NotNull
-  private static HaxeLibDependency parseLibrary(@NotNull String value) {
-    String[] parts = value.split(":", 2);
-    return new HaxeLibDependency(parts[0], parts.length > 1 ? parts[1] : null);
   }
 
   private static boolean isIncludeReference(@NotNull String token) {
