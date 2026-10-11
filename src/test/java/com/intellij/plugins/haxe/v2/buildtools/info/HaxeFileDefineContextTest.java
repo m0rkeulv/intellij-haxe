@@ -102,7 +102,6 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals(List.of(cppMain), inCpp, "only CppMain is lexed under cpp.hxml");
 
     WriteAction.runAndWait(() -> VfsUtil.saveText(cpp, CPP_HXML_SOURCE + "-D foo\n"));
-    HaxeDefineContextService.getInstance(getProject()).refreshAsync();
 
     PlatformTestUtil.waitWithEventsDispatching("cpp.hxml gained -D foo: CppMain must be re-lexed", () -> branchLive(psiFile(cppMain), "foo = true"), 10);
   }

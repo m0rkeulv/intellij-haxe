@@ -5,6 +5,7 @@ import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.plugins.haxe.ide.projectStructure.detection.HaxeProjectFileDetectionUtil;
@@ -36,6 +37,11 @@ public final class HaxeBuildFileScanner {
   public static final Set<String> BUILD_FILE_EXTENSIONS = Set.of("hxml", "hxp", "nmml", "xml", "lime");
 
   private HaxeBuildFileScanner() {
+  }
+
+  /** Whether the path's extension is one a build file can carry; the content decides the rest ({@link #detectType}). */
+  public static boolean hasBuildFileExtension(@NotNull String path) {
+    return BUILD_FILE_EXTENSIONS.contains(FileUtilRt.getExtension(path).toLowerCase(Locale.ROOT));
   }
 
   @NotNull
