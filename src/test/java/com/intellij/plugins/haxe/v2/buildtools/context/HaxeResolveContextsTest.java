@@ -131,6 +131,11 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
 
     assertFalse(contexts().follow(shared, nodeMain), "nothing changes when the two already agree");
 
+    VirtualFile tools = hxml("tools.hxml", TOOLS_HXML_SOURCE);
+    VirtualFile tool = source("src/tools/Tool.hx", "class Tool {}");
+    assertFalse(contexts().follow(nodeMain, tool), "a file with a closer owner keeps it, although node.hxml reaches it too");
+    assertEquals(tools.getPath(), contextPath(tool));
+
     HaxeResolveContextStore store = HaxeResolveContextStore.getInstance(getProject());
     store.pin(shared, web.getPath());
     assertFalse(contexts().follow(nodeMain, shared), "a pinned file never follows");
