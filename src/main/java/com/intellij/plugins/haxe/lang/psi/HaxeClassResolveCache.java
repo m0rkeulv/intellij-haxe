@@ -52,6 +52,11 @@ public class HaxeClassResolveCache {
   });
   }
 
+  /** Drops every entry: the roots-change path, where no PSI change announces itself. */
+  public void clear() {
+    myMap.clear();
+  }
+
   public void put(@NotNull HaxeClass haxeClass, @NotNull HaxeResolveResult result) {
     myMap.put(haxeClass, result);
   }
