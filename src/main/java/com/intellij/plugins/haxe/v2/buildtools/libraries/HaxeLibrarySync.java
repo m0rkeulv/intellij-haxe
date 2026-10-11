@@ -86,9 +86,22 @@ public final class HaxeLibrarySync {
                             @NotNull Map<String, Map<String, String>> definesByDependency) {
   }
 
-  /** Resolves and applies module libraries in the background; {@code onFinished} runs on the EDT. */
+  /**
+   * Requests a background sync of every module's libraries. Syncs run one at
+   * a time and a request during a run gets one follow-up run
+   * ({@link HaxeLibrarySyncQueue}); {@code onFinished} runs on the EDT once
+   * a sync started after this request completed.
+   */
   public static void sync(@NotNull Project project, @Nullable Runnable onFinished) {
+    HaxeLibrarySyncQueue.getInstance(project).request(onFinished);
+  }
+
+  /** One sync run; {@code onDone} runs on the EDT exactly once, whether the run applied libraries or stopped short. */
+  static void runOnce(@NotNull Project project, @NotNull Runnable onDone) {
     new Task.Backgroundable(project, HaxeBundle.message("haxe.library.sync.progress"), false) {
+      // once the workspace apply is scheduled, it signals the completion itself
+      private boolean applying;
+
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         Map<Module, List<HaxeLibDependency>> dependencies =
@@ -101,9 +114,16 @@ public final class HaxeLibrarySync {
           definesByModuleName.put(module.getName(), resolution.definesByDependency());
         });
         if (!project.isDisposed()) {
-          Runnable onApplied = () -> recordLibraryDefines(project, definesByModuleName, onFinished);
+          applying = true;
+          Runnable onApplied = () -> recordLibraryDefines(project, definesByModuleName, onDone);
           HaxeLibraryWorkspace.getInstance(project).applyAllAsync(byModuleName, onApplied);
         }
+      }
+
+      @Override
+      public void onFinished() {
+        // a run that never reached the apply (cancelled, failed) still completes
+        if (!applying && !project.isDisposed()) onDone.run();
       }
     }.queue();
   }
@@ -178,7 +198,7 @@ public final class HaxeLibrarySync {
     HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
     HaxeBuildFileType type = buildFile.type();
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(module.getName());
-    Runnable onEvaluated = () -> sync(project, null);
+    Runnable onEvaluated = HaxeLibrarySyncQueue.getInstance(project).resyncRequest();
     if (type == HaxeBuildFileType.NMML) {
       return HaxeNmeProjectInfoService.getInstance(project)
         .effectiveInfo(buildFile, raw, environmentSdk, onEvaluated)
