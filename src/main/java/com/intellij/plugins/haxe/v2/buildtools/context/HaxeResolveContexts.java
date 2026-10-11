@@ -100,7 +100,7 @@ public final class HaxeResolveContexts {
     return pinnedAmong(file, owners(file)) != null;
   }
 
-  /** Whether the file shows the context a navigation gave it (no pin, and that build contains the file). Call in a read action. */
+  /** Whether the file shows the context a navigation gave it (no pin, and that build is among its closest owners). Call in a read action. */
   public boolean isFollowed(@NotNull VirtualFile file) {
     List<Ownership> owners = owners(file);
     return pinnedAmong(file, owners) == null && followedAmong(file, owners) != null;
@@ -108,9 +108,11 @@ public final class HaxeResolveContexts {
 
   /**
    * Gives {@code to} the context of {@code from}: a navigation landing in a
-   * file several builds reach shows it as the file it came from sees it.
-   * Nothing happens for a pinned file, a file one build reaches, or when the
-   * two already agree. Returns whether the context changed. Call in a read
+   * file several builds reach equally (a library or a shared source) shows it
+   * as the file it came from sees it. A file with a closer owner keeps that
+   * owner (every root hxml reaches the whole project through its implicit
+   * classpath); nothing happens either for a pinned file or when the two
+   * already agree. Returns whether the context changed. Call in a read
    * action.
    */
   public boolean follow(@NotNull VirtualFile from, @NotNull VirtualFile to) {
@@ -119,7 +121,9 @@ public final class HaxeResolveContexts {
     HaxeResolveContext origin = contextFor(from);
     if (origin == null) return false;
     List<Ownership> owners = owners(to);
-    if (owners.size() < 2 || ownedBy(owners, origin.path()) == null) return false;
+    if (owners.isEmpty()) return false;
+    List<Ownership> closest = closestOwners(to.getPath(), owners);
+    if (closest.size() < 2 || ownedBy(closest, origin.path()) == null) return false;
     HaxeResolveContext current = contextFor(to);
     if (current != null && current.path().equals(origin.path())) return false;
     store.follow(to, origin.path());
@@ -139,10 +143,12 @@ public final class HaxeResolveContexts {
     return pinnedPath == null ? null : ownedBy(owners, pinnedPath);
   }
 
+  /** The followed build applies only while it stays among the file's closest owners - the rule {@link #follow} chose it by. */
   @Nullable
   private Ownership followedAmong(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
     String followedPath = HaxeResolveContextStore.getInstance(project).getFollowedBuildFile(file);
-    return followedPath == null ? null : ownedBy(owners, followedPath);
+    if (followedPath == null || owners.isEmpty()) return null;
+    return ownedBy(closestOwners(file.getPath(), owners), followedPath);
   }
 
   @Nullable
@@ -208,11 +214,7 @@ public final class HaxeResolveContexts {
   /** Among the most specific owners (every build, for a library file): the file's -main build, else the active build file, else the first. */
   @NotNull
   private Ownership preferred(@NotNull String path, @NotNull List<Ownership> owners) {
-    String pathAsPrefix = path + "/";
-    int best = owners.getFirst().specificity(pathAsPrefix);
-    List<Ownership> candidates = owners.stream()
-      .filter(ownership -> ownership.specificity(pathAsPrefix) == best)
-      .toList();
+    List<Ownership> candidates = closestOwners(path, owners);
     for (Ownership candidate : candidates) {
       if (candidate.isMain(path)) return candidate;
     }
@@ -221,6 +223,16 @@ public final class HaxeResolveContexts {
       if (candidate.buildFile().file().getPath().equals(activePath)) return candidate;
     }
     return candidates.getFirst();
+  }
+
+  /** The owners whose source directory containing the path is the longest (every owner of a library file ties at none); {@code owners} is sorted that way. */
+  @NotNull
+  private static List<Ownership> closestOwners(@NotNull String path, @NotNull List<Ownership> owners) {
+    String pathAsPrefix = path + "/";
+    int best = owners.getFirst().specificity(pathAsPrefix);
+    return owners.stream()
+      .filter(ownership -> ownership.specificity(pathAsPrefix) == best)
+      .toList();
   }
 
   @NotNull
