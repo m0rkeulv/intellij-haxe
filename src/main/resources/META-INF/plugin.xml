@@ -191,8 +191,6 @@
     <!-- Enable the following stanza to use the HaxePsiBuilder when parsing.  Beware! It overrides any other
          PsiBuilder; every language will use the HaxePsiBuilder. -->
     <!--
-    <applicationService overrides="true" serviceInterface="com.intellij.lang.PsiBuilderFactory"
-                        serviceImplementation="com.intellij.plugins.haxe.lang.parser.HaxePsiBuilderFactoryImpl"/>
     -->
 
     <lang.syntaxHighlighterFactory language="Haxe" implementationClass="com.intellij.plugins.haxe.ide.highlight.HaxeSyntaxHighlighterFactory"/>
