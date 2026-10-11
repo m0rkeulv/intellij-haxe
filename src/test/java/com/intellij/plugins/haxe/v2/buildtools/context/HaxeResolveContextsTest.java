@@ -4,7 +4,9 @@ import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,10 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
     -cp src
     -main NodeMain
     -js bin/node.js
+    """;
+  private static final String SHARED_HXML_SOURCE = """
+    -cp src
+    --interp
     """;
   private static final String TOOLS_HXML_SOURCE = """
     -cp src/tools
@@ -144,6 +150,19 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
     store.unpin(shared);
     assertEquals(web.getPath(), contextPath(shared), "select automatically forgets the followed context too");
     assertFalse(contexts().isFollowed(shared));
+  }
+
+  @Test
+  @DisplayName("among equal owners the containers build command wins before the first known build")
+  public void testAmongEqualOwnersTheContainersBuildCommandWinsBeforeTheFirstKnownBuild() {
+    hxml("a.hxml", SHARED_HXML_SOURCE);
+    VirtualFile b = hxml("b.hxml", SHARED_HXML_SOURCE);
+    VirtualFile shared = source("src/Shared.hx", "class Shared {}");
+    String containerId = HaxeContainers.containerIdFor(getProject(), shared);
+    HaxeEnvironmentStore.CompileCommand command = new HaxeEnvironmentStore.CompileCommand(b.getPath(), null, "");
+    HaxeEnvironmentStore.getInstance(getProject()).setCompileCommand(containerId, command);
+
+    assertEquals(b.getPath(), contextPath(shared), "no -main, no active build: the Build command's file beats tool-window order");
   }
 
   @Test
