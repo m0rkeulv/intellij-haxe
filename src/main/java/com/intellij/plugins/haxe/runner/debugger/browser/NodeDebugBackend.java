@@ -24,11 +24,10 @@ import java.util.Map;
  * output stays on the real process stdout (a test run's protocol drives the
  * SM console exactly like a plain run); this backend spawns the pinned
  * vscode-js-debug adapter (the chromium lane's, shared store and pin) and
- * ATTACHES it to the inspector port. The
- * parent/child session dance and the wire quirks are
- * {@link BrowserDebugBackend}'s (fire-and-forget launch, startDebugging
- * hand-over, deferred launch response); the mux presents the process plus
- * any worker_threads as one session. {@link NodeEntryHoldRelease} releases
+ * ATTACHES it to the inspector port. The parent/child session dance and the
+ * wire quirks are {@link BrowserDebugBackend}'s (fire-and-forget launch,
+ * startDebugging hand-over, deferred launch response); the mux presents the
+ * process plus any worker_threads as one session. {@link NodeEntryHoldRelease} releases
  * the {@code --inspect-brk} hold once the breakpoints are bound, so even code
  * that runs at startup stops on them.
  */
@@ -52,6 +51,11 @@ public class NodeDebugBackend implements DapBackend {
 
   public int getInspectorPort() {
     return inspectorPort;
+  }
+
+  /** The node option that holds the script at its first line on this backend's inspector port. */
+  public String inspectorArgument() {
+    return "--inspect-brk=" + inspectorPort;
   }
 
   @Override

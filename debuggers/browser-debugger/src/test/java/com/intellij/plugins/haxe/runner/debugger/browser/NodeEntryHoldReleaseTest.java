@@ -66,6 +66,20 @@ public class NodeEntryHoldReleaseTest {
     assertEquals(List.of(4), session.continuedThreads());
   }
 
+  @Test
+  @DisplayName("a first stop that hit a breakpoint passes through whatever its reason")
+  public void aFirstStopThatHitABreakpointPassesThroughWhateverItsReason() throws Exception {
+    StoppedEvent heldOnBreakpoint = stopped("step", 2);
+    heldOnBreakpoint.getBody().setHitBreakpointIds(List.of(1));
+    ScriptedSession session = new ScriptedSession(heldOnBreakpoint);
+    NodeEntryHoldRelease release = new NodeEntryHoldRelease(session);
+
+    Event first = release.pollEvent(10);
+
+    assertSame(heldOnBreakpoint, first);
+    assertTrue(session.continuedThreads().isEmpty());
+  }
+
   private static StoppedEvent stopped(String reason, int threadId) {
     StoppedEventBody body = new StoppedEventBody();
     body.setReason(reason);

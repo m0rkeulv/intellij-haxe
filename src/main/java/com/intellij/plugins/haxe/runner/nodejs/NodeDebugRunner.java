@@ -48,7 +48,7 @@ public class NodeDebugRunner extends DapDebugRunnerBase<NodeRunConfiguration, No
   protected GeneralCommandLine createCommandLine(NodeRunConfiguration configuration, NodeDebugBackend backend)
     throws ExecutionException {
     GeneralCommandLine commandLine = configuration.createCommandLine();
-    commandLine.getParametersList().addAt(0, "--inspect-brk=" + backend.getInspectorPort());
+    commandLine.getParametersList().addAt(0, backend.inspectorArgument());
     return commandLine;
   }
 }

@@ -21,7 +21,6 @@ import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
 import com.intellij.plugins.haxe.v2.buildtools.HxcppExecutables;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
@@ -117,9 +116,9 @@ public final class HaxeProgramLaunches {
     return info.hasNodeSignal() ? NODE_FIRST : BROWSER_FIRST;
   }
 
-  /** The kind that launches this build's output, or null when nothing can. */
+  /** The likeliest kind launching this build's output, or null when nothing can. */
   @Nullable
-  public static HaxeLaunchKind launchKind(@NotNull Project project, @NotNull HaxeBuildFileInfo info, @NotNull HaxeBuildFile buildFile) {
+  private static HaxeLaunchKind launchKind(@NotNull Project project, @NotNull HaxeBuildFileInfo info, @NotNull HaxeBuildFile buildFile) {
     String output = launchOutput(info);
     if (info.target() == null || output == null) return null;
     return kindFor(info.target(), output, buildFile.type(), selectedTargetFlag(project, buildFile), info.defines());
@@ -138,24 +137,6 @@ public final class HaxeProgramLaunches {
   @Nullable
   public static String launchOutput(@NotNull HaxeBuildFileInfo info) {
     return info.target() == HaxeTarget.INTERP ? "" : info.targetOutput();
-  }
-
-  /**
-   * The build's own launch configuration (the Build & run row): the kind its
-   * target output launches through, the file's default build action as the
-   * step and the derived defaults as parameters.
-   */
-  @Nullable
-  public static RunnerAndConfigurationSettings findOrCreate(@NotNull Project project,
-                                                            @NotNull Module module,
-                                                            @NotNull HaxeBuildFile buildFile,
-                                                            @NotNull HaxeTarget target,
-                                                            @NotNull String targetOutput) {
-    List<HaxeDefine> defines = HaxeReadActions.compute(() -> HaxeBuildSections.inspectSelected(project, buildFile)).defines();
-    HaxeLaunchKind kind = kindFor(target, targetOutput, buildFile.type(), selectedTargetFlag(project, buildFile), defines);
-    if (kind == null) return null;
-    String buildAction = HaxeBuildSystem.of(buildFile.type()).defaultBuildActionName();
-    return findOrCreate(project, module, buildFile, kind, targetOutput, buildAction, Map.of(), true);
   }
 
   /**

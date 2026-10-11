@@ -31,6 +31,20 @@ public class NekoRunConfigurationTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals(moduleDir.resolve("bin"), configuration.resolveWorkingDirectory());
   }
 
+  @Test
+  @DisplayName("blank working directory with the runtime defaults to the script folder")
+  public void testBlankWorkingDirectoryWithTheRuntimeDefaultsToTheScriptFolder() {
+    NekoRunConfiguration configuration = newConfiguration();
+    configuration.setModule(myFixture.getModule());
+    Path moduleDir = Path.of(Objects.requireNonNull(ProjectUtil.guessModuleDir(myFixture.getModule())).getPath());
+    configuration.setExecutablePath("");
+    configuration.setProgramArguments("out/app.n --flag");
+
+    configuration.setWorkingDirectory("");
+
+    assertEquals(moduleDir.resolve("out"), configuration.resolveWorkingDirectory());
+  }
+
   private NekoRunConfiguration newConfiguration() {
     HaxeRunConfigurationType type = HaxeRunConfigurationType.getInstance();
     return new NekoRunConfiguration("neko", getProject(), new NekoConfigurationFactory(type));
