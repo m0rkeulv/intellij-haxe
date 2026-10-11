@@ -20,6 +20,8 @@ import com.intellij.ui.dsl.builder.CollapsibleRow
 import com.intellij.ui.dsl.builder.TopGap
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
+import com.intellij.openapi.ui.Messages
+import java.util.function.BiFunction
 import java.util.function.Function
 import java.util.function.Supplier
 import javax.swing.Icon
@@ -28,15 +30,19 @@ import javax.swing.Icon
  * The "Run before" part of the custom action dialog: actions that run first,
  * in order - of the same build file or of any other; a failure stops the rest
  * and the action itself. `candidates` offers, for the name the dialog
- * currently shows, the actions that can be added without a loop; `label`
- * names a reference in the list, `location` finds another build file's
- * module and path. The + popup lists the file's own actions, then one entry
- * per module that opens its build files, each opening its actions.
+ * currently shows, every action but the edited one; `refusal` says why a
+ * pick cannot run first (it would loop), shown instead of adding it; `label`
+ * names a reference in the list, `missing` marks one naming nothing any
+ * more, `location` finds another build file's module and path. The + popup
+ * lists the file's own actions, then one entry per module that opens its
+ * build files, each opening its actions.
  */
 class HaxeRunBeforeSection(
   private val candidates: Function<String, List<ActionReference>>,
   private val label: Function<ActionReference, String>,
+  private val missing: Function<ActionReference, Boolean>,
   private val location: Function<String, Location?>,
+  private val refusal: BiFunction<String, ActionReference, String?>,
   initial: List<ActionReference>,
 ) {
   private val model = CollectionListModel(initial)
@@ -50,8 +56,14 @@ class HaxeRunBeforeSection(
   init {
     list.emptyText.text = HaxeBundle.message("haxe.custom.action.dialog.run.before.empty")
     list.cellRenderer = listCellRenderer {
-      icon(HaxeActionIcons.forAction(value.action()))
-      text(label.apply(value))
+      if (missing.apply(value)) {
+        icon(AllIcons.General.Error)
+        text(HaxeBundle.message("haxe.action.reference.missing", label.apply(value)))
+      }
+      else {
+        icon(HaxeActionIcons.forAction(value.action()))
+        text(label.apply(value))
+      }
     }
     val decorated = ToolbarDecorator.createDecorator(list)
       .setAddAction { button -> chooseAction(button) }
@@ -74,6 +86,16 @@ class HaxeRunBeforeSection(
 
   /** The actions to run first, in order. */
   fun actions(): List<ActionReference> = model.items.toList()
+
+  private fun add(reference: ActionReference) {
+    val message = refusal.apply(currentName.get(), reference)
+    if (message == null) {
+      model.add(reference)
+    }
+    else {
+      Messages.showWarningDialog(list, message, HaxeBundle.message("haxe.custom.action.dialog.run.before.add"))
+    }
+  }
 
   private fun chooseAction(button: AnActionButton) {
     val offered = candidates.apply(currentName.get()).filter { it !in model.items }
@@ -132,10 +154,7 @@ class HaxeRunBeforeSection(
 
     override fun onChosen(selectedValue: Choice, finalChoice: Boolean): PopupStep<*>? = when (selectedValue) {
       is GroupChoice -> ChoiceStep(null, selectedValue.children)
-      is ActionChoice -> {
-        model.add(selectedValue.reference)
-        FINAL_CHOICE
-      }
+      is ActionChoice -> doFinalStep { add(selectedValue.reference) }
     }
   }
 }

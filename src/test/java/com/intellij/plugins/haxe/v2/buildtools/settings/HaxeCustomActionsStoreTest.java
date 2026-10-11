@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.buildtools.settings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.RunBeforeRefusal;
 import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;
 import org.junit.jupiter.api.DisplayName;
@@ -125,7 +126,7 @@ public class HaxeCustomActionsStoreTest {
     store.addAction(OTHER_FILE, new CustomAction("b", "cmd-b", "", null, List.of(in(FILE, "a"))));
 
     assertNull(store.runBeforeChain(FILE, "a"));
-    assertTrue(store.runsBefore(in(FILE, "a"), FILE, "anything"), "a looping action is never offered");
+    assertEquals(RunBeforeRefusal.LOOPS, store.refusal(in(FILE, "a"), FILE, "anything"), "a looping action is refused whatever it would run before");
   }
 
   @Test
@@ -151,12 +152,12 @@ public class HaxeCustomActionsStoreTest {
     store.addAction(OTHER_FILE, new CustomAction("prepare", "cmd-prepare", "", null, List.of(own("Clean"))));
     store.addAction(FILE, new CustomAction("release", "cmd-release", "", null, List.of(in(OTHER_FILE, "prepare"))));
 
-    store.moveOwner("/p/lib", "/p/libs/core");
+    store.moveFile("/p/lib", "/p/libs/core");
     String moved = "/p/libs/core/build.hxml";
     assertEquals(List.of("prepare"), store.getActions(moved).stream().map(CustomAction::name).toList());
     assertEquals(List.of(in(moved, "Clean"), in(moved, "prepare")), store.runBeforeChain(FILE, "release"));
 
-    store.moveOwner(moved, "/p/libs/core/main.hxml");
+    store.moveFile(moved, "/p/libs/core/main.hxml");
     assertEquals(List.of("prepare"), store.getActions("/p/libs/core/main.hxml").stream().map(CustomAction::name).toList());
   }
 

@@ -433,7 +433,7 @@ final class HaxeToolWindowModelBuilder {
       String actionWorkDirectory =
         HaxeCustomCommands.resolveWorkDirectory(custom.workDirectory(), workDirectory, moduleRoot, projectRoot);
       List<String> runBefore = custom.runBefore().stream()
-        .map(reference -> HaxeActionReferences.label(project, ownerId, reference))
+        .map(reference -> HaxeActionReferences.labelOrMissing(project, ownerId, reference))
         .toList();
       ActionNode actionNode = new ActionNode(ownerId, custom.name(), command, actionWorkDirectory, expanded, true, custom.launch(),
                                              launchOutput, runBefore);

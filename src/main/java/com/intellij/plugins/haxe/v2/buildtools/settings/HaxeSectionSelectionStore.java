@@ -65,6 +65,11 @@ public final class HaxeSectionSelectionStore implements PersistentStateComponent
   }
 
   /** The selected section's index among the given identities; the first section when nothing (or a removed section) is stored. */
+  /** The entries of a moved or renamed build file (or folder) keep their file; whether any did. */
+  public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
+    return HaxeStoredPaths.moveKeys(state.sectionsByFile, oldPath, newPath);
+  }
+
   public int getSelectedSection(@NotNull VirtualFile buildFile, @NotNull List<String> sectionIds) {
     String stored = state.sectionsByFile.get(buildFile.getPath());
     if (stored == null) return 0;
