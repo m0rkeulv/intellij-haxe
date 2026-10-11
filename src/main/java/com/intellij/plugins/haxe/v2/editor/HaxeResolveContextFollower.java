@@ -4,6 +4,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeFileType;
@@ -36,6 +37,8 @@ public final class HaxeResolveContextFollower implements FileEditorManagerListen
 
   @Override
   public void beforeFileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
+    // the tabs restored while the project opens are not navigation
+    if (!StartupManager.getInstance(project).postStartupActivityPassed()) return;
     VirtualFile from = selectedFile(source);
     if (from == null || from.equals(file) || !isHaxe(from) || !isHaxe(file)) return;
     boolean changed = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).follow(from, file));

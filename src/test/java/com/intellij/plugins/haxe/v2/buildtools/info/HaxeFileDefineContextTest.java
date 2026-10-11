@@ -69,9 +69,8 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
 
     HaxeResolveContextStore.getInstance(getProject()).pin(shared, cpp.getPath());
     HaxeDefineContextService.getInstance(getProject()).fileContextChanged(shared);
-    PlatformTestUtil.dispatchAllEventsInIdeEventQueue();
 
-    assertTrue(sysBranchLive(psiFile(shared)), "pinned to cpp.hxml: the sys branch is live");
+    PlatformTestUtil.waitWithEventsDispatching("pinned to cpp.hxml: the sys branch must come alive", () -> sysBranchLive(psiFile(shared)), 10);
   }
 
   private PsiFile psiFile(VirtualFile file) {
