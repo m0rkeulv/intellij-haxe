@@ -83,9 +83,9 @@ public final class HaxeResolveContexts {
   @Nullable
   public HaxeResolveContext contextFor(@NotNull VirtualFile file) {
     List<Ownership> owners = owners(file);
-    Ownership pinned = pinnedAmong(file, owners);
-    if (pinned != null) {
-      return new HaxeResolveContext(pinned.buildFile());
+    Ownership chosen = chosenAmong(file, owners);
+    if (chosen != null) {
+      return new HaxeResolveContext(chosen.buildFile());
     }
     if (!owners.isEmpty()) {
       return new HaxeResolveContext(preferred(file.getPath(), owners).buildFile());
@@ -100,12 +100,55 @@ public final class HaxeResolveContexts {
     return pinnedAmong(file, owners(file)) != null;
   }
 
+  /** Whether the file shows the context a navigation gave it (no pin, and that build contains the file). Call in a read action. */
+  public boolean isFollowed(@NotNull VirtualFile file) {
+    List<Ownership> owners = owners(file);
+    return pinnedAmong(file, owners) == null && followedAmong(file, owners) != null;
+  }
+
+  /**
+   * Gives {@code to} the context of {@code from}: a navigation landing in a
+   * file several builds reach shows it as the file it came from sees it.
+   * Nothing happens for a pinned file, a file one build reaches, or when the
+   * two already agree. Returns whether the context changed. Call in a read
+   * action.
+   */
+  public boolean follow(@NotNull VirtualFile from, @NotNull VirtualFile to) {
+    HaxeResolveContextStore store = HaxeResolveContextStore.getInstance(project);
+    if (store.getPinnedBuildFile(to) != null) return false;
+    HaxeResolveContext origin = contextFor(from);
+    if (origin == null) return false;
+    List<Ownership> owners = owners(to);
+    if (owners.size() < 2 || ownedBy(owners, origin.path()) == null) return false;
+    HaxeResolveContext current = contextFor(to);
+    if (current != null && current.path().equals(origin.path())) return false;
+    store.follow(to, origin.path());
+    return true;
+  }
+
+  /** The user's pin, else the context a navigation gave the file - each only while its build contains the file. */
+  @Nullable
+  private Ownership chosenAmong(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
+    Ownership pinned = pinnedAmong(file, owners);
+    return pinned != null ? pinned : followedAmong(file, owners);
+  }
+
   @Nullable
   private Ownership pinnedAmong(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
     String pinnedPath = HaxeResolveContextStore.getInstance(project).getPinnedBuildFile(file);
-    if (pinnedPath == null) return null;
+    return pinnedPath == null ? null : ownedBy(owners, pinnedPath);
+  }
+
+  @Nullable
+  private Ownership followedAmong(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
+    String followedPath = HaxeResolveContextStore.getInstance(project).getFollowedBuildFile(file);
+    return followedPath == null ? null : ownedBy(owners, followedPath);
+  }
+
+  @Nullable
+  private static Ownership ownedBy(@NotNull List<Ownership> owners, @NotNull String buildFilePath) {
     return owners.stream()
-      .filter(ownership -> ownership.buildFile().file().getPath().equals(pinnedPath))
+      .filter(ownership -> ownership.buildFile().file().getPath().equals(buildFilePath))
       .findFirst()
       .orElse(null);
   }

@@ -985,6 +985,10 @@
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
     <listener class="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsMoveTracker"
               topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+    <listener class="com.intellij.plugins.haxe.v2.editor.HaxeResolveContextFollower"
+              topic="com.intellij.openapi.fileEditor.FileEditorManagerListener$Before"/>
+    <listener class="com.intellij.plugins.haxe.v2.editor.HaxeResolveContextFollower"
+              topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
 
   </projectListeners>
 

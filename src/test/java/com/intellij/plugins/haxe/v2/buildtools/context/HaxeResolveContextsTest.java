@@ -115,6 +115,33 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("a navigation gives a shared file the context it was opened from, a pin still wins")
+  public void testANavigationGivesASharedFileTheContextItWasOpenedFromAPinStillWins() {
+    VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
+    VirtualFile node = hxml("node.hxml", NODE_HXML_SOURCE);
+    VirtualFile nodeMain = source("src/NodeMain.hx", "class NodeMain {}");
+    VirtualFile shared = source("src/Shared.hx", "class Shared {}");
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+    assertEquals(web.getPath(), contextPath(shared), "the active build before any navigation");
+
+    assertTrue(contexts().follow(nodeMain, shared), "node.hxml reaches Shared.hx and differs from its current context");
+    assertEquals(node.getPath(), contextPath(shared));
+    assertTrue(contexts().isFollowed(shared));
+    assertFalse(contexts().isPinned(shared));
+
+    assertFalse(contexts().follow(shared, nodeMain), "nothing changes when the two already agree");
+
+    HaxeResolveContextStore store = HaxeResolveContextStore.getInstance(getProject());
+    store.pin(shared, web.getPath());
+    assertFalse(contexts().follow(nodeMain, shared), "a pinned file never follows");
+    assertEquals(web.getPath(), contextPath(shared));
+
+    store.unpin(shared);
+    assertEquals(web.getPath(), contextPath(shared), "select automatically forgets the followed context too");
+    assertFalse(contexts().isFollowed(shared));
+  }
+
+  @Test
   @DisplayName("contexts reaching a file list every owner, the most specific first")
   public void testContextsReachingAFileListEveryOwnerTheMostSpecificFirst() {
     VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
