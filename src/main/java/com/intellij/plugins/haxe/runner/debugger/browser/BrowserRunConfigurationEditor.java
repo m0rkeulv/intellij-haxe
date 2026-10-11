@@ -32,6 +32,8 @@ import javax.swing.JPanel;
 import javax.swing.JTextPane;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import com.intellij.plugins.haxe.runner.debugger.javascript.AdapterPin;
+import com.intellij.plugins.haxe.runner.debugger.javascript.AdapterStores;
 
 /**
  * Settings UI for the browser debug configuration: module, the browser
