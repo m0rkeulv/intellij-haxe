@@ -16,6 +16,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsTracker;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
 import com.intellij.psi.util.PsiModificationTracker;
@@ -72,17 +73,40 @@ public final class HaxeResolveContexts {
     return project.getService(HaxeResolveContexts.class);
   }
 
-  /** The context a file is analysed under, or null when neither a build nor its module names one. Call in a read action. */
+  /**
+   * The context a file is analysed under: the build the user pinned it to
+   * while that build still contains it, else the automatic choice; null when
+   * neither a build nor the file's module names one. Call in a read action.
+   */
   // TODO: multiverse: the provider's getPreferredContext answers this - see doc/planned/resolve-context-plan.md, route B
   @Nullable
   public HaxeResolveContext contextFor(@NotNull VirtualFile file) {
     List<Ownership> owners = owners(file.getPath());
+    Ownership pinned = pinnedAmong(file, owners);
+    if (pinned != null) {
+      return new HaxeResolveContext(pinned.buildFile());
+    }
     if (!owners.isEmpty()) {
       return new HaxeResolveContext(preferred(file.getPath(), owners).buildFile());
     }
     Module module = ModuleUtilCore.findModuleForFile(file, project);
     HaxeBuildFile fallback = module == null ? null : defaultBuildFileFor(module);
     return fallback == null ? null : new HaxeResolveContext(fallback);
+  }
+
+  /** Whether the file's context is a pin that still applies (its build contains the file). Call in a read action. */
+  public boolean isPinned(@NotNull VirtualFile file) {
+    return pinnedAmong(file, owners(file.getPath())) != null;
+  }
+
+  @Nullable
+  private Ownership pinnedAmong(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
+    String pinnedPath = HaxeResolveContextStore.getInstance(project).getPinnedBuildFile(file);
+    if (pinnedPath == null) return null;
+    return owners.stream()
+      .filter(ownership -> ownership.buildFile().file().getPath().equals(pinnedPath))
+      .findFirst()
+      .orElse(null);
   }
 
   /** Every build whose sources contain the file: the most specific first, tool-window order among equals. Call in a read action. */
