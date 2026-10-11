@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Tree context menu on any action row or the Build &amp; run row: opens the
@@ -53,8 +54,10 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
     Project project = e.getProject();
     BuildFileRow row = panel.getSelectedBuildFileRowAncestor();
     if (project == null || row == null) return;
-    CustomAction template = templateOf(project, row.buildFile(), panel.getSelectedUserObject());
-    if (template == null) return;
+    CustomAction source = templateOf(project, row.buildFile(), panel.getSelectedUserObject());
+    if (source == null) return;
+    Set<String> taken = HaxeCustomActionDialog.takenNames(project, row.buildFile(), null);
+    CustomAction template = source.withName(copyName(source.name(), taken));
 
     String launchOutput = launchOutputOf(panel.getSelectedUserObject());
     HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forDuplicate(project, row.buildFile(), launchOutput, template);
@@ -97,18 +100,17 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
   /** The stored values, not the row's ${target}-expanded display form. */
   @NotNull
   private static CustomAction copyOfStored(@NotNull Project project, @NotNull ActionNode actionNode) {
-    CustomAction stored = HaxeCustomActionsStore.getInstance(project).getActions(actionNode.ownerId()).stream()
+    return HaxeCustomActionsStore.getInstance(project).getActions(actionNode.ownerId()).stream()
       .filter(action -> action.name().equals(actionNode.name()))
       .findFirst()
       .orElse(new CustomAction(actionNode.name(), actionNode.presentableCommand(), ""));
-    return new CustomAction(copyName(stored.name()), stored.command(), stored.workDirectory(), stored.launch(), stored.runBefore());
   }
 
   /** The resolved command line as the row runs it; the work directory stays blank when it is the build file's own. */
   @NotNull
   private static CustomAction copyOfGenerated(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull ActionNode actionNode) {
     String command = asTypedCommand(project, buildFile, actionNode.command());
-    return new CustomAction(copyName(actionNode.name()), command, workDirectoryOverride(project, buildFile, actionNode.workDirectory()), null);
+    return new CustomAction(actionNode.name(), command, workDirectoryOverride(project, buildFile, actionNode.workDirectory()), null);
   }
 
   /**
@@ -123,7 +125,7 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
 
     HaxeLaunchKind kind = programNode.kind();
     Launch launch = kind.compilesBeforeLaunch() ? new Launch.Create(kind.name(), Map.of(), true) : null;
-    String name = copyName(HaxeBundle.message("haxe.toolwindow.node.program"));
+    String name = HaxeBundle.message("haxe.toolwindow.node.program");
     return new CustomAction(name, asTypedCommand(project, programNode.buildFile(), command), "", launch);
   }
 
@@ -161,8 +163,13 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
     return workDirectory == null || Objects.equals(workDirectory, fileWorkDirectory) ? "" : workDirectory;
   }
 
+  /** "{@code name} (copy)", numbered "(copy 2)", "(copy 3)"... while the build file already uses the name. */
   @NotNull
-  private static String copyName(@NotNull String name) {
-    return HaxeBundle.message("haxe.toolwindow.duplicate.action.name", name);
+  static String copyName(@NotNull String name, @NotNull Set<String> taken) {
+    String candidate = HaxeBundle.message("haxe.toolwindow.duplicate.action.name", name);
+    for (int number = 2; taken.contains(candidate); number++) {
+      candidate = HaxeBundle.message("haxe.toolwindow.duplicate.action.name.numbered", name, number);
+    }
+    return candidate;
   }
 }

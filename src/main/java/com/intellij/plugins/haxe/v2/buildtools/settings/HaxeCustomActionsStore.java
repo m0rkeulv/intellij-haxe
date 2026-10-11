@@ -71,6 +71,11 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     public CustomAction(@NotNull String name, @NotNull String command, @NotNull String workDirectory) {
       this(name, command, workDirectory, null);
     }
+
+    @NotNull
+    public CustomAction withName(@NotNull String newName) {
+      return new CustomAction(newName, command, workDirectory, launch, runBefore);
+    }
   }
 
   /**

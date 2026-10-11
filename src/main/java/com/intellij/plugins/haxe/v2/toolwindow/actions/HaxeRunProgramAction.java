@@ -10,7 +10,6 @@ import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowLaunches;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
@@ -64,7 +63,7 @@ public final class HaxeRunProgramAction extends DumbAwareAction {
       return !debug || HaxeToolWindowLaunches.canDebug(project, existing.configurationName());
     }
     HaxeLaunchKind kind = launchKindOf(selected);
-    return kind != null && (!debug || HaxeDebugSupport.supportsProgramDebug(kind.target()));
+    return kind != null && (!debug || kind.debuggable());
   }
 
   /** The kind a Build & run row or a created-configuration action row launches through; null for every other row. */

@@ -197,7 +197,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
    * still free to keep.
    */
   @NotNull
-  private static Set<String> takenNames(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @Nullable String editedName) {
+  public static Set<String> takenNames(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @Nullable String editedName) {
     Set<String> taken = new HashSet<>(HaxeBuildSystem.of(buildFile.type()).actionNames(project, buildFile));
     for (CustomAction custom : HaxeCustomActionsStore.getInstance(project).getActions(buildFile.file().getPath())) {
       if (!custom.name().equals(editedName)) taken.add(custom.name());

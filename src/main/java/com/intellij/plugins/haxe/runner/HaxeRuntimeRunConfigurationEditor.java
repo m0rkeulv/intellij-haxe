@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.runner.neko;
+package com.intellij.plugins.haxe.runner;
 
 import com.intellij.application.options.ModulesComboBox;
 import com.intellij.openapi.project.Project;
@@ -7,12 +7,13 @@ import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationEditorBase;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
-import javax.swing.JComponent;
-import javax.swing.JPanel;
 import org.jetbrains.annotations.NotNull;
 
-/** Settings UI for a Neko run configuration: only the shared executable fields, built programmatically. */
-public class NekoRunConfigurationEditor extends DapExecutableRunConfigurationEditorBase<NekoRunConfiguration> {
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+
+/** Settings UI for a runtime configuration: the shared executable fields, with the runtime's own executable hint. */
+public class HaxeRuntimeRunConfigurationEditor extends DapExecutableRunConfigurationEditorBase<HaxeRuntimeRunConfiguration> {
 
   private final ModulesComboBox moduleCombo = new ModulesComboBox();
   private final TextFieldWithBrowseButton executableField = new TextFieldWithBrowseButton();
@@ -20,15 +21,15 @@ public class NekoRunConfigurationEditor extends DapExecutableRunConfigurationEdi
   private final JBTextField programArgumentsField = new JBTextField();
   private final JPanel panel;
 
-  public NekoRunConfigurationEditor(Project project) {
+  public HaxeRuntimeRunConfigurationEditor(@NotNull Project project, @NotNull String executableHint) {
     super(project);
     wireCommonChoosers();
     panel = FormBuilder.createFormBuilder()
-      .addLabeledComponent(HaxeDebuggerBundle.message("neko.runner.editor.module"), moduleCombo)
-      .addLabeledComponent(HaxeDebuggerBundle.message("neko.runner.editor.executable"), executableField)
-      .addTooltip(HaxeDebuggerBundle.message("neko.runner.editor.executable.hint"))
-      .addLabeledComponent(HaxeDebuggerBundle.message("neko.runner.editor.working.directory"), workingDirectoryField)
-      .addLabeledComponent(HaxeDebuggerBundle.message("neko.runner.editor.program.arguments"), programArgumentsField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("runtime.runner.editor.module"), moduleCombo)
+      .addLabeledComponent(HaxeDebuggerBundle.message("runtime.runner.editor.executable"), executableField)
+      .addTooltip(executableHint)
+      .addLabeledComponent(HaxeDebuggerBundle.message("runtime.runner.editor.working.directory"), workingDirectoryField)
+      .addLabeledComponent(HaxeDebuggerBundle.message("runtime.runner.editor.program.arguments"), programArgumentsField)
       .getPanel();
   }
 
@@ -53,12 +54,12 @@ public class NekoRunConfigurationEditor extends DapExecutableRunConfigurationEdi
   }
 
   @Override
-  protected void resetEditorFrom(@NotNull NekoRunConfiguration configuration) {
+  protected void resetEditorFrom(@NotNull HaxeRuntimeRunConfiguration configuration) {
     resetCommon(configuration);
   }
 
   @Override
-  protected void applyEditorTo(@NotNull NekoRunConfiguration configuration) {
+  protected void applyEditorTo(@NotNull HaxeRuntimeRunConfiguration configuration) {
     applyCommon(configuration);
   }
 

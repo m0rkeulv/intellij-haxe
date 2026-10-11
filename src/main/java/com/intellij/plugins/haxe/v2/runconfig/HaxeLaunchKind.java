@@ -17,6 +17,8 @@ import com.intellij.plugins.haxe.runner.debugger.interp.InterpConfigurationFacto
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpRunConfiguration;
 import com.intellij.plugins.haxe.runner.neko.NekoConfigurationFactory;
 import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
+import com.intellij.plugins.haxe.runner.nodejs.NodeConfigurationFactory;
+import com.intellij.plugins.haxe.runner.nodejs.NodeRunConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,8 +29,9 @@ import java.util.List;
 import java.util.Map;
 
 /// The run configuration kinds a build's output launches through: HL bytecode
-/// → HashLink Application, JS → Web Browser, a swf → Flash (AIR for lime's air
-/// target), C++ → HXCPP, neko → Neko, an interpreter build → Haxe Interpreter.
+/// → HashLink Application, JS → Web Browser or Node.js, a swf → Flash (AIR for
+/// lime's air target), C++ → HXCPP, neko → Neko, an interpreter build → Haxe
+/// Interpreter.
 /// A kind's parameters are the configuration fields a launch fills (paths,
 /// arguments, working directory); [HaxeProgramLaunches] derives their defaults
 /// from the build file and applies them. The persisted id of a kind is its `name()`.
@@ -39,6 +42,9 @@ public enum HaxeLaunchKind {
   BROWSER(BrowserRunConfiguration.class, BrowserConfigurationFactory.class,
           "haxe.toolwindow.program.configuration.name.browser", HaxeTarget.JAVA_SCRIPT, Lane.JS,
           Parameter.CONTENT_ROOT),
+  NODE(NodeRunConfiguration.class, NodeConfigurationFactory.class,
+       "haxe.toolwindow.program.configuration.name.node", HaxeTarget.JAVA_SCRIPT, null,
+       Parameter.EXECUTABLE, Parameter.PROGRAM_ARGUMENTS, Parameter.WORKING_DIRECTORY),
   FLASH(FlashRunConfiguration.class, FlashConfigurationFactory.class,
         "haxe.toolwindow.program.configuration.name.flash", HaxeTarget.FLASH, null,
         Parameter.SWF),
@@ -190,6 +196,12 @@ public enum HaxeLaunchKind {
   @NotNull
   public List<Parameter> parameters() {
     return parameters;
+  }
+
+  /** Whether the kind launches under Debug: its target has a debugger and its configuration runs one. */
+  public boolean debuggable() {
+    // Node.js shares the browser's target but runs plain
+    return this != NODE && HaxeDebugSupport.supportsProgramDebug(target);
   }
 
   /**

@@ -262,6 +262,10 @@ public final class LimeProjects {
     return "air".equals(targetFlag);
   }
 
+  public static boolean isElectronTarget(@Nullable String targetFlag) {
+    return "electron".equals(targetFlag);
+  }
+
   /**
    * The html5 build's packaged web root ({@code <app path>/html5/bin}, lime's
    * own index.html inside), or null for other targets or without an app path.
