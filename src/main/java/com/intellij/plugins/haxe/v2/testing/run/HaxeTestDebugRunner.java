@@ -166,7 +166,7 @@ public class HaxeTestDebugRunner extends DapDebugRunnerBase<HaxeTestRunConfigura
   private static GeneralCommandLine nodeCommandLine(@NotNull Plan plan, @NotNull NodeDebugBackend backend) {
     return new GeneralCommandLine()
       .withExePath(plan.command().getFirst())
-      .withParameters("--inspect-brk=" + backend.getInspectorPort(), plan.command().get(1))
+      .withParameters(backend.inspectorArgument(), plan.command().get(1))
       .withWorkDirectory(plan.workDirectory());
   }
 

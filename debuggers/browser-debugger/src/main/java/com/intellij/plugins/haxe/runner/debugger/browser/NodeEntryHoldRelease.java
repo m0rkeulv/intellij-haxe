@@ -5,6 +5,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Event;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Response;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
+import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEventBody;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ContinueRequest;
 
 import java.io.IOException;
@@ -58,10 +59,13 @@ public final class NodeEntryHoldRelease implements DapEndpoint {
     }
   }
 
-  /// The held thread when `stopped` is the hold, null for any other stop.
+  /// The held thread when `stopped` is the hold, null for any other stop - a
+  /// stop that hit a breakpoint is the user's whatever reason it carries.
   private static Integer holdThreadOf(StoppedEvent stopped) {
-    if (stopped.getBody() == null || !HOLD_REASONS.contains(stopped.getBody().getReason())) return null;
-    return stopped.getBody().getThreadId();
+    StoppedEventBody body = stopped.getBody();
+    if (body == null || !HOLD_REASONS.contains(body.getReason())) return null;
+    boolean hitBreakpoint = body.getHitBreakpointIds() != null && !body.getHitBreakpointIds().isEmpty();
+    return hitBreakpoint ? null : body.getThreadId();
   }
 
   @Override

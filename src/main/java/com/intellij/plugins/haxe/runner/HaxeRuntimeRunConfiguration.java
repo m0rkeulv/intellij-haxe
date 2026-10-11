@@ -9,11 +9,13 @@ import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationBase;
+import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * A run-only configuration that starts a runtime with the build output as its
@@ -65,6 +67,17 @@ public abstract class HaxeRuntimeRunConfiguration extends DapExecutableRunConfig
       throw new ExecutionException(runtimeMissingMessage());
     }
     return Path.of(runtime);
+  }
+
+  /** With the runtime as the executable, a blank working directory is the script's folder, not the runtime's. */
+  @Override
+  public @Nullable Path resolveWorkingDirectory() {
+    if (!getWorkingDirectory().isBlank() || !usesResolvedRuntime()) {
+      return super.resolveWorkingDirectory();
+    }
+    List<String> arguments = ParametersListUtil.parse(getProgramArguments());
+    Path script = arguments.isEmpty() ? null : resolveAgainstModule(arguments.getFirst());
+    return script != null ? script.getParent() : super.resolveWorkingDirectory();
   }
 
   @Override

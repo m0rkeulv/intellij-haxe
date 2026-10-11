@@ -21,6 +21,7 @@ import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import org.junit.jupiter.api.AfterEach;
@@ -122,10 +123,10 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     HaxeBuildFile buildFile = interpHxml();
     HaxeBuildFileInfo info = HxmlFileParser.parse(INTERP_HXML_SOURCE);
 
-    HaxeLaunchKind launchKind = HaxeProgramLaunches.launchKind(getProject(), info, buildFile);
+    List<HaxeLaunchKind> launchKinds = HaxeProgramLaunches.launchKinds(getProject(), info, buildFile);
 
-    assertEquals(HaxeLaunchKind.INTERP, launchKind);
-    assertEquals("Haxe Interpreter", launchKind.displayName());
+    assertEquals(List.of(HaxeLaunchKind.INTERP), launchKinds);
+    assertEquals("Haxe Interpreter", HaxeLaunchKind.INTERP.displayName());
     assertEquals("", HaxeProgramLaunches.launchOutput(info));
   }
 
@@ -192,7 +193,7 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
   public void testABuildAndRunConfigurationScopesConsoleLinksByItsBuildStep() throws IOException {
     HaxeBuildFile buildFile = interpHxml();
     RunnerAndConfigurationSettings settings =
-      HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.HL, "out/game.hl");
+      buildAndRun(buildFile, HaxeTarget.HL, "out/game.hl");
 
     assertNotNull(settings);
     RunConfiguration configuration = settings.getConfiguration();
@@ -218,7 +219,7 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
   public void testALaunchingActionGetsAConfigurationOfItsOwnKeyedByItsName() throws IOException {
     HaxeBuildFile buildFile = interpHxml();
     RunnerAndConfigurationSettings buildAndRun =
-      HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.HL, "out/game.hl");
+      buildAndRun(buildFile, HaxeTarget.HL, "out/game.hl");
     assertNotNull(buildAndRun);
 
     RunnerAndConfigurationSettings release = HaxeProgramLaunches.findOrCreate(
@@ -260,7 +261,7 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
   public void testAnExistingConfigurationGetsTheActionAsItsBuildStepOnce() throws IOException {
     HaxeBuildFile buildFile = interpHxml();
     RunConfiguration existing = Objects.requireNonNull(
-      HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.HL, "out/game.hl")).getConfiguration();
+      buildAndRun(buildFile, HaxeTarget.HL, "out/game.hl")).getConfiguration();
     assertEquals(1, existing.getBeforeRunTasks().size(), "the Build & run step");
 
     HaxeProgramLaunches.ensureBuildStep(existing, buildFile, "release", false);
@@ -275,7 +276,7 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     HaxeBuildFile buildFile = interpHxml();
     String path = buildFile.file().getPath();
     RunConfiguration configuration = Objects.requireNonNull(
-      HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.HL, "out/game.hl")).getConfiguration();
+      buildAndRun(buildFile, HaxeTarget.HL, "out/game.hl")).getConfiguration();
     HaxeProgramLaunches.ensureBuildStep(configuration, buildFile, "release", true);
 
     HaxeProgramLaunches.retargetBuildSteps(getProject(), path, "release", "final");
@@ -369,7 +370,14 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   private RunnerAndConfigurationSettings findOrCreate(HaxeBuildFile buildFile) {
-    return HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, HaxeTarget.INTERP, "");
+    return buildAndRun(buildFile, HaxeTarget.INTERP, "");
+  }
+
+  /** The Build & run row's configuration: the target's kind, the file's default build action, every parameter at its default. */
+  private RunnerAndConfigurationSettings buildAndRun(HaxeBuildFile buildFile, HaxeTarget target, String targetOutput) {
+    HaxeLaunchKind kind = Objects.requireNonNull(HaxeProgramLaunches.kindFor(target, targetOutput, buildFile.type(), null, List.of()));
+    String buildAction = HaxeBuildSystem.of(buildFile.type()).defaultBuildActionName();
+    return HaxeProgramLaunches.findOrCreate(getProject(), myFixture.getModule(), buildFile, kind, targetOutput, buildAction, Map.of(), true);
   }
 
   private static InterpRunConfiguration interpConfiguration(RunnerAndConfigurationSettings settings) {
