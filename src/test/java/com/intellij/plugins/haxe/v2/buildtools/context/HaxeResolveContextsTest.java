@@ -3,12 +3,15 @@ package com.intellij.plugins.haxe.v2.buildtools.context;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -81,6 +84,26 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("a pin wins over the automatic choice while its build contains the file")
+  public void testAPinWinsOverTheAutomaticChoiceWhileItsBuildContainsTheFile() {
+    VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
+    hxml("node.hxml", NODE_HXML_SOURCE);
+    VirtualFile nodeMain = source("src/NodeMain.hx", "class NodeMain {}");
+    HaxeResolveContextStore store = HaxeResolveContextStore.getInstance(getProject());
+
+    store.pin(nodeMain, web.getPath());
+    assertEquals(web.getPath(), contextPath(nodeMain), "the pin beats the -main rule");
+    assertTrue(contexts().isPinned(nodeMain));
+
+    store.pin(nodeMain, "/elsewhere/gone.hxml");
+    assertEquals(hxmlPath("node.hxml"), contextPath(nodeMain), "a pin to a build that does not contain the file is ignored");
+    assertFalse(contexts().isPinned(nodeMain));
+
+    store.unpin(nodeMain);
+    assertFalse(contexts().isPinned(nodeMain));
+  }
+
+  @Test
   @DisplayName("contexts reaching a file list every owner, the most specific first")
   public void testContextsReachingAFileListEveryOwnerTheMostSpecificFirst() {
     VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
@@ -104,6 +127,10 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
 
   private VirtualFile hxml(String name, String content) {
     return myFixture.addFileToProject(name, content).getVirtualFile();
+  }
+
+  private String hxmlPath(String name) {
+    return myFixture.findFileInTempDir(name).getPath();
   }
 
   private VirtualFile source(String relativePath, String content) {
