@@ -1,5 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
@@ -41,6 +43,7 @@ public class HaxeCompilerDisplayServiceTest extends HaxeLightFixtureTestCase {
   @AfterEach
   public void forgetRecordedOutcome() {
     HaxeCompilerDisplayService.getInstance(getProject()).clearCaches();
+    HaxeActiveBuildFileStore.getInstance(getProject()).loadState(new HaxeActiveBuildFileStore.State());
     HaxeContextFailures.getInstance(getProject()).record(CONTAINER_ID, null);
   }
 
@@ -104,6 +107,24 @@ public class HaxeCompilerDisplayServiceTest extends HaxeLightFixtureTestCase {
       assertFalse(compiled, "after clearing, the next request compiles again and sees the failure");
       assertNotNull(failures().lastFailure(CONTAINER_ID));
     }
+  }
+
+  @Test
+  @DisplayName("the display context follows the build owning the file, not the active one")
+  public void testTheDisplayContextFollowsTheBuildOwningTheFileNotTheActiveOne() {
+    VirtualFile web = myFixture.addFileToProject("web.hxml", "-cp src\n-main WebMain\n-js bin/web.js\n").getVirtualFile();
+    myFixture.addFileToProject("node.hxml", "-cp src\n-main NodeMain\n-js bin/node.js\n");
+    VirtualFile nodeMain = myFixture.addFileToProject("src/NodeMain.hx", "class NodeMain {}").getVirtualFile();
+    VirtualFile webMain = myFixture.addFileToProject("src/WebMain.hx", "class WebMain {}").getVirtualFile();
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+
+    HaxeCompilerDisplayService.DisplayContext nodeContext = displayService().contextFor(nodeMain);
+    HaxeCompilerDisplayService.DisplayContext webContext = displayService().contextFor(webMain);
+
+    assertNotNull(nodeContext);
+    assertNotNull(webContext);
+    assertEquals("node.hxml", nodeContext.args().getLast(), "NodeMain is node.hxml's main class");
+    assertEquals("web.hxml", webContext.args().getLast());
   }
 
   private HaxeCompilerDisplayService displayService() {

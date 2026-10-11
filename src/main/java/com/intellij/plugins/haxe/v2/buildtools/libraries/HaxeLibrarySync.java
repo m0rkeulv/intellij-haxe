@@ -23,6 +23,7 @@ import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibPathParser.LibrarySection;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import lombok.CustomLog;
@@ -201,7 +202,7 @@ public final class HaxeLibrarySync {
   private static List<HaxeBuildFile> dependencySources(@NotNull Project project,
                                                        @NotNull Module module,
                                                        @NotNull List<HaxeBuildFile> buildFiles) {
-    HaxeBuildFile current = currentBuildFile(project, module, buildFiles);
+    HaxeBuildFile current = HaxeResolveContexts.getInstance(project).defaultBuildFileFor(module);
     List<HaxeBuildFile> sources = new ArrayList<>(current != null ? List.of(current) : buildFiles);
 
     for (HaxeBuildFile tests : testsBuildFiles(project, module, buildFiles)) {
@@ -212,25 +213,6 @@ public final class HaxeLibrarySync {
       }
     }
     return sources;
-  }
-
-  @Nullable
-  private static HaxeBuildFile currentBuildFile(@NotNull Project project,
-                                               @NotNull Module module,
-                                               @NotNull List<HaxeBuildFile> scanned) {
-    String activePath = HaxeKnownBuildFiles.effectiveActivePath(project);
-    HaxeBuildFile active = byPath(project, scanned, activePath);
-    if (active != null && ownedBy(project, active, module)) {
-      return active;
-    }
-    HaxeEnvironmentStore.CompileCommand command = HaxeEnvironmentStore.getInstance(project).getCompileCommand(module.getName());
-    if (command != null) {
-      HaxeBuildFile commandFile = byPath(project, scanned, command.buildFilePath());
-      if (commandFile != null && ownedBy(project, commandFile, module)) {
-        return commandFile;
-      }
-    }
-    return null;
   }
 
   /** The container's marked (or convention-suggested) tests build files that this module owns (see {@link HaxeTestFrameworks#testsBuildPaths}). */

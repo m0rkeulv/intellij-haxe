@@ -8,9 +8,7 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
@@ -24,6 +22,8 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -126,25 +126,31 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
-   * The display context of a haxe source file, derived from its module's
-   * current build file. Null when the file has no supported build context.
-   * Call in a read action; does not touch the network or spawn processes.
+   * The display context of a haxe source file, derived from the build the
+   * file is analysed under ({@link HaxeResolveContexts}). Null when the file
+   * has no supported build context. Call in a read action; does not touch
+   * the network or spawn processes.
    */
   @Nullable
   public DisplayContext contextFor(@NotNull VirtualFile file) {
-    Module module = ModuleUtilCore.findModuleForFile(file, project);
-    return module == null ? null : contextFor(module);
+    HaxeResolveContext context = HaxeResolveContexts.getInstance(project).contextFor(file);
+    return context == null ? null : contextOfBuildFile(context.buildFile().file());
   }
 
   /**
-   * The display context of a module's current build file, for callers
+   * The display context of a module's default build file, for callers
    * without a source file (the type catalog works per module). Same contract
    * as {@link #contextFor(VirtualFile)}.
    */
   @Nullable
   public DisplayContext contextFor(@NotNull Module module) {
-    VirtualFile buildFile = currentBuildFile(module);
-    if (buildFile == null || buildFile.getParent() == null) return null;
+    HaxeBuildFile buildFile = HaxeResolveContexts.getInstance(project).defaultBuildFileFor(module);
+    return buildFile == null ? null : contextOfBuildFile(buildFile.file());
+  }
+
+  @Nullable
+  private DisplayContext contextOfBuildFile(@NotNull VirtualFile buildFile) {
+    if (buildFile.getParent() == null) return null;
     HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, buildFile);
     // a plain hxp script generates its compiler args in code - nothing to derive statically
     if (type == null || type == HaxeBuildFileType.HXP_SCRIPT) return null;
@@ -495,26 +501,4 @@ public final class HaxeCompilerDisplayService {
     return document != null && documents.isDocumentUnsaved(document) ? document.getText() : null;
   }
 
-  // --- build file resolution ---
-
-  /**
-   * The module's current build file: the project's active file when this
-   * module owns it, else the module's Build command file.
-   */
-  @Nullable
-  private VirtualFile currentBuildFile(@NotNull Module module) {
-    VirtualFile active = fileIfOwned(HaxeKnownBuildFiles.effectiveActivePath(project), module);
-    if (active != null) return active;
-    HaxeEnvironmentStore.CompileCommand command =
-      HaxeEnvironmentStore.getInstance(project).getCompileCommand(module.getName());
-    return command != null ? fileIfOwned(command.buildFilePath(), module) : null;
-  }
-
-  @Nullable
-  private VirtualFile fileIfOwned(@Nullable String path, @NotNull Module module) {
-    if (path == null || path.isBlank()) return null;
-    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    if (file == null || !file.isValid()) return null;
-    return HaxeContainers.containerIdFor(project, file).equals(module.getName()) ? file : null;
-  }
 }
