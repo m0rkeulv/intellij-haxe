@@ -1,15 +1,14 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
-import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.impl.PushedFilePropertiesUpdater;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.lang.psi.stubs.HaxeStubableFileService;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.util.FileContentUtilCore;
 import com.intellij.util.indexing.FileBasedIndex;
 import lombok.CustomLog;
@@ -44,21 +43,27 @@ final class HaxeDefineContextInvalidator {
    */
   static void invalidateConditionalFiles(@NotNull Project project) {
     List<VirtualFile> conditionalFiles = collectConditionalFiles(project);
-    PushedFilePropertiesUpdater updater = PushedFilePropertiesUpdater.getInstance(project);
-    Disposable expiry = HaxeDefineContextService.getInstance(project);
-    for (VirtualFile file : conditionalFiles) {
-      ReadAction.nonBlocking(() -> invalidate(updater, file))
-        .expireWith(expiry)
-        .executeSynchronously();
-    }
-    Runnable reparseOpenEditors = () -> reparseOpenEditors(project, conditionalFiles);
-    ApplicationManager.getApplication().invokeLater(reparseOpenEditors, ModalityState.nonModal(), project.getDisposed());
+    invalidateFiles(project, conditionalFiles);
     if (log.isDebugEnabled()) {
       log.debug("define context: " + conditionalFiles.size() + " conditional haxe files invalidated");
     }
   }
 
   /** Walks the indexable files without a lock — this is where an uncached stubable flag reads its file. */
+  /** One file's context changed (pin, unpin): that file alone is re-indexed and, when open, reparsed. */
+  static void invalidateFile(@NotNull Project project, @NotNull VirtualFile file) {
+    invalidateFiles(project, List.of(file));
+  }
+
+  private static void invalidateFiles(@NotNull Project project, @NotNull List<VirtualFile> files) {
+    PushedFilePropertiesUpdater updater = PushedFilePropertiesUpdater.getInstance(project);
+    for (VirtualFile file : files) {
+      HaxeReadActions.compute(() -> invalidate(updater, file));
+    }
+    Runnable reparseOpenEditors = () -> reparseOpenEditors(project, files);
+    ApplicationManager.getApplication().invokeLater(reparseOpenEditors, ModalityState.nonModal(), project.getDisposed());
+  }
+
   @NotNull
   private static List<VirtualFile> collectConditionalFiles(@NotNull Project project) {
     List<VirtualFile> conditionalFiles = new ArrayList<>();

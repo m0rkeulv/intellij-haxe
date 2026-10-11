@@ -18,12 +18,17 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryDefinesStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
+import com.intellij.psi.PsiFile;
+import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.text.SemVer;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -39,14 +44,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG_DEFINE_VALUE;
 
 /**
- * The IDE's conditional-compilation define context, derived from the v2 build
- * configuration: the project's ACTIVE build file's defines (via the tool
- * evaluation for xml projects — conditionals evaluated, toolchain defines
- * included), the target's platform defines and the library defines haxelib
- * reports, overlaid with the owning container's IDE Define overrides. Feeds
- * {@code HaxeDefineDetectionManager.getAllDefinitions()}, i.e. the parsing and
- * indexing of every haxe file — which is why a context change re-indexes the
- * files with conditional compilation ({@link HaxeDefineContextInvalidator}).
+ * The IDE's conditional-compilation define contexts, derived from the v2
+ * build configuration: a build file's defines (via the tool evaluation for
+ * xml projects — conditionals evaluated, toolchain defines included), the
+ * target's platform defines and the library defines haxelib reports,
+ * overlaid with the owning container's IDE Define overrides. A source file
+ * is lexed with the defines of its resolve context's build file
+ * ({@link #definesForSource}); the ACTIVE build file's set
+ * ({@link #getActiveDefines}) feeds
+ * {@code HaxeDefineDetectionManager.getAllDefinitions()} for everything asked
+ * without a file. A context change re-indexes the files with conditional
+ * compilation ({@link HaxeDefineContextInvalidator}).
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -74,20 +82,22 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   /**
    * Lock-free identity of every input reachable without VFS or read-action
-   * work: the active path and the file's content stamp. A match
-   * short-circuits the whole computation - this runs per candidate inside
-   * index lookups, so the fast path must not touch findFileByPath or take a
-   * read action.
+   * work: the build file's content stamp. A match short-circuits the whole
+   * computation - this runs per candidate inside index lookups and per lexer
+   * reset, so the fast path must not touch findFileByPath or take a read
+   * action.
    */
-  private record FastState(@NotNull String path, @NotNull VirtualFile file, long contentStamp,
-                           @Nullable Map<String, String> defines) {
+  private record FastState(@NotNull VirtualFile file, long contentStamp, @NotNull Map<String, String> defines) {
   }
 
   private final Project project;
-  private volatile Snapshot snapshot;
-  private volatile FastState fastState;
-  /** The defines most recently handed to a consumer — what current PSI state was parsed against. */
+  // both by build file path
+  private final Map<String, Snapshot> snapshots = new ConcurrentHashMap<>();
+  private final Map<String, FastState> fastStates = new ConcurrentHashMap<>();
+  /** The ACTIVE build's defines most recently handed to a consumer — what current PSI state was parsed against. */
   private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
+  /** Per build file path, the defines most recently handed out as a file's context. */
+  private final Map<String, Map<String, String>> handedOutByPath = new ConcurrentHashMap<>();
   private final AtomicBoolean refreshQueued = new AtomicBoolean();
   private final Object refreshLock = new Object();
 
@@ -120,8 +130,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    */
   @Override
   public void buildSettingsChanged() {
-    snapshot = null;
-    fastState = null;
+    snapshots.clear();
+    fastStates.clear();
     effectiveActivePathComputed = false;
     activeContainerIdComputed = false;
     refreshAsync();
@@ -142,25 +152,69 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       return null;
     }
 
-    FastState fast = fastState;
-    boolean fastHit = fast != null
-                      && fast.path().equals(path)
-                      && fast.file().isValid()
-                      && contentStamp(fast.file()) == fast.contentStamp();
-    if (fastHit) {
+    FastState fast = fastStates.get(path);
+    if (isFresh(fast)) {
+      lastComputed = fast.defines();
       return fast.defines();
     }
-
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    if (file == null || !file.isValid()) {
-      lastComputed = null;
-      return null;
-    }
-
-    Map<String, String> result = HaxeReadActions.compute(() -> cachedOrComputedDefines(file));
-    fastState = new FastState(path, file, contentStamp(file), result);
+    Map<String, String> result = file != null && file.isValid() ? definesFor(file) : null;
     lastComputed = result;
     return result;
+  }
+
+  /**
+   * The defines a source file is lexed with: those of its resolve context's
+   * build file; null for a file no build reaches (the project-wide set
+   * applies then). A map lookup after the first ask.
+   */
+  @Nullable
+  public Map<String, String> definesForSource(@NotNull VirtualFile sourceFile) {
+    HaxeResolveContext context = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).contextFor(sourceFile));
+    return context == null ? null : definesFor(context.buildFile().file());
+  }
+
+  /**
+   * The build file's defines, null when the file is not a build file.
+   * Recorded as handed out: a later change of them reparses the files lexed
+   * against them.
+   */
+  @Nullable
+  public Map<String, String> definesFor(@NotNull VirtualFile buildFile) {
+    String path = buildFile.getPath();
+    FastState fast = fastStates.get(path);
+    if (isFresh(fast)) {
+      return fast.defines();
+    }
+    Map<String, String> result = HaxeReadActions.compute(() -> cachedOrComputedDefines(buildFile));
+    if (result != null) {
+      fastStates.put(path, new FastState(buildFile, contentStamp(buildFile), result));
+      handedOutByPath.put(path, result);
+    }
+    return result;
+  }
+
+  private static boolean isFresh(@Nullable FastState fast) {
+    return fast != null && fast.file().isValid() && contentStamp(fast.file()) == fast.contentStamp();
+  }
+
+  /** The build file whose defines a source file is lexed with: its resolve context's, else the active build file; null without either. */
+  @Nullable
+  public VirtualFile definingBuildFile(@NotNull VirtualFile sourceFile) {
+    HaxeResolveContext context = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).contextFor(sourceFile));
+    return context != null ? context.buildFile().file() : activeBuildFile();
+  }
+
+  /** The physical file a PSI file's context derives from: a copy (completion) counts as its original; null for a light file. */
+  @Nullable
+  public static VirtualFile physicalFileOf(@Nullable PsiFile file) {
+    VirtualFile virtualFile = file == null ? null : file.getOriginalFile().getVirtualFile();
+    return virtualFile instanceof LightVirtualFile ? null : virtualFile;
+  }
+
+  /** A source file's resolve context changed (pin, unpin): that file alone is re-lexed under its new context. */
+  public void fileContextChanged(@NotNull VirtualFile sourceFile) {
+    HaxeDefineContextInvalidator.invalidateFile(project, sourceFile);
   }
 
   /**
@@ -175,18 +229,16 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * Whether the ACTIVE build context defines the name before environment
+   * Whether the build file's context defines the name before environment
    * overrides apply — the define quickfix uses this to decide between merely
    * dropping its own override and masking a build-file define with a REMOVE
-   * entry. False when no v2 active build file is configured.
+   * entry.
    */
-  public boolean isDefinedWithoutOverrides(@NotNull String name) {
-    VirtualFile file = activeBuildFile();
-    if (file == null) return false;
+  public boolean isDefinedWithoutOverrides(@NotNull VirtualFile buildFile, @NotNull String name) {
     return HaxeReadActions.compute(() -> {
-      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, file);
+      HaxeBuildFileType type = HaxeBuildFileScanner.detectType(project, buildFile);
       if (type == null) return false;
-      return definesBeforeOverrides(file, type).containsKey(HaxeDefine.compilerName(name));
+      return definesBeforeOverrides(buildFile, type).containsKey(HaxeDefine.compilerName(name));
     });
   }
 
@@ -196,10 +248,10 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * The container owning the ACTIVE build file, or null without one — where
-   * define overrides belong, and the container library/SDK elements resolve
-   * their language level against. Cached (the language level lookup calls
-   * this per annotated element); callers hold the read lock.
+   * The container owning the ACTIVE build file, or null without one — what
+   * the container library/SDK elements resolve their language level
+   * against. Cached (the language level lookup calls this per annotated
+   * element); callers hold the read lock.
    */
   @Nullable
   public String activeContainerId() {
@@ -245,22 +297,49 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       // on the null -> non-null transition (build file activated after files
       // were parsed against the legacy context).
       Map<String, String> before = lastComputed;
-      snapshot = null;
-      fastState = null;
+      Map<String, Map<String, String>> byPathBefore = Map.copyOf(handedOutByPath);
+      snapshots.clear();
+      fastStates.clear();
       // one non-blocking read action around the recompute: this is a pooled
       // thread, and the inner blocking read forms then nest instead of freezing the UI
       Map<String, String> after = ReadAction.nonBlocking(this::getActiveDefines)
         .expireWith(this)
         .executeSynchronously();
       lastComputed = after;
-      boolean changed = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
+      boolean activeChanged = before != NEVER_HANDED_OUT && !Objects.equals(before, after);
+      boolean changed = activeChanged || anyHandedOutChanged(byPathBefore);
       if (log.isDebugEnabled()) {
         log.debug("define context refresh: changed=" + changed + ", defines=" + (after == null ? "legacy" : after.size()));
       }
       if (changed) {
+        // TODO: reparse only the files whose context's defines changed, not every conditional file
         HaxeDefineContextInvalidator.invalidateConditionalFiles(project);
       }
     }
+  }
+
+  /** Whether a build file handed out as a context now computes to other defines; one that is gone counts once, then is forgotten. */
+  private boolean anyHandedOutChanged(@NotNull Map<String, Map<String, String>> before) {
+    boolean changed = false;
+    for (Map.Entry<String, Map<String, String>> entry : before.entrySet()) {
+      Map<String, String> after = recomputedDefines(entry.getKey());
+      if (after == null) {
+        handedOutByPath.remove(entry.getKey());
+      }
+      if (!Objects.equals(entry.getValue(), after)) {
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  @Nullable
+  private Map<String, String> recomputedDefines(@NotNull String buildFilePath) {
+    VirtualFile file = LocalFileSystem.getInstance().findFileByPath(buildFilePath);
+    if (file == null || !file.isValid()) return null;
+    return ReadAction.nonBlocking(() -> definesFor(file))
+      .expireWith(this)
+      .executeSynchronously();
   }
 
   /** The snapshot's defines while its inputs are unchanged, else a fresh computation. Call in a read action. */
@@ -270,12 +349,12 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     if (type == null) return null;
 
     ContextKey key = contextKey(file, type);
-    Snapshot current = snapshot;
+    Snapshot current = snapshots.get(key.path());
     if (current != null && current.key().equals(key)) {
       return current.defines();
     }
     Map<String, String> defines = compute(file, type);
-    snapshot = new Snapshot(key, defines);
+    snapshots.put(key.path(), new Snapshot(key, defines));
     return defines;
   }
 
