@@ -514,17 +514,10 @@ final class HaxeTestLaunchPlanner {
   /** The hxnodejs hint for a js run whose build carries no node signal; null otherwise. */
   @Nullable
   private static String nodeHint(@NotNull HaxeTarget target, @NotNull HaxeBuildFileInfo info) {
-    if (target == HaxeTarget.JAVA_SCRIPT && !hasNodeSignal(info)) {
+    if (target == HaxeTarget.JAVA_SCRIPT && !info.hasNodeSignal()) {
       return HaxeBundle.message("haxe.test.config.hxnodejs.hint");
     }
     return null;
-  }
-
-  /** A tests build carrying hxnodejs or -D nodejs declares node-runnability (utest then reports to stdout and exits properly). */
-  private static boolean hasNodeSignal(@NotNull HaxeBuildFileInfo info) {
-    boolean hasLib = info.libraries().stream()
-      .anyMatch(library -> library.name().equalsIgnoreCase("hxnodejs"));
-    return hasLib || info.defines().stream().anyMatch(define -> define.name().equals("nodejs"));
   }
 
   /** The whole-build flash launch: {@link #adlCommand} behind the framework's flash-support gate. */

@@ -10,6 +10,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.execution.console.HaxeLaunchSearchScope;
+import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.flash.AirRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.flash.FlashRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfiguration;
@@ -74,7 +75,17 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     arguments(HaxeTarget.NEKO, "out/game.n", HaxeBuildFileType.HXML, null, NekoRunConfiguration.class),
     arguments(HaxeTarget.NEKO, "bin/neko/bin/Game.exe", HaxeBuildFileType.LIME, "neko", NekoRunConfiguration.class),
     // the interpreter writes no output; "" is what launchOutput hands over
-    arguments(HaxeTarget.INTERP, "", HaxeBuildFileType.HXML, null, InterpRunConfiguration.class));
+    arguments(HaxeTarget.INTERP, "", HaxeBuildFileType.HXML, null, InterpRunConfiguration.class),
+    arguments(HaxeTarget.JAVA_SCRIPT, "out/client.js", HaxeBuildFileType.HXML, null, BrowserRunConfiguration.class),
+    arguments(HaxeTarget.JAVA_SCRIPT, "bin/html5/bin/Game.js", HaxeBuildFileType.LIME, "html5", BrowserRunConfiguration.class),
+    // electron runs the output in Electron, which no configuration launches
+    arguments(HaxeTarget.JAVA_SCRIPT, "bin/electron/bin/Game.js", HaxeBuildFileType.LIME, "electron", null));
+
+  /** (hxml source, expected Build & run kinds in row order). */
+  static final List<Arguments> JS_LAUNCH_KINDS = List.of(
+    arguments("-main Main\n-js out/client.js", List.of(HaxeLaunchKind.BROWSER, HaxeLaunchKind.NODE)),
+    arguments("-main Main\n-lib hxnodejs\n-js out/server.js", List.of(HaxeLaunchKind.NODE, HaxeLaunchKind.BROWSER)),
+    arguments("-main Main\n-D nodejs\n-js out/server.js", List.of(HaxeLaunchKind.NODE, HaxeLaunchKind.BROWSER)));
 
   @TempDir
   Path projectDirectory;
@@ -116,6 +127,40 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals(HaxeLaunchKind.INTERP, launchKind);
     assertEquals("Haxe Interpreter", launchKind.displayName());
     assertEquals("", HaxeProgramLaunches.launchOutput(info));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("JS_LAUNCH_KINDS")
+  @DisplayName("javascript hxml launches in a browser and on node, a node build node first")
+  public void testJavascriptHxmlLaunchesInABrowserAndOnNode(String source, List<HaxeLaunchKind> expectedKinds) throws IOException {
+    HaxeBuildFile buildFile = hxml("web.hxml", source);
+    HaxeBuildFileInfo info = HxmlFileParser.parse(source);
+
+    List<HaxeLaunchKind> kinds = HaxeProgramLaunches.launchKinds(getProject(), info, buildFile);
+
+    assertEquals(expectedKinds, kinds);
+  }
+
+  @Test
+  @DisplayName("node runs the script from its folder on the resolved runtime")
+  public void testNodeRunsTheScriptFromItsFolderOnTheResolvedRuntime() throws IOException {
+    HaxeBuildFile buildFile = hxml("server.hxml", "-main Main\n-js out/server.js");
+
+    Map<Parameter, String> parameters =
+      HaxeProgramLaunches.defaultParameters(getProject(), buildFile, HaxeLaunchKind.NODE, "out/server.js");
+
+    Path script = projectDirectory.resolve("out/server.js");
+    assertEquals(Map.of(
+      Parameter.EXECUTABLE, "",
+      Parameter.PROGRAM_ARGUMENTS, script.toString(),
+      Parameter.WORKING_DIRECTORY, script.getParent().toString()), parameters);
+  }
+
+  @Test
+  @DisplayName("node runs without debug while the browser debugs")
+  public void testNodeRunsWithoutDebugWhileTheBrowserDebugs() {
+    assertFalse(HaxeLaunchKind.NODE.debuggable());
+    assertTrue(HaxeLaunchKind.BROWSER.debuggable());
   }
 
   @Test

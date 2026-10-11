@@ -30,6 +30,16 @@ public record HaxeBuildFileInfo(@Nullable HaxeTarget target,
     return new HaxeBuildFileInfo(target, targetOutput, defines, libraries, classpaths);
   }
 
+  /**
+   * Whether the build declares Node.js: the hxnodejs library or the
+   * {@code nodejs} define. A hint, not proof - a shared hxml can carry it
+   * into a browser build too.
+   */
+  public boolean hasNodeSignal() {
+    boolean hasLib = libraries.stream().anyMatch(library -> library.name().equalsIgnoreCase("hxnodejs"));
+    return hasLib || defines.stream().anyMatch(define -> define.name().equals("nodejs"));
+  }
+
   /// A `-D name=value` compiler define, the name as the build file spells it.
   public record HaxeDefine(@NotNull String name, @Nullable String value) {
 

@@ -16,7 +16,7 @@ import com.intellij.plugins.haxe.runner.debugger.flash.FlashRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijRunConfiguration;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpRunConfiguration;
-import com.intellij.plugins.haxe.runner.neko.NekoRunConfiguration;
+import com.intellij.plugins.haxe.runner.HaxeRuntimeRunConfiguration;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
@@ -27,6 +27,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HxcppExecutables;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
+import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -61,6 +62,9 @@ import java.util.function.Consumer;
 /// step, and is matched by the hxml its arguments name.
 public final class HaxeProgramLaunches {
 
+  private static final List<HaxeLaunchKind> NODE_FIRST = List.of(HaxeLaunchKind.NODE, HaxeLaunchKind.BROWSER);
+  private static final List<HaxeLaunchKind> BROWSER_FIRST = List.of(HaxeLaunchKind.BROWSER, HaxeLaunchKind.NODE);
+
   private HaxeProgramLaunches() {
   }
 
@@ -82,7 +86,8 @@ public final class HaxeProgramLaunches {
     return switch (target) {
       // HL/C output (-hl out/main.c) is a source directory, not runnable bytecode
       case HL -> output.endsWith(".hl") ? HaxeLaunchKind.HASHLINK : null;
-      case JAVA_SCRIPT -> output.endsWith(".js") ? HaxeLaunchKind.BROWSER : null;
+      // lime's electron target runs in Electron, neither a browser nor plain node
+      case JAVA_SCRIPT -> output.endsWith(".js") && !LimeProjects.isElectronTarget(targetFlag) ? HaxeLaunchKind.BROWSER : null;
       case FLASH -> {
         if (!output.endsWith(".swf")) yield null;
         yield LimeProjects.isAirTarget(targetFlag) ? HaxeLaunchKind.AIR : HaxeLaunchKind.FLASH;
@@ -93,6 +98,23 @@ public final class HaxeProgramLaunches {
       case INTERP -> HaxeLaunchKind.INTERP;
       default -> null;
     };
+  }
+
+  /**
+   * Every kind launching this build's output, the likelier first. JS from an
+   * hxml may be browser code or a Node.js program, and nothing in the build
+   * proves which (a shared hxml, a bundler in between), so it gets both:
+   * hxnodejs or {@code -D nodejs} puts Node.js first. The lime family's html5
+   * is a browser build.
+   */
+  @NotNull
+  public static List<HaxeLaunchKind> launchKinds(@NotNull Project project,
+                                                 @NotNull HaxeBuildFileInfo info,
+                                                 @NotNull HaxeBuildFile buildFile) {
+    HaxeLaunchKind kind = launchKind(project, info, buildFile);
+    if (kind == null) return List.of();
+    if (kind != HaxeLaunchKind.BROWSER || buildFile.type() != HaxeBuildFileType.HXML) return List.of(kind);
+    return info.hasNodeSignal() ? NODE_FIRST : BROWSER_FIRST;
   }
 
   /** The kind that launches this build's output, or null when nothing can. */
@@ -204,6 +226,7 @@ public final class HaxeProgramLaunches {
     switch (kind) {
       case HASHLINK -> hashLinkDefaults(project, buildFile, targetOutput, parameters);
       case BROWSER -> browserDefaults(project, buildFile, targetOutput, parameters);
+      case NODE -> runtimeDefaults(HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput), parameters);
       case FLASH -> parameters.put(Parameter.SWF, HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput).toString());
       case AIR -> airDefaults(project, buildFile, targetOutput, parameters);
       case HXCPP -> hxcppDefaults(project, buildFile, targetOutput, parameters);
@@ -221,7 +244,7 @@ public final class HaxeProgramLaunches {
       case FlashRunConfiguration flash -> ifPresent(parameters, Parameter.SWF, flash::setSwfFilePath);
       case AirRunConfiguration air -> applyAir(air, parameters);
       case HxcppIntellijRunConfiguration hxcpp -> ifPresent(parameters, Parameter.EXECUTABLE, hxcpp::setExecutablePath);
-      case NekoRunConfiguration neko -> applyNeko(neko, parameters);
+      case HaxeRuntimeRunConfiguration runtime -> applyRuntime(runtime, parameters);
       case InterpRunConfiguration interp -> applyInterp(interp, parameters);
       default -> { }
     }
@@ -339,10 +362,7 @@ public final class HaxeProgramLaunches {
                                    @NotNull Map<Parameter, String> parameters) {
     Path output = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput);
     if (buildFile.type() == HaxeBuildFileType.HXML) {
-      // empty executable = the neko RUNTIME, resolved at launch (settings/SDK/PATH)
-      parameters.put(Parameter.EXECUTABLE, "");
-      parameters.put(Parameter.PROGRAM_ARGUMENTS, output.toString());
-      parameters.put(Parameter.WORKING_DIRECTORY, String.valueOf(output.getParent()));
+      runtimeDefaults(output, parameters);
       return;
     }
     Path launcher = output;
@@ -357,7 +377,14 @@ public final class HaxeProgramLaunches {
     parameters.put(Parameter.EXECUTABLE, launcher.toString());
   }
 
-  private static void applyNeko(@NotNull NekoRunConfiguration configuration, @NotNull Map<Parameter, String> parameters) {
+  /** The runtime runs the output from the output's folder; an empty executable is the RUNTIME, resolved at launch. */
+  private static void runtimeDefaults(@NotNull Path output, @NotNull Map<Parameter, String> parameters) {
+    parameters.put(Parameter.EXECUTABLE, "");
+    parameters.put(Parameter.PROGRAM_ARGUMENTS, ParametersListUtil.join(List.of(output.toString())));
+    parameters.put(Parameter.WORKING_DIRECTORY, String.valueOf(output.getParent()));
+  }
+
+  private static void applyRuntime(@NotNull HaxeRuntimeRunConfiguration configuration, @NotNull Map<Parameter, String> parameters) {
     ifPresent(parameters, Parameter.EXECUTABLE, configuration::setExecutablePath);
     ifPresent(parameters, Parameter.PROGRAM_ARGUMENTS, configuration::setProgramArguments);
     ifPresent(parameters, Parameter.WORKING_DIRECTORY, configuration::setWorkingDirectory);
