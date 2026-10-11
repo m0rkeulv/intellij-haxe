@@ -198,12 +198,6 @@ public enum HaxeLaunchKind {
     return parameters;
   }
 
-  /** Whether the kind launches under Debug: its target has a debugger and its configuration runs one. */
-  public boolean debuggable() {
-    // Node.js shares the browser's target but runs plain
-    return this != NODE && HaxeDebugSupport.supportsProgramDebug(target);
-  }
-
   /**
    * Whether the kind's launch compiles the build file first and then runs its
    * output. The interpreter compiles AS it runs: a build step before it would

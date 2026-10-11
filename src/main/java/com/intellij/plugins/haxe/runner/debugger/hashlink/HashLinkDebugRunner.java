@@ -5,8 +5,6 @@ import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Path;
 import org.jetbrains.annotations.NotNull;
 
@@ -71,15 +69,5 @@ public class HashLinkDebugRunner extends DapDebugRunnerBase<HashLinkRunConfigura
       .withExePath(hlExecutable.toString())
       .withParameters("--debug", Integer.toString(backend.getDebugPort()), "--debug-wait", hlProgram.toString())
       .withWorkDirectory(workDir != null ? workDir.toString() : null);
-  }
-
-  public static int findFreePort() throws ExecutionException {
-    // unavoidable race between closing here and the VM binding it; in practice
-    // hl binds immediately at startup and a collision just fails the session
-    try (ServerSocket socket = new ServerSocket(0)) {
-      return socket.getLocalPort();
-    } catch (IOException e) {
-      throw new ExecutionException("Cannot allocate a debug port: " + e.getMessage(), e);
-    }
   }
 }

@@ -10,9 +10,10 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * A Node.js application run configuration: the node runtime with the
- * compiled {@code .js} script as its program argument. Run only.
+ * compiled {@code .js} script as its program argument. Run, and Debug
+ * through {@link NodeDebugRunner}.
  */
-// TODO: Debug through the bundled js-debug adapter's node launch, and a profiler lane over the inspector protocol
+// TODO: a profiler lane over the inspector protocol's CPU profiler
 public class NodeRunConfiguration extends HaxeRuntimeRunConfiguration {
 
   public NodeRunConfiguration(String name, Project project, ConfigurationFactory factory) {

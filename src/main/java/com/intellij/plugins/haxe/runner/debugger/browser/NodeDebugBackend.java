@@ -19,11 +19,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The node TEST debug backend: the RUNNER spawns the debuggee itself —
- * {@code node --inspect-brk=<port> <tests.js>} — so the test protocol stays
- * on the real process stdout and drives the SM console exactly like a plain
- * run; this backend spawns the pinned vscode-js-debug adapter (the chromium
- * lane's, shared store and pin) and ATTACHES it to the inspector port. The
+ * The node debug backend, for programs and tests alike: the RUNNER spawns the
+ * debuggee itself - {@code node --inspect-brk=<port> <script.js>} - so its
+ * output stays on the real process stdout (a test run's protocol drives the
+ * SM console exactly like a plain run); this backend spawns the pinned
+ * vscode-js-debug adapter (the chromium lane's, shared store and pin) and
+ * ATTACHES it to the inspector port. The
  * parent/child session dance and the wire quirks are
  * {@link BrowserDebugBackend}'s (fire-and-forget launch, startDebugging
  * hand-over, deferred launch response); the mux presents the process plus
@@ -31,7 +32,7 @@ import java.util.Map;
  * {@code --inspect-brk} hold once configuration is done — breakpoints are
  * installed before the first test line runs.
  */
-public class NodeTestDebugBackend implements DapBackend {
+public class NodeDebugBackend implements DapBackend {
 
   private final Path nodeExecutable; // runs the adapter AND the debuggee
   private final int inspectorPort;
@@ -43,7 +44,7 @@ public class NodeTestDebugBackend implements DapBackend {
   private volatile DapClient parentClient;
   private volatile JsDebugSessionMux sessionMux;
 
-  public NodeTestDebugBackend(Path nodeExecutable, int inspectorPort, String workDirectory) {
+  public NodeDebugBackend(Path nodeExecutable, int inspectorPort, String workDirectory) {
     this.nodeExecutable = nodeExecutable;
     this.inspectorPort = inspectorPort;
     this.workDirectory = workDirectory;
@@ -87,14 +88,14 @@ public class NodeTestDebugBackend implements DapBackend {
     Map<String, Object> config = new LinkedHashMap<>();
     config.put("type", "pwa-node");
     config.put("request", "attach");
-    config.put("name", "IntelliJ Haxe node tests");
+    config.put("name", "IntelliJ Haxe node");
     config.put("port", inspectorPort);
     // the debuggee holds at --inspect-brk; resume once configuration is done
     config.put("continueOnAttach", true);
     // js-debug's default restricts source-map resolution to the workspace
-    // folder; a gutter single run's artifact lives under the temp root, so
-    // the restriction must be lifted for its map (and the .hx originals) to
-    // resolve. The match-all glob rather than null: the DAP encoder drops
+    // folder; an output outside it (a gutter single run's artifact lives under
+    // the temp root) needs the restriction lifted for its map (and the .hx
+    // originals) to resolve. The match-all glob rather than null: the DAP encoder drops
     // null values (NON_NULL), and an absent field keeps the default.
     config.put("resolveSourceMapLocations", List.of("**"));
     if (workDirectory != null) {
@@ -179,7 +180,7 @@ public class NodeTestDebugBackend implements DapBackend {
 
   @Override
   public String startupHint() {
-    return HaxeDebuggerBundle.message("node.test.runner.startup.hint");
+    return HaxeDebuggerBundle.message("node.runner.startup.hint");
   }
 
   @Override

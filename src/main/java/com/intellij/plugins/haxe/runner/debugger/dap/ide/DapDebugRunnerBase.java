@@ -18,6 +18,7 @@ import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerManager;
 import com.intellij.xdebugger.XSessionStartedResult;
 import java.io.IOException;
+import java.net.ServerSocket;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -49,6 +50,17 @@ public abstract class DapDebugRunnerBase<C extends RunConfiguration, B extends D
    * adapters launch the browser themselves; nothing is spawned here).
    */
   protected abstract GeneralCommandLine createCommandLine(C configuration, B backend) throws ExecutionException;
+
+  /** A loopback port free right now, for a debuggee or adapter that binds it next. */
+  protected static int findFreePort() throws ExecutionException {
+    // unavoidable race between closing here and the debuggee binding it; in
+    // practice it binds immediately at startup and a collision just fails the session
+    try (ServerSocket socket = new ServerSocket(0)) {
+      return socket.getLocalPort();
+    } catch (IOException e) {
+      throw new ExecutionException("Cannot allocate a debug port: " + e.getMessage(), e);
+    }
+  }
 
   @Override
   public boolean canRun(@NotNull String executorId, @NotNull RunProfile profile) {
