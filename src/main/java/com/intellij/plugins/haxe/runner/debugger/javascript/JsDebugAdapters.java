@@ -17,6 +17,16 @@ public final class JsDebugAdapters {
     return HaxeDebuggerBundle.message(key);
   }
 
+  /** The adapter's status in an editor: name and version, marked downloaded or not. */
+  public static String statusText(AdapterPin pin, boolean installed) {
+    String name = displayName(pin) + " " + pin.version();
+    return installed ? HaxeDebuggerBundle.message("javascript.adapter.downloaded", name) : name + " \u2014";
+  }
+
+  public static String downloadingText(AdapterPin pin) {
+    return HaxeDebuggerBundle.message("javascript.adapter.downloading", displayName(pin) + " " + pin.version());
+  }
+
   /**
    * The adapter's entry point, WITHOUT downloading: acquisition is the user's
    * explicit decision (the run configuration's Download link). The browser
