@@ -1,5 +1,8 @@
 package com.intellij.plugins.haxe.lang;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiComment;
 import com.intellij.codeInsight.daemon.impl.HighlightInfo;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.lang.annotation.HighlightSeverity;
@@ -93,6 +96,37 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     assertEquals(1, bodies.size(), "the nested region must not split the branch: " + bodies);
     assertTrue(bodies.get(0).contains("#if debug"), "the inner directives lie inside the blob");
     assertTrue(bodies.get(0).contains("#end\n\t}"), "the inner #end and the closing brace lie inside the blob");
+  }
+
+  @Test
+  @DisplayName("code after a nested section stays inside the dead branch")
+  public void testCodeAfterANestedSectionStaysInsideTheDeadBranch() {
+    String source = """
+      package p;
+
+      #if (never && sys)
+      import a.A;
+      #if (lime && !macro)
+      import b.B;
+      #end
+      import c.C;
+
+      class File {}
+      #end
+      """;
+
+    List<String> bodies = ppBodyTokens(source);
+    assertEquals(1, bodies.size(), "the dead branch must stay ONE blob past the nested #end: " + bodies);
+    assertTrue(bodies.get(0).contains("import c.C") && bodies.get(0).contains("class File"), bodies.get(0));
+
+    PsiFile file = myFixture.configureByText("File.hx", source);
+    PsiElement afterNested = file.findElementAt(source.indexOf("c.C"));
+    assertNotNull(afterNested);
+    PsiComment enclosing = PsiTreeUtil.getParentOfType(afterNested, PsiComment.class);
+    assertInstanceOf(HaxeInactiveBody.class, enclosing, "the import after the nested #end sits inside the outer dead blob");
+    HaxeInactiveBody outer = PsiTreeUtil.getParentOfType(afterNested, HaxeInactiveBody.class, true, PsiFile.class);
+    assertNotNull(outer);
+    assertTrue(outer.getText().contains("import a.A"), "...the SAME blob that holds the branch's first lines");
   }
 
   @Test
