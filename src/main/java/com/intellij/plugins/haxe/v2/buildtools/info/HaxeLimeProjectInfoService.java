@@ -57,6 +57,8 @@ import static com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.
 public final class HaxeLimeProjectInfoService implements Disposable {
 
   private static final int DISPLAY_TIMEOUT_MS = 60_000;
+  /** The bundled tool as the build-tool failure names it. */
+  private static final String PARSER_TOOL_NAME = "LimeProjectParser";
   private static final String PARSER_RELATIVE_PATH = "tools/LimeProjectParser.jar";
   // unknown members ignored so a newer bundled tool may add output fields freely
   private static final ObjectMapper PARSER_OUTPUT_MAPPER = JsonMapper.builder()
@@ -135,10 +137,11 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     }
 
     if (info == null) {
-      // resilience over purity: a tool failure falls back to lime display
-      info = runDisplay(key, tool, fileName, workDirectory);
+      // resilience over purity: a tool failure falls back to lime display, whose own failure counts only without a tool
+      info = runDisplay(key, tool, fileName, workDirectory, parserJar == null);
     }
-    if (info != null) {
+    // a display result after a tool failure keeps the tool's problem on the row
+    if (info != null && settled) {
       failures.record(key.filePath(), null);
     }
 
@@ -166,6 +169,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(DISPLAY_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {
         log.warn("LimeProjectParser failed for " + key.filePath() + " (" + key.targetFlag() + "): " + firstErrorLine(output));
+        failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(PARSER_TOOL_NAME, output));
         return null;
       }
 
@@ -173,6 +177,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     }
     catch (ExecutionException e) {
       log.warn("LimeProjectParser could not run for " + key.filePath() + ": " + e.getMessage());
+      failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(PARSER_TOOL_NAME, e));
       return null;
     }
   }
@@ -216,11 +221,13 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   // TODO: point the display at an export root no build uses (LimeProjects.displayCommandLine) - lime prints the
   //  cached <app path>/<target>/haxe/<build type>.hxml whenever it is newer than the project file
+  /** {@code recordFailure}: without a bundled tool the display run is the only evaluation, so its failure is the one shown. */
   @Nullable
   private HaxeBuildFileInfo runDisplay(@NotNull Key key,
                                        @NotNull String tool,
                                        @NotNull String fileName,
-                                       @Nullable String workDirectory) {
+                                       @Nullable String workDirectory,
+                                       boolean recordFailure) {
     GeneralCommandLine commandLine =
       new GeneralCommandLine(key.haxelibPath(), "run", tool, "display", fileName, key.targetFlag())
         .withWorkDirectory(workDirectory);
@@ -228,14 +235,14 @@ public final class HaxeLimeProjectInfoService implements Disposable {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(DISPLAY_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {
         log.warn(tool + " display failed for " + fileName + " (" + key.targetFlag() + "): " + firstErrorLine(output));
-        failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(tool + " display", output));
+        if (recordFailure) failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(tool + " display", output));
         return null;
       }
       return parseDisplayOutput(output.getStdout(), key.targetFlag(), projectFileContent(key.filePath()));
     }
     catch (ExecutionException e) {
       log.warn(tool + " display could not run for " + fileName + ": " + e.getMessage());
-      failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(tool + " display", e));
+      if (recordFailure) failures.record(key.filePath(), HaxeBuildToolFailures.failureOf(tool + " display", e));
       return null;
     }
   }
