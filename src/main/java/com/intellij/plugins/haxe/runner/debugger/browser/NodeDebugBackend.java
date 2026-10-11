@@ -28,9 +28,9 @@ import java.util.Map;
  * parent/child session dance and the wire quirks are
  * {@link BrowserDebugBackend}'s (fire-and-forget launch, startDebugging
  * hand-over, deferred launch response); the mux presents the process plus
- * any worker_threads as one session. {@code continueOnAttach} releases the
- * {@code --inspect-brk} hold once configuration is done — breakpoints are
- * installed before the first test line runs.
+ * any worker_threads as one session. {@link NodeEntryHoldRelease} releases
+ * the {@code --inspect-brk} hold once the breakpoints are bound, so even code
+ * that runs at startup stops on them.
  */
 public class NodeDebugBackend implements DapBackend {
 
@@ -81,7 +81,7 @@ public class NodeDebugBackend implements DapBackend {
     DapClient process = BrowserDebugBackend.connectWithRetry(launched.port());
     JsDebugSessionMux mux = new JsDebugSessionMux(parent, process, launched.port());
     sessionMux = mux;
-    return mux;
+    return new NodeEntryHoldRelease(mux);
   }
 
   private Map<String, Object> attachConfig() {
@@ -90,8 +90,9 @@ public class NodeDebugBackend implements DapBackend {
     config.put("request", "attach");
     config.put("name", "IntelliJ Haxe node");
     config.put("port", inspectorPort);
-    // the debuggee holds at --inspect-brk; resume once configuration is done
-    config.put("continueOnAttach", true);
+    // the hold is released by NodeEntryHoldRelease: js-debug's own release
+    // comes before the breakpoints of a source-mapped file are bound
+    config.put("continueOnAttach", false);
     // js-debug's default restricts source-map resolution to the workspace
     // folder; an output outside it (a gutter single run's artifact lives under
     // the temp root) needs the restriction lifted for its map (and the .hx
