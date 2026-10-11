@@ -88,7 +88,7 @@ public final class HaxeResolveContexts {
       return new HaxeResolveContext(chosen.buildFile());
     }
     if (!owners.isEmpty()) {
-      return new HaxeResolveContext(preferred(file.getPath(), owners).buildFile());
+      return new HaxeResolveContext(preferred(file, owners).buildFile());
     }
     Module module = ModuleUtilCore.findModuleForFile(file, project);
     HaxeBuildFile fallback = module == null ? null : defaultBuildFileFor(module);
@@ -152,7 +152,8 @@ public final class HaxeResolveContexts {
   }
 
   @Nullable
-  private static Ownership ownedBy(@NotNull List<Ownership> owners, @NotNull String buildFilePath) {
+  private static Ownership ownedBy(@NotNull List<Ownership> owners, @Nullable String buildFilePath) {
+    if (buildFilePath == null) return null;
     return owners.stream()
       .filter(ownership -> ownership.buildFile().file().getPath().equals(buildFilePath))
       .findFirst()
@@ -211,18 +212,30 @@ public final class HaxeResolveContexts {
     return owners;
   }
 
-  /** Among the most specific owners (every build, for a library file): the file's -main build, else the active build file, else the first. */
+  /**
+   * Among the closest owners (every build, for a library file): the file's
+   * -main build, else the active build file, else the Build command of the
+   * file's container, else the first in tool-window order.
+   */
   @NotNull
-  private Ownership preferred(@NotNull String path, @NotNull List<Ownership> owners) {
+  private Ownership preferred(@NotNull VirtualFile file, @NotNull List<Ownership> owners) {
+    String path = file.getPath();
     List<Ownership> candidates = closestOwners(path, owners);
     for (Ownership candidate : candidates) {
       if (candidate.isMain(path)) return candidate;
     }
-    String activePath = HaxeKnownBuildFiles.effectiveActivePath(project);
-    for (Ownership candidate : candidates) {
-      if (candidate.buildFile().file().getPath().equals(activePath)) return candidate;
-    }
-    return candidates.getFirst();
+    Ownership active = ownedBy(candidates, HaxeKnownBuildFiles.effectiveActivePath(project));
+    if (active != null) return active;
+    Ownership command = ownedBy(candidates, compileCommandPath(file));
+    return command != null ? command : candidates.getFirst();
+  }
+
+  /** The build file of the Build command set for the file's container, or null. */
+  @Nullable
+  private String compileCommandPath(@NotNull VirtualFile file) {
+    String containerId = HaxeContainers.containerIdFor(project, file);
+    HaxeEnvironmentStore.CompileCommand command = HaxeEnvironmentStore.getInstance(project).getCompileCommand(containerId);
+    return command == null ? null : command.buildFilePath();
   }
 
   /** The owners whose source directory containing the path is the longest (every owner of a library file ties at none); {@code owners} is sorted that way. */
