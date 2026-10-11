@@ -84,8 +84,11 @@ public final class HaxeToolWindowLaunches {
    * the command as the build step.
    */
   public static void runAction(@NotNull Project project, @NotNull ActionNode actionNode, @NotNull Executor executor) {
-    // an action may be a bare trigger of an existing configuration; every other action needs its command
-    if (actionNode.command().isEmpty() && !(actionNode.launch() instanceof Launch.Existing)) return;
+    // a bare trigger of an existing configuration and a chain of other actions need no command of their own
+    boolean runsSomething = !actionNode.command().isEmpty()
+                            || !actionNode.runBefore().isEmpty()
+                            || actionNode.launch() instanceof Launch.Existing;
+    if (!runsSomething) return;
     RunnerAndConfigurationSettings settings = actionNode.launch() != null
                                               ? launchingActionConfiguration(project, actionNode)
                                               : actionConfiguration(project, actionNode);
