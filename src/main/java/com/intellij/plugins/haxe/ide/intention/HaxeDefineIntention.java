@@ -20,7 +20,9 @@ package com.intellij.plugins.haxe.ide.intention;
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
@@ -32,10 +34,12 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Toggles a conditional-compilation flag by editing the active container's
- * define OVERRIDES, so the change shows up in the Environment dialog and
+ * Toggles a conditional-compilation flag by editing the define OVERRIDES of
+ * the container whose build defines the file (its resolve context, else the
+ * active build), so the change shows up in the Environment dialog and
  * composes with the build file: a flag the build file defines is masked with
  * a REMOVE entry, one it doesn't gets a SET entry, and toggling back simply
  * drops the override. The store mutation publishes the build-settings topic,
@@ -64,23 +68,23 @@ public class HaxeDefineIntention implements IntentionAction {
 
   @Override
   public boolean isAvailable(@NotNull Project project, Editor editor, PsiFile file) {
-    // invoke() edits the active container's define overrides. without an active container it would silently do nothing
+    // invoke() edits the define overrides of the container whose build defines the file; without one it would silently do nothing
     if (HaxeDefineContextService.isCompilerIdentityDefine(myWord)) return false;
-    return HaxeDefineContextService.getInstance(project).activeContainerId() != null;
+    return definingBuildFile(project, file) != null;
   }
 
   @Override
   public void invoke(@NotNull Project project, Editor editor, PsiFile file) throws IncorrectOperationException {
-    HaxeDefineContextService contextService = HaxeDefineContextService.getInstance(project);
-    String containerId = contextService.activeContainerId();
-    if (containerId == null) return;
+    VirtualFile buildFile = definingBuildFile(project, file);
+    if (buildFile == null) return;
+    String containerId = HaxeContainers.containerIdFor(project, buildFile);
 
     HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
     List<EnvironmentDefine> defines = new ArrayList<>(store.getDefines(containerId));
     defines.removeIf(define -> define.name().equals(myWord));
     // an override entry is only needed when the build context disagrees with
     // the wanted state; otherwise dropping the previous override suffices
-    boolean definedByBuildContext = contextService.isDefinedWithoutOverrides(myWord);
+    boolean definedByBuildContext = HaxeDefineContextService.getInstance(project).isDefinedWithoutOverrides(buildFile, myWord);
     if (isDefined && definedByBuildContext) {
       defines.add(new EnvironmentDefine(myWord, "", DefineEffect.REMOVE));
     }
@@ -88,6 +92,12 @@ public class HaxeDefineIntention implements IntentionAction {
       defines.add(new EnvironmentDefine(myWord, "", DefineEffect.SET));
     }
     store.setDefines(containerId, defines);
+  }
+
+  @Nullable
+  private static VirtualFile definingBuildFile(@NotNull Project project, @Nullable PsiFile file) {
+    VirtualFile physical = HaxeDefineContextService.physicalFileOf(file);
+    return physical == null ? null : HaxeDefineContextService.getInstance(project).definingBuildFile(physical);
   }
 
   @Override

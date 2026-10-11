@@ -191,6 +191,7 @@ public final class HaxeResolveContexts {
     return new Object[]{
       HaxeBuildSettingsTracker.getInstance(project),
       ProjectRootModificationTracker.getInstance(project),
+      // TODO: any file creation (a build's output) re-sweeps the build files on the next ask; a build-file-only tracker would narrow it
       VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
       psiTracker.forLanguage(HXMLLanguage.INSTANCE),
       psiTracker.forLanguage(XMLLanguage.INSTANCE)};

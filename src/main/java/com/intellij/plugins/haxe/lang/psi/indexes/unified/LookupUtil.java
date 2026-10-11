@@ -23,6 +23,7 @@ public class LookupUtil {
       Set.of("cpp", "cs", "flash", "hl", "java", "js", "jvm", "lua", "php", "python", "neko");
 
     static boolean isActiveTarget(HaxeComponentIndexData indexData, @NotNull Project project) {
+        // TODO: the active build's defines answer for every requester; a per-file answer needs the requesting file's context (resolve context, milestone 4)
         List<String> targets = indexData.getTargets();
         if(targets.isEmpty()) return true;
 
@@ -45,6 +46,7 @@ public class LookupUtil {
      * in the current build and must not be offered by completion.
      */
     public static boolean isActiveTargetPackage(@Nullable String packageName, @NotNull Project project) {
+        // TODO: the active build's defines answer for every requester; a per-file answer needs the requesting file's context (resolve context, milestone 4)
         if (packageName == null || packageName.isEmpty()) return true;
         int dot = packageName.indexOf('.');
         String root = dot < 0 ? packageName : packageName.substring(0, dot);

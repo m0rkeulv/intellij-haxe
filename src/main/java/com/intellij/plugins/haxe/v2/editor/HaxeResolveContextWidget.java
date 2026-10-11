@@ -19,6 +19,7 @@ import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContextLabels;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
@@ -126,7 +127,8 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     else {
       store.pin(file, choice.context().path());
     }
-    // the compiler-backed answers (diagnostics, resolve fallback) were computed under the previous context
+    // the file's tree was lexed under the previous context; the compiler-backed answers (diagnostics, resolve fallback) were computed under it
+    HaxeDefineContextService.getInstance(getProject()).fileContextChanged(file);
     HaxeCompilerCaches.clearAndRehighlight(getProject(), "haxe: resolve context changed");
   }
 
