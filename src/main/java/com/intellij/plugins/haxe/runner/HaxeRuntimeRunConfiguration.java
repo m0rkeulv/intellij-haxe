@@ -9,6 +9,7 @@ import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapExecutableRunConfigurationBase;
+import com.intellij.plugins.haxe.runner.debugger.javascript.AdapterPin;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -47,9 +48,15 @@ public abstract class HaxeRuntimeRunConfiguration extends DapExecutableRunConfig
   @NotNull
   protected abstract String executableHint();
 
+  /** The DAP adapter the Debug executor needs, offered for download in the editor; null for a runtime debugged without one. */
+  @Nullable
+  protected AdapterPin debugAdapter() {
+    return null;
+  }
+
   @Override
   public @NotNull SettingsEditor<? extends RunConfiguration> getConfigurationEditor() {
-    return new HaxeRuntimeRunConfigurationEditor(getProject(), executableHint());
+    return new HaxeRuntimeRunConfigurationEditor(getProject(), executableHint(), debugAdapter());
   }
 
   private boolean usesResolvedRuntime() {

@@ -4,6 +4,7 @@ import com.intellij.execution.configurations.ConfigurationFactory;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.HaxeRuntimeRunConfiguration;
+import com.intellij.plugins.haxe.runner.debugger.javascript.AdapterPin;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -38,5 +39,10 @@ public class NodeRunConfiguration extends HaxeRuntimeRunConfiguration {
   @Override
   protected @NotNull String executableHint() {
     return HaxeDebuggerBundle.message("node.runner.editor.executable.hint");
+  }
+
+  @Override
+  protected @NotNull AdapterPin debugAdapter() {
+    return AdapterPin.JS_DEBUG;
   }
 }
