@@ -5,7 +5,7 @@ import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.runner.HaxeRunConfigurationType;
-import com.intellij.plugins.haxe.runner.debugger.browser.NodeDebugBackend;
+import com.intellij.plugins.haxe.runner.nodejs.NodeDebugBackend;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

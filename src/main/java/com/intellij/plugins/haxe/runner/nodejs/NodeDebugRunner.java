@@ -2,7 +2,7 @@ package com.intellij.plugins.haxe.runner.nodejs;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
-import com.intellij.plugins.haxe.runner.debugger.browser.NodeDebugBackend;
+import com.intellij.plugins.haxe.runner.nodejs.NodeDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import org.jetbrains.annotations.NotNull;
 

@@ -13,7 +13,7 @@ import com.intellij.plugins.haxe.runner.debugger.hashlink.HashLinkBackend;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.browser.HaxeBrowserTestSupport;
-import com.intellij.plugins.haxe.runner.debugger.browser.NodeDebugBackend;
+import com.intellij.plugins.haxe.runner.nodejs.NodeDebugBackend;
 import com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij.HxcppIntellijBackend;
 import com.intellij.plugins.haxe.runner.debugger.interp.InterpDapBackend;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestLaunchPlanner.Plan;
