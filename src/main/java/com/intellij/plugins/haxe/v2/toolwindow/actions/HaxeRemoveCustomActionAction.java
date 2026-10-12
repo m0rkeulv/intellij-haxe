@@ -4,6 +4,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.MessageDialogBuilder;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeActionReferences;
@@ -46,13 +47,15 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
     panel.refreshTree();
   }
 
-  /** The two questions as a Yes/No and a Yes/No/Cancel dialog; No on the second keeps the references. */
+  /** The two questions as dialogs: Yes/No for the removal, then "Remove There Too" / "Keep as Missing" / Cancel for the references. */
   private record DialogDecisions(@NotNull Project project, @NotNull String ownerId) implements Decisions {
 
     @Override
     public boolean confirmRemoval(@NotNull String name) {
       String question = HaxeBundle.message("haxe.toolwindow.remove.action.confirm", name);
-      return Messages.showYesNoDialog(project, question, title(), Messages.getQuestionIcon()) == Messages.YES;
+      return MessageDialogBuilder.yesNo(title(), question)
+        .icon(Messages.getQuestionIcon())
+        .ask(project);
     }
 
     @Override
@@ -61,7 +64,12 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
         .map(reference -> HaxeActionReferences.label(project, ownerId, reference))
         .collect(Collectors.joining(", "));
       String question = HaxeBundle.message("haxe.toolwindow.remove.action.references", name, dependentLabels);
-      return switch (Messages.showYesNoCancelDialog(project, question, title(), Messages.getQuestionIcon())) {
+      int answer = MessageDialogBuilder.yesNoCancel(title(), question)
+        .yesText(HaxeBundle.message("haxe.toolwindow.remove.action.references.remove"))
+        .noText(HaxeBundle.message("haxe.toolwindow.remove.action.references.keep"))
+        .icon(Messages.getQuestionIcon())
+        .show(project);
+      return switch (answer) {
         case Messages.YES -> References.REMOVE;
         case Messages.NO -> References.KEEP;
         default -> References.CANCEL;
