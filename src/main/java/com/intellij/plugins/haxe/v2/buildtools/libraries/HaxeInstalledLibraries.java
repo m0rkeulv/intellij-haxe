@@ -26,10 +26,13 @@ import java.util.concurrent.CompletableFuture;
 /**
  * The installed picture of haxelib - which libraries and versions it has
  * installed - as the tool window and the build-file inspections see it.
- * Fetching it runs a haxelib process, so code under the read lock reads the
- * last {@link #snapshot} and requests a {@link #refreshAsync} when there is
- * none; a fetch whose result differs restarts highlighting so the
- * inspections follow. A fetch requested while one runs shares that run.
+ * Fetching it runs a haxelib process, so readers take the last
+ * {@link #snapshot}: code under the read lock requests a
+ * {@link #refreshAsync} when there is none, a tree refresh reads
+ * {@link #current}. A fetch is requested only where the picture can change:
+ * after a library sync (which an install or remove ends with) and from the
+ * Purge action. A fetch whose result differs restarts highlighting so the
+ * inspections follow; a fetch requested while one runs shares that run.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeInstalledLibraries {
@@ -66,10 +69,18 @@ public final class HaxeInstalledLibraries {
     return snapshot;
   }
 
-  /** The picture after a fetch, shared with one in flight; null when haxelib is unavailable. Runs a process - call on a pooled thread. */
+  /**
+   * The picture for a tree refresh: a fetch in flight is awaited (the refresh
+   * after an install must show the new library), otherwise the snapshot
+   * serves, and only without one a fetch runs. Blocks - call on a pooled
+   * thread. Null when haxelib is unavailable.
+   */
   @Nullable
-  public Map<String, InstalledLibrary> fetch() {
-    return refresh().join();
+  public Map<String, InstalledLibrary> current() {
+    CompletableFuture<@Nullable Map<String, InstalledLibrary>> pending = pendingFetch();
+    if (pending != null) return pending.join();
+    Map<String, InstalledLibrary> known = snapshot;
+    return known != null ? known : refresh().join();
   }
 
   /** Fetches on a pooled thread; a request during a fetch shares that fetch. */
@@ -95,12 +106,14 @@ public final class HaxeInstalledLibraries {
   /** Seeds the picture; a fetch still in flight is awaited first so it cannot overwrite the seed. */
   @TestOnly
   public void setSnapshotForTests(@Nullable Map<String, InstalledLibrary> snapshot) {
-    CompletableFuture<?> pending;
-    synchronized (this) {
-      pending = inFlight;
-    }
+    CompletableFuture<?> pending = pendingFetch();
     if (pending != null) pending.handle((result, failure) -> null).join();
     this.snapshot = snapshot;
+  }
+
+  @Nullable
+  private synchronized CompletableFuture<@Nullable Map<String, InstalledLibrary>> pendingFetch() {
+    return inFlight != null && !inFlight.isDone() ? inFlight : null;
   }
 
   @NotNull
