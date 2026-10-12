@@ -21,7 +21,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries;
@@ -121,12 +121,12 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     });
     project.getMessageBus().connect(this)
       .subscribe(HaxeCompilationServerListener.TOPIC, (HaxeCompilationServerListener)this::refreshTree);
+    // the tree shows every choice and every outcome; store mutations can
+    // originate outside this panel too (the define quickfix edits overrides)
     project.getMessageBus().connect(this)
-      .subscribe(HaxeBuildConfigListener.TOPIC, (HaxeBuildConfigListener)this::refreshTree);
-    // store mutations can originate outside this panel (the define quickfix
-    // edits environment overrides) - the tree must follow those too
+      .subscribe(HaxeBuildEventListener.TOPIC, HaxeBuildEventListener.onAny(this::refreshTree));
     project.getMessageBus().connect(this)
-      .subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::refreshTree);
+      .subscribe(HaxeBuildSettingsListener.TOPIC, HaxeBuildSettingsListener.onAny(this::refreshTree));
 
     refreshTree();
   }

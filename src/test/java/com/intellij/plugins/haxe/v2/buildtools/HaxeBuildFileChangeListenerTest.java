@@ -1,4 +1,4 @@
-package com.intellij.plugins.haxe.v2.buildtools.info;
+package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Define context: build file listener")
-public class HaxeDefineContextBuildFileListenerTest extends HaxeLightFixtureTestCase {
+@DisplayName("Build tools: build file change listener")
+public class HaxeBuildFileChangeListenerTest extends HaxeLightFixtureTestCase {
 
   @Override
   protected String getBasePath() {
@@ -21,9 +21,9 @@ public class HaxeDefineContextBuildFileListenerTest extends HaxeLightFixtureTest
   }
 
   @Test
-  @DisplayName("a saved project build file concerns the define context, IDE settings and outside files do not")
-  public void testASavedProjectBuildFileConcernsTheDefineContextIdeSettingsAndOutsideFilesDoNot() {
-    HaxeDefineContextBuildFileListener listener = new HaxeDefineContextBuildFileListener(getProject());
+  @DisplayName("a saved project build file is announced, IDE settings and outside files are not")
+  public void testASavedProjectBuildFileIsAnnouncedIdeSettingsAndOutsideFilesAreNot() {
+    HaxeBuildFileChangeListener listener = new HaxeBuildFileChangeListener(getProject());
     VirtualFile build = myFixture.addFileToProject("build.hxml", "-main Main").getVirtualFile();
     VirtualFile include = myFixture.addFileToProject("config/defs.xml", "<project/>").getVirtualFile();
     VirtualFile source = myFixture.addFileToProject("src/Main.hx", "class Main {}").getVirtualFile();

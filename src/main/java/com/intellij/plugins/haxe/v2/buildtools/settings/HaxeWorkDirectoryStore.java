@@ -95,6 +95,6 @@ public final class HaxeWorkDirectoryStore implements PersistentStateComponent<Ha
       entry.workDirectory = workDirectory;
       state.files.add(entry);
     }
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).workDirectoryChanged(buildFilePath);
   }
 }

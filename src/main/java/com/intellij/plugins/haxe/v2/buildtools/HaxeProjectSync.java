@@ -13,9 +13,9 @@ import org.jetbrains.annotations.Nullable;
  * The v2 sync pipeline, shared by the tool window's sync button and the build file
  * auto-reload: flush editors, drop the cached lime/nme evaluations and every
  * compiler-derived cache (a context compiled from the old configuration would
- * keep answering otherwise), resync module libraries, then announce the change
- * on {@link HaxeBuildConfigListener#TOPIC}
- * (which refreshes the tool window tree).
+ * keep answering otherwise), then resync module libraries. The sync's end
+ * ({@link HaxeBuildEventListener#librariesSynced}) is what the tool window
+ * and the define context follow.
  */
 public final class HaxeProjectSync {
 
@@ -30,14 +30,7 @@ public final class HaxeProjectSync {
       HaxeLimeProjectInfoService.getInstance(project).clearCache();
       HaxeNmeProjectInfoService.getInstance(project).clearCache();
       HaxeCompilerCaches.clearAndRehighlight(project, "haxe: project synced");
-      HaxeLibrarySync.sync(project, () -> {
-        if (!project.isDisposed()) {
-          project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
-        }
-        if (onFinished != null) {
-          onFinished.run();
-        }
-      });
+      HaxeLibrarySync.sync(project, onFinished);
     });
   }
 }

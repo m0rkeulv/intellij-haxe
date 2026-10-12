@@ -120,14 +120,52 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   public HaxeDefineContextService(@NotNull Project project) {
     this.project = project;
-    // config changes (language level, compiler settings) feed haxe_ver, so they invalidate the context too
     MessageBusConnection connection = project.getMessageBus().connect(this);
     connection.subscribe(HaxeBuildSettingsListener.TOPIC, this);
-    connection.subscribe(HaxeBuildConfigListener.TOPIC, (HaxeBuildConfigListener)this::buildSettingsChanged);
+    connection.subscribe(HaxeBuildEventListener.TOPIC, new BuildEvents());
   }
 
   public static HaxeDefineContextService getInstance(@NotNull Project project) {
     return project.getService(HaxeDefineContextService.class);
+  }
+
+  // The choices a context derives from. Custom actions, tools, tests marks and
+  // work directories change no define, so they are not listened to.
+
+  @Override
+  public void stateLoaded() {
+    invalidateAndRefresh();
+  }
+
+  @Override
+  public void activeBuildFileChanged() {
+    invalidateAndRefresh();
+  }
+
+  @Override
+  public void buildFilesChanged() {
+    invalidateAndRefresh();
+  }
+
+  @Override
+  public void targetSelected(@NotNull String buildFilePath) {
+    invalidateAndRefresh();
+  }
+
+  @Override
+  public void sectionSelected(@NotNull String buildFilePath) {
+    invalidateAndRefresh();
+  }
+
+  @Override
+  public void environmentChanged(@NotNull String containerId, @NotNull EnvironmentAspect aspect) {
+    invalidateAndRefresh();
+  }
+
+  /** The language level and the compiler settings feed {@code haxe_ver}. */
+  @Override
+  public void compilerSettingsChanged() {
+    invalidateAndRefresh();
   }
 
   /**
@@ -135,8 +173,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    * mutation must reach parsing (re-index) and highlighting WITHOUT relying on
    * the tool window being open to call {@link #refreshAsync()}.
    */
-  @Override
-  public void buildSettingsChanged() {
+  private void invalidateAndRefresh() {
     snapshots.clear();
     fastStates.clear();
     effectiveActivePathComputed = false;
@@ -573,5 +610,23 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   @Override
   public void dispose() {
+  }
+
+  /** The events a context follows: a build file changed on disk, or a sync recorded new library defines. */
+  private final class BuildEvents implements HaxeBuildEventListener {
+    @Override
+    public void buildFileContentChanged(@NotNull String path) {
+      refreshAsync();
+    }
+
+    @Override
+    public void buildFileDeleted(@NotNull String path) {
+      refreshAsync();
+    }
+
+    @Override
+    public void librariesSynced() {
+      refreshAsync();
+    }
   }
 }

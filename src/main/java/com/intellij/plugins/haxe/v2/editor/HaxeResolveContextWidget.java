@@ -70,7 +70,7 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     // a context choice or a build setting (active file, target, section) changes the answer
     MessageBusConnection connection = getProject().getMessageBus().connect(this);
     connection.subscribe(HaxeResolveContextListener.TOPIC, (HaxeResolveContextListener)this::update);
-    connection.subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::update);
+    connection.subscribe(HaxeBuildSettingsListener.TOPIC, HaxeBuildSettingsListener.onAny(this::update));
   }
 
   /**

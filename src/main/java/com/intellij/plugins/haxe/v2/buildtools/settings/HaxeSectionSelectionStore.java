@@ -61,7 +61,7 @@ public final class HaxeSectionSelectionStore implements PersistentStateComponent
       state.sectionsByFile = new TreeMap<>();
     }
     this.state = state;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).stateLoaded();
   }
 
   /** A build file keeps its selected section when it, or a folder above it, is moved or renamed; whether anything changed. */
@@ -79,6 +79,6 @@ public final class HaxeSectionSelectionStore implements PersistentStateComponent
 
   public void setSelectedSection(@NotNull VirtualFile buildFile, @NotNull String sectionId) {
     state.sectionsByFile.put(buildFile.getPath(), sectionId);
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).sectionSelected(buildFile.getPath());
   }
 }

@@ -95,14 +95,29 @@ public final class HaxeBuildFilesProjectAware implements ExternalSystemProjectAw
    * {@link ExternalSystemProjectListener#onSettingsFilesListChange()}, sent
    * whenever the watched set may have changed: after a sync (the edit that
    * triggered it may have changed the imports) and when a build file is
-   * registered or removed.
+   * registered, removed or moved.
    */
   @Override
   public void subscribe(@NotNull ExternalSystemProjectListener listener, @NotNull Disposable parentDisposable) {
     listeners.add(listener);
     Disposer.register(parentDisposable, () -> listeners.remove(listener));
     MessageBusConnection connection = project.getMessageBus().connect(parentDisposable);
-    connection.subscribe(HaxeBuildConfigListener.TOPIC, (HaxeBuildConfigListener)listener::onSettingsFilesListChange);
-    connection.subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)listener::onSettingsFilesListChange);
+    connection.subscribe(HaxeBuildEventListener.TOPIC, new HaxeBuildEventListener() {
+      @Override
+      public void librariesSynced() {
+        listener.onSettingsFilesListChange();
+      }
+    });
+    connection.subscribe(HaxeBuildSettingsListener.TOPIC, new HaxeBuildSettingsListener() {
+      @Override
+      public void stateLoaded() {
+        listener.onSettingsFilesListChange();
+      }
+
+      @Override
+      public void buildFilesChanged() {
+        listener.onSettingsFilesListChange();
+      }
+    });
   }
 }

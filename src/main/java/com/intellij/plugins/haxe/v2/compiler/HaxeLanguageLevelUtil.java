@@ -5,7 +5,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
@@ -126,12 +126,11 @@ public final class HaxeLanguageLevelUtil {
 
   /**
    * Refreshes everything that depends on language levels: the tool window's
-   * Language level rows read the settings again (through the build
-   * configuration topic), and highlighting restarts. Every path that changes
-   * a level setting calls this.
+   * Language level rows and the define context read the settings again, and
+   * highlighting restarts. Every path that changes a level setting calls this.
    */
   public static void notifyLanguageLevelChanged(@NotNull Project project) {
-    project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
+    HaxeBuildSettingsListener.publisher(project).compilerSettingsChanged();
     DaemonCodeAnalyzer.getInstance(project).restart("haxe: language level changed");
   }
 }

@@ -39,7 +39,7 @@ public final class HaxeEditToolAction extends DumbAwareAction {
       var edited = dialog.getEditedCommand();
       var tool = new HaxeCustomToolsStore.CustomTool(edited.name(), edited.command(), edited.workDirectory());
       HaxeCustomToolsStore.getInstance(project).updateTool(toolNode.containerId(), toolNode.name(), tool);
-      panel.refreshTree();
+      
     }
   }
 

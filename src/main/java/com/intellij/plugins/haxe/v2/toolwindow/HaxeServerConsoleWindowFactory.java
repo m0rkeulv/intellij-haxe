@@ -21,7 +21,8 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager.ServerInfo;
@@ -66,10 +67,24 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
       .connect(toolWindow.getDisposable())
       .subscribe(HaxeCompilationServerListener.TOPIC, () -> syncTabs(project, toolWindow));
 
-    // context-health transitions arrive on background threads
+    // context-health transitions arrive on background threads; the server
+    // settings and a container's environment decide which server a context uses
     project.getMessageBus()
       .connect(toolWindow.getDisposable())
-      .subscribe(HaxeBuildConfigListener.TOPIC, () -> updateStatusesLater(project, toolWindow));
+      .subscribe(HaxeBuildEventListener.TOPIC, HaxeBuildEventListener.onAny(() -> updateStatusesLater(project, toolWindow)));
+    project.getMessageBus()
+      .connect(toolWindow.getDisposable())
+      .subscribe(HaxeBuildSettingsListener.TOPIC, new HaxeBuildSettingsListener() {
+        @Override
+        public void compilerSettingsChanged() {
+          updateStatusesLater(project, toolWindow);
+        }
+
+        @Override
+        public void environmentChanged(@NotNull String containerId, @NotNull EnvironmentAspect aspect) {
+          updateStatusesLater(project, toolWindow);
+        }
+      });
 
     // closing a tab means "done with that SDK's server": stop the process and
     // forget the instance (on project close the manager kills everything anyway,

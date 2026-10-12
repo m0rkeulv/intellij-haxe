@@ -10,8 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The last failure per key, kept for the tool window: a change of a key's
- * failure publishes {@link HaxeBuildConfigListener#buildConfigurationChanged()},
- * so the tree repaints; recording null clears the key.
+ * failure publishes {@link HaxeBuildEventListener#failureRecorded}, so the
+ * tree repaints; recording null clears the key.
  */
 public abstract class HaxeLastFailures {
   private final Project project;
@@ -39,7 +39,7 @@ public abstract class HaxeLastFailures {
                       ? !failure.equals(failures.put(key, failure))
                       : failures.remove(key) != null;
     if (changed && !project.isDisposed()) {
-      project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
+      HaxeBuildEventListener.publisher(project).failureRecorded(key);
     }
   }
 

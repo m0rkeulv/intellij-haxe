@@ -63,7 +63,7 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
     HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forDuplicate(project, row.buildFile(), launchOutput, template);
     if (dialog.showAndGet()) {
       HaxeCustomActionsStore.getInstance(project).addAction(row.buildFile().file().getPath(), dialog.getAction());
-      panel.refreshTree();
+      
     }
   }
 

@@ -1,7 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -44,8 +45,13 @@ public class HaxeBuildToolFailuresTest extends HaxeLightFixtureTestCase {
   @DisplayName("repaints the tool window only when a failure changes")
   public void testRepaintsTheToolWindowOnlyWhenAFailureChanges() {
     AtomicInteger repaints = new AtomicInteger();
-    HaxeBuildConfigListener listener = repaints::incrementAndGet;
-    getProject().getMessageBus().connect(getTestRootDisposable()).subscribe(HaxeBuildConfigListener.TOPIC, listener);
+    HaxeBuildEventListener listener = new HaxeBuildEventListener() {
+      @Override
+      public void failureRecorded(@NotNull String key) {
+        repaints.incrementAndGet();
+      }
+    };
+    getProject().getMessageBus().connect(getTestRootDisposable()).subscribe(HaxeBuildEventListener.TOPIC, listener);
     HaxeBuildToolFailures failures = HaxeBuildToolFailures.getInstance(getProject());
 
     failures.record(NMML_PATH, null);

@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
@@ -127,13 +128,14 @@ public final class HaxeLibrarySync {
     }.queue();
   }
 
-  /** On the EDT after the libraries landed: the define context follows the recorded defines before the caller's refresh. */
+  /** On the EDT after the libraries landed: the defines are recorded, then the end of the run is announced. */
   private static void recordLibraryDefines(@NotNull Project project,
                                            @NotNull Map<String, Map<String, Map<String, String>>> definesByModuleName,
                                            @Nullable Runnable onFinished) {
     if (!project.isDisposed()) {
       HaxeLibraryDefinesStore.getInstance(project).replaceAll(definesByModuleName);
       HaxeInstalledLibraries.getInstance(project).refreshAsync();
+      HaxeBuildEventListener.publisher(project).librariesSynced();
     }
     if (onFinished != null) {
       onFinished.run();
