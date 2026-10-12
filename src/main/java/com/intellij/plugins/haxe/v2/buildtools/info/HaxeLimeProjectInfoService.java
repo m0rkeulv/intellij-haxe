@@ -23,6 +23,7 @@ import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Key;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Outcome;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.util.HaxePluginPaths;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -82,9 +83,18 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   /**
    * The file's effective configuration for the target, or null when not resolved
-   * (yet). Schedules a background run when the cache is stale; {@code onUpdated}
-   * fires on the EDT after the run completes. Safe to call from read actions.
+   * (yet). Schedules a background run when the cache is stale; the landing is
+   * announced as {@link HaxeBuildEventListener#evaluationLanded}. Safe to call
+   * from read actions.
    */
+  @Nullable
+  public HaxeBuildFileInfo getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
+                                               @NotNull String targetFlag,
+                                               @Nullable String preferredSdkName) {
+    return getCachedOrSchedule(buildFile, targetFlag, preferredSdkName, HaxeProjectInfoCache.NO_CALLBACK);
+  }
+
+  /** {@link #getCachedOrSchedule(HaxeBuildFile, String, String)} with a callback for a caller that must act on its own ask; kept by identity. */
   @Nullable
   public HaxeBuildFileInfo getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
                                                @NotNull String targetFlag,

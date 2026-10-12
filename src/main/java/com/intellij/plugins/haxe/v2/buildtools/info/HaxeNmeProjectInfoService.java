@@ -17,6 +17,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Key;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.Outcome;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -89,9 +90,18 @@ public final class HaxeNmeProjectInfoService implements Disposable {
 
   /**
    * The file's evaluation for the target, or null when not resolved (yet).
-   * Schedules a background run when the cache is stale; {@code onUpdated}
-   * fires on the EDT after the run completes. Safe to call from read actions.
+   * Schedules a background run when the cache is stale; the landing is
+   * announced as {@link HaxeBuildEventListener#evaluationLanded}. Safe to call
+   * from read actions.
    */
+  @Nullable
+  public Evaluation getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
+                                        @NotNull String targetFlag,
+                                        @Nullable String preferredSdkName) {
+    return getCachedOrSchedule(buildFile, targetFlag, preferredSdkName, HaxeProjectInfoCache.NO_CALLBACK);
+  }
+
+  /** {@link #getCachedOrSchedule(HaxeBuildFile, String, String)} with a callback for a caller that must act on its own ask; kept by identity. */
   @Nullable
   public Evaluation getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
                                         @NotNull String targetFlag,
@@ -123,8 +133,16 @@ public final class HaxeNmeProjectInfoService implements Disposable {
    * failed tool — the raw xml parse serves with the selected target, its
    * conditions unevaluated. The prepared hxml flattens libs into classpaths,
    * so a run whose derived library list is empty keeps the declared one.
-   * Call in a read action; {@code onUpdated} as in {@link #getCachedOrSchedule}.
+   * Call in a read action.
    */
+  @NotNull
+  public HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile,
+                                         @NotNull HaxeBuildFileInfo raw,
+                                         @Nullable String preferredSdkName) {
+    return effectiveInfo(buildFile, raw, preferredSdkName, HaxeProjectInfoCache.NO_CALLBACK);
+  }
+
+  /** {@link #effectiveInfo(HaxeBuildFile, HaxeBuildFileInfo, String)} with a callback for a caller that must act on its own ask. */
   @NotNull
   public HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile,
                                          @NotNull HaxeBuildFileInfo raw,

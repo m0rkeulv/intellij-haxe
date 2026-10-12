@@ -44,7 +44,7 @@ public final class HaxeMarkTestsBuildFileAction extends DumbAwareAction {
         HaxeSourceRootsOffer.offerFor(project, row.containerId(), row.buildFile().file());
       }
       // the tests build's libraries feed the module's resolve scope - re-sync
-      HaxeLibrarySync.sync(project, panel::refreshTree);
+      HaxeLibrarySync.sync(project, null);
     }
   }
 

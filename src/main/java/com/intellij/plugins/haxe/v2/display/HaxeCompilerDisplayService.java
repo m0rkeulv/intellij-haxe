@@ -216,7 +216,7 @@ public final class HaxeCompilerDisplayService {
                                     @NotNull String containerId) {
     String targetFlag = NmeProjects.selectedTargetFlag(project, buildFile);
     HaxeNmeProjectInfoService.Evaluation evaluation = HaxeNmeProjectInfoService.getInstance(project)
-      .getCachedOrSchedule(new HaxeBuildFile(buildFile, HaxeBuildFileType.NMML), targetFlag, sdkName, () -> { });
+      .getCachedOrSchedule(new HaxeBuildFile(buildFile, HaxeBuildFileType.NMML), targetFlag, sdkName);
     if (evaluation == null) return null;
 
     List<String> args = new ArrayList<>(List.of("--cwd", directory));

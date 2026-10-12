@@ -49,12 +49,9 @@ import java.util.stream.Collectors;
 final class HaxeToolWindowModelBuilder {
 
   private final Project project;
-  // fired when a background lime/nme evaluation lands, so the owner can re-scan
-  private final Runnable onEvaluationReady;
 
-  HaxeToolWindowModelBuilder(@NotNull Project project, @NotNull Runnable onEvaluationReady) {
+  HaxeToolWindowModelBuilder(@NotNull Project project) {
     this.project = project;
-    this.onEvaluationReady = onEvaluationReady;
   }
 
   /** {@code sectionIds}/{@code sectionLabels}/{@code sectionDescriptors} list a multi-section hxml's {@code --next} compilations (empty otherwise); {@code selectedSection} indexes into them. */
@@ -363,7 +360,7 @@ final class HaxeToolWindowModelBuilder {
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
-      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, onEvaluationReady);
+      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk);
     if (display == null) {
       return raw;
     }
@@ -379,7 +376,7 @@ final class HaxeToolWindowModelBuilder {
                                              @NotNull HaxeBuildFile buildFile,
                                              @NotNull HaxeBuildFileInfo raw) {
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    return HaxeNmeProjectInfoService.getInstance(project).effectiveInfo(buildFile, raw, environmentSdk, onEvaluationReady);
+    return HaxeNmeProjectInfoService.getInstance(project).effectiveInfo(buildFile, raw, environmentSdk);
   }
 
   /**

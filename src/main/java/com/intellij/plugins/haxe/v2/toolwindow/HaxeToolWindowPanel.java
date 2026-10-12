@@ -23,7 +23,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
-import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.InstalledLibrary;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
@@ -90,7 +89,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   public HaxeToolWindowPanel(@NotNull Project project) {
     super(true, true);
     this.project = project;
-    this.modelBuilder = new HaxeToolWindowModelBuilder(project, this::refreshTree);
+    this.modelBuilder = new HaxeToolWindowModelBuilder(project);
     this.treeBuilder = new HaxeToolWindowTreeBuilder(project);
 
     tree.setRootVisible(false);
@@ -134,7 +133,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   @NotNull
   private JComponent createToolbar() {
     DefaultActionGroup group = new DefaultActionGroup();
-    group.add(new HaxeSyncProjectAction(this::refreshTree));
+    group.add(new HaxeSyncProjectAction());
     group.add(new HaxePurgeCachesAction(this::refreshTree));
     group.addSeparator();
     group.add(new HaxeAddModuleAction());
@@ -202,9 +201,6 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
    * none) outside any read action, then the Swing model update on the EDT.
    */
   public void refreshTree() {
-    // every configuration change funnels through here - keep the parse-context
-    // defines in sync (cheap no-op when nothing changed)
-    HaxeDefineContextService.getInstance(project).refreshAsync();
     ReadAction.nonBlocking(modelBuilder::build)
       .inSmartMode(project)
       .coalesceBy(this)
