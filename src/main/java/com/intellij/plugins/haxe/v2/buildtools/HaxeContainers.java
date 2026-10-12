@@ -4,6 +4,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -36,18 +37,25 @@ public final class HaxeContainers {
   }
 
   /**
-   * The container's root directory path: the module's first content root;
-   * the project base dir for the project-root container (or when the id
-   * names no module).
+   * The container's root directory: the module's first content root; the
+   * project base dir for the project-root container (or when the id names no
+   * module).
    */
   @Nullable
-  public static String containerRootPath(@NotNull Project project, @NotNull String containerId) {
+  public static VirtualFile containerRootDir(@NotNull Project project, @NotNull String containerId) {
     Module module = ModuleManager.getInstance(project).findModuleByName(containerId);
     if (module != null) {
       VirtualFile[] contentRoots = ModuleRootManager.getInstance(module).getContentRoots();
-      if (contentRoots.length > 0) return contentRoots[0].getPath();
+      if (contentRoots.length > 0) return contentRoots[0];
     }
-    return projectRootPath(project);
+    return ProjectUtil.guessProjectDir(project);
+  }
+
+  /** {@link #containerRootDir} as a path. */
+  @Nullable
+  public static String containerRootPath(@NotNull Project project, @NotNull String containerId) {
+    VirtualFile root = containerRootDir(project, containerId);
+    return root == null ? null : root.getPath();
   }
 
   /** The project base directory's path. */
@@ -55,5 +63,16 @@ public final class HaxeContainers {
   public static String projectRootPath(@NotNull Project project) {
     VirtualFile baseDir = ProjectUtil.guessProjectDir(project);
     return baseDir == null ? null : baseDir.getPath();
+  }
+
+  /**
+   * The module whose content root is the project base dir, or null: that
+   * module IS the project, its build files belong to the project node and it
+   * gets no module row of its own.
+   */
+  @Nullable
+  public static Module projectRootModule(@NotNull Project project) {
+    VirtualFile baseDir = ProjectUtil.guessProjectDir(project);
+    return baseDir == null ? null : ProjectFileIndex.getInstance(project).getModuleForFile(baseDir);
   }
 }
