@@ -556,6 +556,7 @@
     <annotator language="Haxe" id="docMarkup" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeDocMarkupAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="inactiveDim" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInactiveCodeDimAnnotator" order="after fastColor"/>
     <annotator language="Haxe" id="conditionalDiagnostic" implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeConditionalDiagnosticAnnotator"/>
+    <annotator language="Haxe" id="staleConditionalBranch" implementationClass="com.intellij.plugins.haxe.ide.annotator.HaxeStaleConditionalBranchAnnotator"/>
     <!-- metadata is its own PSI language; without this registration dead @:meta
          stays uncolored (its lexer-layer yellow only exists in active code) -->
     <annotator language="HaxeMetadata" id="inactiveDimMeta" implementationClass="com.intellij.plugins.haxe.ide.annotator.color.HaxeInactiveCodeDimAnnotator"/>
