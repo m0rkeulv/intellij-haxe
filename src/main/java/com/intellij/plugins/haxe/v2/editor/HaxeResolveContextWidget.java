@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.editor;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -70,6 +71,14 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
     MessageBusConnection connection = getProject().getMessageBus().connect(this);
     connection.subscribe(HaxeResolveContextListener.TOPIC, (HaxeResolveContextListener)this::update);
     connection.subscribe(HaxeBuildSettingsListener.TOPIC, (HaxeBuildSettingsListener)this::update);
+  }
+
+  /**
+   * The context depends on the file and the build settings, never on what is
+   * typed into it: the base's per-edit update is skipped.
+   */
+  @Override
+  protected void updateForDocument(@Nullable Document document) {
   }
 
   @Override

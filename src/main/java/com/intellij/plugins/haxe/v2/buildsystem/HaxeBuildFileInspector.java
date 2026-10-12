@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.buildsystem;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.hxml.psi.HXMLProperty;
@@ -13,22 +14,34 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.tree.IElementType;
+import com.intellij.psi.util.CachedValue;
+import com.intellij.psi.util.CachedValueProvider;
+import com.intellij.psi.util.CachedValuesManager;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Reads a build file's declared target, defines and library dependencies
  * statically; call inside a read action. HXP files are Haxe code and report
  * empty info here: {@code HaxeLimeProjectInfoService} evaluates them (and
- * lime/openfl projects with their conditions applied).
+ * lime/openfl projects with their conditions applied). An hxml's sections
+ * and an xml project file's declared info are cached on the file's PSI: the
+ * many readers (tool window, resolve context, define context, library sync,
+ * test runs) share one answer until the file, or an include the flattening
+ * read, changes.
  */
 @CustomLog
 public final class HaxeBuildFileInspector {
+
+  private static final Key<CachedValue<List<String>>> SECTION_CONTENTS = Key.create("haxe.build.file.sections");
+  private static final Key<CachedValue<HaxeBuildFileInfo>> PROJECT_XML_INFO = Key.create("haxe.build.file.xml.info");
 
   private HaxeBuildFileInspector() {
   }
@@ -57,13 +70,29 @@ public final class HaxeBuildFileInspector {
         .toList();
     }
 
-    String content = loadText(buildFile.file());
-    if (content == null) return List.of(HaxeBuildFileInfo.EMPTY);
     // exhaustive on purpose: a NEW type must decide its inspection here instead of silently reading as EMPTY
     return switch (buildFile.type()) {
-      case OPENFL, LIME, NMML -> List.of(ProjectXmlParser.parse(content));
+      case OPENFL, LIME, NMML -> List.of(projectXmlInfo(project, buildFile.file()));
       case HXML, HXP_PROJECT, HXP_SCRIPT -> List.of(HaxeBuildFileInfo.EMPTY);
     };
+  }
+
+  /** The xml project file's declared info, cached on its PSI; a file without PSI parses afresh. */
+  @NotNull
+  private static HaxeBuildFileInfo projectXmlInfo(@NotNull Project project, @NotNull VirtualFile file) {
+    PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
+    if (psiFile == null) return parseProjectXml(file);
+    return CachedValuesManager.getCachedValue(psiFile, PROJECT_XML_INFO, () -> {
+      List<Object> dependencies = new ArrayList<>();
+      addTextDependencies(dependencies, project, file);
+      return CachedValueProvider.Result.create(parseProjectXml(file), dependencies.toArray());
+    });
+  }
+
+  @NotNull
+  private static HaxeBuildFileInfo parseProjectXml(@NotNull VirtualFile file) {
+    String content = loadText(file);
+    return content == null ? HaxeBuildFileInfo.EMPTY : ProjectXmlParser.parse(content);
   }
 
   /**
@@ -77,15 +106,50 @@ public final class HaxeBuildFileInspector {
    * separator leaves empty is a silent compiler no-op and produces no entry.
    * Single-section files come back as the one whole effective content;
    * unreadable files as an empty list; a file without PSI comes back as one
-   * section, its chain unsplit. Call inside a read action.
+   * section, its chain unsplit. Cached on the PSI until the file or an
+   * include the flattening read changes. Call inside a read action.
    */
   @NotNull
   public static List<String> sectionContents(@NotNull Project project, @NotNull VirtualFile buildFile) {
-    String effective = effectiveContent(buildFile);
-    if (effective == null) return List.of();
     PsiFile psiFile = PsiManager.getInstance(project).findFile(buildFile);
-    if (psiFile == null) return List.of(effective);
+    if (psiFile == null) {
+      // without PSI the chain cannot be split, and nothing holds a cache
+      String effective = effectiveContent(buildFile);
+      return effective == null ? List.of() : List.of(effective);
+    }
+    CachedValueProvider<List<String>> provider = () -> splitSections(project, psiFile, buildFile);
+    return CachedValuesManager.getCachedValue(psiFile, SECTION_CONTENTS, provider);
+  }
 
+  @NotNull
+  private static CachedValueProvider.Result<List<String>> splitSections(@NotNull Project project,
+                                                                        @NotNull PsiFile psiFile,
+                                                                        @NotNull VirtualFile buildFile) {
+    IncludeTracker includes = new IncludeTracker(buildFile);
+    List<String> sections = splitAndFlatten(psiFile, buildFile, includes);
+    return CachedValueProvider.Result.create(sections, includes.dependencies(project));
+  }
+
+  /**
+   * What a cached result must follow for one file: its text as
+   * {@link #loadText} reads it (the Document while one is cached, else the
+   * file) and its PSI. A PsiFile alone is not enough: its stamp moves when
+   * the tree is rebuilt, which trails a reloaded or edited document until
+   * the commit, and a refresh in that window would cache the old text.
+   */
+  private static void addTextDependencies(@NotNull List<Object> dependencies,
+                                          @NotNull Project project,
+                                          @NotNull VirtualFile file) {
+    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
+    dependencies.add(document != null ? document : file);
+    PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
+    if (psiFile != null) dependencies.add(psiFile);
+  }
+
+  @NotNull
+  private static List<String> splitAndFlatten(@NotNull PsiFile psiFile,
+                                              @NotNull VirtualFile buildFile,
+                                              @NotNull HxmlFileParser.IncludeReader reader) {
     List<String> eachBlock = new ArrayList<>();
     List<String> currentSection = new ArrayList<>();
     List<List<String>> sectionLines = new ArrayList<>();
@@ -116,10 +180,12 @@ public final class HaxeBuildFileInspector {
 
     sectionLines.removeIf(List::isEmpty);
     boolean singleSection = sectionLines.size() <= 1 && eachBlock.isEmpty();
-    if (singleSection) return List.of(effective);
+    if (singleSection) {
+      String content = loadText(buildFile);
+      return content == null ? List.of() : List.of(HxmlFileParser.flatten(content, reader));
+    }
 
     String sharedPrefix = eachBlock.isEmpty() ? "" : String.join("\n", eachBlock) + "\n";
-    HxmlFileParser.IncludeReader reader = includeReader(buildFile);
     return sectionLines.stream()
       .map(lines -> HxmlFileParser.flatten(sharedPrefix + String.join("\n", lines), reader))
       .toList();
@@ -149,16 +215,39 @@ public final class HaxeBuildFileInspector {
   @Nullable
   public static String effectiveContent(@NotNull VirtualFile buildFile) {
     String content = loadText(buildFile);
-    return content == null ? null : HxmlFileParser.flatten(content, includeReader(buildFile));
+    return content == null ? null : HxmlFileParser.flatten(content, new IncludeTracker(buildFile));
   }
 
-  @NotNull
-  private static HxmlFileParser.IncludeReader includeReader(@NotNull VirtualFile root) {
-    return relativePath -> {
+  /**
+   * Resolves includes next to the root file, as haxe does, and remembers
+   * every file it read so a cached result can depend on them.
+   */
+  private static final class IncludeTracker implements HxmlFileParser.IncludeReader {
+    private final VirtualFile root;
+    private final Set<VirtualFile> read = new LinkedHashSet<>();
+
+    private IncludeTracker(@NotNull VirtualFile root) {
+      this.root = root;
+    }
+
+    @Override
+    public @Nullable String read(@NotNull String relativePath) {
       VirtualFile parent = root.getParent();
       VirtualFile included = parent == null ? null : parent.findFileByRelativePath(relativePath);
-      return included == null ? null : loadText(included);
-    };
+      if (included == null) return null;
+      read.add(included);
+      return loadText(included);
+    }
+
+    /** The root file's text dependencies and those of every include read. */
+    Object @NotNull [] dependencies(@NotNull Project project) {
+      List<Object> dependencies = new ArrayList<>();
+      addTextDependencies(dependencies, project, root);
+      for (VirtualFile include : read) {
+        addTextDependencies(dependencies, project, include);
+      }
+      return dependencies.toArray();
+    }
   }
 
   @Nullable

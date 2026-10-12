@@ -1,11 +1,14 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
+import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -45,6 +48,23 @@ public class HaxeBuildFileSectionsTest extends HaxeCodeInsightFixtureTestCase {
     }
     assertEquals(HaxeTarget.JAVA_SCRIPT, HxmlFileParser.parse(sections.get(0)).target());
     assertEquals(HaxeTarget.HL, HxmlFileParser.parse(sections.get(1)).target());
+  }
+
+  @Test
+  @DisplayName("sections are cached until the file or an include changes")
+  public void testSectionsAreCachedUntilTheFileOrAnIncludeChanges() throws IOException {
+    VirtualFile common = addHxml("cached/common.hxml", "-lib utest\n");
+    VirtualFile root = addHxml("cached/build.hxml", "common.hxml\n-neko bin/app.n\n");
+    List<String> first = HaxeBuildFileInspector.sectionContents(getProject(), root);
+    List<String> again = HaxeBuildFileInspector.sectionContents(getProject(), root);
+    assertSame(first, again, "an unchanged file answers from the cache");
+
+    WriteAction.runAndWait(() -> VfsUtil.saveText(common, "-lib utest\n-lib hxnodejs\n"));
+
+    List<String> afterIncludeEdit = HaxeBuildFileInspector.sectionContents(getProject(), root);
+    int libraries = HxmlFileParser.parse(afterIncludeEdit.getFirst()).libraries().size();
+    assertNotSame(first, afterIncludeEdit, "an edited include drops the cached sections");
+    assertEquals(2, libraries, "the new include content reaches the section");
   }
 
   @Test
