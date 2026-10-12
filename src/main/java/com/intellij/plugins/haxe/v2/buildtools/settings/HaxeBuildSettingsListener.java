@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.settings;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.util.messages.Topic;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -8,20 +9,25 @@ import org.jetbrains.annotations.Nullable;
 import java.util.EventListener;
 
 /**
- * A persisted build choice changed. Published by the stores only, one
- * method per kind of choice; a consumer overrides the methods for the
- * choices it derives from, or {@link #anySettingChanged} for all of them.
- * Background results and observed facts are not settings: they go through
- * {@link com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener}.
+ * A persisted build choice changed: a store wrote it, or a Haxe settings
+ * page did ({@link #compilerSettingsChanged}). There is one method per kind
+ * of choice. A consumer overrides the kinds it derives from, or
+ * {@link #anySettingChanged} to react to all of them. Things observed or
+ * computed about the build are not choices; they arrive through
+ * {@link HaxeBuildEventListener}.
  */
 public interface HaxeBuildSettingsListener extends EventListener {
   @Topic.ProjectLevel
   Topic<HaxeBuildSettingsListener> TOPIC = new Topic<>(HaxeBuildSettingsListener.class, Topic.BroadcastDirection.NONE);
 
-  /** The part of a container's environment that changed. */
+  /** Publishes nowhere: what a store built without a project (state tests) publishes to. */
+  HaxeBuildSettingsListener NONE = new HaxeBuildSettingsListener() {
+  };
+
+  /** The part of a container's environment that changed; {@code ALL} when the whole environment was dropped. */
   enum EnvironmentAspect { SDK, COMPILE_COMMAND, COMPILATION_SERVER, CUSTOM_TARGET, DEFINES, ALL }
 
-  /** A store loaded its persisted state (project open); everything derived from it starts over. */
+  /** A store loaded its persisted state (project open): everything derived from it starts over. */
   default void stateLoaded() {
     anySettingChanged();
   }
@@ -55,8 +61,8 @@ public interface HaxeBuildSettingsListener extends EventListener {
     anySettingChanged();
   }
 
-  /** The custom actions of a build file changed; only the views showing them derive from it. */
-  default void customActionsChanged(@NotNull String ownerId) {
+  /** The custom actions of a build file changed; only the views that show them derive from it. */
+  default void customActionsChanged(@NotNull String buildFilePath) {
     anySettingChanged();
   }
 
@@ -64,12 +70,12 @@ public interface HaxeBuildSettingsListener extends EventListener {
     anySettingChanged();
   }
 
-  /** The Haxe Compiler settings or a language level changed ({@code haxe_ver} and the Language level rows follow). */
+  /** The Haxe settings or a language level changed; {@code haxe_ver} and the Language level rows follow them. */
   default void compilerSettingsChanged() {
     anySettingChanged();
   }
 
-  /** Any of the above, for a consumer that derives from every choice; the specific methods reach it unless overridden. */
+  /** Every method above lands here unless overridden: one place for a consumer that derives from every choice. */
   default void anySettingChanged() {
   }
 
@@ -84,12 +90,9 @@ public interface HaxeBuildSettingsListener extends EventListener {
     };
   }
 
-  /** The project's publisher; a store built without a project (state tests) publishes into the void. */
+  /** The project's publisher; {@link #NONE} without a project. */
   @NotNull
   static HaxeBuildSettingsListener publisher(@Nullable Project project) {
     return project == null ? NONE : project.getMessageBus().syncPublisher(TOPIC);
   }
-
-  HaxeBuildSettingsListener NONE = new HaxeBuildSettingsListener() {
-  };
 }

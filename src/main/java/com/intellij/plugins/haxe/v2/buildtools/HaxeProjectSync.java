@@ -9,9 +9,9 @@ import org.jetbrains.annotations.Nullable;
 /**
  * The v2 sync pipeline, shared by the tool window's sync button and the build file
  * auto-reload: flush editors, drop everything derived
- * ({@link HaxeBuildCaches#clearDerived}), then resync module libraries. The
- * sync's end ({@link HaxeBuildEventListener#librariesSynced}) is what the tool
- * window and the define context follow.
+ * ({@link HaxeBuildCaches#clearDerivedCaches}), then resync module libraries.
+ * The tool window and the define context follow the sync's end
+ * ({@link HaxeBuildEventListener#librariesSynced}).
  */
 public final class HaxeProjectSync {
 
@@ -23,7 +23,7 @@ public final class HaxeProjectSync {
     ApplicationManager.getApplication().invokeLater(() -> {
       if (project.isDisposed()) return;
       HaxeUnsavedDocuments.saveAll();
-      HaxeBuildCaches.clearDerived(project, "haxe: project synced");
+      HaxeBuildCaches.clearDerivedCaches(project, "haxe: project synced");
       HaxeLibrarySync.sync(project, onFinished);
     });
   }

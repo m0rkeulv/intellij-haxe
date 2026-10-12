@@ -10,6 +10,9 @@ import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryDefinesStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import com.intellij.psi.PsiElement;
@@ -59,14 +62,27 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     class %1$s { static var foo = false; }
     #end
     """;
+  private static final String LIB_HXML_SOURCE = """
+    -cp src
+    -main LibMain
+    -lib somelib
+    --interp
+    """;
+  private static final String LIB_GATED_SOURCE = """
+    #if somelib
+    class LibMain { static var somelib = true; }
+    #else
+    class LibMain { static var somelib = false; }
+    #end
+    """;
+
+  /** The names of the files each invalidation re-lexed, in order. */
+  private final List<String> invalidated = new CopyOnWriteArrayList<>();
 
   @Override
   protected String getBasePath() {
     return "";
   }
-
-  /** The names of the files each invalidation re-lexed, in order. */
-  private final List<String> invalidated = new CopyOnWriteArrayList<>();
 
   @Override
   protected void setUp() throws Exception {
@@ -130,7 +146,7 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     WriteAction.runAndWait(() -> VfsUtil.saveText(cpp, CPP_HXML_SOURCE + "-D foo\n"));
 
     awaitInvalidationOf("CppMain.hx", "cpp.hxml gained -D foo: CppMain must be re-lexed");
-    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+    awaitBranchLive(cppMain, "foo = true", "the foo branch is live after the re-lex");
   }
 
   @Test
@@ -150,7 +166,7 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     HaxeDefineContextService.getInstance(getProject()).refreshAsync();
 
     awaitInvalidationOf("CppMain.hx", "cpp.hxml gained -D foo in the editor: CppMain must be re-lexed");
-    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+    awaitBranchLive(cppMain, "foo = true", "the foo branch is live after the re-lex");
   }
 
   @Test
@@ -173,7 +189,7 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     HaxeDefineContextService.getInstance(getProject()).refreshAsync();
 
     awaitInvalidationOf("CppMain.hx", "the read must not count as lexed under: CppMain is re-lexed");
-    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+    awaitBranchLive(cppMain, "foo = true", "the foo branch is live after the re-lex");
   }
 
   @Test
@@ -197,7 +213,24 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     myFixture.doHighlighting();
 
     awaitInvalidationOf("CppMain.hx", "the pass saw a dead branch whose condition holds: CppMain is re-lexed");
-    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+    awaitBranchLive(cppMain, "foo = true", "the foo branch is live after the re-lex");
+  }
+
+  @Test
+  @DisplayName("library defines a sync records re-lex the files lexed without them")
+  public void testLibraryDefinesASyncRecordsReLexTheFilesLexedWithoutThem() {
+    VirtualFile lib = myFixture.addFileToProject("lib.hxml", LIB_HXML_SOURCE).getVirtualFile();
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(lib.getPath());
+    VirtualFile libMain = myFixture.addFileToProject("src/LibMain.hx", LIB_GATED_SOURCE).getVirtualFile();
+    myFixture.openFileInEditor(libMain);
+    assertFalse(branchLive(psiFile(libMain), "somelib = true"), "no library defines before the first sync");
+
+    String containerId = HaxeContainers.containerIdFor(getProject(), lib);
+    HaxeLibraryDefinesStore.getInstance(getProject()).replaceAll(Map.of(containerId, Map.of("somelib", Map.of("somelib", "1.0.0"))));
+    HaxeBuildEventListener.publisher(getProject()).librariesSynced();
+
+    awaitInvalidationOf("LibMain.hx", "the sync recorded somelib=1.0.0: LibMain must be re-lexed");
+    awaitBranchLive(libMain, "somelib = true", "the somelib branch is live after the re-lex");
   }
 
   private void awaitInvalidationOf(String fileName, String message) {
@@ -205,8 +238,8 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   /** The reparse an invalidation requests lands asynchronously (background re-index, editor reparse on the EDT). */
-  private void awaitBranchLive(VirtualFile file, String message) {
-    PlatformTestUtil.waitWithEventsDispatching(message, () -> branchLive(psiFile(file), "foo = true"), 10);
+  private void awaitBranchLive(VirtualFile file, String marker, String message) {
+    PlatformTestUtil.waitWithEventsDispatching(message, () -> branchLive(psiFile(file), marker), 10);
   }
 
   private PsiFile psiFile(VirtualFile file) {

@@ -1,36 +1,39 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.util.messages.Topic;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.EventListener;
 
 /**
  * Something was observed or computed about the build: a build file changed
- * on disk, a library sync or a build-tool evaluation finished, a failure was
- * recorded, the module workspace was written. Never a user editing a
- * setting, which is
- * {@link com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener}.
- * Delivered on the publisher's thread, often a background one: a consumer
- * touching UI or PSI dispatches first.
+ * on disk, a library sync or a build-tool evaluation finished, a failure
+ * was recorded, the module workspace was written. A user changing a setting
+ * is not an event; that arrives through {@link HaxeBuildSettingsListener}.
+ * Events are delivered on the publisher's thread, often a background one,
+ * so a consumer that touches UI or PSI dispatches first.
  */
 public interface HaxeBuildEventListener extends EventListener {
   @Topic.ProjectLevel
   Topic<HaxeBuildEventListener> TOPIC = new Topic<>(HaxeBuildEventListener.class, Topic.BroadcastDirection.NONE);
 
-  /** A build file, or a file one includes, was saved to disk. Not a trigger for processes: the "Load changes" banner is. */
+  /**
+   * A build file, or a file one includes, was saved to disk. Autosave fires
+   * this, so no consumer starts a process on it: the "Load changes" banner
+   * is the user's trigger for that.
+   */
   default void buildFileContentChanged(@NotNull String path) {
     anyBuildEvent();
   }
 
-  /** A file with a build-file extension appeared in the project: created, copied, moved or renamed to the name. */
+  /** A file with a build-file extension appeared in the project: created, copied, or moved or renamed to this path. */
   default void buildFileAdded(@NotNull String path) {
     anyBuildEvent();
   }
 
-  /** A build file is gone from the path: deleted, moved or renamed away. */
+  /** A build file left the path: deleted, or moved or renamed away. */
   default void buildFileDeleted(@NotNull String path) {
     anyBuildEvent();
   }
@@ -40,7 +43,7 @@ public interface HaxeBuildEventListener extends EventListener {
     anyBuildEvent();
   }
 
-  /** A lime, openfl or nme evaluation of the build file landed in its cache (fresh, or a retry of a failed run). */
+  /** A lime, openfl or nme tool run for the build file finished and its result is cached. */
   default void evaluationLanded(@NotNull String buildFilePath) {
     anyBuildEvent();
   }
@@ -50,17 +53,20 @@ public interface HaxeBuildEventListener extends EventListener {
     anyBuildEvent();
   }
 
-  /** A build-tool or compiler-context failure appeared, changed or cleared for the key. */
+  /**
+   * A build-tool or compiler-context failure appeared, changed or cleared;
+   * {@code key} is the build file or container it belongs to.
+   */
   default void failureRecorded(@NotNull String key) {
     anyBuildEvent();
   }
 
-  /** Every evaluation and every compiler-derived cache was dropped (Sync, Purge): derived views start over. */
+  /** Sync or Purge dropped every tool evaluation and compiler-derived cache; derived views start over. */
   default void derivedCachesCleared() {
     anyBuildEvent();
   }
 
-  /** Any of the above, for a consumer reacting to every event; the specific methods reach it unless overridden. */
+  /** Every method above lands here unless overridden: one place for a consumer that reacts to every event. */
   default void anyBuildEvent() {
   }
 
@@ -78,11 +84,5 @@ public interface HaxeBuildEventListener extends EventListener {
   @NotNull
   static HaxeBuildEventListener publisher(@NotNull Project project) {
     return project.getMessageBus().syncPublisher(TOPIC);
-  }
-
-  /** A publisher that publishes into the void, for a disposed project. */
-  @Nullable
-  static HaxeBuildEventListener publisherIfOpen(@NotNull Project project) {
-    return project.isDisposed() ? null : publisher(project);
   }
 }

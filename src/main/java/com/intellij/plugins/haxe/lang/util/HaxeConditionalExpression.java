@@ -747,10 +747,12 @@ public class HaxeConditionalExpression {
 
   /**
    * {@link #definitionsFor(Project, VirtualFile)} for the lexer: the same
-   * defines, recorded as what the file is lexed under so a later change of
-   * them reparses it. Readers that only evaluate conditions (annotators,
-   * completion) use {@code definitionsFor}: a recording read from them would
-   * make a changed context look already lexed under.
+   * defines, recorded as what the file is lexed under, so that a later change
+   * of them re-lexes it. Readers that only evaluate conditions (annotators,
+   * completion) use {@code definitionsFor}. If they recorded too, a
+   * highlighting pass between a build-file change and the define refresh
+   * would make the new defines look already lexed under, and the open file
+   * would never be re-lexed.
    */
   @NotNull
   public static Map<String, String> definitionsForLexing(@NotNull Project project, @Nullable VirtualFile file) {
@@ -761,7 +763,7 @@ public class HaxeConditionalExpression {
     HaxeDefineContextService service = HaxeDefineContextService.getInstance(project);
     Map<String, String> own = file == null ? null : service.definesForLexing(file);
     if (own != null) return own;
-    // the test injection (or nothing) in unit-test mode, as projectDefinitions does
+    // as projectDefinitions does, unit tests never read the active build's set
     if (ApplicationManager.getApplication().isUnitTestMode()) return projectDefinitions(project);
     Map<String, String> active = service.activeDefinesForLexing();
     return active != null ? active : projectDefinitions(project);

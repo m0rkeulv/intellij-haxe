@@ -190,7 +190,7 @@ public final class HaxeLibrarySync {
   @NotNull
   private static List<HaxeLibDependency> effectiveLibraries(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
     Runnable onEvaluated = HaxeLibrarySyncQueue.getInstance(project).resyncRequest();
-    return HaxeEffectiveBuildFileInfo.effectiveInfo(project, buildFile, onEvaluated).libraries();
+    return HaxeEffectiveBuildFileInfo.of(project, buildFile, onEvaluated).libraries();
   }
 
   /**

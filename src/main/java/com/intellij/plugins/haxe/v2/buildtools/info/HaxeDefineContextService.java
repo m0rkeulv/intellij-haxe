@@ -73,7 +73,11 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   /** The defines that identify the compiler itself; no compiler lets a build toggle them. */
   private static final Set<String> COMPILER_IDENTITY_DEFINES = Set.of("haxe_ver", "haxe", "haxe3", "haxe4", "haxe5");
 
-  /** Every input of a computed context; a mismatch invalidates the cached one. */
+  /**
+   * The inputs of a computed define set that are cheap to read; a mismatch
+   * recomputes it. What the key cannot see (an included file, a tool
+   * evaluation) drops the snapshots through build events instead.
+   */
   private record ContextKey(@NotNull String path, @NotNull HaxeBuildFileType type, long contentStamp,
                             @Nullable String targetId, @Nullable String sdkName, @Nullable String customTarget,
                             @NotNull String compilerVersion, @NotNull List<EnvironmentDefine> overrides,
@@ -112,9 +116,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   // the implicit single-file fallback behind HaxeKnownBuildFiles sweeps every
   // module under the read lock - far too heavy for getActiveDefines, which
-  // runs per candidate inside index lookups. Resolved once per build-settings
-  // change instead of per call (a module set change without a settings event
-  // keeps the stale answer until the next one).
+  // runs per candidate inside index lookups. Resolved once per settings or
+  // module change instead of per call.
   private volatile String effectiveActivePath;
   private volatile boolean effectiveActivePathComputed;
   private volatile String activeContainerId;
@@ -171,11 +174,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     invalidateAndRefresh();
   }
 
-  /**
-   * Drops the derived context and recomputes in the background — a settings
-   * mutation must reach parsing (re-index) and highlighting WITHOUT relying on
-   * the tool window being open to call {@link #refreshAsync()}.
-   */
+  /** Drops every cached define set and recomputes in the background; the files whose set changed are re-lexed. */
   private void invalidateAndRefresh() {
     snapshots.clear();
     fastStates.clear();
@@ -185,9 +184,10 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * The current define context, or null when the project has no v2 active build
-   * file (legacy detection applies then). Cached; recomputed when the build
-   * file, target selection or environment overrides change.
+   * The active build file's define set, or null when the project has none
+   * (legacy detection applies then). Cached until a build setting or a build
+   * file changes. Reading it records nothing; the lexer reads through
+   * {@link #activeDefinesForLexing}.
    */
   @Nullable
   public Map<String, String> getActiveDefines() {
@@ -203,10 +203,10 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * {@link #getActiveDefines} for the lexer: the result is recorded as what
-   * files without a resolve context are lexed under, a null included (they
-   * then use the legacy context, and activating a build file later must
-   * reparse them).
+   * {@link #getActiveDefines} for the lexer: the result, null included, is
+   * recorded as what files without a resolve context are lexed under. A null
+   * means the legacy context, and activating a build file later must reparse
+   * those files.
    */
   @Nullable
   public Map<String, String> activeDefinesForLexing() {
@@ -218,7 +218,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   /**
    * The defines a source file is compiled with: those of its resolve
    * context's build file; null for a file no build reaches (the project-wide
-   * set applies then). A map lookup after the first ask.
+   * set applies then). A map lookup after the first ask. Reading it records
+   * nothing; the lexer reads through {@link #definesForLexing}.
    */
   @Nullable
   public Map<String, String> definesForSource(@NotNull VirtualFile sourceFile) {
@@ -285,10 +286,10 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * Recomputes the context in the background and, when it actually changed,
-   * has {@link HaxeDefineContextInvalidator} re-index the conditional haxe
-   * files. Cheap when nothing changed — safe to call from every tree
-   * refresh; requests arriving while one is queued coalesce into it.
+   * Recomputes the define sets in the background and has
+   * {@link HaxeDefineContextInvalidator} re-lex the conditional files whose
+   * set changed. Cheap when nothing changed; requests arriving while one is
+   * queued fold into it.
    */
   public void refreshAsync() {
     if (!refreshQueued.compareAndSet(false, true)) return;
@@ -476,7 +477,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   /** The context's defines BEFORE the container's environment overrides apply - everything an override can mask. */
   @NotNull
   private Map<String, String> definesBeforeOverrides(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
-    HaxeBuildFileInfo info = HaxeEffectiveBuildFileInfo.effectiveInfo(project, new HaxeBuildFile(file, type));
+    HaxeBuildFileInfo info = HaxeEffectiveBuildFileInfo.of(project, new HaxeBuildFile(file, type));
     String containerId = HaxeContainers.containerIdFor(project, file);
 
     Map<String, String> defines = new LinkedHashMap<>();
@@ -590,11 +591,17 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * The events a context follows. A snapshot's key carries the build file's
-   * own stamp and every setting, so a saved build file drops every snapshot
-   * (an included file changes other files' defines without moving their
-   * stamp), a landed evaluation drops its file's (the evaluation is not in
-   * the key), and a sync recorded new library defines, which the key sees.
+   * The build events a define set follows. Settings arrive through the
+   * {@link ContextKey}; these are the inputs it cannot see:
+   * <ul>
+   *   <li>a build file saved, added or deleted, and a cache clear, drop every
+   *   snapshot (an included file changes another file's defines without
+   *   moving that file's stamp);</li>
+   *   <li>a landed evaluation drops its own file's snapshot;</li>
+   *   <li>a finished sync drops only the fast path: the library defines it
+   *   recorded are in the key, but the fast path checks nothing but the
+   *   build file's stamp.</li>
+   * </ul>
    */
   private final class BuildEvents implements HaxeBuildEventListener {
     @Override
@@ -619,6 +626,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
     @Override
     public void librariesSynced() {
+      fastStates.clear();
       refreshAsync();
     }
 
@@ -630,7 +638,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     }
   }
 
-  /** The module set decides which build files exist and who owns a source file: the context starts over. */
+  /** The module set decides which build files exist and which build owns a source file: every define set starts over. */
   private final class ModuleChanges implements ModuleListener {
     @Override
     public void modulesAdded(@NotNull Project project, @NotNull List<? extends Module> modules) {

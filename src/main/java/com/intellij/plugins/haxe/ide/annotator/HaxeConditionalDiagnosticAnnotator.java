@@ -12,14 +12,10 @@ import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.tree.IElementType;
-import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
  * Flags conditional-compilation conditions the compiler would hard-error on:
@@ -79,11 +75,9 @@ public class HaxeConditionalDiagnosticAnnotator implements Annotator, DumbAware 
 
   @NotNull
   private static String computeVerdict(@NotNull PsiElement runHead, @NotNull Map<String, String> definitions) {
-    PsiElement directive = PsiTreeUtil.prevLeaf(runHead);
+    PsiElement directive = HaxeConditionalRuns.directiveOf(runHead);
     if (directive == null) return NO_ERROR;
-    IElementType directiveType = directive.getNode().getElementType();
-    if (directiveType != PPIF && directiveType != PPELSEIF) return NO_ERROR;
-    if (!HaxeConditionalRuns.wouldBeEvaluated(directive, directiveType, definitions)) return NO_ERROR;
+    if (!HaxeConditionalRuns.wouldBeEvaluated(directive, definitions)) return NO_ERROR;
 
     HaxeConditionalExpression condition = HaxeConditionalExpression.fromCondition(HaxeConditionalRuns.runText(runHead));
     if (condition == null) return NO_ERROR;

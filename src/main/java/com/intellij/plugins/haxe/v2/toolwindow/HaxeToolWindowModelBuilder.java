@@ -279,7 +279,7 @@ final class HaxeToolWindowModelBuilder {
                           ? 0
                           : HaxeSectionSelectionStore.getInstance(project).getSelectedSection(buildFile.file(), sectionIds);
 
-    HaxeBuildFileInfo info = HaxeEffectiveBuildFileInfo.effectiveInfo(project, buildFile);
+    HaxeBuildFileInfo info = HaxeEffectiveBuildFileInfo.of(project, buildFile);
     String toolFailure = HaxeBuildToolFailures.getInstance(project).lastFailure(buildFile.file().getPath());
     boolean manual = manualPaths.contains(buildFile.file().getPath());
     List<ActionNode> actions = buildFileActions(containerId, buildFile, HaxeProgramLaunches.launchOutput(info));

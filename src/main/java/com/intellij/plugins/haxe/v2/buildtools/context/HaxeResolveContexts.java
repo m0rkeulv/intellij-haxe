@@ -42,12 +42,11 @@ import java.util.List;
  * tool-window order. A file no build contains falls back to its module's
  * default build ({@link #defaultBuildFileFor}).
  * <p>
- * The builds' source directories are cached for the project and recomputed
- * when a build file is registered, appears, moves, is saved or deleted,
- * when a selection or environment that changes a build's classpaths or
- * evaluation changes, when an evaluation lands, when the project roots
- * change, and on edits of hxml or xml files - never on a build's output
- * being written or on an unrelated setting.
+ * The builds' source directories are cached for the project. Only what can
+ * change them drops the cache: a build file registered, added, moved, saved
+ * or deleted; a target, section or environment change; a landed evaluation
+ * or a cache clear; a change of the project roots; an edit of an hxml or
+ * xml file. A build writing its output does not.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeResolveContexts implements Disposable {
@@ -284,7 +283,8 @@ public final class HaxeResolveContexts implements Disposable {
 
   /**
    * The choices that change which build files exist or what they compile.
-   * The active file and a pin are read per ask, not cached. */
+   * The active file and a pin are read per ask, not cached.
+   */
   private final class BuildFileSettings implements HaxeBuildSettingsListener {
     @Override
     public void stateLoaded() {
