@@ -1,8 +1,5 @@
 package com.intellij.plugins.haxe.v2.toolwindow.actions;
 
-import com.intellij.openapi.actionSystem.ActionUpdateThread;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
@@ -14,23 +11,22 @@ import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFil
 import com.intellij.plugins.haxe.v2.toolwindow.ui.HaxeCustomActionDialog;
 import org.jetbrains.annotations.NotNull;
 
-/**
- * Tree context menu on a custom action row: edits its name, command, work directory and launch.
- */
-public final class HaxeEditCustomActionAction extends DumbAwareAction {
-
-  private final HaxeToolWindowPanel panel;
+/** Tree context menu on a custom action row: edits its name, command, work directory and launch. */
+public final class HaxeEditCustomActionAction extends HaxeSelectedNodeAction<ActionNode> {
 
   public HaxeEditCustomActionAction(@NotNull HaxeToolWindowPanel panel) {
-    super(HaxeBundle.message("haxe.toolwindow.edit.action"));
-    this.panel = panel;
+    super(panel, ActionNode.class, HaxeBundle.message("haxe.toolwindow.edit.action"));
   }
 
   @Override
-  public void actionPerformed(@NotNull AnActionEvent e) {
-    Project project = e.getProject();
+  protected boolean applies(@NotNull ActionNode actionNode) {
+    return actionNode.custom();
+  }
+
+  @Override
+  protected void perform(@NotNull Project project, @NotNull ActionNode actionNode) {
     BuildFileRow row = panel.getSelectedBuildFileRowAncestor();
-    if (project == null || row == null || !(panel.getSelectedUserObject() instanceof ActionNode actionNode) || !actionNode.custom()) return;
+    if (row == null) return;
 
     // edit the STORED values - the node's command is the ${target}-expanded display form
     CustomAction stored = HaxeCustomActionsStore.getInstance(project).getActions(actionNode.ownerId()).stream()
@@ -44,7 +40,6 @@ public final class HaxeEditCustomActionAction extends DumbAwareAction {
       store.updateAction(actionNode.ownerId(), actionNode.name(), updated);
       store.renameReferences(actionNode.ownerId(), actionNode.name(), updated.name());
       updateBuildSteps(project, actionNode, updated);
-      
     }
   }
 
@@ -54,16 +49,5 @@ public final class HaxeEditCustomActionAction extends DumbAwareAction {
     if (!before.name().equals(stepName)) {
       HaxeProgramLaunches.retargetBuildSteps(project, before.ownerId(), before.name(), stepName);
     }
-  }
-
-  @Override
-  public void update(@NotNull AnActionEvent e) {
-    boolean custom = panel.getSelectedUserObject() instanceof ActionNode actionNode && actionNode.custom();
-    e.getPresentation().setEnabledAndVisible(custom);
-  }
-
-  @Override
-  public @NotNull ActionUpdateThread getActionUpdateThread() {
-    return ActionUpdateThread.EDT;
   }
 }
