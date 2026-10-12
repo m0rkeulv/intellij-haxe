@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.buildtools.info;
 import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -20,9 +21,11 @@ import java.util.function.Supplier;
  * ({@link HaxeLimeProjectInfoService}, {@link HaxeNmeProjectInfoService}):
  * evaluations cached per (file, target, toolchain) key and run on a bounded
  * single-thread executor. Callers get the cached value (possibly stale,
- * possibly null on first ask) immediately and a callback once a refresh
- * lands. A value leaving the cache (replaced, invalidated, cleared) passes
- * through the evict hook.
+ * possibly null on first ask) immediately; a landed refresh is announced as
+ * {@link HaxeBuildEventListener#evaluationLanded} and, for a caller that must
+ * act on its own ask (the library sync's follow-up), through its callback.
+ * A value leaving the cache (replaced, invalidated, cleared) passes through
+ * the evict hook.
  */
 final class HaxeProjectInfoCache<V> {
 
@@ -58,6 +61,9 @@ final class HaxeProjectInfoCache<V> {
     this.onEvict = onEvict != null ? onEvict : ignored -> { };
     this.executor = AppExecutorUtil.createBoundedApplicationPoolExecutor(executorName, 1);
   }
+
+  /** The callback of a caller that only follows the event. Shared, so the cache registers it once per key. */
+  static final Runnable NO_CALLBACK = () -> { };
 
   /**
    * The key's cached value, or null when not resolved (yet). Schedules the
@@ -131,6 +137,7 @@ final class HaxeProjectInfoCache<V> {
       Set<Runnable> toRun = callbacks != null ? callbacks : Set.of();
       ApplicationManager.getApplication().invokeLater(() -> {
         if (!project.isDisposed()) {
+          HaxeBuildEventListener.publisher(project).evaluationLanded(key.filePath());
           toRun.forEach(Runnable::run);
         }
       });

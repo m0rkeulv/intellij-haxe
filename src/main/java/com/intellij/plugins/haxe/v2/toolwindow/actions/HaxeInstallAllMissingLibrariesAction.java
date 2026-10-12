@@ -75,7 +75,7 @@ public final class HaxeInstallAllMissingLibrariesAction extends DumbAwareAction 
           String summary = HaxeBundle.message("haxe.toolwindow.install.all.missing.failed", String.join(", ", failed));
           HaxeCommandNotifications.notify(project, summary, NotificationType.ERROR);
         }
-        HaxeLibrarySync.sync(project, panel::refreshTree);
+        HaxeLibrarySync.sync(project, null);
       }
     }.queue();
   }

@@ -5,6 +5,8 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.OrderRootType;
@@ -123,6 +125,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     MessageBusConnection connection = project.getMessageBus().connect(this);
     connection.subscribe(HaxeBuildSettingsListener.TOPIC, this);
     connection.subscribe(HaxeBuildEventListener.TOPIC, new BuildEvents());
+    connection.subscribe(ModuleListener.TOPIC, new ModuleChanges());
   }
 
   public static HaxeDefineContextService getInstance(@NotNull Project project) {
@@ -598,13 +601,13 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     if (type == HaxeBuildFileType.NMML) {
-      return HaxeNmeProjectInfoService.getInstance(project).effectiveInfo(buildFile, raw, environmentSdk, this::refreshAsync);
+      return HaxeNmeProjectInfoService.getInstance(project).effectiveInfo(buildFile, raw, environmentSdk);
     }
     if (!LimeProjects.isLimeFamily(type)) return raw;
 
     String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
     HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
-      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, this::refreshAsync);
+      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk);
     return display != null ? display : raw.withTarget(LimeProjects.targetFor(targetFlag), null);
   }
 
@@ -612,7 +615,11 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   public void dispose() {
   }
 
-  /** The events a context follows: a build file changed on disk, or a sync recorded new library defines. */
+  /**
+   * The events a context follows: a build file changed on disk, a sync
+   * recorded new library defines, a lime/nme evaluation landed (its defines
+   * replace the raw parse's).
+   */
   private final class BuildEvents implements HaxeBuildEventListener {
     @Override
     public void buildFileContentChanged(@NotNull String path) {
@@ -627,6 +634,24 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     @Override
     public void librariesSynced() {
       refreshAsync();
+    }
+
+    @Override
+    public void evaluationLanded(@NotNull String buildFilePath) {
+      refreshAsync();
+    }
+  }
+
+  /** The module set decides which build files exist and who owns a source file: the context starts over. */
+  private final class ModuleChanges implements ModuleListener {
+    @Override
+    public void modulesAdded(@NotNull Project project, @NotNull List<? extends Module> modules) {
+      invalidateAndRefresh();
+    }
+
+    @Override
+    public void moduleRemoved(@NotNull Project project, @NotNull Module module) {
+      invalidateAndRefresh();
     }
   }
 }

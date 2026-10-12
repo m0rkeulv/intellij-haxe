@@ -36,7 +36,7 @@ public final class HaxeReloadBuildFileAction extends DumbAwareAction {
     HaxeLimeProjectInfoService.getInstance(project).invalidate(row.buildFile().file().getPath());
     HaxeNmeProjectInfoService.getInstance(project).invalidate(row.buildFile().file().getPath());
     panel.refreshTree();
-    HaxeLibrarySync.sync(project, panel::refreshTree);
+    HaxeLibrarySync.sync(project, null);
   }
 
   @Override

@@ -34,6 +34,11 @@ public interface HaxeBuildEventListener extends EventListener {
     anyBuildEvent();
   }
 
+  /** A lime, openfl or nme evaluation of the build file landed in its cache (fresh, or a retry of a failed run). */
+  default void evaluationLanded(@NotNull String buildFilePath) {
+    anyBuildEvent();
+  }
+
   /** Module libraries or SDK entries were written to the project model. */
   default void workspaceApplied() {
     anyBuildEvent();

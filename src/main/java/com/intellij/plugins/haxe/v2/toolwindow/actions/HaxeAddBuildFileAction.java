@@ -53,7 +53,7 @@ public final class HaxeAddBuildFileAction extends DumbAwareAction {
       return;
     }
 
-    HaxeKnownBuildFiles.registerBuildFile(project, containerId, chosen, panel::refreshTree);
+    HaxeKnownBuildFiles.registerBuildFile(project, containerId, chosen, null);
   }
 
   @Override

@@ -24,7 +24,7 @@ public final class HaxeInstallLibraryAction extends DumbAwareAction {
   public void actionPerformed(@NotNull AnActionEvent e) {
     Project project = e.getProject();
     if (project != null && panel.getSelectedUserObject() instanceof LibraryNode library && !library.installed()) {
-      HaxelibInstallTask.queue(project, library.name(), library.version(), library.resolvedVersion(), panel::refreshTree);
+      HaxelibInstallTask.queue(project, library.name(), library.version(), library.resolvedVersion(), null);
     }
   }
 
