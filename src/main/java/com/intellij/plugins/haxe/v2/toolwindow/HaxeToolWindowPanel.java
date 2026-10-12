@@ -82,6 +82,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   private final HaxeToolWindowModelBuilder modelBuilder;
   private final HaxeToolWindowTreeBuilder treeBuilder;
   private boolean initialExpansionDone;
+  // a restore expands many rows at once; the persister waits for its end instead of rewriting the state per row
+  private boolean restoringExpansion;
   // last scan's tests build files per container (EDT only), for the container-row unit-test action
   private final Map<String, List<String>> testsPathsByContainer = new HashMap<>();
   private @Nullable String projectRootContainerId;
@@ -394,32 +396,39 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   private void expandAndSelect(@NotNull DefaultMutableTreeNode root,
                                @NotNull Set<String> expandedKeys,
                                @Nullable String selectedKey) {
-    forEachNode(root, node -> {
-      TreePath path = new TreePath(node.getPath());
-      String key = chainKey(path);
-      if (expandedKeys.contains(key)) {
-        tree.expandPath(path);
-      }
-      if (key != null && key.equals(selectedKey)) {
-        tree.setSelectionPath(path);
-      }
-    });
+    restoringExpansion = true;
+    try {
+      forEachNode(root, node -> {
+        TreePath path = new TreePath(node.getPath());
+        String key = chainKey(path);
+        if (expandedKeys.contains(key)) {
+          tree.expandPath(path);
+        }
+        if (key != null && key.equals(selectedKey)) {
+          tree.setSelectionPath(path);
+        }
+      });
+    }
+    finally {
+      restoringExpansion = false;
+    }
+    persistExpansion();
   }
 
-  /** Mirrors every expand/collapse into the workspace-file state; the last write holds the full current set. */
+  private void persistExpansion() {
+    HaxeToolWindowUiState.getInstance(project).setExpandedKeys(collectExpandedKeys());
+  }
+
+  /** Mirrors the user's expand/collapse into the workspace-file state; a restore persists once, at its end. */
   private final class ExpansionPersister implements TreeExpansionListener {
     @Override
     public void treeExpanded(TreeExpansionEvent event) {
-      persist();
+      if (!restoringExpansion) persistExpansion();
     }
 
     @Override
     public void treeCollapsed(TreeExpansionEvent event) {
-      persist();
-    }
-
-    private void persist() {
-      HaxeToolWindowUiState.getInstance(project).setExpandedKeys(collectExpandedKeys());
+      if (!restoringExpansion) persistExpansion();
     }
   }
 

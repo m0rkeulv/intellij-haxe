@@ -7,9 +7,7 @@ import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.ProjectJdkTable;
-import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.util.text.StringUtil;
@@ -154,7 +152,7 @@ final class HaxeToolWindowModelBuilder {
    */
   @NotNull
   private List<ToolNode> containerTools(@NotNull RawContainer raw) {
-    VirtualFile rootDir = containerRootDir(raw);
+    VirtualFile rootDir = HaxeContainers.containerRootDir(project, raw.id());
     if (rootDir == null) return List.of();
 
     List<ToolNode> tools = new ArrayList<>();
@@ -205,21 +203,10 @@ final class HaxeToolWindowModelBuilder {
     return new ToolNode(containerId, name, command, workDirectory, configName, false);
   }
 
-  @Nullable
-  private VirtualFile containerRootDir(@NotNull RawContainer raw) {
-    if (raw.projectRoot()) {
-      return ProjectUtil.guessProjectDir(project);
-    }
-    Module module = ModuleManager.getInstance(project).findModuleByName(raw.id());
-    if (module == null) return null;
-    VirtualFile[] contentRoots = ModuleRootManager.getInstance(module).getContentRoots();
-    return contentRoots.length == 0 ? null : contentRoots[0];
-  }
-
   /** Source roots relative to the container root; without any, the whole container directory. */
   @NotNull
   private List<String> sourceArguments(@NotNull RawContainer raw, @NotNull VirtualFile rootDir) {
-    Module module = raw.projectRoot() ? findProjectRootModule()
+    Module module = raw.projectRoot() ? HaxeContainers.projectRootModule(project)
                                       : ModuleManager.getInstance(project).findModuleByName(raw.id());
     if (module == null) return List.of(".");
     List<String> sources = new ArrayList<>();
@@ -244,9 +231,7 @@ final class HaxeToolWindowModelBuilder {
   private List<RawContainer> collectRawContainers() {
     List<RawContainer> rawContainers = new ArrayList<>();
 
-    // The module whose content root is the project base dir IS the project - its build
-    // files belong to the project node, and it gets no module row of its own.
-    Module rootModule = findProjectRootModule();
+    Module rootModule = HaxeContainers.projectRootModule(project);
     String rootContainerId = rootModule != null ? rootModule.getName() : HaxeContainers.PROJECT_ROOT_CONTAINER;
     List<HaxeBuildFile> rootDetected = new ArrayList<>(HaxeBuildFileScanner.scanProjectRoot(project));
     if (rootModule != null) {
@@ -269,12 +254,6 @@ final class HaxeToolWindowModelBuilder {
       rawContainers.add(new RawContainer(module.getName(), module.getName(), false, files));
     }
     return rawContainers;
-  }
-
-  @Nullable
-  private Module findProjectRootModule() {
-    VirtualFile baseDir = ProjectUtil.guessProjectDir(project);
-    return baseDir == null ? null : ProjectFileIndex.getInstance(project).getModuleForFile(baseDir);
   }
 
   /** Combines auto-detected files with manual additions, drops hidden ones, and parses each file. */

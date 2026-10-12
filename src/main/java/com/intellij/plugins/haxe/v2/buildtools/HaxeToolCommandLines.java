@@ -1,11 +1,13 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.execution.configurations.GeneralCommandLine;
+import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.execution.configurations.PtyCommandLine;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -26,9 +28,23 @@ public final class HaxeToolCommandLines {
   public static GeneralCommandLine interactive(@NotNull List<String> command, @Nullable String workDirectory) {
     Path workingDirectory = workDirectory == null ? null : Path.of(workDirectory);
     // the pty hard-wraps output at its column count, and the console view is no terminal
-    return new PtyCommandLine(command)
+    return new PtyCommandLine(withResolvedExecutable(command))
       .withInitialColumns(PtyCommandLine.MAX_COLUMNS)
       .withWorkingDirectory(workingDirectory)
       .withEnvironment(LimeProjects.commandEnvironment(command));
+  }
+
+  /**
+   * On Windows a bare program name is resolved through PATH honoring PATHEXT:
+   * a terminal launches "nme" (nme.bat) fine, but CreateProcess never tries
+   * extensions and fails with error=2. Resolved here, at launch, so building
+   * the tool window's model does not stat every PATH entry per command.
+   */
+  @NotNull
+  private static List<String> withResolvedExecutable(@NotNull List<String> command) {
+    if (command.isEmpty()) return command;
+    List<String> resolved = new ArrayList<>(command);
+    resolved.set(0, PathEnvironmentVariableUtil.findExecutableInWindowsPath(command.getFirst()));
+    return resolved;
   }
 }

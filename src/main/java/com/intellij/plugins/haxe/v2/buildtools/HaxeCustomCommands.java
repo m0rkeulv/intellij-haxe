@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
-import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -175,18 +174,9 @@ public final class HaxeCustomCommands {
     return expandRoots(workDirectory, moduleRoot, projectRoot);
   }
 
-  /**
-   * Parses a user-typed command. On Windows a bare program name is resolved
-   * through PATH honoring PATHEXT: a terminal launches "nme" (nme.bat) fine,
-   * but CreateProcess never tries extensions and fails with error=2, so the
-   * parsed command carries the resolved absolute path instead.
-   */
+  /** Parses a user-typed command into its arguments; the program name is resolved through PATH only when launched. */
   @NotNull
   public static List<String> parse(@NotNull String command) {
-    List<String> parsed = new ArrayList<>(ParametersListUtil.parse(command));
-    if (!parsed.isEmpty()) {
-      parsed.set(0, PathEnvironmentVariableUtil.findExecutableInWindowsPath(parsed.get(0)));
-    }
-    return parsed;
+    return ParametersListUtil.parse(command);
   }
 }
