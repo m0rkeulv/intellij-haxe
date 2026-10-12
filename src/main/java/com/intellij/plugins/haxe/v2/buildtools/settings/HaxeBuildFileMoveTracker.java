@@ -30,7 +30,7 @@ public final class HaxeBuildFileMoveTracker implements BulkFileListener {
       };
     }
     if (changed) {
-      HaxeBuildSettingsListener.publish(project);
+      HaxeBuildSettingsListener.publisher(project).buildFilesChanged();
     }
   }
 

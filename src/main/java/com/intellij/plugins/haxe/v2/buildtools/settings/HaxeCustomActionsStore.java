@@ -8,6 +8,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -123,6 +124,17 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
   }
 
   private State state = new State();
+  private final @Nullable Project project;
+
+  public HaxeCustomActionsStore(@NotNull Project project) {
+    this.project = project;
+  }
+
+  /** State tests exercise the store without a project; no events fire then. */
+  @TestOnly
+  public HaxeCustomActionsStore() {
+    this.project = null;
+  }
 
   @NotNull
   public static HaxeCustomActionsStore getInstance(@NotNull Project project) {
@@ -177,6 +189,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     ContainerActions container = getOrCreate(ownerId);
     container.actions.removeIf(existing -> action.name().equals(existing.name));
     container.actions.add(toState(action));
+    HaxeBuildSettingsListener.publisher(project).customActionsChanged(ownerId);
   }
 
   /** Replaces the action named {@code oldName}, keeping its position. */
@@ -185,10 +198,12 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     for (int i = 0; i < container.actions.size(); i++) {
       if (oldName.equals(container.actions.get(i).name)) {
         container.actions.set(i, toState(action));
+        HaxeBuildSettingsListener.publisher(project).customActionsChanged(ownerId);
         return;
       }
     }
     container.actions.add(toState(action));
+    HaxeBuildSettingsListener.publisher(project).customActionsChanged(ownerId);
   }
 
   public void removeAction(@NotNull String ownerId, @NotNull String name) {
@@ -196,6 +211,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
     if (container != null) {
       container.actions.removeIf(action -> name.equals(action.name));
     }
+    HaxeBuildSettingsListener.publisher(project).customActionsChanged(ownerId);
   }
 
   /** The custom actions, of any build file, that run {@code action} of {@code buildFile} before themselves. */
@@ -220,6 +236,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
         }
       }
     }
+    HaxeBuildSettingsListener.publisher(project).customActionsChanged(buildFile);
   }
 
   /** Drops every run-before reference, from any build file, to {@code action} of {@code buildFile}. */
@@ -229,6 +246,7 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
         actionState.runBefore.removeIf(reference -> names(container.ownerId, reference, buildFile, action));
       }
     }
+    HaxeBuildSettingsListener.publisher(project).customActionsChanged(buildFile);
   }
 
   /**

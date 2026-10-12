@@ -66,7 +66,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
       if (container.hiddenPaths == null) container.hiddenPaths = new ArrayList<>();
     });
     this.state = state;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).stateLoaded();
   }
 
   /** Added and hidden build files keep their entries when they, or a folder above them, are moved or renamed; whether anything changed. */
@@ -106,7 +106,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
     if (!container.addedPaths.contains(path)) {
       container.addedPaths.add(path);
     }
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).buildFilesChanged();
   }
 
   /** Removes a manual entry, or hides an auto-detected file. */
@@ -115,7 +115,7 @@ public final class HaxeBuildFilesStore implements PersistentStateComponent<HaxeB
     if (!container.addedPaths.remove(path) && !container.hiddenPaths.contains(path)) {
       container.hiddenPaths.add(path);
     }
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).buildFilesChanged();
   }
 
   @Nullable

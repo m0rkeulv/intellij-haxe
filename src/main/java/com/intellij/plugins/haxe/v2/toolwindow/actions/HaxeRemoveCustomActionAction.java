@@ -44,7 +44,7 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
     Decisions decisions = new DialogDecisions(project, actionNode.ownerId());
     if (!HaxeCustomActionRemoval.remove(store, actionNode.ownerId(), actionNode.name(), decisions)) return;
     HaxeProgramLaunches.retargetBuildSteps(project, actionNode.ownerId(), actionNode.name(), null);
-    panel.refreshTree();
+    
   }
 
   /** The two questions as dialogs: Yes/No for the removal, then "Remove There Too" / "Keep as Missing" / Cancel for the references. */

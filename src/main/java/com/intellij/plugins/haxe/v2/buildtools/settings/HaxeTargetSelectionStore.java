@@ -56,7 +56,7 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
       state.targetsByFile = new TreeMap<>();
     }
     this.state = state;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).stateLoaded();
   }
 
   /** A build file keeps its selected target when it, or a folder above it, is moved or renamed; whether anything changed. */
@@ -71,6 +71,6 @@ public final class HaxeTargetSelectionStore implements PersistentStateComponent<
 
   public void setSelectedTargetId(@NotNull VirtualFile buildFile, @NotNull String targetId) {
     state.targetsByFile.put(buildFile.getPath(), targetId);
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).targetSelected(buildFile.getPath());
   }
 }

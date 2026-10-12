@@ -28,7 +28,7 @@ public final class HaxeRemoveToolAction extends DumbAwareAction {
     Project project = e.getProject();
     if (project != null && panel.getSelectedUserObject() instanceof ToolNode toolNode && toolNode.custom()) {
       HaxeCustomToolsStore.getInstance(project).removeTool(toolNode.containerId(), toolNode.name());
-      panel.refreshTree();
+      
     }
   }
 

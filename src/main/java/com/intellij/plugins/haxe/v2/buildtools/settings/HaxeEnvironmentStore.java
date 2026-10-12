@@ -6,6 +6,7 @@ import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener.EnvironmentAspect;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -83,7 +84,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     }
     state.environments.forEach(HaxeEnvironmentStore::sanitizeDefines);
     this.state = state;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).stateLoaded();
   }
 
   /**
@@ -119,7 +120,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   /** Drops every stored setting of the container (a removed module leaves no stale state behind). */
   public void clearContainer(@NotNull String containerId) {
     state.environments.removeIf(environment -> containerId.equals(environment.containerId));
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.ALL);
   }
 
   /** SDK name chosen for the container, or null to use the Build Tools default. */
@@ -131,7 +132,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   public void setSdkName(@NotNull String containerId, @Nullable String sdkName) {
     getOrCreate(containerId).sdkName = sdkName;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.SDK);
   }
 
   /** A Build command keeps its build file when the file, or a folder above it, is moved or renamed; whether anything changed. */
@@ -161,7 +162,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     environment.compileFilePath = compileCommand == null ? null : compileCommand.buildFilePath();
     environment.compileActionName = compileCommand == null ? null : compileCommand.actionName();
     environment.compileArguments = compileCommand == null ? "" : compileCommand.arguments();
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.COMPILE_COMMAND);
   }
 
   /** Whether the container's compile command connects to the project's compilation server (when enabled). */
@@ -172,7 +173,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   public void setUsingCompilationServer(@NotNull String containerId, boolean use) {
     getOrCreate(containerId).useCompilationServer = use;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.COMPILATION_SERVER);
   }
 
   /**
@@ -188,7 +189,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   public void setCustomTarget(@NotNull String containerId, @Nullable String customTarget) {
     getOrCreate(containerId).customTarget = customTarget == null ? null : StringUtil.nullize(customTarget.trim());
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.CUSTOM_TARGET);
   }
 
   /** The container's define entries, in name order. */
@@ -215,7 +216,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
       serialized.add(defineState);
     }
     getOrCreate(containerId).defines = serialized;
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.DEFINES);
   }
 
   /** Adds or updates a SET define, keeping any other entries. */
@@ -241,7 +242,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     environment.defines.removeIf(define -> name.equals(define.name));
     environment.defines.add(defineState);
 
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.DEFINES);
   }
 
   public void removeDefine(@NotNull String containerId, @NotNull String name) {
@@ -249,7 +250,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     if (environment != null) {
       environment.defines.removeIf(define -> name.equals(define.name));
     }
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.DEFINES);
   }
 
   @NotNull

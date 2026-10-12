@@ -44,7 +44,7 @@ public final class HaxeEditCustomActionAction extends DumbAwareAction {
       store.updateAction(actionNode.ownerId(), actionNode.name(), updated);
       store.renameReferences(actionNode.ownerId(), actionNode.name(), updated.name());
       updateBuildSteps(project, actionNode, updated);
-      panel.refreshTree();
+      
     }
   }
 

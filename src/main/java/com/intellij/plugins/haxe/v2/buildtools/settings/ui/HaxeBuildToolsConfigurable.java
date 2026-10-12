@@ -16,9 +16,9 @@ import com.intellij.plugins.haxe.util.HaxeModuleDetection;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfigurations;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -149,7 +149,7 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
       HaxeCompilationServerManager.getInstance(project).stop();
     }
     // the tool window's rows and the define context derive from these settings
-    project.getMessageBus().syncPublisher(HaxeBuildConfigListener.TOPIC).buildConfigurationChanged();
+    HaxeBuildSettingsListener.publisher(project).compilerSettingsChanged();
   }
 
   /** Haxe modules without an Environment override follow the default SDK. */

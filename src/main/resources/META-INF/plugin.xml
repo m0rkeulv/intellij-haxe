@@ -983,14 +983,14 @@
     <listener class="com.intellij.plugins.haxe.v2.display.HaxeDisplayCacheInvalidator"
               topic="com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener"/>
     <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
-              topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
+              topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener"/>
     <listener class="com.intellij.plugins.haxe.v2.testing.run.HaxeTestCompileStepResync"
               topic="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener"/>
     <listener class="com.intellij.plugins.haxe.v2.editor.HaxeBuildToolFailureBannerRefresh"
-              topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildConfigListener"/>
+              topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener"/>
     <listener class="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFileMoveTracker"
               topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
-    <listener class="com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextBuildFileListener"
+    <listener class="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileChangeListener"
               topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
     <listener class="com.intellij.plugins.haxe.v2.editor.HaxeResolveContextFollower"
               topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>

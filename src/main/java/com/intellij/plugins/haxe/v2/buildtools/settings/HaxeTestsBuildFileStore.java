@@ -80,7 +80,8 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
       state.excludedFiles = new ArrayList<>();
     }
     this.state = state;
-    notifyChanged();
+    modificationTracker.incModificationCount();
+    HaxeBuildSettingsListener.publisher(project).stateLoaded();
   }
 
   /** A marked or excluded tests build file keeps its mark when it, or a folder above it, is moved or renamed; whether anything changed. */
@@ -126,7 +127,7 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
       state.testsFiles.add(newEntry(containerId, filePath));
     }
     state.excludedFiles.removeIf(entryFor(containerId, filePath));
-    notifyChanged();
+    notifyChanged(containerId);
   }
 
   /**
@@ -140,7 +141,7 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     if (!excluded) {
       state.excludedFiles.add(newEntry(containerId, filePath));
     }
-    notifyChanged();
+    notifyChanged(containerId);
   }
 
   /** Every excluded path across all containers - the gutter markers skip these. */
@@ -222,8 +223,8 @@ public final class HaxeTestsBuildFileStore implements PersistentStateComponent<H
     return entry;
   }
 
-  private void notifyChanged() {
+  private void notifyChanged(@NotNull String containerId) {
     modificationTracker.incModificationCount();
-    HaxeBuildSettingsListener.publish(project);
+    HaxeBuildSettingsListener.publisher(project).testsMarkChanged(containerId);
   }
 }
