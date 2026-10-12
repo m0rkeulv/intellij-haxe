@@ -68,17 +68,14 @@ public final class HaxeResolveContextStore implements PersistentStateComponent<H
 
   /**
    * A source file keeps its pin and its followed context when it, or a
-   * folder above it, is moved or renamed, and a pin follows its moved build
+   * folder above it, is moved or renamed, and both follow their moved build
    * file; whether anything changed.
    */
   public boolean moveFile(@NotNull String oldPath, @NotNull String newPath) {
     boolean changed = HaxeStoredPaths.moveKeys(state.buildFileByFile, oldPath, newPath);
     changed |= HaxeStoredPaths.moveKeys(followedBuildFileByFile, oldPath, newPath);
-    for (Map.Entry<String, String> entry : state.buildFileByFile.entrySet()) {
-      String movedBuildFile = HaxeStoredPaths.moved(entry.getValue(), oldPath, newPath);
-      changed |= !movedBuildFile.equals(entry.getValue());
-      entry.setValue(movedBuildFile);
-    }
+    changed |= HaxeStoredPaths.moveValues(state.buildFileByFile, oldPath, newPath);
+    changed |= HaxeStoredPaths.moveValues(followedBuildFileByFile, oldPath, newPath);
     return changed;
   }
 

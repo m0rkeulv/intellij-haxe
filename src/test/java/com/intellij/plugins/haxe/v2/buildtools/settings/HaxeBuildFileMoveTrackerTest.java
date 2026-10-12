@@ -67,6 +67,7 @@ public class HaxeBuildFileMoveTrackerTest extends HaxeLightFixtureTestCase {
   public void testRenamingABuildFileCarriesEveryStoreEntryKeyedByItsPath() throws IOException {
     VirtualFile library = myFixture.addFileToProject("lib/build.hxml", "-main Lib").getVirtualFile();
     VirtualFile source = myFixture.addFileToProject("lib/src/Lib.hx", "class Lib {}").getVirtualFile();
+    VirtualFile opened = myFixture.addFileToProject("lib/src/Opened.hx", "class Opened {}").getVirtualFile();
     String containerId = HaxeContainers.containerIdFor(getProject(), library);
     String oldPath = library.getPath();
     HaxeTargetSelectionStore.getInstance(getProject()).setSelectedTargetId(library, "html5");
@@ -76,6 +77,7 @@ public class HaxeBuildFileMoveTrackerTest extends HaxeLightFixtureTestCase {
     HaxeTestsBuildFileStore.getInstance(getProject()).markTestsFile(containerId, oldPath);
     HaxeBuildFilesStore.getInstance(getProject()).addFile(containerId, oldPath);
     HaxeResolveContextStore.getInstance(getProject()).pin(source, oldPath);
+    HaxeResolveContextStore.getInstance(getProject()).follow(opened, oldPath);
 
     WriteAction.runAndWait(() -> library.rename(this, "main.hxml"));
 
@@ -87,6 +89,7 @@ public class HaxeBuildFileMoveTrackerTest extends HaxeLightFixtureTestCase {
     assertEquals(List.of(newPath), HaxeTestsBuildFileStore.getInstance(getProject()).getTestsFilePaths(containerId));
     assertEquals(List.of(newPath), HaxeBuildFilesStore.getInstance(getProject()).getAddedPaths(containerId));
     assertEquals(newPath, HaxeResolveContextStore.getInstance(getProject()).getPinnedBuildFile(source));
+    assertEquals(newPath, HaxeResolveContextStore.getInstance(getProject()).getFollowedBuildFile(opened));
   }
 
   private static List<String> actionNames(HaxeCustomActionsStore store, String buildFile) {

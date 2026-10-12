@@ -31,6 +31,19 @@ public final class HaxeStoredPaths {
     return !affected.isEmpty();
   }
 
+  /** Re-points the path values of a map in place; whether any moved. */
+  public static boolean moveValues(@NotNull Map<String, String> byKey, @NotNull String oldPath, @NotNull String newPath) {
+    boolean changed = false;
+    for (Map.Entry<String, String> entry : byKey.entrySet()) {
+      String movedPath = moved(entry.getValue(), oldPath, newPath);
+      if (!movedPath.equals(entry.getValue())) {
+        entry.setValue(movedPath);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   /** Rewrites the paths of a list in place; whether any moved. */
   public static boolean moveAll(@NotNull List<String> paths, @NotNull String oldPath, @NotNull String newPath) {
     boolean changed = false;
