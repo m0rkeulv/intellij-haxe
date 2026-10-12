@@ -134,7 +134,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   private JComponent createToolbar() {
     DefaultActionGroup group = new DefaultActionGroup();
     group.add(new HaxeSyncProjectAction());
-    group.add(new HaxePurgeCachesAction(this::refreshTree));
+    group.add(new HaxePurgeCachesAction());
     group.addSeparator();
     group.add(new HaxeAddModuleAction());
     group.add(new HaxeRemoveNodeAction(this));

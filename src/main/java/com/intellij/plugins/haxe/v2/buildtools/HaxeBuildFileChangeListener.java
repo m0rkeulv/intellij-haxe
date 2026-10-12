@@ -3,19 +3,26 @@ package com.intellij.plugins.haxe.v2.buildtools;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileCopyEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
 /**
- * Announces a saved or deleted build file, or a configuration file one
- * includes, as a {@link HaxeBuildEventListener} event. Any project file with
- * a build-file extension counts; the IDE's own settings files are xml too
- * and are left out, as are files outside the project's content.
+ * Announces a saved, created, moved, renamed or deleted build file, or a
+ * configuration file one includes, as a {@link HaxeBuildEventListener}
+ * event. Any project file with a build-file extension counts; the IDE's own
+ * settings files are xml too and are left out, as are files outside the
+ * project's content.
  */
 public final class HaxeBuildFileChangeListener implements BulkFileListener {
   /** Where the IDE keeps its settings (workspace.xml, the plugin's stores), saved on the IDE's own schedule. */
@@ -32,25 +39,52 @@ public final class HaxeBuildFileChangeListener implements BulkFileListener {
     if (project.isDisposed()) return;
     HaxeBuildEventListener publisher = HaxeBuildEventListener.publisher(project);
     for (VFileEvent event : events) {
-      if (!concernsBuildFile(event)) continue;
-      if (event instanceof VFileDeleteEvent) {
-        publisher.buildFileDeleted(event.getPath());
-      }
-      else {
-        publisher.buildFileContentChanged(event.getPath());
-      }
+      announce(event, publisher);
     }
   }
 
-  /** Whether the event may change a build file's meaning: a project file with a build-file extension saved, or one deleted. */
+  /** A move or rename is a departure from the old path and an arrival at the new one; either side may be a build file. */
+  private void announce(@NotNull VFileEvent event, @NotNull HaxeBuildEventListener publisher) {
+    switch (event) {
+      case VFileContentChangeEvent change when concernsBuildFile(change) ->
+        publisher.buildFileContentChanged(change.getPath());
+      case VFileDeleteEvent deletion when concernsBuildFile(deletion) -> publisher.buildFileDeleted(deletion.getPath());
+      case VFileCreateEvent creation when concernsBuildFile(creation) -> publisher.buildFileAdded(creation.getPath());
+      case VFileCopyEvent copy when concernsBuildFile(copy) -> publisher.buildFileAdded(copy.getPath());
+      case VFileMoveEvent move ->
+        announceRelocation(move.getOldPath(), move.getNewPath(), move.getFile(), publisher);
+      case VFilePropertyChangeEvent rename when VirtualFile.PROP_NAME.equals(rename.getPropertyName()) ->
+        announceRelocation(rename.getOldPath(), rename.getNewPath(), rename.getFile(), publisher);
+      default -> { }
+    }
+  }
+
+  private void announceRelocation(@NotNull String oldPath,
+                                  @NotNull String newPath,
+                                  @NotNull VirtualFile file,
+                                  @NotNull HaxeBuildEventListener publisher) {
+    if (isWatchedPath(oldPath)) publisher.buildFileDeleted(oldPath);
+    if (isWatchedPath(newPath) && isInContent(file)) publisher.buildFileAdded(newPath);
+  }
+
+  /** Whether the event may change a build file's meaning: a project build file saved, created or deleted. */
   boolean concernsBuildFile(@NotNull VFileEvent event) {
-    String path = event.getPath();
-    if (!HaxeBuildFileScanner.hasBuildFileExtension(path) || path.contains(IDE_SETTINGS_FOLDER)) return false;
+    if (!isWatchedPath(event.getPath())) return false;
     return switch (event) {
-      case VFileContentChangeEvent change -> ProjectFileIndex.getInstance(project).isInContent(change.getFile());
       // a deleted file is in no content root any more; its path decided above
       case VFileDeleteEvent ignored -> true;
+      case VFileContentChangeEvent change -> ProjectFileIndex.getInstance(project).isInContent(change.getFile());
+      case VFileCreateEvent creation -> isInContent(creation.getFile());
+      case VFileCopyEvent copy -> isInContent(copy.findCreatedFile());
       default -> false;
     };
+  }
+
+  private boolean isInContent(@Nullable VirtualFile file) {
+    return file != null && ProjectFileIndex.getInstance(project).isInContent(file);
+  }
+
+  private static boolean isWatchedPath(@NotNull String path) {
+    return HaxeBuildFileScanner.hasBuildFileExtension(path) && !path.contains(IDE_SETTINGS_FOLDER);
   }
 }
