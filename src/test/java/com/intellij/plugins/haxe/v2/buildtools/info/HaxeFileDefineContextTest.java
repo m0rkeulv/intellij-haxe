@@ -2,9 +2,13 @@ package com.intellij.plugins.haxe.v2.buildtools.info;
 
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.vfs.VfsUtil;
+import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.editor.Document;
+import com.intellij.psi.PsiDocumentManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
+import com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
@@ -15,7 +19,9 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.testFramework.PlatformTestUtil;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +62,25 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected String getBasePath() {
     return "";
+  }
+
+  /** The names of the files each invalidation re-lexed, in order. */
+  private final List<String> invalidated = new CopyOnWriteArrayList<>();
+
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
+    HaxeDefineContextInvalidator.invalidationObserver = files -> files.forEach(file -> invalidated.add(file.getName()));
+  }
+
+  @Override
+  protected void tearDown() throws Exception {
+    try {
+      HaxeDefineContextInvalidator.invalidationObserver = null;
+    }
+    finally {
+      super.tearDown();
+    }
   }
 
   @Test
@@ -103,7 +128,60 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
 
     WriteAction.runAndWait(() -> VfsUtil.saveText(cpp, CPP_HXML_SOURCE + "-D foo\n"));
 
-    PlatformTestUtil.waitWithEventsDispatching("cpp.hxml gained -D foo: CppMain must be re-lexed", () -> branchLive(psiFile(cppMain), "foo = true"), 10);
+    awaitInvalidationOf("CppMain.hx", "cpp.hxml gained -D foo: CppMain must be re-lexed");
+    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+  }
+
+  @Test
+  @DisplayName("an unsaved build file edit re-lexes the files it defines on the next refresh")
+  public void testAnUnsavedBuildFileEditReLexesTheFilesItDefinesOnTheNextRefresh() {
+    VirtualFile web = myFixture.addFileToProject("web.hxml", WEB_HXML_SOURCE).getVirtualFile();
+    VirtualFile cpp = myFixture.addFileToProject("cpp.hxml", CPP_HXML_SOURCE).getVirtualFile();
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+    VirtualFile cppMain = myFixture.addFileToProject("src/CppMain.hx", FOO_GATED_SOURCE.formatted("CppMain")).getVirtualFile();
+    myFixture.openFileInEditor(cppMain);
+    assertFalse(branchLive(psiFile(cppMain), "foo = true"), "no -D foo yet");
+
+    myFixture.openFileInEditor(cpp);
+    Document document = myFixture.getEditor().getDocument();
+    WriteCommandAction.runWriteCommandAction(getProject(), () -> document.insertString(document.getTextLength(), "-D foo\n"));
+    PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+    HaxeDefineContextService.getInstance(getProject()).refreshAsync();
+
+    awaitInvalidationOf("CppMain.hx", "cpp.hxml gained -D foo in the editor: CppMain must be re-lexed");
+    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+  }
+
+  @Test
+  @DisplayName("a read of the new defines before the refresh does not mask the change")
+  public void testAReadOfTheNewDefinesBeforeTheRefreshDoesNotMaskTheChange() {
+    VirtualFile web = myFixture.addFileToProject("web.hxml", WEB_HXML_SOURCE).getVirtualFile();
+    VirtualFile cpp = myFixture.addFileToProject("cpp.hxml", CPP_HXML_SOURCE).getVirtualFile();
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+    VirtualFile cppMain = myFixture.addFileToProject("src/CppMain.hx", FOO_GATED_SOURCE.formatted("CppMain")).getVirtualFile();
+    myFixture.openFileInEditor(cppMain);
+    assertFalse(branchLive(psiFile(cppMain), "foo = true"), "no -D foo yet");
+
+    myFixture.openFileInEditor(cpp);
+    Document document = myFixture.getEditor().getDocument();
+    WriteCommandAction.runWriteCommandAction(getProject(), () -> document.insertString(document.getTextLength(), "-D foo\n"));
+    PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+    // what an annotator pass on CppMain does between the edit and the refresh
+    Map<String, String> read = HaxeReadActions.compute(() -> HaxeConditionalExpression.definitionsFor(getProject(), psiFile(cppMain)));
+    assertTrue(read.containsKey("foo"), "the reader already sees the new define");
+    HaxeDefineContextService.getInstance(getProject()).refreshAsync();
+
+    awaitInvalidationOf("CppMain.hx", "the read must not count as lexed under: CppMain is re-lexed");
+    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+  }
+
+  private void awaitInvalidationOf(String fileName, String message) {
+    PlatformTestUtil.waitWithEventsDispatching(message, () -> invalidated.contains(fileName), 10);
+  }
+
+  /** The reparse an invalidation requests lands asynchronously (background re-index, editor reparse on the EDT). */
+  private void awaitBranchLive(VirtualFile file, String message) {
+    PlatformTestUtil.waitWithEventsDispatching(message, () -> branchLive(psiFile(file), "foo = true"), 10);
   }
 
   private PsiFile psiFile(VirtualFile file) {

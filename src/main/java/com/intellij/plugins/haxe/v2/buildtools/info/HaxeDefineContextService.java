@@ -62,11 +62,11 @@ import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG
 public final class HaxeDefineContextService implements Disposable, HaxeBuildSettingsListener {
 
   /**
-   * Sentinel for {@link #lastComputed}: no consumer has been handed a define
-   * context yet, so nothing was parsed against one and no reparse is owed.
-   * Identity-compared, never handed out.
+   * Sentinel for {@link #lexedActive}: no file has been lexed under the
+   * active context yet, so no reparse is owed. Identity-compared, never
+   * handed out.
    */
-  private static final Map<String, String> NEVER_HANDED_OUT = new LinkedHashMap<>();
+  private static final Map<String, String> NEVER_LEXED = new LinkedHashMap<>();
 
   /** The defines that identify the compiler itself; no compiler lets a build toggle them. */
   private static final Set<String> COMPILER_IDENTITY_DEFINES = Set.of("haxe_ver", "haxe", "haxe3", "haxe4", "haxe5");
@@ -95,10 +95,16 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   // both by build file path
   private final Map<String, Snapshot> snapshots = new ConcurrentHashMap<>();
   private final Map<String, FastState> fastStates = new ConcurrentHashMap<>();
-  /** The active build's defines last handed out by {@link #getActiveDefines} - what files without a resolve context were parsed against. */
-  private volatile Map<String, String> lastComputed = NEVER_HANDED_OUT;
-  /** Per build file path, the defines last handed out for the files lexed under it. */
-  private final Map<String, Map<String, String>> handedOutByPath = new ConcurrentHashMap<>();
+  /**
+   * What files were last LEXED under, as opposed to merely read: the active
+   * build's defines for files without a resolve context, and per build file
+   * path the defines of the files lexed under it. Only the lexer records
+   * here. Annotators and completion read the same defines and must not,
+   * or a daemon pass between a build-file change and the refresh would make
+   * the new defines look already lexed under and no file would be reparsed.
+   */
+  private volatile Map<String, String> lexedActive = NEVER_LEXED;
+  private final Map<String, Map<String, String>> lexedByPath = new ConcurrentHashMap<>();
   private final AtomicBoolean refreshQueued = new AtomicBoolean();
   private final Object refreshLock = new Object();
 
@@ -146,40 +152,57 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   @Nullable
   public Map<String, String> getActiveDefines() {
     String path = effectiveActivePath();
-    if (StringUtil.isEmptyOrSpaces(path)) {
-      // record the null handout: files parsed now use the LEGACY define
-      // context, and activating a build file later must trigger a reparse
-      lastComputed = null;
-      return null;
-    }
+    if (StringUtil.isEmptyOrSpaces(path)) return null;
 
     FastState fast = fastStates.get(path);
     if (isFresh(fast)) {
-      lastComputed = fast.defines();
       return fast.defines();
     }
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-    Map<String, String> result = file != null && file.isValid() ? definesFor(file) : null;
-    lastComputed = result;
+    return file != null && file.isValid() ? definesFor(file) : null;
+  }
+
+  /**
+   * {@link #getActiveDefines} for the lexer: the result is recorded as what
+   * files without a resolve context are lexed under, a null included (they
+   * then use the legacy context, and activating a build file later must
+   * reparse them).
+   */
+  @Nullable
+  public Map<String, String> activeDefinesForLexing() {
+    Map<String, String> result = getActiveDefines();
+    lexedActive = result;
     return result;
   }
 
   /**
-   * The defines a source file is lexed with: those of its resolve context's
-   * build file; null for a file no build reaches (the project-wide set
-   * applies then). A map lookup after the first ask.
+   * The defines a source file is compiled with: those of its resolve
+   * context's build file; null for a file no build reaches (the project-wide
+   * set applies then). A map lookup after the first ask.
    */
   @Nullable
   public Map<String, String> definesForSource(@NotNull VirtualFile sourceFile) {
-    HaxeResolveContext context = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).contextFor(sourceFile));
-    return context == null ? null : definesFor(context.buildFile().file());
+    VirtualFile buildFile = contextBuildFile(sourceFile);
+    return buildFile == null ? null : definesFor(buildFile);
   }
 
-  /**
-   * The build file's defines, null when the file is not a build file.
-   * Recorded as handed out: a later change of them reparses the files lexed
-   * against them.
-   */
+  /** {@link #definesForSource} for the lexer: the result is recorded as what the file is lexed under. */
+  @Nullable
+  public Map<String, String> definesForLexing(@NotNull VirtualFile sourceFile) {
+    VirtualFile buildFile = contextBuildFile(sourceFile);
+    if (buildFile == null) return null;
+    Map<String, String> result = definesFor(buildFile);
+    if (result != null) lexedByPath.put(buildFile.getPath(), result);
+    return result;
+  }
+
+  @Nullable
+  private VirtualFile contextBuildFile(@NotNull VirtualFile sourceFile) {
+    HaxeResolveContext context = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).contextFor(sourceFile));
+    return context == null ? null : context.buildFile().file();
+  }
+
+  /** The build file's defines, null when the file is not a build file. */
   @Nullable
   public Map<String, String> definesFor(@NotNull VirtualFile buildFile) {
     String path = buildFile.getPath();
@@ -190,7 +213,6 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     Map<String, String> result = HaxeReadActions.compute(() -> cachedOrComputedDefines(buildFile));
     if (result != null) {
       fastStates.put(path, new FastState(buildFile, contentStamp(buildFile), result));
-      handedOutByPath.put(path, result);
     }
     return result;
   }
@@ -291,14 +313,14 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     synchronized (refreshLock) {
       // cleared under the lock: requests arriving during this refresh fold into ONE follow-up
       refreshQueued.set(false);
-      // compare against the defines last handed to consumers, NOT the snapshot
-      // cache: the invalidation topic clears the snapshot synchronously before
-      // this runs. The sentinel keeps project open cheap (nothing was handed
-      // out, nothing to re-index) while a recorded null handout still pushes
-      // on the null -> non-null transition (build file activated after files
-      // were parsed against the legacy context).
-      Map<String, String> before = lastComputed;
-      Map<String, Map<String, String>> byPathBefore = Map.copyOf(handedOutByPath);
+      // compare against the defines files were last LEXED under, NOT the
+      // snapshot cache: the invalidation topic clears the snapshot synchronously
+      // before this runs. The sentinel keeps project open cheap (nothing was
+      // lexed, nothing to re-index) while a recorded null still pushes on the
+      // null -> non-null transition (build file activated after files were
+      // parsed against the legacy context).
+      Map<String, String> before = lexedActive;
+      Map<String, Map<String, String>> byPathBefore = Map.copyOf(lexedByPath);
       snapshots.clear();
       fastStates.clear();
       // one non-blocking read action around the recompute: this is a pooled
@@ -306,7 +328,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       Map<String, String> after = ReadAction.nonBlocking(this::getActiveDefines)
         .expireWith(this)
         .executeSynchronously();
-      lastComputed = after;
+      lexedActive = after;
       Set<String> changed = changedContexts(before, after, byPathBefore);
       if (log.isDebugEnabled()) {
         log.debug("define context refresh: changed=" + (changed == null ? "all" : changed.size()) + ", defines=" + (after == null ? "legacy" : after.size()));
@@ -321,19 +343,19 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * The build files whose defines differ from what was handed out: the
-   * active one when its set changed (the files following the active build
-   * are lexed under it), and every handed-out build file whose set changed.
-   * Null when every conditional file must be re-lexed: the active context
-   * went away, or a handed-out build file is gone and its files now fall to
-   * other contexts.
+   * The build files whose defines differ from what files were lexed under:
+   * the active one when its set changed (the files following the active
+   * build are lexed under it), and every lexed-under build file whose set
+   * changed. Null when every conditional file must be re-lexed: the active
+   * context went away, or a lexed-under build file is gone and its files now
+   * fall to other contexts.
    */
   @Nullable
   private Set<String> changedContexts(@Nullable Map<String, String> activeBefore,
                                       @Nullable Map<String, String> activeAfter,
                                       @NotNull Map<String, Map<String, String>> byPathBefore) {
     Set<String> changed = new HashSet<>();
-    boolean activeChanged = activeBefore != NEVER_HANDED_OUT && !Objects.equals(activeBefore, activeAfter);
+    boolean activeChanged = activeBefore != NEVER_LEXED && !Objects.equals(activeBefore, activeAfter);
     boolean everything = false;
     if (activeChanged) {
       String activePath = effectiveActivePath();
@@ -343,7 +365,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     for (Map.Entry<String, Map<String, String>> entry : byPathBefore.entrySet()) {
       Map<String, String> after = recomputedDefines(entry.getKey());
       if (after == null) {
-        handedOutByPath.remove(entry.getKey());
+        lexedByPath.remove(entry.getKey());
         everything = true;
       }
       else if (!Objects.equals(entry.getValue(), after)) {

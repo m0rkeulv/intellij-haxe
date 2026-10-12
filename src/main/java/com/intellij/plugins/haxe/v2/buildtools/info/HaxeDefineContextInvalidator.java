@@ -20,12 +20,14 @@ import java.util.concurrent.TimeUnit;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Re-indexes and reparses the haxe files whose parse depends on the define
@@ -38,6 +40,10 @@ import java.util.Set;
  */
 @CustomLog
 final class HaxeDefineContextInvalidator {
+
+  /** Told the files of every invalidation; tests set it, since a reloaded tree alone does not prove one happened. */
+  @TestOnly
+  static volatile @Nullable Consumer<List<VirtualFile>> invalidationObserver;
 
   private HaxeDefineContextInvalidator() {
   }
@@ -97,6 +103,8 @@ final class HaxeDefineContextInvalidator {
       AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> invalidateFiles(project, files), 1, TimeUnit.SECONDS);
       return;
     }
+    Consumer<List<VirtualFile>> observer = invalidationObserver;
+    if (observer != null) observer.accept(files);
     PushedFilePropertiesUpdater updater = PushedFilePropertiesUpdater.getInstance(project);
     Disposable expiry = HaxeDefineContextService.getInstance(project);
     for (VirtualFile file : files) {
