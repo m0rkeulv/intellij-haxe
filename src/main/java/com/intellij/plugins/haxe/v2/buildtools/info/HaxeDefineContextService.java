@@ -358,15 +358,13 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
       // cleared under the lock: requests arriving during this refresh fold into ONE follow-up
       refreshQueued.set(false);
       // compare against the defines files were last LEXED under, NOT the
-      // snapshot cache: the invalidation topic clears the snapshot synchronously
-      // before this runs. The sentinel keeps project open cheap (nothing was
-      // lexed, nothing to re-index) while a recorded null still pushes on the
-      // null -> non-null transition (build file activated after files were
+      // snapshot cache, which the settings and events that change an input
+      // have already dropped. The sentinel keeps project open cheap (nothing
+      // was lexed, nothing to re-index) while a recorded null still pushes on
+      // the null -> non-null transition (build file activated after files were
       // parsed against the legacy context).
       Map<String, String> before = lexedActive;
       Map<String, Map<String, String>> byPathBefore = Map.copyOf(lexedByPath);
-      snapshots.clear();
-      fastStates.clear();
       // one non-blocking read action around the recompute: this is a pooled
       // thread, and the inner blocking read forms then nest instead of freezing the UI
       Map<String, String> after = ReadAction.nonBlocking(this::getActiveDefines)
@@ -478,7 +476,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   /** The context's defines BEFORE the container's environment overrides apply - everything an override can mask. */
   @NotNull
   private Map<String, String> definesBeforeOverrides(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
-    HaxeBuildFileInfo info = effectiveInfo(new HaxeBuildFile(file, type));
+    HaxeBuildFileInfo info = HaxeEffectiveBuildFileInfo.effectiveInfo(project, new HaxeBuildFile(file, type));
     String containerId = HaxeContainers.containerIdFor(project, file);
 
     Map<String, String> defines = new LinkedHashMap<>();
@@ -587,48 +585,36 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     return null;
   }
 
-  /**
-   * The build file's parsed info; lime-family and nmml files use the selected
-   * target's tool evaluation when available. Until the background run lands
-   * (which re-triggers a refresh) — or without one: untrusted project, failed
-   * tool — the raw xml defines serve with the selected target's platform
-   * defines; {@code if}/{@code unless} conditions stay unevaluated then.
-   */
-  @NotNull
-  private HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile) {
-    HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
-    HaxeBuildFileType type = buildFile.type();
-    String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    if (type == HaxeBuildFileType.NMML) {
-      return HaxeNmeProjectInfoService.getInstance(project).effectiveInfo(buildFile, raw, environmentSdk);
-    }
-    if (!LimeProjects.isLimeFamily(type)) return raw;
-
-    String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
-    HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
-      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk);
-    return display != null ? display : raw.withTarget(LimeProjects.targetFor(targetFlag), null);
-  }
-
   @Override
   public void dispose() {
   }
 
   /**
-   * The events a context follows: a build file changed on disk, a sync
-   * recorded new library defines, a lime/nme evaluation landed (its defines
-   * replace the raw parse's).
+   * The events a context follows. A snapshot's key carries the build file's
+   * own stamp and every setting, so a saved build file drops every snapshot
+   * (an included file changes other files' defines without moving their
+   * stamp), a landed evaluation drops its file's (the evaluation is not in
+   * the key), and a sync recorded new library defines, which the key sees.
    */
   private final class BuildEvents implements HaxeBuildEventListener {
     @Override
     public void buildFileContentChanged(@NotNull String path) {
-      refreshAsync();
+      invalidateAndRefresh();
+    }
+
+    @Override
+    public void buildFileAdded(@NotNull String path) {
+      invalidateAndRefresh();
     }
 
     @Override
     public void buildFileDeleted(@NotNull String path) {
-      refreshAsync();
+      invalidateAndRefresh();
+    }
+
+    @Override
+    public void derivedCachesCleared() {
+      invalidateAndRefresh();
     }
 
     @Override
@@ -638,6 +624,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
     @Override
     public void evaluationLanded(@NotNull String buildFilePath) {
+      snapshots.remove(buildFilePath);
+      fastStates.remove(buildFilePath);
       refreshAsync();
     }
   }
