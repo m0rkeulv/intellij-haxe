@@ -1,8 +1,5 @@
 package com.intellij.plugins.haxe.v2.toolwindow.actions;
 
-import com.intellij.openapi.actionSystem.ActionUpdateThread;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.MessageDialogBuilder;
 import com.intellij.openapi.ui.Messages;
@@ -27,24 +24,23 @@ import java.util.stream.Collectors;
  * missing ({@link HaxeCustomActionRemoval}). The "Run Haxe action" build steps
  * that named it are dropped either way.
  */
-public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
-
-  private final HaxeToolWindowPanel panel;
+public final class HaxeRemoveCustomActionAction extends HaxeSelectedNodeAction<ActionNode> {
 
   public HaxeRemoveCustomActionAction(@NotNull HaxeToolWindowPanel panel) {
-    super(HaxeBundle.message("haxe.toolwindow.remove.action"));
-    this.panel = panel;
+    super(panel, ActionNode.class, HaxeBundle.message("haxe.toolwindow.remove.action"));
   }
 
   @Override
-  public void actionPerformed(@NotNull AnActionEvent e) {
-    Project project = e.getProject();
-    if (project == null || !(panel.getSelectedUserObject() instanceof ActionNode actionNode) || !actionNode.custom()) return;
+  protected boolean applies(@NotNull ActionNode actionNode) {
+    return actionNode.custom();
+  }
+
+  @Override
+  protected void perform(@NotNull Project project, @NotNull ActionNode actionNode) {
     HaxeCustomActionsStore store = HaxeCustomActionsStore.getInstance(project);
     Decisions decisions = new DialogDecisions(project, actionNode.ownerId());
     if (!HaxeCustomActionRemoval.remove(store, actionNode.ownerId(), actionNode.name(), decisions)) return;
     HaxeProgramLaunches.retargetBuildSteps(project, actionNode.ownerId(), actionNode.name(), null);
-    
   }
 
   /** The two questions as dialogs: Yes/No for the removal, then "Remove There Too" / "Keep as Missing" / Cancel for the references. */
@@ -79,16 +75,5 @@ public final class HaxeRemoveCustomActionAction extends DumbAwareAction {
     private static String title() {
       return HaxeBundle.message("haxe.toolwindow.remove.action");
     }
-  }
-
-  @Override
-  public void update(@NotNull AnActionEvent e) {
-    boolean custom = panel.getSelectedUserObject() instanceof ActionNode actionNode && actionNode.custom();
-    e.getPresentation().setEnabledAndVisible(custom);
-  }
-
-  @Override
-  public @NotNull ActionUpdateThread getActionUpdateThread() {
-    return ActionUpdateThread.EDT;
   }
 }
