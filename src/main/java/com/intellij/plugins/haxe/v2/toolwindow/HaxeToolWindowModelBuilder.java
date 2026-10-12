@@ -2,8 +2,7 @@ package com.intellij.plugins.haxe.v2.toolwindow;
 
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeBuildToolFailures;
-import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
-import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeEffectiveBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
@@ -301,7 +300,7 @@ final class HaxeToolWindowModelBuilder {
                           ? 0
                           : HaxeSectionSelectionStore.getInstance(project).getSelectedSection(buildFile.file(), sectionIds);
 
-    HaxeBuildFileInfo info = effectiveInfo(containerId, buildFile);
+    HaxeBuildFileInfo info = HaxeEffectiveBuildFileInfo.effectiveInfo(project, buildFile);
     String toolFailure = HaxeBuildToolFailures.getInstance(project).lastFailure(buildFile.file().getPath());
     boolean manual = manualPaths.contains(buildFile.file().getPath());
     List<ActionNode> actions = buildFileActions(containerId, buildFile, HaxeProgramLaunches.launchOutput(info));
@@ -337,47 +336,6 @@ final class HaxeToolWindowModelBuilder {
     return labels;
   }
 
-  /**
-   * The file's info for the tree. Lime-family files get their defines and libraries
-   * from the LimeProjectParser evaluation for the selected target - conditionals
-   * evaluated, toolchain defines included, and the library list is the FULL
-   * resolved set (declared + transitive via include.xml/haxelib.json), so the
-   * Libraries node shows everything the build actually loads. Falls back to the
-   * raw parse until the background evaluation lands (or when only the legacy
-   * lime-display path ran - its hxml carries no library identities).
-   */
-  @NotNull
-  private HaxeBuildFileInfo effectiveInfo(@NotNull String containerId, @NotNull HaxeBuildFile buildFile) {
-    HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
-    HaxeBuildFileType type = buildFile.type();
-    if (type == HaxeBuildFileType.NMML) {
-      return nmeEffectiveInfo(containerId, buildFile, raw);
-    }
-    if (!LimeProjects.isLimeFamily(type)) {
-      return raw;
-    }
-
-    String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
-      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk);
-    if (display == null) {
-      return raw;
-    }
-    var libraries = !display.libraries().isEmpty() ? display.libraries() : raw.libraries();
-    // target + output come from the evaluation too: the actual haxe target and
-    // artifact path of the SELECTED lime target (the raw xml declares neither)
-    return display.withLibraries(libraries);
-  }
-
-  /** NMML info per the shared {@code nme prepare} evaluation - the define context and library sync read the same. */
-  @NotNull
-  private HaxeBuildFileInfo nmeEffectiveInfo(@NotNull String containerId,
-                                             @NotNull HaxeBuildFile buildFile,
-                                             @NotNull HaxeBuildFileInfo raw) {
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    return HaxeNmeProjectInfoService.getInstance(project).effectiveInfo(buildFile, raw, environmentSdk);
-  }
 
   /**
    * The build file's runnable actions: defaults for its type (using the file's

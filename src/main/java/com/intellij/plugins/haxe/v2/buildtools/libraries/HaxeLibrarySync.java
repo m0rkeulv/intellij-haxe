@@ -3,9 +3,7 @@ package com.intellij.plugins.haxe.v2.buildtools.libraries;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
-import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
-import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
-import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeEffectiveBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
@@ -25,7 +23,6 @@ import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibPathParser.LibrarySection;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
@@ -151,7 +148,7 @@ public final class HaxeLibrarySync {
 
       List<HaxeLibDependency> moduleDependencies = new ArrayList<>();
       for (HaxeBuildFile buildFile : sources) {
-        for (HaxeLibDependency dependency : effectiveLibraries(project, module, buildFile)) {
+        for (HaxeLibDependency dependency : effectiveLibraries(project, buildFile)) {
           addIfNameAbsent(moduleDependencies, dependency);
         }
       }
@@ -186,32 +183,14 @@ public final class HaxeLibrarySync {
   }
 
   /**
-   * A build file's library dependencies with conditionals evaluated: lime-family
-   * files use the LimeProjectParser evaluation for the selected target, nmml
-   * files the {@code nme prepare} evaluation — the raw xml parse lists every
-   * {@code <haxelib>} regardless of its if/unless condition. The raw parse
-   * remains the fallback while the evaluation is pending or when only the
-   * legacy lime-display path ran (its hxml has no -lib entries).
+   * A build file's library dependencies with conditionals evaluated
+   * ({@link HaxeEffectiveBuildFileInfo}); a landed evaluation asks for one
+   * more sync through the queue's callback.
    */
   @NotNull
-  private static List<HaxeLibDependency> effectiveLibraries(@NotNull Project project,
-                                                            @NotNull Module module,
-                                                            @NotNull HaxeBuildFile buildFile) {
-    HaxeBuildFileInfo raw = HaxeBuildSections.inspectSelected(project, buildFile);
-    HaxeBuildFileType type = buildFile.type();
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(module.getName());
+  private static List<HaxeLibDependency> effectiveLibraries(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
     Runnable onEvaluated = HaxeLibrarySyncQueue.getInstance(project).resyncRequest();
-    if (type == HaxeBuildFileType.NMML) {
-      return HaxeNmeProjectInfoService.getInstance(project)
-        .effectiveInfo(buildFile, raw, environmentSdk, onEvaluated)
-        .libraries();
-    }
-    if (!LimeProjects.isLimeFamily(type)) return raw.libraries();
-
-    String targetFlag = LimeProjects.selectedTargetFlag(project, type, buildFile.file());
-    HaxeBuildFileInfo display = HaxeLimeProjectInfoService.getInstance(project)
-      .getCachedOrSchedule(buildFile, targetFlag, environmentSdk, onEvaluated);
-    return display != null && !display.libraries().isEmpty() ? display.libraries() : raw.libraries();
+    return HaxeEffectiveBuildFileInfo.effectiveInfo(project, buildFile, onEvaluated).libraries();
   }
 
   /**
