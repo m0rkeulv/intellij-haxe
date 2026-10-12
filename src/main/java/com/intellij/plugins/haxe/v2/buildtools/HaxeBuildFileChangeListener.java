@@ -2,8 +2,8 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
-import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileCopyEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
@@ -18,11 +18,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Announces a saved, created, moved, renamed or deleted build file, or a
- * configuration file one includes, as a {@link HaxeBuildEventListener}
- * event. Any project file with a build-file extension counts; the IDE's own
- * settings files are xml too and are left out, as are files outside the
- * project's content.
+ * Turns file-system changes to build files into {@link HaxeBuildEventListener}
+ * events: saved, created, copied, moved, renamed or deleted. Any project
+ * file with a build-file extension counts, so a configuration file that a
+ * build file includes does too. The IDE's own settings files are xml as
+ * well and are left out, as are files outside the project's content.
  */
 public final class HaxeBuildFileChangeListener implements BulkFileListener {
   /** Where the IDE keeps its settings (workspace.xml, the plugin's stores), saved on the IDE's own schedule. */
@@ -43,7 +43,7 @@ public final class HaxeBuildFileChangeListener implements BulkFileListener {
     }
   }
 
-  /** A move or rename is a departure from the old path and an arrival at the new one; either side may be a build file. */
+  /** A move or rename leaves the old path and arrives at the new one; either side may be a build file. */
   private void announce(@NotNull VFileEvent event, @NotNull HaxeBuildEventListener publisher) {
     switch (event) {
       case VFileContentChangeEvent change when concernsBuildFile(change) ->
@@ -67,13 +67,16 @@ public final class HaxeBuildFileChangeListener implements BulkFileListener {
     if (isWatchedPath(newPath) && isInContent(file)) publisher.buildFileAdded(newPath);
   }
 
-  /** Whether the event may change a build file's meaning: a project build file saved, created or deleted. */
+  /**
+   * Whether a save, creation, copy or deletion concerns a project build file.
+   * A move or rename is judged per path instead.
+   */
   boolean concernsBuildFile(@NotNull VFileEvent event) {
     if (!isWatchedPath(event.getPath())) return false;
     return switch (event) {
       // a deleted file is in no content root any more; its path decided above
       case VFileDeleteEvent ignored -> true;
-      case VFileContentChangeEvent change -> ProjectFileIndex.getInstance(project).isInContent(change.getFile());
+      case VFileContentChangeEvent change -> isInContent(change.getFile());
       case VFileCreateEvent creation -> isInContent(creation.getFile());
       case VFileCopyEvent copy -> isInContent(copy.findCreatedFile());
       default -> false;

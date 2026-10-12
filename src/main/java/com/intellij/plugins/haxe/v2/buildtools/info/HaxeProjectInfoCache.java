@@ -20,12 +20,12 @@ import java.util.function.Supplier;
  * The caching/scheduling skeleton of the project info services
  * ({@link HaxeLimeProjectInfoService}, {@link HaxeNmeProjectInfoService}):
  * evaluations cached per (file, target, toolchain) key and run on a bounded
- * single-thread executor. Callers get the cached value (possibly stale,
- * possibly null on first ask) immediately; a landed refresh is announced as
- * {@link HaxeBuildEventListener#evaluationLanded} and, for a caller that must
- * act on its own ask (the library sync's follow-up), through its callback.
- * A value leaving the cache (replaced, invalidated, cleared) passes through
- * the evict hook.
+ * single-thread executor. Callers get the cached value at once (possibly
+ * stale, possibly null on the first ask). A landed refresh is announced as
+ * {@link HaxeBuildEventListener#evaluationLanded}; a caller that must react
+ * to its own request, such as the library sync's follow-up run, also passes
+ * a callback. A value leaving the cache (replaced, invalidated, cleared)
+ * passes through the evict hook.
  */
 final class HaxeProjectInfoCache<V> {
 
@@ -33,6 +33,9 @@ final class HaxeProjectInfoCache<V> {
   // the result is accepted as final - keeps transient tool failures from
   // sticking without allowing refresh loops
   private static final int MAX_ATTEMPTS = 3;
+
+  /** The callback of a caller that only follows the event; one shared instance, so a key registers it once. */
+  static final Runnable NO_CALLBACK = () -> { };
 
   record Key(@NotNull String filePath, @NotNull String targetFlag, @NotNull String haxelibPath) {
   }
@@ -61,9 +64,6 @@ final class HaxeProjectInfoCache<V> {
     this.onEvict = onEvict != null ? onEvict : ignored -> { };
     this.executor = AppExecutorUtil.createBoundedApplicationPoolExecutor(executorName, 1);
   }
-
-  /** The callback of a caller that only follows the event. Shared, so the cache registers it once per key. */
-  static final Runnable NO_CALLBACK = () -> { };
 
   /**
    * The key's cached value, or null when not resolved (yet). Schedules the

@@ -18,9 +18,10 @@ import java.util.Map;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
- * Walks conditional-compilation chains in the PSI. A condition lexes as a
- * RUN of PPEXPRESSION leaves behind its {@code #if}/{@code #elseif}
- * directive; the annotators that evaluate conditions share these walks.
+ * Walks conditional-compilation chains in the PSI, for the annotators that
+ * evaluate conditions. A condition is lexed as a run of consecutive
+ * PPEXPRESSION leaves right after its {@code #if} or {@code #elseif}
+ * directive; the run's first leaf is its head.
  */
 final class HaxeConditionalRuns {
   private HaxeConditionalRuns() {
@@ -35,7 +36,7 @@ final class HaxeConditionalRuns {
     return type == PPIF || type == PPELSEIF ? directive : null;
   }
 
-  /** The leaf the branch body starts with (the first after the run that is not whitespace); null at the end of the file. */
+  /** The first leaf of the branch the run guards, skipping whitespace; null at the end of the file. */
   @Nullable
   static PsiElement branchStart(@NotNull PsiElement runHead) {
     PsiElement leaf = PsiTreeUtil.nextLeaf(runHead);
@@ -45,7 +46,7 @@ final class HaxeConditionalRuns {
     return leaf;
   }
 
-  /** The first PPEXPRESSION leaf of the run this leaf belongs to. */
+  /** The head of the run this condition leaf belongs to. */
   @NotNull
   static PsiElement runHead(@NotNull PsiElement expression) {
     PsiElement head = expression;
@@ -55,6 +56,7 @@ final class HaxeConditionalRuns {
     return head;
   }
 
+  /** The condition's source text, all leaves of the run joined. */
   @NotNull
   static String runText(@NotNull PsiElement runHead) {
     StringBuilder text = new StringBuilder(runHead.getText());
@@ -64,12 +66,17 @@ final class HaxeConditionalRuns {
     return text.toString();
   }
 
-  static boolean isConditionLeaf(@Nullable PsiElement leaf) {
+  private static boolean isConditionLeaf(@Nullable PsiElement leaf) {
     return leaf != null && leaf.getNode().getElementType() == HaxeTokenTypeSets.PPEXPRESSION;
   }
 
-  static boolean wouldBeEvaluated(@NotNull PsiElement directive, @NotNull IElementType directiveType, @NotNull Map<String, String> definitions) {
-    if (directiveType == PPIF) {
+  /**
+   * Whether the compiler evaluates the directive's condition at all: an
+   * {@code #if} outside an inactive region; an {@code #elseif} only while no
+   * earlier branch of its chain was taken.
+   */
+  static boolean wouldBeEvaluated(@NotNull PsiElement directive, @NotNull Map<String, String> definitions) {
+    if (directive.getNode().getElementType() == PPIF) {
       return !inDeadRegion(directive);
     }
     return elseifWouldBeEvaluated(directive, definitions);
@@ -81,7 +88,7 @@ final class HaxeConditionalRuns {
    * evaluated only when the chain start sits in live code and none of those
    * conditions holds.
    */
-  static boolean elseifWouldBeEvaluated(@NotNull PsiElement elseifDirective, @NotNull Map<String, String> definitions) {
+  private static boolean elseifWouldBeEvaluated(@NotNull PsiElement elseifDirective, @NotNull Map<String, String> definitions) {
     List<String> earlierConditions = new ArrayList<>();
     StringBuilder pendingCondition = null;
     int depth = 0;
@@ -113,7 +120,7 @@ final class HaxeConditionalRuns {
     return false;  // no opening #if found - malformed chain, stay silent
   }
 
-  static boolean noEarlierBranchTaken(@NotNull List<String> earlierConditions, @NotNull Map<String, String> definitions) {
+  private static boolean noEarlierBranchTaken(@NotNull List<String> earlierConditions, @NotNull Map<String, String> definitions) {
     for (String conditionText : earlierConditions) {
       HaxeConditionalExpression earlier = HaxeConditionalExpression.fromCondition(conditionText);
       if (earlier == null) return false;           // cannot model the chain - stay silent
@@ -127,7 +134,7 @@ final class HaxeConditionalRuns {
    * preceding content is dead-branch material. Even a whitespace leaf counts
    * when it lives inside the dead blob (a whitespace-only region is one).
    */
-  static boolean inDeadRegion(@NotNull PsiElement directive) {
+  private static boolean inDeadRegion(@NotNull PsiElement directive) {
     for (PsiElement before = PsiTreeUtil.prevLeaf(directive); before != null; before = PsiTreeUtil.prevLeaf(before)) {
       if (before instanceof HaxeInactiveBody || AnnotatorUtil.isInInactiveBranch(before)) return true;
       if (!(before instanceof PsiWhiteSpace)) return false;

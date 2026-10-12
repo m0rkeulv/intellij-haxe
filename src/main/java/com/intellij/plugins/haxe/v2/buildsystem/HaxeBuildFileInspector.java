@@ -32,10 +32,10 @@ import java.util.Set;
  * statically; call inside a read action. HXP files are Haxe code and report
  * empty info here: {@code HaxeLimeProjectInfoService} evaluates them (and
  * lime/openfl projects with their conditions applied). An hxml's sections
- * and an xml project file's declared info are cached on the file's PSI: the
- * many readers (tool window, resolve context, define context, library sync,
- * test runs) share one answer until the file, or an include the flattening
- * read, changes.
+ * and an xml project file's declared info are cached on the file's PSI, so
+ * the many readers (tool window, resolve context, define context, library
+ * sync, test runs) share one answer until the file, or a file it includes,
+ * changes.
  */
 @CustomLog
 public final class HaxeBuildFileInspector {
@@ -106,8 +106,8 @@ public final class HaxeBuildFileInspector {
    * separator leaves empty is a silent compiler no-op and produces no entry.
    * Single-section files come back as the one whole effective content;
    * unreadable files as an empty list; a file without PSI comes back as one
-   * section, its chain unsplit. Cached on the PSI until the file or an
-   * include the flattening read changes. Call inside a read action.
+   * section, its chain unsplit. Cached on the PSI until the file or a file
+   * it includes changes. Call inside a read action.
    */
   @NotNull
   public static List<String> sectionContents(@NotNull Project project, @NotNull VirtualFile buildFile) {
@@ -117,14 +117,14 @@ public final class HaxeBuildFileInspector {
       String effective = effectiveContent(buildFile);
       return effective == null ? List.of() : List.of(effective);
     }
-    CachedValueProvider<List<String>> provider = () -> splitSections(project, psiFile, buildFile);
+    CachedValueProvider<List<String>> provider = () -> computeSectionContents(project, psiFile, buildFile);
     return CachedValuesManager.getCachedValue(psiFile, SECTION_CONTENTS, provider);
   }
 
   @NotNull
-  private static CachedValueProvider.Result<List<String>> splitSections(@NotNull Project project,
-                                                                        @NotNull PsiFile psiFile,
-                                                                        @NotNull VirtualFile buildFile) {
+  private static CachedValueProvider.Result<List<String>> computeSectionContents(@NotNull Project project,
+                                                                                 @NotNull PsiFile psiFile,
+                                                                                 @NotNull VirtualFile buildFile) {
     IncludeTracker includes = new IncludeTracker(buildFile);
     List<String> sections = splitAndFlatten(psiFile, buildFile, includes);
     return CachedValueProvider.Result.create(sections, includes.dependencies(project));
@@ -133,9 +133,10 @@ public final class HaxeBuildFileInspector {
   /**
    * What a cached result must follow for one file: its text as
    * {@link #loadText} reads it (the Document while one is cached, else the
-   * file) and its PSI. A PsiFile alone is not enough: its stamp moves when
-   * the tree is rebuilt, which trails a reloaded or edited document until
-   * the commit, and a refresh in that window would cache the old text.
+   * file), and its PSI. The PsiFile alone is not enough: its stamp moves
+   * only when the tree is rebuilt, which trails a reloaded or edited
+   * document until the commit, and a read in that window would cache the
+   * old text.
    */
   private static void addTextDependencies(@NotNull List<Object> dependencies,
                                           @NotNull Project project,

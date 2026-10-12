@@ -40,7 +40,7 @@ public final class HaxeLibraryDefinesStore {
     return byContainer.getOrDefault(containerId, Map.of());
   }
 
-  /** Replaces every container's recorded defines with a sync's result; the sync announces its end, this store stays quiet. */
+  /** Replaces every container's recorded defines with a sync's result; the sync's end is announced by the sync, not here. */
   public void replaceAll(@NotNull Map<String, Map<String, Map<String, String>>> resolvedByContainer) {
     if (byContainer.equals(resolvedByContainer)) return;
     byContainer = Map.copyOf(resolvedByContainer);

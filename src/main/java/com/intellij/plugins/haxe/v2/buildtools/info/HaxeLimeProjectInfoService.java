@@ -94,7 +94,12 @@ public final class HaxeLimeProjectInfoService implements Disposable {
     return getCachedOrSchedule(buildFile, targetFlag, preferredSdkName, HaxeProjectInfoCache.NO_CALLBACK);
   }
 
-  /** {@link #getCachedOrSchedule(HaxeBuildFile, String, String)} with a callback for a caller that must act on its own ask; kept by identity. */
+  /**
+   * {@link #getCachedOrSchedule(HaxeBuildFile, String, String)} for a caller
+   * that must react to the evaluation this call starts: {@code onUpdated}
+   * runs on the EDT when it lands. Kept by identity, so pass one long-lived
+   * instance.
+   */
   @Nullable
   public HaxeBuildFileInfo getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
                                                @NotNull String targetFlag,

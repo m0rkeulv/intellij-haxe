@@ -101,7 +101,12 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     return getCachedOrSchedule(buildFile, targetFlag, preferredSdkName, HaxeProjectInfoCache.NO_CALLBACK);
   }
 
-  /** {@link #getCachedOrSchedule(HaxeBuildFile, String, String)} with a callback for a caller that must act on its own ask; kept by identity. */
+  /**
+   * {@link #getCachedOrSchedule(HaxeBuildFile, String, String)} for a caller
+   * that must react to the evaluation this call starts: {@code onUpdated}
+   * runs on the EDT when it lands. Kept by identity, so pass one long-lived
+   * instance.
+   */
   @Nullable
   public Evaluation getCachedOrSchedule(@NotNull HaxeBuildFile buildFile,
                                         @NotNull String targetFlag,
@@ -142,7 +147,11 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     return effectiveInfo(buildFile, raw, preferredSdkName, HaxeProjectInfoCache.NO_CALLBACK);
   }
 
-  /** {@link #effectiveInfo(HaxeBuildFile, HaxeBuildFileInfo, String)} with a callback for a caller that must act on its own ask. */
+  /**
+   * {@link #effectiveInfo(HaxeBuildFile, HaxeBuildFileInfo, String)} with
+   * {@code onUpdated} as in
+   * {@link #getCachedOrSchedule(HaxeBuildFile, String, String, Runnable)}.
+   */
   @NotNull
   public HaxeBuildFileInfo effectiveInfo(@NotNull HaxeBuildFile buildFile,
                                          @NotNull HaxeBuildFileInfo raw,

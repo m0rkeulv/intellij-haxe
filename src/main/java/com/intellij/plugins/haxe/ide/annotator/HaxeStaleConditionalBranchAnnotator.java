@@ -22,20 +22,19 @@ import java.util.Objects;
 import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.*;
 
 /**
- * Re-lexes a file whose conditional branches disagree with its defines.
- * The lexer decides which branch of a {@code #if} chain is live from the
- * defines of the moment it ran; the define context asks for a reparse when
- * those change, but that request can be lost (a stale record of what was
- * lexed under, a refresh that ran before the change was visible). This
- * annotator evaluates every condition with the CURRENT defines on each
- * highlighting pass anyway, so it is the one reader that sees the
- * disagreement: a branch the lexer left dead that now holds, or one it
- * made live that now fails. One reparse per defines set and file - a
- * disagreement the reparse does not settle is not retried until the
- * defines change again.
+ * Re-lexes a file whose {@code #if} branches disagree with its current
+ * defines. The lexer fixes each branch as live or dead when it runs; when
+ * the defines change, the define context asks for a re-lex, and this
+ * annotator is the safety net for a request that did not reach an open
+ * file. On every highlighting pass it evaluates each condition with the
+ * current defines and compares the verdict with the branch the lexer
+ * produced: a dead branch whose condition now holds, or a live one whose
+ * condition now fails. It asks once per define set and file, so a
+ * disagreement the re-lex cannot settle is not retried until the defines
+ * change again.
  */
 public class HaxeStaleConditionalBranchAnnotator implements Annotator, DumbAware {
-  /** The defines the last reparse of a file was requested for. */
+  /** The defines the last re-lex of a file was requested for. */
   private static final Key<Map<String, String>> RELEX_REQUESTED_FOR = Key.create("haxe.cc.relex.requested.for");
 
   @Override
@@ -61,9 +60,7 @@ public class HaxeStaleConditionalBranchAnnotator implements Annotator, DumbAware
     PsiElement branchStart = HaxeConditionalRuns.branchStart(runHead);
     // an empty branch shows nothing to disagree with
     if (branchStart == null || isDirective(branchStart)) return false;
-    IElementType directiveType = directive.getNode().getElementType();
-    boolean shouldBeLive = HaxeConditionalRuns.wouldBeEvaluated(directive, directiveType, definitions)
-                           && condition.evaluate(definitions);
+    boolean shouldBeLive = HaxeConditionalRuns.wouldBeEvaluated(directive, definitions) && condition.evaluate(definitions);
     boolean lexedDead = branchStart instanceof HaxeInactiveBody || AnnotatorUtil.isInInactiveBranch(branchStart);
     return shouldBeLive == lexedDead;
   }
