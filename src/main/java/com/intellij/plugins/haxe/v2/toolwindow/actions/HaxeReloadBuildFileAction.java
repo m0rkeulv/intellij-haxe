@@ -7,8 +7,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
-import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
-import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildCaches;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
 import org.jetbrains.annotations.NotNull;
@@ -33,8 +32,7 @@ public final class HaxeReloadBuildFileAction extends DumbAwareAction {
     BuildFileRow row = panel.getSelectedBuildFileRowAncestor();
     if (project == null || row == null) return;
 
-    HaxeLimeProjectInfoService.getInstance(project).invalidate(row.buildFile().file().getPath());
-    HaxeNmeProjectInfoService.getInstance(project).invalidate(row.buildFile().file().getPath());
+    HaxeBuildCaches.clearEvaluations(project, row.buildFile().file().getPath());
     panel.refreshTree();
     HaxeLibrarySync.sync(project, null);
   }

@@ -196,6 +196,18 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
   }
 
   @Test
+  @DisplayName("a build file created on disk owns its sources on the next ask")
+  public void testABuildFileCreatedOnDiskOwnsItsSourcesOnTheNextAsk() {
+    VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
+    VirtualFile tool = source("src/tools/Tool.hx", "class Tool {}");
+    assertEquals(web.getPath(), contextPath(tool), "only the web build reaches src/tools before tools.hxml exists");
+
+    VirtualFile tools = hxml("tools.hxml", TOOLS_HXML_SOURCE);
+
+    assertEquals(tools.getPath(), contextPath(tool), "the created build file is an owner without a reload");
+  }
+
+  @Test
   @DisplayName("a file of a project without build files has no context")
   public void testAFileOfAProjectWithoutBuildFilesHasNoContext() {
     VirtualFile lone = source("src/Lone.hx", "class Lone {}");

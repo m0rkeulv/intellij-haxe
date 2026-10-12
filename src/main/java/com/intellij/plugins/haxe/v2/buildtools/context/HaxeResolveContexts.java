@@ -1,26 +1,29 @@
 package com.intellij.plugins.haxe.v2.buildtools.context;
 
 import com.intellij.lang.xml.XMLLanguage;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootModificationTracker;
+import com.intellij.openapi.util.SimpleModificationTracker;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLLanguage;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildClasspaths;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsTracker;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
 import com.intellij.psi.util.PsiModificationTracker;
+import com.intellij.util.messages.MessageBusConnection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -39,12 +42,15 @@ import java.util.List;
  * tool-window order. A file no build contains falls back to its module's
  * default build ({@link #defaultBuildFileFor}).
  * <p>
- * The builds' source directories are cached for the project, invalidated by
- * build-settings events, project roots, VFS structure changes and edits of
- * hxml or xml files - not by every PSI change.
+ * The builds' source directories are cached for the project and recomputed
+ * when a build file is registered, appears, moves, is saved or deleted,
+ * when a selection or environment that changes a build's classpaths or
+ * evaluation changes, when an evaluation lands, when the project roots
+ * change, and on edits of hxml or xml files - never on a build's output
+ * being written or on an unrelated setting.
  */
 @Service(Service.Level.PROJECT)
-public final class HaxeResolveContexts {
+public final class HaxeResolveContexts implements Disposable {
 
   /** One build and the source directories it compiles; {@code mainFileSuffix} is {@code /pkg/Main.hx} for an hxml {@code -main}. */
   private record Ownership(@NotNull HaxeBuildFile buildFile,
@@ -67,9 +73,18 @@ public final class HaxeResolveContexts {
   }
 
   private final Project project;
+  /** Bumped by every build-file setting or event the source directories derive from. */
+  private final SimpleModificationTracker buildFileInputs = new SimpleModificationTracker();
 
   public HaxeResolveContexts(@NotNull Project project) {
     this.project = project;
+    MessageBusConnection connection = project.getMessageBus().connect(this);
+    connection.subscribe(HaxeBuildSettingsListener.TOPIC, new BuildFileSettings());
+    connection.subscribe(HaxeBuildEventListener.TOPIC, new BuildFileEvents());
+  }
+
+  @Override
+  public void dispose() {
   }
 
   @NotNull
@@ -261,12 +276,68 @@ public final class HaxeResolveContexts {
   private Object @NotNull [] dependencies() {
     PsiModificationTracker psiTracker = PsiModificationTracker.getInstance(project);
     return new Object[]{
-      HaxeBuildSettingsTracker.getInstance(project),
+      buildFileInputs,
       ProjectRootModificationTracker.getInstance(project),
-      // TODO: any file creation (a build's output) re-sweeps the build files on the next ask; a build-file-only tracker would narrow it
-      VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
       psiTracker.forLanguage(HXMLLanguage.INSTANCE),
       psiTracker.forLanguage(XMLLanguage.INSTANCE)};
+  }
+
+  /**
+   * The choices that change which build files exist or what they compile.
+   * The active file and a pin are read per ask, not cached. */
+  private final class BuildFileSettings implements HaxeBuildSettingsListener {
+    @Override
+    public void stateLoaded() {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void buildFilesChanged() {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void targetSelected(@NotNull String buildFilePath) {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void sectionSelected(@NotNull String buildFilePath) {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void environmentChanged(@NotNull String containerId, @NotNull EnvironmentAspect aspect) {
+      buildFileInputs.incModificationCount();
+    }
+  }
+
+  /** The facts that change the build files on disk or their evaluated classpaths. */
+  private final class BuildFileEvents implements HaxeBuildEventListener {
+    @Override
+    public void buildFileContentChanged(@NotNull String path) {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void buildFileAdded(@NotNull String path) {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void buildFileDeleted(@NotNull String path) {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void evaluationLanded(@NotNull String buildFilePath) {
+      buildFileInputs.incModificationCount();
+    }
+
+    @Override
+    public void derivedCachesCleared() {
+      buildFileInputs.incModificationCount();
+    }
   }
 
   /** One inspection per known build file: its classpaths decide ownership, its main class the tie-break. */

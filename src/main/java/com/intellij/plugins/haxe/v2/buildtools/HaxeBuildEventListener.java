@@ -25,6 +25,12 @@ public interface HaxeBuildEventListener extends EventListener {
     anyBuildEvent();
   }
 
+  /** A file with a build-file extension appeared in the project: created, copied, moved or renamed to the name. */
+  default void buildFileAdded(@NotNull String path) {
+    anyBuildEvent();
+  }
+
+  /** A build file is gone from the path: deleted, moved or renamed away. */
   default void buildFileDeleted(@NotNull String path) {
     anyBuildEvent();
   }
@@ -46,6 +52,11 @@ public interface HaxeBuildEventListener extends EventListener {
 
   /** A build-tool or compiler-context failure appeared, changed or cleared for the key. */
   default void failureRecorded(@NotNull String key) {
+    anyBuildEvent();
+  }
+
+  /** Every evaluation and every compiler-derived cache was dropped (Sync, Purge): derived views start over. */
+  default void derivedCachesCleared() {
     anyBuildEvent();
   }
 
