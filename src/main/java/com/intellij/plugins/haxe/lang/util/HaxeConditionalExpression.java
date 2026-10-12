@@ -745,6 +745,34 @@ public class HaxeConditionalExpression {
     return definitionsFor(project, HaxeDefineContextService.physicalFileOf(file));
   }
 
+  /**
+   * {@link #definitionsFor(Project, VirtualFile)} for the lexer: the same
+   * defines, recorded as what the file is lexed under so a later change of
+   * them reparses it. Readers that only evaluate conditions (annotators,
+   * completion) use {@code definitionsFor}: a recording read from them would
+   * make a changed context look already lexed under.
+   */
+  @NotNull
+  public static Map<String, String> definitionsForLexing(@NotNull Project project, @Nullable VirtualFile file) {
+    if (ApplicationManager.getApplication().isUnitTestMode()) {
+      Map<String, String> userData = project.getUserData(DEFINES_KEY);
+      if (userData != null) return userData;
+    }
+    HaxeDefineContextService service = HaxeDefineContextService.getInstance(project);
+    Map<String, String> own = file == null ? null : service.definesForLexing(file);
+    if (own != null) return own;
+    // the test injection (or nothing) in unit-test mode, as projectDefinitions does
+    if (ApplicationManager.getApplication().isUnitTestMode()) return projectDefinitions(project);
+    Map<String, String> active = service.activeDefinesForLexing();
+    return active != null ? active : projectDefinitions(project);
+  }
+
+  /** {@link #definitionsForLexing(Project, VirtualFile)} for a PSI file. */
+  @NotNull
+  public static Map<String, String> definitionsForLexing(@NotNull Project project, @Nullable PsiFile file) {
+    return definitionsForLexing(project, HaxeDefineContextService.physicalFileOf(file));
+  }
+
   // Parodies Haxe parser is_true function
   // https://github.com/HaxeFoundation/haxe/blob/development/src/syntax/parser.mly#L1596
   private boolean objectIsTrue(Object o) {

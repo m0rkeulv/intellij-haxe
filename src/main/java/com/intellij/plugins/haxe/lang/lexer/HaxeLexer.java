@@ -58,11 +58,11 @@ public class HaxeLexer extends LookAheadLexer {
 
   /**
    * A lexer whose {@code #if} evaluation follows the file's own resolve
-   * context ({@link HaxeConditionalExpression#definitionsFor(Project, PsiFile)});
+   * context ({@link HaxeConditionalExpression#definitionsForLexing(Project, PsiFile)});
    * the project-wide set without a file.
    */
   public static HaxeLexer forFile(@NotNull Project project, @Nullable PsiFile file) {
-    return new HaxeLexer(project, () -> HaxeConditionalExpression.definitionsFor(project, file), true);
+    return new HaxeLexer(project, () -> HaxeConditionalExpression.definitionsForLexing(project, file), true);
   }
 
   /**
@@ -77,7 +77,7 @@ public class HaxeLexer extends LookAheadLexer {
 
   /** The highlighting lexer of one file: {@code #if} follows the file's own context; a null project (color settings page) has no defines. */
   public static HaxeLexer forHighlighting(@Nullable Project project, @Nullable VirtualFile file) {
-    Supplier<Map<String, String>> definitions = project == null ? null : () -> HaxeConditionalExpression.definitionsFor(project, file);
+    Supplier<Map<String, String>> definitions = project == null ? null : () -> HaxeConditionalExpression.definitionsForLexing(project, file);
     return new HaxeLexer(project, definitions, false);
   }
 }
