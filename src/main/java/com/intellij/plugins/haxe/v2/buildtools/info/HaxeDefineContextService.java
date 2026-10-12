@@ -235,8 +235,12 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     return virtualFile instanceof LightVirtualFile ? null : virtualFile;
   }
 
-  /** A source file's resolve context changed (pin, unpin, navigation): that file alone is re-lexed under its new context. */
-  public void fileContextChanged(@NotNull VirtualFile sourceFile) {
+  /**
+   * Re-lexes one source file under its current context: its resolve context
+   * changed (pin, unpin, navigation), or a highlighting pass found its
+   * branches lexed under defines that no longer hold.
+   */
+  public void relexFile(@NotNull VirtualFile sourceFile) {
     HaxeDefineContextInvalidator.invalidateFile(project, sourceFile);
   }
 

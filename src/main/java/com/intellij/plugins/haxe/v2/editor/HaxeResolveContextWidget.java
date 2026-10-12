@@ -147,7 +147,7 @@ public final class HaxeResolveContextWidget extends EditorBasedStatusBarPopup {
       store.pin(file, choice.context().path());
     }
     // the file's tree and its compiler-backed answers (diagnostics, resolve fallback) belong to the previous context
-    HaxeDefineContextService.getInstance(getProject()).fileContextChanged(file);
+    HaxeDefineContextService.getInstance(getProject()).relexFile(file);
     HaxeCompilerCaches.clearAndRehighlight(getProject(), "haxe: resolve context changed");
   }
 

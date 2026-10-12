@@ -17,6 +17,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.testFramework.PlatformTestUtil;
+import com.intellij.testFramework.fixtures.impl.CodeInsightTestFixtureImpl;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -107,7 +108,7 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     assertFalse(branchLive(psiFile(shared), "sys = true"), "a shared file follows the active build before a pin");
 
     HaxeResolveContextStore.getInstance(getProject()).pin(shared, cpp.getPath());
-    HaxeDefineContextService.getInstance(getProject()).fileContextChanged(shared);
+    HaxeDefineContextService.getInstance(getProject()).relexFile(shared);
 
     PlatformTestUtil.waitWithEventsDispatching("pinned to cpp.hxml: the sys branch must come alive", () -> branchLive(psiFile(shared), "sys = true"), 10);
   }
@@ -172,6 +173,30 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
     HaxeDefineContextService.getInstance(getProject()).refreshAsync();
 
     awaitInvalidationOf("CppMain.hx", "the read must not count as lexed under: CppMain is re-lexed");
+    awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
+  }
+
+  @Test
+  @DisplayName("a highlighting pass re-lexes a file whose branches disagree with its defines")
+  public void testAHighlightingPassReLexesAFileWhoseBranchesDisagreeWithItsDefines() {
+    VirtualFile web = myFixture.addFileToProject("web.hxml", WEB_HXML_SOURCE).getVirtualFile();
+    VirtualFile cpp = myFixture.addFileToProject("cpp.hxml", CPP_HXML_SOURCE).getVirtualFile();
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+    VirtualFile cppMain = myFixture.addFileToProject("src/CppMain.hx", FOO_GATED_SOURCE.formatted("CppMain")).getVirtualFile();
+    myFixture.openFileInEditor(cppMain);
+    assertFalse(branchLive(psiFile(cppMain), "foo = true"), "no -D foo yet");
+
+    // the edit reaches no refresh: nothing but the highlighting pass can notice it
+    myFixture.openFileInEditor(cpp);
+    Document document = myFixture.getEditor().getDocument();
+    WriteCommandAction.runWriteCommandAction(getProject(), () -> document.insertString(document.getTextLength(), "-D foo\n"));
+    PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+    myFixture.openFileInEditor(cppMain);
+    // the pass requests a reparse of the file it highlights; the harness refuses that unless told
+    ((CodeInsightTestFixtureImpl)myFixture).canChangeDocumentDuringHighlighting(true);
+    myFixture.doHighlighting();
+
+    awaitInvalidationOf("CppMain.hx", "the pass saw a dead branch whose condition holds: CppMain is re-lexed");
     awaitBranchLive(cppMain, "the foo branch is live after the re-lex");
   }
 

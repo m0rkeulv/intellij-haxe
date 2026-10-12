@@ -77,7 +77,7 @@ public final class HaxeResolveContextFollower implements FileEditorManagerListen
     if (!StartupManager.getInstance(project).postStartupActivityPassed() || !isHaxe(from)) return;
     boolean changed = HaxeReadActions.compute(() -> HaxeResolveContexts.getInstance(project).follow(from, to));
     if (changed) {
-      HaxeDefineContextService.getInstance(project).fileContextChanged(to);
+      HaxeDefineContextService.getInstance(project).relexFile(to);
     }
   }
 
