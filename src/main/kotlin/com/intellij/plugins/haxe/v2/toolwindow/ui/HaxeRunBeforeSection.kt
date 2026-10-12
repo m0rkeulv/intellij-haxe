@@ -36,7 +36,9 @@ import javax.swing.Icon
  * dialog currently shows); `refusal` says why a pick cannot run first (it
  * would loop), shown instead of adding it; `label` is a reference's text;
  * `missing` tells whether a reference names nothing any more; `location`
- * finds another build file's module and path.
+ * finds another build file's module and path. `label` and `missing` look
+ * the build file up, so they are asked once per reference, when it enters
+ * the list, never while painting.
  */
 class HaxeRunBeforeSection(
   private val candidates: Function<String, List<ActionReference>>,
@@ -48,6 +50,8 @@ class HaxeRunBeforeSection(
 ) {
   private val model = CollectionListModel(initial)
   private val list = JBList(model)
+  /** What each reference's row shows, read once per reference. */
+  private val rows = HashMap<ActionReference, Row>()
 
   /** The edited action's name as the dialog currently shows it; the candidates leave it and its users out. */
   var currentName: Supplier<String> = Supplier { "" }
@@ -55,16 +59,12 @@ class HaxeRunBeforeSection(
   val component: DialogPanel
 
   init {
+    initial.forEach { rows[it] = row(it) }
     list.emptyText.text = HaxeBundle.message("haxe.custom.action.dialog.run.before.empty")
     list.cellRenderer = listCellRenderer {
-      if (missing.apply(value)) {
-        icon(AllIcons.General.Error)
-        text(HaxeBundle.message("haxe.action.reference.missing", label.apply(value)))
-      }
-      else {
-        icon(HaxeActionIcons.forAction(value.action()))
-        text(label.apply(value))
-      }
+      val row = rows.getValue(value)
+      icon(row.icon)
+      text(row.text)
     }
     val decorated = ToolbarDecorator.createDecorator(list)
       .setAddAction { button -> chooseAction(button) }
@@ -91,6 +91,7 @@ class HaxeRunBeforeSection(
   private fun add(reference: ActionReference) {
     val message = refusal.apply(currentName.get(), reference)
     if (message == null) {
+      rows[reference] = row(reference)
       model.add(reference)
     }
     else {
@@ -123,6 +124,19 @@ class HaxeRunBeforeSection(
 
   private fun fileIcon(location: Location): Icon =
     location.type()?.icon ?: AllIcons.FileTypes.Any_type
+
+  private fun row(reference: ActionReference): Row {
+    val text = label.apply(reference)
+    return if (missing.apply(reference)) {
+      Row(AllIcons.General.Error, HaxeBundle.message("haxe.action.reference.missing", text))
+    }
+    else {
+      Row(HaxeActionIcons.forAction(reference.action()), text)
+    }
+  }
+
+  /** A reference's list row: a marked label when it names nothing any more. */
+  private data class Row(val icon: Icon, val text: String)
 
   /** A row of the + popup: an action to add, or a module or build file that opens the next level. */
   private sealed interface Choice {
