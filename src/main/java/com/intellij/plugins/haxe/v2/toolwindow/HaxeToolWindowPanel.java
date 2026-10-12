@@ -198,8 +198,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
 
   /**
    * Rebuilds the tree: scan + parse under a non-blocking read action, then the
-   * haxelib installed-library lookup (external process) outside any read action,
-   * then the Swing model update on the EDT.
+   * installed picture (its snapshot; a haxelib process only while there is
+   * none) outside any read action, then the Swing model update on the EDT.
    */
   public void refreshTree() {
     // every configuration change funnels through here - keep the parse-context
@@ -217,7 +217,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   private void updateTree(@NotNull List<ContainerEntry> scan) {
     Map<String, InstalledLibrary> installed = null;
     try {
-      installed = HaxeInstalledLibraries.getInstance(project).fetch();
+      installed = HaxeInstalledLibraries.getInstance(project).current();
     }
     catch (ProcessCanceledException e) {
       throw e;
