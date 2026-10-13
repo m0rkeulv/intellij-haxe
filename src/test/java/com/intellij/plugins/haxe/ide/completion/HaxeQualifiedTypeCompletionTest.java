@@ -1,13 +1,15 @@
 package com.intellij.plugins.haxe.ide.completion;
 
-import com.intellij.codeInsight.lookup.Lookup;
-import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
-import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The text a type completion leaves behind. A type declared inside another
@@ -17,6 +19,12 @@ import java.util.Arrays;
 @DisplayName("Completion: qualified type insertion")
 public class HaxeQualifiedTypeCompletionTest extends HaxeLightFixtureTestCase {
 
+  private static final String TOOLS_HX_NAME = "pack/sub/Tools.hx";
+  private static final String TOOLS_HX_SOURCE = """
+    package pack.sub;
+
+    class StringHelpers {}
+    """;
   private static final String REFLECT_HX_NAME = "pack/sub/Reflect.hx";
   private static final String REFLECT_HX_SOURCE = """
     package pack.sub;
@@ -91,14 +99,7 @@ public class HaxeQualifiedTypeCompletionTest extends HaxeLightFixtureTestCase {
       }
       """);
 
-    // the module Reflect.hx is offered beside its main type; the type is the one picked here
-    LookupElement[] items = myFixture.completeBasic();
-    LookupElement typeItem = Arrays.stream(items)
-      .filter(item -> item.getPsiElement() instanceof HaxeClass)
-      .findFirst()
-      .orElseThrow();
-    myFixture.getLookup().setCurrentItem(typeItem);
-    myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR);
+    myFixture.completeBasic();
 
     myFixture.checkResult("""
       class Main {
@@ -107,6 +108,28 @@ public class HaxeQualifiedTypeCompletionTest extends HaxeLightFixtureTestCase {
         }
       }
       """);
+  }
+
+  @Test
+  @DisplayName("a package lists a module only when no same named type stands for it")
+  public void testAPackageListsAModuleOnlyWhenNoSameNamedTypeStandsForIt() {
+    myFixture.addFileToProject(REFLECT_HX_NAME, REFLECT_HX_SOURCE);
+    myFixture.addFileToProject(TOOLS_HX_NAME, TOOLS_HX_SOURCE);
+    myFixture.configureByText("Main.hx", """
+      class Main {
+        static function main() {
+          pack.sub.<caret>;
+        }
+      }
+      """);
+
+    myFixture.completeBasic();
+    List<String> items = myFixture.getLookupElementStrings();
+
+    assertNotNull(items);
+    assertEquals(1, Collections.frequency(items, "Reflect"), "Reflect.hx's main type stands for the module: " + items);
+    assertTrue(items.contains("Tools"), "Tools.hx has no type of its name, so the module itself is offered: " + items);
+    assertTrue(items.contains("StringHelpers"), items.toString());
   }
 
   @Test
