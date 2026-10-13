@@ -66,7 +66,7 @@ public final class HaxeCompilerDisplayService {
   public record DisplayContext(@Nullable List<String> args,
                                @Nullable LimeDisplaySpec lime,
                                @Nullable String sdkName,
-                               @NotNull HaxeDisplayConfiguration.DefineOverrides overrides,
+                               @NotNull HaxeDisplayConfiguration.ContainerOverrides overrides,
                                @NotNull String containerId) {
   }
 
@@ -162,7 +162,8 @@ public final class HaxeCompilerDisplayService {
     if (!environment.isUsingCompilationServer(containerId)) return null;
     String sdkName = environment.getSdkName(containerId);
     String directory = buildFile.getParent().getPath();
-    HaxeDisplayConfiguration.DefineOverrides overrides = HaxeDisplayConfiguration.overridesFor(project, containerId);
+    boolean declaresTarget = type != HaxeBuildFileType.HXML || hxmlDeclaresTarget(buildFile);
+    HaxeDisplayConfiguration.ContainerOverrides overrides = HaxeDisplayConfiguration.overridesFor(project, containerId, declaresTarget);
 
     if (type == HaxeBuildFileType.HXML) {
       // hxml paths resolve against the file's work directory, not its folder
@@ -178,6 +179,15 @@ public final class HaxeCompilerDisplayService {
     LimeDisplaySpec lime =
       new LimeDisplaySpec(directory, buildFile.getName(), tool, targetFlag, buildFile.getModificationStamp());
     return new DisplayContext(null, lime, sdkName, overrides, containerId);
+  }
+
+  /**
+   * Whether the hxml's selected section, its includes merged, selects a
+   * target; the lime family and nme always pass one.
+   */
+  private boolean hxmlDeclaresTarget(@NotNull VirtualFile buildFile) {
+    String content = HaxeBuildSections.selectedSectionContent(project, new HaxeBuildFile(buildFile, HaxeBuildFileType.HXML));
+    return content != null && HxmlFileParser.declaresAnyTarget(content);
   }
 
   /**
@@ -212,7 +222,7 @@ public final class HaxeCompilerDisplayService {
   private DisplayContext nmeContext(@NotNull VirtualFile buildFile,
                                     @NotNull String directory,
                                     @Nullable String sdkName,
-                                    @NotNull HaxeDisplayConfiguration.DefineOverrides overrides,
+                                    @NotNull HaxeDisplayConfiguration.ContainerOverrides overrides,
                                     @NotNull String containerId) {
     String targetFlag = NmeProjects.selectedTargetFlag(project, buildFile);
     HaxeNmeProjectInfoService.Evaluation evaluation = HaxeNmeProjectInfoService.getInstance(project)

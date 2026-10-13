@@ -65,6 +65,22 @@ public class HxmlFileParserTest {
     assertEquals(target, HxmlFileParser.parse(line).target());
   }
 
+  /** (hxml content, whether it selects a target). */
+  static final List<Arguments> TARGET_SELECTIONS = List.of(
+    arguments("-js out.js", true),
+    arguments("--interp", true),
+    arguments("--custom-target go=export", true),
+    arguments("-cp src\n--run Main", true),
+    // a library's extraParams.hxml: classpaths, defines and macros, no target
+    arguments("-cp std\n-D hx2go\n--macro include('runtime', true)", false));
+
+  @ParameterizedTest(name = "{0}")
+  @FieldSource("TARGET_SELECTIONS")
+  @DisplayName("declares any target")
+  public void declaresAnyTarget(String content, boolean selectsTarget) {
+    assertEquals(selectsTarget, HxmlFileParser.declaresAnyTarget(content));
+  }
+
   @Test
   @DisplayName("first target flag wins")
   public void firstTargetFlagWins() {
