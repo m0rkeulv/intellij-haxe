@@ -98,6 +98,7 @@ public final class HaxeCompilerDisplayService {
   private final Set<String> compiledContexts = ConcurrentHashMap.newKeySet();
   /** What each running server answered on initialize, by port; a server state change empties it. */
   private final Map<Integer, Capability> capabilities = new ConcurrentHashMap<>();
+  private final HaxeServerUnsavedFiles unsavedFiles = new HaxeServerUnsavedFiles();
 
   public HaxeCompilerDisplayService(@NotNull Project project) {
     this.project = project;
@@ -248,9 +249,7 @@ public final class HaxeCompilerDisplayService {
     Connected connected = connectFor(context, DisplayMethods.DIAGNOSTICS);
     if (connected == null) return null;
     try {
-      if (contents != null) {
-        connected.client().invalidate(connected.args(), filePath);
-      }
+      prepareFile(connected, filePath, contents);
       List<FileDiagnostics> results = connected.client().diagnostics(connected.args(), filePath, contents);
       HaxeContextFailures.getInstance(project).record(context.containerId(), null);
       return results;
@@ -482,13 +481,32 @@ public final class HaxeCompilerDisplayService {
   }
 
   /**
+   * Readies the server for a request about one file, which sends the file's
+   * unsaved {@code contents} or null for the saved file. The file is
+   * invalidated first when the request sends text, since a cached module
+   * would hide it, and when the server last received unsaved text for it,
+   * since that module would otherwise keep answering for text the editor no
+   * longer has ({@link HaxeServerUnsavedFiles}).
+   */
+  void prepareFile(@NotNull Connected connected, @NotNull String filePath, @Nullable String contents)
+    throws DisplayRequestException {
+    boolean sendsText = contents != null;
+    if (unsavedFiles.needsInvalidate(connected.port(), filePath, sendsText)) {
+      connected.client().invalidate(connected.args(), filePath);
+    }
+    unsavedFiles.requestSent(connected.port(), filePath, sendsText);
+  }
+
+  /**
    * Forgets which contexts were compiled, what each server answered on
-   * initialize and the cached lime display arguments, so the next request
-   * initializes, evaluates and compiles again.
+   * initialize, which files' unsaved text each server holds and the cached
+   * lime display arguments, so the next request initializes, evaluates and
+   * compiles again.
    */
   public void clearCaches() {
     compiledContexts.clear();
     capabilities.clear();
+    unsavedFiles.clear();
     limeArgsCache.clear();
   }
 

@@ -117,10 +117,9 @@ public final class HaxeCompilerCompletionService {
     HaxeCompilerDisplayService.Connected connected = displayService.connectFor(context, DisplayMethods.COMPLETION);
     if (connected == null) return null;
     try {
-      if (unsaved) {
-        connected.client().invalidate(connected.args(), path);
-      }
-      return connected.client().completion(connected.args(), path, offset, unsaved ? contents : null, autoTriggered);
+      String sentContents = unsaved ? contents : null;
+      displayService.prepareFile(connected, path, sentContents);
+      return connected.client().completion(connected.args(), path, offset, sentContents, autoTriggered);
     } catch (DisplayRequestException e) {
       log.info("display/completion failed for " + path + ": " + e.getMessage());
       return null;

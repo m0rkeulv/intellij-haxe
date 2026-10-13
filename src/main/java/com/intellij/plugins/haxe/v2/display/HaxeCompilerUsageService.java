@@ -158,14 +158,12 @@ public final class HaxeCompilerUsageService {
 
   @NotNull
   private UsageState fetchVerdict(@NotNull Request request) {
-    HaxeCompilerDisplayService.Connected connected =
-      HaxeCompilerDisplayService.getInstance(project).connectFor(request.context(), DisplayMethods.FIND_REFERENCES);
+    HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
+    HaxeCompilerDisplayService.Connected connected = displayService.connectFor(request.context(), DisplayMethods.FIND_REFERENCES);
     if (connected == null) return UsageState.UNKNOWN;
     try {
       String filePath = request.key().filePath();
-      if (request.contents() != null) {
-        connected.client().invalidate(connected.args(), filePath);
-      }
+      displayService.prepareFile(connected, filePath, request.contents());
       List<Location> references = connected.client()
         .references(connected.args(), filePath, request.key().offset(), request.contents(), request.kind());
       return references.isEmpty() ? UsageState.UNUSED : UsageState.USED;

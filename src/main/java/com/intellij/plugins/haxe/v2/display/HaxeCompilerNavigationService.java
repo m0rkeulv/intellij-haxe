@@ -114,9 +114,7 @@ public final class HaxeCompilerNavigationService {
     Connected connected = displayService.connectFor(context, method);
     if (connected == null) return List.of();
     try {
-      if (contents != null) {
-        connected.client().invalidate(connected.args(), file.getPath());
-      }
+      displayService.prepareFile(connected, file.getPath(), contents);
       return request.send(connected, contents);
     } catch (DisplayRequestException e) {
       log.info(method + " failed for " + file.getPath() + ": " + e.getMessage());
