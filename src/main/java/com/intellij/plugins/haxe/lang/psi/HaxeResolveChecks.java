@@ -743,7 +743,7 @@ public final class HaxeResolveChecks {
                         if(haxeClassModel != null) {
                           HaxeBaseMemberModel member = haxeClassModel.getMember(reference.getText(), null);
                           if (member != null) {
-                            return List.of(member.getBasePsi());
+                            return List.of(member.getNameOrBasePsi());
                           }
                         }
                       }
@@ -1292,6 +1292,18 @@ public final class HaxeResolveChecks {
     return null;
   }
 
+  /**
+   * A found declaration at the level every check answers with and the
+   * resolve cache stores: its component name ({@code resolve()} maps it back
+   * to the declaration). A check answering with the declaration itself makes
+   * one reference resolve differently depending on which check answered.
+   */
+  @NotNull
+  private static List<PsiElement> componentNameOf(@NotNull PsiElement declaration) {
+    HaxeComponentName name = declaration instanceof HaxeNamedComponent named ? named.getComponentName() : null;
+    return List.of(name != null ? name : declaration);
+  }
+
   static List<? extends PsiElement> checkEnumExtractor(HaxeReference reference) {
 
 
@@ -1303,7 +1315,7 @@ public final class HaxeResolveChecks {
         PsiElement declaration = HaxeResolveUtil.resolveEnumValueDeclaration(classReference, argumentExtractor);
         if (declaration != null) {
           LogResolution(reference, "via enum extractor");
-          return List.of(declaration);
+          return componentNameOf(declaration);
         }
       }
     } else if (parent instanceof HaxeExtractorMatchAssignExpression assignExpression) {
@@ -1325,7 +1337,7 @@ public final class HaxeResolveChecks {
             PsiElement declaration = HaxeResolveUtil.resolveEnumValueDeclaration(classReference, reference.getText());
             if (declaration != null) {
               LogResolution(reference, "via enum extractor");
-              return List.of(declaration);
+              return componentNameOf(declaration);
             }
           }
         }
@@ -1372,7 +1384,7 @@ public final class HaxeResolveChecks {
                 if(classType != null && classType.getHaxeClassModel() instanceof HaxeEnumModel enumModel) {
                   HaxeEnumValueModel value = enumModel.getValue(reference.getText());
                   if(value != null && value.getEnumValuePsi() != null){
-                    return List.of(value.getEnumValuePsi());
+                    return componentNameOf(value.getEnumValuePsi());
                   }
                 }
               }
