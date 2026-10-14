@@ -55,7 +55,17 @@ final class HaxeToolWindowModelBuilder {
   record FileEntry(HaxeBuildFile buildFile, HaxeBuildFileInfo info, @Nullable String toolFailure, boolean manual,
                    List<ActionNode> actions,
                    List<String> sectionIds, List<String> sectionLabels, List<String> sectionDescriptors,
-                   int selectedSection) {
+                   int selectedSection, IdeOverridesData ideOverrides) {
+  }
+
+  /**
+   * A build file's IDE overrides as the tree shows them.
+   * {@code customTargetApplicable} is false for build types that always
+   * select a target; {@code buildTarget} names the target the build selects
+   * itself, null when it selects none.
+   */
+  record IdeOverridesData(List<DefineOverride> defines, @Nullable String customTarget,
+                          boolean customTargetApplicable, @Nullable String buildTarget) {
   }
 
   /**
@@ -81,9 +91,7 @@ final class HaxeToolWindowModelBuilder {
   }
 
   /** The container's environment as shown in the tree, resolved during the scan read action. */
-  record EnvironmentData(String sdkDisplay, boolean sdkMissing, String languageLevelDisplay,
-                         List<EnvDefineNode> defines, Set<String> activeBuildFileDefines,
-                         @Nullable String customTarget) {
+  record EnvironmentData(String sdkDisplay, boolean sdkMissing, String languageLevelDisplay) {
   }
 
   /** A container before global active-file resolution. */
@@ -103,18 +111,11 @@ final class HaxeToolWindowModelBuilder {
       .toList();
 
     String activePath = HaxeActiveBuildFileStore.getInstance(project).resolveActivePath(allPaths);
-    FileEntry activeEntry = rawContainers.stream()
-      .flatMap(raw -> raw.files().stream())
-      .filter(entry -> entry.buildFile().file().getPath().equals(activePath))
-      .findFirst()
-      .orElse(null);
-
-    Set<String> activeDefines = activeDefineNames(activeEntry);
 
     List<ContainerEntry> containers = new ArrayList<>();
     for (RawContainer raw : rawContainers) {
       EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files());
-      EnvironmentData environment = buildEnvironmentData(raw.id(), activeDefines);
+      EnvironmentData environment = buildEnvironmentData(raw.id());
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
       List<String> testsPaths = resolveTestsPaths(raw);
       List<String> markedTestsPaths = HaxeTestsBuildFileStore.getInstance(project).getTestsFilePaths(raw.id());
@@ -126,15 +127,6 @@ final class HaxeToolWindowModelBuilder {
       containers.add(container);
     }
     return containers;
-  }
-
-  /** The active build file's define names - the environment rows mark overrides of these. */
-  @NotNull
-  private static Set<String> activeDefineNames(@Nullable FileEntry activeEntry) {
-    if (activeEntry == null) return Set.of();
-    return activeEntry.info().defines().stream()
-      .map(HaxeBuildFileInfo.HaxeDefine::name)
-      .collect(Collectors.toSet());
   }
 
   /** Whether the user attached anything to the container: environment overrides, custom actions or custom tools. */
@@ -283,8 +275,28 @@ final class HaxeToolWindowModelBuilder {
     String toolFailure = HaxeBuildToolFailures.getInstance(project).lastFailure(buildFile.file().getPath());
     boolean manual = manualPaths.contains(buildFile.file().getPath());
     List<ActionNode> actions = buildFileActions(containerId, buildFile, HaxeProgramLaunches.launchOutput(info));
+    IdeOverridesData ideOverrides = ideOverridesData(buildFile, info);
     return new FileEntry(buildFile, info, toolFailure, manual, actions, sectionIds, sectionLabels(sectionIds), sectionDescriptors,
-                         selectedSection);
+                         selectedSection, ideOverrides);
+  }
+
+  @NotNull
+  private IdeOverridesData ideOverridesData(@NotNull HaxeBuildFile buildFile, @NotNull HaxeBuildFileInfo info) {
+    HaxeIdeOverridesStore store = HaxeIdeOverridesStore.getInstance(project);
+    String path = buildFile.file().getPath();
+    boolean customTargetApplicable = buildFile.type() == HaxeBuildFileType.HXML;
+    String buildTarget = ownTargetOfHxml(buildFile, info);
+    return new IdeOverridesData(store.getDefines(path), store.getCustomTarget(path), customTargetApplicable, buildTarget);
+  }
+
+  /** The target an hxml selects itself, by name; null for other build types and for an hxml selecting none. */
+  @Nullable
+  private String ownTargetOfHxml(@NotNull HaxeBuildFile buildFile, @NotNull HaxeBuildFileInfo info) {
+    if (buildFile.type() != HaxeBuildFileType.HXML) return null;
+    if (!HaxeIdeOverrides.buildSelectsTarget(project, buildFile)) return null;
+    if (info.target() != null) return info.target().toString();
+    String customTarget = info.customTargetName();
+    return customTarget != null ? customTarget : HaxeBundle.message("haxe.toolwindow.node.ide.custom.target.build.own");
   }
 
   /** The {@code --next} sections of a multi-section hxml; empty for single-section files and other build types. */
@@ -435,7 +447,7 @@ final class HaxeToolWindowModelBuilder {
   }
 
   @NotNull
-  private EnvironmentData buildEnvironmentData(@NotNull String containerId, @NotNull Set<String> activeFileDefines) {
+  private EnvironmentData buildEnvironmentData(@NotNull String containerId) {
     HaxeEnvironmentStore environmentStore = HaxeEnvironmentStore.getInstance(project);
 
     String sdkName = environmentStore.getSdkName(containerId);
@@ -457,13 +469,7 @@ final class HaxeToolWindowModelBuilder {
     String levelDisplay = levelOverride != null
                           ? levelOverride.getPresentableText()
                           : defaultLevelDisplay(compilerSettings, containerId);
-
-    List<EnvDefineNode> defines = environmentStore.getDefines(containerId).stream()
-      .map(define -> new EnvDefineNode(containerId, define.name(), define.value(), define.effect(),
-                                       activeFileDefines.contains(define.name())))
-      .toList();
-    String customTarget = environmentStore.getCustomTarget(containerId);
-    return new EnvironmentData(sdkDisplay, sdkMissing, levelDisplay, defines, activeFileDefines, customTarget);
+    return new EnvironmentData(sdkDisplay, sdkMissing, levelDisplay);
   }
 
   /** The "Project default (X)" label following the compiler settings' per-container default level. */

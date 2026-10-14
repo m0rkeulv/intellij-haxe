@@ -332,10 +332,80 @@ public final class HaxeToolWindowNodes {
     }
   }
 
-  /** "Environment" row under a container: its SDK, language level, define overrides and custom target. */
-  public record EnvironmentNode(@NotNull String containerId,
-                                @NotNull String displayName,
-                                @NotNull Set<String> activeBuildFileDefines) implements HaxeToolWindowNode {
+  /**
+   * "IDE Overrides" row under a build file: what code analysis adds to the
+   * build, never passed to builds or runs. {@code count} counts the define
+   * entries plus a set custom target; {@code buildDefineNames} are the build's
+   * own defines, which an entry of the same name overrides;
+   * {@code customTargetApplicable} is false for build types that always
+   * select a target.
+   */
+  public record IdeOverridesNode(@NotNull HaxeBuildFile buildFile,
+                                 int count,
+                                 @NotNull Set<String> buildDefineNames,
+                                 boolean customTargetApplicable) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "ideoverrides";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.ide.overrides");
+    }
+  }
+
+  /** The "Defines" row under IDE Overrides. */
+  public record IdeDefinesNode(@NotNull HaxeBuildFile buildFile, int count) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "idedefines";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.defines");
+    }
+  }
+
+  /** An IDE define entry; {@code inBuildFile} = the build file declares the same name. */
+  public record IdeDefineNode(@NotNull HaxeBuildFile buildFile,
+                              @NotNull String name,
+                              @NotNull String value,
+                              @NotNull DefineEffect effect,
+                              boolean inBuildFile) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "idedef:" + name;
+    }
+
+    @Override
+    public String speedSearchText() {
+      return name;
+    }
+  }
+
+  /**
+   * The custom target row under IDE Overrides ({@code --custom-target} name,
+   * null when unset); clicking opens an input dialog. {@code buildTarget}
+   * names the target the build selects itself, which then wins; null when it
+   * selects none.
+   */
+  public record IdeCustomTargetNode(@NotNull HaxeBuildFile buildFile, @Nullable String customTarget, @Nullable String buildTarget)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "idecustomtarget";
+    }
+
+    @Override
+    public String speedSearchText() {
+      return HaxeBundle.message("haxe.toolwindow.node.ide.custom.target");
+    }
+  }
+
+  /** "Environment" row under a container: its SDK and language level. */
+  public record EnvironmentNode(@NotNull String containerId) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
       return "env";
@@ -372,33 +442,6 @@ public final class HaxeToolWindowNodes {
     @Override
     public String speedSearchText() {
       return displayName;
-    }
-  }
-
-  /** Environment "Defines" grouping row. */
-  public record EnvDefinesNode(@NotNull String containerId, int count) implements HaxeToolWindowNode {
-    @Override
-    public String expansionKey() {
-      return "envdefines";
-    }
-
-    @Override
-    public String speedSearchText() {
-      return HaxeBundle.message("haxe.toolwindow.node.environment.defines");
-    }
-  }
-
-  /** Environment "Custom target" row ({@code --custom-target} name, null when unset); clicking opens an input dialog. */
-  public record EnvCustomTargetNode(@NotNull String containerId, @Nullable String customTarget)
-    implements HaxeToolWindowNode {
-    @Override
-    public String expansionKey() {
-      return "envcustomtarget";
-    }
-
-    @Override
-    public String speedSearchText() {
-      return HaxeBundle.message("haxe.toolwindow.node.environment.custom.target");
     }
   }
 
@@ -465,23 +508,6 @@ public final class HaxeToolWindowNodes {
     @Override
     public String speedSearchText() {
       return display;
-    }
-  }
-
-  /** A user define entry; {@code inBuildFile} = the active build file declares the same name. */
-  public record EnvDefineNode(@NotNull String containerId,
-                              @NotNull String name,
-                              @NotNull String value,
-                              @NotNull DefineEffect effect,
-                              boolean inBuildFile) implements HaxeToolWindowNode {
-    @Override
-    public String expansionKey() {
-      return "envdef:" + name;
-    }
-
-    @Override
-    public String speedSearchText() {
-      return name;
     }
   }
 

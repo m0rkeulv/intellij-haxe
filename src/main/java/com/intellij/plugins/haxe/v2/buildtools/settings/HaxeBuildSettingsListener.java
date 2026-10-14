@@ -25,7 +25,7 @@ public interface HaxeBuildSettingsListener extends EventListener {
   };
 
   /** The part of a container's environment that changed; {@code ALL} when the whole environment was dropped. */
-  enum EnvironmentAspect { SDK, COMPILE_COMMAND, COMPILATION_SERVER, CUSTOM_TARGET, DEFINES, ALL }
+  enum EnvironmentAspect { SDK, COMPILE_COMMAND, COMPILATION_SERVER, ALL }
 
   /** A store loaded its persisted state (project open): everything derived from it starts over. */
   default void stateLoaded() {
@@ -50,6 +50,11 @@ public interface HaxeBuildSettingsListener extends EventListener {
   }
 
   default void environmentChanged(@NotNull String containerId, @NotNull EnvironmentAspect aspect) {
+    anySettingChanged();
+  }
+
+  /** A build file's IDE overrides changed: its define entries or its custom target. */
+  default void ideOverridesChanged(@NotNull String buildFilePath) {
     anySettingChanged();
   }
 

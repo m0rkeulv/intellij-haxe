@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
-import com.intellij.plugins.haxe.v2.display.HaxeDisplayConfiguration.ContainerOverrides;
+import com.intellij.plugins.haxe.v2.display.HaxeDisplayConfiguration.OverrideArguments;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -25,7 +25,7 @@ public class HaxeDisplayConfigurationTest {
   @DisplayName("set overrides append as later defines")
   public void testSetOverridesAppendAsLaterDefines() {
     List<String> base = List.of("--cwd", "dir", "build.hxml");
-    ContainerOverrides overrides = new ContainerOverrides(Set.of(), List.of("-D", "console=ps4", "-D", "debug_hud"), null);
+    OverrideArguments overrides = new OverrideArguments(Set.of(), List.of("-D", "console=ps4", "-D", "debug_hud"), null);
 
     List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
 
@@ -37,14 +37,14 @@ public class HaxeDisplayConfigurationTest {
   public void testEmptyOverridesLeaveTheArgumentsUntouched() {
     List<String> base = List.of("--cwd", "dir", "build.hxml");
 
-    assertSame(base, HaxeDisplayConfiguration.applyOverrides(base, ContainerOverrides.EMPTY));
+    assertSame(base, HaxeDisplayConfiguration.applyOverrides(base, OverrideArguments.EMPTY));
   }
 
   @Test
   @DisplayName("remove strips both define spellings and valued defines")
   public void testRemoveStripsBothDefineSpellingsAndValuedDefines() {
     List<String> base = List.of("-D", "alpha", "-D", "beta=2", "--define", "gamma=x", "-cp", "src");
-    ContainerOverrides overrides = new ContainerOverrides(Set.of("alpha", "gamma"), List.of(), null);
+    OverrideArguments overrides = new OverrideArguments(Set.of("alpha", "gamma"), List.of(), null);
 
     List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
 
@@ -60,7 +60,7 @@ public class HaxeDisplayConfigurationTest {
       -main Main
       """);
     List<String> base = List.of("--cwd", directory.toString(), "build.hxml");
-    ContainerOverrides overrides = new ContainerOverrides(Set.of("legacy_api"), List.of("-D", "modern_api"), null);
+    OverrideArguments overrides = new OverrideArguments(Set.of("legacy_api"), List.of("-D", "modern_api"), null);
 
     List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
 
@@ -74,48 +74,46 @@ public class HaxeDisplayConfigurationTest {
   @DisplayName("a custom target is appended after the defines")
   public void testACustomTargetIsAppendedAfterTheDefines() {
     List<String> base = List.of("--cwd", "dir", "extraParams.hxml");
-    ContainerOverrides overrides = new ContainerOverrides(Set.of(), List.of("-D", "hx2go"), "go");
+    OverrideArguments overrides = new OverrideArguments(Set.of(), List.of("-D", "hx2go"), "go");
 
     List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
 
     assertEquals(List.of("--cwd", "dir", "extraParams.hxml", "-D", "hx2go", "--custom-target", "go"), applied);
   }
 
-  /** (container's Custom target, the container's compiler, whether the build selects a target, what is forwarded). */
+  /** (the custom target analysis uses, the container's compiler, what is forwarded). */
   static final List<Arguments> CUSTOM_TARGET_FORWARDING = List.of(
-    arguments("go", HaxeLanguageLevel.HAXE_5_0, false, "go"),
-    // the build's own target stays: a second target fails the compile
-    arguments("go", HaxeLanguageLevel.HAXE_5_0, true, null),
+    arguments("go", HaxeLanguageLevel.HAXE_5_0, "go"),
     // Haxe 4 has no --custom-target flag
-    arguments("go", HaxeLanguageLevel.HAXE_4_3, false, null),
+    arguments("go", HaxeLanguageLevel.HAXE_4_3, null),
     // no registered SDK: the version is unknown, nothing is risked
-    arguments("go", null, false, null),
-    arguments(null, HaxeLanguageLevel.HAXE_5_0, false, null));
+    arguments("go", null, null),
+    arguments(null, HaxeLanguageLevel.HAXE_5_0, null));
 
-  @ParameterizedTest(name = "{0} on {1}, build target {2}")
+  @ParameterizedTest(name = "{0} on {1}")
   @FieldSource("CUSTOM_TARGET_FORWARDING")
   @DisplayName("custom target to forward")
-  public void testCustomTargetToForward(String customTarget, HaxeLanguageLevel compiler, boolean buildDeclaresTarget, String forwarded) {
-    assertEquals(forwarded, HaxeDisplayConfiguration.customTargetToForward(customTarget, compiler, buildDeclaresTarget));
+  public void testCustomTargetToForward(String customTarget, HaxeLanguageLevel compiler, String forwarded) {
+    assertEquals(forwarded, HaxeDisplayConfiguration.customTargetToForward(customTarget, compiler));
   }
 
   @Test
   @DisplayName("a custom target separates server contexts")
   public void testACustomTargetSeparatesServerContexts() {
-    ContainerOverrides withoutTarget = new ContainerOverrides(Set.of(), List.of("-D", "b"), null);
-    ContainerOverrides withTarget = new ContainerOverrides(Set.of(), List.of("-D", "b"), "go");
+    OverrideArguments withoutTarget = new OverrideArguments(Set.of(), List.of("-D", "b"), null);
+    OverrideArguments withTarget = new OverrideArguments(Set.of(), List.of("-D", "b"), "go");
 
     assertNotEquals(withoutTarget.signature(), withTarget.signature());
-    assertFalse(new ContainerOverrides(Set.of(), List.of(), "go").isEmpty());
+    assertFalse(new OverrideArguments(Set.of(), List.of(), "go").isEmpty());
   }
 
   @Test
   @DisplayName("override signatures separate server contexts")
   public void testOverrideSignaturesSeparateServerContexts() {
-    ContainerOverrides first = new ContainerOverrides(Set.of("a"), List.of("-D", "b"), null);
-    ContainerOverrides second = new ContainerOverrides(Set.of("a"), List.of("-D", "c"), null);
+    OverrideArguments first = new OverrideArguments(Set.of("a"), List.of("-D", "b"), null);
+    OverrideArguments second = new OverrideArguments(Set.of("a"), List.of("-D", "c"), null);
 
     assertNotEquals(first.signature(), second.signature());
-    assertTrue(ContainerOverrides.EMPTY.signature().isEmpty());
+    assertTrue(OverrideArguments.EMPTY.signature().isEmpty());
   }
 }

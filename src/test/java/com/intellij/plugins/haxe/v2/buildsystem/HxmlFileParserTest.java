@@ -110,6 +110,8 @@ public class HxmlFileParserTest {
     HaxeBuildFileInfo bare = HxmlFileParser.parse("--custom-target go");
     assertNull(bare.target());
     assertEquals(List.of(new HaxeDefine("custom_target", null), new HaxeDefine("target.name", "go")), bare.defines());
+    assertEquals("go", bare.customTargetName());
+    assertNull(HxmlFileParser.parse("-js out.js").customTargetName(), "a stock target is no custom target");
 
     // "name=path" carries the generator path, which the defines do not; first declaration wins
     HaxeBuildFileInfo withPath = HxmlFileParser.parse("""

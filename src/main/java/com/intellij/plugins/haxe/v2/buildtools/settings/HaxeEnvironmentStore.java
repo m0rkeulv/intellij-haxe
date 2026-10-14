@@ -11,30 +11,37 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import org.jetbrains.annotations.TestOnly;
 
 /**
- * Per-container (module / project root) environment: the Haxe SDK to use and
- * user-managed defines applied on top of the active build file's own defines.
- * A define entry either sets a value (adding or overriding the build file's) or
- * removes a define the build file declares. Shares {@code .idea/haxeBuildConfig.xml}
- * with the active-build-file selection.
+ * Per-container (module / project root) environment: the Haxe SDK to use, the
+ * Build command and whether builds use the compilation server. Shares
+ * {@code .idea/haxeBuildConfig.xml} with the active-build-file selection.
+ * Define entries and the custom target are per build file
+ * ({@link HaxeIdeOverridesStore}).
  */
 @Service(Service.Level.PROJECT)
 @State(name = "HaxeEnvironments", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeEnvironmentStore implements PersistentStateComponent<HaxeEnvironmentStore.State> {
 
+  /** The layout {@link #getState} writes. Version 1 moved define entries and the custom target to the build files. */
+  static final int STATE_VERSION = 1;
+
   public static final class State {
+    /**
+     * The layout version, 0 for a layout older than the field. Values equal
+     * to the default are not written, so the default stays 0 and
+     * {@link #getState} stamps the current version.
+     */
+    public int version;
     public List<ContainerEnvironment> environments = new ArrayList<>();
   }
 
+  /** Options of an older layout that this class no longer declares are skipped on load and dropped on the next save. */
   public static final class ContainerEnvironment {
     public String containerId;
     public String sdkName;
-    public List<DefineState> defines = new ArrayList<>();
-    public String customTarget;
     public String compileFilePath;
     public String compileActionName;
     public String compileArguments = "";
@@ -46,12 +53,6 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
    * (null = the type-derived default command) and extra arguments (e.g. "-clean -debug").
    */
   public record CompileCommand(@NotNull String buildFilePath, @Nullable String actionName, @NotNull String arguments) {
-  }
-
-  public static final class DefineState {
-    public String name;
-    public String value = "";
-    public String effect = DefineEffect.SET.name();
   }
 
   private final @Nullable Project project;
@@ -74,6 +75,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
 
   @Override
   public @NotNull State getState() {
+    state.version = STATE_VERSION;
     return state;
   }
 
@@ -82,38 +84,16 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     if (state.environments == null) {
       state.environments = new ArrayList<>();
     }
-    state.environments.forEach(HaxeEnvironmentStore::sanitizeDefines);
     this.state = state;
     HaxeBuildSettingsListener.publisher(project).stateLoaded();
   }
 
-  /**
-   * XML from an older storage format (defines were a map) deserializes into the list
-   * as foreign objects (Strings) because of type erasure - they must be dropped here
-   * or every later access explodes with a ClassCastException.
-   */
-  private static void sanitizeDefines(@NotNull ContainerEnvironment environment) {
-    if (environment.defines == null) {
-      environment.defines = new ArrayList<>();
-      return;
-    }
-    List<DefineState> cleaned = new ArrayList<>();
-    for (Object entry : (List<?>)environment.defines) {
-      if (entry instanceof DefineState defineState) {
-        cleaned.add(defineState);
-      }
-    }
-    environment.defines = cleaned;
-  }
-
-  /** Whether the user overrode anything for the container: SDK, defines, target, compile command or server opt-out. */
+  /** Whether the user overrode anything for the container: SDK, compile command or server opt-out. */
   public boolean hasUserOverrides(@NotNull String containerId) {
     ContainerEnvironment environment = find(containerId);
     if (environment == null) return false;
     return StringUtil.isNotEmpty(environment.sdkName)
-           || StringUtil.isNotEmpty(environment.customTarget)
            || StringUtil.isNotEmpty(environment.compileFilePath)
-           || !environment.defines.isEmpty()
            || !environment.useCompilationServer;
   }
 
@@ -174,95 +154,6 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
   public void setUsingCompilationServer(@NotNull String containerId, boolean use) {
     getOrCreate(containerId).useCompilationServer = use;
     HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.COMPILATION_SERVER);
-  }
-
-  /**
-   * The container's custom compilation target ({@code --custom-target} name), or
-   * null when unset. Activates the target's {@code <Module>.<name>.hx} variant
-   * files and wins over an hxml-declared custom target.
-   */
-  @Nullable
-  public String getCustomTarget(@NotNull String containerId) {
-    ContainerEnvironment environment = find(containerId);
-    return environment == null ? null : StringUtil.nullize(environment.customTarget, true);
-  }
-
-  public void setCustomTarget(@NotNull String containerId, @Nullable String customTarget) {
-    getOrCreate(containerId).customTarget = customTarget == null ? null : StringUtil.nullize(customTarget.trim());
-    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.CUSTOM_TARGET);
-  }
-
-  /** The container's define entries, in name order. */
-  @NotNull
-  public List<EnvironmentDefine> getDefines(@NotNull String containerId) {
-    ContainerEnvironment environment = find(containerId);
-    if (environment == null) return List.of();
-    return environment.defines.stream()
-      .filter(define -> !StringUtil.isEmptyOrSpaces(define.name))
-      .map(HaxeEnvironmentStore::toDefine)
-      .sorted(Comparator.comparing(EnvironmentDefine::name, String.CASE_INSENSITIVE_ORDER))
-      .toList();
-  }
-
-  /** Replaces the container's define entries (the Configure Environment dialog applies the whole list). */
-  public void setDefines(@NotNull String containerId, @NotNull List<EnvironmentDefine> defines) {
-    List<DefineState> serialized = new ArrayList<>();
-    for (EnvironmentDefine define : defines) {
-      if (StringUtil.isEmptyOrSpaces(define.name())) continue;
-      DefineState defineState = new DefineState();
-      defineState.name = define.name();
-      defineState.value = define.value();
-      defineState.effect = define.effect().name();
-      serialized.add(defineState);
-    }
-    getOrCreate(containerId).defines = serialized;
-    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.DEFINES);
-  }
-
-  /** Adds or updates a SET define, keeping any other entries. */
-  public void putDefine(@NotNull String containerId, @NotNull String name, @NotNull String value) {
-    putEntry(containerId, name, value, DefineEffect.SET);
-  }
-
-  /** Adds a REMOVE entry, which hides a define the build context sets; replaces any entry of the same name. */
-  public void putUndefine(@NotNull String containerId, @NotNull String name) {
-    putEntry(containerId, name, "", DefineEffect.REMOVE);
-  }
-
-  private void putEntry(@NotNull String containerId,
-                        @NotNull String name,
-                        @NotNull String value,
-                        @NotNull DefineEffect effect) {
-    DefineState defineState = new DefineState();
-    defineState.name = name;
-    defineState.value = value;
-    defineState.effect = effect.name();
-
-    ContainerEnvironment environment = getOrCreate(containerId);
-    environment.defines.removeIf(define -> name.equals(define.name));
-    environment.defines.add(defineState);
-
-    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.DEFINES);
-  }
-
-  public void removeDefine(@NotNull String containerId, @NotNull String name) {
-    ContainerEnvironment environment = find(containerId);
-    if (environment != null) {
-      environment.defines.removeIf(define -> name.equals(define.name));
-    }
-    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.DEFINES);
-  }
-
-  @NotNull
-  private static EnvironmentDefine toDefine(@NotNull DefineState defineState) {
-    DefineEffect effect;
-    try {
-      effect = DefineEffect.valueOf(StringUtil.notNullize(defineState.effect, DefineEffect.SET.name()));
-    }
-    catch (IllegalArgumentException e) {
-      effect = DefineEffect.SET;
-    }
-    return new EnvironmentDefine(defineState.name, StringUtil.notNullize(defineState.value), effect);
   }
 
   @Nullable

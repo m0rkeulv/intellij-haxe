@@ -53,6 +53,11 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       case GroupNode group -> countRow(groupIcon(group.kind()), groupLabel(group.kind()), group.count());
       case DefineNode define -> renderDefine(define.name(), define.value());
       case EnvironmentNode ignored -> labelRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.environment"));
+      case IdeOverridesNode overrides ->
+        countRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.ide.overrides"), overrides.count());
+      case IdeDefinesNode defines -> countRow(AllIcons.Nodes.Folder, HaxeBundle.message("haxe.toolwindow.node.defines"), defines.count());
+      case IdeDefineNode define -> renderIdeDefine(define);
+      case IdeCustomTargetNode customTarget -> renderCustomTarget(customTarget);
       case BuildGroupNode buildGroup ->
         countRow(AllIcons.Nodes.Folder, HaxeBundle.message("haxe.toolwindow.node.build"), buildGroup.count());
       case CompilationGroupNode ignored -> labelRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.compilation"));
@@ -72,12 +77,6 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
         valueRow(AllIcons.Actions.Compile, HaxeBundle.message("haxe.toolwindow.node.compile.command"), compileCommand.display(), true);
       case EnvLanguageLevelNode level ->
         valueRow(AllIcons.Nodes.Property, HaxeBundle.message("haxe.toolwindow.node.environment.language.level"), level.displayName(), true);
-      case EnvDefinesNode defines ->
-        countRow(AllIcons.Nodes.Folder, HaxeBundle.message("haxe.toolwindow.node.environment.defines"), defines.count());
-      case EnvCustomTargetNode customTarget ->
-        valueRow(AllIcons.Nodes.Property, HaxeBundle.message("haxe.toolwindow.node.environment.custom.target"),
-                 customTargetDisplay(customTarget), true);
-      case EnvDefineNode define -> renderEnvironmentDefine(define);
       case LibraryNode library -> renderLibrary(library);
       case null -> { }
       default -> append(String.valueOf(userObject));
@@ -160,17 +159,37 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     }
   }
 
-  private void renderEnvironmentDefine(@NotNull EnvDefineNode define) {
+  private void renderIdeDefine(@NotNull IdeDefineNode define) {
     if (define.effect() == DefineEffect.REMOVE) {
       setIcon(AllIcons.Nodes.Property);
       append(define.name(), STRIKEOUT_ATTRIBUTES);
-      append("  " + HaxeBundle.message("haxe.environment.effect.remove"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      append("  " + HaxeBundle.message("haxe.ide.overrides.effect.remove"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
       return;
     }
     renderDefine(define.name(), define.value());
     if (define.inBuildFile()) {
       append("  " + HaxeBundle.message("haxe.toolwindow.node.define.overriding"), SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
+  }
+
+  /** A custom target the build's own target beats is struck through, with the target that wins. */
+  private void renderCustomTarget(@NotNull IdeCustomTargetNode customTarget) {
+    String label = HaxeBundle.message("haxe.toolwindow.node.ide.custom.target");
+    if (customTarget.customTarget() == null) {
+      valueRow(AllIcons.Nodes.Property, label, HaxeBundle.message("haxe.toolwindow.node.target.unspecified"), true);
+      return;
+    }
+    if (customTarget.buildTarget() == null) {
+      valueRow(AllIcons.Nodes.Property, label, customTarget.customTarget(), true);
+      return;
+    }
+    setIcon(AllIcons.Nodes.Property);
+    append(label);
+    append("  ");
+    append(customTarget.customTarget(), STRIKEOUT_ATTRIBUTES);
+    String buildWins = HaxeBundle.message("haxe.toolwindow.node.ide.custom.target.build.wins", customTarget.buildTarget());
+    append("  " + buildWins, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    append(CHOOSER_MARKER, SimpleTextAttributes.GRAYED_ATTRIBUTES);
   }
 
   private void renderLibrary(@NotNull LibraryNode library) {
@@ -199,8 +218,9 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       case EnvironmentNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment");
       case EnvSdkNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.sdk");
       case EnvLanguageLevelNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.language.level");
-      case EnvDefinesNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment.defines");
-      case EnvCustomTargetNode ignored -> HaxeBundle.message("haxe.environment.dialog.custom.target.tooltip");
+      case IdeOverridesNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.ide.overrides");
+      case IdeDefinesNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.ide.defines");
+      case IdeCustomTargetNode customTarget -> customTargetTooltip(customTarget);
       case BuildGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.build.files");
       case TargetNode target ->
         HaxeBundle.message(target.selectable() ? "haxe.toolwindow.tooltip.target.selectable" : "haxe.toolwindow.tooltip.target");
@@ -265,10 +285,10 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
   }
 
   @NotNull
-  private static String customTargetDisplay(@NotNull EnvCustomTargetNode customTarget) {
-    return customTarget.customTarget() != null
-           ? customTarget.customTarget()
-           : HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
+  private static String customTargetTooltip(@NotNull IdeCustomTargetNode customTarget) {
+    boolean beaten = customTarget.customTarget() != null && customTarget.buildTarget() != null;
+    return HaxeBundle.message(beaten ? "haxe.toolwindow.tooltip.ide.custom.target.build.wins"
+                                     : "haxe.ide.overrides.dialog.custom.target.tooltip");
   }
 
   @NotNull

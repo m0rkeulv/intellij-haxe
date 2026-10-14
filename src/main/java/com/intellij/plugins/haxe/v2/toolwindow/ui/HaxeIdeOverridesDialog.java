@@ -1,21 +1,18 @@
 package com.intellij.plugins.haxe.v2.toolwindow.ui;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.projectRoots.ProjectJdkTable;
-import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.InputValidatorEx;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants.CustomTargetProblem;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeIdeOverridesStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
-import com.intellij.plugins.haxe.v2.buildtools.settings.EnvironmentDefine;
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineOverride;
 import com.intellij.ui.TableUtil;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
@@ -35,18 +32,18 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * "Configure Environment" dialog for one container: the Haxe SDK to use, the
- * define entries and the custom compilation target.
- * The Effect column shows what an entry does against the active build
- * file: Add (new name), Override (name exists there) or Remove (unsets the
- * build file's define). The layout lives in the matching
- * .form; the defines table plus its toolbar is the form's custom-created panel
- * (see {@link #createUIComponents}).
+ * "IDE Overrides" dialog for one build file: its define entries and its
+ * custom compilation target. The Effect column shows what an entry does
+ * against the build file: Add (new name), Override (name exists there) or
+ * Remove (unsets the build file's define). The custom target row is hidden
+ * for build types that always select a target. The layout lives in the
+ * matching .form; the defines table plus its toolbar is the form's
+ * custom-created panel (see {@link #createUIComponents}).
  */
-public final class HaxeEnvironmentDialog extends DialogWrapper {
+public final class HaxeIdeOverridesDialog extends DialogWrapper {
 
   /** Validates a custom target entry, here and in the tree row's prompt: blank clears it, anything else must be a target name. */
-  public static final InputValidatorEx CUSTOM_TARGET_VALIDATOR = HaxeEnvironmentDialog::customTargetError;
+  public static final InputValidatorEx CUSTOM_TARGET_VALIDATOR = HaxeIdeOverridesDialog::customTargetError;
 
   /** Mutable table row; blank names are dropped on apply. */
   private static final class DefineRow {
@@ -56,28 +53,28 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
   }
 
   private final Project project;
-  private final String containerId;
-  private final Set<String> activeBuildFileDefines;
+  private final String buildFilePath;
+  private final Set<String> buildDefineNames;
 
   private JPanel panel;
-  private ComboBox<String> sdkCombo;
   private JPanel definesPanel;
+  private JLabel customTargetLabel;
   private JTextField customTargetField;
   private ListTableModel<DefineRow> tableModel;
   private TableView<DefineRow> table;
 
-  public HaxeEnvironmentDialog(@NotNull Project project,
-                               @NotNull String containerId,
-                               @NotNull String containerDisplayName,
-                               @NotNull Set<String> activeBuildFileDefines) {
+  public HaxeIdeOverridesDialog(@NotNull Project project,
+                                @NotNull HaxeBuildFile buildFile,
+                                @NotNull Set<String> buildDefineNames,
+                                boolean customTargetApplicable) {
     super(project);
     this.project = project;
-    this.containerId = containerId;
-    this.activeBuildFileDefines = activeBuildFileDefines;
+    this.buildFilePath = buildFile.file().getPath();
+    this.buildDefineNames = buildDefineNames;
 
-    setTitle(HaxeBundle.message("haxe.environment.dialog.title", containerDisplayName));
-    sdkCombo.setRenderer(BuilderKt.textListCellRenderer(
-      HaxeBundle.message("haxe.toolwindow.environment.sdk.default.choice"), name -> name));
+    setTitle(HaxeBundle.message("haxe.ide.overrides.dialog.title", buildFile.file().getName()));
+    customTargetLabel.setVisible(customTargetApplicable);
+    customTargetField.setVisible(customTargetApplicable);
     fillFromStore();
     init();
   }
@@ -101,22 +98,10 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
   }
 
   private void fillFromStore() {
-    HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
-
-    DefaultComboBoxModel<String> sdkModel = new DefaultComboBoxModel<>();
-    sdkModel.addElement(null);
-    for (Sdk sdk : ProjectJdkTable.getInstance().getSdksOfType(HaxeSdkType.getInstance())) {
-      sdkModel.addElement(sdk.getName());
-    }
-    String storedSdk = store.getSdkName(containerId);
-    if (storedSdk != null && sdkModel.getIndexOf(storedSdk) < 0) {
-      sdkModel.addElement(storedSdk);
-    }
-    sdkCombo.setModel(sdkModel);
-    sdkCombo.setSelectedItem(storedSdk);
+    HaxeIdeOverridesStore store = HaxeIdeOverridesStore.getInstance(project);
 
     List<DefineRow> rows = new ArrayList<>();
-    for (EnvironmentDefine define : store.getDefines(containerId)) {
+    for (DefineOverride define : store.getDefines(buildFilePath)) {
       DefineRow row = new DefineRow();
       row.name = define.name();
       row.value = define.value();
@@ -125,7 +110,7 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
     }
     tableModel.setItems(rows);
 
-    customTargetField.setText(StringUtil.notNullize(store.getCustomTarget(containerId)));
+    customTargetField.setText(StringUtil.notNullize(store.getCustomTarget(buildFilePath)));
   }
 
   private void addRow() {
@@ -148,17 +133,15 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
       editor.stopCellEditing();
     }
 
-    List<EnvironmentDefine> defines = new ArrayList<>();
+    List<DefineOverride> defines = new ArrayList<>();
     for (DefineRow row : tableModel.getItems()) {
       if (StringUtil.isEmptyOrSpaces(row.name)) continue;
-      defines.add(new EnvironmentDefine(row.name.trim(), row.value.trim(), row.effect));
+      defines.add(new DefineOverride(row.name.trim(), row.value.trim(), row.effect));
     }
 
-    HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
-    store.setDefines(containerId, defines);
-    store.setCustomTarget(containerId, customTargetField.getText());
-    String sdkName = (String)sdkCombo.getSelectedItem();
-    HaxeModuleSdkApplier.getInstance(project).chooseSdk(containerId, sdkName);
+    HaxeIdeOverridesStore store = HaxeIdeOverridesStore.getInstance(project);
+    store.setDefines(buildFilePath, defines);
+    store.setCustomTarget(buildFilePath, customTargetField.getText());
     super.doOKAction();
   }
 
@@ -169,15 +152,15 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
     CustomTargetProblem problem = name.isEmpty() ? null : HaxeModuleVariants.customTargetProblem(name);
     if (problem == null) return null;
     return switch (problem) {
-      case RESERVED -> HaxeBundle.message("haxe.environment.dialog.custom.target.reserved", name);
-      case TOO_LONG -> HaxeBundle.message("haxe.environment.dialog.custom.target.too.long", HaxeModuleVariants.MAX_CUSTOM_TARGET_LENGTH);
-      case NOT_A_TARGET_NAME -> HaxeBundle.message("haxe.environment.dialog.custom.target.invalid");
+      case RESERVED -> HaxeBundle.message("haxe.ide.overrides.dialog.custom.target.reserved", name);
+      case TOO_LONG -> HaxeBundle.message("haxe.ide.overrides.dialog.custom.target.too.long", HaxeModuleVariants.MAX_CUSTOM_TARGET_LENGTH);
+      case NOT_A_TARGET_NAME -> HaxeBundle.message("haxe.ide.overrides.dialog.custom.target.invalid");
     };
   }
 
   private static final class NameColumn extends ColumnInfo<DefineRow, String> {
     NameColumn() {
-      super(HaxeBundle.message("haxe.environment.column.name"));
+      super(HaxeBundle.message("haxe.ide.overrides.column.name"));
     }
 
     @Override
@@ -198,7 +181,7 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
 
   private static final class ValueColumn extends ColumnInfo<DefineRow, String> {
     ValueColumn() {
-      super(HaxeBundle.message("haxe.environment.column.value"));
+      super(HaxeBundle.message("haxe.ide.overrides.column.value"));
     }
 
     @Override
@@ -220,7 +203,7 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
 
   private final class EffectColumn extends ColumnInfo<DefineRow, DefineEffect> {
     EffectColumn() {
-      super(HaxeBundle.message("haxe.environment.column.action"));
+      super(HaxeBundle.message("haxe.ide.overrides.column.action"));
     }
 
     @Override
@@ -261,14 +244,14 @@ public final class HaxeEnvironmentDialog extends DialogWrapper {
     }
   }
 
-  /** Add / Override / Remove, resolved against the active build file's defines. */
+  /** Add / Override / Remove, resolved against the build file's own defines. */
   @NotNull
   private String effectText(@NotNull DefineRow row, @Nullable DefineEffect effect) {
     if (effect == DefineEffect.REMOVE) {
-      return HaxeBundle.message("haxe.environment.effect.remove");
+      return HaxeBundle.message("haxe.ide.overrides.effect.remove");
     }
-    return activeBuildFileDefines.contains(row.name.trim())
-           ? HaxeBundle.message("haxe.environment.effect.override")
-           : HaxeBundle.message("haxe.environment.effect.add");
+    return buildDefineNames.contains(row.name.trim())
+           ? HaxeBundle.message("haxe.ide.overrides.effect.override")
+           : HaxeBundle.message("haxe.ide.overrides.effect.add");
   }
 }

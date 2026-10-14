@@ -4,12 +4,14 @@ import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.InstalledLibrary;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.LibraryStatus;
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineOverride;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
@@ -18,6 +20,7 @@ import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.ContainerEntry;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.EnvironmentData;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.FileEntry;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowModelBuilder.IdeOverridesData;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -26,19 +29,24 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import java.util.List;
 import java.util.Objects;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Turns the model builder's container entries into the tool window's Swing
  * tree, Gradle-style: one project node holding the project root's groups and
  * the modules. A pure transformation of the prepared model plus the target
- * selection store - no read action needed.
+ * selection store - no read action needed. With {@code hideEmptyNodes}, a
+ * grouping row without children and an unset value row are left out.
  */
 final class HaxeToolWindowTreeBuilder {
 
   private final Project project;
+  private final boolean hideEmptyNodes;
 
-  HaxeToolWindowTreeBuilder(@NotNull Project project) {
+  HaxeToolWindowTreeBuilder(@NotNull Project project, boolean hideEmptyNodes) {
     this.project = project;
+    this.hideEmptyNodes = hideEmptyNodes;
   }
 
   /** {@code installedLibraries} null = the haxelib lookup failed: install state unknown, shown as installed. */
@@ -68,7 +76,7 @@ final class HaxeToolWindowTreeBuilder {
                                   @Nullable Map<String, InstalledLibrary> installedLibraries) {
     parent.add(compilationGroupNode(container));
     parent.add(environmentNode(container));
-    parent.add(buildGroupNode(container, installedLibraries));
+    addUnlessEmpty(parent, buildGroupNode(container, installedLibraries));
     if (!container.tools().isEmpty()) {
       parent.add(toolsGroupNode(container));
     }
@@ -85,25 +93,13 @@ final class HaxeToolWindowTreeBuilder {
   @NotNull
   private static DefaultMutableTreeNode environmentNode(@NotNull ContainerEntry container) {
     EnvironmentData environment = container.environment();
-    EnvironmentNode environmentRow =
-      new EnvironmentNode(container.id(), container.displayName(), environment.activeBuildFileDefines());
-    DefaultMutableTreeNode environmentNode = new DefaultMutableTreeNode(environmentRow);
+    DefaultMutableTreeNode environmentNode = new DefaultMutableTreeNode(new EnvironmentNode(container.id()));
 
     EnvSdkNode sdkRow = new EnvSdkNode(container.id(), environment.sdkDisplay(), environment.sdkMissing());
     environmentNode.add(new DefaultMutableTreeNode(sdkRow));
 
     EnvLanguageLevelNode levelRow = new EnvLanguageLevelNode(container.id(), environment.languageLevelDisplay());
     environmentNode.add(new DefaultMutableTreeNode(levelRow));
-
-    EnvDefinesNode definesRow = new EnvDefinesNode(container.id(), environment.defines().size());
-    DefaultMutableTreeNode definesNode = new DefaultMutableTreeNode(definesRow);
-    for (EnvDefineNode define : environment.defines()) {
-      definesNode.add(new DefaultMutableTreeNode(define));
-    }
-    environmentNode.add(definesNode);
-
-    EnvCustomTargetNode customTargetRow = new EnvCustomTargetNode(container.id(), environment.customTarget());
-    environmentNode.add(new DefaultMutableTreeNode(customTargetRow));
     return environmentNode;
   }
 
@@ -155,9 +151,10 @@ final class HaxeToolWindowTreeBuilder {
                                                 entry.sectionDescriptors(), entry.selectedSection());
       fileNode.add(new DefaultMutableTreeNode(sectionNode));
     }
-    fileNode.add(definesGroupNode(entry));
-    fileNode.add(librariesGroupNode(entry, installedLibraries));
-    fileNode.add(actionsGroupNode(entry));
+    addUnlessEmpty(fileNode, definesGroupNode(entry));
+    addUnlessEmpty(fileNode, ideOverridesNode(entry));
+    addUnlessEmpty(fileNode, librariesGroupNode(entry, installedLibraries));
+    addUnlessEmpty(fileNode, actionsGroupNode(entry));
     if (row.testsFile()) {
       fileNode.add(testsGroupNode(entry));
     }
@@ -168,13 +165,20 @@ final class HaxeToolWindowTreeBuilder {
   private TargetNode targetNode(@NotNull FileEntry entry) {
     HaxeBuildFile buildFile = entry.buildFile();
     if (!HaxeTargetOptions.isTargetSelectable(buildFile.type())) {
-      HaxeTarget target = entry.info().target();
-      String display = target != null ? target.toString()
-                                      : HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
-      return new TargetNode(buildFile, display, false);
+      return new TargetNode(buildFile, declaredTargetDisplay(entry.info()), false);
     }
     String selectedId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(buildFile.file());
     return new TargetNode(buildFile, HaxeTargetOptions.displayNameFor(buildFile.type(), selectedId), true);
+  }
+
+  /** The target the build file selects: a stock target's name, "Custom (go)" for a custom target, else "(not specified)". */
+  @NotNull
+  private static String declaredTargetDisplay(@NotNull HaxeBuildFileInfo info) {
+    HaxeTarget target = info.target();
+    if (target != null) return target.toString();
+    String customTarget = info.customTargetName();
+    if (customTarget != null) return HaxeBundle.message("haxe.toolwindow.node.target.custom", customTarget);
+    return HaxeBundle.message("haxe.toolwindow.node.target.unspecified");
   }
 
   @NotNull
@@ -185,6 +189,40 @@ final class HaxeToolWindowTreeBuilder {
       definesNode.add(new DefaultMutableTreeNode(new DefineNode(entry.buildFile(), define.name(), define.value())));
     }
     return definesNode;
+  }
+
+  /** The build file's IDE overrides: its define entries, then - for an hxml - its custom target. */
+  @NotNull
+  private DefaultMutableTreeNode ideOverridesNode(@NotNull FileEntry entry) {
+    HaxeBuildFile buildFile = entry.buildFile();
+    IdeOverridesData overrides = entry.ideOverrides();
+    Set<String> buildDefineNames = entry.info().defines().stream()
+      .map(HaxeDefine::name)
+      .collect(Collectors.toSet());
+    int count = overrides.defines().size() + (overrides.customTarget() != null ? 1 : 0);
+    IdeOverridesNode overridesRow = new IdeOverridesNode(buildFile, count, buildDefineNames, overrides.customTargetApplicable());
+    DefaultMutableTreeNode overridesNode = new DefaultMutableTreeNode(overridesRow);
+
+    DefaultMutableTreeNode definesNode = new DefaultMutableTreeNode(new IdeDefinesNode(buildFile, overrides.defines().size()));
+    for (DefineOverride define : overrides.defines()) {
+      boolean inBuildFile = buildDefineNames.contains(define.name());
+      IdeDefineNode defineRow = new IdeDefineNode(buildFile, define.name(), define.value(), define.effect(), inBuildFile);
+      definesNode.add(new DefaultMutableTreeNode(defineRow));
+    }
+    addUnlessEmpty(overridesNode, definesNode);
+
+    boolean showsCustomTarget = overrides.customTargetApplicable() && (overrides.customTarget() != null || !hideEmptyNodes);
+    if (showsCustomTarget) {
+      IdeCustomTargetNode customTargetRow = new IdeCustomTargetNode(buildFile, overrides.customTarget(), overrides.buildTarget());
+      overridesNode.add(new DefaultMutableTreeNode(customTargetRow));
+    }
+    return overridesNode;
+  }
+
+  /** Adds a grouping row, unless empty rows are hidden and it has no children. */
+  private void addUnlessEmpty(@NotNull DefaultMutableTreeNode parent, @NotNull DefaultMutableTreeNode group) {
+    if (hideEmptyNodes && group.getChildCount() == 0) return;
+    parent.add(group);
   }
 
   @NotNull

@@ -8,6 +8,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
+import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiElement;
@@ -81,11 +83,10 @@ public final class HaxeLanguageLevelUtil {
   /**
    * The element's container id, which is the key level overrides are stored
    * under: a module name, or the project-root container for project files
-   * outside every module. A library or SDK file is analyzed as part of
-   * whatever the ACTIVE build context pulls in, so it gets the active build
-   * file's container. The define context uses the same source, which keeps
-   * level checks consistent with the active {@code #if haxe_ver} block. Null
-   * only for non-physical elements.
+   * outside every module. A library or SDK file takes the container of the
+   * build it is analysed under (its resolve context), else of the active
+   * build - the same build its {@code #if haxe_ver} blocks are evaluated
+   * with. Null only for non-physical elements.
    */
   @Nullable
   private static String containerIdOf(@NotNull PsiElement element) {
@@ -95,6 +96,8 @@ public final class HaxeLanguageLevelUtil {
     if (file == null) return null;
     Project project = element.getProject();
     if (!ProjectFileIndex.getInstance(project).isInContent(file)) {
+      HaxeResolveContext context = HaxeResolveContexts.getInstance(project).contextFor(file);
+      if (context != null) return HaxeContainers.containerIdFor(project, context.buildFile().file());
       String activeContainer = HaxeDefineContextService.getInstance(project).activeContainerId();
       if (activeContainer != null) return activeContainer;
     }

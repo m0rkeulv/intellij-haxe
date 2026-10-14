@@ -38,7 +38,7 @@ public class HaxeGeneratedPreviewTargetTest extends HaxeLightFixtureTestCase {
   public void testEditSourceDescriptorIsTheTargetItself() {
     PsiFile file = myFixture.configureByText("Sample.hx", "extern class Sample { function run():Void; }");
     HaxeClass externClass = PsiTreeUtil.findChildOfType(file, HaxeClass.class);
-    var overrides = HaxeDisplayConfiguration.ContainerOverrides.EMPTY;
+    var overrides = HaxeDisplayConfiguration.OverrideArguments.EMPTY;
     var context = new HaxeCompilerDisplayService.DisplayContext(List.of(), null, null, overrides, "container");
 
     PsiElement element = HaxeGeneratedPreviewTarget.createElement(externClass, context, "Sample", "run");

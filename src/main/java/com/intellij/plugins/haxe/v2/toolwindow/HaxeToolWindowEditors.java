@@ -21,7 +21,7 @@ import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.plugins.haxe.v2.toolwindow.ui.HaxeCompileCommandDialog;
-import com.intellij.plugins.haxe.v2.toolwindow.ui.HaxeEnvironmentDialog;
+import com.intellij.plugins.haxe.v2.toolwindow.ui.HaxeIdeOverridesDialog;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.dsl.listCellRenderer.BuilderKt;
@@ -125,16 +125,17 @@ public final class HaxeToolWindowEditors {
       .show(point);
   }
 
-  /** Edits the container's {@code --custom-target} name; an empty entry clears it. */
-  public static void editCustomTarget(@NotNull Project project, @NotNull EnvCustomTargetNode customTargetNode) {
+  /** Edits the build file's {@code --custom-target} name; an empty entry clears it. */
+  public static void editCustomTarget(@NotNull Project project, @NotNull IdeCustomTargetNode customTargetNode) {
     String entered = Messages.showInputDialog(project,
                                               HaxeBundle.message("haxe.toolwindow.custom.target.prompt"),
                                               HaxeBundle.message("haxe.toolwindow.custom.target.title"),
                                               null,
                                               customTargetNode.customTarget(),
-                                              HaxeEnvironmentDialog.CUSTOM_TARGET_VALIDATOR);
+                                              HaxeIdeOverridesDialog.CUSTOM_TARGET_VALIDATOR);
     if (entered == null) return;
-    HaxeEnvironmentStore.getInstance(project).setCustomTarget(customTargetNode.containerId(), entered);
+    String buildFilePath = customTargetNode.buildFile().file().getPath();
+    HaxeIdeOverridesStore.getInstance(project).setCustomTarget(buildFilePath, entered);
   }
 
   /** Opens the compile command configuration dialog; OK applies the command. */
@@ -188,13 +189,13 @@ public final class HaxeToolWindowEditors {
     HaxeBuildFilesStore.getInstance(project).removeFile(row.containerId(), row.buildFile().file().getPath());
   }
 
-  public static void confirmAndRemoveDefine(@NotNull Project project, @NotNull EnvDefineNode define) {
+  public static void confirmAndRemoveDefine(@NotNull Project project, @NotNull IdeDefineNode define) {
     int answer = Messages.showYesNoDialog(project,
                                           HaxeBundle.message("haxe.toolwindow.remove.define.confirm", define.name()),
                                           HaxeBundle.message("haxe.toolwindow.remove.define"),
                                           Messages.getQuestionIcon());
     if (answer != Messages.YES) return;
-    HaxeEnvironmentStore.getInstance(project).removeDefine(define.containerId(), define.name());
+    HaxeIdeOverridesStore.getInstance(project).removeDefine(define.buildFile().file().getPath(), define.name());
   }
 
   /** Module removal after confirmation. Files on disk are untouched - the folder folds back into the surrounding module. */
