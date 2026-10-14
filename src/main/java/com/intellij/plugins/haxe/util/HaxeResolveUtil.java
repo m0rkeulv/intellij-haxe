@@ -22,7 +22,6 @@ package com.intellij.plugins.haxe.util;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.LogLevel;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
@@ -259,7 +258,7 @@ public class HaxeResolveUtil {
     if (ApplicationManager.getApplication().isUnitTestMode()) {
       return GlobalSearchScope.allScope(project);
     }
-    final Module module = ModuleUtilCore.findModuleForPsiElement(context);
+    final Module module = HaxeProjectModel.moduleOf(context);
     return module != null ? GlobalSearchScope.moduleWithDependenciesAndLibrariesScope(module) : GlobalSearchScope.allScope(project);
   }
 
