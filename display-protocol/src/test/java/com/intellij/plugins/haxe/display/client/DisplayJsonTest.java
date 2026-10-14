@@ -78,6 +78,8 @@ public class DisplayJsonTest {
     CompletionItem type = completion.items().get(3);
     assertEquals("haxe.ds.StringMap", type.detail());
     assertEquals("class", type.moduleTypeKind());
+    assertEquals(ImportStatus.UNIMPORTED, type.importStatus());
+    assertNull(local.importStatus(), "only a type carries an import status");
     assertEquals("haxe.ds", completion.items().get(4).detail());
     assertTrue(completion.items().get(6).isKeywordOrLiteral());
   }

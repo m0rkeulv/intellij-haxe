@@ -169,17 +169,23 @@ public final class DisplayJson {
     int index = entry.path("index").asInt(position);
     return switch (kind) {
       case "Local", "Literal", "Keyword", "Metadata", "Define", "TypeParameter" ->
-        new CompletionItem(kind, args.path("name").asString(""), null, null, type, doc, index);
+        new CompletionItem(kind, args.path("name").asString(""), null, null, type, doc, index, null);
       case "ClassField", "EnumAbstractField", "EnumField" ->
-        new CompletionItem(kind, args.path("field").path("name").asString(""), null, null, type, doc, index);
-      case "Type" -> new CompletionItem(kind, args.path("path").path("typeName").asString(""),
-                                        JsonTypeRef.qualifiedNameOf(args.path("path")), args.path("kind").asString(""), type, doc, index);
+        new CompletionItem(kind, args.path("field").path("name").asString(""), null, null, type, doc, index, null);
+      case "Type" -> typeItem(kind, args.path("path"), args.path("kind").asString(""), type, doc, index);
       case "Package" -> new CompletionItem(kind, lastSegment(args.path("path").path("pack")), dotPath(args.path("path").path("pack")),
-                                           null, type, doc, index);
+                                           null, type, doc, index, null);
       case "Module" -> new CompletionItem(kind, args.path("path").path("moduleName").asString(""),
-                                          dotPath(args.path("path").path("pack")), null, type, doc, index);
+                                          dotPath(args.path("path").path("pack")), null, type, doc, index, null);
       default -> null;
     };
+  }
+
+  /** A type item: its name, qualified path and declaration kind, and its import status at the position. */
+  private static CompletionItem typeItem(String kind, JsonNode path, String moduleTypeKind, JsonTypeRef type, String doc, int index) {
+    String name = path.path("typeName").asString("");
+    ImportStatus importStatus = ImportStatus.fromWire(path.path("importStatus").asInt(-1));
+    return new CompletionItem(kind, name, JsonTypeRef.qualifiedNameOf(path), moduleTypeKind, type, doc, index, importStatus);
   }
 
   /** The item-level type. When that is absent, a local carries its type in its args and a field in its field args. */
