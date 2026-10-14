@@ -4,13 +4,18 @@ import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectRootModificationTracker;
+import com.intellij.openapi.util.SimpleModificationTracker;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
+import com.intellij.plugins.haxe.display.protocol.Diagnostic;
+import com.intellij.plugins.haxe.display.protocol.DiagnosticSeverity;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.InitializeResult;
@@ -24,9 +29,13 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextListener;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.util.PsiModificationTracker;
+import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.PsiErrorElementUtil;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,18 +64,18 @@ import org.jetbrains.annotations.Nullable;
 /// restarts when the result arrives.
 @Service(Service.Level.PROJECT)
 @CustomLog
-public final class HaxeCompilerDisplayService {
+public final class HaxeCompilerDisplayService implements Disposable {
 
   /**
    * The part of a display request computed under the read lock. Either
    * {@code args} is known already (HXML, NMML), or {@code lime} still has to
-   * run on a background thread. The container's define overrides are applied
+   * run on a background thread. The build file's IDE overrides are applied
    * to whichever argument list results.
    */
   public record DisplayContext(@Nullable List<String> args,
                                @Nullable LimeDisplaySpec lime,
                                @Nullable String sdkName,
-                               @NotNull HaxeDisplayConfiguration.ContainerOverrides overrides,
+                               @NotNull HaxeDisplayConfiguration.OverrideArguments overrides,
                                @NotNull String containerId) {
   }
 
@@ -100,8 +109,24 @@ public final class HaxeCompilerDisplayService {
   private final Map<Integer, Capability> capabilities = new ConcurrentHashMap<>();
   private final HaxeServerUnsavedFiles unsavedFiles = new HaxeServerUnsavedFiles();
 
+  /** A file's display context and the {@link #contextInputsStamp} it was computed under. */
+  private record CachedContext(long inputsStamp, @Nullable DisplayContext context) {
+  }
+
+  private final Map<VirtualFile, CachedContext> contextCache = new ConcurrentHashMap<>();
+  /** Bumped by every build setting, build event and resolve-context choice a display context derives from. */
+  private final SimpleModificationTracker contextInputs = new SimpleModificationTracker();
+
   public HaxeCompilerDisplayService(@NotNull Project project) {
     this.project = project;
+    MessageBusConnection connection = project.getMessageBus().connect(this);
+    connection.subscribe(HaxeBuildSettingsListener.TOPIC, HaxeBuildSettingsListener.onAny(contextInputs::incModificationCount));
+    connection.subscribe(HaxeBuildEventListener.TOPIC, HaxeBuildEventListener.onAny(contextInputs::incModificationCount));
+    connection.subscribe(HaxeResolveContextListener.TOPIC, (HaxeResolveContextListener)contextInputs::incModificationCount);
+  }
+
+  @Override
+  public void dispose() {
   }
 
   @NotNull
@@ -131,11 +156,33 @@ public final class HaxeCompilerDisplayService {
    * file is analysed under ({@link HaxeResolveContexts}). Null when the file
    * has no supported build context. Call in a read action; does not touch
    * the network or spawn processes.
+   *
+   * Cached per file until {@link #contextInputsStamp} moves: resolve asks
+   * for every reference that fails statically, and working the context out
+   * walks the build files.
    */
   @Nullable
   public DisplayContext contextFor(@NotNull VirtualFile file) {
-    HaxeResolveContext context = HaxeResolveContexts.getInstance(project).contextFor(file);
-    return context == null ? null : contextOfBuildFile(context.buildFile().file());
+    long inputsStamp = contextInputsStamp();
+    CachedContext cached = contextCache.get(file);
+    if (cached != null && cached.inputsStamp() == inputsStamp) return cached.context();
+
+    HaxeResolveContext resolveContext = HaxeResolveContexts.getInstance(project).contextFor(file);
+    DisplayContext context = resolveContext == null ? null : contextOfBuildFile(resolveContext.buildFile().file());
+    contextCache.put(file, new CachedContext(inputsStamp, context));
+    return context;
+  }
+
+  /**
+   * Moves whenever a display context may change: any PSI change (a build
+   * file edit included), a project-root change, or a build setting, build
+   * event or resolve-context choice. Read BEFORE computing, so an input
+   * changing during the computation leaves the result stale-stamped.
+   */
+  long contextInputsStamp() {
+    return PsiModificationTracker.getInstance(project).getModificationCount()
+           + ProjectRootModificationTracker.getInstance(project).getModificationCount()
+           + contextInputs.getModificationCount();
   }
 
   /**
@@ -163,8 +210,8 @@ public final class HaxeCompilerDisplayService {
     if (!environment.isUsingCompilationServer(containerId)) return null;
     String sdkName = environment.getSdkName(containerId);
     String directory = buildFile.getParent().getPath();
-    boolean declaresTarget = type != HaxeBuildFileType.HXML || hxmlDeclaresTarget(buildFile);
-    HaxeDisplayConfiguration.ContainerOverrides overrides = HaxeDisplayConfiguration.overridesFor(project, containerId, declaresTarget);
+    HaxeBuildFile typedBuildFile = new HaxeBuildFile(buildFile, type);
+    HaxeDisplayConfiguration.OverrideArguments overrides = HaxeDisplayConfiguration.overridesFor(project, typedBuildFile, containerId);
 
     if (type == HaxeBuildFileType.HXML) {
       // hxml paths resolve against the file's work directory, not its folder
@@ -180,15 +227,6 @@ public final class HaxeCompilerDisplayService {
     LimeDisplaySpec lime =
       new LimeDisplaySpec(directory, buildFile.getName(), tool, targetFlag, buildFile.getModificationStamp());
     return new DisplayContext(null, lime, sdkName, overrides, containerId);
-  }
-
-  /**
-   * Whether the hxml's selected section, its includes merged, selects a
-   * target; the lime family and nme always pass one.
-   */
-  private boolean hxmlDeclaresTarget(@NotNull VirtualFile buildFile) {
-    String content = HaxeBuildSections.selectedSectionContent(project, new HaxeBuildFile(buildFile, HaxeBuildFileType.HXML));
-    return content != null && HxmlFileParser.declaresAnyTarget(content);
   }
 
   /**
@@ -223,7 +261,7 @@ public final class HaxeCompilerDisplayService {
   private DisplayContext nmeContext(@NotNull VirtualFile buildFile,
                                     @NotNull String directory,
                                     @Nullable String sdkName,
-                                    @NotNull HaxeDisplayConfiguration.ContainerOverrides overrides,
+                                    @NotNull HaxeDisplayConfiguration.OverrideArguments overrides,
                                     @NotNull String containerId) {
     String targetFlag = NmeProjects.selectedTargetFlag(project, buildFile);
     HaxeNmeProjectInfoService.Evaluation evaluation = HaxeNmeProjectInfoService.getInstance(project)
@@ -443,22 +481,23 @@ public final class HaxeCompilerDisplayService {
   // --- context warm-up ---
 
   /**
-   * Compiles the context once per session, because the server's module cache
-   * fills only from a real compile. Returns whether the context compiled. A
-   * FAILED compile (broken code) is not remembered: remembering it would keep
-   * module lookups broken until the caches are purged, even after the code is
-   * fixed. The next call retries instead. The outcome is recorded as the
-   * container's context failure, so a broken build context shows in the tool
-   * window even while compiler diagnostics are off. Background threads only.
+   * Types the whole context once per session, because the server's module
+   * cache fills only when every module is typed. Returns whether the context
+   * typed without errors. A FAILED warm-up (broken code) is not remembered:
+   * remembering it would keep module lookups broken until the caches are
+   * purged, even after the code is fixed. The next call retries instead. The
+   * outcome is recorded as the container's context failure, so a broken
+   * build context shows in the tool window even while compiler diagnostics
+   * are off. Background threads only.
    */
   boolean ensureContextCompiled(@NotNull Connected connected, @NotNull String contextKey, @NotNull String containerId) {
     if (compiledContexts.contains(contextKey)) return true;
     HaxeContextFailures failures = HaxeContextFailures.getInstance(project);
     try {
-      DisplayResponse compiled = compileContext(connected);
-      if (compiled.hasError()) {
-        log.info("context warm-up compile reported errors - will retry: " + compiled.payload());
-        failures.record(containerId, contextCompileFailure(compiled));
+      String failure = typeContext(connected);
+      if (failure != null) {
+        log.info("context warm-up reported errors - will retry: " + failure);
+        failures.record(containerId, failure);
         return false;
       }
       compiledContexts.add(contextKey);
@@ -469,6 +508,39 @@ public final class HaxeCompilerDisplayService {
       failures.record(containerId, StringUtil.notNullize(e.getMessage()));
       return false;
     }
+  }
+
+  /**
+   * Types the connected context and returns the user-facing failure, or null
+   * when it types. A project-wide {@code display/diagnostics} request types
+   * every module like a compile but stops before generation, so build hooks
+   * that run after it - a custom target's tool runs, a macro that expects a
+   * main class - do not run for the IDE. A compiler without that method
+   * (before 4.3.5) gets a {@code --no-output} compile, which does run them.
+   */
+  @Nullable
+  private String typeContext(@NotNull Connected connected) throws DisplayRequestException {
+    Capability known = capabilities.get(connected.port());
+    if (known == null || !known.methods().contains(DisplayMethods.DIAGNOSTICS)) {
+      DisplayResponse compiled = compileContext(connected);
+      return compiled.hasError() ? contextCompileFailure(compiled) : null;
+    }
+    String errors = contextErrors(connected.client().projectDiagnostics(connected.args()));
+    return errors.isEmpty() ? null : HaxeBundle.message("haxe.display.context.compile.failed", errors);
+  }
+
+  /** The error-severity diagnostics of a project-wide request, one {@code file:line: message} per line; warnings are left out. */
+  @NotNull
+  static String contextErrors(@NotNull List<FileDiagnostics> results) {
+    List<String> lines = new ArrayList<>();
+    for (FileDiagnostics fileDiagnostics : results) {
+      for (Diagnostic diagnostic : fileDiagnostics.diagnostics()) {
+        if (diagnostic.severity() != DiagnosticSeverity.ERROR) continue;
+        int line = diagnostic.range().start().line() + 1;
+        lines.add(fileDiagnostics.file() + ":" + line + ": " + HaxeDiagnosticsFetcher.messageOf(diagnostic));
+      }
+    }
+    return String.join("\n", lines);
   }
 
   /** A plain {@code --no-output} compile of the connected context through the server. */
@@ -508,6 +580,7 @@ public final class HaxeCompilerDisplayService {
     capabilities.clear();
     unsavedFiles.clear();
     limeArgsCache.clear();
+    contextCache.clear();
   }
 
   /** The file on disk behind an element; a completion copy maps back to its original. */
