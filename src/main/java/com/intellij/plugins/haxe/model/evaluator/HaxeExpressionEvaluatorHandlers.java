@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.model.evaluator;
 
 import com.esotericsoftware.kryo.kryo5.util.Null;
-import com.intellij.lang.ASTNode;
 import com.intellij.lang.annotation.AnnotationBuilder;
 import com.intellij.openapi.util.RecursionGuard;
 import com.intellij.openapi.util.RecursionManager;
@@ -26,7 +25,6 @@ import com.intellij.psi.PsiPackage;
 import com.intellij.psi.PsiReference;
 import com.intellij.psi.impl.source.tree.LazyParseablePsiElement;
 import com.intellij.psi.tree.IElementType;
-import com.intellij.psi.tree.TokenSet;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -98,41 +96,28 @@ public class HaxeExpressionEvaluatorHandlers {
       (expression instanceof HaxeInExpression) ||
       (expression instanceof HaxeMultiplicativeExpression)
     ) {
-      PsiElement[] children = expression.getChildren();
-      String operatorText;
-      if (children.length == 3) {
-        if(children[1] instanceof  HaxeOperator operator) {
-          SpecificTypeReference left = handle(children[0], context, resolver).getType();
-          SpecificTypeReference right = handle(children[2], context, resolver).getType();
+      // the typed accessors skip what else can sit between the operands: an
+      // inactive `#if` block is a composite child, positional children are not safe
+      HaxeExpression leftExpression = expression.getLeftExpression();
+      HaxeExpression rightExpression = expression.getRightExpression();
+      if (leftExpression == null || rightExpression == null) return createUnknown(expression);
 
-          left = resolveAnyTypeDefsOrTypeParameterConstraint(left);
-          right = resolveAnyTypeDefsOrTypeParameterConstraint(right);
+      SpecificTypeReference left = handle(leftExpression, context, resolver).getType();
+      SpecificTypeReference right = handle(rightExpression, context, resolver).getType();
 
-          if(left != null && left.isNullType()) left = SpecificHaxeClassReference.tryUnwrapNullType(left);
-          if(right != null && right.isNullType()) right =SpecificHaxeClassReference.tryUnwrapNullType(right);
+      left = resolveAnyTypeDefsOrTypeParameterConstraint(left);
+      right = resolveAnyTypeDefsOrTypeParameterConstraint(right);
 
-          // we might have constraints that help up here
-          if (left != null && left.isTypeParameter()) left = tryResolveTypeParameter(left, resolver);
-          if (right != null && right.isTypeParameter()) right = tryResolveTypeParameter(right, resolver);
+      if(left != null && left.isNullType()) left = SpecificHaxeClassReference.tryUnwrapNullType(left);
+      if(right != null && right.isNullType()) right =SpecificHaxeClassReference.tryUnwrapNullType(right);
 
-          if(left == null || right == null) return createUnknown(expression);
+      // we might have constraints that help up here
+      if (left != null && left.isTypeParameter()) left = tryResolveTypeParameter(left, resolver);
+      if (right != null && right.isTypeParameter()) right = tryResolveTypeParameter(right, resolver);
 
-          return HaxeOperatorResolver.getBinaryOperatorResult(expression, left, right, operator, context).createHolder();
-        }
-      }
-      else {
-        operatorText = getOperator(expression, HaxeTokenTypeSets.OPERATORS);
-        SpecificTypeReference left = handle(children[0], context, resolver).getType();
-        SpecificTypeReference right = handle(children[1], context, resolver).getType();
-        left = resolveAnyTypeDefsOrTypeParameterConstraint(left);
-        right = resolveAnyTypeDefsOrTypeParameterConstraint(right);
-        // we might have constraints that help up here
-        if(left.isTypeParameter())  left = tryResolveTypeParameter(left, resolver);
-        if(right.isTypeParameter())  right = tryResolveTypeParameter(right, resolver);
-      //TODO
-        throw  new RuntimeException("MLO: inspect");
-        //return HaxeOperatorResolver.getBinaryOperatorResult(expression, left, right, operatorText, context).createHolder();
-      }
+      if(left == null || right == null) return createUnknown(expression);
+
+      return HaxeOperatorResolver.getBinaryOperatorResult(expression, left, right, expression.getOperator(), context).createHolder();
     }
     return createUnknown(expression);
   }
@@ -2577,12 +2562,6 @@ public class HaxeExpressionEvaluatorHandlers {
     else if (parameterExpressionsSize < ftype.getNonOptionalArgumentsCount()) {
       context.addError(callelement, "Less arguments than expected");
     }
-  }
-
-  static private String getOperator(PsiElement field, TokenSet set) {
-    ASTNode operatorNode = field.getNode().findChildByType(set);
-    if (operatorNode == null) return "";
-    return operatorNode.getText();
   }
 
   static int getDistance(PsiReference reference, int offset) {
