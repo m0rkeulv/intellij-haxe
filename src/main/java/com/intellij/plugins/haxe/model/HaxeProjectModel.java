@@ -27,6 +27,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,9 +46,9 @@ import static com.intellij.plugins.haxe.model.HaxeStdTypesFileModel.STD_TYPES_HX
  * The root/std model resolution works against. MODULE-SCOPED when obtained
  * via {@link #fromElement}: each module resolves against its OWN SDK's std
  * and its own dependency roots, so modules on different haxe versions never
- * see each other's standard library. Elements outside any module (opened
- * library files, scratches) and {@link #fromProject} callers get the
- * project-wide union.
+ * see each other's standard library. A library or SDK file resolves under
+ * the module whose SDK or library holds it; elements outside any module
+ * (scratches) and {@link #fromProject} callers get the project-wide union.
  */
 public class HaxeProjectModel {
   private static final Key<HaxeProjectModel> HAXE_PROJECT_MODEL_KEY = new Key<>("HAXE_PROJECT_MODEL");
@@ -69,7 +70,7 @@ public class HaxeProjectModel {
   }
 
   public static HaxeProjectModel fromElement(PsiElement element) {
-    Module module = ModuleUtilCore.findModuleForPsiElement(element);
+    Module module = moduleOf(element);
     if (module == null) {
       return fromProject(element.getProject());
     }
@@ -79,6 +80,19 @@ public class HaxeProjectModel {
       module.putUserData(HAXE_MODULE_MODEL_KEY, model);
     }
     return model;
+  }
+
+  /**
+   * The module an element resolves under. The platform attributes a library
+   * or SDK file to the module whose SDK or library holds it only when asked
+   * about the FILE; for an element inside that file it answers null, which
+   * would send the element to the project-wide view and, with several SDKs,
+   * to another SDK's std.
+   */
+  @Nullable
+  public static Module moduleOf(@NotNull PsiElement element) {
+    PsiFile file = element.getContainingFile();
+    return ModuleUtilCore.findModuleForPsiElement(file != null ? file : element);
   }
 
   public static HaxeProjectModel fromProject(Project project) {
