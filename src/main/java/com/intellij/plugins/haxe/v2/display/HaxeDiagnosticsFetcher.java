@@ -9,6 +9,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.protocol.Diagnostic;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.Position;
@@ -177,6 +178,22 @@ final class HaxeDiagnosticsFetcher {
     cache.entrySet().stream()
       .min(Map.Entry.comparingByValue(Comparator.comparingLong(CacheEntry::timestampMillis)))
       .ifPresent(oldest -> cache.remove(oldest.getKey()));
+  }
+
+  /** The text a diagnostic is shown with: the compiler's message where it sends one, else a message for its kind. */
+  @NotNull
+  static String messageOf(@NotNull Diagnostic diagnostic) {
+    return switch (diagnostic.kind()) {
+      case UNRESOLVED_IDENTIFIER -> HaxeBundle.message("haxe.diagnostics.unresolved.identifier");
+      case COMPILER_ERROR, PARSER_ERROR, DEPRECATION_WARNING -> orGeneric(diagnostic.messageArg());
+      case MISSING_FIELDS -> HaxeBundle.message("haxe.diagnostics.missing.fields");
+      default -> HaxeBundle.message("haxe.diagnostics.generic");
+    };
+  }
+
+  @NotNull
+  private static String orGeneric(@NotNull String message) {
+    return message.isBlank() ? HaxeBundle.message("haxe.diagnostics.generic") : message;
   }
 
   @NotNull
