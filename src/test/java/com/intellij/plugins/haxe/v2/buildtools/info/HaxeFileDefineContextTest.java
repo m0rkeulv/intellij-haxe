@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryDefinesStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeIdeOverridesStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -31,7 +32,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The define set a file is lexed with follows its resolve context (its own build, or a pin), not the active build file. */
@@ -231,6 +234,44 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
 
     awaitInvalidationOf("LibMain.hx", "the sync recorded somelib=1.0.0: LibMain must be re-lexed");
     awaitBranchLive(libMain, "somelib = true", "the somelib branch is live after the re-lex");
+  }
+
+  @Test
+  @DisplayName("an IDE define reaches only the files of its own build")
+  public void testAnIdeDefineReachesOnlyTheFilesOfItsOwnBuild() {
+    VirtualFile web = myFixture.addFileToProject("web.hxml", WEB_HXML_SOURCE).getVirtualFile();
+    VirtualFile cpp = myFixture.addFileToProject("cpp.hxml", CPP_HXML_SOURCE).getVirtualFile();
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+    VirtualFile cppMain = myFixture.addFileToProject("src/CppMain.hx", FOO_GATED_SOURCE.formatted("CppMain")).getVirtualFile();
+    VirtualFile webMain = myFixture.addFileToProject("src/WebMain.hx", FOO_GATED_SOURCE.formatted("WebMain")).getVirtualFile();
+    myFixture.openFileInEditor(cppMain);
+    assertFalse(branchLive(psiFile(cppMain), "foo = true"), "no foo define yet");
+
+    HaxeIdeOverridesStore.getInstance(getProject()).putDefine(cpp.getPath(), "foo", "");
+
+    awaitBranchLive(cppMain, "foo = true", "cpp.hxml's IDE define foo must reach CppMain");
+    assertFalse(branchLive(psiFile(webMain), "foo = true"), "web.hxml has no IDE define: WebMain keeps its foo branch dead");
+  }
+
+  @Test
+  @DisplayName("a custom target applies only to a build that selects no target")
+  public void testACustomTargetAppliesOnlyToABuildThatSelectsNoTarget() {
+    VirtualFile cpp = myFixture.addFileToProject("cpp.hxml", CPP_HXML_SOURCE).getVirtualFile();
+    VirtualFile extraParams = myFixture.addFileToProject("extraParams.hxml", "-cp src\n").getVirtualFile();
+    HaxeIdeOverridesStore overrides = HaxeIdeOverridesStore.getInstance(getProject());
+
+    overrides.setCustomTarget(cpp.getPath(), "go");
+    overrides.setCustomTarget(extraParams.getPath(), "go");
+
+    HaxeDefineContextService defineContext = HaxeDefineContextService.getInstance(getProject());
+    Map<String, String> cppDefines = defineContext.definesFor(cpp);
+    Map<String, String> extraParamsDefines = defineContext.definesFor(extraParams);
+    assertNotNull(cppDefines);
+    assertNotNull(extraParamsDefines);
+    assertNull(cppDefines.get("custom_target"), "cpp.hxml selects -cpp itself, so the custom target does not apply");
+    assertNotEquals("go", cppDefines.get("target.name"));
+    assertNotNull(extraParamsDefines.get("custom_target"));
+    assertEquals("go", extraParamsDefines.get("target.name"));
   }
 
   private void awaitInvalidationOf(String fileName, String message) {

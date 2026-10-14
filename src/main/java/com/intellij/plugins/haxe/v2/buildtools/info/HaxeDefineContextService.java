@@ -52,7 +52,7 @@ import static com.intellij.plugins.haxe.lang.util.HaxeConditionalExpression.FLAG
  * defines (for Lime/OpenFL/NME files from the tool's evaluation, so
  * conditions are evaluated and toolchain defines included), the target's
  * platform defines and the library defines haxelib reports, overlaid with
- * the container's Define overrides. A source file is lexed with the set of
+ * the build file's IDE overrides. A source file is lexed with the set of
  * the build it is analysed under ({@link #definesForSource}); the active
  * build file's set ({@link #getActiveDefines}) answers everything asked
  * without a file, through {@code HaxeDefineDetectionManager.getAllDefinitions()}.
@@ -80,7 +80,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    */
   private record ContextKey(@NotNull String path, @NotNull HaxeBuildFileType type, long contentStamp,
                             @Nullable String targetId, @Nullable String sdkName, @Nullable String customTarget,
-                            @NotNull String compilerVersion, @NotNull List<EnvironmentDefine> overrides,
+                            @NotNull String compilerVersion, @NotNull List<DefineOverride> overrides,
                             @NotNull Map<String, Map<String, String>> libraryDefines) {
   }
 
@@ -165,6 +165,11 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   @Override
   public void environmentChanged(@NotNull String containerId, @NotNull EnvironmentAspect aspect) {
+    invalidateAndRefresh();
+  }
+
+  @Override
+  public void ideOverridesChanged(@NotNull String buildFilePath) {
     invalidateAndRefresh();
   }
 
@@ -297,7 +302,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * Whether the build file's context defines the name before environment
+   * Whether the build file's context defines the name before its IDE
    * overrides apply — the define quickfix uses this to decide between merely
    * dropping its own override and masking a build-file define with a REMOVE
    * entry.
@@ -316,10 +321,11 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * The container owning the ACTIVE build file, or null without one — what
-   * the container library/SDK elements resolve their language level
-   * against. Cached (the language level lookup calls this per annotated
-   * element); callers hold the read lock.
+   * The container owning the ACTIVE build file, or null without one — what a
+   * library or SDK file without a resolve context of its own resolves its
+   * language level against, as its defines come from the active build.
+   * Cached (the language level lookup calls this per annotated element);
+   * callers hold the read lock.
    */
   @Nullable
   public String activeContainerId() {
@@ -449,9 +455,10 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     HaxeEnvironmentStore environment = HaxeEnvironmentStore.getInstance(project);
     String targetId = HaxeTargetSelectionStore.getInstance(project).getSelectedTargetId(file);
     String sdkName = environment.getSdkName(containerId);
-    String customTarget = environment.getCustomTarget(containerId);
+    HaxeIdeOverridesStore ideOverrides = HaxeIdeOverridesStore.getInstance(project);
+    String customTarget = ideOverrides.getCustomTarget(file.getPath());
     String compilerVersion = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
-    List<EnvironmentDefine> overrides = environment.getDefines(containerId);
+    List<DefineOverride> overrides = ideOverrides.getDefines(file.getPath());
     Map<String, Map<String, String>> libraryDefines = HaxeLibraryDefinesStore.getInstance(project).definesByDependency(containerId);
     return new ContextKey(file.getPath(), type, contentStamp(file), targetId, sdkName, customTarget, compilerVersion,
                           overrides, libraryDefines);
@@ -462,8 +469,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   private Map<String, String> compute(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
     Map<String, String> defines = definesBeforeOverrides(file, type);
 
-    String containerId = HaxeContainers.containerIdFor(project, file);
-    for (EnvironmentDefine override : HaxeEnvironmentStore.getInstance(project).getDefines(containerId)) {
+    for (DefineOverride override : HaxeIdeOverridesStore.getInstance(project).getDefines(file.getPath())) {
       String name = HaxeDefine.compilerName(override.name());
       if (override.effect() == DefineEffect.REMOVE) {
         defines.remove(name);
@@ -474,7 +480,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     return defines;
   }
 
-  /** The context's defines BEFORE the container's environment overrides apply - everything an override can mask. */
+  /** The context's defines BEFORE the build file's IDE overrides apply - everything an override can mask. */
   @NotNull
   private Map<String, String> definesBeforeOverrides(@NotNull VirtualFile file, @NotNull HaxeBuildFileType type) {
     HaxeBuildFileInfo info = HaxeEffectiveBuildFileInfo.of(project, new HaxeBuildFile(file, type));
@@ -494,7 +500,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     defines.putAll(libraryDefines(info, containerId));
     putCompilerIdentityDefines(defines, containerId);
     putHashlinkVersionDefine(defines, containerId);
-    putCustomTargetDefines(defines, containerId);
+    putCustomTargetDefines(defines, new HaxeBuildFile(file, type));
     return defines;
   }
 
@@ -520,8 +526,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    * major-version flags), mirrored so `#if (haxe_ver >= 4.1)` blocks activate
    * correctly. Sourced from the language level or the container's compiler
    * version per the compiler settings; wins over a build-tool-reported value
-   * (the point of choosing the level), while the container's explicit Define
-   * overrides still apply on top.
+   * (the point of choosing the level), while the build file's IDE overrides
+   * still apply on top.
    */
   private void putCompilerIdentityDefines(@NotNull Map<String, String> defines, @NotNull String containerId) {
     String version = HaxeLanguageLevelUtil.getHaxeVersion(project, containerId);
@@ -536,15 +542,15 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
   }
 
   /**
-   * The container's Custom target setting, mirrored as the defines
+   * The build file's IDE custom target, mirrored as the defines
    * {@code --custom-target} sets: {@code custom_target} and
    * {@code target.name=<name>} (never the bare name — a custom target does
-   * NOT define itself the way stock targets do). Wins over an hxml-declared
-   * custom target, which arrives through the build file's defines; the
-   * container's explicit Define overrides still apply on top.
+   * NOT define itself the way stock targets do). Applies only to a build
+   * that selects no target of its own ({@link HaxeIdeOverrides}); the build
+   * file's IDE define entries still apply on top.
    */
-  private void putCustomTargetDefines(@NotNull Map<String, String> defines, @NotNull String containerId) {
-    String customTarget = HaxeEnvironmentStore.getInstance(project).getCustomTarget(containerId);
+  private void putCustomTargetDefines(@NotNull Map<String, String> defines, @NotNull HaxeBuildFile buildFile) {
+    String customTarget = HaxeIdeOverrides.effectiveCustomTarget(project, buildFile);
     if (customTarget == null) return;
     defines.put(HaxeModuleVariants.CUSTOM_TARGET_DEFINE, FLAG_DEFINE_VALUE);
     defines.put(HaxeModuleVariants.TARGET_NAME_DEFINE, customTarget);
@@ -558,7 +564,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
    * of the configured toolchain, target membership is what {@code #if hl}
    * answers, and a target-dependent define would flicker with the selection.
    * A build-file {@code -D hl-ver} keeps precedence (absence-guarded), and
-   * the container's environment overrides still apply on top.
+   * the build file's IDE overrides still apply on top.
    */
   private void putHashlinkVersionDefine(@NotNull Map<String, String> defines, @NotNull String containerId) {
     if (defines.containsKey("hl_ver")) return;

@@ -1,10 +1,12 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 
 /// What a Haxe build/project file declares: the compilation target (HXML only —
 /// XML-based projects choose their target in the UI), the target's output argument
@@ -38,6 +40,23 @@ public record HaxeBuildFileInfo(@Nullable HaxeTarget target,
   public boolean hasNodeSignal() {
     boolean hasLib = libraries.stream().anyMatch(library -> library.name().equalsIgnoreCase("hxnodejs"));
     return hasLib || defines.stream().anyMatch(define -> define.name().equals("nodejs"));
+  }
+
+  /**
+   * The custom target the build selects ({@code --custom-target go}), read
+   * from the {@code custom_target} and {@code target.name} defines a custom
+   * target surfaces as; null for a stock target or none.
+   */
+  @Nullable
+  public String customTargetName() {
+    boolean custom = defines.stream().anyMatch(define -> define.name().equals(HaxeModuleVariants.CUSTOM_TARGET_DEFINE));
+    if (!custom) return null;
+    return defines.stream()
+      .filter(define -> define.name().equals(HaxeModuleVariants.TARGET_NAME_DEFINE))
+      .map(HaxeDefine::value)
+      .filter(Objects::nonNull)
+      .findFirst()
+      .orElse(null);
   }
 
   /// A `-D name=value` compiler define, the name as the build file spells it.
