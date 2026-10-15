@@ -46,6 +46,12 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
     -main Tool
     --interp
     """;
+  private static final String LIB_USER_HXML_SOURCE = """
+    -cp src
+    -lib fake
+    -main NodeMain
+    --interp
+    """;
 
   @TempDir
   Path libraryDirectory;
@@ -193,6 +199,22 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
 
     assertEquals(Set.of(web.getPath(), node.getPath()), Set.copyOf(reaching), "no build's sources contain it, so every build reaches it");
     assertEquals(node.getPath(), contextPath(libraryFile), "the active build is the default for a library file");
+  }
+
+  @Test
+  @DisplayName("a haxelib file goes to the builds declaring its library")
+  public void testAHaxelibFileGoesToTheBuildsDeclaringItsLibrary() throws IOException {
+    VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
+    VirtualFile user = hxml("user.hxml", LIB_USER_HXML_SOURCE);
+    VirtualFile libraryFile = libraryFile("Lib.hx");
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+
+    List<String> reaching = contexts().contextsReaching(libraryFile).stream()
+      .map(HaxeResolveContext::path)
+      .toList();
+
+    assertEquals(List.of(user.getPath()), reaching, "only the build declaring -lib fake reaches a file of haxelib fake");
+    assertEquals(user.getPath(), contextPath(libraryFile), "the declaring build beats the active build file");
   }
 
   @Test
