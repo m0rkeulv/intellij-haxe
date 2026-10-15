@@ -610,10 +610,22 @@ public class HaxeExpressionEvaluatorHandlers {
       }
     }
     HaxeSwitchStatement switchStatement = PsiTreeUtil.getParentOfType(capture, HaxeSwitchStatement.class);
-    if (switchStatement != null && switchStatement.getExpression() != null) {
-      return handle(switchStatement.getExpression(), context, resolver);
+    if (switchStatement == null) return null;
+    if (HaxeStreamSwitch.isStreamSwitch(switchStatement)) {
+      HaxeCallExpression boundCall = capturedCall(capture);
+      if (boundCall != null) return handle(boundCall, context, resolver);
     }
-    return null;
+    ResultHolder matched = HaxePatternMatchedType.at(capture);
+    if (matched != null) return matched;
+    return switchStatement.getExpression() != null ? handle(switchStatement.getExpression(), context, resolver) : null;
+  }
+
+  /** The call a stream capture binds the result of ({@code case [t, e = expr()]}), or null. */
+  @Nullable
+  private static HaxeCallExpression capturedCall(@NotNull PsiElement capture) {
+    if (!(capture instanceof HaxeSwitchCaseCapture switchCaseCapture)) return null;
+    List<HaxeExpression> initializers = switchCaseCapture.getExpressionList();
+    return initializers.size() == 1 && initializers.getFirst() instanceof HaxeCallExpression call ? call : null;
   }
 
   static ResultHolder handleSwitchCaseCaptureVar(HaxeGenericResolver resolver, HaxeSwitchCaseCaptureVar captureVar) {
@@ -868,6 +880,12 @@ public class HaxeExpressionEvaluatorHandlers {
       return extractorModel.resolveExtractedValueType(extractedValueRef);
     }
 
+    // a literal subject is typed piece by piece below; a typed subject through the matched type
+    if (!isLiteralSubject(extractedValueRef)) {
+      ResultHolder matched = HaxePatternMatchedType.at(extractedValueRef);
+      if (matched != null) return matched;
+    }
+
     PsiElement resolve = extractedValueRef.resolve();
     if(resolve != null) {
 
@@ -908,6 +926,15 @@ public class HaxeExpressionEvaluatorHandlers {
       return result;
     }
     return createUnknown(extractedValueRef);
+  }
+
+  private static boolean isLiteralSubject(@NotNull PsiElement patternElement) {
+    HaxeSwitchStatement switchStatement = PsiTreeUtil.getParentOfType(patternElement, HaxeSwitchStatement.class);
+    HaxeExpression subject = switchStatement == null ? null : switchStatement.getExpression();
+    while (subject instanceof HaxeParenthesizedExpression parenthesized) {
+      subject = parenthesized.getExpression();
+    }
+    return subject instanceof HaxeArrayLiteral || subject instanceof HaxeObjectLiteral;
   }
 
   private static boolean isLiteralInSwitchExpression(PsiElement resolve, @NotNull HaxeEnumExtractedValueReference extractedValueRef) {
