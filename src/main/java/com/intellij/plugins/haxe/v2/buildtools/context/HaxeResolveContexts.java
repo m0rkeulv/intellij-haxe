@@ -6,6 +6,8 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.LibraryOrderEntry;
+import com.intellij.openapi.roots.OrderEntry;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootModificationTracker;
 import com.intellij.openapi.util.SimpleModificationTracker;
@@ -17,6 +19,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
@@ -29,6 +32,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Which build each file is analysed under. Ownership is by path: among the
@@ -51,9 +56,14 @@ import java.util.List;
 @Service(Service.Level.PROJECT)
 public final class HaxeResolveContexts implements Disposable {
 
-  /** One build and the source directories it compiles; {@code mainFileSuffix} is {@code /pkg/Main.hx} for an hxml {@code -main}. */
+  /**
+   * One build, the source directories it compiles and the haxelibs its selected
+   * section declares; {@code mainFileSuffix} is {@code /pkg/Main.hx} for an hxml
+   * {@code -main}.
+   */
   private record Ownership(@NotNull HaxeBuildFile buildFile,
                            @NotNull List<String> sourceDirectories,
+                           @NotNull Set<String> haxelibs,
                            @Nullable String mainFileSuffix) {
     /** Length of the longest source directory containing the path, or -1 when none does. */
     int specificity(@NotNull String pathAsPrefix) {
@@ -211,11 +221,11 @@ public final class HaxeResolveContexts implements Disposable {
   /**
    * The builds reaching the file: those whose sources contain it, the most
    * specific first and the cache's order (tool-window order) among equals.
-   * A library or std file sits in no build's sources, and every build
-   * compiles against the std and the module's libraries, so every known
-   * build reaches it.
+   * A library or std file sits in no build's sources: a haxelib file is
+   * reached by the builds declaring its lib, any other library file (the
+   * std, a plain path library) by every known build, since every build
+   * compiles against them.
    */
-  // TODO: a haxelib library reaches only the builds declaring it; every build is offered until declared libraries are matched per build
   @NotNull
   private List<Ownership> owners(@NotNull VirtualFile file) {
     String pathAsPrefix = file.getPath() + "/";
@@ -224,14 +234,42 @@ public final class HaxeResolveContexts implements Disposable {
       if (ownership.specificity(pathAsPrefix) >= 0) owners.add(ownership);
     }
     if (owners.isEmpty() && ProjectFileIndex.getInstance(project).isInLibrary(file)) {
-      return ownerships();
+      return declaringBuilds(file);
     }
     owners.sort((a, b) -> Integer.compare(b.specificity(pathAsPrefix), a.specificity(pathAsPrefix)));
     return owners;
   }
 
   /**
-   * Among the closest owners (every build, for a library file): the file's
+   * The builds declaring the haxelib a library file belongs to; every build
+   * when the file is not under a synced haxelib entry or no build declares
+   * its lib.
+   * TODO: a lib pulled in transitively (hxparse through haxeparser) is
+   * declared by no build and falls back to every build.
+   */
+  @NotNull
+  private List<Ownership> declaringBuilds(@NotNull VirtualFile file) {
+    String haxelib = haxelibOf(file);
+    if (haxelib == null) return ownerships();
+    List<Ownership> declaring = ownerships().stream()
+      .filter(ownership -> ownership.haxelibs().contains(haxelib))
+      .toList();
+    return declaring.isEmpty() ? ownerships() : declaring;
+  }
+
+  /** The lib of the synced haxelib entry whose roots hold the file, or null. */
+  @Nullable
+  private String haxelibOf(@NotNull VirtualFile file) {
+    for (OrderEntry entry : ProjectFileIndex.getInstance(project).getOrderEntriesForFile(file)) {
+      if (!(entry instanceof LibraryOrderEntry libraryEntry)) continue;
+      String haxelib = HaxeLibrarySync.haxelibNameOf(libraryEntry.getLibraryName());
+      if (haxelib != null) return haxelib;
+    }
+    return null;
+  }
+
+  /**
+   * Among the closest owners (every build reaching a library file): the file's
    * -main build, else the active build file, else the Build command of the
    * file's container, else the first in tool-window order.
    */
@@ -256,7 +294,7 @@ public final class HaxeResolveContexts implements Disposable {
     return command == null ? null : command.buildFilePath();
   }
 
-  /** The owners tied for the most specific source directory containing the path - all of them for a library file. Expects {@code owners} sorted most specific first. */
+  /** The owners tied for the most specific source directory containing the path - every owner of a library file. Expects {@code owners} sorted most specific first. */
   @NotNull
   private static List<Ownership> closestOwners(@NotNull String path, @NotNull List<Ownership> owners) {
     String pathAsPrefix = path + "/";
@@ -349,7 +387,10 @@ public final class HaxeResolveContexts implements Disposable {
       if (buildFile.type() == HaxeBuildFileType.HXP_SCRIPT) continue;
       HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, buildFile);
       List<String> sourceDirectories = HaxeBuildClasspaths.sourceDirectories(project, buildFile, info.classpaths());
-      ownerships.add(new Ownership(buildFile, List.copyOf(sourceDirectories), mainFileSuffix(buildFile)));
+      Set<String> haxelibs = info.libraries().stream()
+        .map(HaxeBuildFileInfo.HaxeLibDependency::name)
+        .collect(Collectors.toUnmodifiableSet());
+      ownerships.add(new Ownership(buildFile, List.copyOf(sourceDirectories), haxelibs, mainFileSuffix(buildFile)));
     }
     return List.copyOf(ownerships);
   }

@@ -74,6 +74,15 @@ public final class HaxeLibrarySync {
     return entryName.equals(base) || entryName.startsWith(base + " ");
   }
 
+  /** The lib a synced entry name stands for ({@code haxelib: name} or {@code haxelib: name 1.2.3}); null for an unmanaged entry. */
+  @Nullable
+  public static String haxelibNameOf(@Nullable String entryName) {
+    if (entryName == null || !entryName.startsWith(MANAGED_PREFIX)) return null;
+    String rest = entryName.substring(MANAGED_PREFIX.length());
+    int versionStart = rest.indexOf(' ');
+    return versionStart < 0 ? rest : rest.substring(0, versionStart);
+  }
+
   /**
    * One module's {@code haxelib path} results: the classpaths per External
    * Libraries entry, and per dependency the {@code -D name=version} defines
