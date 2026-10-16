@@ -20,6 +20,7 @@ public class HaxeInlayPreviewTest extends HaxeInlayTestBase {
     return "/inlay/";
   }
 
+  // haxe.compiler.types is absent: its preview carries no markers, since its hints need a running compilation server
   @ParameterizedTest(name = "{0} preview")
   @ValueSource(strings = {"haxe.capture.variable", "haxe.enum.extractor", "haxe.field.type", "haxe.local.variable",
     "haxe.loop.type", "haxe.return.type", "haxe.untyped.parameter.type"})

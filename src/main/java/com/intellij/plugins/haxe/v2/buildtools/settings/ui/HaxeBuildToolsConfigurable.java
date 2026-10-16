@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.util.HaxeModuleDetection;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
@@ -146,7 +147,8 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
     if (serverConfigChanged) {
       // these settings invalidate the running server; the next connected compile
       // restarts it. Unrelated edits (haxelib/neko/hashlink paths) keep the warm caches.
-      HaxeCompilationServerManager.getInstance(project).stop();
+      HaxeCompilationServerManager.getInstance(project).stopAll();
+      HaxeDisplayProcessManager.getInstance(project).stopAll();
     }
     // the tool window's rows and the define context derive from these settings
     HaxeBuildSettingsListener.publisher(project).compilerSettingsChanged();

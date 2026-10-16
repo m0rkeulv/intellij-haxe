@@ -83,8 +83,10 @@ public final class HaxeCompilerCompletionService {
     HaxeCompilerDisplayService.DisplayContext context = displayService.contextFor(file);
     if (context == null) return null;
     String path = file.getPath();
+    String sentContents = unsaved ? contents : null;
+    int serverOffset = HaxeServerOffsets.serverOffset(file, offset, sentContents);
     Future<CompletionList> request = ApplicationManager.getApplication()
-      .executeOnPooledThread(() -> fetch(displayService, context, path, contents, unsaved, offset, autoTriggered));
+      .executeOnPooledThread(() -> fetch(displayService, context, path, sentContents, serverOffset, autoTriggered));
     return HaxeCancelableFutures.awaitUnderReadLock(request, ANSWER_TIMEOUT_MS, "display/completion for " + path);
   }
 
@@ -113,13 +115,12 @@ public final class HaxeCompilerCompletionService {
 
   @Nullable
   private static CompletionList fetch(HaxeCompilerDisplayService displayService, HaxeCompilerDisplayService.DisplayContext context,
-                                      String path, String contents, boolean unsaved, int offset, boolean autoTriggered) {
+                                      String path, @Nullable String sentContents, int serverOffset, boolean autoTriggered) {
     HaxeCompilerDisplayService.Connected connected = displayService.connectFor(context, DisplayMethods.COMPLETION);
     if (connected == null) return null;
     try {
-      String sentContents = unsaved ? contents : null;
       displayService.prepareFile(connected, path, sentContents);
-      return connected.client().completion(connected.args(), path, offset, sentContents, autoTriggered);
+      return connected.client().completion(connected.args(), path, serverOffset, sentContents, autoTriggered);
     } catch (DisplayRequestException e) {
       log.info("display/completion failed for " + path + ": " + e.getMessage());
       return null;

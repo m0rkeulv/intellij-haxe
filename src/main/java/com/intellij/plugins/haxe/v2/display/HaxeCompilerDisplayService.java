@@ -2,6 +2,9 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeDisplayConnectionMode;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.openapi.Disposable;
@@ -19,10 +22,8 @@ import com.intellij.plugins.haxe.display.protocol.DiagnosticSeverity;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.FileDiagnostics;
 import com.intellij.plugins.haxe.display.protocol.InitializeResult;
-import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.DisplayResponse;
-import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
@@ -91,8 +92,20 @@ public final class HaxeCompilerDisplayService implements Disposable {
   private record Capability(@NotNull Set<String> methods, @Nullable InitializeResult.SemVer haxeVersion) {
   }
 
-  /** A client for a running server that supports the requested method, with the resolved arguments. */
+  /**
+   * A client for a running server that supports the requested method, with
+   * the resolved arguments. {@code port} identifies the server the per-server
+   * state (capabilities, unsaved files) is kept for: the shared server's port,
+   * or the loopback port a dedicated display process connected to.
+   */
   record Connected(@NotNull HaxeDisplayClient client, @NotNull List<String> args, int port) {
+  }
+
+  /**
+   * The server behind a client, the identity its per-server state is keyed on,
+   * and the console entry its request metrics count under.
+   */
+  private record Endpoint(@NotNull HaxeDisplayClient client, int id, @NotNull String metricsId) {
   }
 
   private record CachedLimeArgs(long fileStamp, @NotNull String targetFlag, @NotNull List<String> args) {
@@ -183,6 +196,11 @@ public final class HaxeCompilerDisplayService implements Disposable {
     return PsiModificationTracker.getInstance(project).getModificationCount()
            + ProjectRootModificationTracker.getInstance(project).getModificationCount()
            + contextInputs.getModificationCount();
+  }
+
+  /** The build inputs alone (project roots, build settings and events, resolve-context choices): an edit does not move it. */
+  long buildInputsStamp() {
+    return ProjectRootModificationTracker.getInstance(project).getModificationCount() + contextInputs.getModificationCount();
   }
 
   /**
@@ -415,16 +433,6 @@ public final class HaxeCompilerDisplayService implements Disposable {
 
   // --- server connection ---
 
-  /**
-   * Memory statistics of the compilation server already RUNNING on {@code port}.
-   * Unlike the context-based requests, {@code server/memory} needs no build
-   * context: it reports per-context sizes for whatever the server has
-   * compiled. Performs a socket round-trip; call on a background thread.
-   */
-  @NotNull
-  public static ServerMemory fetchServerMemory(int port) throws DisplayRequestException {
-    return new HaxeDisplayClient(HaxeCompilationServerManager.SERVER_HOST, port).serverMemory(List.of());
-  }
 
   /**
    * A client for the context's server, starting the server when needed. Null
@@ -436,24 +444,42 @@ public final class HaxeCompilerDisplayService implements Disposable {
   Connected connectFor(@NotNull DisplayContext context, @NotNull String method) {
     List<String> args = resolveArgs(context);
     if (args == null) return null;
-    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(context.sdkName());
-    if (port <= 0) return null;
-    HaxeDisplayClient client = new HaxeDisplayClient(HaxeCompilationServerManager.SERVER_HOST, port);
-    String serverId = HaxeToolPathResolver.resolveHaxeExecutable(project, context.sdkName());
-    client.setObserver((requestMethod, millis, success) ->
-                         HaxeServerMetrics.getInstance(project).record(serverId, millis, success));
+    Endpoint endpoint = endpointFor(context.sdkName());
+    if (endpoint == null) return null;
+    HaxeDisplayClient client = endpoint.client();
+    client.setObserver(HaxeServerMetrics.getInstance(project).observerFor(endpoint.metricsId()));
 
-    Capability known = capabilities.get(port);
+    Capability known = capabilities.get(endpoint.id());
     if (known == null) {
       InitializeResult initialized = initializeWithRetry(client, args);
       if (initialized == null) return null;
       known = new Capability(Set.copyOf(initialized.methods()), initialized.haxeVersion());
       log.info("haxe display protocol " + initialized.protocolVersion()
-               + " (haxe " + initialized.haxeVersion() + ") on port " + port + ", "
+               + " (haxe " + initialized.haxeVersion() + ") on port " + endpoint.id() + ", "
                + known.methods().size() + " methods");
-      capabilities.put(port, known);
+      capabilities.put(endpoint.id(), known);
     }
-    return known.methods().contains(method) ? new Connected(client, args, port) : null;
+    return known.methods().contains(method) ? new Connected(client, args, endpoint.id()) : null;
+  }
+
+  /**
+   * The SDK's dedicated display process when the setting asks for one and
+   * it runs, else the shared {@code --wait} server. A dedicated process that
+   * cannot start (an SDK without {@code --server-connect}, a start failure)
+   * falls back to the shared server, so the feature stays available.
+   */
+  @Nullable
+  private Endpoint endpointFor(@Nullable String sdkName) {
+    String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
+    if (HaxeCompilerSettings.getInstance(project).getDisplayConnectionMode() == HaxeDisplayConnectionMode.DEDICATED_PROCESS) {
+      HaxeDisplayProcessManager.Channel channel = HaxeDisplayProcessManager.getInstance(project).channelFor(sdkName);
+      if (channel != null) {
+        return new Endpoint(new HaxeDisplayClient(channel.channel()), channel.id(), HaxeDisplayProcessManager.idFor(executablePath));
+      }
+    }
+    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(sdkName);
+    if (port <= 0) return null;
+    return new Endpoint(new HaxeDisplayClient(HaxeCompilationServerManager.SERVER_HOST, port), port, executablePath);
   }
 
   /** A freshly spawned server needs a moment to bind its port; retry briefly before giving up. */
@@ -548,8 +574,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
   private static DisplayResponse compileContext(@NotNull Connected connected) throws DisplayRequestException {
     List<String> compileArgs = new ArrayList<>(connected.args());
     compileArgs.add("--no-output");
-    return HaxeDisplayTransport.request(HaxeCompilationServerManager.SERVER_HOST, connected.port(), compileArgs,
-                                        CONTEXT_COMPILE_TIMEOUT_MS);
+    return connected.client().exchange(compileArgs, CONTEXT_COMPILE_TIMEOUT_MS);
   }
 
   /**

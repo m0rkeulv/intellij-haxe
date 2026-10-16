@@ -50,6 +50,7 @@ public final class HaxeCompilerUsageService {
   private record Request(@NotNull Key key,
                          @NotNull HaxeCompilerDisplayService.DisplayContext context,
                          @Nullable String contents,
+                         int serverOffset,
                          @NotNull FindReferencesKind kind,
                          long fileStamp) {
   }
@@ -113,7 +114,8 @@ public final class HaxeCompilerUsageService {
                               ? FindReferencesKind.WITH_BASE_AND_DESCENDANTS
                               : FindReferencesKind.DIRECT;
     String contents = HaxeCompilerDisplayService.unsavedContents(virtualFile);
-    scheduleHydration(new Request(key, context, contents, kind, fileStamp));
+    int serverOffset = HaxeServerOffsets.serverOffset(virtualFile, key.offset(), contents);
+    scheduleHydration(new Request(key, context, contents, serverOffset, kind, fileStamp));
     return UsageState.UNKNOWN;
   }
 
@@ -165,7 +167,7 @@ public final class HaxeCompilerUsageService {
       String filePath = request.key().filePath();
       displayService.prepareFile(connected, filePath, request.contents());
       List<Location> references = connected.client()
-        .references(connected.args(), filePath, request.key().offset(), request.contents(), request.kind());
+        .references(connected.args(), filePath, request.serverOffset(), request.contents(), request.kind());
       return references.isEmpty() ? UsageState.UNUSED : UsageState.USED;
     } catch (DisplayRequestException e) {
       log.info("display/references failed for " + request.key().memberName() + ": " + e.getMessage());

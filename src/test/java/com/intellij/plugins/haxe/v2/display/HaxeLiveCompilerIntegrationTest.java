@@ -12,6 +12,7 @@ import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerTypeCatalogService.GeneratedType;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,11 +61,13 @@ public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestC
     HaxeEnvironmentStore.CompileCommand command =
       new HaxeEnvironmentStore.CompileCommand(buildFile.getPath(), null, "");
     HaxeEnvironmentStore.getInstance(getProject()).setCompileCommand(containerId, command);
+    // the catalog and the blueprints answer only while the compiler features are on
+    HaxeCompilerSettings.getInstance(getProject()).setCompilerIdeFeaturesEnabled(true);
   }
 
   @AfterEach
   void stopCompilationServer() {
-    HaxeCompilationServerManager.getInstance(getProject()).stop();
+    HaxeCompilationServerManager.getInstance(getProject()).stopAll();
   }
 
   @Test

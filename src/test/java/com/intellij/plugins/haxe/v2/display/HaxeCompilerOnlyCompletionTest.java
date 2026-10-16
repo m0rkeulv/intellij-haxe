@@ -31,7 +31,9 @@ public class HaxeCompilerOnlyCompletionTest extends HaxeLightFixtureTestCase {
   @DisplayName("without a compilation server the IDE stays silent and notifies once")
   public void testWithoutACompilationServerTheIdeStaysSilentAndNotifiesOnce() {
     // no build file in the light project: the file has no compilation server context
-    HaxeCompilerSettings.getInstance(getProject()).setCompletionMode(HaxeCompletionMode.COMPILER_ONLY);
+    HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(getProject());
+    settings.setCompilerIdeFeaturesEnabled(true);
+    settings.setCompletionMode(HaxeCompletionMode.COMPILER_ONLY);
     HaxeCompilerCompletionService service = HaxeCompilerCompletionService.getInstance(getProject());
     assertFalse(service.unavailabilityNotifiedForTests());
     myFixture.configureByText("Main.hx", STATEMENT_SOURCE);

@@ -7,6 +7,7 @@ import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorContext;
 import com.intellij.plugins.haxe.model.type.ResultHolder;
 import com.intellij.psi.PsiElement;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerInlayService;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,6 +18,7 @@ public class HaxeInlayUntypedParameterHintsProvider implements InlayHintsProvide
   @Nullable
   @Override
   public InlayHintsCollector createCollector(@NotNull PsiFile file, @NotNull Editor editor) {
+    if (HaxeCompilerInlayService.isActive(file.getProject())) return null;
     return new TypeCollector();
   }
 

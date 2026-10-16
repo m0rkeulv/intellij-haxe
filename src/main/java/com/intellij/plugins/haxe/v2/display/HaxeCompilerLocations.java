@@ -109,7 +109,10 @@ final class HaxeCompilerLocations {
 
   /**
    * The declaration the range marks: the named component whose name sits
-   * there, else the bare element at the range start.
+   * there, else the bare element at the range start. A range that starts
+   * inside an expression marks no declaration: a macro gives a declaration
+   * it generates the position of the source expression it was built from,
+   * and the element there is not it.
    */
   @Nullable
   static PsiElement declarationIn(@NotNull PsiFile file, @NotNull Range range) {
@@ -119,7 +122,8 @@ final class HaxeCompilerLocations {
     if (element == null) return null;
     HaxeComponentName name = PsiTreeUtil.getParentOfType(element, HaxeComponentName.class, false);
     HaxeNamedComponent named = name == null ? null : PsiTreeUtil.getParentOfType(name, HaxeNamedComponent.class);
-    return named != null ? named : element;
+    if (named != null) return named;
+    return PsiTreeUtil.getParentOfType(element, HaxeExpression.class) != null ? null : element;
   }
 
   @Nullable

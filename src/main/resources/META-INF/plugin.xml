@@ -54,6 +54,9 @@
   </extensions>
 
   <extensions defaultExtensionNs="com.intellij">
+    <!-- experiment: compiler types in place of the IDE evaluator -->
+    <registryKey key="haxe.compiler.types.redirect.evaluator" defaultValue="false"
+                 description="Haxe: the expression evaluator asks the compilation server (display/hover) for the type of a parameter, variable, field or extracted value before evaluating it itself"/>
 
     <iconMapper mappingFile="HaxeIconMappings.json"/>
       <!-- NOTE: Looks like intellij-platform-gradle-plugin 2.7.0 prefixes all extra jars with rootProject.name-->
@@ -308,6 +311,14 @@
                                           bundle="messages.HaxeHintBundle"
                                           nameKey="haxe.untyped.parameter.hint.name"
                                           descriptionKey="haxe.untyped.parameter.hint.description"/>
+    <codeInsight.declarativeInlayProvider language="Haxe"
+                                          implementationClass="com.intellij.plugins.haxe.v2.display.HaxeCompilerTypeInlayProvider"
+                                          isEnabledByDefault="true"
+                                          group="TYPES_GROUP"
+                                          providerId="haxe.compiler.types"
+                                          bundle="messages.HaxeHintBundle"
+                                          nameKey="haxe.compiler.types.hint.name"
+                                          descriptionKey="haxe.compiler.types.hint.description"/>
 
 
 
@@ -1055,6 +1066,10 @@
 
   <actions resource-bundle="messages.HaxeProjectBundle">
     <action id="Haxe.ConvertV1Modules" class="com.intellij.plugins.haxe.v2.migration.HaxeConvertV1ModulesAction">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+    </action>
+    <action id="Haxe.ShowPostMacroFile" class="com.intellij.plugins.haxe.v2.display.HaxeShowPostMacroFileAction">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </action>
   </actions>
