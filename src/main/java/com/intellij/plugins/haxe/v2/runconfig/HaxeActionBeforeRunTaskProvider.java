@@ -24,8 +24,6 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.PersistentStateComponent;
-import com.intellij.openapi.progress.ProgressIndicator;
-import com.intellij.openapi.progress.Task.Backgroundable;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
@@ -44,6 +42,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions.Debugger;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstaller;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibMutations;
 import com.intellij.plugins.haxe.v2.testing.run.HaxeTestRunConfiguration;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.openapi.util.UserDataHolder;
@@ -611,20 +610,14 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
 
   private static void installDebugServerInBackground(@NotNull Project project, @NotNull String serverLib) {
     String progressTitle = HaxeDebuggerBundle.message("haxe.before.run.debug.server.installing", serverLib);
-    new Backgroundable(project, progressTitle, true) {
-      @Override
-      public void run(@NotNull ProgressIndicator indicator) {
-        String failure = HaxelibInstaller.install(project, serverLib, null, null);
-        if (failure != null) {
-          String title = HaxeDebuggerBundle.message("haxe.before.run.debug.server.install.failed", serverLib);
-          HaxeCommandNotifications.notify(project, title, failure, NotificationType.ERROR);
-        }
-        else {
-          String message = HaxeDebuggerBundle.message("haxe.before.run.debug.server.installed", serverLib);
-          HaxeCommandNotifications.notify(project, message, NotificationType.INFORMATION);
-        }
-      }
-    }.queue();
+    String failureTitle = HaxeDebuggerBundle.message("haxe.before.run.debug.server.install.failed", serverLib);
+    HaxelibMutations.Mutation install = indicator -> HaxelibInstaller.install(project, serverLib, null, null);
+    HaxelibMutations.queue(project, progressTitle, failureTitle, install, () -> notifyDebugServerInstalled(project, serverLib));
+  }
+
+  private static void notifyDebugServerInstalled(@NotNull Project project, @NotNull String serverLib) {
+    String message = HaxeDebuggerBundle.message("haxe.before.run.debug.server.installed", serverLib);
+    HaxeCommandNotifications.notify(project, message, NotificationType.INFORMATION);
   }
 
   private static void notifyFailure(@NotNull Project project, @NotNull String message) {

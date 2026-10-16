@@ -18,7 +18,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeProjectXmlFiles;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.InstalledLibrary;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeInstalledLibraries.LibraryStatus;
-import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstallTask;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibMutations;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.PsiFile;
@@ -154,7 +154,7 @@ public class HaxeMissingLibraryInspection extends LocalInspectionTool {
 
     @Override
     public void applyFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
-      HaxelibInstallTask.queue(project, name, version, selectedVersion, null);
+      HaxelibMutations.install(project, name, version, selectedVersion);
     }
   }
 }
