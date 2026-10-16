@@ -56,92 +56,56 @@ public final class HaxeToolPathResolver {
 
   /**
    * Absolute path to haxelib, preferring the named SDK (a container's
-   * environment SDK): the Build Tools override when set, else the SDK's own
-   * (its configured haxelib, else the copy in its home), else the PATH copy,
-   * else the bare name for a PATH lookup at launch. Every v2 haxelib call
+   * environment SDK), through {@link HaxeRuntimeTool#HAXELIB}; the bare name
+   * when nothing resolves, for a PATH lookup at launch. Every v2 haxelib call
    * resolves through here, so installs, the installed-library list and
    * {@code haxelib path} agree on the haxelib.
    */
   @NotNull
   public static String resolveHaxelibExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
-    String configured = HaxeBuildToolSettings.getInstance(project).getHaxelibPath();
-    if (!configured.isEmpty()) {
-      return configuredOverride(configured, "haxelib");
-    }
-    String fromSdk = sdkHaxelib(findSdk(project, preferredSdkName));
-    if (fromSdk != null) {
-      return fromSdk;
-    }
-    String onPath = pathDetectedExecutable("haxelib");
-    return onPath != null ? onPath : HaxeSdkUtilBase.getExecutableName("haxelib");
-  }
-
-  /** The SDK's haxelib: its configured haxelib (an executable, or the directory holding one) when that exists, else the copy in the SDK home; null without either. */
-  @Nullable
-  static String sdkHaxelib(@Nullable Sdk sdk) {
-    if (sdk == null) return null;
-    if (sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
-      Path configured = executableOrInDirectory(data.getHaxelibPath(), "haxelib");
-      if (configured != null) return configured.toString();
-    }
-    return sdk.getHomePath() == null ? null : HaxeSdkUtilBase.getHaxelibPathByFolderPath(sdk.getHomePath());
+    return resolveRuntimeOrBareName(HaxeRuntimeTool.HAXELIB, project, preferredSdkName);
   }
 
   /**
-   * Absolute path to the neko runtime: the Build Tools setting when set, else
-   * the SDK's configured runtime, else a PATH lookup — the bare name only as
-   * the last resort (run configurations validate the file exists, so a bare
-   * name must have been genuinely unresolvable).
+   * Absolute path to the neko runtime through {@link HaxeRuntimeTool#NEKO};
+   * the bare name only as the last resort (run configurations validate the
+   * file exists, so a bare name must have been genuinely unresolvable).
    */
   @NotNull
   public static String resolveNekoExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
-    String configured = HaxeBuildToolSettings.getInstance(project).getNekoPath();
-    if (!configured.isEmpty()) {
-      return configuredOverride(configured, "neko");
-    }
-    Sdk sdk = findSdk(project, preferredSdkName);
-    if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
-      Path fromSdk = executableOrInDirectory(data.getNekoBinPath(), "neko");
-      if (fromSdk != null) {
-        return fromSdk.toString();
-      }
-    }
-    String onPath = pathDetectedExecutable("neko");
-    return onPath != null ? onPath : HaxeSdkUtilBase.getExecutableName("neko");
+    return resolveRuntimeOrBareName(HaxeRuntimeTool.NEKO, project, preferredSdkName);
   }
 
   /**
-   * An explicit Build Tools override always WINS: a directory resolves to
-   * the canonical executable inside it, and an unresolvable value comes back
-   * verbatim — validation then fails on the configured value instead of a
-   * typo silently running a different tool from the SDK or PATH.
-   */
-  @NotNull
-  private static String configuredOverride(@NotNull String configured, @NotNull String executableName) {
-    Path resolved = executableOrInDirectory(configured, executableName);
-    return resolved != null ? resolved.toString() : configured;
-  }
-
-  /**
-   * Path to the node runtime for js-target runs: the Build Tools override
-   * when set (see {@link #configuredOverride}), else the SDK's configured
-   * NodeJS, else a PATH lookup; null when nothing resolves (a js run then
+   * Path to the node runtime for js-target runs through
+   * {@link HaxeRuntimeTool#NODE}; null when nothing resolves (a js run then
    * reports the missing runtime instead of failing on a bare name).
    */
   @Nullable
   public static String resolveNodeExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
-    String configured = HaxeBuildToolSettings.getInstance(project).getNodePath();
-    if (!configured.isEmpty()) {
-      return configuredOverride(configured, "node");
+    return resolveRuntime(HaxeRuntimeTool.NODE, project, preferredSdkName);
+  }
+
+  @NotNull
+  private static String resolveRuntimeOrBareName(@NotNull HaxeRuntimeTool tool, @NotNull Project project, @Nullable String preferredSdkName) {
+    String resolved = resolveRuntime(tool, project, preferredSdkName);
+    return resolved != null ? resolved : tool.executableName();
+  }
+
+  /**
+   * The table's resolution for the project and the named SDK, except that an
+   * unresolvable Build Tools override comes back verbatim: validation then
+   * fails on the configured value instead of a typo silently running a
+   * different copy from the SDK or PATH.
+   */
+  @Nullable
+  private static String resolveRuntime(@NotNull HaxeRuntimeTool tool, @NotNull Project project, @Nullable String preferredSdkName) {
+    String configured = tool.override(project);
+    if (!configured.isBlank()) {
+      String resolved = tool.executableOrInDirectory(configured);
+      return resolved != null ? resolved : configured;
     }
-    Sdk sdk = findSdk(project, preferredSdkName);
-    if (sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
-      Path fromSdk = executableOrInDirectory(data.getNodeBinPath(), "node");
-      if (fromSdk != null) {
-        return fromSdk.toString();
-      }
-    }
-    return pathDetectedExecutable("node");
+    return tool.inheritedDefault(findSdk(project, preferredSdkName), HaxeRuntimeTool.PROCESS_ENVIRONMENT);
   }
 
   /**
@@ -209,9 +173,9 @@ public final class HaxeToolPathResolver {
   /**
    * The values empty Build Tools overrides would inherit from the named SDK
    * (or, with no name, the first registered Haxe SDK - the same fallback the
-   * resolve methods use), with executables falling back to a PATH lookup.
-   * Display-only: computed against the panel's CURRENT selection, which may
-   * not be applied yet.
+   * resolve methods use), each runtime through its {@link HaxeRuntimeTool}
+   * row. Display-only: computed against the panel's CURRENT selection, which
+   * may not be applied yet.
    */
   @NotNull
   public static InheritedRuntimeDefaults inheritedRuntimeDefaults(@Nullable String sdkName) {
@@ -222,27 +186,15 @@ public final class HaxeToolPathResolver {
     }
     HaxeSdkData data = sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData sdkData ? sdkData : null;
 
-    String haxelib = sdkHaxelib(sdk);
-    if (haxelib == null) {
-      haxelib = pathDetectedExecutable("haxelib");
-    }
     String flashPlayer = data == null || data.getFlashPlayerPath().isBlank() ? null : data.getFlashPlayerPath();
     String flexSdkName = data == null || data.getFlexSdkName().isEmpty() ? null : data.getFlexSdkName();
-    // TODO: the HashLink default skips the HASHLINK_BIN/HASHLINK/HASHLINKPATH
-    //       variables that HlExecutableResolver consults before PATH.
     return new InheritedRuntimeDefaults(
-      haxelib,
-      inheritedExecutable(data == null ? null : data.getNekoBinPath(), "neko"),
-      inheritedExecutable(data == null ? null : data.getHlBinPath(), "hl"),
-      inheritedExecutable(data == null ? null : data.getNodeBinPath(), "node"),
+      HaxeRuntimeTool.HAXELIB.inheritedDefault(sdk, HaxeRuntimeTool.PROCESS_ENVIRONMENT),
+      HaxeRuntimeTool.NEKO.inheritedDefault(sdk, HaxeRuntimeTool.PROCESS_ENVIRONMENT),
+      HaxeRuntimeTool.HASHLINK.inheritedDefault(sdk, HaxeRuntimeTool.PROCESS_ENVIRONMENT),
+      HaxeRuntimeTool.NODE.inheritedDefault(sdk, HaxeRuntimeTool.PROCESS_ENVIRONMENT),
       flashPlayer,
       flexSdkName);
-  }
-
-  @Nullable
-  private static String inheritedExecutable(@Nullable String sdkConfiguredPath, @NotNull String executableName) {
-    Path fromSdk = executableOrInDirectory(sdkConfiguredPath, executableName);
-    return fromSdk != null ? fromSdk.toString() : pathDetectedExecutable(executableName);
   }
 
   /** The executable a PATH lookup picks (absolute), or null; also displayed as an inherited default in the settings panels. */
@@ -282,16 +234,6 @@ public final class HaxeToolPathResolver {
   @NotNull
   public static Path adlInSdk(@NotNull String sdkHome) {
     return Path.of(sdkHome, "bin", HaxeSdkUtilBase.getExecutableName("adl"));
-  }
-
-  /** The configured value may point at the executable itself or its directory. */
-  @Nullable
-  static Path executableOrInDirectory(@Nullable String configuredPath, @NotNull String executableName) {
-    if (configuredPath == null || configuredPath.isBlank()) return null;
-    Path candidate = Path.of(configuredPath);
-    if (Files.isRegularFile(candidate)) return candidate;
-    Path inDirectory = candidate.resolve(HaxeSdkUtilBase.getExecutableName(executableName));
-    return Files.isRegularFile(inDirectory) ? inDirectory : null;
   }
 
   /** The named SDK when registered, else {@link #findConfiguredSdk}. */

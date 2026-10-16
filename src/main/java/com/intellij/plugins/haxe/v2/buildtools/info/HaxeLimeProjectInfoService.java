@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
+import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
@@ -10,7 +11,6 @@ import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.HaxeTarget;
@@ -275,7 +275,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   @NotNull
   private static String javaExecutable() {
-    return Path.of(System.getProperty("java.home"), "bin", SystemInfo.isWindows ? "java.exe" : "java").toString();
+    return Path.of(System.getProperty("java.home"), "bin", HaxeSdkUtilBase.getExecutableName("java")).toString();
   }
 
   /** The evaluator jar shipped inside the plugin directory, or null when absent (fallback applies). */

@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.openapi.projectRoots.Sdk;
-import com.intellij.plugins.haxe.config.sdk.HaxeSdkData;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -46,11 +45,8 @@ public final class HaxeToolEnvironment {
     if (sdk == null || sdk.getHomePath() == null) return List.of();
     Set<String> folders = new LinkedHashSet<>();
     addFolderOf(folders, HaxeSdkUtilBase.getCompilerPathByFolderPath(sdk.getHomePath()));
-    addFolderOf(folders, HaxeToolPathResolver.sdkHaxelib(sdk));
-    if (sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
-      Path neko = HaxeToolPathResolver.executableOrInDirectory(data.getNekoBinPath(), "neko");
-      addFolderOf(folders, neko == null ? null : neko.toString());
-    }
+    addFolderOf(folders, HaxeRuntimeTool.HAXELIB.fromSdk(sdk));
+    addFolderOf(folders, HaxeRuntimeTool.NEKO.fromSdk(sdk));
     return List.copyOf(folders);
   }
 
