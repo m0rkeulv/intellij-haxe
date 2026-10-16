@@ -7,7 +7,6 @@ import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.ide.annotator.HaxeStandardAnnotation;
 import com.intellij.plugins.haxe.lang.lexer.HaxeEmbeddedElementType;
-import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.lang.psi.impl.*;
@@ -2358,10 +2357,10 @@ public class HaxeExpressionEvaluatorHandlers {
           }
 
             if (parentForLoop.getKeyValueIterator() != null) {
-              ResultHolder iteratorType = searchForIteratorType(haxeClassReference, "keyValueIterator",  parentForLoop);
+              ResultHolder iteratorType = searchForIteratorType(haxeClassReference, HaxeIterationProtocol.KEY_VALUE_ITERATOR, parentForLoop);
               if (iteratorType != null) return  iteratorType;
             } else {
-              ResultHolder iteratorType = searchForIteratorType(haxeClassReference, "iterator",  parentForLoop);
+              ResultHolder iteratorType = searchForIteratorType(haxeClassReference, HaxeIterationProtocol.ITERATOR, parentForLoop);
               if (iteratorType != null) return  iteratorType;
 
 
@@ -2389,7 +2388,7 @@ public class HaxeExpressionEvaluatorHandlers {
                       HaxeGenericResolver translated = localResolver.translateFromTo(haxeClassReference.getHaxeClass(), fullyResolvedClass.getHaxeClass());
                       SpecificTypeReference underlyingTypeResolved = translated.resolve(fullyResolvedClass);
                       if (underlyingTypeResolved instanceof SpecificHaxeClassReference underlyingClassResolved) {
-                        ResultHolder iteratorTypeFromUnderlying = searchForIteratorType(underlyingClassResolved, "iterator", parentForLoop);
+                        ResultHolder iteratorTypeFromUnderlying = searchForIteratorType(underlyingClassResolved, HaxeIterationProtocol.ITERATOR, parentForLoop);
                         if (iteratorTypeFromUnderlying != null) return iteratorTypeFromUnderlying;
                       }
                     }
@@ -2417,8 +2416,10 @@ public class HaxeExpressionEvaluatorHandlers {
 
     SpecificTypeReference typeReference = haxeClassReference.fullyResolveTypeDefAndUnwrapNullTypeReference();
     if (typeReference instanceof SpecificHaxeClassReference resolvedClassReference) {
+      HaxeClassModel classModel = resolvedClassReference.getHaxeClassModel();
+      if (classModel == null) return null;
       HaxeGenericResolver referenceGenericResolver = resolvedClassReference.getGenericResolver();
-      HaxeBaseMemberModel iterator = resolvedClassReference.getHaxeClassModel().getMember(iteratorName, referenceGenericResolver);
+      HaxeBaseMemberModel iterator = classModel.getMember(iteratorName, referenceGenericResolver);
 
       if (iterator == null) {
         // look for extension method iterator

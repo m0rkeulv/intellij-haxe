@@ -5,13 +5,12 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
-import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIndex;
 import com.intellij.plugins.haxe.model.HaxeBaseMemberModel;
 import com.intellij.plugins.haxe.runner.debugger.dap.EvaluationPath;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
+import com.intellij.plugins.haxe.util.HaxeQnameResolveUtil;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import java.util.concurrent.ExecutorService;
@@ -147,30 +146,11 @@ public final class HaxeVariableSourceNavigator {
     if (typeName == null || memberName == null || !EvaluationPath.isIdentifier(memberName)) {
       return null;
     }
-    String bare = typeName;
-    int typeParams = bare.indexOf('<');
-    if (typeParams >= 0) {
-      bare = bare.substring(0, typeParams); // "Array<Circle>" -> "Array"
-    }
-    bare = bare.trim();
-    String shortName = bare.substring(bare.lastIndexOf('.') + 1);
-    boolean qualified = bare.indexOf('.') >= 0;
-    if (shortName.isBlank()) {
-      return null;
-    }
-    for (HaxeClass candidate : HaxeClassNameUnifiedIndex.getByNameFiltered(
-      shortName, project, GlobalSearchScope.allScope(project))) {
-      // compare RUNTIME-style names (package + bare name) — PSI's
-      // getQualifiedName() inserts the module segment for ancillary classes
-      // ("openfl.display.Preloader.DefaultPreloader") and would reject the
-      // adapter-reported "openfl.display.DefaultPreloader"
-      if (qualified && !bare.equals(HaxeDebuggerSupportUtils.runtimeClassName(candidate))) {
-        continue;
-      }
+    for (HaxeClass candidate : HaxeQnameResolveUtil.findRuntimeTypes(typeName, project)) {
       HaxeBaseMemberModel member = candidate.getModel().getMember(memberName, null);
       if (member != null) {
         if (LOG.isDebugEnabled()) {
-          LOG.debug("jump-to-source: member '" + memberName + "' found on runtime type '" + bare + "'");
+          LOG.debug("jump-to-source: member '" + memberName + "' found on runtime type '" + typeName + "'");
         }
         return XDebuggerUtil.getInstance().createPositionByElement(member.getBasePsi().getNavigationElement());
       }

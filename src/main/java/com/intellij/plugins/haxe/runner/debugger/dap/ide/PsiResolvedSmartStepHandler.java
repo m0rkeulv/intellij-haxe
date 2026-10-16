@@ -9,6 +9,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeReference;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeMethodModel;
 import com.intellij.plugins.haxe.runner.debugger.HaxeDebuggerSupportUtils;
+import com.intellij.plugins.haxe.util.HaxeQnameResolveUtil;
 import com.intellij.psi.PsiElement;
 import com.intellij.xdebugger.XSourcePosition;
 import java.util.ArrayList;
@@ -83,7 +84,7 @@ class PsiResolvedSmartStepHandler extends DapSmartStepHandlerBase<PsiResolvedSma
       // runtime name, not PSI's getQualifiedName(): a mismatched name means
       // the entry breakpoint never fires and every choice degrades to step over
       String className = declaringClass != null
-                         ? HaxeDebuggerSupportUtils.runtimeClassName(declaringClass.haxeClass) : null;
+                         ? HaxeQnameResolveUtil.runtimeClassName(declaringClass.haxeClass) : null;
       if (className == null || className.isEmpty()) {
         continue; // closures/local functions: no class-function name to break on
       }
