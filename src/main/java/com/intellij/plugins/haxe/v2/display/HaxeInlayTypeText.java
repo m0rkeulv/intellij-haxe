@@ -30,7 +30,7 @@ final class HaxeInlayTypeText {
 
   @Nullable
   static HaxeInlayTypeText of(@Nullable JsonTypeRef type) {
-    if (type == null || "TMono".equals(type.kind())) return null;
+    if (type == null || type.isMonomorph()) return null;
     List<Part> parts = new ArrayList<>();
     render(type, parts);
     return new HaxeInlayTypeText(parts);
@@ -66,18 +66,17 @@ final class HaxeInlayTypeText {
       parts.add(plainPart("?"));
       return;
     }
-    switch (type.kind()) {
-      case "TInst", "TEnum", "TType", "TAbstract" -> named(type, parts);
-      case "TFun" -> function(type, parts);
-      case "TDynamic" -> dynamic(type, parts);
-      case "TAnonymous" -> anonymous(type, parts);
-      default -> parts.add(plainPart("?"));
-    }
+    if (type.isNamedType()) named(type, parts);
+    else if (type.isFunction()) function(type, parts);
+    else if (type.isDynamic()) dynamic(type, parts);
+    else if (type.isAnonymous()) anonymous(type, parts);
+    else parts.add(plainPart("?"));
   }
 
   private static void named(@NotNull JsonTypeRef type, @NotNull List<Part> parts) {
-    parts.add(new Part(type.args().path("path").path("typeName").asString("?"), type));
-    List<JsonNode> parameters = type.args().path("params").valueStream().toList();
+    String name = type.typeName();
+    parts.add(new Part(name != null ? name : "?", type));
+    List<JsonTypeRef> parameters = type.typeParameters();
     if (parameters.isEmpty()) return;
     parts.add(plainPart("<"));
     renderList(parameters, parts);
@@ -86,7 +85,7 @@ final class HaxeInlayTypeText {
 
   private static void function(@NotNull JsonTypeRef type, @NotNull List<Part> parts) {
     parts.add(plainPart("("));
-    List<JsonNode> arguments = type.args().path("args").valueStream().map(argument -> argument.path("t")).toList();
+    List<JsonTypeRef> arguments = type.functionArguments().stream().map(JsonTypeRef.Argument::type).toList();
     renderList(arguments, parts);
     parts.add(plainPart(")->"));
     render(type.returnType(), parts);
@@ -115,10 +114,10 @@ final class HaxeInlayTypeText {
   }
 
   /** The types, comma-separated. */
-  private static void renderList(@NotNull List<JsonNode> types, @NotNull List<Part> parts) {
+  private static void renderList(@NotNull List<JsonTypeRef> types, @NotNull List<Part> parts) {
     for (int i = 0; i < types.size(); i++) {
       if (i > 0) parts.add(plainPart(", "));
-      render(JsonTypeRef.of(types.get(i)), parts);
+      render(types.get(i), parts);
     }
   }
 

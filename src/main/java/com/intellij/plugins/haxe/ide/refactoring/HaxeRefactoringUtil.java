@@ -19,6 +19,7 @@
 package com.intellij.plugins.haxe.ide.refactoring;
 
 import com.intellij.codeInsight.PsiEquivalenceUtil;
+import com.intellij.plugins.haxe.lang.psi.fakes.HaxeSyntheticDeclarations;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
@@ -55,8 +56,7 @@ public class HaxeRefactoringUtil {
     }
     List<String> converted = convertNamesToString(usedComponentNames);
     Set<String> usedNames = new HashSet<>(converted);
-    // adding global values
-    usedNames.add("trace");
+    usedNames.addAll(HaxeSyntheticDeclarations.declaredNames(context.getProject()));
     return usedNames;
   }
 

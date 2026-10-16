@@ -42,6 +42,15 @@ public final class HaxeModuleVariants {
   private static final Set<String> STOCK_PLATFORM_NAMES = Set.of(
     "js", "lua", "neko", "flash", "php", "cpp", "jvm", "java", "cs", "python", "hl", "eval");
 
+  /**
+   * The root packages that mirror compiler targets: the std library's target
+   * externs ({@code std/flash} is package {@code flash}) and libraries shipping
+   * per-target externs use exactly these names, so a class under one of them
+   * is usable only while that target is active.
+   */
+  public static final Set<String> TARGET_ROOT_PACKAGES =
+    Set.of("cpp", "cs", "flash", "hl", "java", "js", "jvm", "lua", "php", "python", "neko");
+
   /** The platform names Haxe 5 refuses as a {@code --custom-target}: its own targets. */
   private static final Set<String> RESERVED_TARGET_NAMES = Set.of(
     "js", "lua", "neko", "flash", "php", "cpp", "jvm", "python", "hl", "eval");
@@ -141,7 +150,7 @@ public final class HaxeModuleVariants {
 
       for (String platform : STOCK_PLATFORM_NAMES) {
         // the tool window lists only the declared defines; the context adds the target's own
-        // (and the compiler version's) - see HaxeDefineContextService.baseDefines
+        // (and the compiler version's) - see HaxeDefineContextService.definesBeforeOverrides
         if (defines.containsKey(platform)) active.add(platform);
       }
 

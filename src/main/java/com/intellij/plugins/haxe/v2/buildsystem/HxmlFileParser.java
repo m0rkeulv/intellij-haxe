@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
+import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
@@ -128,7 +130,7 @@ public final class HxmlFileParser {
       appendFlattened(tokens[1], reader, visited, out);
       return;
     }
-    if (isIncludeReference(line)) {
+    if (isHxmlReference(line)) {
       if (!visited.add(line)) return;
       String included = reader.read(line);
       if (included != null) {
@@ -152,7 +154,7 @@ public final class HxmlFileParser {
       String line = rawLine.trim();
       if (line.startsWith(INCLUDE_MARKER)) {
         String reference = line.substring(INCLUDE_MARKER.length()).trim();
-        if (isIncludeReference(reference)) return reference;
+        if (isHxmlReference(reference)) return reference;
         continue;
       }
       if (isSignificantLine(line)) break;
@@ -308,9 +310,9 @@ public final class HxmlFileParser {
     return new HaxeDefine(parts[0], parts.length > 1 ? parts[1] : null);
   }
 
-  /** A line that pulls in another hxml: a bare path ending in .hxml, never a flag. */
-  static boolean isIncludeReference(@NotNull String token) {
-    return !token.startsWith("-") && token.endsWith(".hxml");
+  /** A token naming another hxml - an include line or a command-line argument: a bare path with the hxml extension, never a flag. */
+  public static boolean isHxmlReference(@NotNull String token) {
+    return !token.startsWith("-") && FileUtilRt.extensionEquals(token, HXMLFileType.DEFAULT_EXTENSION);
   }
 
   /** The target a compiler flag selects ({@code -js}, {@code --jvm}, ...), or null for non-target flags. */

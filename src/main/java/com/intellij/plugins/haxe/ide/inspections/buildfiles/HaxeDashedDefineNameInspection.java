@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.inspections.buildfiles;
 
 import com.intellij.codeInspection.LocalInspectionTool;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.modcommand.ModPsiUpdater;
 import com.intellij.modcommand.PsiUpdateModCommandQuickFix;
@@ -15,7 +16,6 @@ import com.intellij.plugins.haxe.hxml.psi.HXMLValue;
 import com.intellij.plugins.haxe.hxml.psi.HXMLVisitor;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeProjectXmlFiles;
-import com.intellij.plugins.haxe.v2.buildsystem.ProjectXmlParser;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.PsiFile;
@@ -90,7 +90,7 @@ public class HaxeDashedDefineNameInspection extends LocalInspectionTool {
 
     @Override
     public void visitXmlTag(@NotNull XmlTag tag) {
-      if (!ProjectXmlParser.DEFINE_TAGS.contains(tag.getLocalName().toLowerCase(Locale.ROOT))) return;
+      if (!ProjectXmlVocabulary.DEFINE_ELEMENTS.contains(tag.getLocalName().toLowerCase(Locale.ROOT))) return;
       XmlAttributeValue name = HaxeXmlAttributeValues.nameAttributeValue(tag);
       if (name == null) return;
       checkName(holder, name, HaxeXmlAttributeValues.valueRange(name));

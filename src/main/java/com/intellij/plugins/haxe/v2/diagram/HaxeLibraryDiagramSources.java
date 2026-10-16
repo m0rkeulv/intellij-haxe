@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.diagram;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
@@ -14,8 +15,6 @@ import org.jetbrains.annotations.Nullable;
 /** What the diagram reads about a build file: its include tree, or for a non-hxml build file one entry with its inspected declarations. */
 final class HaxeLibraryDiagramSources {
 
-  private static final String HXML_EXTENSION = "hxml";
-
   private HaxeLibraryDiagramSources() {
   }
 
@@ -24,7 +23,7 @@ final class HaxeLibraryDiagramSources {
   static HxmlIncludeTree treeOf(@NotNull Project project, @NotNull String path) {
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null) return null;
-    if (HXML_EXTENSION.equalsIgnoreCase(file.getExtension())) return HxmlIncludeTree.of(file);
+    if (HXMLFileType.DEFAULT_EXTENSION.equalsIgnoreCase(file.getExtension())) return HxmlIncludeTree.of(file);
     HaxeBuildFile buildFile = knownBuildFile(project, path);
     HaxeBuildFileInfo info = buildFile == null ? HaxeBuildFileInfo.EMPTY : HaxeBuildSections.inspectSelected(project, buildFile);
     return HxmlIncludeTree.leaf(file, info);

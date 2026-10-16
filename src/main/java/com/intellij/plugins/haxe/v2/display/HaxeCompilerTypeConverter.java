@@ -8,7 +8,6 @@ import com.intellij.plugins.haxe.util.HaxeResolveUtil;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,12 +31,10 @@ final class HaxeCompilerTypeConverter {
   @Nullable
   static ResultHolder toResultHolder(@Nullable JsonTypeRef type, @NotNull PsiElement context) {
     if (type == null) return null;
-    return switch (type.kind()) {
-      case "TInst", "TEnum", "TType", "TAbstract" -> classType(type, context);
-      case "TFun" -> functionType(type, context);
-      case "TDynamic" -> SpecificTypeReference.getDynamic(context).createHolder();
-      default -> null;
-    };
+    if (type.isNamedType()) return classType(type, context);
+    if (type.isFunction()) return functionType(type, context);
+    if (type.isDynamic()) return SpecificTypeReference.getDynamic(context).createHolder();
+    return null;
   }
 
   @Nullable
@@ -45,8 +42,8 @@ final class HaxeCompilerTypeConverter {
     HaxeClass haxeClass = findClass(type, context);
     if (haxeClass == null) return null;
     List<ResultHolder> specifics = new ArrayList<>();
-    for (JsonNode param : type.args().path("params")) {
-      ResultHolder specific = toResultHolder(JsonTypeRef.of(param), context);
+    for (JsonTypeRef param : type.typeParameters()) {
+      ResultHolder specific = toResultHolder(param, context);
       if (specific == null) return null;
       specifics.add(specific);
     }
@@ -54,7 +51,6 @@ final class HaxeCompilerTypeConverter {
     return SpecificHaxeClassReference.withGenerics(reference, specifics.toArray(ResultHolder[]::new)).createHolder();
   }
 
-  /** The index form ({@code pack.Module.SubType}) first, the printed dot path as the fallback. */
   /** The declaration of a named compiler type, through the class indexes: by its qualified name, else by its dot path. */
   @Nullable
   static HaxeClass findClass(@NotNull JsonTypeRef type, @NotNull PsiElement context) {
@@ -68,14 +64,12 @@ final class HaxeCompilerTypeConverter {
   private static ResultHolder functionType(@NotNull JsonTypeRef type, @NotNull PsiElement context) {
     List<HaxeArgument> arguments = new ArrayList<>();
     int index = 0;
-    for (JsonNode argument : type.args().path("args")) {
-      ResultHolder argumentType = toResultHolder(JsonTypeRef.of(argument.path("t")), context);
+    for (JsonTypeRef.Argument argument : type.functionArguments()) {
+      ResultHolder argumentType = toResultHolder(argument.type(), context);
       if (argumentType == null) return null;
-      String name = argument.path("name").asString("");
-      boolean optional = argument.path("opt").asBoolean(false);
-      arguments.add(new HaxeArgument(context, index++, optional, false, argumentType, name.isEmpty() ? null : name));
+      arguments.add(new HaxeArgument(context, index++, argument.optional(), false, argumentType, argument.name()));
     }
-    ResultHolder returnType = toResultHolder(JsonTypeRef.of(type.args().path("ret")), context);
+    ResultHolder returnType = toResultHolder(type.returnType(), context);
     if (returnType == null) return null;
     return new SpecificFunctionReference(arguments, returnType, (HaxeMethodModel)null, context).createHolder();
   }
