@@ -3,13 +3,13 @@ package com.intellij.plugins.haxe.v2.toolwindow.actions;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibInstallTask;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibMutations;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.LibraryNode;
 import org.jetbrains.annotations.NotNull;
 
 /// Tree context menu on a missing library: runs `haxelib install <name> [version] --always`
-/// in the background ([HaxelibInstallTask]); the tree follows the sync that ends it.
+/// in the background ([HaxelibMutations]); the tree follows the sync that ends it.
 public final class HaxeInstallLibraryAction extends HaxeSelectedNodeAction<LibraryNode> {
 
   public HaxeInstallLibraryAction(@NotNull HaxeToolWindowPanel panel) {
@@ -23,7 +23,7 @@ public final class HaxeInstallLibraryAction extends HaxeSelectedNodeAction<Libra
 
   @Override
   protected void perform(@NotNull Project project, @NotNull LibraryNode library) {
-    HaxelibInstallTask.queue(project, library.name(), library.version(), library.resolvedVersion(), null);
+    HaxelibMutations.install(project, library.name(), library.version(), library.resolvedVersion());
   }
 
   /** The entry names the library it installs. */
