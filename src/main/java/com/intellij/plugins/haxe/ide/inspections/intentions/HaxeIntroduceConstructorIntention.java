@@ -80,7 +80,7 @@ public class HaxeIntroduceConstructorIntention
 
                 }
                 """
-                .formatted(parameterListFromArguments(arguments()));
+                .formatted(parameterListFromArguments(arguments(), false));
         return HaxeElementGenerator.createConstructorDeclaration(project, function);
     }
 

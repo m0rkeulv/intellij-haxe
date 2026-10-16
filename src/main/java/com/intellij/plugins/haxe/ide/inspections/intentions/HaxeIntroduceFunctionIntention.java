@@ -52,7 +52,7 @@ public class HaxeIntroduceFunctionIntention extends HaxeUnresolvedSymbolIntentio
         %s
       }
       """
-      .formatted(methodName, parameterListFromArguments(callArguments(call)), returnType, defaultReturnStatement(returnType));
+      .formatted(methodName, parameterListFromArguments(callArguments(call), true), returnType, defaultReturnStatement(returnType));
     return HaxeElementGenerator.createMethodDeclaration(project, function);
   }
 }
