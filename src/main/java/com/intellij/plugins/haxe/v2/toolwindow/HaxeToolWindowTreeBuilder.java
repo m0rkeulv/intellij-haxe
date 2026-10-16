@@ -27,6 +27,10 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.tree.DefaultMutableTreeNode;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import java.util.Objects;
 import java.util.Map;
 import java.util.Set;
@@ -225,23 +229,46 @@ final class HaxeToolWindowTreeBuilder {
     parent.add(group);
   }
 
+  /** The declared libraries, each with the dependencies the sync's graph knows below it. */
   @NotNull
-  private static DefaultMutableTreeNode librariesGroupNode(@NotNull FileEntry entry,
-                                                           @Nullable Map<String, InstalledLibrary> installedLibraries) {
+  private DefaultMutableTreeNode librariesGroupNode(@NotNull FileEntry entry,
+                                                    @Nullable Map<String, InstalledLibrary> installedLibraries) {
     List<HaxeLibDependency> libraries = entry.info().libraries();
     DefaultMutableTreeNode librariesNode = new DefaultMutableTreeNode(new GroupNode(GroupKind.LIBRARIES, libraries.size()));
+    HaxeLibraryGraph graph = HaxeLibraryGraph.getInstance(project);
     for (HaxeLibDependency library : libraries) {
-      librariesNode.add(new DefaultMutableTreeNode(libraryNode(entry.buildFile(), library, installedLibraries)));
+      LibraryNode row = libraryNode(entry.buildFile(), library, installedLibraries, null);
+      librariesNode.add(libraryTreeNode(row, graph, installedLibraries, new HashSet<>()));
     }
     return librariesNode;
+  }
+
+  /** The library's row with its transitive dependencies below it; a library already on the path above is not repeated. */
+  @NotNull
+  private static DefaultMutableTreeNode libraryTreeNode(@NotNull LibraryNode row,
+                                                        @NotNull HaxeLibraryGraph graph,
+                                                        @Nullable Map<String, InstalledLibrary> installedLibraries,
+                                                        @NotNull Set<String> ancestry) {
+    DefaultMutableTreeNode node = new DefaultMutableTreeNode(row);
+    HaxeLibraryGraph.Library library = graph.library(row.name());
+    String key = row.name().toLowerCase(Locale.ROOT);
+    if (library == null || !ancestry.add(key)) return node;
+    for (HaxeLibraryGraph.Requirement requirement : library.requires()) {
+      HaxeLibDependency dependency = new HaxeLibDependency(requirement.name(), requirement.version());
+      LibraryNode child = libraryNode(row.owner(), dependency, installedLibraries, row.name());
+      node.add(libraryTreeNode(child, graph, installedLibraries, ancestry));
+    }
+    ancestry.remove(key);
+    return node;
   }
 
   @NotNull
   private static LibraryNode libraryNode(@NotNull HaxeBuildFile buildFile,
                                          @NotNull HaxeLibDependency library,
-                                         @Nullable Map<String, InstalledLibrary> installedLibraries) {
+                                         @Nullable Map<String, InstalledLibrary> installedLibraries,
+                                         @Nullable String requiredBy) {
     LibraryStatus status = HaxeInstalledLibraries.status(installedLibraries, library);
-    return new LibraryNode(buildFile, library.name(), library.version(), status.selectedVersion(), status.installed());
+    return new LibraryNode(buildFile, library.name(), library.version(), status.selectedVersion(), status.installed(), requiredBy);
   }
 
   @NotNull

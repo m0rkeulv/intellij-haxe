@@ -32,8 +32,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.HashSet;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Which build each file is analysed under. Ownership is by path: among the
@@ -241,18 +243,17 @@ public final class HaxeResolveContexts implements Disposable {
   }
 
   /**
-   * The builds declaring the haxelib a library file belongs to; every build
-   * when the file is not under a synced haxelib entry or no build declares
-   * its lib.
-   * TODO: a lib pulled in transitively (hxparse through haxeparser) is
-   * declared by no build and falls back to every build.
+   * The builds reaching the haxelib a library file belongs to, by declaring
+   * it or a library that depends on it; every build when the file is not
+   * under a synced haxelib entry or no build reaches its lib.
    */
   @NotNull
   private List<Ownership> declaringBuilds(@NotNull VirtualFile file) {
     String haxelib = haxelibOf(file);
     if (haxelib == null) return ownerships();
+    String wanted = haxelib.toLowerCase(Locale.ROOT);
     List<Ownership> declaring = ownerships().stream()
-      .filter(ownership -> ownership.haxelibs().contains(haxelib))
+      .filter(ownership -> ownership.haxelibs().contains(wanted))
       .toList();
     return declaring.isEmpty() ? ownerships() : declaring;
   }
@@ -372,6 +373,12 @@ public final class HaxeResolveContexts implements Disposable {
       buildFileInputs.incModificationCount();
     }
 
+    /** The closures a build reaches come from the sync. */
+    @Override
+    public void librariesSynced() {
+      buildFileInputs.incModificationCount();
+    }
+
     @Override
     public void derivedCachesCleared() {
       buildFileInputs.incModificationCount();
@@ -387,12 +394,28 @@ public final class HaxeResolveContexts implements Disposable {
       if (buildFile.type() == HaxeBuildFileType.HXP_SCRIPT) continue;
       HaxeBuildFileInfo info = HaxeBuildSections.inspectSelected(project, buildFile);
       List<String> sourceDirectories = HaxeBuildClasspaths.sourceDirectories(project, buildFile, info.classpaths());
-      Set<String> haxelibs = info.libraries().stream()
-        .map(HaxeBuildFileInfo.HaxeLibDependency::name)
-        .collect(Collectors.toUnmodifiableSet());
+      Set<String> haxelibs = reachableLibraries(buildFile, info);
       ownerships.add(new Ownership(buildFile, List.copyOf(sourceDirectories), haxelibs, mainFileSuffix(buildFile)));
     }
     return List.copyOf(ownerships);
+  }
+
+  /**
+   * The libraries the build reaches, lower-cased: the ones it declares and,
+   * once a library sync recorded them, everything those bring in.
+   */
+  @NotNull
+  private Set<String> reachableLibraries(@NotNull HaxeBuildFile buildFile, @NotNull HaxeBuildFileInfo info) {
+    HaxeLibraryGraph graph = HaxeLibraryGraph.getInstance(project);
+    String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
+    Set<String> reachable = new HashSet<>();
+    for (HaxeBuildFileInfo.HaxeLibDependency library : info.libraries()) {
+      reachable.add(library.name().toLowerCase(Locale.ROOT));
+      for (String member : graph.closureOf(containerId, library.name())) {
+        reachable.add(member.toLowerCase(Locale.ROOT));
+      }
+    }
+    return Set.copyOf(reachable);
   }
 
   /** The hxml's {@code -main} class as a path suffix under a source directory; null without one. */

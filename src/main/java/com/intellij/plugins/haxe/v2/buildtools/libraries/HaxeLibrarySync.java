@@ -3,6 +3,8 @@ package com.intellij.plugins.haxe.v2.buildtools.libraries;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph.Library;
+import java.nio.file.Path;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeEffectiveBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
@@ -85,11 +87,21 @@ public final class HaxeLibrarySync {
 
   /**
    * One module's {@code haxelib path} results: the classpaths per External
-   * Libraries entry, and per dependency the {@code -D name=version} defines
-   * the output carried (the dependency and its transitives).
+   * Libraries entry, per dependency the {@code -D name=version} defines the
+   * output carried (the dependency and its transitives), every library the
+   * output listed with what its haxelib.json requires, and per dependency
+   * the names the output listed in order (the closure).
    */
   private record Resolution(@NotNull Map<String, List<String>> classpaths,
-                            @NotNull Map<String, Map<String, String>> definesByDependency) {
+                            @NotNull Map<String, Map<String, String>> definesByDependency,
+                            @NotNull Map<String, Library> libraries,
+                            @NotNull Map<String, List<String>> closureByDependency) {
+  }
+
+  /** Everything a sync run records besides the workspace libraries, keyed by module name where per container. */
+  private record SyncResult(@NotNull Map<String, Map<String, Map<String, String>>> definesByModule,
+                            @NotNull Map<String, Library> libraries,
+                            @NotNull Map<String, Map<String, List<String>>> closuresByModule) {
   }
 
   /**
@@ -113,15 +125,17 @@ public final class HaxeLibrarySync {
         Map<Module, List<HaxeLibDependency>> dependencies =
           HaxeReadActions.compute(() -> collectDependencies(project));
         Map<String, Map<String, List<String>>> byModuleName = new LinkedHashMap<>();
-        Map<String, Map<String, Map<String, String>>> definesByModuleName = new LinkedHashMap<>();
+        SyncResult result = new SyncResult(new LinkedHashMap<>(), new LinkedHashMap<>(), new LinkedHashMap<>());
         dependencies.forEach((module, moduleDependencies) -> {
           Resolution resolution = resolveClasspaths(project, module, moduleDependencies, indicator);
           byModuleName.put(module.getName(), resolution.classpaths());
-          definesByModuleName.put(module.getName(), resolution.definesByDependency());
+          result.definesByModule().put(module.getName(), resolution.definesByDependency());
+          resolution.libraries().forEach(result.libraries()::putIfAbsent);
+          result.closuresByModule().put(module.getName(), resolution.closureByDependency());
         });
         if (!project.isDisposed()) {
           applying = true;
-          Runnable onApplied = () -> recordLibraryDefines(project, definesByModuleName, onDone);
+          Runnable onApplied = () -> recordResolution(project, result, onDone);
           HaxeLibraryWorkspace.getInstance(project).applyAllAsync(byModuleName, onApplied);
         }
       }
@@ -134,12 +148,11 @@ public final class HaxeLibrarySync {
     }.queue();
   }
 
-  /** On the EDT after the libraries landed: the defines are recorded, then the end of the run is announced. */
-  private static void recordLibraryDefines(@NotNull Project project,
-                                           @NotNull Map<String, Map<String, Map<String, String>>> definesByModuleName,
-                                           @Nullable Runnable onFinished) {
+  /** On the EDT after the libraries landed: the defines and the dependency graph are recorded, then the end of the run is announced. */
+  private static void recordResolution(@NotNull Project project, @NotNull SyncResult result, @Nullable Runnable onFinished) {
     if (!project.isDisposed()) {
-      HaxeLibraryDefinesStore.getInstance(project).replaceAll(definesByModuleName);
+      HaxeLibraryDefinesStore.getInstance(project).replaceAll(result.definesByModule());
+      HaxeLibraryGraph.getInstance(project).replaceAll(result.libraries(), result.closuresByModule());
       HaxeInstalledLibraries.getInstance(project).refreshAsync();
       HaxeBuildEventListener.publisher(project).librariesSynced();
     }
@@ -266,15 +279,20 @@ public final class HaxeLibrarySync {
     Sdk sdk = HaxeToolPathResolver.resolveSdk(project, module.getName());
     Map<String, List<String>> libraries = new LinkedHashMap<>();
     Map<String, Map<String, String>> definesByDependency = new LinkedHashMap<>();
+    Map<String, Library> resolvedLibraries = new LinkedHashMap<>();
+    Map<String, List<String>> closureByDependency = new LinkedHashMap<>();
     if (sdk != null && workDir != null) {
       for (HaxeLibDependency dependency : dependencies) {
         indicator.setText2(dependency.name());
         List<String> output = haxelibPathOutput(sdk, workDir, dependency);
         Map<String, String> defines = new LinkedHashMap<>();
+        List<String> closure = new ArrayList<>();
         // one External Libraries entry PER library in the output (see HaxelibPathParser.parseSections)
         for (LibrarySection section : HaxelibPathParser.parseSections(dependency.name(), output)) {
           String version = sectionVersion(section, dependency);
           defines.putIfAbsent(section.name(), version != null ? version : FLAG_DEFINE_VALUE);
+          closure.add(section.name());
+          resolvedLibraries.putIfAbsent(section.name(), resolvedLibrary(section, version));
           if (section.classpaths().isEmpty()) continue;
           // TODO: drop classpaths under the module's own content roots - a lib resolving to the open
           //  checkout (a tests project's <haxelib path="../.."/>) registers the module's source folder
@@ -285,9 +303,18 @@ public final class HaxeLibrarySync {
           libraries.merge(managedLibraryName(entryName), section.classpaths(), HaxeLibrarySync::unionPreservingOrder);
         }
         definesByDependency.put(dependency.name(), defines);
+        closureByDependency.put(dependency.name(), closure);
       }
     }
-    return new Resolution(libraries, definesByDependency);
+    return new Resolution(libraries, definesByDependency, resolvedLibraries, closureByDependency);
+  }
+
+  /** The graph node of a section: its resolved version and kind, and the requirements of the haxelib.json above its roots. */
+  @NotNull
+  private static Library resolvedLibrary(@NotNull LibrarySection section, @Nullable String version) {
+    Path manifest = HaxelibManifest.find(section.classpaths());
+    List<HaxeLibraryGraph.Requirement> requires = manifest == null ? List.of() : HaxelibManifest.requirements(manifest);
+    return new Library(section.name(), version, isScmCheckout(section), requires);
   }
 
   /// The section carries its own version; the queried library itself may only know it from the dependency.
