@@ -4,6 +4,7 @@ import com.intellij.openapi.roots.LibraryOrderEntry;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.OrderEntry;
 import com.intellij.plugins.haxe.haxelib.*;
+import com.intellij.plugins.haxe.haxelib.HaxelibRepositoryLayout;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
@@ -386,7 +387,7 @@ public final class HaxeLibrarySync {
     for (String classpath : section.classpaths()) {
       String[] segments = classpath.replace('\\', '/').split("/");
       for (int i = 1; i < segments.length; i++) {
-        boolean checkoutSegment = segments[i].equals("git") || segments[i].equals("hg");
+        boolean checkoutSegment = HaxelibRepositoryLayout.isScmDirName(segments[i]);
         if (checkoutSegment && segments[i - 1].equalsIgnoreCase(section.name())) return true;
       }
     }

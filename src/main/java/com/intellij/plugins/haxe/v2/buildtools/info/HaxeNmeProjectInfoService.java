@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
+import com.intellij.plugins.haxe.haxelib.HaxelibRepositoryLayout;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
@@ -27,7 +28,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import static com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.firstErrorLine;
 
@@ -54,11 +54,6 @@ public final class HaxeNmeProjectInfoService implements Disposable {
   private static final int PREPARE_TIMEOUT_MS = 60_000;
   private static final String BUILD_FILE_MARKER = "PREPARE BUILD_FILE=";
   private static final String PREPARE_TOOL = "nme prepare";
-
-  // a haxelib-repo path segment naming an installed version: haxelib stores
-  // versions with commas (6,3,149) or as "git"; the segment BEFORE it is the
-  // library name (<repo>/<name>/<version>/...)
-  private static final Pattern HAXELIB_VERSION_SEGMENT = Pattern.compile("\\d+(?:,\\d+)+|git");
 
   /**
    * One landed evaluation: the parsed info for the tool window plus the
@@ -278,9 +273,11 @@ public final class HaxeNmeProjectInfoService implements Disposable {
     // either path separator
     String[] segments = classpath.split("[/\\\\]");
     for (int i = 1; i < segments.length; i++) {
-      if (HAXELIB_VERSION_SEGMENT.matcher(segments[i]).matches()) {
-        String version = "git".equals(segments[i]) ? null : segments[i].replace(',', '.');
-        return new HaxeLibDependency(segments[i - 1], version);
+      // <repo>/<name>/<version folder>/...: an scm checkout pins no version
+      String version = HaxelibRepositoryLayout.versionOf(segments[i]);
+      if (version != null) {
+        boolean checkout = HaxelibRepositoryLayout.isScmDirName(segments[i]);
+        return new HaxeLibDependency(segments[i - 1], checkout ? null : version);
       }
     }
     return null;
