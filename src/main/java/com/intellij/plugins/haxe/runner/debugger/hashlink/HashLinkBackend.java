@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
 import com.intellij.execution.ExecutionException;
+import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.ColoredProcessHandler;
 import com.intellij.execution.ui.RunnerLayoutUi;
 import com.intellij.execution.ui.layout.PlaceInGrid;
@@ -65,6 +66,15 @@ public class HashLinkBackend implements DapBackend {
 
   public int getDebugPort() {
     return debugPort;
+  }
+
+  /** The debuggee: this backend's runtime holding this backend's program at its first instruction until the adapter attaches on the debug port. */
+  @NotNull
+  public GeneralCommandLine debuggeeCommandLine(@Nullable String workDirectory) {
+    return new GeneralCommandLine()
+      .withExePath(hlExecutable.toString())
+      .withParameters("--debug", Integer.toString(debugPort), "--debug-wait", hlProgram.toString())
+      .withWorkDirectory(workDirectory);
   }
 
   @Override
