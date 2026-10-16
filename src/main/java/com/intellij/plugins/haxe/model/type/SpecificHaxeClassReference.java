@@ -20,6 +20,7 @@
 package com.intellij.plugins.haxe.model.type;
 
 import com.intellij.openapi.util.Key;
+import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.openapi.util.RecursionGuard;
 import com.intellij.openapi.util.RecursionManager;
 import com.intellij.plugins.haxe.lang.psi.*;
@@ -379,7 +380,7 @@ public class SpecificHaxeClassReference extends SpecificTypeReference {
               specific = paramModel.getInstanceType();
             }
           }
-          if(!hasReachedRestTypeParam && "Rest".equals(paramModel.getName())) {
+          if (!hasReachedRestTypeParam && HaxeClassModel.isGenericBuildRestParam(paramModel.getName())) {
               hasReachedRestTypeParam = true;
           }
           if (hasTypeParamRest && hasReachedRestTypeParam) {

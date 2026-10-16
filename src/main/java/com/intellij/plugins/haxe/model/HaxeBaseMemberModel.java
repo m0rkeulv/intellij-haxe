@@ -20,6 +20,7 @@
 package com.intellij.plugins.haxe.model;
 
 import com.intellij.plugins.haxe.lang.psi.*;
+import com.intellij.psi.PsiDocCommentOwner;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeEnumExtractedValueMixin;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeStubBasedNamedComponent;
 import com.intellij.plugins.haxe.model.type.HaxeGenericResolver;
@@ -106,6 +107,11 @@ public abstract class HaxeBaseMemberModel implements HaxeNamedComponentModel {
 
   @Nullable
   public abstract HaxeModuleModel getDeclaringModule();
+
+  /** Whether the declaration carries {@code @:deprecated}. */
+  public boolean isDeprecated() {
+    return basePsi instanceof PsiDocCommentOwner owner && owner.isDeprecated();
+  }
 
   @Deprecated
   public ResultHolder getResultType() {
