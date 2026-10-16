@@ -178,8 +178,7 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
     Module module = requireModule();
     Path hlExecutable = resolveHlExecutable(module);
     Path hlProgram = resolveProgram(module);
-    Path workingDir = resolveWorkingDirectory(module);
-    Path workDir = workingDir != null ? workingDir : hlProgram.getParent();
+    Path workDir = effectiveWorkingDirectory(module);
 
     GeneralCommandLine commandLine = new GeneralCommandLine().withExePath(hlExecutable.toString());
     if (profilerSamples != null) {
@@ -189,15 +188,13 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
     }
     return commandLine
       .withParameters(hlProgram.toString())
-      .withWorkDirectory(workDir != null ? workDir.toString() : null);
+      .withWorkDirectory(workDir.toString());
   }
 
   /** Where this run's dump will appear: hashlink writes it into the process working directory. */
   private Path expectedDumpPath() throws ExecutionException {
     Module module = requireModule();
-    Path workingDir = resolveWorkingDirectory(module);
-    Path base = workingDir != null ? workingDir : resolveProgram(module).getParent();
-    return base.resolve(PROFILER_DUMP_FILE_NAME);
+    return effectiveWorkingDirectory(module).resolve(PROFILER_DUMP_FILE_NAME);
   }
 
   /**
@@ -240,13 +237,10 @@ public class HashLinkRunConfiguration extends DapRunConfigurationBase implements
     return HashLinkRunConfigurations.detectedOutput(module).orElse(null);
   }
 
-  /** The working directory: the explicit setting, else the program's directory. */
-  @Nullable Path resolveWorkingDirectory(Module module) {
-    if (!workingDirectory.isBlank()) {
-      return resolveAgainstModule(workingDirectory);
-    }
-    Path program = resolveProgramOrNull(module);
-    return program != null ? program.getParent() : null;
+  /** The working directory of a launch: the explicit setting, else the directory of the program, which must resolve. */
+  @NotNull Path effectiveWorkingDirectory(Module module) throws ExecutionException {
+    Path program = resolveProgram(module);
+    return workingDirectory.isBlank() ? program.getParent() : resolveAgainstModule(workingDirectory);
   }
 
   // --- persistence ---

@@ -195,7 +195,7 @@ class HaxeV1Migrator(private val project: Project, private val scope: CoroutineS
         is ConfigurationPlan.Hxcpp -> {
           (old.configuration as? LegacyHxcppRunConfiguration)?.apply {
             setModule(module)
-            executablePath = plan.executablePath
+            setExecutablePath(plan.executablePath)
           }
         }
       }

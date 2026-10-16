@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
@@ -106,28 +107,10 @@ public final class HaxeCompilerDisplayService implements Disposable {
   private record Endpoint(@NotNull HaxeDisplayClient client, int id, @NotNull String metricsId) {
   }
 
-  /**
-   * One {@code lime display} outcome per project file and target. A failure
-   * is kept for a cooldown, so a broken tool is not re-run on every request.
-   */
-  private record CachedLimeArgs(long fileStamp, @NotNull String targetFlag, @Nullable List<String> args, long failedAtMs) {
-
-    boolean matches(@NotNull LimeDisplaySpec spec) {
-      return fileStamp == spec.fileStamp() && targetFlag.equals(spec.targetFlag());
-    }
-
-    boolean failureWithinCooldown(long nowMs) {
-      return args == null && nowMs - failedAtMs < LIME_FAILURE_COOLDOWN_MS;
-    }
-  }
-
-  private static final int LIME_DISPLAY_TIMEOUT_MS = 60_000;
-  private static final long LIME_FAILURE_COOLDOWN_MS = 30_000;
   /** The read timeout of a whole-context compile (warm-up, inlay types, dump) on a cold server; a single display answer keeps the client's default. */
   static final int CONTEXT_COMPILE_TIMEOUT_MS = 120_000;
 
   private final Project project;
-  private final Map<String, CachedLimeArgs> limeArgsCache = new ConcurrentHashMap<>();
   /** Keys of the contexts compiled this session; the server's module cache fills only from a compile. */
   private final Set<String> compiledContexts = ConcurrentHashMap.newKeySet();
   /** What each running server answered on initialize, by port; a server state change empties it. */
@@ -422,36 +405,16 @@ public final class HaxeCompilerDisplayService implements Disposable {
     }
     else {
       LimeDisplaySpec lime = context.lime();
-      base = lime != null ? limeArgsFor(lime, context.sdkName()) : null;
+      base = lime != null ? limeArguments(lime, context.sdkName()) : null;
     }
     return base == null ? null : HaxeDisplayConfiguration.applyOverrides(base, context.overrides());
   }
 
-  // TODO: keyed on the project file's stamp only - an edited library
-  //  include.xml takes effect on Reload Haxe Project or Purge Caches, not by itself.
+  /** The lime-family context's arguments from the info service's display cache; null while the tool fails or the project is untrusted. */
   @Nullable
-  private List<String> limeArgsFor(@NotNull LimeDisplaySpec spec, @Nullable String sdkName) {
-    String cacheKey = spec.directory() + "/" + spec.fileName();
-    long now = System.currentTimeMillis();
-    CachedLimeArgs cached = limeArgsCache.get(cacheKey);
-    if (cached != null && cached.matches(spec)) {
-      if (cached.args() != null) return cached.args();
-      if (cached.failureWithinCooldown(now)) return null;
-    }
-    List<String> args = runLimeDisplay(spec, sdkName);
-    limeArgsCache.put(cacheKey, new CachedLimeArgs(spec.fileStamp(), spec.targetFlag(), args, args == null ? now : 0));
-    return args;
-  }
-
-  @Nullable
-  private List<String> runLimeDisplay(@NotNull LimeDisplaySpec spec, @Nullable String sdkName) {
-    String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, sdkName);
-    List<String> args = LimeProjects.displayArguments(
-      haxelib, spec.tool(), spec.directory(), spec.fileName(), spec.targetFlag(), LIME_DISPLAY_TIMEOUT_MS);
-    if (args == null) {
-      log.info("lime display failed for " + spec.fileName());
-    }
-    return args;
+  private List<String> limeArguments(@NotNull LimeDisplaySpec spec, @Nullable String sdkName) {
+    return HaxeLimeProjectInfoService.getInstance(project)
+      .displayArguments(spec.directory(), spec.fileName(), spec.tool(), spec.targetFlag(), spec.fileStamp(), sdkName);
   }
 
   // --- server connection ---
@@ -641,7 +604,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
     compiledContexts.clear();
     capabilities.clear();
     unsavedFiles.clear();
-    limeArgsCache.clear();
+    HaxeLimeProjectInfoService.getInstance(project).clearDisplayArguments();
     contextCache.clear();
   }
 

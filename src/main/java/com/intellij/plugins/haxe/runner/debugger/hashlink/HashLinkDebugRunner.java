@@ -5,7 +5,6 @@ import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.openapi.module.Module;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugRunnerBase;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider;
-import java.nio.file.Path;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -60,8 +59,6 @@ public class HashLinkDebugRunner extends DapDebugRunnerBase<HashLinkRunConfigura
   protected GeneralCommandLine createCommandLine(HashLinkRunConfiguration configuration, HashLinkBackend backend)
     throws ExecutionException {
     Module module = configuration.requireModule();
-    Path workingDirectory = configuration.resolveWorkingDirectory(module);
-    Path workDir = workingDirectory != null ? workingDirectory : configuration.resolveProgram(module).getParent();
-    return backend.debuggeeCommandLine(workDir != null ? workDir.toString() : null);
+    return backend.debuggeeCommandLine(configuration.effectiveWorkingDirectory(module).toString());
   }
 }
