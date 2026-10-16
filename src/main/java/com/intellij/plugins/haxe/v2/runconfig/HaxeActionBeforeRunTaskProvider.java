@@ -511,9 +511,8 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
    * The compile additions a PROFILING launch injects — the hxcpp telemetry
    * entry's defines plus its start/stop bootstrap, the tracy entry's plain
    * defines, the flash entry's telemetry opt-in, or the browser entry's
-   * source-map emission — null on every non-profiling launch. The build
-   * file's type picks the tool spelling (lime {@code --haxeflag=} against
-   * plain haxe).
+   * source-map emission — in the build system's tool spelling; null on every
+   * non-profiling launch.
    */
   @Nullable
   private static List<String> profilingAdditions(@NotNull Project project,
@@ -522,23 +521,22 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                                                  @NotNull Task task) {
     HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, task.getBuildFilePath());
     if (buildFile == null) return null;
-    boolean limeFamily = buildFile.type() != HaxeBuildFileType.HXML;
+    List<String> plain = plainProfilingAdditions(configuration, executor);
+    return plain == null ? null : HaxeBuildSystem.of(buildFile.type()).forwardedArguments(plain);
+  }
+
+  /** The profiler's additions in plain haxe spelling; null when the executor is no profiler of the configuration's lane. */
+  @Nullable
+  private static List<String> plainProfilingAdditions(@NotNull RunConfiguration configuration, @NotNull Executor executor) {
     if (configuration instanceof HxcppIntellijRunConfiguration hxcpp) {
       Path dumpPath = hxcpp.expectedDumpPath();
       if (dumpPath == null) return null;
-      List<String> telemetry = HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, limeFamily, dumpPath);
-      if (telemetry != null) return telemetry;
-      return HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, limeFamily);
+      List<String> telemetry = HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, dumpPath);
+      return telemetry != null ? telemetry : HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor);
     }
-    if (configuration instanceof HashLinkRunConfiguration) {
-      return HaxeProfilerExecutorSupport.hlProfilingAdditions(executor, limeFamily);
-    }
-    if (configuration instanceof AirRunConfiguration) {
-      return HaxeProfilerExecutorSupport.flashProfilingAdditions(executor, limeFamily);
-    }
-    if (configuration instanceof BrowserRunConfiguration) {
-      return HaxeProfilerExecutorSupport.jsProfilingAdditions(executor, limeFamily);
-    }
+    if (configuration instanceof HashLinkRunConfiguration) return HaxeProfilerExecutorSupport.hlProfilingAdditions(executor);
+    if (configuration instanceof AirRunConfiguration) return HaxeProfilerExecutorSupport.flashProfilingAdditions(executor);
+    if (configuration instanceof BrowserRunConfiguration) return HaxeProfilerExecutorSupport.jsProfilingAdditions(executor);
     return null;
   }
 

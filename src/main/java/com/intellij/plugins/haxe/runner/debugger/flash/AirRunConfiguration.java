@@ -149,7 +149,7 @@ public class AirRunConfiguration extends DapRunConfigurationBase implements Haxe
     // with the Flash Profiler entry selected (the collector itself goes into
     // the before-launch compile, not this command line)
     boolean profiling = !descriptorPath.isBlank()
-                        && HaxeProfilerExecutorSupport.flashProfilingAdditions(executor, false) != null;
+                        && HaxeProfilerExecutorSupport.flashProfilingAdditions(executor) != null;
     HaxeTelemetryCapture.Handle capture = profiling
                                           ? HaxeTelemetryCapture.startCapture(getProject(), getName(), profilerSessionPath(), Lane.FLASH)
                                           : null;

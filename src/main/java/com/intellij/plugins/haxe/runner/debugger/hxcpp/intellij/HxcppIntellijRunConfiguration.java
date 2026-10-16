@@ -86,7 +86,7 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
     // with the hxcpp profiler configuration selected (the additions themselves
     // go into the before-launch compile, not this command line)
     boolean profiling = dumpPath != null
-                        && HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, false, dumpPath) != null;
+                        && HaxeProfilerExecutorSupport.hxcppProfilingAdditions(executor, dumpPath) != null;
     // the telemetry capture (samples with a time axis) supersedes the text
     // report when the receiver opens; the report stays the fallback outcome
     HaxeTelemetryCapture.Handle capture = profiling
@@ -94,7 +94,7 @@ public class HxcppIntellijRunConfiguration extends DapExecutableRunConfiguration
                                           : null;
     // the tracy entry: exact zones, no bootstrap - the receiver connects to
     // the client listening on the port we assign
-    boolean tracy = dumpPath != null && HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor, false) != null;
+    boolean tracy = dumpPath != null && HaxeProfilerExecutorSupport.hxcppTracyAdditions(executor) != null;
     HaxeTracyCapture.Handle tracyCapture = tracy
                                            ? HaxeTracyCapture.startCapture(getProject(), getName(), dumpPath.resolveSibling(TELEMETRY_SESSION_FILE_NAME), executor)
                                            : null;

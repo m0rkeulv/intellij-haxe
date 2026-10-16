@@ -22,6 +22,14 @@ import java.util.List;
 public final class NmeProjects {
 
   /**
+   * nme's forwarding forms (nme 7.0.64): the tool forwards ATTACHED defines and
+   * any double-dash token verbatim into its generated build.hxml; single-dash
+   * haxe flags like {@code -cp} are swallowed, so the classpath rides the
+   * {@code --class-path} spelling.
+   */
+  public static final HaxeToolFlagSpellings FLAG_SPELLINGS = new HaxeToolFlagSpellings("-D", "--class-path ", "--macro ");
+
+  /**
    * The nme tool's core project actions (it accepts many more - installer,
    * trace, update... - which stay available as custom actions). "test" is
    * update + build + run, mirroring lime's.
