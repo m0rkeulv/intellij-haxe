@@ -60,14 +60,8 @@ public class HashLinkDebugRunner extends DapDebugRunnerBase<HashLinkRunConfigura
   protected GeneralCommandLine createCommandLine(HashLinkRunConfiguration configuration, HashLinkBackend backend)
     throws ExecutionException {
     Module module = configuration.requireModule();
-    Path hlExecutable = configuration.resolveHlExecutable(module);
-    Path hlProgram = configuration.resolveProgram(module);
     Path workingDirectory = configuration.resolveWorkingDirectory(module);
-    Path workDir = workingDirectory != null ? workingDirectory : hlProgram.getParent();
-
-    return new GeneralCommandLine()
-      .withExePath(hlExecutable.toString())
-      .withParameters("--debug", Integer.toString(backend.getDebugPort()), "--debug-wait", hlProgram.toString())
-      .withWorkDirectory(workDir != null ? workDir.toString() : null);
+    Path workDir = workingDirectory != null ? workingDirectory : configuration.resolveProgram(module).getParent();
+    return backend.debuggeeCommandLine(workDir != null ? workDir.toString() : null);
   }
 }

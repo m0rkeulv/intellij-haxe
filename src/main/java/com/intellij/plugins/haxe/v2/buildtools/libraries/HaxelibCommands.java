@@ -50,7 +50,7 @@ public final class HaxelibCommands {
   @NotNull
   public static List<String> output(@NotNull Project project,
                                     @NotNull String containerId,
-                                    @NotNull Path workDirectory,
+                                    @Nullable Path workDirectory,
                                     @NotNull List<String> arguments) {
     GeneralCommandLine commandLine = commandLine(project, containerId, workDirectory, arguments).withRedirectErrorStream(true);
     try {

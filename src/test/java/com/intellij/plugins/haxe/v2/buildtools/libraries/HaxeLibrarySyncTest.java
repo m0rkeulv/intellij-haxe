@@ -6,7 +6,8 @@ import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.haxelib.HaxelibNameUtil;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildWorkDirectories;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync.DeclaredDependency;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
@@ -14,6 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -106,6 +108,17 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
     assertTrue(names.isEmpty(), "the legacy engine owns the module's libraries, got: " + names);
   }
 
+  /** haxelib runs where the declaring build compiles, so a .haxelib repository local to that build is the one it resolves from. */
+  @Test
+  @DisplayName("a dependency resolves from its declaring builds work directory")
+  public void testADependencyResolvesFromItsDeclaringBuildsWorkDirectory() {
+    VirtualFile buildFile = registerTestsBuildInSubfolder();
+
+    DeclaredDependency utest = collectedDependency("utest");
+
+    assertEquals(Path.of(HaxeBuildWorkDirectories.workDirectory(getProject(), buildFile)), utest.workDirectory());
+  }
+
   /** The only build file sits in tests/ (registered manually) with its -libs behind includes. */
   @NotNull
   private VirtualFile registerTestsBuildInSubfolder() {
@@ -116,25 +129,37 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
     return buildFile;
   }
 
+  /** The fixture module's collected dependencies; the module must have an entry. */
+  @NotNull
+  private List<DeclaredDependency> collectedDependencies() {
+    Map<Module, List<DeclaredDependency>> dependencies =
+      ReadAction.computeBlocking(() -> HaxeLibrarySync.collectDependencies(getProject()));
+    List<DeclaredDependency> moduleDependencies = dependencies.get(myFixture.getModule());
+    assertNotNull(moduleDependencies, "the module must have a dependency entry");
+    return moduleDependencies;
+  }
+
   @NotNull
   private List<String> collectedDependencyNames() {
-    Map<Module, List<HaxeLibDependency>> dependencies =
-      ReadAction.computeBlocking(() -> HaxeLibrarySync.collectDependencies(getProject()));
-    List<HaxeLibDependency> moduleDependencies = dependencies.get(myFixture.getModule());
-    assertNotNull(moduleDependencies, "the module must have a dependency entry");
-    return moduleDependencies.stream()
-      .map(HaxeLibDependency::name)
+    return collectedDependencies().stream()
+      .map(declared -> declared.dependency().name())
       .toList();
   }
 
-  private void assertUtestCollected(@NotNull String reason) {
-    Module module = myFixture.getModule();
-    Map<Module, List<HaxeLibDependency>> dependencies =
-      ReadAction.computeBlocking(() -> HaxeLibrarySync.collectDependencies(getProject()));
+  @NotNull
+  private DeclaredDependency collectedDependency(@NotNull String name) {
+    List<DeclaredDependency> dependencies = collectedDependencies();
+    DeclaredDependency declared = dependencies.stream()
+      .filter(candidate -> candidate.dependency().name().equals(name))
+      .findFirst()
+      .orElse(null);
+    assertNotNull(declared, name + " must be collected, got: " + dependencies);
+    return declared;
+  }
 
-    List<HaxeLibDependency> moduleDependencies = dependencies.get(module);
-    assertNotNull(moduleDependencies, "the module must have a dependency entry");
-    boolean utestCollected = moduleDependencies.stream().anyMatch(dependency -> dependency.name().equals("utest"));
-    assertTrue(utestCollected, reason + ", got: " + moduleDependencies);
+  private void assertUtestCollected(@NotNull String reason) {
+    List<String> names = collectedDependencyNames();
+
+    assertTrue(names.contains("utest"), reason + ", got: " + names);
   }
 }
