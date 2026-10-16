@@ -1,8 +1,10 @@
 package com.intellij.plugins.haxe.profiler.bridge;
 
 import com.intellij.execution.Executor;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeSystemPaths;
 import com.intellij.execution.executors.RunExecutorSettings;
-import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.plugins.haxe.profiler.HaxeProfilableRunConfiguration;
@@ -18,10 +20,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -174,31 +174,26 @@ public class HaxeIuProfilerExecutorSupport implements HaxeProfilerExecutorSuppor
   }
 
   /**
-   * The classpath root holding the bundled bootstrap sources, extracted (and
-   * kept current) under the IDE system directory; null when extraction fails —
-   * the launch then proceeds unprofiled rather than failing the build.
+   * The classpath root holding the bundled bootstrap sources, extracted under
+   * the IDE system directory keyed by their content
+   * ({@link HaxeSystemPaths#extractSources}); null when extraction fails — the
+   * launch then proceeds unprofiled rather than failing the build.
    */
   @Nullable
   private static Path extractBootMacro() {
-    Path root = Path.of(PathManager.getSystemPath(), "haxe-profiler");
     try {
+      Map<String, byte[]> sources = new LinkedHashMap<>();
       for (String resource : BOOT_RESOURCES) {
-        // the resource path mirrors the haxe package layout under the root
-        Path target = root.resolve(resource.substring(resource.lastIndexOf("/ijhaxe/") + 1));
         try (InputStream source = HaxeIuProfilerExecutorSupport.class.getResourceAsStream(resource)) {
           if (source == null) {
             LOG.warn("bundled profiler bootstrap missing: " + resource);
             return null;
           }
-          byte[] content = source.readAllBytes();
-          // rewrite on content change so a plugin update replaces stale extractions
-          if (!Files.exists(target) || !Arrays.equals(content, Files.readAllBytes(target))) {
-            Files.createDirectories(target.getParent());
-            Files.write(target, content);
-          }
+          // the resource path mirrors the haxe package layout under the root
+          sources.put(resource.substring(resource.lastIndexOf("/ijhaxe/") + 1), source.readAllBytes());
         }
       }
-      return root;
+      return HaxeSystemPaths.extractSources("profiler-boot", sources);
     }
     catch (IOException e) {
       LOG.warn("could not extract the profiler bootstrap", e);

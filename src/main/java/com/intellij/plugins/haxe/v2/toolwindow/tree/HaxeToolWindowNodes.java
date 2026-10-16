@@ -1,6 +1,9 @@
 package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
+import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
@@ -32,9 +35,9 @@ public final class HaxeToolWindowNodes {
     @NotNull
     String expansionKey();
 
-    /** The text the tree's speed search matches against. */
+    /** The row's primary label as the renderer shows it; speed search matches against it too. */
     @NotNull
-    String speedSearchText();
+    String label();
   }
 
   public record ModuleNode(@NotNull String name) implements HaxeToolWindowNode {
@@ -44,7 +47,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return name;
     }
   }
@@ -57,7 +60,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return name;
     }
   }
@@ -82,7 +85,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return buildFile.file().getName();
     }
   }
@@ -95,7 +98,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.build");
     }
   }
@@ -112,7 +115,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.actions");
     }
   }
@@ -125,7 +128,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.tests.group");
     }
   }
@@ -156,6 +159,13 @@ public final class HaxeToolWindowNodes {
       return launch instanceof Launch.Create create ? HaxeLaunchKind.byId(create.kindId()) : null;
     }
 
+    /** The stored action behind the row; when the store has none, the row's own display form. */
+    @NotNull
+    public CustomAction storedAction(@NotNull Project project) {
+      CustomAction stored = HaxeCustomActionsStore.getInstance(project).findAction(ownerId, name);
+      return stored != null ? stored : new CustomAction(name, presentableCommand, "");
+    }
+
     /** What the row's gray tail names: the kind, or the existing configuration; null for a plain action or an unknown kind. */
     @Nullable
     public String launchTarget() {
@@ -172,7 +182,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return name;
     }
   }
@@ -185,7 +195,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.tools");
     }
   }
@@ -209,7 +219,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return name;
     }
   }
@@ -231,8 +241,9 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
-      return HaxeBundle.message("haxe.toolwindow.node.program");
+    public String label() {
+      // "Build & run", or "Run" for a target that runs without a build step (the interpreter)
+      return HaxeBundle.message(kind.compilesBeforeLaunch() ? "haxe.toolwindow.node.program" : "haxe.toolwindow.node.program.run");
     }
   }
 
@@ -249,7 +260,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.run.unit.tests");
     }
   }
@@ -263,7 +274,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return displayName;
     }
   }
@@ -297,7 +308,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return displayName();
     }
   }
@@ -312,7 +323,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return kind == GroupKind.LIBRARIES
              ? HaxeBundle.message("haxe.toolwindow.node.libraries")
              : HaxeBundle.message("haxe.toolwindow.node.defines");
@@ -327,7 +338,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return name;
     }
   }
@@ -350,7 +361,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.ide.overrides");
     }
   }
@@ -363,7 +374,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.defines");
     }
   }
@@ -380,7 +391,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return name;
     }
   }
@@ -399,7 +410,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.ide.custom.target");
     }
   }
@@ -412,7 +423,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.environment");
     }
   }
@@ -426,7 +437,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return displayName;
     }
   }
@@ -440,7 +451,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return displayName;
     }
   }
@@ -453,7 +464,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return HaxeBundle.message("haxe.toolwindow.node.compilation");
     }
   }
@@ -478,7 +489,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return display;
     }
   }
@@ -506,7 +517,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return display;
     }
   }
@@ -546,7 +557,7 @@ public final class HaxeToolWindowNodes {
     }
 
     @Override
-    public String speedSearchText() {
+    public String label() {
       return name;
     }
   }

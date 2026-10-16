@@ -50,28 +50,23 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
                  target.displayName(), target.selectable());
       case SectionNode section ->
         valueRow(AllIcons.RunConfigurations.Compound, HaxeBundle.message("haxe.toolwindow.node.section"), section.displayName(), true);
-      case GroupNode group -> countRow(groupIcon(group.kind()), groupLabel(group.kind()), group.count());
+      case GroupNode group -> countRow(groupIcon(group.kind()), group.label(), group.count());
       case DefineNode define -> renderDefine(define.name(), define.value());
-      case EnvironmentNode ignored -> labelRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.environment"));
-      case IdeOverridesNode overrides ->
-        countRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.ide.overrides"), overrides.count());
-      case IdeDefinesNode defines -> countRow(AllIcons.Nodes.Folder, HaxeBundle.message("haxe.toolwindow.node.defines"), defines.count());
+      case EnvironmentNode environment -> labelRow(AllIcons.General.Settings, environment.label());
+      case IdeOverridesNode overrides -> countRow(AllIcons.General.Settings, overrides.label(), overrides.count());
+      case IdeDefinesNode defines -> countRow(AllIcons.Nodes.Folder, defines.label(), defines.count());
       case IdeDefineNode define -> renderIdeDefine(define);
       case IdeCustomTargetNode customTarget -> renderCustomTarget(customTarget);
-      case BuildGroupNode buildGroup ->
-        countRow(AllIcons.Nodes.Folder, HaxeBundle.message("haxe.toolwindow.node.build"), buildGroup.count());
-      case CompilationGroupNode ignored -> labelRow(AllIcons.General.Settings, HaxeBundle.message("haxe.toolwindow.node.compilation"));
+      case BuildGroupNode buildGroup -> countRow(AllIcons.Nodes.Folder, buildGroup.label(), buildGroup.count());
+      case CompilationGroupNode compilation -> labelRow(AllIcons.General.Settings, compilation.label());
       case CompilationServerNode server -> renderServer(server);
-      case ActionsGroupNode actionsGroup ->
-        countRow(AllIcons.Nodes.ConfigFolder, HaxeBundle.message("haxe.toolwindow.node.actions"), actionsGroup.count());
-      case TestsGroupNode ignored -> labelRow(AllIcons.Nodes.TestSourceFolder, HaxeBundle.message("haxe.toolwindow.node.tests.group"));
+      case ActionsGroupNode actionsGroup -> countRow(AllIcons.Nodes.ConfigFolder, actionsGroup.label(), actionsGroup.count());
+      case TestsGroupNode tests -> labelRow(AllIcons.Nodes.TestSourceFolder, tests.label());
       case ActionNode action -> renderAction(action);
-      case ToolsGroupNode toolsGroup ->
-        countRow(AllIcons.General.ExternalTools, HaxeBundle.message("haxe.toolwindow.node.tools"), toolsGroup.count());
+      case ToolsGroupNode toolsGroup -> countRow(AllIcons.General.ExternalTools, toolsGroup.label(), toolsGroup.count());
       case ToolNode tool -> valueRow(AllIcons.General.ExternalTools, tool.name(), tool.detail(), false);
-      case ProgramNode program -> valueRow(AllIcons.Actions.Execute, programLabel(program), program.kind().displayName(), false);
-      case TestRunNode ignored ->
-        labelRow(AllIcons.RunConfigurations.TestState.Run, HaxeBundle.message("haxe.toolwindow.node.run.unit.tests"));
+      case ProgramNode program -> valueRow(AllIcons.Actions.Execute, program.label(), program.kind().displayName(), false);
+      case TestRunNode testRun -> labelRow(AllIcons.RunConfigurations.TestState.Run, testRun.label());
       case EnvSdkNode sdk -> renderSdk(sdk);
       case EnvCompileCommandNode compileCommand ->
         valueRow(AllIcons.Actions.Compile, HaxeBundle.message("haxe.toolwindow.node.compile.command"), compileCommand.display(), true);
@@ -174,7 +169,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
 
   /** A custom target the build's own target beats is struck through, with the target that wins. */
   private void renderCustomTarget(@NotNull IdeCustomTargetNode customTarget) {
-    String label = HaxeBundle.message("haxe.toolwindow.node.ide.custom.target");
+    String label = customTarget.label();
     if (customTarget.customTarget() == null) {
       valueRow(AllIcons.Nodes.Property, label, HaxeBundle.message("haxe.toolwindow.node.target.unspecified"), true);
       return;
@@ -239,13 +234,6 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     };
   }
 
-  /** "Build & run", or "Run" for a target that runs without a build step (the interpreter). */
-  @NotNull
-  private static String programLabel(@NotNull ProgramNode program) {
-    boolean builds = program.kind().compilesBeforeLaunch();
-    return HaxeBundle.message(builds ? "haxe.toolwindow.node.program" : "haxe.toolwindow.node.program.run");
-  }
-
   @NotNull
   private static String programTooltip(@NotNull ProgramNode program) {
     boolean builds = program.kind().compilesBeforeLaunch();
@@ -295,12 +283,5 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
   @NotNull
   private static Icon groupIcon(@NotNull GroupKind kind) {
     return kind == GroupKind.LIBRARIES ? AllIcons.Nodes.PpLibFolder : AllIcons.Nodes.Folder;
-  }
-
-  @NotNull
-  private static String groupLabel(@NotNull GroupKind kind) {
-    return kind == GroupKind.LIBRARIES
-           ? HaxeBundle.message("haxe.toolwindow.node.libraries")
-           : HaxeBundle.message("haxe.toolwindow.node.defines");
   }
 }

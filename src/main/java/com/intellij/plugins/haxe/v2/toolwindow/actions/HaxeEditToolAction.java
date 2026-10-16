@@ -23,10 +23,8 @@ public final class HaxeEditToolAction extends HaxeSelectedNodeAction<ToolNode> {
   @Override
   protected void perform(@NotNull Project project, @NotNull ToolNode toolNode) {
     // edit the STORED values - the node's are the resolved display forms
-    var stored = HaxeCustomToolsStore.getInstance(project).getTools(toolNode.containerId()).stream()
-      .filter(tool -> tool.name().equals(toolNode.name()))
-      .findFirst()
-      .orElse(new HaxeCustomToolsStore.CustomTool(toolNode.name(), toolNode.detail(), ""));
+    HaxeCustomToolsStore.CustomTool stored = HaxeCustomToolsStore.getInstance(project).findTool(toolNode.containerId(), toolNode.name());
+    if (stored == null) stored = new HaxeCustomToolsStore.CustomTool(toolNode.name(), toolNode.detail(), "");
     var initial = new HaxeCustomActionDialog.EditedCommand(stored.name(), stored.command(), stored.workDirectory());
     HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forTool(project, toolNode.containerId(), initial);
     if (dialog.showAndGet()) {

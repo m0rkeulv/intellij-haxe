@@ -80,7 +80,7 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
   @Nullable
   private static CustomAction templateOf(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @Nullable Object selected) {
     return switch (selected) {
-      case ActionNode actionNode when actionNode.custom() -> copyOfStored(project, actionNode);
+      case ActionNode actionNode when actionNode.custom() -> actionNode.storedAction(project);
       case ActionNode actionNode -> copyOfGenerated(project, buildFile, actionNode);
       case ProgramNode programNode -> copyOfBuildAndRun(project, programNode);
       case null, default -> null;
@@ -94,15 +94,6 @@ public final class HaxeDuplicateActionAction extends DumbAwareAction {
       case ProgramNode programNode -> programNode.targetOutput();
       case null, default -> null;
     };
-  }
-
-  /** The stored values, not the row's ${target}-expanded display form. */
-  @NotNull
-  private static CustomAction copyOfStored(@NotNull Project project, @NotNull ActionNode actionNode) {
-    return HaxeCustomActionsStore.getInstance(project).getActions(actionNode.ownerId()).stream()
-      .filter(action -> action.name().equals(actionNode.name()))
-      .findFirst()
-      .orElse(new CustomAction(actionNode.name(), actionNode.presentableCommand(), ""));
   }
 
   /** The resolved command line as the row runs it; the work directory stays blank when it is the build file's own. */
