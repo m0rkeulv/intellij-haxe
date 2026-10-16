@@ -75,15 +75,15 @@ public final class HaxeCompilerCompletionService {
    * {@link #ensureAvailable}.
    */
   @Nullable
-  public CompletionList complete(@NotNull VirtualFile file, @NotNull String contents, boolean unsaved, int offset, boolean autoTriggered) {
+  public CompletionList complete(@NotNull VirtualFile file, int offset, boolean autoTriggered) {
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
     HaxeCompilerDisplayService.DisplayContext context = displayService.contextFor(file);
     if (context == null) return null;
     String path = file.getPath();
-    String sentContents = unsaved ? contents : null;
-    int serverOffset = HaxeServerOffsets.serverOffset(file, offset, sentContents);
-    Future<CompletionList> request = ApplicationManager.getApplication()
-      .executeOnPooledThread(() -> fetch(displayService, context, path, sentContents, serverOffset, autoTriggered));
+    HaxeCompilerDisplayService.FilePayload payload = HaxeCompilerDisplayService.payloadOf(file, offset);
+    Future<CompletionList> request = ApplicationManager.getApplication().executeOnPooledThread(
+      () -> displayService.send(context, DisplayMethods.COMPLETION, path, payload, (connected, filePath, sent) ->
+        connected.client().completion(connected.args(), filePath, sent.serverOffset(), sent.contents(), autoTriggered)));
     return HaxeCancelableFutures.awaitUnderReadLock(request, HaxeCancelableFutures.ANSWER_TIMEOUT_MS, "display/completion for " + path);
   }
 
@@ -106,20 +106,6 @@ public final class HaxeCompilerCompletionService {
       return resolved == null ? null : resolved.doc();
     } catch (DisplayRequestException e) {
       log.info("display/completionItem/resolve failed for " + file.getPath() + " #" + index + ": " + e.getMessage());
-      return null;
-    }
-  }
-
-  @Nullable
-  private static CompletionList fetch(HaxeCompilerDisplayService displayService, HaxeCompilerDisplayService.DisplayContext context,
-                                      String path, @Nullable String sentContents, int serverOffset, boolean autoTriggered) {
-    HaxeCompilerDisplayService.Connected connected = displayService.connectFor(context, DisplayMethods.COMPLETION);
-    if (connected == null) return null;
-    try {
-      displayService.prepareFile(connected, path, sentContents);
-      return connected.client().completion(connected.args(), path, serverOffset, sentContents, autoTriggered);
-    } catch (DisplayRequestException e) {
-      log.info("display/completion failed for " + path + ": " + e.getMessage());
       return null;
     }
   }

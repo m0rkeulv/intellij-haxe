@@ -113,8 +113,7 @@ final class HaxeDiagnosticsFetcher {
       return null;
     }
 
-    boolean diverged = FileDocumentManager.getInstance().isDocumentUnsaved(document);
-    String contents = diverged ? document.getText() : null;
+    String contents = HaxeCompilerDisplayService.unsavedContents(virtualFile);
     return new Request(context, service, virtualFile.getPath(), contents, document.getModificationStamp());
   }
 

@@ -7,14 +7,13 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.FindReferencesKind;
 import com.intellij.plugins.haxe.display.protocol.Location;
-import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
-import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.Connected;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.DisplayContext;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.FilePayload;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.FileRequest;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.concurrent.Future;
@@ -37,15 +36,6 @@ import java.util.concurrent.Future;
 @Service(Service.Level.PROJECT)
 @CustomLog
 public final class HaxeCompilerNavigationService {
-
-  @FunctionalInterface
-  private interface Request {
-    List<Location> send(@NotNull Connected connected, @NotNull Payload payload) throws DisplayRequestException;
-  }
-
-  /** What a request carries for its file: the unsaved text when there is one, and the offset as the server counts it. */
-  private record Payload(@Nullable String contents, int serverOffset) {
-  }
 
   private final Project project;
 
@@ -80,17 +70,15 @@ public final class HaxeCompilerNavigationService {
   /** Every reference of the symbol at the offset, declaration excluded; empty when the server gives none. Background thread. */
   @NotNull
   public List<Location> references(@NotNull VirtualFile file, int offset, @NotNull FindReferencesKind kind) {
-    String path = file.getPath();
     return request(file, offset, DisplayMethods.FIND_REFERENCES,
-                   (connected, payload) -> connected.client().references(connected.args(), path, payload.serverOffset(), payload.contents(), kind));
+                   (connected, path, payload) -> connected.client().references(connected.args(), path, payload.serverOffset(), payload.contents(), kind));
   }
 
   /** The declarations of the symbol at the offset; empty when the server gives none. Background thread. */
   @NotNull
   public List<Location> definition(@NotNull VirtualFile file, int offset) {
-    String path = file.getPath();
     return request(file, offset, DisplayMethods.GOTO_DEFINITION,
-                   (connected, payload) -> connected.client().definition(connected.args(), path, payload.serverOffset(), payload.contents()));
+                   (connected, path, payload) -> connected.client().definition(connected.args(), path, payload.serverOffset(), payload.contents()));
   }
 
   /**
@@ -108,27 +96,13 @@ public final class HaxeCompilerNavigationService {
   }
 
   @NotNull
-  private List<Location> request(@NotNull VirtualFile file, int offset, @NotNull String method, @NotNull Request request) {
+  private List<Location> request(@NotNull VirtualFile file, int offset, @NotNull String method, @NotNull FileRequest<List<Location>> request) {
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
     DisplayContext context = HaxeReadActions.compute(() -> displayService.contextFor(file));
     if (context == null) return List.of();
-    Payload payload = HaxeReadActions.compute(() -> payloadOf(file, offset));
-    Connected connected = displayService.connectFor(context, method);
-    if (connected == null) return List.of();
-    try {
-      displayService.prepareFile(connected, file.getPath(), payload.contents());
-      return request.send(connected, payload);
-    } catch (DisplayRequestException e) {
-      log.info(method + " failed for " + file.getPath() + ": " + e.getMessage());
-      return List.of();
-    }
-  }
-
-  /** Read action. */
-  @NotNull
-  private static Payload payloadOf(@NotNull VirtualFile file, int offset) {
-    String contents = HaxeCompilerDisplayService.unsavedContents(file);
-    return new Payload(contents, HaxeServerOffsets.serverOffset(file, offset, contents));
+    FilePayload payload = HaxeReadActions.compute(() -> HaxeCompilerDisplayService.payloadOf(file, offset));
+    List<Location> locations = displayService.send(context, method, file.getPath(), payload, request);
+    return locations == null ? List.of() : locations;
   }
 
 }

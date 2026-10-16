@@ -6,7 +6,6 @@ import com.intellij.codeInsight.completion.CompletionResultSet;
 import com.intellij.codeInsight.completion.InsertionContext;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
 import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -58,9 +57,8 @@ public class HaxeCompilerCompletionContributor extends CompletionContributor {
     if (!service.ensureAvailable(file)) return;
 
     Document document = parameters.getEditor().getDocument();
-    boolean unsaved = FileDocumentManager.getInstance().isDocumentUnsaved(document);
     int offset = parameters.getOffset();
-    CompletionList completion = service.complete(file, document.getText(), unsaved, offset, parameters.isAutoPopup());
+    CompletionList completion = service.complete(file, offset, parameters.isAutoPopup());
     if (completion == null) return;
 
     String replaced = replacedText(document.getCharsSequence(), completion.replaceRange(), offset);
