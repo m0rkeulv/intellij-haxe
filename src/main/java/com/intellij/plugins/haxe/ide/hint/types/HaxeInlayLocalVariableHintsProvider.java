@@ -37,11 +37,7 @@ public class HaxeInlayLocalVariableHintsProvider implements InlayHintsProvider {
         // attempts to resolve type from init or usage
         ResultHolder type = HaxeTypeResolver.getPsiElementType(varDeclaration, null);
 
-        if (!type.isUnknown() && !type.getType().isInvalid()) {
-          int offset = varDeclaration.getComponentName().getTextRange().getEndOffset();
-          InlineInlayPosition position = new InlineInlayPosition(offset, true, 0);
-          sink.addPresentation(position, null, null, HintFormat.Companion.getDefault(), appendTypeTextToBuilder(type));
-        }
+        addTypeHint(varDeclaration, sink, type);
       }
     }
   }

@@ -2,8 +2,8 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.codeInsight.hints.declarative.*;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.plugins.haxe.ide.hint.types.HaxeTypeHintAnchors;
 import com.intellij.plugins.haxe.lang.psi.*;
-import com.intellij.plugins.haxe.util.UsefulPsiTreeUtil;
 import com.intellij.plugins.haxe.v2.display.HaxeInlayTypeText.Part;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -37,18 +37,26 @@ public final class HaxeCompilerTypeInlayProvider implements InlayHintsProvider {
 
     @Override
     public void collectFromElement(@NotNull PsiElement element, @NotNull InlayTreeSink sink) {
-      int offset = anchorOf(element);
-      if (offset < 0) return;
+      int offset = HaxeTypeHintAnchors.anchorOf(element);
+      if (offset < 0 || !hinted(element)) return;
       HaxeInlayTypeText text = service.typeTextOf(element);
       if (text == null) return;
-      sink.addPresentation(new InlineInlayPosition(offset, true, 0), null, null, HintFormat.Companion.getDefault(), builder -> {
-        builder.text(":", null);
+      HaxeTypeHintAnchors.addTypeHint(sink, offset, builder -> {
         for (Part part : text.parts()) {
           builder.text(part.text(), navigationTo(part, element));
         }
         return Unit.INSTANCE;
       });
     }
+  }
+
+  /** A parameter with a default takes its type from the default and a case pattern's capture gets no hint, as the IDE's hints do. */
+  private static boolean hinted(@NotNull PsiElement element) {
+    return switch (element) {
+      case HaxeParameter parameter -> parameter.getVarInit() == null;
+      case HaxeSwitchCaseCapture _ -> false;
+      default -> true;
+    };
   }
 
   /** The click target of a type-name part: its declaration; null for punctuation and for a name the indexes do not know. */
@@ -59,30 +67,5 @@ public final class HaxeCompilerTypeInlayProvider implements InlayHintsProvider {
     if (target == null) return null;
     SmartPsiElementPointer<PsiElement> pointer = SmartPointerManager.getInstance(context.getProject()).createSmartPsiElementPointer(target);
     return new InlayActionData(new PsiPointerInlayActionPayload(pointer), PsiPointerInlayActionNavigationHandler.HANDLER_ID);
-  }
-
-  /** Where the hint goes: after the name, after a property's accessors, after a function's parameter list; -1 for anything else. */
-  private static int anchorOf(@NotNull PsiElement element) {
-    return switch (element) {
-      case HaxeFieldDeclaration field when field.getPropertyDeclaration() != null -> field.getPropertyDeclaration().getTextRange().getEndOffset();
-      case HaxeMethodDeclaration method -> afterParameterList(method.getParameterList());
-      case HaxeLocalFunctionDeclaration function -> afterParameterList(function.getParameterList());
-      case HaxeEnumExtractedValueReference extracted -> extracted.getTextRange().getEndOffset();
-      // a parameter with a default takes its type from the default, as the IDE's hints do
-      case HaxeParameter parameter when parameter.getVarInit() != null -> -1;
-      // the IDE shows no hint for a case pattern's capture name either
-      case HaxeSwitchCaseCapture _ -> -1;
-      default -> afterName(element);
-    };
-  }
-
-  private static int afterName(@NotNull PsiElement element) {
-    HaxeComponentName name = HaxeCompilerHoverTypes.componentNameOf(element);
-    return name != null ? name.getTextRange().getEndOffset() : -1;
-  }
-
-  private static int afterParameterList(@Nullable PsiElement parameterList) {
-    PsiElement closing = parameterList == null ? null : UsefulPsiTreeUtil.getNextSiblingSkipWhiteSpacesAndComments(parameterList);
-    return closing != null ? closing.getTextRange().getEndOffset() : -1;
   }
 }

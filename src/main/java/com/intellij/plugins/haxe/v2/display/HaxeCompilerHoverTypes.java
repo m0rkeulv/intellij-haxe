@@ -15,6 +15,7 @@ import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
 import com.intellij.plugins.haxe.display.protocol.Position;
 import com.intellij.plugins.haxe.display.protocol.Range;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
+import com.intellij.plugins.haxe.ide.hint.types.HaxeTypeHintAnchors;
 import com.intellij.plugins.haxe.lang.psi.*;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.Connected;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.DisplayContext;
@@ -149,7 +150,7 @@ public final class HaxeCompilerHoverTypes implements Disposable {
 
   /** Whether the hover answers for the declaration: a covered kind without a type tag; a constructor has no type to show. */
   public static boolean covers(@NotNull PsiElement declaration) {
-    return componentNameOf(declaration) != null && !hasTypeTag(declaration) && !isConstructor(declaration);
+    return HaxeTypeHintAnchors.componentNameOf(declaration) != null && !hasTypeTag(declaration) && !isConstructor(declaration);
   }
 
   /** Whether the declaration sits in a function body rather than on the class. */
@@ -348,7 +349,7 @@ public final class HaxeCompilerHoverTypes implements Disposable {
   /** The declaration is hovered at its name, and the answer must be about that name. */
   @Nullable
   private static Target targetOf(@NotNull PsiElement element, @NotNull Document document) {
-    HaxeComponentName name = componentNameOf(element);
+    HaxeComponentName name = HaxeTypeHintAnchors.componentNameOf(element);
     if (name == null) return null;
     TextRange nameRange = name.getTextRange();
     if (nameRange == null || nameRange.isEmpty() || nameRange.getEndOffset() > document.getTextLength()) return null;
@@ -361,24 +362,6 @@ public final class HaxeCompilerHoverTypes implements Disposable {
   private static Position positionOf(@NotNull Document document, int offset) {
     int line = document.getLineNumber(offset);
     return new Position(line, offset - document.getLineStartOffset(line));
-  }
-
-  /** The name element of a covered declaration kind; null for any other element. */
-  @Nullable
-  static HaxeComponentName componentNameOf(@NotNull PsiElement declaration) {
-    return switch (declaration) {
-      case HaxeParameter parameter -> parameter.getComponentName();
-      case HaxeLocalVarDeclaration local -> local.getComponentName();
-      case HaxeSwitchCaseCapture capture -> capture.getComponentName();
-      case HaxeFieldDeclaration field -> field.getComponentName();
-      case HaxeEnumExtractedValueReference extracted -> extracted.getComponentName();
-      case HaxeMethodDeclaration method -> method.getComponentName();
-      case HaxeLocalFunctionDeclaration function -> function.getComponentName();
-      case HaxeValueIterator iterator -> iterator.getComponentName();
-      case HaxeIteratorkey key -> key.getComponentName();
-      case HaxeIteratorValue value -> value.getComponentName();
-      default -> null;
-    };
   }
 
   private static boolean hasTypeTag(@NotNull PsiElement declaration) {

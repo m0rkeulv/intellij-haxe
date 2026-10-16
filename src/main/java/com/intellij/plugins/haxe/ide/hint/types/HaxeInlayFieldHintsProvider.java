@@ -47,18 +47,7 @@ public class HaxeInlayFieldHintsProvider implements InlayHintsProvider {
           HaxeGenericResolver resolver = HaxeGenericResolverUtil.generateResolverFromScopeParents(expression);
           ResultHolder type = HaxeTypeResolver.getPsiElementType(element,  resolver);
 
-          if (!type.isUnknown() && !type.getType().isInvalid()) {
-            int offset;
-            if (fieldDeclaration.getPropertyDeclaration() != null) {
-              offset = fieldDeclaration.getPropertyDeclaration().getTextRange().getEndOffset();
-            }
-            else {
-              offset = field.getPsiField().getComponentName().getTextRange().getEndOffset();
-            }
-            InlineInlayPosition position = new InlineInlayPosition(offset, true, 0);
-            sink.addPresentation(position, null, null, HintFormat.Companion.getDefault(), appendTypeTextToBuilder(type)
-            );
-          }
+          addTypeHint(fieldDeclaration, sink, type);
         }
       }
     }
