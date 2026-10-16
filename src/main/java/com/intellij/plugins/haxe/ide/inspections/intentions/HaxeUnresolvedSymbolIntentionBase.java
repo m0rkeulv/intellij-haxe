@@ -217,10 +217,11 @@ public abstract class HaxeUnresolvedSymbolIntentionBase<T extends PsiElement> ex
   /**
    * {@code name:Type, ...} for the arguments: each argument's evaluated type
    * (left out when unknown) and a name the suggester derives from it, avoiding
-   * the names in scope at the argument and the names already taken; {@code pN}
-   * as the fallback.
+   * the names already taken and, for a declaration that joins the call's scope
+   * (a local function), the names visible at the call; {@code pN} as the
+   * fallback.
    */
-  protected String parameterListFromArguments(@NotNull List<HaxeExpression> arguments) {
+  protected String parameterListFromArguments(@NotNull List<HaxeExpression> arguments, boolean avoidNamesVisibleAtCall) {
     StringBuilder builder = new StringBuilder();
     Set<String> used = new HashSet<>();
     for (int i = 0; i < arguments.size(); i++) {
@@ -229,7 +230,8 @@ public abstract class HaxeUnresolvedSymbolIntentionBase<T extends PsiElement> ex
       String paramName = "p" + i;
       String typeTag = "";
       if (!type.isUnknown()) {
-        List<String> names = HaxeNameSuggesterUtil.suggest(expression, null, HaxeNameKind.VARIABLE, expression, used).names();
+        HaxeExpression scope = avoidNamesVisibleAtCall ? expression : null;
+        List<String> names = HaxeNameSuggesterUtil.suggest(expression, null, HaxeNameKind.VARIABLE, scope, used).names();
         if (!names.isEmpty()) {
           paramName = names.getFirst();
           used.add(paramName);

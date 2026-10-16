@@ -27,7 +27,7 @@ public class HaxeIntroduceMethodIntention extends HaxeIntroduceMethodIntentionBa
 
   @Override
   protected String parameterListText() {
-    return parameterListFromArguments(callArguments(myPsiElementPointer.getElement()));
+    return parameterListFromArguments(callArguments(myPsiElementPointer.getElement()), false);
   }
 
   @Override
