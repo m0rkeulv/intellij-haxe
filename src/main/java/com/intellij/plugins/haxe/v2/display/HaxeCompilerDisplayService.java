@@ -608,6 +608,46 @@ public final class HaxeCompilerDisplayService implements Disposable {
     contextCache.clear();
   }
 
+  /** What a per-file request carries: the editor's unsaved text when there is one, and the offset as the server counts it. */
+  public record FilePayload(@Nullable String contents, int serverOffset) {
+  }
+
+  /** The call of a per-file request, on a prepared connection. */
+  @FunctionalInterface
+  interface FileRequest<R> {
+    R send(@NotNull Connected connected, @NotNull String filePath, @NotNull FilePayload payload) throws DisplayRequestException;
+  }
+
+  /** The payload of a request about the file at the offset. Read action. */
+  @NotNull
+  static FilePayload payloadOf(@NotNull VirtualFile file, int offset) {
+    String contents = unsavedContents(file);
+    return new FilePayload(contents, HaxeServerOffsets.serverOffset(file, offset, contents));
+  }
+
+  /**
+   * One per-file request: connects for the method, prepares the file on the
+   * server for the payload's text ({@link #prepareFile}) and sends. Null when
+   * there is no server or the request fails (logged). Background thread, no
+   * read lock.
+   */
+  @Nullable
+  <R> R send(@NotNull DisplayContext context,
+             @NotNull String method,
+             @NotNull String filePath,
+             @NotNull FilePayload payload,
+             @NotNull FileRequest<R> request) {
+    Connected connected = connectFor(context, method);
+    if (connected == null) return null;
+    try {
+      prepareFile(connected, filePath, payload.contents());
+      return request.send(connected, filePath, payload);
+    } catch (DisplayRequestException e) {
+      log.info(method + " failed for " + filePath + ": " + e.getMessage());
+      return null;
+    }
+  }
+
   /** The file on disk behind an element; a completion copy maps back to its original. */
   @Nullable
   static VirtualFile physicalFileOf(@NotNull PsiElement element) {

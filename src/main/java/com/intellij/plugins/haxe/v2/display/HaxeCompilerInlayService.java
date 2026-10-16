@@ -3,8 +3,6 @@ package com.intellij.plugins.haxe.v2.display;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
@@ -160,9 +158,7 @@ public final class HaxeCompilerInlayService implements Disposable {
 
   /** Whether the editor holds text for the file that is not on disk yet; a compile would read the older file. */
   private static boolean isUnsaved(@NotNull VirtualFile file) {
-    FileDocumentManager documents = FileDocumentManager.getInstance();
-    Document document = documents.getCachedDocument(file);
-    return document != null && documents.isDocumentUnsaved(document);
+    return HaxeCompilerDisplayService.unsavedContents(file) != null;
   }
 
   // --- members from typer/compiledTypes ---
