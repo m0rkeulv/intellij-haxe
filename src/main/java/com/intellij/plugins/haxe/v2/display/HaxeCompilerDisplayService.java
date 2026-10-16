@@ -618,7 +618,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
     R send(@NotNull Connected connected, @NotNull String filePath, @NotNull FilePayload payload) throws DisplayRequestException;
   }
 
-  /** The payload of a request about the file at the offset. Read action. */
+  /** The payload of a request about the file at the offset. Call in a read action. */
   @NotNull
   static FilePayload payloadOf(@NotNull VirtualFile file, int offset) {
     String contents = unsavedContents(file);

@@ -32,8 +32,9 @@ public interface HaxeProfilerExecutorSupport {
   /**
    * The compile additions an hxcpp profiling build must carry (profiler
    * defines plus the injected start/stop bootstrap writing {@code dumpPath}),
-   * or null when the executor is not the hxcpp profiler one. Every additions
-   * answer is in plain haxe spelling; the build system respells it for its tool.
+   * or null when the executor is not the hxcpp profiler one. Like all
+   * additions this interface returns, it is in plain haxe spelling; the build
+   * system respells it for its tool.
    */
   @Nullable
   List<String> hxcppProfilingAdditionsFor(@NotNull Executor executor, @NotNull Path dumpPath);

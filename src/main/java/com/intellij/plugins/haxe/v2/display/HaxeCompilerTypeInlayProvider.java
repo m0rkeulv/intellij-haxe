@@ -50,7 +50,7 @@ public final class HaxeCompilerTypeInlayProvider implements InlayHintsProvider {
     }
   }
 
-  /** A parameter with a default takes its type from the default and a case pattern's capture gets no hint, as the IDE's hints do. */
+  /** Whether the element gets a hint; as with the IDE's hints, a parameter with a default (its type comes from the default) and a case pattern's capture get none. */
   private static boolean hinted(@NotNull PsiElement element) {
     return switch (element) {
       case HaxeParameter parameter -> parameter.getVarInit() == null;

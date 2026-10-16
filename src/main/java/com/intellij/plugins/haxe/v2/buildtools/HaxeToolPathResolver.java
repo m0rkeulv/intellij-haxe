@@ -93,10 +93,10 @@ public final class HaxeToolPathResolver {
   }
 
   /**
-   * The table's resolution for the project and the named SDK, except that an
-   * unresolvable Build Tools override comes back verbatim: validation then
-   * fails on the configured value instead of a typo silently running a
-   * different copy from the SDK or PATH.
+   * The tool's {@link HaxeRuntimeTool} lookup for the project and the named
+   * SDK, except that an unresolvable Build Tools override comes back
+   * verbatim: validation then fails on the configured value instead of a
+   * typo silently running a different copy from the SDK or PATH.
    */
   @Nullable
   private static String resolveRuntime(@NotNull HaxeRuntimeTool tool, @NotNull Project project, @Nullable String preferredSdkName) {
@@ -197,7 +197,7 @@ public final class HaxeToolPathResolver {
       flexSdkName);
   }
 
-  /** The executable a PATH lookup picks (absolute), or null; also displayed as an inherited default in the settings panels. */
+  /** The executable a PATH lookup picks (absolute), or null. */
   @Nullable
   public static String pathDetectedExecutable(@NotNull String executableName) {
     File onPath = PathEnvironmentVariableUtil.findInPath(HaxeSdkUtilBase.getExecutableName(executableName));

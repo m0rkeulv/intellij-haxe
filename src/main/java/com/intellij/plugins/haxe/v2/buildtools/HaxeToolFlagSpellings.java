@@ -8,8 +8,8 @@ import java.util.List;
 /**
  * A build tool's forwarding forms for the plain hxml flags a launch adds
  * ({@code -D}, {@code -cp}, {@code --macro}); each flag's VALUE is appended to
- * its form, so a form ending in a space or {@code =} decides whether the value
- * rides the same token.
+ * its form as one argument, so the form's ending (nothing, a space or
+ * {@code =}) decides how the tool sees the flag and its value joined.
  */
 public record HaxeToolFlagSpellings(@NotNull String defineForm, @NotNull String classpathForm, @NotNull String macroForm) {
 

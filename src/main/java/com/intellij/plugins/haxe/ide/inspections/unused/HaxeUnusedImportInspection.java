@@ -60,7 +60,7 @@ public class HaxeUnusedImportInspection extends LocalInspectionTool {
     HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(file.getProject());
     // the compiler's unused-import annotator owns this while its toggle is on
     if (settings.isCompilerDiagnosticsEnabled() && settings.isDiagnosticsUnusedImportsEnabled()) return null;
-    // an import.hx imports on behalf of its folder's modules, so nothing in it is unused by itself
+    // an import.hx imports on behalf of the modules in its folder and below, so nothing in it is unused by itself
     if (HaxeFile.isImportHx(file.getName())) return null;
 
     List<HaxeImportStatement> unusedImports = HaxeImportUtil.findUnusedImports(file);

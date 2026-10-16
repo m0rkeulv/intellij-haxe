@@ -8,11 +8,11 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The for-loop iteration protocol: the member names the compiler looks for,
- * and whether a value iterates. The evaluator and the for-loop intentions
- * ask here, so an iterable the evaluator understands (typedefs, {@code Null<T>},
- * {@code using} extensions) is one the intentions offer a loop for.
+ * and whether a value iterates. The for-loop intentions ask through the
+ * evaluator's own lookup, so an iterable the evaluator understands (typedefs,
+ * {@code Null<T>}, {@code using} extensions) is one they offer a loop for.
  */
-// TODO: the ArrayAccess<T> fallback (Vector<T>) still lives in HaxeExpressionEvaluatorHandlers.handleIterable only
+// TODO: iterates() lacks the ArrayAccess<T> fallback (Vector<T>) that HaxeExpressionEvaluatorHandlers.handleIterable applies
 public final class HaxeIterationProtocol {
 
   public static final String ITERATOR = "iterator";

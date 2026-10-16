@@ -39,11 +39,9 @@ import java.util.Set;
  * default build ({@link #defaultBuildFileFor}).
  * <p>
  * The builds' source directories are cached for the project and dropped only
- * by what can change them, the build inputs of {@link HaxeBuildInputs}: a
- * build file registered, added, moved, saved or deleted; a target, section,
- * work-directory or environment change; a landed evaluation or a cache
- * clear; a change of the project roots; an edit of an hxml or xml file. A
- * build writing its output does not.
+ * by what can change them: the build inputs ({@link HaxeBuildInputs}), a
+ * change of the project roots and an edit of an hxml or xml file. A build
+ * writing its output does not.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeResolveContexts implements Disposable {
@@ -276,7 +274,7 @@ public final class HaxeResolveContexts implements Disposable {
     return command == null ? null : command.buildFilePath();
   }
 
-  /** The owners tied for the most specific source directory containing the path; every owner of a library file, which none contains. */
+  /** The owners tied for the most specific source directory containing the path; all owners when none contains it (a library file). */
   @NotNull
   private static List<Ownership> closestOwners(@NotNull String path, @NotNull List<Ownership> owners) {
     List<Ownership> closest = HaxeBuildOwnership.closest(path, owners, Ownership::sourceDirectories);

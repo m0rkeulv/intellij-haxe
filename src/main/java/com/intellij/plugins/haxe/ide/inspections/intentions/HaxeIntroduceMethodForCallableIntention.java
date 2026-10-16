@@ -8,7 +8,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-/** Creates the method an unresolved callable reference names: no call, so no parameters and an untyped result. */
+/**
+ * Creates the method an unresolved reference names where a callable type without a known signature is expected:
+ * there are no arguments to derive parameters from, so the method has none and no declared return type.
+ */
 public class HaxeIntroduceMethodForCallableIntention extends HaxeIntroduceMethodIntentionBase<HaxeReferenceExpression> {
 
   public HaxeIntroduceMethodForCallableIntention(@NotNull HaxeReferenceExpression referenceExpression, @NotNull HaxeClass targetClass) {

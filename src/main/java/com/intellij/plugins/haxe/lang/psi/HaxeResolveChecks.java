@@ -140,10 +140,11 @@ public final class HaxeResolveChecks {
     }
 
   /**
-   * An untyped target-syntax call (`__js__`, `__cpp__`, ...): the compiler accepts
-   * these without a std declaration, so they resolve to the synthetic ones
-   * ({@link HaxeSyntheticDeclarations}). Instance forms like `.code` are not
-   * handled here. See the haxe manual's
+   * An untyped target-syntax call ({@code __js__}, {@code __cpp__}, ...): the
+   * compiler accepts these without a std declaration, so they resolve to the
+   * synthetic ones ({@link HaxeSyntheticDeclarations}). Members the compiler
+   * adds to values ({@code .bind}, {@code .code}) are not handled here. See
+   * the haxe manual's
    * <a href="https://haxe.org/manual/target-syntax.html">target-syntax</a>.
    */
     static List<? extends PsiElement> checkIsFakeReference(@NotNull HaxeReference reference, String referenceText) {
@@ -990,7 +991,7 @@ public final class HaxeResolveChecks {
     return null;
   }
 
-  /** A bare `trace` resolves to its synthetic declaration; checked after members and imports, so a declared trace wins. */
+  /** A bare {@code trace} resolves to its synthetic declaration; checked after members and imports, so a declared trace wins. */
   static List<? extends PsiElement> checkGlobalAlias(HaxeReference reference, String referenceText) {
     if (HaxeSyntheticDeclarations.TRACE.equals(referenceText)) {
       return List.of(HaxeSyntheticDeclarations.traceMethod(reference.getProject()));

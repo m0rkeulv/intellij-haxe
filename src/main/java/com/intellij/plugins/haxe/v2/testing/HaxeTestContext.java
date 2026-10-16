@@ -30,10 +30,9 @@ import java.util.List;
  * the one with the most specific classpath wins, ties going to the earlier
  * candidate. An hxml build's work directory counts as a classpath (haxe's
  * implicit one), so a root-level tests build would otherwise claim every file
- * of a nested one. Nothing
- * claims a path outside every build. Resolved from a project-level cache of
- * the builds' classpaths, dropped by the shared build inputs
- * ({@link HaxeBuildInputs}: marks, sections, work directories, syncs,
+ * of a nested one. Nothing claims a path outside every build. Resolved from a
+ * project-level cache of the builds' classpaths, dropped by the shared build
+ * inputs ({@link HaxeBuildInputs}: marks, sections, work directories, syncs,
  * build-file content) and the VFS structure (see {@link #dependencies}) —
  * never by the whole-PSI counter, which bumps on every keystroke.
  */

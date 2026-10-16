@@ -16,7 +16,8 @@ import java.util.List;
 import javax.swing.Icon;
 
 /**
- * The shared half of the two smart-step flavours: the async entry point the
+ * What both smart-step flavours ({@link AdapterTargetsSmartStepHandler},
+ * {@link PsiResolvedSmartStepHandler}) share: the async entry point the
  * platform drives (the variants are computed on the DAP request thread, never
  * on the EDT), the plain Step Into (F7) showing the same chooser, one popup
  * title, and the variants' presentation (the method icon and the highlight of

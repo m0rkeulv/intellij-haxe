@@ -524,13 +524,13 @@ final class HaxeTestLaunchPlanner {
   }
 
   /**
-   * hxcpp's name for the binary a section builds, from the section's defines
-   * ({@code -debug} lines, {@code -D debug}, {@code HAXE_OUTPUT_FILE},
-   * {@code DEBUGSUFFIX}) plus the {@code -debug} a debug launch compiles
-   * with - the same rule Build & run uses, never a guess from what happens to
-   * sit on disk (a stale leftover of the other flavor must not be launched).
-   * A build linking nothing this machine runs (a cross toolchain, a static or
-   * shared library) is not runnable.
+   * hxcpp's name for the binary a section builds. It follows from the
+   * section's defines ({@code -debug} lines, {@code -D debug},
+   * {@code HAXE_OUTPUT_FILE}, {@code DEBUGSUFFIX}) plus the {@code -debug} a
+   * debug launch compiles with, by the same rule Build &amp; run uses - never
+   * from whatever sits on disk, where a stale binary of the other flavor must
+   * not be picked. Throws for a build that links nothing this machine runs (a
+   * cross toolchain, a static or shared library).
    */
   @NotNull
   private static String hxcppFileName(@NotNull String effective, @NotNull String mainClass, boolean debugLaunch)

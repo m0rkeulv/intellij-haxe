@@ -120,7 +120,7 @@ public final class HaxeBuildInputs implements Disposable {
       tracker.incModificationCount();
     }
 
-    /** The closures a build reaches come from the sync. */
+    /** The libraries a build reaches, transitive ones included, come from the sync. */
     @Override
     public void librariesSynced() {
       tracker.incModificationCount();

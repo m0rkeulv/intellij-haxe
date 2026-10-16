@@ -25,10 +25,11 @@ import java.util.Map;
  * The mechanics every manager of haxe server processes shares: the entries
  * and their console listeners, stop, restart and removal, the handling of a
  * process that died on its own, and the state topic the compiler caches and
- * the server console follow, plus the start gate ({@link #mayStart}) and the
- * server command line ({@link #serverCommandLine}). A subclass contributes
- * how a process is launched ({@link #startLocked}), what a stopped one leaves
- * behind ({@link #clearDerivedState}) and the console's termination line.
+ * the server console follow. The start gate ({@link #mayStart}) and the
+ * server command line ({@link #serverCommandLine}) live here too. A subclass
+ * contributes how a process is launched ({@link #startLocked}), what a
+ * stopped one leaves behind ({@link #clearDerivedState}) and the console's
+ * termination line.
  *
  * A stopped or crashed entry keeps its output backlog, so its console tab
  * survives a restart. All processes stop with the project. Methods whose
@@ -56,10 +57,10 @@ abstract class HaxeServerProcessManager<P extends HaxeServerProcess> implements 
 
   /**
    * The server's command line: its haxe, the configured server arguments,
-   * then the mode arguments; run in the project directory when there is one
-   * (every request carries its own --cwd, so a missing directory, as in a
-   * test fixture or a freshly moved project, must not fail the start) with
-   * the SDK's folders in front of PATH.
+   * then the mode arguments, with the SDK's folders in front of PATH. It runs
+   * in the project directory when that exists; every request carries its own
+   * {@code --cwd}, so a missing directory (a test fixture, a freshly moved
+   * project) must not fail the start.
    */
   @NotNull
   protected final GeneralCommandLine serverCommandLine(@NotNull P process, @NotNull String... modeArguments) {

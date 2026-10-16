@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -59,7 +60,7 @@ public class HaxeRuntimeToolTest {
   @DisplayName("a path lookup finds the executable under its name on this os")
   public void aPathLookupFindsTheExecutableUnderItsNameOnThisOs() throws IOException {
     Path onPath = executableIn("path", HaxeRuntimeTool.NODE);
-    Environment env = env(Map.of("PATH", temp.resolve("empty") + java.io.File.pathSeparator + onPath.getParent()));
+    Environment env = env(Map.of("PATH", temp.resolve("empty") + File.pathSeparator + onPath.getParent()));
 
     assertEquals(onPath.toAbsolutePath().toString(), HaxeRuntimeTool.NODE.fromPath(env));
     assertNull(HaxeRuntimeTool.NODE.fromPath(env(Map.of())), "no PATH, no lookup");

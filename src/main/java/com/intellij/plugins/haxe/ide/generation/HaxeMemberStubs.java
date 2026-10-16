@@ -18,7 +18,7 @@ public final class HaxeMemberStubs {
   private HaxeMemberStubs() {
   }
 
-  /** The body for a method that must return a value, or the empty one. */
+  /** The stub body: one throwing {@code NotImplementedException} when the method must return a value, else an empty one. */
   @NotNull
   public static String body(boolean returnsValue) {
     return returnsValue ? THROWING_BODY : EMPTY_BODY;

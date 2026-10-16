@@ -193,7 +193,7 @@ public class HaxeClassModel implements HaxeCommonMembersModel {
         return haxeClass.hasCompileTimeMeta(HaxeMeta.GENERIC_BUILD);
     }
 
-    /** The type-parameter name a `@:genericBuild` macro declares last to accept any number of type arguments; unrelated to the `haxe.Rest` type. */
+    /** The name of the type parameter a {@code @:genericBuild} class declares last to accept any number of type arguments; unrelated to the {@code haxe.Rest} type. */
     public static final String GENERIC_BUILD_REST_PARAM = "Rest";
 
     public static boolean isGenericBuildRestParam(@Nullable String name) {

@@ -29,10 +29,10 @@ import java.util.concurrent.Future;
  *
  * Completion runs under a read action, which must not wait on the network.
  * The request therefore runs on a pooled thread, and the caller waits for at
- * most {@link HaxeCancelableFutures#ANSWER_TIMEOUT_MS}. Typing cancels the wait. A slow answer,
- * such as from a server that is still starting or from a {@code lime display} run,
- * is abandoned. The request still completes, so the next popup gets a faster
- * answer.
+ * most {@link HaxeCancelableFutures#ANSWER_TIMEOUT_MS}. Typing cancels the
+ * wait. A slow answer, such as from a server that is still starting or from a
+ * {@code lime display} run, is abandoned. The request still completes, so the
+ * next popup gets a faster answer.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog

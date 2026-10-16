@@ -56,9 +56,10 @@ public final class HaxeInstallAllMissingLibrariesAction extends DumbAwareAction 
   }
 
   /**
-   * Installs the libraries one by one, reporting each failure as it happens.
-   * Null once any library installed - the sync that follows covers it and the
-   * failed names are summarized here; the failed names when none did.
+   * Installs the libraries one by one, notifying each failure as it happens.
+   * When any library installed, the summary is notified here and the result
+   * is null, so the library sync follows; when none did, the result is the
+   * failed names, which the mutation flow reports as its failure.
    */
   @Nullable
   private static String installAll(@NotNull Project project, @NotNull List<LibraryNode> missing, @NotNull ProgressIndicator indicator) {

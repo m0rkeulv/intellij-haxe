@@ -28,7 +28,7 @@ public record AdapterProcess(Process process, int port, BufferedReader stdout) {
    * Starts the command with stderr merged into stdout and waits for the line
    * {@code isAnnouncement} accepts; {@code portOf} reads the port from that
    * line and may throw for a malformed one. The process is destroyed when the
-   * announcement does not come.
+   * launch fails.
    */
   public static AdapterProcess launch(ProcessBuilder command, Predicate<String> isAnnouncement, ToIntFunction<String> portOf)
     throws IOException {
