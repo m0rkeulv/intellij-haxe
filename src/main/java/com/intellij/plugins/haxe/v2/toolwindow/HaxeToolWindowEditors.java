@@ -168,6 +168,21 @@ public final class HaxeToolWindowEditors {
     }
   }
 
+  /** Whether Delete and the toolbar's Remove act on the row: a build file, a define override, a module. */
+  public static boolean isRemovable(@Nullable Object node) {
+    return node instanceof BuildFileRow || node instanceof IdeDefineNode || node instanceof ModuleNode;
+  }
+
+  /** Removes the row after its confirmation - the one dispatch behind Delete and the toolbar's Remove; nothing for other rows. */
+  public static void confirmAndRemove(@NotNull Project project, @Nullable Object node) {
+    switch (node) {
+      case BuildFileRow row -> confirmAndRemoveBuildFile(project, row);
+      case IdeDefineNode define -> confirmAndRemoveDefine(project, define);
+      case ModuleNode module -> confirmAndRemoveModule(project, module);
+      case null, default -> { }
+    }
+  }
+
   public static void confirmAndRemoveBuildFile(@NotNull Project project, @NotNull BuildFileRow row) {
     String confirmKey = row.manual() ? "haxe.toolwindow.remove.build.file.confirm"
                                      : "haxe.toolwindow.hide.build.file.confirm";
