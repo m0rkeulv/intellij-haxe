@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
+import java.util.concurrent.ConcurrentHashMap;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.execution.ExecutionException;
@@ -65,10 +66,24 @@ public final class HaxeLimeProjectInfoService implements Disposable {
   private static final ObjectMapper PARSER_OUTPUT_MAPPER = JsonMapper.builder()
     .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
     .build();
+  private static final long DISPLAY_FAILURE_COOLDOWN_MS = 30_000;
+
+  /** One display run's outcome per project file: the arguments, or the time the run failed. */
+  private record CachedDisplayArguments(long fileStamp, @NotNull String targetFlag, @Nullable List<String> arguments, long failedAtMs) {
+
+    boolean matches(long stamp, @NotNull String target) {
+      return fileStamp == stamp && targetFlag.equals(target);
+    }
+
+    boolean failureWithinCooldown(long nowMs) {
+      return arguments == null && nowMs - failedAtMs < DISPLAY_FAILURE_COOLDOWN_MS;
+    }
+  }
 
   private final Project project;
   private final HaxeProjectInfoCache<HaxeBuildFileInfo> cache;
   private final HaxeBuildToolFailures failures;
+  private final Map<String, CachedDisplayArguments> displayArguments = new ConcurrentHashMap<>();
 
   public HaxeLimeProjectInfoService(@NotNull Project project) {
     this.project = project;
@@ -128,11 +143,48 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   public void clearCache() {
     cache.clear();
+    displayArguments.clear();
   }
 
-  /** Drops every cached evaluation of one build file (all targets/toolchains), forcing a re-run on the next ask. */
+  /** Drops every cached evaluation of one build file (all targets/toolchains) and its display arguments, forcing a re-run on the next ask. */
   public void invalidate(@NotNull String filePath) {
     cache.invalidate(filePath);
+    displayArguments.remove(filePath);
+  }
+
+  /** Drops the compiler services' display arguments of every file. */
+  public void clearDisplayArguments() {
+    displayArguments.clear();
+  }
+
+  /**
+   * The file's effective haxe arguments for the compiler services, {@code --cwd}
+   * first, from one {@code lime display} run per (file stamp, target); a failed
+   * run is kept for a cooldown, so a broken tool is not re-run on every request.
+   * Null while the project is untrusted or the tool fails. Spawns a process -
+   * never call under the read lock.
+   */
+  // TODO: keyed on the project file's stamp only - an edited library include.xml
+  //  takes effect on Reload Haxe Project or Purge Caches, not by itself
+  @Nullable
+  public List<String> displayArguments(@NotNull String directory,
+                                       @NotNull String fileName,
+                                       @NotNull String tool,
+                                       @NotNull String targetFlag,
+                                       long fileStamp,
+                                       @Nullable String sdkName) {
+    if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) return null;
+    String cacheKey = directory + "/" + fileName;
+    long now = System.currentTimeMillis();
+    CachedDisplayArguments cached = displayArguments.get(cacheKey);
+    if (cached != null && cached.matches(fileStamp, targetFlag)) {
+      if (cached.arguments() != null) return cached.arguments();
+      if (cached.failureWithinCooldown(now)) return null;
+    }
+    String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, sdkName);
+    List<String> arguments = LimeProjects.displayArguments(haxelib, tool, directory, fileName, targetFlag, DISPLAY_TIMEOUT_MS);
+    displayArguments.put(cacheKey, new CachedDisplayArguments(fileStamp, targetFlag, arguments, arguments == null ? now : 0));
+    return arguments;
   }
 
   /** {@code settled} = the parser tool succeeded, or no tool is bundled (legacy is the best available). */
@@ -234,8 +286,6 @@ public final class HaxeLimeProjectInfoService implements Disposable {
 
   // --- legacy lime display fallback ---
 
-  // TODO: point the display at an export root no build uses (LimeProjects.displayCommandLine) - lime prints the
-  //  cached <app path>/<target>/haxe/<build type>.hxml whenever it is newer than the project file
   /** {@code recordFailure}: without a bundled tool the display run is the only evaluation, so its failure is the one shown. */
   @Nullable
   private HaxeBuildFileInfo runDisplay(@NotNull Key key,
@@ -243,9 +293,7 @@ public final class HaxeLimeProjectInfoService implements Disposable {
                                        @NotNull String fileName,
                                        @Nullable String workDirectory,
                                        boolean recordFailure) {
-    GeneralCommandLine commandLine =
-      new GeneralCommandLine(key.haxelibPath(), "run", tool, "display", fileName, key.targetFlag())
-        .withWorkDirectory(workDirectory);
+    GeneralCommandLine commandLine = LimeProjects.displayCommandLine(key.haxelibPath(), tool, workDirectory, fileName, key.targetFlag());
     try {
       ProcessOutput output = new CapturingProcessHandler(commandLine).runProcess(DISPLAY_TIMEOUT_MS);
       if (output.isTimeout() || output.getExitCode() != 0) {

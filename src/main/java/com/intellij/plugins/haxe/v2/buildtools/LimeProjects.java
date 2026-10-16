@@ -217,11 +217,11 @@ public final class LimeProjects {
    * writes nothing there.
    */
   @NotNull
-  static GeneralCommandLine displayCommandLine(@NotNull String haxelibExecutable,
-                                               @NotNull String tool,
-                                               @NotNull String directory,
-                                               @NotNull String fileName,
-                                               @NotNull String targetFlag) {
+  public static GeneralCommandLine displayCommandLine(@NotNull String haxelibExecutable,
+                                                      @NotNull String tool,
+                                                      @Nullable String directory,
+                                                      @NotNull String fileName,
+                                                      @NotNull String targetFlag) {
     String appPathArgument = APP_PATH_FLAG + displayAppPath();
     return new GeneralCommandLine()
       .withExePath(haxelibExecutable)

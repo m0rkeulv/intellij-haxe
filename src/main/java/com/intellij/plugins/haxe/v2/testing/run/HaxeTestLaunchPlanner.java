@@ -389,14 +389,10 @@ final class HaxeTestLaunchPlanner {
                               boolean debugLaunch) throws ExecutionException {
     String targetFlag = NmeProjects.selectedTargetFlag(project, file);
     String content = HaxeBuildFileInspector.loadText(file);
-    String appFile = content == null ? null : ProjectXmlParser.parseAppFile(content);
-    if (appFile == null) {
+    if (content == null || ProjectXmlParser.parseAppFile(content) == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.app.file", file.getName()));
     }
-    // content is non-null here: a null load already failed the appFile guard
-    String appPath = ProjectXmlParser.parseAppPath(content);
-    String outputRoot = appPath != null ? appPath : "bin";
-    NmeProjects.TargetArtifact artifact = NmeProjects.targetArtifact(targetFlag, appFile, outputRoot);
+    NmeProjects.TargetArtifact artifact = NmeProjects.selectedArtifact(content, targetFlag);
     if (artifact == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.unrunnable.target", targetFlag));
     }

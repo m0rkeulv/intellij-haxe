@@ -86,21 +86,23 @@ public final class NmeProjects {
                                                      @NotNull VirtualFile file,
                                                      @NotNull HaxeBuildFileInfo raw) {
     String targetFlag = selectedTargetFlag(project, file);
-    TargetArtifact artifact = selectedArtifact(file, targetFlag);
+    String content = HaxeBuildFileInspector.loadText(file);
+    TargetArtifact artifact = content == null ? null : selectedArtifact(content, targetFlag);
     if (artifact == null) return raw.withTarget(targetFor(targetFlag), null);
     return raw.withTarget(artifact.target(), artifact.relativeOutput());
   }
 
+  /**
+   * The artifact the nmml's {@code <app file>} packages for the target under its
+   * {@code <app path>} (nme shares lime's default export root); null without an
+   * app file or for an unmapped target.
+   */
   @Nullable
-  private static TargetArtifact selectedArtifact(@NotNull VirtualFile file, @NotNull String targetFlag) {
-    String content = HaxeBuildFileInspector.loadText(file);
-    String appFile = content == null ? null : ProjectXmlParser.parseAppFile(content);
+  public static TargetArtifact selectedArtifact(@NotNull String content, @NotNull String targetFlag) {
+    String appFile = ProjectXmlParser.parseAppFile(content);
     if (appFile == null) return null;
-
-    // the nmml's <app path> overrides the tool's default "bin" output root
     String appPath = ProjectXmlParser.parseAppPath(content);
-    String outputRoot = appPath != null ? appPath : "bin";
-    return targetArtifact(targetFlag, appFile, outputRoot);
+    return targetArtifact(targetFlag, appFile, appPath != null ? appPath : LimeProjects.DEFAULT_APP_PATH);
   }
 
   /**
