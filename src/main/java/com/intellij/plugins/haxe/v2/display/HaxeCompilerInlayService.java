@@ -16,6 +16,7 @@ import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
+import com.intellij.plugins.haxe.ide.hint.types.HaxeTypeHintAnchors;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalFunctionDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
@@ -175,7 +176,7 @@ public final class HaxeCompilerInlayService implements Disposable {
     }
     if (known == null) return null;
 
-    HaxeComponentName name = HaxeCompilerHoverTypes.componentNameOf(declaration);
+    HaxeComponentName name = HaxeTypeHintAnchors.componentNameOf(declaration);
     if (name == null) return null;
     String path = HaxeCompiledMembers.normalizePath(file.getPath(), "", SystemInfo.isFileSystemCaseSensitive);
     HaxeCompiledMembers.Member member = known.members().memberAt(path, name.getTextRange().getStartOffset());
@@ -267,7 +268,7 @@ public final class HaxeCompilerInlayService implements Disposable {
 
   @Nullable
   private static String nameOf(@NotNull PsiElement declaration) {
-    HaxeComponentName name = HaxeCompilerHoverTypes.componentNameOf(declaration);
+    HaxeComponentName name = HaxeTypeHintAnchors.componentNameOf(declaration);
     return name != null ? name.getText() : null;
   }
 

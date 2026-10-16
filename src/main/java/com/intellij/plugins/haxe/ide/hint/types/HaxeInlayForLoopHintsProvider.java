@@ -30,12 +30,7 @@ public class HaxeInlayForLoopHintsProvider implements InlayHintsProvider {
     }
 
 
-    private static void handleForEachHints(@NotNull PsiElement element,
-                                                    @NotNull InlayTreeSink sink,
-                                           HaxeForStatement forStatement) {
-
-
-
+    private static void handleForEachHints(@NotNull PsiElement element, @NotNull InlayTreeSink sink, HaxeForStatement forStatement) {
       HaxeIterable iterable = forStatement.getIterable();
       HaxeKeyValueIterator keyValueIterator = forStatement.getKeyValueIterator();
       HaxeGenericResolver resolver = HaxeGenericResolverUtil.generateResolverFromScopeParents(forStatement);
@@ -43,7 +38,7 @@ public class HaxeInlayForLoopHintsProvider implements InlayHintsProvider {
         HaxeValueIterator valueIterator = forStatement.getValueIterator();
         if (valueIterator != null) {
           ResultHolder type = HaxeTypeResolver.getPsiElementType(valueIterator, element, resolver);
-          createInlayHint(valueIterator.getComponentName(), sink, type);
+          addTypeHint(valueIterator, sink, type);
         }
       }
       if (keyValueIterator != null) {
@@ -53,20 +48,8 @@ public class HaxeInlayForLoopHintsProvider implements InlayHintsProvider {
         ResultHolder keyType = HaxeExpressionEvaluator.findIteratorType(iteratorKey);
         ResultHolder valueType = HaxeExpressionEvaluator.findIteratorType(iteratorValue);
 
-        if (!keyType.isUnknown()) createInlayHint(iteratorKey.getComponentName(), sink, keyType);
-        if (!valueType.isUnknown()) createInlayHint(iteratorValue.getComponentName(), sink, valueType);
-      }
-
-    }
-
-
-
-    private static void createInlayHint(@NotNull HaxeComponentName componentName,@NotNull InlayTreeSink sink, ResultHolder type ) {
-      if (!type.isUnknown() && !type.getType().isInvalid()) {
-        int offset = componentName.getTextRange().getEndOffset();
-        InlineInlayPosition position = new InlineInlayPosition(offset, true, 0);
-        sink.addPresentation(position, null, null, HintFormat.Companion.getDefault(), appendTypeTextToBuilder(type)
-        );
+        addTypeHint(iteratorKey, sink, keyType);
+        addTypeHint(iteratorValue, sink, valueType);
       }
     }
   }
