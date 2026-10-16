@@ -89,6 +89,8 @@ public final class JsDebugSessionMux implements DapEndpoint {
 
   private final DapClient parent;
   private final int adapterPort;
+  /** The adapter id the parent was initialized with; every attached child announces the same. */
+  private final String adapterId;
   private final Map<Integer, ChildSession> sessions = new ConcurrentHashMap<>();
   private final AtomicInteger nextSessionIndex = new AtomicInteger(0);
   private final BlockingQueue<Event> mergedEvents = new LinkedBlockingQueue<>();
@@ -112,9 +114,10 @@ public final class JsDebugSessionMux implements DapEndpoint {
    * for any single session); the mux only takes over event pumping and
    * later-target attachment.
    */
-  public JsDebugSessionMux(DapClient parent, DapClient pageSession, int adapterPort) {
+  public JsDebugSessionMux(DapClient parent, DapClient pageSession, int adapterPort, String adapterId) {
     this.parent = parent;
     this.adapterPort = adapterPort;
+    this.adapterId = adapterId;
     ChildSession page = new ChildSession(nextSessionIndex.getAndIncrement(), pageSession, "page");
     sessions.put(page.index, page);
     startPump(page);
@@ -696,7 +699,10 @@ public final class JsDebugSessionMux implements DapEndpoint {
       return;
     }
     DapClient client = DapClient.connect("127.0.0.1", adapterPort, (int)CHILD_TIMEOUT_MILLIS);
-    if (!client.sendRequest(InitializeRequest.standard("chrome", true), CHILD_TIMEOUT_MILLIS).isSuccess()) {
+    try {
+      JsDebugHandshake.initialize(client, adapterId, CHILD_TIMEOUT_MILLIS);
+    } catch (IOException e) {
+      logSink.accept("cannot debug target '" + label + "': " + e.getMessage());
       client.close();
       return;
     }

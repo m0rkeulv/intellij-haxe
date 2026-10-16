@@ -557,7 +557,7 @@ public class JsDebugAdapterLiveTest {
       assertNotNull(startDebugging, "no startDebugging for the page");
 
       DapClient page = connectWithRetry(adapterPort);
-      try (JsDebugSessionMux mux = new JsDebugSessionMux(parent, page, adapterPort)) {
+      try (JsDebugSessionMux mux = new JsDebugSessionMux(parent, page, adapterPort, "chrome")) {
         mux.setLogSink(line -> System.out.println("[mux] " + line));
 
         // --- page handshake THROUGH the mux, as DapDebugProcess drives it ---

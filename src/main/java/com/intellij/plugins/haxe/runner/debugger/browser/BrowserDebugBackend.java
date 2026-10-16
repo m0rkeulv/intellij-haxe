@@ -166,28 +166,15 @@ public class BrowserDebugBackend implements DapBackend {
   private DapEndpoint connectChromium(
     Path node, AdapterStore store, String targetUrl) throws IOException {
     Path dapServerJs = JsDebugAdapters.installedEntry(store, AdapterPin.JS_DEBUG);
-    AdapterProcess launched = JsAdapterLauncher.launchJsDebug(node, dapServerJs);
-    adapterProcess = launched.process();
-    adapterStdout = launched.stdout();
-
-    DapClient parent = JsDebugSessions.connectWithRetry(launched.port());
-    parentClient = parent;
-    Map<String, Object> childConfig;
-    try {
-      childConfig = JsDebugSessions.runParentHandshake(parent, "chrome", parentLaunchConfig(targetUrl));
-    } catch (IOException e) {
-      throw new IOException("The js-debug parent session failed: " + e.getMessage(), e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while starting the js-debug session", e);
-    }
-    launchConfig = childConfig;
-    DapClient page = JsDebugSessions.connectWithRetry(launched.port()); // the PAGE session's connection
+    JsDebugSessions.Session session = JsDebugSessions.open(node, dapServerJs, "chrome", parentLaunchConfig(targetUrl));
+    adapterProcess = session.adapter().process();
+    adapterStdout = session.adapter().stdout();
+    parentClient = session.parent();
+    launchConfig = session.childConfiguration();
     // the mux takes over the parent (further startDebugging = new targets)
     // and presents page+workers as ONE session with workers as extra threads
-    JsDebugSessionMux mux = new JsDebugSessionMux(parent, page, launched.port());
-    sessionMux = mux;
-    return mux;
+    sessionMux = session.mux();
+    return session.mux();
   }
 
   /** The parent session's launch configuration (mirrors {@link #firefoxLaunchConfig}). */

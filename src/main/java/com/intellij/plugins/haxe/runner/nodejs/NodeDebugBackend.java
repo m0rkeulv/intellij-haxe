@@ -8,7 +8,6 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfiguredLaunchRequest;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
-import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import java.io.BufferedReader;
 import java.io.File;
@@ -20,7 +19,6 @@ import java.util.Map;
 import com.intellij.plugins.haxe.runner.debugger.javascript.AdapterPin;
 import com.intellij.plugins.haxe.runner.debugger.javascript.AdapterStore;
 import com.intellij.plugins.haxe.runner.debugger.javascript.AdapterStores;
-import com.intellij.plugins.haxe.runner.debugger.javascript.JsAdapterLauncher;
 import com.intellij.plugins.haxe.runner.debugger.javascript.JsDebugAdapters;
 import com.intellij.plugins.haxe.runner.debugger.javascript.JsDebugSessionMux;
 import com.intellij.plugins.haxe.runner.debugger.javascript.JsDebugSessions;
@@ -72,26 +70,13 @@ public class NodeDebugBackend implements DapBackend {
     NodeLocator.requireModern(nodeExecutable);
     AdapterStore store = AdapterStores.open();
     Path dapServerJs = JsDebugAdapters.installedEntry(store, AdapterPin.JS_DEBUG);
-    AdapterProcess launched = JsAdapterLauncher.launchJsDebug(nodeExecutable, dapServerJs);
-    adapterProcess = launched.process();
-    adapterStdout = launched.stdout();
-
-    DapClient parent = JsDebugSessions.connectWithRetry(launched.port());
-    parentClient = parent;
-    Map<String, Object> childConfig;
-    try {
-      childConfig = JsDebugSessions.runParentHandshake(parent, "node", attachConfig());
-    } catch (IOException e) {
-      throw new IOException("The js-debug parent session failed: " + e.getMessage(), e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while starting the js-debug session", e);
-    }
-    launchConfig = childConfig;
-    DapClient process = JsDebugSessions.connectWithRetry(launched.port());
-    JsDebugSessionMux mux = new JsDebugSessionMux(parent, process, launched.port());
-    sessionMux = mux;
-    return new NodeEntryHoldRelease(mux);
+    JsDebugSessions.Session session = JsDebugSessions.open(nodeExecutable, dapServerJs, "node", attachConfig());
+    adapterProcess = session.adapter().process();
+    adapterStdout = session.adapter().stdout();
+    parentClient = session.parent();
+    launchConfig = session.childConfiguration();
+    sessionMux = session.mux();
+    return new NodeEntryHoldRelease(session.mux());
   }
 
   private Map<String, Object> attachConfig() {
