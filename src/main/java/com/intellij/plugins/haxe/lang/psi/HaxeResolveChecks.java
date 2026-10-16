@@ -13,7 +13,6 @@ import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
 import com.intellij.plugins.haxe.model.*;
-import com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCacheService;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
 import com.intellij.plugins.haxe.model.evaluator.HaxePatternMatchedType;
 import com.intellij.plugins.haxe.model.evaluator.HaxeSwitchSubjectTypeCache;
@@ -38,6 +37,7 @@ import org.jspecify.annotations.NonNull;
 import java.util.*;
 
 import static com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentStringCode.FAKE_PSI_KEY;
+import static com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCacheService.cachedHaxeCallExpressionEvaluation;
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.*;
 import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.ANALYZER;
 import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.NULL_SAFETY;
@@ -552,12 +552,6 @@ public final class HaxeResolveChecks {
   }
 
 
-
-  private static @Nullable HaxeCallExpressionEvaluation cachedHaxeCallExpressionEvaluation(HaxeMethod method, HaxeCallExpression callExpression) {
-
-    HaxeCallExpressionEvaluatorCacheService service = method.getProject().getService(HaxeCallExpressionEvaluatorCacheService.class);
-    return service.callExpressionCachedEvaluation(method, callExpression);
-  }
 
   private static boolean testAsEnumValueConstructor(@NotNull HaxeEnumValueDeclarationConstructor enumValueDeclaration, @NotNull HaxeReference reference) {
       if (reference.getParent() instanceof HaxeCallExpression haxeCallExpression) {

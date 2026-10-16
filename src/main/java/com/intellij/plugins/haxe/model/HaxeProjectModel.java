@@ -126,11 +126,6 @@ public class HaxeProjectModel {
   public HaxePackageModel getStdPackage() {
     return getRootsCache().stdPackageModel;
   }
-  @NotNull
-  public HaxeLogPackageModel getLogPackage() {
-    return getRootsCache().logPackageModel;
-  }
-
   @Nullable
   public List<HaxeModel> resolve(FullyQualifiedInfo info) {
     return resolve(info, null);
@@ -228,13 +223,10 @@ class RootsCache {
   final HaxeSourceRootModel sdkRoot;
   final HaxeStdPackageModel stdPackageModel;
 
-  final HaxeLogPackageModel logPackageModel;
-
   private RootsCache(List<HaxeSourceRootModel> roots, HaxeSourceRootModel sdkRoot) {
     this.roots = roots;
     this.sdkRoot = sdkRoot;
     this.stdPackageModel = new HaxeStdPackageModel(sdkRoot);
-    this.logPackageModel = new HaxeLogPackageModel(sdkRoot);
   }
 
   static RootsCache forProject(HaxeProjectModel model) {

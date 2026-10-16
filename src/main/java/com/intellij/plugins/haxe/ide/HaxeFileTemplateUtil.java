@@ -18,6 +18,7 @@
 package com.intellij.plugins.haxe.ide;
 
 import com.intellij.ide.fileTemplates.FileTemplate;
+import com.intellij.util.TriConsumer;
 import com.intellij.ide.fileTemplates.FileTemplateManager;
 import com.intellij.ide.fileTemplates.FileTemplateUtil;
 import com.intellij.openapi.project.Project;
@@ -68,6 +69,14 @@ public class HaxeFileTemplateUtil {
     applicableTemplates.addAll(ContainerUtil.findAll(FileTemplateManager.getInstance(project).getInternalTemplates(), filter));
     applicableTemplates.addAll(ContainerUtil.findAll(FileTemplateManager.getInstance(project).getAllTemplates(), filter));
     return applicableTemplates;
+  }
+
+  /** Offers each template as a kind: its short name, its icon and the template name the kind creates from. */
+  public static void addTemplateKinds(@NotNull List<FileTemplate> templates, @NotNull TriConsumer<String, Icon, String> addKind) {
+    for (FileTemplate fileTemplate : templates) {
+      String templateName = fileTemplate.getName();
+      addKind.accept(getTemplateShortName(templateName), getTemplateIcon(templateName), templateName);
+    }
   }
 
   public static String getTemplateShortName(String templateName) {

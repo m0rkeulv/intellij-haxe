@@ -75,7 +75,7 @@ public abstract class HaxeAnnotatingVisitor extends HaxeVisitor {
 
   @Override
   public void visitMethodDeclaration(@NotNull HaxeMethodDeclaration functionDeclaration) {
-    if (functionDeclaration.hasCompileTimeMetadata(HaxeMeta.DEPRECATED)) {
+    if (functionDeclaration.isDeprecated()) {
       handleDeprecatedFunctionDeclaration(functionDeclaration);
     }
 
@@ -89,7 +89,7 @@ public abstract class HaxeAnnotatingVisitor extends HaxeVisitor {
       final PsiElement reference = referenceExpression.resolve();
 
       if (reference instanceof HaxeMethodDeclaration functionDeclaration) {
-        if (functionDeclaration.hasCompileTimeMetadata(HaxeMeta.DEPRECATED)) {
+        if (functionDeclaration.isDeprecated()) {
           handleDeprecatedCallExpression(referenceExpression);
         }
       }
@@ -100,7 +100,7 @@ public abstract class HaxeAnnotatingVisitor extends HaxeVisitor {
 
   @Override
   public void visitFieldDeclaration(@NotNull HaxeFieldDeclaration fieldDeclaration) {
-    if (fieldDeclaration.hasCompileTimeMetadata(HaxeMeta.DEPRECATED)) {
+    if (fieldDeclaration.isDeprecated()) {
       handleDeprecatedFieldDeclaration(fieldDeclaration);
     }
     super.visitFieldDeclaration(fieldDeclaration);
@@ -134,7 +134,7 @@ public abstract class HaxeAnnotatingVisitor extends HaxeVisitor {
     PsiElement reference = referenceExpression.resolve();
 
     if (reference instanceof HaxeFieldDeclaration varDeclaration) {
-      if (varDeclaration.hasCompileTimeMetadata(HaxeMeta.DEPRECATED)) {
+      if (varDeclaration.isDeprecated()) {
         handleDeprecatedCallExpression(referenceExpression);
       }
     }
