@@ -1,8 +1,8 @@
 package com.intellij.plugins.haxe.runner.debugger.javascript;
 
-import com.intellij.execution.configurations.PathEnvironmentVariableUtil;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
-import java.io.File;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeRuntimeTool;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,15 +28,11 @@ public final class NodeLocator {
       }
       return node;
     }
-    File onPath = PathEnvironmentVariableUtil.findInPath(nodeBinaryName());
+    String onPath = HaxeRuntimeTool.NODE.fromPath(HaxeRuntimeTool.PROCESS_ENVIRONMENT);
     if (onPath == null) {
       throw new IOException(HaxeDebuggerBundle.message("javascript.node.not.found"));
     }
-    return onPath.toPath();
-  }
-
-  private static String nodeBinaryName() {
-    return System.getProperty("os.name", "").toLowerCase().contains("win") ? "node.exe" : "node";
+    return Path.of(onPath);
   }
 
   // `node --version` prints e.g. v24.18.0

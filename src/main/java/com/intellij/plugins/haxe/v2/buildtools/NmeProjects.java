@@ -6,6 +6,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.FrameworkTarget;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.config.NMETarget;
+import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
@@ -155,7 +156,7 @@ public final class NmeProjects {
   @NotNull
   private static TargetArtifact nekoArtifact(@NotNull String appFile, @NotNull String outputRoot) {
     String platformDir = nekoPlatformDirectory();
-    String launcher = SystemInfo.isWindows ? appFile + ".exe" : appFile;
+    String launcher = HaxeSdkUtilBase.getExecutableName(appFile);
     return new TargetArtifact(HaxeTarget.NEKO, outputRoot + "/" + platformDir + "/" + appFile + "/" + launcher);
   }
 
