@@ -116,7 +116,7 @@ public class InterpRunConfiguration extends DapRunConfigurationBase {
     commandLine.addParameters(arguments);
     commandLine.addParameters(extraArguments);
     if (runAsInterpreter && !declaresInterp(arguments, workDirectory)) {
-      commandLine.addParameter("--interp");
+      commandLine.addParameter(HxmlFileParser.INTERP_FLAG);
     }
     return commandLine;
   }

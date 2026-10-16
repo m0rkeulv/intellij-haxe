@@ -11,6 +11,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.buildtools.*;
@@ -20,6 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -308,10 +310,9 @@ final class HaxeTestLaunchPlanner {
   private static Path singleRunCppBinary(@NotNull Project project,
                                          @NotNull VirtualFile file,
                                          @NotNull Path outputDirectory,
-                                         boolean debugLaunch) {
+                                         boolean debugLaunch) throws ExecutionException {
     String effective = HaxeBuildSections.selectedSectionContent(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
-    boolean debugBuild = debugLaunch || (effective != null && HxmlFileParser.hasDebugFlag(effective));
-    return HxcppBinaries.binary(outputDirectory, HaxeTestSingleRuns.MAIN_CLASS, debugBuild);
+    return outputDirectory.resolve(hxcppFileName(StringUtil.notNullize(effective), HaxeTestSingleRuns.MAIN_CLASS, debugLaunch));
   }
 
   /**
@@ -512,13 +513,7 @@ final class HaxeTestLaunchPlanner {
     return List.of(nodeExecutable, artifact.toString());
   }
 
-  /**
-   * The hxcpp binary the compile arguments produce, derived deterministically:
-   * a {@code -debug} in the effective hxml renames the binary even for plain
-   * runs, and the debug executor's compile additions do the same for debug
-   * sessions — never guessed from what happens to sit on disk (a stale
-   * leftover of the other flavor must not be launched).
-   */
+  /** The hxcpp binary of the hxml's selected section inside its output directory (see {@link #hxcppFileName}); the section must name a main class. */
   @NotNull
   private static Path cppExecutable(@NotNull Project project,
                                     @NotNull VirtualFile file,
@@ -529,8 +524,27 @@ final class HaxeTestLaunchPlanner {
     if (mainClass == null) {
       throw new ExecutionException(HaxeBundle.message("haxe.test.config.no.main", file.getName()));
     }
-    boolean debugBuild = debugLaunch || (effective != null && HxmlFileParser.hasDebugFlag(effective));
-    return HxcppBinaries.binary(outputDirectory, StringUtil.getShortName(mainClass), debugBuild);
+    return outputDirectory.resolve(hxcppFileName(effective, mainClass, debugLaunch));
+  }
+
+  /**
+   * hxcpp's name for the binary a section builds, from the section's defines
+   * ({@code -debug} lines, {@code -D debug}, {@code HAXE_OUTPUT_FILE},
+   * {@code DEBUGSUFFIX}) plus the {@code -debug} a debug launch compiles
+   * with - the same rule Build & run uses, never a guess from what happens to
+   * sit on disk (a stale leftover of the other flavor must not be launched).
+   * A build linking nothing this machine runs (a cross toolchain, a static or
+   * shared library) is not runnable.
+   */
+  @NotNull
+  private static String hxcppFileName(@NotNull String effective, @NotNull String mainClass, boolean debugLaunch)
+    throws ExecutionException {
+    List<HaxeDefine> defines = new ArrayList<>(HxmlFileParser.parse(effective).defines());
+    if (debugLaunch) {
+      defines.add(new HaxeDefine(HxmlFileParser.DEBUG_DEFINE_NAME, null));
+    }
+    if (!HxcppExecutables.buildsHostExecutable(defines)) throw unrunnableTarget(HaxeTarget.CPP);
+    return HxcppExecutables.fileName(mainClass, defines);
   }
 
   /** The hxnodejs hint for a js run whose build carries no node signal; null otherwise. */

@@ -13,14 +13,36 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * hxml content as a compiler argument list: line parsing and expansion of
- * hxml file references. The structured view (target, defines, libraries) is
- * {@link HxmlFileParser}.
+ * hxml content as a compiler argument list: line parsing, expansion of hxml
+ * file references and the working directory the arguments select. The
+ * structured view (target, defines, libraries) is {@link HxmlFileParser}.
  */
 @CustomLog
 public final class HxmlArguments {
 
+  /** {@code --cwd <directory>}: where the compiler runs and resolves relative paths from; a later one composes with the earlier. */
+  public static final String CWD_FLAG = "--cwd";
+
   private HxmlArguments() {
+  }
+
+  /**
+   * The directory the arguments make the compiler run in: every {@code --cwd}
+   * composed in order, a relative one resolving against the previous, as haxe
+   * does; null without any. A relative first one stays relative.
+   */
+  @Nullable
+  public static Path workDirectory(@NotNull List<String> args) {
+    Path cwd = null;
+    for (int i = 0; i + 1 < args.size(); i++) {
+      if (args.get(i).equals(CWD_FLAG)) cwd = composedCwd(cwd, args.get(i + 1));
+    }
+    return cwd;
+  }
+
+  @NotNull
+  private static Path composedCwd(@Nullable Path cwd, @NotNull String value) {
+    return cwd == null ? Path.of(value) : cwd.resolve(value);
   }
 
   /**
@@ -70,8 +92,8 @@ public final class HxmlArguments {
                                  @NotNull List<String> out) {
     for (int i = 0; i < args.size(); i++) {
       String arg = args.get(i);
-      if (arg.equals("--cwd") && i + 1 < args.size()) {
-        cwd = Path.of(args.get(i + 1));
+      if (arg.equals(CWD_FLAG) && i + 1 < args.size()) {
+        cwd = composedCwd(cwd, args.get(i + 1));
         out.add(arg);
         out.add(args.get(i + 1));
         i++;

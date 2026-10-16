@@ -195,7 +195,7 @@ public final class LimeProjects {
         LOG.warn(tool + " display produced no haxe arguments for " + fileName + " " + targetFlag);
         return null;
       }
-      List<String> withCwd = new ArrayList<>(List.of("--cwd", directory));
+      List<String> withCwd = new ArrayList<>(List.of(HxmlArguments.CWD_FLAG, directory));
       withCwd.addAll(arguments);
       return List.copyOf(withCwd);
     }

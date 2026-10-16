@@ -288,13 +288,8 @@ public final class HaxeCompilerDisplayService implements Disposable {
    */
   @NotNull
   private List<String> hxmlContextArgs(@NotNull VirtualFile buildFile, @NotNull String directory) {
-    List<String> sectionArguments = HaxeBuildSections.selectedSectionArguments(project, buildFile);
-    if (sectionArguments == null) {
-      return List.of("--cwd", directory, HaxeBuildWorkDirectories.fileArgument(buildFile, directory));
-    }
-    List<String> args = new ArrayList<>(List.of("--cwd", directory));
-    args.addAll(sectionArguments);
-    return List.copyOf(args);
+    List<String> byReference = List.of(HxmlArguments.CWD_FLAG, directory, HaxeBuildWorkDirectories.fileArgument(buildFile, directory));
+    return List.copyOf(HxmlProjects.scopeToSelectedSection(project, buildFile, byReference));
   }
 
   /**
@@ -314,7 +309,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
       .getCachedOrSchedule(new HaxeBuildFile(buildFile, HaxeBuildFileType.NMML), targetFlag, sdkName);
     if (evaluation == null) return null;
 
-    List<String> args = new ArrayList<>(List.of("--cwd", directory));
+    List<String> args = new ArrayList<>(List.of(HxmlArguments.CWD_FLAG, directory));
     args.addAll(HxmlArguments.parseLines(evaluation.hxmlContent().lines().toList()));
     return new DisplayContext(List.copyOf(args), null, sdkName, overrides, containerId);
   }
@@ -615,7 +610,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
   @NotNull
   private static DisplayResponse compileContext(@NotNull Connected connected) throws DisplayRequestException {
     List<String> compileArgs = new ArrayList<>(connected.args());
-    compileArgs.add("--no-output");
+    compileArgs.add(HxmlFileParser.NO_OUTPUT_FLAG);
     return connected.client().exchange(compileArgs, CONTEXT_COMPILE_TIMEOUT_MS);
   }
 
