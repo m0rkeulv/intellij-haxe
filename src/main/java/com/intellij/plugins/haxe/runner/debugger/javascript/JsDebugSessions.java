@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -36,11 +37,7 @@ public final class JsDebugSessions {
    */
   public static Map<String, Object> runParentHandshake(DapClient parent, String adapterId, Map<String, Object> parentConfig)
     throws IOException, InterruptedException {
-    InitializeRequest initialize = InitializeRequest.standard(adapterId, true);
-    initialize.getArguments().setClientName("IntelliJ Haxe");
-    if (!parent.sendRequest(initialize, CONNECT_TIMEOUT_MILLIS).isSuccess()) {
-      throw new IOException("initialize was rejected");
-    }
+    JsDebugHandshake.initialize(parent, adapterId, CONNECT_TIMEOUT_MILLIS);
     parent.sendRequestNoWait(ConfiguredLaunchRequest.of(parentConfig));
 
     long deadline = System.currentTimeMillis() + PARENT_HANDSHAKE_TIMEOUT_MILLIS;
@@ -60,6 +57,41 @@ public final class JsDebugSessions {
     }
     throw new IOException("js-debug never requested the child debug session"
                           + " (no startDebugging within " + PARENT_HANDSHAKE_TIMEOUT_MILLIS / 1000 + "s)");
+  }
+
+  /** A js-debug session's parts: the adapter, the parent connection, the child configuration the parent handed over and the mux over the first child. */
+  public record Session(AdapterProcess adapter, DapClient parent, Map<String, Object> childConfiguration, JsDebugSessionMux mux) {
+  }
+
+  /**
+   * Starts js-debug on the node executable, runs the parent handshake for
+   * the lane's configuration and wires the first child (page or process) into
+   * a mux - the sequence the browser and node backends share. The adapter is
+   * torn down again when the handshake fails.
+   */
+  public static Session open(Path nodeExecutable, Path dapServerJs, String adapterId, Map<String, Object> parentConfig) throws IOException {
+    AdapterProcess adapter = JsAdapterLauncher.launchJsDebug(nodeExecutable, dapServerJs);
+    DapClient parent = null;
+    try {
+      parent = connectWithRetry(adapter.port());
+      Map<String, Object> childConfig = parentHandshake(parent, adapterId, parentConfig);
+      DapClient child = connectWithRetry(adapter.port());
+      return new Session(adapter, parent, childConfig, new JsDebugSessionMux(parent, child, adapter.port(), adapterId));
+    } catch (IOException e) {
+      closeSession(null, parent, adapter.process());
+      throw e;
+    }
+  }
+
+  private static Map<String, Object> parentHandshake(DapClient parent, String adapterId, Map<String, Object> parentConfig) throws IOException {
+    try {
+      return runParentHandshake(parent, adapterId, parentConfig);
+    } catch (IOException e) {
+      throw new IOException("The js-debug parent session failed: " + e.getMessage(), e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while starting the js-debug session", e);
+    }
   }
 
   // The adapters announce their port slightly BEFORE the listener accepts;
