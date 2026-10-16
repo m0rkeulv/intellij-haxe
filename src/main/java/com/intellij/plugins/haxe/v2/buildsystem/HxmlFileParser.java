@@ -60,9 +60,10 @@ public final class HxmlFileParser {
 
   private static final Set<String> LIBRARY_FLAGS = Set.of("-lib", "--library", "-L");
   private static final Set<String> CLASSPATH_FLAGS = Set.of("-cp", "-p", "--class-path");
-  private static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
-  /** What {@code -debug} defines, as {@code -D debug} would. */
-  private static final HaxeDefine DEBUG_DEFINE = new HaxeDefine("debug", null);
+  /** The debug flag's two spellings; the flag defines {@link #DEBUG_DEFINE_NAME} as {@code -D debug} would. */
+  public static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
+  public static final String DEBUG_DEFINE_NAME = "debug";
+  private static final HaxeDefine DEBUG_DEFINE = new HaxeDefine(DEBUG_DEFINE_NAME, null);
   private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
 
   private HxmlFileParser() {

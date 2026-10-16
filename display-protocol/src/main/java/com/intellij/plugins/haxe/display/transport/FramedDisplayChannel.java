@@ -68,6 +68,7 @@ public final class FramedDisplayChannel implements DisplayChannel, Closeable {
   }
 
   /** Whether a failed exchange closed the channel; a broken channel never recovers. */
+  @Override
   public boolean isBroken() {
     return broken;
   }

@@ -12,12 +12,17 @@ import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Run configurations: chained process handler")
@@ -54,6 +59,24 @@ public class HaxeChainedProcessHandlerTest extends HaxeLightFixtureTestCase {
     assertFalse(output.contains("second"), output);
   }
 
+  /** The console takes the input stream when it attaches, before any step runs; what it types later must reach the running step. */
+  @Test
+  @DisplayName("console input taken before the first step reaches the running step")
+  public void testConsoleInputTakenBeforeTheFirstStepReachesTheRunningStep() throws IOException {
+    RecordingStep step = new RecordingStep();
+    HaxeChainedProcessHandler chain = new HaxeChainedProcessHandler(List.of(new HaxeChainedProcessHandler.Step("step", () -> step)));
+    OutputStream consoleInput = chain.getProcessInput();
+    assertNotNull(consoleInput);
+
+    chain.startNotify();
+    consoleInput.write("y\n".getBytes(StandardCharsets.UTF_8));
+    consoleInput.flush();
+    step.finish();
+
+    assertTrue(chain.waitFor(10_000), "the chain must end");
+    assertEquals("y\n", step.input.toString(StandardCharsets.UTF_8));
+  }
+
   private static HaxeChainedProcessHandler.Step step(String header, String argument) {
     return new HaxeChainedProcessHandler.Step(header, () -> startJava(argument));
   }
@@ -77,6 +100,35 @@ public class HaxeChainedProcessHandlerTest extends HaxeLightFixtureTestCase {
     assertTrue(chain.waitFor(60_000), "the chain must end");
     synchronized (output) {
       return output.toString();
+    }
+  }
+
+  /** A step that records what the console writes into it and ends when told. */
+  private static final class RecordingStep extends ProcessHandler {
+    final ByteArrayOutputStream input = new ByteArrayOutputStream();
+
+    void finish() {
+      notifyProcessTerminated(0);
+    }
+
+    @Override
+    protected void destroyProcessImpl() {
+      notifyProcessTerminated(-1);
+    }
+
+    @Override
+    protected void detachProcessImpl() {
+      notifyProcessDetached();
+    }
+
+    @Override
+    public boolean detachIsDefault() {
+      return false;
+    }
+
+    @Override
+    public @NotNull OutputStream getProcessInput() {
+      return input;
     }
   }
 }

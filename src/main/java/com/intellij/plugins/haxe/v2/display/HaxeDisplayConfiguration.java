@@ -4,6 +4,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.DefineOverride;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeIdeOverrides;
@@ -14,6 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,15 +31,29 @@ import java.util.Set;
 public final class HaxeDisplayConfiguration {
 
   /**
-   * A build file's IDE overrides in argument form: the names of the defines
-   * to remove, the {@code -D} arguments of the defines to set, and the custom
-   * target to compile for, null when none is forwarded.
+   * A build file's IDE overrides in argument form: the defines to remove, by
+   * compiler name (the name {@code #if} looks up: dashes become underscores,
+   * whatever spelling was given), the {@code -D} arguments of the defines to
+   * set, and the custom target to compile for (null when none is forwarded).
    */
   public record OverrideArguments(@NotNull Set<String> removedNames,
                                    @NotNull List<String> defineArgs,
                                    @Nullable String customTarget) {
 
     public static final OverrideArguments EMPTY = new OverrideArguments(Set.of(), List.of(), null);
+
+    public OverrideArguments {
+      removedNames = compilerNames(removedNames);
+    }
+
+    @NotNull
+    private static Set<String> compilerNames(@NotNull Set<String> names) {
+      Set<String> normalized = new LinkedHashSet<>();
+      for (String name : names) {
+        normalized.add(HaxeDefine.compilerName(name));
+      }
+      return Collections.unmodifiableSet(normalized);
+    }
 
     public boolean isEmpty() {
       return removedNames.isEmpty() && defineArgs.isEmpty() && customTarget == null;
@@ -97,10 +113,12 @@ public final class HaxeDisplayConfiguration {
 
   /// Applies the overrides to the build's base arguments. SETs are simply
   /// appended, because a later `-D` wins over an earlier value of the same
-  /// define. A REMOVE has no command-line form. The hxml references are
-  /// therefore expanded one level, since a reference can hide the `-D` lines
-  /// to strip, and the matching define pairs are dropped. A forwarded custom
-  /// target comes last.
+  /// define. A REMOVE has no command-line form, so the matching `-D` pairs
+  /// are dropped instead, after expanding the hxml references (nested ones
+  /// included), since a reference can hide the `-D` lines to strip. Defines
+  /// match by compiler name, as in the editor's define context, and the
+  /// debug flag counts as the define `debug`. A forwarded custom target
+  /// comes last.
   @NotNull
   public static List<String> applyOverrides(@NotNull List<String> baseArgs, @NotNull OverrideArguments overrides) {
     if (overrides.isEmpty()) return baseArgs;
@@ -119,22 +137,26 @@ public final class HaxeDisplayConfiguration {
   }
 
   private static List<String> withoutRemovedDefines(@NotNull List<String> args, @NotNull Set<String> removedNames) {
+    boolean debugRemoved = removedNames.contains(HxmlFileParser.DEBUG_DEFINE_NAME);
     List<String> kept = new ArrayList<>(args.size());
     for (int i = 0; i < args.size(); i++) {
       String arg = args.get(i);
+      if (debugRemoved && HxmlFileParser.DEBUG_FLAGS.contains(arg)) continue;
       boolean isDefineFlag = HxmlFileParser.DEFINE_FLAGS.contains(arg);
-      if (isDefineFlag && i + 1 < args.size()) {
-        String value = args.get(i + 1);
-        // the define's name is everything before the optional =value
-        int equals = value.indexOf('=');
-        String name = equals >= 0 ? value.substring(0, equals) : value;
-        if (removedNames.contains(name)) {
-          i++;
-          continue;
-        }
+      if (isDefineFlag && i + 1 < args.size() && removedNames.contains(definedName(args.get(i + 1)))) {
+        i++;
+        continue;
       }
       kept.add(arg);
     }
     return kept;
+  }
+
+  /** The compiler name of the define a {@code -D} value sets: everything before the optional {@code =value}, dashes as underscores. */
+  @NotNull
+  private static String definedName(@NotNull String defineValue) {
+    int equals = defineValue.indexOf('=');
+    String name = equals >= 0 ? defineValue.substring(0, equals) : defineValue;
+    return HaxeDefine.compilerName(name);
   }
 }

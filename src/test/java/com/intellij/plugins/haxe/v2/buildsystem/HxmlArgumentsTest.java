@@ -52,6 +52,40 @@ public class HxmlArgumentsTest {
   }
 
   @Test
+  @DisplayName("nested hxml references expand too")
+  public void testNestedHxmlReferencesExpandToo(@TempDir Path projectDir) throws IOException {
+    Files.writeString(projectDir.resolve("build.hxml"), """
+      common.hxml
+      -main Main
+      """);
+    Files.writeString(projectDir.resolve("common.hxml"), """
+      -cp src
+      -D shared
+      """);
+
+    List<String> expanded = HxmlArguments.expandReferences(List.of("--cwd", projectDir.toString(), "build.hxml"));
+
+    assertEquals(List.of("--cwd", projectDir.toString(), "-cp", "src", "-D", "shared", "-main", "Main"), expanded);
+  }
+
+  @Test
+  @DisplayName("an include cycle expands each file once")
+  public void testAnIncludeCycleExpandsEachFileOnce(@TempDir Path projectDir) throws IOException {
+    Files.writeString(projectDir.resolve("a.hxml"), """
+      -D a
+      b.hxml
+      """);
+    Files.writeString(projectDir.resolve("b.hxml"), """
+      -D b
+      a.hxml
+      """);
+
+    List<String> expanded = HxmlArguments.expandReferences(List.of("--cwd", projectDir.toString(), "a.hxml"));
+
+    assertEquals(List.of("--cwd", projectDir.toString(), "-D", "a", "-D", "b", "a.hxml"), expanded);
+  }
+
+  @Test
   @DisplayName("unreadable hxml reference is kept as-is")
   public void testUnreadableHxmlReferenceIsKeptAsIs() {
     List<String> expanded = HxmlArguments.expandReferences(List.of("missing.hxml", "-main", "Main"));

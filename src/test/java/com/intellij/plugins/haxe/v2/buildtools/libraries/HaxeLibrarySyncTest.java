@@ -2,8 +2,10 @@ package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.haxelib.HaxelibNameUtil;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFilesStore;
@@ -89,6 +91,19 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
 
     assertTrue(names.contains("tink_core") && names.contains("hxnodejs"),
                "a file resolves under its own build, so both builds' libraries attach; got: " + names);
+  }
+
+  /** The fixture's module has the V1 module type; once it carries the legacy engine's entries, that engine owns its libraries and the sync adds none, or they would appear twice. */
+  @Test
+  @DisplayName("a module the legacy engine equips gets no dependencies from the sync")
+  public void testAModuleTheLegacyEngineEquipsGetsNoDependenciesFromTheSync() {
+    registerTestsBuildInSubfolder();
+    String legacyEntry = HaxelibNameUtil.stringifyHaxelib("utest:1.0.0");
+    ModuleRootModificationUtil.addModuleLibrary(myFixture.getModule(), legacyEntry, List.of(), List.of());
+
+    List<String> names = collectedDependencyNames();
+
+    assertTrue(names.isEmpty(), "the legacy engine owns the module's libraries, got: " + names);
   }
 
   /** The only build file sits in tests/ (registered manually) with its -libs behind includes. */

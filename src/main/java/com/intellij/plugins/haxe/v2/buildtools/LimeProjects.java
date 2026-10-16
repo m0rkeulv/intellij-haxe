@@ -12,7 +12,9 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.config.FrameworkTarget;
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.config.LimeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
@@ -47,6 +49,8 @@ public final class LimeProjects {
 
   /** The target flags whose packaged app is a host-launchable binary (see {@link #packagedBinary}). */
   public static final Set<String> HOST_LAUNCHABLE_TARGETS = Set.of("neko", "hl", "cpp", "windows", "linux", "mac");
+  /** The bytecode a lime HL package runs: the obj bytecode copied into bin under this name, beside the renamed hl runtime. */
+  public static final String HL_BOOT_FILE = "hlboot.dat";
 
   /** The target flags whose packaged artifact is a swf, hosted under adl for test runs. */
   public static final Set<String> FLASH_FAMILY_TARGETS = Set.of("flash", "air");
@@ -285,18 +289,20 @@ public final class LimeProjects {
       .normalize();
   }
 
-  /** The haxe compilation target behind a lime CLI target id, or null for an unknown id. */
+  /**
+   * The haxe compilation target behind a lime CLI target id: the mapping of
+   * {@link LimeTarget} (the targets the settings offer), plus the ids the
+   * tool accepts that the settings do not list. Null for an unknown id.
+   */
   @Nullable
   public static HaxeTarget targetFor(@NotNull String targetFlag) {
+    HaxeTarget listed = FrameworkTarget.outputTargetFor(LimeTarget.values(), targetFlag);
+    if (listed != null) return listed;
     return switch (targetFlag) {
-      case "hl" -> HaxeTarget.HL;
-      case "html5" -> HaxeTarget.JAVA_SCRIPT;
-      case "flash", "air" -> HaxeTarget.FLASH;
-      case "neko" -> HaxeTarget.NEKO;
-      case "java" -> HaxeTarget.JAVA;
+      case "cpp" -> HaxeTarget.CPP;
       case "cppia" -> HaxeTarget.CPPIA;
+      case "java" -> HaxeTarget.JAVA;
       case "cs" -> HaxeTarget.CSHARP;
-      case "cpp", "windows", "mac", "linux", "android", "ios" -> HaxeTarget.CPP;
       default -> null;
     };
   }
@@ -308,10 +314,9 @@ public final class LimeProjects {
    * build ships a renamed copy of the hl runtime beside its hlboot.dat — for
    * all host targets the packaged binary itself is what runs. A mac build
    * packages a {@code .app} bundle; the binary is the executable inside it.
-   * Null when the target is not host-launchable.
-   * TODO honour a {@code <platform>.output-directory} config value here as
-   *  {@link #relativeTargetOutput} does (the test lane reads the project xml
-   *  directly, without the parser tool's evaluation)
+   * Null when the target is not host-launchable. Reads the xml alone, so a
+   * {@code <platform>.output-directory} config value is invisible here; the
+   * overload taking the EVALUATED output honours it.
    */
   @Nullable
   public static Path packagedBinary(@NotNull VirtualFile projectFile, @NotNull String content, @NotNull String targetFlag) {
@@ -320,6 +325,34 @@ public final class LimeProjects {
     return exportBinDirectory(projectFile, content, targetDirectory(platformTarget))
       .resolve(packagedLauncher(platformTarget, appFile(content)))
       .normalize();
+  }
+
+  /**
+   * The launchable binary behind a host target's EVALUATED output (the path
+   * the parser tool reports, honouring the project's output-directory):
+   * desktop and neko evaluations name the launcher itself; an HL evaluation
+   * ({@code obj/ApplicationMain.hl}) and an output naming the obj directory
+   * itself mean the launcher in {@code bin} beside {@code obj}.
+   * Null when the target is not host-launchable.
+   */
+  @Nullable
+  public static Path packagedBinary(@NotNull Path evaluatedOutput, @NotNull String targetFlag, @NotNull String appFile) {
+    if (!HOST_LAUNCHABLE_TARGETS.contains(targetFlag)) return null;
+    Path binDir = binDirBesideObj(evaluatedOutput);
+    if (binDir == null) return evaluatedOutput;
+    return binDir.resolve(packagedLauncher(platformTarget(targetFlag), appFile)).normalize();
+  }
+
+  /** The bin directory beside obj when the evaluated output is the obj directory or a file directly in it; null otherwise. */
+  @Nullable
+  public static Path binDirBesideObj(@NotNull Path evaluatedOutput) {
+    Path objDir = isObjDirectory(evaluatedOutput) ? evaluatedOutput : evaluatedOutput.getParent();
+    if (objDir == null || !isObjDirectory(objDir)) return null;
+    return objDir.resolveSibling("bin");
+  }
+
+  private static boolean isObjDirectory(@NotNull Path path) {
+    return "obj".equals(String.valueOf(path.getFileName()));
   }
 
   /**

@@ -115,6 +115,11 @@ public class HaxelibProjectUpdater {
     return INSTANCE;
   }
 
+  /** Whether the legacy engine serves the project: it tracks projects with V1 (HAXE_MODULE) modules and equips their libraries itself. */
+  public static boolean tracksProject(@NotNull Project project) {
+    return getInstance().findProjectTracker(project) != null;
+  }
+
   /**
    * Adds a new project to the manager.  This is normally called in response to a
    * ModuleComponent.openProject() notification.  Multiple modules referencing

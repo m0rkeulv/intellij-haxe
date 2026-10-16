@@ -221,7 +221,7 @@ public final class HaxeCompilerInlayService implements Disposable {
     args.add("--no-output");
     long started = System.currentTimeMillis();
     try {
-      List<TypeBlueprint> types = connected.client().compiledTypes(args);
+      List<TypeBlueprint> types = connected.client().compiledTypes(args, HaxeCompilerDisplayService.CONTEXT_COMPILE_TIMEOUT_MS);
       HaxeCompiledMembers members =
         HaxeCompiledMembers.of(types, workDirectoryOf(connected.args()), SystemInfo.isFileSystemCaseSensitive, HaxeCompilerInlayService::fileBytes);
       membersByContext.put(key, new ContextMembers(buildStamp, saved, members));

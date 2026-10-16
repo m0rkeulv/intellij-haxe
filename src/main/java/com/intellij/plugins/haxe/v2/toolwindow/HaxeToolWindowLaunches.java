@@ -67,7 +67,8 @@ public final class HaxeToolWindowLaunches {
         project, compileCommand.containerId(), compileCommand.connectEligible(), compileCommand.command());
       ApplicationManager.getApplication().invokeLater(() -> {
         if (!project.isDisposed()) {
-          HaxeConsoleCommandRunner.run(project, compileCommand.display(), command, compileCommand.workDirectory());
+          HaxeConsoleCommandRunner.run(project, compileCommand.containerId(), compileCommand.display(), command,
+                                       compileCommand.workDirectory());
         }
       });
     });
@@ -112,7 +113,7 @@ public final class HaxeToolWindowLaunches {
     // lock the runner's save-all needs; invokeLater re-enters with it
     ApplicationManager.getApplication().invokeLater(() -> {
       if (!project.isDisposed()) {
-        HaxeConsoleCommandRunner.run(project, toolNode.name(), toolNode.command(), toolNode.workDirectory());
+        HaxeConsoleCommandRunner.run(project, toolNode.containerId(), toolNode.name(), toolNode.command(), toolNode.workDirectory());
       }
     });
   }

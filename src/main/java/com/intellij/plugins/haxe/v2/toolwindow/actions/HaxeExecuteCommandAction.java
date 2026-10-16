@@ -10,7 +10,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeConsoleCommandRunner;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
@@ -47,10 +49,13 @@ public final class HaxeExecuteCommandAction extends DumbAwareAction {
     if (StringUtil.isEmptyOrSpaces(arguments)) return;
     properties.setValue(LAST_COMMAND_KEY, arguments);
 
+    // the project node's container: its environment SDK, else the Build Tools default
+    String containerId = HaxeContainers.projectNodeContainerId(project);
+    String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     List<String> command = new ArrayList<>();
-    command.add(HaxeToolPathResolver.resolveHaxeExecutable(project));
+    command.add(HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName));
     command.addAll(ParametersListUtil.parse(arguments.trim()));
-    HaxeConsoleCommandRunner.run(project, "haxe " + arguments.trim(), command, project.getBasePath());
+    HaxeConsoleCommandRunner.run(project, containerId, "haxe " + arguments.trim(), command, project.getBasePath());
   }
 
   @Override

@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.ide.trustedProjects.TrustedProjects;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -45,6 +46,19 @@ public class HaxeCompilerDisplayServiceTest extends HaxeLightFixtureTestCase {
     HaxeCompilerDisplayService.getInstance(getProject()).clearCaches();
     HaxeActiveBuildFileStore.getInstance(getProject()).loadState(new HaxeActiveBuildFileStore.State());
     HaxeContextFailures.getInstance(getProject()).record(CONTAINER_ID, null);
+  }
+
+  /** Resolving a lime context's arguments runs the project's tool, so the gate comes before that step. */
+  @Test
+  @DisplayName("untrusted project may not use the server")
+  public void testUntrustedProjectMayNotUseTheServer() {
+    TrustedProjects.setProjectTrusted(getProject(), false);
+    try {
+      assertFalse(displayService().mayUseServer());
+    }
+    finally {
+      TrustedProjects.setProjectTrusted(getProject(), true);
+    }
   }
 
   @Test

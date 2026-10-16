@@ -48,27 +48,43 @@ public final class HaxeToolPathResolver {
     return HaxeSdkUtilBase.getExecutableName("haxe");
   }
 
-  /** Absolute path to haxelib: the Build Tools setting when set, else the SDK's copy, else PATH lookup. */
+  /** Absolute path to haxelib for the project default SDK; see {@link #resolveHaxelibExecutable(Project, String)}. */
   @NotNull
   public static String resolveHaxelibExecutable(@NotNull Project project) {
     return resolveHaxelibExecutable(project, null);
   }
 
-  /** Like {@link #resolveHaxelibExecutable(Project)}, preferring the named SDK (a container's environment SDK). */
+  /**
+   * Absolute path to haxelib, preferring the named SDK (a container's
+   * environment SDK): the Build Tools override when set, else the SDK's own
+   * (its configured haxelib, else the copy in its home), else the PATH copy,
+   * else the bare name for a PATH lookup at launch. Every v2 haxelib call
+   * resolves through here, so installs, the installed-library list and
+   * {@code haxelib path} agree on the haxelib.
+   */
   @NotNull
   public static String resolveHaxelibExecutable(@NotNull Project project, @Nullable String preferredSdkName) {
     String configured = HaxeBuildToolSettings.getInstance(project).getHaxelibPath();
     if (!configured.isEmpty()) {
-      return configured;
+      return configuredOverride(configured, "haxelib");
     }
-    Sdk sdk = findSdk(project, preferredSdkName);
-    if (sdk != null && sdk.getHomePath() != null) {
-      String haxelibPath = HaxeSdkUtilBase.getHaxelibPathByFolderPath(sdk.getHomePath());
-      if (haxelibPath != null) {
-        return haxelibPath;
-      }
+    String fromSdk = sdkHaxelib(findSdk(project, preferredSdkName));
+    if (fromSdk != null) {
+      return fromSdk;
     }
-    return HaxeSdkUtilBase.getExecutableName("haxelib");
+    String onPath = pathDetectedExecutable("haxelib");
+    return onPath != null ? onPath : HaxeSdkUtilBase.getExecutableName("haxelib");
+  }
+
+  /** The SDK's haxelib: its configured haxelib (an executable, or the directory holding one) when that exists, else the copy in the SDK home; null without either. */
+  @Nullable
+  static String sdkHaxelib(@Nullable Sdk sdk) {
+    if (sdk == null) return null;
+    if (sdk.getSdkAdditionalData() instanceof HaxeSdkData data) {
+      Path configured = executableOrInDirectory(data.getHaxelibPath(), "haxelib");
+      if (configured != null) return configured.toString();
+    }
+    return sdk.getHomePath() == null ? null : HaxeSdkUtilBase.getHaxelibPathByFolderPath(sdk.getHomePath());
   }
 
   /**
@@ -206,9 +222,7 @@ public final class HaxeToolPathResolver {
     }
     HaxeSdkData data = sdk != null && sdk.getSdkAdditionalData() instanceof HaxeSdkData sdkData ? sdkData : null;
 
-    String haxelib = sdk != null && sdk.getHomePath() != null
-                     ? HaxeSdkUtilBase.getHaxelibPathByFolderPath(sdk.getHomePath())
-                     : null;
+    String haxelib = sdkHaxelib(sdk);
     if (haxelib == null) {
       haxelib = pathDetectedExecutable("haxelib");
     }
@@ -272,7 +286,7 @@ public final class HaxeToolPathResolver {
 
   /** The configured value may point at the executable itself or its directory. */
   @Nullable
-  private static Path executableOrInDirectory(@Nullable String configuredPath, @NotNull String executableName) {
+  static Path executableOrInDirectory(@Nullable String configuredPath, @NotNull String executableName) {
     if (configuredPath == null || configuredPath.isBlank()) return null;
     Path candidate = Path.of(configuredPath);
     if (Files.isRegularFile(candidate)) return candidate;
@@ -280,8 +294,9 @@ public final class HaxeToolPathResolver {
     return Files.isRegularFile(inDirectory) ? inDirectory : null;
   }
 
+  /** The named SDK when registered, else {@link #findConfiguredSdk}. */
   @Nullable
-  private static Sdk findSdk(@NotNull Project project, @Nullable String preferredSdkName) {
+  public static Sdk findSdk(@NotNull Project project, @Nullable String preferredSdkName) {
     if (preferredSdkName != null) {
       Sdk preferred = ProjectJdkTable.getInstance().findJdk(preferredSdkName);
       if (preferred != null) {

@@ -3,7 +3,9 @@ package com.intellij.plugins.haxe.v2.buildtools;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.config.FrameworkTarget;
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.plugins.haxe.config.NMETarget;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetOptions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
@@ -101,14 +103,19 @@ public final class NmeProjects {
     return targetArtifact(targetFlag, appFile, outputRoot);
   }
 
-  /** The haxe compilation target behind an nme CLI target id ("cpp" is nme's host-desktop word), or null for an unknown id. */
+  /**
+   * The haxe compilation target behind an nme CLI target id: the mapping of
+   * {@link NMETarget} (the targets the settings offer; "cpp" is nme's
+   * host-desktop word), plus the ids the tool accepts that the settings do
+   * not list. Null for an unknown id.
+   */
   @Nullable
   public static HaxeTarget targetFor(@NotNull String targetFlag) {
+    HaxeTarget listed = FrameworkTarget.outputTargetFor(NMETarget.values(), targetFlag);
+    if (listed != null) return listed;
     return switch (targetFlag) {
-      case "neko" -> HaxeTarget.NEKO;
-      case "cpp", "windows", "mac", "linux", "android", "ios" -> HaxeTarget.CPP;
-      case "flash", "air" -> HaxeTarget.FLASH;
-      case "html5", "js", "jsprime" -> HaxeTarget.JAVA_SCRIPT;
+      case "air" -> HaxeTarget.FLASH;
+      case "js", "jsprime" -> HaxeTarget.JAVA_SCRIPT;
       default -> null;
     };
   }

@@ -2,17 +2,20 @@ package com.intellij.plugins.haxe.v2.buildsystem;
 
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * hxml content as a compiler argument list: line parsing and one-level
- * expansion of hxml file references. The structured view (target, defines,
- * libraries) is {@link HxmlFileParser}.
+ * hxml content as a compiler argument list: line parsing and expansion of
+ * hxml file references. The structured view (target, defines, libraries) is
+ * {@link HxmlFileParser}.
  */
 @CustomLog
 public final class HxmlArguments {
@@ -49,34 +52,51 @@ public final class HxmlArguments {
   /// Args may carry an .hxml file REFERENCE instead of flags (an HXML build
   /// context is `["--cwd", dir, "build.hxml"]` — the compiler expands
   /// the file server-side). Callers that need to SEE the real flags (output
-  /// redirection, define removal) expand one level here, resolving against
-  /// the preceding `--cwd`. A reference nested inside an expanded file stays
-  /// as-is: its flags remain invisible to the caller. An unreadable reference
-  /// is kept unchanged.
+  /// redirection, define removal) expand them here. A reference resolves
+  /// against the preceding `--cwd`, and references nested in an expanded
+  /// file expand too: a define two includes down is as real to the compiler
+  /// as a top-level one. A reference already being expanded (an include
+  /// cycle) and an unreadable reference are kept unchanged.
   @NotNull
   public static List<String> expandReferences(@NotNull List<String> args) {
     List<String> expanded = new ArrayList<>(args.size() + 16);
-    Path cwd = null;
+    expandInto(args, null, new HashSet<>(), expanded);
+    return expanded;
+  }
+
+  private static void expandInto(@NotNull List<String> args,
+                                 @Nullable Path cwd,
+                                 @NotNull Set<Path> expanding,
+                                 @NotNull List<String> out) {
     for (int i = 0; i < args.size(); i++) {
       String arg = args.get(i);
       if (arg.equals("--cwd") && i + 1 < args.size()) {
         cwd = Path.of(args.get(i + 1));
-        expanded.add(arg);
-        expanded.add(args.get(i + 1));
+        out.add(arg);
+        out.add(args.get(i + 1));
         i++;
         continue;
       }
-      if (arg.endsWith(".hxml")) {
-        Path hxmlFile = cwd != null ? cwd.resolve(arg) : Path.of(arg);
-        try {
-          expanded.addAll(parseLines(Files.readAllLines(hxmlFile)));
-          continue;
-        } catch (IOException e) {
-          log.info("cannot expand hxml reference " + hxmlFile + ": " + e.getMessage());
-        }
-      }
-      expanded.add(arg);
+      if (arg.endsWith(".hxml") && expandReference(arg, cwd, expanding, out)) continue;
+      out.add(arg);
     }
-    return expanded;
+  }
+
+  /** Expands one reference into {@code out}; false when it is unreadable or already being expanded. */
+  private static boolean expandReference(@NotNull String reference,
+                                         @Nullable Path cwd,
+                                         @NotNull Set<Path> expanding,
+                                         @NotNull List<String> out) {
+    Path hxmlFile = (cwd != null ? cwd.resolve(reference) : Path.of(reference)).normalize();
+    if (!expanding.add(hxmlFile)) return false;
+    try {
+      expandInto(parseLines(Files.readAllLines(hxmlFile)), cwd, expanding, out);
+      return true;
+    } catch (IOException e) {
+      log.info("cannot expand hxml reference " + hxmlFile + ": " + e.getMessage());
+      return false;
+    } finally {
+      expanding.remove(hxmlFile);
+    }
   }
 }

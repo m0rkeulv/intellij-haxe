@@ -12,8 +12,6 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectSync
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust
 import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeSourceRootsInitializer
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches
 
 /**
@@ -32,7 +30,6 @@ class HaxeV2ProjectActivity : ProjectActivity {
     tracker.activate(projectAware.projectId)
 
     HaxeSourceRootsInitializer.initialize(project)
-    initializeActiveBuildFile(project)
     applyEffectiveSdks(project)
     rehydrateWhenTrusted(project)
   }
@@ -69,16 +66,5 @@ class HaxeV2ProjectActivity : ProjectActivity {
         applier.applyAsync(moduleName, sdkName)
       }
     }
-  }
-
-  /** A project with exactly ONE build file and no active file gets it activated; ambiguity stays with the user. */
-  private suspend fun initializeActiveBuildFile(project: Project) {
-    val store = HaxeActiveBuildFileStore.getInstance(project)
-    if (!store.activeFilePath.isNullOrBlank()) return
-    val buildFiles = smartReadAction(project) {
-      ModuleManager.getInstance(project).modules.flatMap { HaxeBuildFileScanner.scan(it) }
-    }
-    val single = buildFiles.singleOrNull() ?: return
-    store.setActiveFile(single.file().path)
   }
 }

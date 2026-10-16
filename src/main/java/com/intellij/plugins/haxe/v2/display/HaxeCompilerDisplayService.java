@@ -30,9 +30,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextListener;
+import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiModificationTracker;
@@ -108,11 +106,25 @@ public final class HaxeCompilerDisplayService implements Disposable {
   private record Endpoint(@NotNull HaxeDisplayClient client, int id, @NotNull String metricsId) {
   }
 
-  private record CachedLimeArgs(long fileStamp, @NotNull String targetFlag, @NotNull List<String> args) {
+  /**
+   * One {@code lime display} outcome per project file and target. A failure
+   * is kept for a cooldown, so a broken tool is not re-run on every request.
+   */
+  private record CachedLimeArgs(long fileStamp, @NotNull String targetFlag, @Nullable List<String> args, long failedAtMs) {
+
+    boolean matches(@NotNull LimeDisplaySpec spec) {
+      return fileStamp == spec.fileStamp() && targetFlag.equals(spec.targetFlag());
+    }
+
+    boolean failureWithinCooldown(long nowMs) {
+      return args == null && nowMs - failedAtMs < LIME_FAILURE_COOLDOWN_MS;
+    }
   }
 
   private static final int LIME_DISPLAY_TIMEOUT_MS = 60_000;
-  private static final int CONTEXT_COMPILE_TIMEOUT_MS = 120_000;
+  private static final long LIME_FAILURE_COOLDOWN_MS = 30_000;
+  /** The read timeout of a whole-context compile (warm-up, inlay types, dump) on a cold server; a single display answer keeps the client's default. */
+  static final int CONTEXT_COMPILE_TIMEOUT_MS = 120_000;
 
   private final Project project;
   private final Map<String, CachedLimeArgs> limeArgsCache = new ConcurrentHashMap<>();
@@ -153,14 +165,30 @@ public final class HaxeCompilerDisplayService implements Disposable {
   }
 
   /**
+   * The key of the per-server state for the SDK's server (see
+   * {@link Connected#port()}): the listen port of its running display
+   * process in dedicated mode, else the shared server's port; -1 while
+   * nothing runs. Starts nothing, so it may run under the read lock.
+   */
+  int runningEndpointIdFor(@Nullable String sdkName) {
+    boolean dedicated =
+      HaxeCompilerSettings.getInstance(project).getDisplayConnectionMode() == HaxeDisplayConnectionMode.DEDICATED_PROCESS;
+    if (dedicated) {
+      int id = HaxeDisplayProcessManager.getInstance(project).runningIdFor(sdkName);
+      if (id > 0) return id;
+    }
+    return HaxeCompilationServerManager.getInstance(project).runningPortForSdk(sdkName);
+  }
+
+  /**
    * The haxe version of the server serving the given SDK; null while that
    * server does not run or has not answered an initialize yet. Each SDK has
    * its own server, so a mixed-version project asks per context.
    */
   @Nullable
   public InitializeResult.SemVer connectedHaxeVersion(@Nullable String sdkName) {
-    int port = HaxeCompilationServerManager.getInstance(project).runningPortForSdk(sdkName);
-    Capability known = port > 0 ? capabilities.get(port) : null;
+    int endpointId = runningEndpointIdFor(sdkName);
+    Capability known = endpointId > 0 ? capabilities.get(endpointId) : null;
     return known != null ? known.haxeVersion() : null;
   }
 
@@ -409,14 +437,14 @@ public final class HaxeCompilerDisplayService implements Disposable {
   @Nullable
   private List<String> limeArgsFor(@NotNull LimeDisplaySpec spec, @Nullable String sdkName) {
     String cacheKey = spec.directory() + "/" + spec.fileName();
+    long now = System.currentTimeMillis();
     CachedLimeArgs cached = limeArgsCache.get(cacheKey);
-    if (cached != null && cached.fileStamp() == spec.fileStamp() && cached.targetFlag().equals(spec.targetFlag())) {
-      return cached.args();
+    if (cached != null && cached.matches(spec)) {
+      if (cached.args() != null) return cached.args();
+      if (cached.failureWithinCooldown(now)) return null;
     }
     List<String> args = runLimeDisplay(spec, sdkName);
-    if (args != null) {
-      limeArgsCache.put(cacheKey, new CachedLimeArgs(spec.fileStamp(), spec.targetFlag(), args));
-    }
+    limeArgsCache.put(cacheKey, new CachedLimeArgs(spec.fileStamp(), spec.targetFlag(), args, args == null ? now : 0));
     return args;
   }
 
@@ -436,12 +464,14 @@ public final class HaxeCompilerDisplayService implements Disposable {
 
   /**
    * A client for the context's server, starting the server when needed. Null
-   * when the arguments cannot be resolved, the server does not start, or it
-   * does not support {@code method}. The supported methods are asked once
-   * per server. Background threads only.
+   * when the server is switched off or the project is not trusted, the
+   * arguments cannot be resolved, the server does not start, or it does not
+   * support {@code method}. The supported methods are asked once per server.
+   * Background threads only.
    */
   @Nullable
   Connected connectFor(@NotNull DisplayContext context, @NotNull String method) {
+    if (!mayUseServer()) return null;
     List<String> args = resolveArgs(context);
     if (args == null) return null;
     Endpoint endpoint = endpointFor(context.sdkName());
@@ -460,6 +490,17 @@ public final class HaxeCompilerDisplayService implements Disposable {
       capabilities.put(endpoint.id(), known);
     }
     return known.methods().contains(method) ? new Connected(client, args, endpoint.id()) : null;
+  }
+
+  /**
+   * Whether the server may be used at all: switched on, and the project
+   * trusted. Checked before the arguments are resolved, not only in the
+   * server managers, because resolving them can run project code
+   * ({@code lime display} runs the project's tool). Package-private for tests.
+   */
+  boolean mayUseServer() {
+    return HaxeBuildToolSettings.getInstance(project).isCompilationServerEnabled()
+           && HaxeProjectTrust.checkForBackgroundEvaluation(project);
   }
 
   /**
@@ -490,7 +531,8 @@ public final class HaxeCompilerDisplayService implements Disposable {
       try {
         return client.initialize(args);
       } catch (DisplayRequestException e) {
-        if (System.currentTimeMillis() > deadline) {
+        // a broken framed channel never recovers; only a server still binding its port earns another try
+        if (client.isChannelBroken() || System.currentTimeMillis() > deadline) {
           log.info("display initialize failed: " + e.getMessage());
           return null;
         }
@@ -551,7 +593,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
       DisplayResponse compiled = compileContext(connected);
       return compiled.hasError() ? contextCompileFailure(compiled) : null;
     }
-    String errors = contextErrors(connected.client().projectDiagnostics(connected.args()));
+    String errors = contextErrors(connected.client().projectDiagnostics(connected.args(), CONTEXT_COMPILE_TIMEOUT_MS));
     return errors.isEmpty() ? null : HaxeBundle.message("haxe.display.context.compile.failed", errors);
   }
 

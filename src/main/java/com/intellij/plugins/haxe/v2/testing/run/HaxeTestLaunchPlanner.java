@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.runner.debugger.hashlink.HlExecutableResolver;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeEffectiveBuildFileInfo;
 import com.intellij.plugins.haxe.v2.testing.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -101,7 +102,7 @@ final class HaxeTestLaunchPlanner {
     if (!packagedHl) return null;
     Path runtime = Path.of(plan.command().getFirst());
     Path binDirectory = runtime.getParent();
-    return binDirectory == null ? null : binDirectory.resolve("hlboot.dat");
+    return binDirectory == null ? null : binDirectory.resolve(LimeProjects.HL_BOOT_FILE);
   }
 
   @NotNull
@@ -347,7 +348,7 @@ final class HaxeTestLaunchPlanner {
       }
       return new Plan(List.of(webRoot.toString()), webRoot.toString(), false, HaxeTarget.JAVA_SCRIPT, null, true);
     }
-    Path binary = content == null ? null : LimeProjects.packagedBinary(file, content, targetFlag);
+    Path binary = packagedLimeBinary(project, file, type, content, targetFlag);
     if (binary == null) {
       boolean unrunnableTarget = !LimeProjects.HOST_LAUNCHABLE_TARGETS.contains(targetFlag);
       if (unrunnableTarget) {
@@ -357,6 +358,27 @@ final class HaxeTestLaunchPlanner {
     }
     String workDirectory = binary.getParent().toString();
     return new Plan(List.of(binary.toString()), workDirectory, false, HaxeTestCompileArguments.limeTarget(targetFlag), null);
+  }
+
+  /**
+   * The lime build's launchable binary: from the evaluated target output when
+   * the build tool has reported one (the parser tool's evaluation honours the
+   * project's {@code <platform>.output-directory}), else from the project xml
+   * alone, since configuration validation plans a launch too and the
+   * evaluation may not have landed yet. Null without the xml content or for a
+   * target that is not host-launchable.
+   */
+  @Nullable
+  private static Path packagedLimeBinary(@NotNull Project project,
+                                         @NotNull VirtualFile file,
+                                         @NotNull HaxeBuildFileType type,
+                                         @Nullable String content,
+                                         @NotNull String targetFlag) {
+    if (content == null) return null;
+    String targetOutput = HaxeEffectiveBuildFileInfo.of(project, new HaxeBuildFile(file, type)).targetOutput();
+    if (targetOutput == null) return LimeProjects.packagedBinary(file, content, targetFlag);
+    Path output = HaxeBuildWorkDirectories.resolve(project, file, targetOutput);
+    return LimeProjects.packagedBinary(output, targetFlag, LimeProjects.appFile(content));
   }
 
   /** An nmml tests build: compile through the nme tool, launch the packaged desktop/neko artifact. */

@@ -7,10 +7,19 @@ import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 
-/** Keeps every store entry keyed by a file path with its file when it, or a folder above it, moves or is renamed. */
+/**
+ * Keeps every store entry keyed by a file path with its file when it, or a
+ * folder above it, moves or is renamed (run configurations keep theirs in a
+ * tracker of their own, built on {@link #movesIn}).
+ */
 public final class HaxeBuildFileMoveTracker implements BulkFileListener {
+
+  /** A file or folder renamed or moved: every stored path at or below {@code oldPath} now lives at or below {@code newPath}. */
+  public record Move(@NotNull String oldPath, @NotNull String newPath) {
+  }
 
   private final Project project;
 
@@ -22,16 +31,26 @@ public final class HaxeBuildFileMoveTracker implements BulkFileListener {
   public void after(@NotNull List<? extends @NotNull VFileEvent> events) {
     if (project.isDisposed()) return;
     boolean changed = false;
-    for (VFileEvent event : events) {
-      changed |= switch (event) {
-        case VFileMoveEvent move -> moveStored(move.getOldPath(), move.getNewPath());
-        case VFilePropertyChangeEvent change when change.isRename() -> moveStored(change.getOldPath(), change.getNewPath());
-        default -> false;
-      };
+    for (Move move : movesIn(events)) {
+      changed |= moveStored(move.oldPath(), move.newPath());
     }
     if (changed) {
       HaxeBuildSettingsListener.publisher(project).buildFilesChanged();
     }
+  }
+
+  /** The moves among VFS events: a move event, or a property change that is a rename. */
+  @NotNull
+  public static List<Move> movesIn(@NotNull List<? extends VFileEvent> events) {
+    List<Move> moves = new ArrayList<>();
+    for (VFileEvent event : events) {
+      switch (event) {
+        case VFileMoveEvent move -> moves.add(new Move(move.getOldPath(), move.getNewPath()));
+        case VFilePropertyChangeEvent change when change.isRename() -> moves.add(new Move(change.getOldPath(), change.getNewPath()));
+        default -> { }
+      }
+    }
+    return moves;
   }
 
   private boolean moveStored(@NotNull String oldPath, @NotNull String newPath) {

@@ -8,8 +8,12 @@ import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Container identity for the v2 build model. A container is what environment
@@ -63,6 +67,34 @@ public final class HaxeContainers {
   public static String projectRootPath(@NotNull Project project) {
     VirtualFile baseDir = ProjectUtil.guessProjectDir(project);
     return baseDir == null ? null : baseDir.getPath();
+  }
+
+  /**
+   * The ids of the containers the tool window can show: the project node's
+   * container first, then every other module.
+   */
+  @NotNull
+  public static List<String> containerIds(@NotNull Project project) {
+    String projectNode = projectNodeContainerId(project);
+    List<String> ids = new ArrayList<>();
+    ids.add(projectNode);
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      if (!module.getName().equals(projectNode)) ids.add(module.getName());
+    }
+    return ids;
+  }
+
+  /**
+   * The id of the container the tool window's project node stands for: the
+   * module owning the project base dir, else the project-root container.
+   * Project-wide tool runs (installs, the installed-library list) use it, so
+   * they follow that container's environment SDK. Takes the read lock when
+   * the caller holds none.
+   */
+  @NotNull
+  public static String projectNodeContainerId(@NotNull Project project) {
+    Module rootModule = HaxeReadActions.compute(() -> projectRootModule(project));
+    return rootModule != null ? rootModule.getName() : PROJECT_ROOT_CONTAINER;
   }
 
   /**

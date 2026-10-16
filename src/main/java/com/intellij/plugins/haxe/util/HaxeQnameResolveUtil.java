@@ -51,33 +51,47 @@ public final class HaxeQnameResolveUtil {
     return false;
   }
 
+  /**
+   * Every class a dotted RUNTIME name denotes ({@code pkg.Cls} or
+   * {@code pkg.Cls.member}: package and class, without the module that
+   * declares the class), one per copy of the class the project knows, so a
+   * caller can pick by location. Empty for a name that qualifies no class
+   * ({@code fn@12}, {@code ?}). Call in a read action.
+   */
+  @NotNull
+  public static List<HaxeClass> findClassesByRuntimeName(@NotNull String qname, @NotNull Project project) {
+    FullyQualifiedInfo info = getRuntimeQualifiedInfo(qname);
+    return info == null ? List.of() : classesNamed(project, info);
+  }
+
   @Nullable
   private static PsiElement resolveRuntimeName(@NotNull Project project, @NotNull String value) {
     FullyQualifiedInfo info = getRuntimeQualifiedInfo(value);
     if (info == null) return null;
-
-    GlobalSearchScope scope = GlobalSearchScope.allScope(project);
-    List<HaxeClass> haxeClasses = HaxeClassNameUnifiedIndex.getByNameFiltered(info.className, project, scope)
-      .stream()
-      .filter(aClass -> {
-        String qualifiedName = aClass.getFullyQualifiedName();
-        FullyQualifiedInfo withNoModuleName = new FullyQualifiedInfo(qualifiedName).withModuleName(null);
-        return withNoModuleName.equals(info.toClassQualifiedName());
-      }).toList();
-
-    if (!haxeClasses.isEmpty()) {
-      HaxeClass haxeClass = haxeClasses.getFirst();
-      if (!info.hasMemberName()) {
-        return haxeClass;
-      }
-      String name = info.getMemberName();
-      HaxeBaseMemberModel member = haxeClass.getModel().getMember(name, null);
-      if (member != null) {
-        return member.getBasePsi();
-      }
+    List<HaxeClass> haxeClasses = classesNamed(project, info);
+    if (haxeClasses.isEmpty()) return null;
+    HaxeClass haxeClass = haxeClasses.getFirst();
+    if (!info.hasMemberName()) {
+      return haxeClass;
     }
+    HaxeBaseMemberModel member = haxeClass.getModel().getMember(info.getMemberName(), null);
+    return member != null ? member.getBasePsi() : null;
+  }
 
-    return null;
+  /** The indexed classes whose qualified name, module dropped, is the one the info names. */
+  @NotNull
+  private static List<HaxeClass> classesNamed(@NotNull Project project, @NotNull FullyQualifiedInfo info) {
+    GlobalSearchScope scope = GlobalSearchScope.allScope(project);
+    FullyQualifiedInfo wanted = info.toClassQualifiedName();
+    return HaxeClassNameUnifiedIndex.getByNameFiltered(info.className, project, scope)
+      .stream()
+      .filter(aClass -> isRuntimeNameOf(aClass, wanted))
+      .toList();
+  }
+
+  private static boolean isRuntimeNameOf(@NotNull HaxeClass aClass, @NotNull FullyQualifiedInfo wanted) {
+    FullyQualifiedInfo withNoModuleName = new FullyQualifiedInfo(aClass.getFullyQualifiedName()).withModuleName(null);
+    return withNoModuleName.equals(wanted);
   }
 
   @Nullable

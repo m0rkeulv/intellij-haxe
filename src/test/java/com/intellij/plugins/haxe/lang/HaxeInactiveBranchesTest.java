@@ -492,6 +492,9 @@ public class HaxeInactiveBranchesTest extends HaxeLightFixtureTestCase {
     arguments("hl_ver=1.11.0", "(hl_ver >= version(\"1.12.0\"))", false),
     arguments("haxe=4.3.7", "(haxe >= version(\"4.1.0\"))", true),
     arguments("haxe_ver=4.307", "(haxe_ver >= 4.1)", true),
+    // the compiler's numeric haxe_ver (4.3.7 is 4.307) compares at patch level
+    arguments("haxe_ver=4.307", "(haxe_ver >= 4.305)", true),
+    arguments("haxe_ver=4.307", "(haxe_ver >= 4.400)", false),
     arguments("v=1.2", "(v == 1.2)", true),
     arguments("", "(version(\"1.10.0\") > version(\"1.9.0\"))", true),
     arguments("", "(version(\"1.0.0-rc.1\") < version(\"1.0.0\"))", true),

@@ -105,12 +105,7 @@ final class HaxeToolWindowModelBuilder {
 
     // The active build file is a PROJECT-wide singleton: the IDE keeps one parse tree
     // per file, so conditional compilation can only follow one build configuration.
-    List<String> allPaths = rawContainers.stream()
-      .flatMap(raw -> raw.files().stream())
-      .map(entry -> entry.buildFile().file().getPath())
-      .toList();
-
-    String activePath = HaxeActiveBuildFileStore.getInstance(project).resolveActivePath(allPaths);
+    String activePath = HaxeKnownBuildFiles.effectiveActivePath(project);
 
     List<ContainerEntry> containers = new ArrayList<>();
     for (RawContainer raw : rawContainers) {
@@ -153,18 +148,9 @@ final class HaxeToolWindowModelBuilder {
     String haxelib = HaxeToolPathResolver.resolveHaxelibExecutable(project, environmentSdk);
     List<String> sources = sourceArguments(raw, rootDir);
 
-    if (rootDir.findChild(HaxeToolConfigs.CHECKSTYLE_CONFIG_NAME) != null) {
-      String name = HaxeBundle.message("haxe.toolwindow.tool.checkstyle");
-      List<String> command = toolCommand(haxelib, HaxeToolConfigs.CHECKSTYLE_HAXELIB, List.of(), sources);
-      tools.add(detectedTool(raw.id(), name, command, HaxeToolConfigs.CHECKSTYLE_CONFIG_NAME, workDirectory));
-    }
-    if (rootDir.findChild(HaxeToolConfigs.FORMATTER_CONFIG_NAME) != null) {
-      String formatName = HaxeBundle.message("haxe.toolwindow.tool.format");
-      String checkName = HaxeBundle.message("haxe.toolwindow.tool.format.check");
-      List<String> format = toolCommand(haxelib, HaxeToolConfigs.FORMATTER_HAXELIB, List.of(), sources);
-      List<String> check = toolCommand(haxelib, HaxeToolConfigs.FORMATTER_HAXELIB, List.of("--check"), sources);
-      tools.add(detectedTool(raw.id(), formatName, format, HaxeToolConfigs.FORMATTER_CONFIG_NAME, workDirectory));
-      tools.add(detectedTool(raw.id(), checkName, check, HaxeToolConfigs.FORMATTER_CONFIG_NAME, workDirectory));
+    for (HaxeDetectedTools.Spec spec : HaxeDetectedTools.in(rootDir)) {
+      List<String> command = HaxeToolConfigs.toolCommand(haxelib, spec.haxelib(), spec.modes(), sources);
+      tools.add(detectedTool(raw.id(), spec.name(), command, spec.configName(), workDirectory));
     }
     String projectRoot = HaxeContainers.projectRootPath(project);
     for (HaxeCustomToolsStore.CustomTool custom : HaxeCustomToolsStore.getInstance(project).getTools(raw.id())) {
@@ -174,18 +160,6 @@ final class HaxeToolWindowModelBuilder {
       tools.add(new ToolNode(raw.id(), custom.name(), command, toolWorkDirectory, custom.command(), true));
     }
     return tools;
-  }
-
-  /** {@code haxelib run <tool> [modes] -s <source>...}: mode flags (--check) go before the source list. */
-  @NotNull
-  private static List<String> toolCommand(@NotNull String haxelib, @NotNull String tool,
-                                          @NotNull List<String> modes, @NotNull List<String> sources) {
-    List<String> command = new ArrayList<>(List.of(haxelib, "run", tool));
-    command.addAll(modes);
-    for (String source : sources) {
-      command.addAll(List.of("-s", source));
-    }
-    return command;
   }
 
   /** The row's gray tail names the config file the tool was detected from, not the full command. */

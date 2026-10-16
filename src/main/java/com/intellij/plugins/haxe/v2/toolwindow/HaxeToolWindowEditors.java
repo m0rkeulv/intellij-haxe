@@ -32,7 +32,6 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.ListCellRenderer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * The settings edits tree rows offer: choosers, the custom-target prompt, the
@@ -148,19 +147,11 @@ public final class HaxeToolWindowEditors {
     }
   }
 
-  /**
-   * Stores the container's compile command. A module that does not own the
-   * active build file takes its libraries from the command's file, so a file
-   * change re-syncs them.
-   */
+  /** Stores the container's compile command; the module's libraries are the union of its build files, so no re-sync follows. */
   public static void applyCompileCommand(@NotNull Project project,
                                          @NotNull String containerId,
                                          @Nullable CompileCommand command) {
-    HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
-    String previousFile = buildFilePath(store.getCompileCommand(containerId));
-    boolean fileChanged = !Objects.equals(previousFile, buildFilePath(command));
-    store.setCompileCommand(containerId, command);
-    if (fileChanged) HaxeLibrarySync.sync(project, null);
+    HaxeEnvironmentStore.getInstance(project).setCompileCommand(containerId, command);
   }
 
   /** Toggles the container's server participation; while disabled project-wide, opens the settings page instead. */
@@ -223,11 +214,6 @@ public final class HaxeToolWindowEditors {
     boolean changed = index != store.getSelectedSection(buildFile, sectionNode.ids());
     store.setSelectedSection(buildFile, sectionNode.ids().get(index));
     if (changed) HaxeLibrarySync.sync(project, null);
-  }
-
-  @Nullable
-  private static String buildFilePath(@Nullable CompileCommand command) {
-    return command == null ? null : command.buildFilePath();
   }
 
   /** Section label first, its target/output descriptor grayed - one glance tells the sections apart. */

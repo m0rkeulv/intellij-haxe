@@ -9,6 +9,7 @@ import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibInstalledIndex;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerCaches;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -16,7 +17,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -140,7 +143,9 @@ public final class HaxeInstalledLibraries {
     VirtualFile workDir = ProjectUtil.guessProjectDir(project);
     if (sdk == null || workDir == null) return null;
 
-    HaxelibInstalledIndex index = HaxelibInstalledIndex.fetchFromHaxelib(sdk, workDir);
+    // the project-wide picture: the project node's haxelib, run from the project directory
+    String containerId = HaxeContainers.projectNodeContainerId(project);
+    HaxelibInstalledIndex index = HaxelibInstalledIndex.parse(HaxelibCommands.output(project, containerId, Path.of(workDir.getPath()), List.of("list")));
     Map<String, InstalledLibrary> byName = new HashMap<>();
     for (String name : index.getInstalledLibraries()) {
       InstalledLibrary library = new InstalledLibrary(index.getSelectedVersion(name), index.getInstalledVersions(name));

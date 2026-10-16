@@ -116,15 +116,18 @@ public final class HaxeBuildToolsConfigurable implements SearchableConfigurable 
       || panel.getServerPort() != settings.getCompilationServerPort()
       || !panel.getServerArguments().equals(settings.getCompilationServerArguments());
 
+    boolean haxelibChanged = !panel.getHaxelibPath().equals(settings.getHaxelibPath());
     settings.setSdkName(panel.getSelectedSdkName());
     if (sdkChanged) {
       // the default SDK is only real once it reaches the module entities -
       // resolution reads the project model, not this settings page
       applyDefaultSdkToModules();
-      // library classpaths come from the SDK's haxelib
-      HaxeLibrarySync.sync(project, null);
     }
     settings.setHaxelibPath(panel.getHaxelibPath());
+    if (sdkChanged || haxelibChanged) {
+      // library classpaths come from the haxelib the SDK and the override resolve to
+      HaxeLibrarySync.sync(project, null);
+    }
     settings.setNekoPath(panel.getNekoPath());
     settings.setHashlinkPath(panel.getHashlinkPath());
     settings.setNodePath(panel.getNodePath());

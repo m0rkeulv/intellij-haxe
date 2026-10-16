@@ -59,7 +59,6 @@ public final class HaxeGeneratedDumpService {
   record DumpBuild(@NotNull List<String> args, @NotNull HaxeTarget target) {
   }
 
-  private static final int DUMP_COMPILE_TIMEOUT_MS = 120_000;
   private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
   private static final int WINDOWS_MAX_PATH = 260;
   /** Room reserved below the dump root for {@code dump/<target>/<package path>/<Module>.dump}. */
@@ -117,7 +116,7 @@ public final class HaxeGeneratedDumpService {
 
     Path hlScratch = prepareHlScratchDir(dumpBuild);
     try {
-      DisplayResponse response = connected.client().exchange(dumpBuild.args(), DUMP_COMPILE_TIMEOUT_MS);
+      DisplayResponse response = connected.client().exchange(dumpBuild.args(), HaxeCompilerDisplayService.CONTEXT_COMPILE_TIMEOUT_MS);
       if (response.hasError()) {
         log.info("dump build reported errors: " + response.payload());
         return new Failed(HaxeBundle.message("haxe.generated.preview.failed.compile"));
