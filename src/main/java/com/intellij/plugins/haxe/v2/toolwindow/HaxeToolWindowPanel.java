@@ -612,25 +612,16 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     }
   }
 
-  /** Delete removes the selected removable row — build file, define override, module — after confirmation. */
+  /** Delete removes the selected removable row after confirmation, through the dispatch the toolbar's Remove shares. */
   private final class TreeDeleteAction extends DumbAwareAction {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
-      switch (getSelectedUserObject()) {
-        case BuildFileRow row -> HaxeToolWindowEditors.confirmAndRemoveBuildFile(project, row);
-        case IdeDefineNode define -> HaxeToolWindowEditors.confirmAndRemoveDefine(project, define);
-        case ModuleNode module -> HaxeToolWindowEditors.confirmAndRemoveModule(project, module);
-        case null, default -> { }
-      }
+      HaxeToolWindowEditors.confirmAndRemove(project, getSelectedUserObject());
     }
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      Object selected = getSelectedUserObject();
-      boolean removable = selected instanceof BuildFileRow
-                          || selected instanceof IdeDefineNode
-                          || selected instanceof ModuleNode;
-      e.getPresentation().setEnabled(removable);
+      e.getPresentation().setEnabled(HaxeToolWindowEditors.isRemovable(getSelectedUserObject()));
     }
 
     @Override
