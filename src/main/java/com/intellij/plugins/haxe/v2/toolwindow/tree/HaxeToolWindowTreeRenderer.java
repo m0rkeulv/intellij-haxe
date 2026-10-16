@@ -281,7 +281,8 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
   @Nullable
   private static String libraryTooltip(@NotNull LibraryNode library) {
     HaxelibGitSpec gitSpec = HaxelibGitSpec.parse(library.version());
-    return gitSpec == null ? null : HaxeBundle.message("haxe.toolwindow.tooltip.library.git", gitSpec.url());
+    if (gitSpec != null) return HaxeBundle.message("haxe.toolwindow.tooltip.library.git", gitSpec.url());
+    return library.transitive() ? HaxeBundle.message("haxe.toolwindow.tooltip.library.transitive", library.requiredBy()) : null;
   }
 
   @NotNull

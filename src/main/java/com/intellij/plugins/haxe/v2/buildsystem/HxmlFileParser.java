@@ -300,7 +300,8 @@ public final class HxmlFileParser {
     return new HaxeDefine(parts[0], parts.length > 1 ? parts[1] : null);
   }
 
-  private static boolean isIncludeReference(@NotNull String token) {
+  /** A line that pulls in another hxml: a bare path ending in .hxml, never a flag. */
+  static boolean isIncludeReference(@NotNull String token) {
     return !token.startsWith("-") && token.endsWith(".hxml");
   }
 

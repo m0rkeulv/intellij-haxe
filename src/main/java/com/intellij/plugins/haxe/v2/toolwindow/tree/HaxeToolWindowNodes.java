@@ -521,7 +521,13 @@ public final class HaxeToolWindowNodes {
                             @NotNull String name,
                             @Nullable String version,
                             @Nullable String resolvedVersion,
-                            boolean installed) implements HaxeToolWindowNode {
+                            boolean installed,
+                            @Nullable String requiredBy) implements HaxeToolWindowNode {
+
+    /** Whether the row is a transitive dependency ({@code requiredBy} names the library pulling it in) rather than one the build file declares. */
+    public boolean transitive() {
+      return requiredBy != null;
+    }
 
     /** The version to show: the pinned one when declared, otherwise haxelib's selected version. A git pin shows as {@code git#shortref}, its url stays in the tooltip. */
     @Nullable
@@ -536,7 +542,7 @@ public final class HaxeToolWindowNodes {
 
     @Override
     public String expansionKey() {
-      return "lib:" + name;
+      return requiredBy == null ? "lib:" + name : "lib:" + requiredBy + "/" + name;
     }
 
     @Override

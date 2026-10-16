@@ -4,7 +4,9 @@ import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeResolveContextStore;
@@ -16,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -190,7 +193,7 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
   public void testALibraryFileIsReachedByEveryBuildTheActiveOneFirst() throws IOException {
     VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
     VirtualFile node = hxml("node.hxml", NODE_HXML_SOURCE);
-    VirtualFile libraryFile = libraryFile("Lib.hx");
+    VirtualFile libraryFile = libraryFile("Lib.hx", "haxelib: fake");
     HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(node.getPath());
 
     List<String> reaching = contexts().contextsReaching(libraryFile).stream()
@@ -206,7 +209,7 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
   public void testAHaxelibFileGoesToTheBuildsDeclaringItsLibrary() throws IOException {
     VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
     VirtualFile user = hxml("user.hxml", LIB_USER_HXML_SOURCE);
-    VirtualFile libraryFile = libraryFile("Lib.hx");
+    VirtualFile libraryFile = libraryFile("Lib.hx", "haxelib: fake");
     HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
 
     List<String> reaching = contexts().contextsReaching(libraryFile).stream()
@@ -215,6 +218,26 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
 
     assertEquals(List.of(user.getPath()), reaching, "only the build declaring -lib fake reaches a file of haxelib fake");
     assertEquals(user.getPath(), contextPath(libraryFile), "the declaring build beats the active build file");
+  }
+
+  @Test
+  @DisplayName("a file of a library reached only through another library goes to the builds declaring that library")
+  public void testAFileOfALibraryReachedOnlyThroughAnotherLibraryGoesToTheBuildsDeclaringThatLibrary() throws IOException {
+    VirtualFile web = hxml("web.hxml", WEB_HXML_SOURCE);
+    VirtualFile user = hxml("user.hxml", LIB_USER_HXML_SOURCE);
+    VirtualFile libraryFile = libraryFile("Deep.hx", "haxelib: transitive 1.0.0");
+    HaxeActiveBuildFileStore.getInstance(getProject()).setActiveFile(web.getPath());
+    // what a library sync records for -lib fake: fake itself brings transitive in
+    String containerId = myFixture.getModule().getName();
+    HaxeLibraryGraph.getInstance(getProject()).replaceAll(Map.of(), Map.of(containerId, Map.of("fake", List.of("fake", "transitive"))));
+    HaxeBuildEventListener.publisher(getProject()).librariesSynced();
+
+    List<String> reaching = contexts().contextsReaching(libraryFile).stream()
+      .map(HaxeResolveContext::path)
+      .toList();
+
+    assertEquals(List.of(user.getPath()), reaching, "the build declaring fake reaches a file of transitive");
+    assertEquals(user.getPath(), contextPath(libraryFile));
   }
 
   @Test
@@ -237,12 +260,12 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
     assertNull(contexts().contextFor(lone));
   }
 
-  /** A file under a library root OUTSIDE the content root: in library scope, in no build's sources. */
-  private VirtualFile libraryFile(String name) throws IOException {
+  /** A file under a library root OUTSIDE the content root: in library scope, in no build's sources; {@code entryName} is the synced entry. */
+  private VirtualFile libraryFile(String name, String entryName) throws IOException {
     Path root = Files.createDirectories(libraryDirectory.resolve("lib"));
     Path file = Files.writeString(root.resolve(name), "class Lib {}");
     VirtualFile rootFile = Objects.requireNonNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root));
-    ModuleRootModificationUtil.addModuleLibrary(myFixture.getModule(), "haxelib: fake", List.of(rootFile.getUrl()), List.of());
+    ModuleRootModificationUtil.addModuleLibrary(myFixture.getModule(), entryName, List.of(rootFile.getUrl()), List.of());
     return Objects.requireNonNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file));
   }
 
