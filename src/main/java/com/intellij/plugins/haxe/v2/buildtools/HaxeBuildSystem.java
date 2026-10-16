@@ -102,6 +102,16 @@ public interface HaxeBuildSystem {
   HaxeTarget launchTarget(@NotNull Project project, @NotNull HaxeBuildFile buildFile);
 
   /**
+   * Plain hxml arguments ({@code -D}, {@code -cp}, {@code --macro}) in the
+   * spelling this build system's tool forwards into the build it generates;
+   * unchanged for a build the compiler takes directly.
+   */
+  @NotNull
+  default List<String> forwardedArguments(@NotNull List<String> haxeArguments) {
+    return haxeArguments;
+  }
+
+  /**
    * The extra compile arguments that make the current selection's output
    * debuggable for the launched debugger (applied by the before-run compile
    * under the Debug executor only), or null when the selection has no

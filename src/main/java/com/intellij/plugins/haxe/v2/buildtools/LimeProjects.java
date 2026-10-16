@@ -72,6 +72,15 @@ public final class LimeProjects {
   /** The lime flag overriding the project's {@code <app path>}, attached spelling like the define above. */
   private static final String APP_PATH_FLAG = "--app-path=";
 
+  /**
+   * lime's forwarding forms (lime 8.3.2): ATTACHED defines ({@code -Dname=value}:
+   * the two-word spelling trips a lime bug duplicating the value),
+   * {@code --source=} for classpaths and {@code --haxeflag=} for macros - lime
+   * turns each haxeflag value into one hxml line, so a macro call with spaces
+   * needs no quoting.
+   */
+  public static final HaxeToolFlagSpellings FLAG_SPELLINGS = new HaxeToolFlagSpellings("-D", "--source=", "--haxeflag=--macro ");
+
   private LimeProjects() {
   }
 
