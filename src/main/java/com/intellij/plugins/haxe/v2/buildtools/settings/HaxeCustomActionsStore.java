@@ -185,6 +185,15 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
       .toList();
   }
 
+  /** The build file's custom action by name, or null. */
+  @Nullable
+  public CustomAction findAction(@NotNull String ownerId, @NotNull String name) {
+    return getActions(ownerId).stream()
+      .filter(action -> action.name().equals(name))
+      .findFirst()
+      .orElse(null);
+  }
+
   public void addAction(@NotNull String ownerId, @NotNull CustomAction action) {
     ContainerActions container = getOrCreate(ownerId);
     container.actions.removeIf(existing -> action.name().equals(existing.name));
@@ -323,11 +332,8 @@ public final class HaxeCustomActionsStore implements PersistentStateComponent<Ha
   @NotNull
   private List<ActionReference> runBeforeOf(@NotNull ActionReference node) {
     String buildFile = Objects.requireNonNull(node.buildFile());
-    return getActions(buildFile).stream()
-      .filter(action -> action.name().equals(node.action()))
-      .findFirst()
-      .map(action -> qualified(action.runBefore(), buildFile))
-      .orElse(List.of());
+    CustomAction action = findAction(buildFile, node.action());
+    return action == null ? List.of() : qualified(action.runBefore(), buildFile);
   }
 
   @NotNull

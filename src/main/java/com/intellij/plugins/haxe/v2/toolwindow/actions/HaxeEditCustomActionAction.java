@@ -29,10 +29,7 @@ public final class HaxeEditCustomActionAction extends HaxeSelectedNodeAction<Act
     if (row == null) return;
 
     // edit the STORED values - the node's command is the ${target}-expanded display form
-    CustomAction stored = HaxeCustomActionsStore.getInstance(project).getActions(actionNode.ownerId()).stream()
-      .filter(action -> action.name().equals(actionNode.name()))
-      .findFirst()
-      .orElse(new CustomAction(actionNode.name(), actionNode.presentableCommand(), ""));
+    CustomAction stored = actionNode.storedAction(project);
     HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forAction(project, row.buildFile(), actionNode.launchOutput(), stored);
     if (dialog.showAndGet()) {
       CustomAction updated = dialog.getAction();

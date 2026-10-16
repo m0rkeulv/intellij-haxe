@@ -29,14 +29,19 @@ public final class HaxeToolConfigs {
   /**
    * The nearest directory holding the config, walking up from the file to the
    * project base directory (inclusive), or null when none holds one — the same
-   * upward discovery the formatter itself performs per source file.
+   * upward discovery the tools perform per source file. The IDE formatter's own
+   * lookup ({@code HxformatConfigs.findConfig}) differs on purpose: it keeps
+   * walking above the project for library sources and falls back to the chosen
+   * override config, which the tools cannot read (they take the config beside
+   * their working directory).
    */
   @Nullable
   public static VirtualFile findConfigDirectory(@NotNull Project project, @NotNull VirtualFile file, @NotNull String configName) {
     VirtualFile projectDir = ProjectUtil.guessProjectDir(project);
     VirtualFile directory = file.isDirectory() ? file : file.getParent();
     while (directory != null) {
-      if (directory.findChild(configName) != null) return directory;
+      VirtualFile config = directory.findChild(configName);
+      if (config != null && !config.isDirectory()) return directory;
       if (directory.equals(projectDir)) return null;
       directory = directory.getParent();
     }

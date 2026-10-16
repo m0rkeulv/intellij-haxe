@@ -172,11 +172,11 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
                                                            @NotNull String editedName) {
     String path = buildFile.file().getPath();
     List<ActionReference> candidates = new ArrayList<>();
-    actionNamesOf(project, buildFile).forEach(name -> candidates.add(new ActionReference(null, name)));
+    HaxeCompileCommands.availableActionNames(project, buildFile.file()).forEach(name -> candidates.add(new ActionReference(null, name)));
     for (HaxeBuildFile other : HaxeReadActions.compute(() -> HaxeKnownBuildFiles.all(project))) {
       String otherPath = other.file().getPath();
       if (otherPath.equals(path)) continue;
-      actionNamesOf(project, other).forEach(name -> candidates.add(new ActionReference(otherPath, name)));
+      HaxeCompileCommands.availableActionNames(project, other.file()).forEach(name -> candidates.add(new ActionReference(otherPath, name)));
     }
     candidates.removeIf(candidate -> isEdited(candidate, editedName));
     return candidates;
@@ -200,14 +200,6 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
 
   private static boolean isEdited(@NotNull ActionReference candidate, @NotNull String editedName) {
     return candidate.buildFile() == null && candidate.action().equals(editedName);
-  }
-
-  /** The build file's built-in actions, then its custom ones. */
-  @NotNull
-  private static List<String> actionNamesOf(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
-    List<String> names = new ArrayList<>(HaxeBuildSystem.of(buildFile.type()).actionNames(project, buildFile));
-    HaxeCustomActionsStore.getInstance(project).getActions(buildFile.file().getPath()).forEach(action -> names.add(action.name()));
-    return names;
   }
 
   /**

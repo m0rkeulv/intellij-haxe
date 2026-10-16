@@ -175,8 +175,8 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     group.add(new HaxeRunProgramAction(this, false));
     group.add(new HaxeRunProgramAction(this, true));
     group.add(new HaxeProfileProgramAction(this));
-    group.add(new HaxeRunUnitTestsAction(this));
-    group.add(new HaxeDebugUnitTestsAction(this));
+    group.add(new HaxeUnitTestsAction(this, false));
+    group.add(new HaxeUnitTestsAction(this, true));
     group.add(new HaxeSetAsCompileCommandAction(this));
     group.add(new HaxeAddCustomActionAction(this));
     group.add(new HaxeEditCustomActionAction(this));
@@ -330,7 +330,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
   @NotNull
   private static String speedSearchText(@NotNull TreePath path) {
     if (!(path.getLastPathComponent() instanceof DefaultMutableTreeNode treeNode)) return "";
-    return treeNode.getUserObject() instanceof HaxeToolWindowNode node ? node.speedSearchText() : "";
+    return treeNode.getUserObject() instanceof HaxeToolWindowNode node ? node.label() : "";
   }
 
   /** Supplies the selection's jump-to-source target so F4 / Jump to Source works on tree rows. */

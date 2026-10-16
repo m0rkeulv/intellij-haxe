@@ -248,10 +248,7 @@ public final class HaxeCompileCommands {
     }
 
     VirtualFile file = buildFile.file();
-    HaxeCustomActionsStore.CustomAction custom = HaxeCustomActionsStore.getInstance(project).getActions(file.getPath()).stream()
-      .filter(action -> action.name().equals(actionName))
-      .findFirst()
-      .orElse(null);
+    HaxeCustomActionsStore.CustomAction custom = HaxeCustomActionsStore.getInstance(project).findAction(file.getPath(), actionName);
     if (custom == null) return null;
 
     String moduleRoot = HaxeContainers.containerRootPath(project, containerId);

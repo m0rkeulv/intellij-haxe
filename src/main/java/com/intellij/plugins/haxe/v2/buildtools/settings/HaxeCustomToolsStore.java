@@ -101,6 +101,15 @@ public final class HaxeCustomToolsStore implements PersistentStateComponent<Haxe
       .toList();
   }
 
+  /** The container's custom tool by name, or null. */
+  @Nullable
+  public CustomTool findTool(@NotNull String ownerId, @NotNull String name) {
+    return getTools(ownerId).stream()
+      .filter(tool -> tool.name().equals(name))
+      .findFirst()
+      .orElse(null);
+  }
+
   public void addTool(@NotNull String ownerId, @NotNull CustomTool tool) {
     ContainerTools container = getOrCreate(ownerId);
     container.tools.removeIf(existing -> tool.name().equals(existing.name));

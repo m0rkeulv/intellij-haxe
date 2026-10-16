@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.ToggleAction;
@@ -57,7 +58,7 @@ public final class HxformatUseAsRulesAction extends ToggleAction implements Dumb
     if (e.getProject() == null) return null;
     VirtualFile file = e.getData(CommonDataKeys.VIRTUAL_FILE);
     boolean isConfig = file != null && !file.isDirectory()
-                       && HxformatConfigs.HXFORMAT_FILE_NAME.equals(file.getName());
+                       && HaxeToolConfigs.FORMATTER_CONFIG_NAME.equals(file.getName());
     return isConfig ? file : null;
   }
 }
