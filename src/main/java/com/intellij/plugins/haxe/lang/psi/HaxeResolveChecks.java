@@ -11,6 +11,7 @@ import com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentStringCode
 import com.intellij.plugins.haxe.lang.psi.impl.*;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMetadataCompileTimeMeta;
+import com.intellij.plugins.haxe.metadata.util.HaxeMetadataArguments;
 import com.intellij.plugins.haxe.metadata.util.HaxeMetadataUtils;
 import com.intellij.plugins.haxe.model.*;
 import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
@@ -37,11 +38,8 @@ import org.jspecify.annotations.NonNull;
 import java.util.*;
 
 import static com.intellij.plugins.haxe.lang.psi.fakes.impl.HaxeFakeComponentStringCode.FAKE_PSI_KEY;
-import static com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCacheService.cachedHaxeCallExpressionEvaluation;
 import static com.intellij.plugins.haxe.lang.psi.impl.HaxeReferenceUtil.*;
-import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.ANALYZER;
-import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.NULL_SAFETY;
-import static com.intellij.plugins.haxe.metadata.psi.HaxeMeta.MULTI_TYPE;
+import static com.intellij.plugins.haxe.model.evaluator.HaxeCallExpressionEvaluatorCacheService.cachedHaxeCallExpressionEvaluation;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator.findObjectLiteralType;
 import static com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluatorHandlers.getArrayAccessTypeFromClass;
 import static com.intellij.plugins.haxe.model.evaluator.callexpression.EnumValueMatchUtil.isInsidePatternMatcher;
@@ -133,59 +131,13 @@ public final class HaxeResolveChecks {
     return checkQualifiedName(reference);
   }
 
+    /** A metadata argument naming one of the values its metadata takes ({@link HaxeMetadataArguments}). */
     static List<? extends PsiElement> checkIsMetadataSpecial(@NotNull HaxeReference reference) {
       HaxeMetadataCompileTimeMeta parentMeta = PsiTreeUtil.getParentOfType(reference, HaxeMetadataCompileTimeMeta.class);
-      if(parentMeta != null){
-        // nullSafety enum expects an Enum but import is not required
-        //haxe.macro.Compiler.NullSafetyMode
-        if(parentMeta.isType(NULL_SAFETY)) {
-          HaxeClass NullSafetyMode = findClassByQName("haxe.macro.Compiler.NullSafetyMode", reference);
-          if(NullSafetyMode != null) {
-            HaxeBaseMemberModel member = NullSafetyMode.getModel().getMember(reference.getText(), null);
-            if(member != null) return List.of(member.getBasePsi());
-          }
-        }
-        else if (parentMeta.isType(ANALYZER)) {
-          HaxeClassModel analyzerOptions = HaxeSyntheticDeclarations.getAnalyzerOptions(reference.getProject());
-          HaxeBaseMemberModel member = analyzerOptions.getMember(reference.getText(), null);
-          if(member != null) return List.of(member.getBasePsi());
-
-        } else if (parentMeta.isType(MULTI_TYPE)) {
-          return multiTypeParameter(parentMeta, reference);
-        }
-      }
-        return null;
+      if (parentMeta == null) return null;
+      HaxeNamedComponent candidate = HaxeMetadataArguments.candidateNamed(parentMeta, reference, reference.getText());
+      return candidate == null ? null : List.of(candidate);
     }
-
-  /** A `@:multiType(T)` argument names a type parameter of the abstract the metadata annotates. */
-  @Nullable
-  private static List<? extends PsiElement> multiTypeParameter(HaxeMetadataCompileTimeMeta meta, HaxeReference reference) {
-    HaxeAbstractTypeDeclaration typeDeclaration = annotatedAbstract(meta);
-    HaxeGenericParam param = typeDeclaration == null ? null : typeDeclaration.getGenericParam();
-    if (param == null) return null;
-    for (HaxeGenericListPart part : param.getGenericListPartList()) {
-      HaxeComponentName name = part.getComponentName();
-      if (name != null && name.textMatches(reference)) {
-        return List.of(name);
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Metadata before a module's first member parses outside the module, so
-   * the annotated abstract is either inside the next module or the next
-   * sibling itself.
-   */
-  @Nullable
-  private static HaxeAbstractTypeDeclaration annotatedAbstract(HaxeMetadataCompileTimeMeta meta) {
-    PsiElement metaParent = meta.getParent();
-    HaxeModule module = PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeModule.class);
-    if (module != null) {
-      return PsiTreeUtil.getChildOfType(module, HaxeAbstractTypeDeclaration.class);
-    }
-    return PsiTreeUtil.getNextSiblingOfType(metaParent, HaxeAbstractTypeDeclaration.class);
-  }
 
   /**
    * An untyped target-syntax call (`__js__`, `__cpp__`, ...): the compiler accepts
